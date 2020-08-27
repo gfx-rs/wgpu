@@ -809,6 +809,17 @@ pub enum TextureFormat {
     Bc7RgbaUnormSrgb = 51,
 }
 
+impl TextureFormat {
+    pub fn is_depth_format(self) -> bool {
+        match self {
+            TextureFormat::Depth32Float
+            | TextureFormat::Depth24Plus
+            | TextureFormat::Depth24PlusStencil8 => true,
+            _ => false,
+        }
+    }
+}
+
 bitflags::bitflags! {
     /// Color write mask. Disabled color channels will not be written to.
     #[repr(transparent)]

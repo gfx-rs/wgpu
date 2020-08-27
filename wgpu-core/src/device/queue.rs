@@ -313,6 +313,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             size,
         )?;
         let (block_width, block_height) = conv::texture_block_size(texture_format);
+        if texture_format.is_depth_format() {
+            Err(TransferError::CopyToForbiddenTextureFormat(texture_format))?
+        }
         let width_blocks = size.width / block_width;
         let height_blocks = size.height / block_width;
 

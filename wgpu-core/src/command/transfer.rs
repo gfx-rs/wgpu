@@ -84,6 +84,8 @@ pub enum TransferError {
     InvalidRowsPerImage,
     #[error("source and destination layers have different aspects")]
     MismatchedAspects,
+    #[error("copying to textures with {0:?} format is forbidden")]
+    CopyToForbiddenTextureFormat(wgt::TextureFormat),
 }
 
 /// Error encountered while attempting to do a copy on a command encoder.
@@ -480,6 +482,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         )?;
 
         let (block_width, _) = conv::texture_block_size(dst_texture.format);
+        if dst_texture.format.is_depth_format() {
+            Err(TransferError::CopyToForbiddenTextureFormat(
+                dst_texture.format,
+            ))?
+        }
 
         let buffer_width = (source.layout.bytes_per_row / bytes_per_block) * block_width;
         let region = hal::command::BufferImageCopy {
