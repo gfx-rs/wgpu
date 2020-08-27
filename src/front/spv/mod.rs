@@ -56,7 +56,15 @@ impl Instruction {
         }
     }
 }
+/// OpPhi instruction.
+#[derive(Clone, Default, Debug)]
+struct PhiInstruction {
+    /// SPIR-V's ID.
+    id: u32,
 
+    /// Tuples of (variable, parent).
+    variables: Vec<(u32, u32)>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub enum ModuleState {
     Empty,
@@ -486,6 +494,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         local_function_calls: &mut FastHashMap<Handle<crate::Expression>, spirv::Word>,
     ) -> Result<ControlFlowNode, Error> {
         let mut assignments = Vec::new();
+        let mut phis = Vec::new();
         let mut merge = None;
         let terminator = loop {
             use spirv::Op;
@@ -531,6 +540,35 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             type_id: result_type_id,
                         },
                     );
+                }
+                Op::Phi => {
+                    inst.expect_at_least(3)?;
+
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+
+                    let name = format!("phi_{}", result_id);
+                    let var_handle = local_arena.append(crate::LocalVariable {
+                        name: Some(name),
+                        ty: self.lookup_type.lookup(result_type_id)?.handle,
+                        init: None,
+                    });
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: expressions
+                                .append(crate::Expression::LocalVariable(var_handle)),
+                            type_id: result_type_id,
+                        },
+                    );
+
+                    let mut phi = PhiInstruction::default();
+                    phi.id = result_id;
+                    for _ in 0..(inst.wc - 3) / 2 {
+                        phi.variables.push((self.next()?, self.next()?));
+                    }
+
+                    phis.push(phi);
                 }
                 Op::AccessChain => {
                     struct AccessExpression {
@@ -1193,6 +1231,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     );
                 }
                 // Relational and Logical Instructions
+                Op::LogicalNot => {
+                    inst.expect(4)?;
+                    self.parse_expr_unary_op(expressions, crate::UnaryOperator::Not)?;
+                }
                 op if inst.op >= Op::IEqual && inst.op <= Op::FUnordGreaterThanEqual => {
                     inst.expect(5)?;
                     self.parse_expr_binary_op(expressions, map_binary_operator(op)?)?;
@@ -1298,6 +1340,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(ControlFlowNode {
             id: block_id,
             ty: None,
+            phis,
             block,
             terminator,
             merge,

@@ -3,7 +3,10 @@
 use super::error::Error;
 ///! see https://en.wikipedia.org/wiki/Control-flow_graph
 ///! see https://www.khronos.org/registry/spir-v/specs/unified1/SPIRV.html#_a_id_structuredcontrolflow_a_structured_control_flow
-use super::function::{BlockId, MergeInstruction, Terminator};
+use super::{
+    function::{BlockId, MergeInstruction, Terminator},
+    LookupExpression, PhiInstruction,
+};
 
 use crate::FastHashMap;
 
@@ -23,7 +26,7 @@ type BlockNodeIndex = NodeIndex<u32>;
 type ControlFlowGraph = petgraph::Graph<ControlFlowNode, ControlFlowEdgeType, Directed, u32>;
 
 /// Control flow graph (CFG) containing relationships between blocks.
-pub struct FlowGraph {
+pub(super) struct FlowGraph {
     ///
     flow: ControlFlowGraph,
 
@@ -33,7 +36,7 @@ pub struct FlowGraph {
 
 impl FlowGraph {
     /// Creates empty flow graph.
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             flow: ControlFlowGraph::default(),
             block_to_node: FastHashMap::default(),
@@ -41,7 +44,7 @@ impl FlowGraph {
     }
 
     /// Add a control flow node.
-    pub fn add_node(&mut self, node: ControlFlowNode) {
+    pub(super) fn add_node(&mut self, node: ControlFlowNode) {
         let block_id = node.id;
         let node_index = self.flow.add_node(node);
         self.block_to_node.insert(block_id, node_index);
@@ -50,7 +53,7 @@ impl FlowGraph {
     ///
     /// 1. Creates edges in the CFG.
     /// 2. Classifies types of blocks and edges in the CFG.
-    pub fn classify(&mut self) {
+    pub(super) fn classify(&mut self) {
         let block_to_node = &mut self.block_to_node;
 
         // 1.
@@ -180,17 +183,34 @@ impl FlowGraph {
         }
     }
 
-    /// TODO
     /// Removes OpPhi instructions from the control flow graph and turns them into ordinary variables.
     ///
     /// Phi instructions are not supported inside Naga nor do they exist as instructions on CPUs. It is neccessary
     /// to remove them and turn into ordinary variables before converting to Naga's IR and shader code.
-    pub fn remove_phi_instructions() {
-        unimplemented!();
+    pub(super) fn remove_phi_instructions(
+        &mut self,
+        lookup_expression: &FastHashMap<spirv::Word, LookupExpression>,
+    ) {
+        for node_index in self.flow.node_indices() {
+            let phis = std::mem::replace(&mut self.flow[node_index].phis, Vec::new());
+            for phi in phis.iter() {
+                let phi_var = &lookup_expression[&phi.id];
+                for (variable_id, parent_id) in phi.variables.iter() {
+                    let variable = &lookup_expression[&variable_id];
+                    let parent_node = &mut self.flow[self.block_to_node[&parent_id]];
+
+                    parent_node.block.push(crate::Statement::Store {
+                        pointer: phi_var.handle,
+                        value: variable.handle,
+                    });
+                }
+            }
+            self.flow[node_index].phis = phis;
+        }
     }
 
     /// Traverses the flow graph and returns a list of Naga's statements.
-    pub fn to_naga(&self) -> Result<crate::Block, Error> {
+    pub(super) fn to_naga(&self) -> Result<crate::Block, Error> {
         self.naga_traverse(node_index(0), None)
     }
 
@@ -208,84 +228,89 @@ impl FlowGraph {
         let node = &self.flow[node_index];
 
         match node.ty {
-            Some(ControlFlowNodeType::Header) => {
-                let merge_node_index = self.block_to_node[&node.merge.unwrap().merge_block_id];
-                let mut result = node.block.clone();
+            Some(ControlFlowNodeType::Header) => match node.terminator {
+                Terminator::BranchConditional {
+                    condition,
+                    true_id,
+                    false_id,
+                } => {
+                    let true_node_index = self.block_to_node[&true_id];
+                    let false_node_index = self.block_to_node[&false_id];
+                    let merge_node_index = self.block_to_node[&node.merge.unwrap().merge_block_id];
 
-                match node.terminator {
-                    Terminator::BranchConditional {
-                        condition,
-                        true_id,
-                        false_id,
-                    } => {
+                    let mut result = node.block.clone();
+
+                    if false_node_index != merge_node_index {
+                        result.push(crate::Statement::If {
+                            condition,
+                            accept: self.naga_traverse(true_node_index, Some(merge_node_index))?,
+                            reject: self.naga_traverse(false_node_index, Some(merge_node_index))?,
+                        });
+                        result.extend(self.naga_traverse(merge_node_index, None)?);
+                    } else {
                         result.push(crate::Statement::If {
                             condition,
                             accept: self.naga_traverse(
                                 self.block_to_node[&true_id],
                                 Some(merge_node_index),
                             )?,
-                            reject: self.naga_traverse(
-                                self.block_to_node[&false_id],
-                                Some(merge_node_index),
-                            )?,
+                            reject: self.naga_traverse(merge_node_index, None)?,
                         });
                     }
-                    Terminator::Switch {
-                        selector,
-                        default,
-                        ref targets,
-                    } => {
-                        let mut cases = FastHashMap::default();
 
-                        for i in 0..targets.len() {
-                            let left_target_node_index = self.block_to_node[&targets[i].1];
+                    Ok(result)
+                }
+                Terminator::Switch {
+                    selector,
+                    default,
+                    ref targets,
+                } => {
+                    let merge_node_index = self.block_to_node[&node.merge.unwrap().merge_block_id];
+                    let mut result = node.block.clone();
 
-                            let fallthrough: Option<crate::FallThrough> = if i < targets.len() - 1 {
-                                let right_target_node_index = self.block_to_node[&targets[i + 1].1];
-                                if has_path_connecting(
-                                    &self.flow,
-                                    left_target_node_index,
-                                    right_target_node_index,
-                                    None,
-                                ) {
-                                    Some(crate::FallThrough {})
-                                } else {
-                                    None
-                                }
+                    let mut cases = FastHashMap::default();
+
+                    for i in 0..targets.len() {
+                        let left_target_node_index = self.block_to_node[&targets[i].1];
+
+                        let fallthrough: Option<crate::FallThrough> = if i < targets.len() - 1 {
+                            let right_target_node_index = self.block_to_node[&targets[i + 1].1];
+                            if has_path_connecting(
+                                &self.flow,
+                                left_target_node_index,
+                                right_target_node_index,
+                                None,
+                            ) {
+                                Some(crate::FallThrough {})
                             } else {
                                 None
-                            };
+                            }
+                        } else {
+                            None
+                        };
 
-                            cases.insert(
-                                targets[i].0,
-                                (
-                                    self.naga_traverse(
-                                        left_target_node_index,
-                                        Some(merge_node_index),
-                                    )?,
-                                    fallthrough,
-                                ),
-                            );
-                        }
-
-                        result.push(crate::Statement::Switch {
-                            selector,
-                            cases,
-                            default: self.naga_traverse(
-                                self.block_to_node[&default],
-                                Some(merge_node_index),
-                            )?,
-                        });
+                        cases.insert(
+                            targets[i].0,
+                            (
+                                self.naga_traverse(left_target_node_index, Some(merge_node_index))?,
+                                fallthrough,
+                            ),
+                        );
                     }
-                    _ => {
-                        return Err(Error::InvalidTerminator);
-                    }
-                };
 
-                result.extend(self.naga_traverse(merge_node_index, None)?);
+                    result.push(crate::Statement::Switch {
+                        selector,
+                        cases,
+                        default: self
+                            .naga_traverse(self.block_to_node[&default], Some(merge_node_index))?,
+                    });
 
-                Ok(result)
-            }
+                    result.extend(self.naga_traverse(merge_node_index, None)?);
+
+                    Ok(result)
+                }
+                _ => Err(Error::InvalidTerminator),
+            },
             Some(ControlFlowNodeType::Loop) => {
                 let merge_node_index = self.block_to_node[&node.merge.unwrap().merge_block_id];
                 let continuing: crate::Block = {
@@ -373,7 +398,7 @@ impl FlowGraph {
     }
 
     /// Get the entire graph in a graphviz dot format for visualization. Useful for debugging purposes.
-    pub fn to_graphviz(&self) -> Result<String, std::fmt::Error> {
+    pub(super) fn to_graphviz(&self) -> Result<String, std::fmt::Error> {
         let mut output = String::new();
 
         output += "digraph ControlFlowGraph {";
@@ -417,7 +442,7 @@ impl FlowGraph {
 
 /// Type of an edge(flow) in the `ControlFlowGraph`.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum ControlFlowEdgeType {
+pub(super) enum ControlFlowEdgeType {
     /// Default
     Forward,
 
@@ -457,7 +482,7 @@ pub enum ControlFlowEdgeType {
 }
 /// Type of a node(block) in the `ControlFlowGraph`.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum ControlFlowNodeType {
+pub(super) enum ControlFlowNodeType {
     /// A block whose merge instruction is an OpSelectionMerge.
     Header,
 
@@ -483,12 +508,15 @@ pub enum ControlFlowNodeType {
     Return,
 }
 /// ControlFlowGraph's node representing a block in the control flow.
-pub struct ControlFlowNode {
+pub(super) struct ControlFlowNode {
     /// SPIR-V ID.
     pub id: BlockId,
 
     /// Type of the node. See *ControlFlowNodeType*.
     pub ty: Option<ControlFlowNodeType>,
+
+    /// Phi instructions.
+    pub phis: Vec<PhiInstruction>,
 
     /// Naga's statements inside this block.
     pub block: crate::Block,

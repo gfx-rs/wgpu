@@ -149,6 +149,7 @@ pub fn parse_function<I: Iterator<Item = u32>>(
     }
 
     flow_graph.classify();
+    flow_graph.remove_phi_instructions(&parser.lookup_expression);
     fun.body = flow_graph.to_naga()?;
 
     // done
