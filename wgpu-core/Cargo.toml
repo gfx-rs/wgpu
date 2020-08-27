@@ -40,7 +40,7 @@ gfx-memory = "0.2"
 [dependencies.naga]
 version = "0.2"
 git = "https://github.com/gfx-rs/naga"
-rev = "479777315211f23f640dc53977eecd46ced6aaf6"
+rev = "bd9efe5915e548b9a2ec1f3d3e9296c90b31e69a"
 features = ["spirv-in", "spirv-out"]
 
 [dependencies.wgt]

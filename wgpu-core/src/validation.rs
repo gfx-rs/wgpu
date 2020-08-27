@@ -157,6 +157,7 @@ fn get_aligned_type_size(
         },
         Ti::Struct { ref members } => members.last().map_or(0, |member| {
             let offset = match member.origin {
+                naga::MemberOrigin::Empty => 0,
                 naga::MemberOrigin::BuiltIn(_) => {
                     tracing::error!("Missing offset on a struct member");
                     0 // TODO: make it a proper error
