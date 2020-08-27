@@ -356,29 +356,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         log::trace!("\t\t{:?}", dec_typed);
         match dec_typed {
             spirv::Decoration::BuiltIn => {
-                use spirv::BuiltIn as Bi;
                 inst.expect(base_words + 2)?;
                 let raw = self.next()?;
-                dec.built_in = Some(match spirv::BuiltIn::from_u32(raw) {
-                    Some(Bi::BaseInstance) => crate::BuiltIn::BaseInstance,
-                    Some(Bi::BaseVertex) => crate::BuiltIn::BaseVertex,
-                    Some(Bi::ClipDistance) => crate::BuiltIn::ClipDistance,
-                    Some(Bi::InstanceIndex) => crate::BuiltIn::InstanceIndex,
-                    Some(Bi::Position) => crate::BuiltIn::Position,
-                    Some(Bi::VertexIndex) => crate::BuiltIn::VertexIndex,
-                    // fragment
-                    Some(Bi::PointSize) => crate::BuiltIn::PointSize,
-                    Some(Bi::FragCoord) => crate::BuiltIn::FragCoord,
-                    Some(Bi::FrontFacing) => crate::BuiltIn::FrontFacing,
-                    Some(Bi::SampleId) => crate::BuiltIn::SampleIndex,
-                    Some(Bi::FragDepth) => crate::BuiltIn::FragDepth,
-                    // compute
-                    Some(Bi::GlobalInvocationId) => crate::BuiltIn::GlobalInvocationId,
-                    Some(Bi::LocalInvocationId) => crate::BuiltIn::LocalInvocationId,
-                    Some(Bi::LocalInvocationIndex) => crate::BuiltIn::LocalInvocationIndex,
-                    Some(Bi::WorkgroupId) => crate::BuiltIn::WorkGroupId,
-                    _ => return Err(Error::UnsupportedBuiltIn(raw)),
-                });
+                dec.built_in = map_builtin(raw)?;
             }
             spirv::Decoration::Location => {
                 inst.expect(base_words + 2)?;

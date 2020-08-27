@@ -82,3 +82,31 @@ pub fn map_width(word: spirv::Word) -> Result<crate::Bytes, Error> {
         .try_into()
         .map_err(|_| Error::InvalidTypeWidth(word))
 }
+
+pub fn map_builtin(word: spirv::Word) -> Result<Option<crate::BuiltIn>, Error> {
+    use spirv::BuiltIn as Bi;
+    Ok(Some(match spirv::BuiltIn::from_u32(word) {
+        Some(Bi::BaseInstance) => crate::BuiltIn::BaseInstance,
+        Some(Bi::BaseVertex) => crate::BuiltIn::BaseVertex,
+        Some(Bi::ClipDistance) => crate::BuiltIn::ClipDistance,
+        Some(Bi::InstanceIndex) => crate::BuiltIn::InstanceIndex,
+        Some(Bi::Position) => crate::BuiltIn::Position,
+        Some(Bi::VertexIndex) => crate::BuiltIn::VertexIndex,
+        // fragment
+        Some(Bi::PointSize) => crate::BuiltIn::PointSize,
+        Some(Bi::FragCoord) => crate::BuiltIn::FragCoord,
+        Some(Bi::FrontFacing) => crate::BuiltIn::FrontFacing,
+        Some(Bi::SampleId) => crate::BuiltIn::SampleIndex,
+        Some(Bi::FragDepth) => crate::BuiltIn::FragDepth,
+        // compute
+        Some(Bi::GlobalInvocationId) => crate::BuiltIn::GlobalInvocationId,
+        Some(Bi::LocalInvocationId) => crate::BuiltIn::LocalInvocationId,
+        Some(Bi::LocalInvocationIndex) => crate::BuiltIn::LocalInvocationIndex,
+        Some(Bi::WorkgroupId) => crate::BuiltIn::WorkGroupId,
+        Some(Bi::WorkgroupSize) => {
+            log::warn!("gl_WorkgroupSize builtin is not supported");
+            return Ok(None);
+        }
+        _ => return Err(Error::UnsupportedBuiltIn(word)),
+    }))
+}
