@@ -748,6 +748,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
+                Op::Transpose => {
+                    inst.expect(4)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let matrix_id = self.next()?;
+                    let matrix_lexp = self.lookup_expression.lookup(matrix_id)?;
+                    let expr = crate::Expression::Transpose(matrix_lexp.handle);
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: expressions.append(expr),
+                            type_id: result_type_id,
+                        },
+                    );
+                }
                 Op::SampledImage => {
                     inst.expect(5)?;
                     let _result_type_id = self.next()?;
@@ -1001,7 +1016,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     );
                 }
                 Op::ExtInst => {
-                    inst.expect_at_least(5)?;
+                    let base_wc = 5;
+                    inst.expect_at_least(base_wc)?;
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let set_id = self.next()?;
@@ -1010,18 +1026,34 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
                     let inst_id = self.next()?;
                     let name = match spirv::GLOp::from_u32(inst_id) {
-                        Some(spirv::GLOp::Length) => {
-                            inst.expect(5 + 1)?;
-                            "length"
+                        Some(spirv::GLOp::Atan2) => {
+                            inst.expect(base_wc + 1)?;
+                            "atan2"
+                        }
+                        Some(spirv::GLOp::MatrixInverse) => {
+                            inst.expect(base_wc + 1)?;
+                            "inverse"
                         }
                         Some(spirv::GLOp::FMix) => {
-                            inst.expect(5 + 3)?;
+                            inst.expect(base_wc + 3)?;
                             "mix"
+                        }
+                        Some(spirv::GLOp::SmoothStep) => {
+                            inst.expect(base_wc + 3)?;
+                            "smoothstep"
+                        }
+                        Some(spirv::GLOp::Length) => {
+                            inst.expect(base_wc + 1)?;
+                            "length"
+                        }
+                        Some(spirv::GLOp::Normalize) => {
+                            inst.expect(base_wc + 1)?;
+                            "normalize"
                         }
                         _ => return Err(Error::UnsupportedExtInst(inst_id)),
                     };
 
-                    let mut arguments = Vec::with_capacity(inst.wc as usize - 5);
+                    let mut arguments = Vec::with_capacity((inst.wc - base_wc) as usize);
                     for _ in 0..arguments.capacity() {
                         let arg_id = self.next()?;
                         arguments.push(self.lookup_expression.lookup(arg_id)?.handle);

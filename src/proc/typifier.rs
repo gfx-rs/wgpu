@@ -164,6 +164,24 @@ impl Typifier {
                         | crate::BinaryOperator::ShiftRightArithmetic => self.types[left.index()],
                     },
                     crate::Expression::Intrinsic { .. } => unimplemented!(),
+                    crate::Expression::Transpose(expr) => {
+                        let ty_handle = self.types[expr.index()];
+                        let inner = match types[ty_handle].inner {
+                            crate::TypeInner::Matrix {
+                                columns,
+                                rows,
+                                kind,
+                                width,
+                            } => crate::TypeInner::Matrix {
+                                columns: rows,
+                                rows: columns,
+                                kind,
+                                width,
+                            },
+                            ref other => panic!("incompatible transpose of {:?}", other),
+                        };
+                        types.fetch_or_append(Type { name: None, inner })
+                    }
                     crate::Expression::DotProduct(_, _) => unimplemented!(),
                     crate::Expression::CrossProduct(_, _) => unimplemented!(),
                     crate::Expression::Derivative { .. } => unimplemented!(),

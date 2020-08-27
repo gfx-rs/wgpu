@@ -520,6 +520,8 @@ pub enum Expression {
         fun: IntrinsicFunction,
         argument: Handle<Expression>,
     },
+    /// Transpose of a matrix.
+    Transpose(Handle<Expression>),
     /// Dot product between two vectors.
     DotProduct(Handle<Expression>, Handle<Expression>),
     /// Cross product between two vectors.

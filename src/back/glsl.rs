@@ -986,16 +986,41 @@ fn write_expression<'a, 'b>(
                 ty,
             )
         }
+        Expression::Transpose(matrix) => {
+            let (matrix_expr, matrix_ty) =
+                write_expression(&builder.expressions[matrix], module, builder)?;
+
+            let ty = match *matrix_ty.as_ref() {
+                TypeInner::Matrix {
+                    columns,
+                    rows,
+                    kind,
+                    width,
+                } => Cow::Owned(TypeInner::Matrix {
+                    columns: rows,
+                    rows: columns,
+                    kind,
+                    width,
+                }),
+                _ => {
+                    return Err(Error::Custom(format!(
+                        "Cannot apply transpose to {}",
+                        matrix_expr
+                    )))
+                }
+            };
+
+            (Cow::Owned(format!("transpose({})", matrix_expr)), ty)
+        }
         Expression::DotProduct(left, right) => {
             let (left_expr, left_ty) =
                 write_expression(&builder.expressions[left], module, builder)?;
             let (right_expr, _) = write_expression(&builder.expressions[right], module, builder)?;
 
-            let ty = match left_ty.as_ref() {
-                TypeInner::Vector { kind, width, .. } => Cow::Owned(TypeInner::Scalar {
-                    kind: *kind,
-                    width: *width,
-                }),
+            let ty = match *left_ty.as_ref() {
+                TypeInner::Vector { kind, width, .. } => {
+                    Cow::Owned(TypeInner::Scalar { kind, width })
+                }
                 _ => {
                     return Err(Error::Custom(format!(
                         "Cannot apply dot product to {}",

@@ -69,6 +69,9 @@ impl<'a> Interface<'a> {
             E::Intrinsic { argument, .. } => {
                 self.add_inputs(argument);
             }
+            E::Transpose(matrix) => {
+                self.add_inputs(matrix);
+            }
             E::DotProduct(left, right) => {
                 self.add_inputs(left);
                 self.add_inputs(right);
