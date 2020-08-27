@@ -930,6 +930,7 @@ impl<W: Write> Writer<W> {
                         let base_name = module.types[member.ty].name.or_index(member.ty);
                         write!(self.out, "\t{} {}", base_name, name)?;
                         match member.origin {
+                            crate::MemberOrigin::Empty => {}
                             crate::MemberOrigin::BuiltIn(built_in) => {
                                 ResolvedBinding::BuiltIn(built_in)
                                     .try_fmt_decorated(&mut self.out, "")?;
@@ -1105,6 +1106,7 @@ impl<W: Write> Writer<W> {
                                 let name = member.name.or_index(MemberIndex(index));
                                 let ty_name = module.types[member.ty].name.or_index(member.ty);
                                 match member.origin {
+                                    crate::MemberOrigin::Empty => {}
                                     crate::MemberOrigin::BuiltIn(built_in) => {
                                         write!(self.out, "\t{} {}", ty_name, name)?;
                                         ResolvedBinding::BuiltIn(built_in)

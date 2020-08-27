@@ -147,6 +147,13 @@ struct Decoration {
 }
 
 impl Decoration {
+    fn debug_name(&self) -> &str {
+        match self.name {
+            Some(ref name) => name.as_str(),
+            None => "?",
+        }
+    }
+
     fn get_binding(&self) -> Option<crate::Binding> {
         //TODO: validate this better
         match *self {
@@ -197,7 +204,7 @@ impl Decoration {
                 offset: Some(offset),
                 ..
             } => Ok(crate::MemberOrigin::Offset(offset)),
-            _ => Err(Error::MissingDecoration(spirv::Decoration::Offset)),
+            _ => Ok(crate::MemberOrigin::Empty),
         }
     }
 }
@@ -353,12 +360,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     ) -> Result<(), Error> {
         let raw = self.next()?;
         let dec_typed = spirv::Decoration::from_u32(raw).ok_or(Error::InvalidDecoration(raw))?;
-        log::trace!("\t\t{:?}", dec_typed);
+        log::trace!("\t\t{}: {:?}", dec.debug_name(), dec_typed);
         match dec_typed {
             spirv::Decoration::BuiltIn => {
                 inst.expect(base_words + 2)?;
                 let raw = self.next()?;
-                dec.built_in = map_builtin(raw)?;
+                match map_builtin(raw) {
+                    Ok(built_in) => dec.built_in = Some(built_in),
+                    Err(_e) => log::warn!("Unsupported builtin {}", raw),
+                };
             }
             spirv::Decoration::Location => {
                 inst.expect(base_words + 2)?;
@@ -1573,6 +1583,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         if left != 0 {
             return Err(Error::InvalidOperand);
         }
+
         self.future_member_decor
             .entry((id, member))
             .or_default()
@@ -1595,6 +1606,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect_at_least(4)?;
         let id = self.next()?;
         let member = self.next()?;
+
         let mut dec = self
             .future_member_decor
             .remove(&(id, member))
@@ -1870,8 +1882,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect_at_least(2)?;
         let id = self.next()?;
-        let decor = self.future_decor.remove(&id);
-        if let Some(ref decor) = decor {
+        let parent_decor = self.future_decor.remove(&id);
+        if let Some(ref decor) = parent_decor {
             if decor.block.is_some() {
                 // do nothing
             }
@@ -1897,7 +1909,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             id,
             LookupType {
                 handle: module.types.append(crate::Type {
-                    name: decor.and_then(|dec| dec.name),
+                    name: parent_decor.and_then(|dec| dec.name),
                     inner,
                 }),
                 base_id: None,

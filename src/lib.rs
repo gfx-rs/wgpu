@@ -147,6 +147,8 @@ pub enum ArraySize {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum MemberOrigin {
+    /// Member is local to the shader.
+    Empty,
     /// Built-in shader variable.
     BuiltIn(BuiltIn),
     /// Offset within the struct.
