@@ -3,12 +3,13 @@ fn load_test_data(name: &str) -> String {
     std::fs::read_to_string(path).unwrap()
 }
 
+#[cfg(feature = "wgsl-in")]
 fn load_wgsl(name: &str) -> naga::Module {
     let input = load_test_data(name);
     naga::front::wgsl::parse_str(&input).unwrap()
 }
 
-#[cfg(feature = "spirv")]
+#[cfg(feature = "spirv-in")]
 fn load_spv(name: &str) -> naga::Module {
     let path = format!("{}/test-data/spv/{}", env!("CARGO_MANIFEST_DIR"), name);
     let input = std::fs::read(path).unwrap();
@@ -21,6 +22,7 @@ fn load_glsl(name: &str, entry: &str, stage: naga::ShaderStage) -> naga::Module 
     naga::front::glsl::parse_str(&input, entry.to_owned(), stage).unwrap()
 }
 
+#[cfg(feature = "spirv-in")]
 #[test]
 fn convert_quad() {
     let module = load_wgsl("quad.wgsl");
@@ -53,6 +55,7 @@ fn convert_quad() {
     }
 }
 
+#[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_boids() {
     let module = load_wgsl("boids.wgsl");
@@ -94,7 +97,7 @@ fn convert_boids() {
     }
 }
 
-#[cfg(feature = "spirv")]
+#[cfg(feature = "spirv-in")]
 #[test]
 fn convert_cube() {
     let mut validator = naga::proc::Validator::new();

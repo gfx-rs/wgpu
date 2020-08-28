@@ -43,6 +43,7 @@ fn main() {
             let input = fs::read(&args[1]).unwrap();
             naga::front::spv::parse_u8_slice(&input).unwrap()
         }
+        #[cfg(feature = "wgsl-in")]
         "wgsl" => {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::wgsl::parse_str(&input).unwrap()

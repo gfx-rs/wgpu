@@ -31,6 +31,7 @@ serialize = ["serde"]
 deserialize = ["serde"]
 spirv-in = ["petgraph", "spirv"]
 spirv-out = ["spirv"]
+wgsl-in = []
 
 [dev-dependencies]
 difference = "2.0"
