@@ -1,5 +1,8 @@
 # Change Log
 
+## v0.6.1 (tbd)
+  - allow copying from Depth32Float textures
+
 ## v0.6 (2020-08-17)
   - Crates:
     - C API is moved to [another repository](https://github.com/gfx-rs/wgpu-native)
