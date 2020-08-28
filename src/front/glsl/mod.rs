@@ -151,6 +151,7 @@ impl<'a> Parser<'a> {
                                         &mut locals,
                                         &mut locals_map,
                                         &parameter_lookup,
+                                        &[],
                                     )?;
                                     let handle = expressions.append(expr);
                                     let val = self.eval_const_expr(handle, &expressions)?;
@@ -174,7 +175,7 @@ impl<'a> Parser<'a> {
                         let mut index = 0;
 
                         for field in block.fields {
-                            let ty = self.parse_type(field.ty).unwrap();
+                            let ty = self.parse_type(field.ty, &[]).unwrap();
 
                             for ident in field.identifiers {
                                 let field_name = ident.ident.0;
@@ -184,7 +185,7 @@ impl<'a> Parser<'a> {
                                     name: Some(field_name.clone()),
                                     origin,
                                     ty: if let Some(array_spec) = ident.array_spec {
-                                        let size = self.parse_array_size(array_spec)?;
+                                        let size = self.parse_array_size(array_spec, &[])?;
                                         self.types.fetch_or_append(Type {
                                             name: None,
                                             inner: TypeInner::Array {
@@ -213,7 +214,7 @@ impl<'a> Parser<'a> {
                                 inner: TypeInner::Struct { members: fields },
                             });
 
-                            let size = self.parse_array_size(array_spec)?;
+                            let size = self.parse_array_size(array_spec, &[])?;
                             self.types.fetch_or_append(Type {
                                 name: None,
                                 inner: TypeInner::Array {
@@ -271,7 +272,7 @@ impl<'a> Parser<'a> {
         let name = function.prototype.name.0;
 
         // Parse return type
-        let ty = self.parse_type(function.prototype.ty.ty);
+        let ty = self.parse_type(function.prototype.ty.ty, &[]);
 
         let mut parameter_types = Vec::with_capacity(function.prototype.parameters.len());
         let mut parameter_lookup = FastHashMap::default();
@@ -285,10 +286,10 @@ impl<'a> Parser<'a> {
         for (index, parameter) in function.prototype.parameters.into_iter().enumerate() {
             match parameter {
                 FunctionParameterDeclaration::Named(_ /* TODO */, decl) => {
-                    let ty = self.parse_type(decl.ty).unwrap();
+                    let ty = self.parse_type(decl.ty, &[]).unwrap();
 
                     let ty = if let Some(array_spec) = decl.ident.array_spec {
-                        let size = self.parse_array_size(array_spec)?;
+                        let size = self.parse_array_size(array_spec, &[])?;
                         self.types.fetch_or_append(Type {
                             name: None,
                             inner: TypeInner::Array {
@@ -308,7 +309,7 @@ impl<'a> Parser<'a> {
                     );
                 }
                 FunctionParameterDeclaration::Unnamed(_, ty) => {
-                    parameter_types.push(self.parse_type(ty).unwrap());
+                    parameter_types.push(self.parse_type(ty, &[]).unwrap());
                 }
             }
         }
@@ -325,6 +326,7 @@ impl<'a> Parser<'a> {
                                 &mut local_variables,
                                 &mut locals_map,
                                 &parameter_lookup,
+                                &parameter_types,
                             )?;
                         }
                         _ => unimplemented!(),
@@ -336,6 +338,7 @@ impl<'a> Parser<'a> {
                             &mut local_variables,
                             &mut locals_map,
                             &parameter_lookup,
+                            &parameter_types,
                         )?);
                     }
                     SimpleStatement::Expression(None) => (),
@@ -355,6 +358,7 @@ impl<'a> Parser<'a> {
                                         &mut local_variables,
                                         &mut locals_map,
                                         &parameter_lookup,
+                                        &parameter_types,
                                     )
                                     .unwrap();
                                 expressions.append(expr)
@@ -385,13 +389,14 @@ impl<'a> Parser<'a> {
         locals: &mut Arena<LocalVariable>,
         locals_map: &mut FastHashMap<String, Handle<LocalVariable>>,
         parameter_lookup: &FastHashMap<String, Expression>,
+        parameter_types: &[Handle<Type>],
     ) -> Result<Handle<LocalVariable>, Error> {
         let name = init.head.name.map(|d| d.0);
         let ty = {
-            let ty = self.parse_type(init.head.ty.ty).unwrap();
+            let ty = self.parse_type(init.head.ty.ty, parameter_types).unwrap();
 
             if let Some(array_spec) = init.head.array_specifier {
-                let size = self.parse_array_size(array_spec)?;
+                let size = self.parse_array_size(array_spec, parameter_types)?;
                 self.types.fetch_or_append(Type {
                     name: None,
                     inner: TypeInner::Array {
@@ -412,6 +417,7 @@ impl<'a> Parser<'a> {
                 locals,
                 locals_map,
                 parameter_lookup,
+                parameter_types,
             )?)
         } else {
             None
@@ -435,6 +441,7 @@ impl<'a> Parser<'a> {
         locals: &mut Arena<LocalVariable>,
         locals_map: &mut FastHashMap<String, Handle<LocalVariable>>,
         parameter_lookup: &FastHashMap<String, Expression>,
+        parameter_types: &[Handle<Type>],
     ) -> Result<Handle<Expression>, Error> {
         match initializer {
             Initializer::Simple(expr) => {
@@ -444,6 +451,7 @@ impl<'a> Parser<'a> {
                     locals,
                     locals_map,
                     parameter_lookup,
+                    parameter_types,
                 )?;
 
                 Ok(expressions.append(handle))
@@ -459,6 +467,7 @@ impl<'a> Parser<'a> {
         locals: &mut Arena<LocalVariable>,
         locals_map: &mut FastHashMap<String, Handle<LocalVariable>>,
         parameter_lookup: &FastHashMap<String, Expression>,
+        parameter_types: &[Handle<Type>],
     ) -> Result<crate::Statement, Error> {
         match expr {
             Expr::Assignment(reg, op, value) => {
@@ -469,6 +478,7 @@ impl<'a> Parser<'a> {
                         locals,
                         locals_map,
                         parameter_lookup,
+                        parameter_types,
                     )?;
                     expressions.append(pointer)
                 };
@@ -479,6 +489,7 @@ impl<'a> Parser<'a> {
                     locals,
                     locals_map,
                     parameter_lookup,
+                    parameter_types,
                 )?;
                 let value = match op {
                     AssignmentOp::Equal => right,
@@ -555,6 +566,7 @@ impl<'a> Parser<'a> {
         locals: &mut Arena<LocalVariable>,
         locals_map: &mut FastHashMap<String, Handle<LocalVariable>>,
         parameter_lookup: &FastHashMap<String, Expression>,
+        parameter_types: &[Handle<Type>],
     ) -> Result<Expression, Error> {
         match expr {
             Expr::Variable(ident) => {
@@ -765,8 +777,14 @@ impl<'a> Parser<'a> {
                 },
             ))),
             Expr::Unary(op, reg) => {
-                let expr =
-                    self.parse_expression(*reg, expressions, locals, locals_map, parameter_lookup)?;
+                let expr = self.parse_expression(
+                    *reg,
+                    expressions,
+                    locals,
+                    locals_map,
+                    parameter_lookup,
+                    parameter_types,
+                )?;
                 Ok(Expression::Unary {
                     op: helpers::glsl_to_spirv_unary_op(op),
                     expr: expressions.append(expr),
@@ -779,6 +797,7 @@ impl<'a> Parser<'a> {
                     locals,
                     locals_map,
                     parameter_lookup,
+                    parameter_types,
                 )?;
                 let right = self.parse_expression(
                     *right,
@@ -786,6 +805,7 @@ impl<'a> Parser<'a> {
                     locals,
                     locals_map,
                     parameter_lookup,
+                    parameter_types,
                 )?;
 
                 Ok(Expression::Binary {
@@ -828,6 +848,7 @@ impl<'a> Parser<'a> {
                                         locals,
                                         locals_map,
                                         parameter_lookup,
+                                        parameter_types,
                                     )
                                     .unwrap();
                                 expressions.append(expr)
@@ -850,6 +871,7 @@ impl<'a> Parser<'a> {
                                             locals,
                                             locals_map,
                                             parameter_lookup,
+                                            parameter_types,
                                         )?,
                                         self.parse_expression(
                                             sample_args.remove(0),
@@ -857,6 +879,7 @@ impl<'a> Parser<'a> {
                                             locals,
                                             locals_map,
                                             parameter_lookup,
+                                            parameter_types,
                                         )?,
                                     ),
                                     _ => unimplemented!(),
@@ -871,6 +894,7 @@ impl<'a> Parser<'a> {
                             locals,
                             locals_map,
                             parameter_lookup,
+                            parameter_types,
                         )?;
 
                         Ok(Expression::ImageSample {
@@ -893,6 +917,7 @@ impl<'a> Parser<'a> {
                                         locals,
                                         locals_map,
                                         parameter_lookup,
+                                        parameter_types,
                                     )
                                     .unwrap();
                                 expressions.append(expr)
@@ -909,6 +934,7 @@ impl<'a> Parser<'a> {
                         locals,
                         locals_map,
                         parameter_lookup,
+                        parameter_types,
                     )?;
                     expressions.append(expr)
                 };
@@ -924,6 +950,7 @@ impl<'a> Parser<'a> {
                         &self.globals,
                         locals,
                         &self.functions,
+                        parameter_types,
                     )
                     .map_err(|e| Error { kind: e.into() })?;
                 let base_type = &self.types[type_handle];
@@ -977,10 +1004,7 @@ impl<'a> Parser<'a> {
                                     crate::TypeInner::Vector { size, kind, width }
                                 };
                             Ok(crate::Expression::Compose {
-                                ty: crate::proc::Typifier::deduce_type_handle(
-                                    inner,
-                                    &mut self.types,
-                                ),
+                                ty: self.types.fetch_or_append(Type { name: None, inner }),
                                 components,
                             })
                         } else {
@@ -1005,7 +1029,11 @@ impl<'a> Parser<'a> {
     }
 
     // None = void
-    fn parse_type(&mut self, ty: TypeSpecifier) -> Option<Handle<Type>> {
+    fn parse_type(
+        &mut self,
+        ty: TypeSpecifier,
+        parameter_types: &[Handle<Type>],
+    ) -> Option<Handle<Type>> {
         let base_ty = helpers::glsl_to_spirv_type(ty.ty)?;
 
         let ty = if let Some(array_spec) = ty.array_specifier {
@@ -1013,7 +1041,7 @@ impl<'a> Parser<'a> {
                 name: None,
                 inner: base_ty,
             });
-            let size = self.parse_array_size(array_spec).unwrap();
+            let size = self.parse_array_size(array_spec, parameter_types).unwrap();
 
             TypeInner::Array {
                 base: handle,
@@ -1033,10 +1061,10 @@ impl<'a> Parser<'a> {
     fn parse_global(&mut self, head: SingleDeclaration) -> Result<Handle<GlobalVariable>, Error> {
         let name = head.name.map(|d| d.0);
         let ty = {
-            let ty = self.parse_type(head.ty.ty).unwrap();
+            let ty = self.parse_type(head.ty.ty, &[]).unwrap();
 
             if let Some(array_spec) = head.array_specifier {
-                let size = self.parse_array_size(array_spec)?;
+                let size = self.parse_array_size(array_spec, &[])?;
                 self.types.fetch_or_append(Type {
                     name: None,
                     inner: TypeInner::Array {
@@ -1137,7 +1165,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_array_size(&mut self, array_spec: ArraySpecifier) -> Result<ArraySize, Error> {
+    pub fn parse_array_size(
+        &mut self,
+        array_spec: ArraySpecifier,
+        parameter_types: &[Handle<Type>],
+    ) -> Result<ArraySize, Error> {
         let parameter_lookup = FastHashMap::default();
         let mut locals = Arena::<LocalVariable>::new();
         let mut locals_map = FastHashMap::default();
@@ -1151,6 +1183,7 @@ impl<'a> Parser<'a> {
                     &mut locals,
                     &mut locals_map,
                     &parameter_lookup,
+                    parameter_types,
                 )?;
                 let handle = expressions.append(expr);
 

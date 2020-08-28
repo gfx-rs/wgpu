@@ -9,8 +9,8 @@ use std::{cmp::Ordering, fmt, hash, marker::PhantomData, num::NonZeroU32};
 type Index = NonZeroU32;
 
 /// A strongly typed reference to a SPIR-V element.
-#[cfg_attr(feature = "serialize", derive(crate::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(crate::Deserialize))]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(transparent)
@@ -85,8 +85,8 @@ impl<T> Handle<T> {
 /// The arena can be indexed using the given handle to obtain
 /// a reference to the stored item.
 #[derive(Debug)]
-#[cfg_attr(feature = "serialize", derive(crate::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(crate::Deserialize))]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(transparent)
@@ -138,19 +138,25 @@ impl<T> Arena<T> {
         Handle::new(index)
     }
 
-    /// Adds a value with a check for uniqueness: returns a handle pointing to
-    /// an existing element if its value matches the given one, or adds a new
+    /// Adds a value with a custom check for uniqueness:
+    /// returns a handle pointing to
+    /// an existing element if the check succeeds, or adds a new
     /// element otherwise.
-    pub fn fetch_or_append(&mut self, value: T) -> Handle<T>
-    where
-        T: PartialEq,
-    {
-        if let Some(index) = self.data.iter().position(|d| d == &value) {
+    pub fn fetch_if_or_append<F: Fn(&T, &T) -> bool>(&mut self, value: T, fun: F) -> Handle<T> {
+        if let Some(index) = self.data.iter().position(|d| fun(d, &value)) {
             let index = unsafe { Index::new_unchecked((index + 1) as u32) };
             Handle::new(index)
         } else {
             self.append(value)
         }
+    }
+
+    /// Adds a value with a check for uniqueness, where the check is plain comparison.
+    pub fn fetch_or_append(&mut self, value: T) -> Handle<T>
+    where
+        T: PartialEq,
+    {
+        self.fetch_if_or_append(value, T::eq)
     }
 
     /// Get a mutable reference to an element in the arena.
