@@ -414,6 +414,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         )?;
 
         let (block_width, _) = conv::texture_block_size(dst_texture.format);
+        if !conv::is_valid_copy_dst_texture_format(dst_texture.format) {
+            panic!(
+                "copying to textures with format {:?} is forbidden",
+                dst_texture.format
+            );
+        }
 
         let buffer_width = (source.layout.bytes_per_row / bytes_per_block) * block_width;
         let region = hal::command::BufferImageCopy {
@@ -521,6 +527,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         )?;
 
         let (block_width, _) = conv::texture_block_size(src_texture.format);
+        if !conv::is_valid_copy_src_texture_format(src_texture.format) {
+            panic!(
+                "copying from textures with format {:?} is forbidden",
+                src_texture.format
+            );
+        }
 
         let buffer_width = (destination.layout.bytes_per_row / bytes_per_block) * block_width;
         let region = hal::command::BufferImageCopy {
