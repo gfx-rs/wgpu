@@ -1,5 +1,5 @@
 use super::parser::Token;
-use super::token::TokenMetadata;
+use super::{token::TokenMetadata, types::parse_type};
 use std::{iter::Enumerate, str::Lines};
 
 fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
@@ -138,68 +138,11 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                 ),
                 // types
                 "void" => (Some(Token::Void(meta)), rest),
-                "float" => (Some(Token::Float(meta)), rest),
-                "double" => (Some(Token::Double(meta)), rest),
-                "int" => (Some(Token::Int(meta)), rest),
-                "uint" => (Some(Token::Uint(meta)), rest),
                 word => {
-                    use crate::{ScalarKind, VectorSize};
-
-                    fn kind_width_parse(ty: &str) -> Option<(ScalarKind, u8)> {
-                        Some(match ty {
-                            "" => (ScalarKind::Float, 4),
-                            "b" => (ScalarKind::Bool, 4),
-                            "i" => (ScalarKind::Sint, 4),
-                            "u" => (ScalarKind::Uint, 4),
-                            "d" => (ScalarKind::Float, 8),
-                            _ => return None,
-                        })
-                    }
-
-                    fn size_parse(n: &str) -> Option<VectorSize> {
-                        Some(match n {
-                            "2" => VectorSize::Bi,
-                            "3" => VectorSize::Tri,
-                            "4" => VectorSize::Quad,
-                            _ => return None,
-                        })
-                    }
-
-                    let vec_parse = |word: &str| {
-                        let mut iter = word.split("vec");
-
-                        let kind = iter.next()?;
-                        let size = iter.next()?;
-                        let (kind, width) = kind_width_parse(kind)?;
-                        let size = size_parse(size)?;
-
-                        Some(Token::Vec((meta.clone(), (size, kind, width))))
+                    let token = match parse_type(word) {
+                        Some(t) => Token::TypeName((meta, t)),
+                        None => Token::Identifier((meta, String::from(word))),
                     };
-
-                    let mat_parse = |word: &str| {
-                        let mut iter = word.split("mat");
-
-                        let kind = iter.next()?;
-                        let size = iter.next()?;
-                        let (kind, width) = kind_width_parse(kind)?;
-
-                        let (col, row) = if let Some(size) = size_parse(size) {
-                            (size, size)
-                        } else {
-                            let mut iter = size.split('x');
-                            match (iter.next()?, iter.next()?, iter.next()) {
-                                (col, row, None) => (size_parse(col)?, size_parse(row)?),
-                                _ => return None,
-                            }
-                        };
-
-                        Some(Token::Mat((meta.clone(), (col, row, kind, width))))
-                    };
-
-                    let token = vec_parse(word)
-                        .or_else(|| mat_parse(word))
-                        .unwrap_or_else(|| Token::Identifier((meta, String::from(word))));
-
                     (Some(token), rest)
                 }
             }

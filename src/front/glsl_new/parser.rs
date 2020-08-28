@@ -7,7 +7,7 @@ pomelo! {
         use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{Arena, BinaryOperator, Binding, Block, BuiltIn, Constant, ConstantInner, Expression,
             Function, GlobalVariable, Handle, LocalVariable, ScalarKind,
-            ShaderStage, Statement, StorageClass, Type, TypeInner, VectorSize, Bytes, Interpolation};
+            ShaderStage, Statement, StorageClass, Type, TypeInner, VectorSize, Interpolation};
     }
     %token #[derive(Debug)] pub enum Token {};
     %parser pub struct Parser<'a> {};
@@ -106,9 +106,7 @@ pomelo! {
     %type type_specifier Option<Handle<Type>>;
     %type type_specifier_nonarray Option<Type>;
 
-    %type Vec (VectorSize, ScalarKind, Bytes);
-    %type Mat (VectorSize, VectorSize, ScalarKind, Bytes);
-
+    %type TypeName Type;
 
     root ::= version_pragma translation_unit;
     version_pragma ::= Version IntConstant(V) Identifier?(P) {
@@ -670,73 +668,7 @@ pomelo! {
     }
 
     type_specifier_nonarray ::= Void { None }
-    // Scalars
-    type_specifier_nonarray ::= Bool {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Bool,
-                width: 4, // https://stackoverflow.com/questions/9419781/what-is-the-size-of-glsl-boolean
-            }
-        })
-    }
-    type_specifier_nonarray ::= Float {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Float,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Double {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Float,
-                width: 8,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Int {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Sint,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Uint {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Uint,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Vec((_, (size, kind, width))) {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size,
-                kind,
-                width,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Mat((_, (columns, rows, kind, width))) {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Matrix {
-                columns,
-                rows,
-                kind,
-                width,
-            }
-        })
-    }
+    type_specifier_nonarray ::= TypeName(t) {Some(t.1)};
 
     // misc
     translation_unit ::= external_declaration;

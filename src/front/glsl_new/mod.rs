@@ -14,6 +14,7 @@ mod parser;
 #[cfg(test)]
 mod parser_tests;
 mod token;
+mod types;
 
 #[cfg(all(test, feature = "serialize"))]
 mod rosetta_tests;
