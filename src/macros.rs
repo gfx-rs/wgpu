@@ -47,6 +47,9 @@ fn test_vertex_attr_array() {
 #[macro_export]
 macro_rules! include_spirv {
     ($($token:tt)*) => {
-        $crate::util::make_spirv(include_bytes!($($token)*))
+        {
+            log::info!("including '{}'", $($token)*);
+            $crate::util::make_spirv(include_bytes!($($token)*))
+        }
     };
 }

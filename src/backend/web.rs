@@ -331,6 +331,9 @@ fn map_texture_component_type(
         wgt::TextureComponentType::Float => web_sys::GpuTextureComponentType::Float,
         wgt::TextureComponentType::Sint => web_sys::GpuTextureComponentType::Sint,
         wgt::TextureComponentType::Uint => web_sys::GpuTextureComponentType::Uint,
+        wgt::TextureComponentType::DepthComparison => {
+            panic!("depth-comparison is not supported here yet")
+        }
     }
 }
 
