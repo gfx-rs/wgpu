@@ -1,7 +1,8 @@
 # Change Log
 
 ## v0.6.1 (tbd)
-  - allow copying from Depth32Float textures
+  - allow copying from `Depth32Float` textures
+  - fix usage tracking of read-only buffer storages
 
 ## v0.6 (2020-08-17)
   - Crates:
