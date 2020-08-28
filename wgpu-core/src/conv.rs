@@ -439,11 +439,10 @@ pub fn texture_block_size(format: wgt::TextureFormat) -> (u32, u32) {
         | Tf::Rgba16Float
         | Tf::Rgba32Uint
         | Tf::Rgba32Sint
-        | Tf::Rgba32Float => (1, 1),
-
-        Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
-            unreachable!("unexpected depth format")
-        }
+        | Tf::Rgba32Float
+        | Tf::Depth32Float
+        | Tf::Depth24Plus
+        | Tf::Depth24PlusStencil8 => (1, 1),
 
         Tf::Bc1RgbaUnorm
         | Tf::Bc1RgbaUnormSrgb
@@ -560,6 +559,22 @@ pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> hal::format::Forma
 
 pub fn is_power_of_two(val: u32) -> bool {
     val != 0 && (val & (val - 1)) == 0
+}
+
+pub fn is_valid_copy_src_texture_format(format: wgt::TextureFormat) -> bool {
+    use wgt::TextureFormat as Tf;
+    match format {
+        Tf::Depth24Plus | Tf::Depth24PlusStencil8 => false,
+        _ => true,
+    }
+}
+
+pub fn is_valid_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
+    use wgt::TextureFormat as Tf;
+    match format {
+        Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => false,
+        _ => true,
+    }
 }
 
 pub fn map_texture_dimension_size(
