@@ -70,9 +70,39 @@ pub fn map_image_dim(word: spirv::Word) -> Result<crate::ImageDimension, Error> 
 }
 
 pub fn map_image_format(word: spirv::Word) -> Result<crate::StorageFormat, Error> {
-    use spirv::ImageFormat as If;
-    match If::from_u32(word) {
-        Some(If::Rgba32f) => Ok(crate::StorageFormat::Rgba32f),
+    match spirv::ImageFormat::from_u32(word) {
+        Some(spirv::ImageFormat::R8) => Ok(crate::StorageFormat::R8Unorm),
+        Some(spirv::ImageFormat::R8Snorm) => Ok(crate::StorageFormat::R8Snorm),
+        Some(spirv::ImageFormat::R8ui) => Ok(crate::StorageFormat::R8Uint),
+        Some(spirv::ImageFormat::R8i) => Ok(crate::StorageFormat::R8Sint),
+        Some(spirv::ImageFormat::R16ui) => Ok(crate::StorageFormat::R16Uint),
+        Some(spirv::ImageFormat::R16i) => Ok(crate::StorageFormat::R16Sint),
+        Some(spirv::ImageFormat::R16f) => Ok(crate::StorageFormat::R16Float),
+        Some(spirv::ImageFormat::Rg8) => Ok(crate::StorageFormat::Rg8Unorm),
+        Some(spirv::ImageFormat::Rg8Snorm) => Ok(crate::StorageFormat::Rg8Snorm),
+        Some(spirv::ImageFormat::Rg8ui) => Ok(crate::StorageFormat::Rg8Uint),
+        Some(spirv::ImageFormat::Rg8i) => Ok(crate::StorageFormat::Rg8Sint),
+        Some(spirv::ImageFormat::R32ui) => Ok(crate::StorageFormat::R32Uint),
+        Some(spirv::ImageFormat::R32i) => Ok(crate::StorageFormat::R32Sint),
+        Some(spirv::ImageFormat::R32f) => Ok(crate::StorageFormat::R32Float),
+        Some(spirv::ImageFormat::Rg16ui) => Ok(crate::StorageFormat::Rg16Uint),
+        Some(spirv::ImageFormat::Rg16i) => Ok(crate::StorageFormat::Rg16Sint),
+        Some(spirv::ImageFormat::Rg16f) => Ok(crate::StorageFormat::Rg16Float),
+        Some(spirv::ImageFormat::Rgba8) => Ok(crate::StorageFormat::Rgba8Unorm),
+        Some(spirv::ImageFormat::Rgba8Snorm) => Ok(crate::StorageFormat::Rgba8Snorm),
+        Some(spirv::ImageFormat::Rgba8ui) => Ok(crate::StorageFormat::Rgba8Uint),
+        Some(spirv::ImageFormat::Rgba8i) => Ok(crate::StorageFormat::Rgba8Sint),
+        Some(spirv::ImageFormat::Rgb10a2ui) => Ok(crate::StorageFormat::Rgb10a2Unorm),
+        Some(spirv::ImageFormat::R11fG11fB10f) => Ok(crate::StorageFormat::Rg11b10Float),
+        Some(spirv::ImageFormat::Rg32ui) => Ok(crate::StorageFormat::Rg32Uint),
+        Some(spirv::ImageFormat::Rg32i) => Ok(crate::StorageFormat::Rg32Sint),
+        Some(spirv::ImageFormat::Rg32f) => Ok(crate::StorageFormat::Rg32Float),
+        Some(spirv::ImageFormat::Rgba16ui) => Ok(crate::StorageFormat::Rgba16Uint),
+        Some(spirv::ImageFormat::Rgba16i) => Ok(crate::StorageFormat::Rgba16Sint),
+        Some(spirv::ImageFormat::Rgba16f) => Ok(crate::StorageFormat::Rgba16Float),
+        Some(spirv::ImageFormat::Rgba32ui) => Ok(crate::StorageFormat::Rgba32Uint),
+        Some(spirv::ImageFormat::Rgba32i) => Ok(crate::StorageFormat::Rgba32Sint),
+        Some(spirv::ImageFormat::Rgba32f) => Ok(crate::StorageFormat::Rgba32Float),
         _ => Err(Error::UnsupportedImageFormat(word)),
     }
 }
