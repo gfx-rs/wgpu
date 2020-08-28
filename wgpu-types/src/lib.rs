@@ -810,7 +810,7 @@ pub enum TextureFormat {
 }
 
 impl TextureFormat {
-    pub fn is_depth_format(self) -> bool {
+    pub fn is_depth(self) -> bool {
         match self {
             TextureFormat::Depth32Float
             | TextureFormat::Depth24Plus

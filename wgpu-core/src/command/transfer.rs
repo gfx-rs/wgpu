@@ -482,7 +482,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         )?;
 
         let (block_width, _) = conv::texture_block_size(dst_texture.format);
-        if dst_texture.format.is_depth_format() {
+        if dst_texture.format.is_depth() {
             Err(TransferError::CopyToForbiddenTextureFormat(
                 dst_texture.format,
             ))?
