@@ -294,8 +294,7 @@ pub struct Type {
 }
 
 /// Enum with additional information, depending on the kind of type.
-// Clone is used only for error reporting and is not intended for end users
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum TypeInner {

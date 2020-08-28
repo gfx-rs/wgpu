@@ -138,6 +138,14 @@ impl<T> Arena<T> {
         Handle::new(index)
     }
 
+    /// Fetch a handle to an existing type.
+    pub fn fetch_if<F: Fn(&T) -> bool>(&self, fun: F) -> Option<Handle<T>> {
+        self.data
+            .iter()
+            .position(fun)
+            .map(|index| Handle::new(unsafe { Index::new_unchecked((index + 1) as u32) }))
+    }
+
     /// Adds a value with a custom check for uniqueness:
     /// returns a handle pointing to
     /// an existing element if the check succeeds, or adds a new

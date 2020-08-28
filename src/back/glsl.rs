@@ -1,3 +1,4 @@
+use super::{BorrowType, MaybeOwned};
 use crate::{
     Arena, ArraySize, BinaryOperator, BuiltIn, Constant, ConstantInner, DerivativeAxis, Expression,
     FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageClass, Interpolation,
@@ -599,26 +600,26 @@ fn write_expression<'a, 'b>(
     expr: &Expression,
     module: &'a Module,
     builder: &'b mut StatementBuilder<'a>,
-) -> Result<(Cow<'a, str>, Cow<'a, TypeInner>), Error> {
+) -> Result<(Cow<'a, str>, BorrowType<'a>), Error> {
     Ok(match *expr {
         Expression::Access { base, index } => {
             let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
 
-            let inner = match *ty.as_ref() {
+            let inner = match *ty.borrow() {
                 TypeInner::Vector { kind, width, .. } => {
-                    Cow::Owned(TypeInner::Scalar { kind, width })
+                    MaybeOwned::Owned(TypeInner::Scalar { kind, width })
                 }
                 TypeInner::Matrix {
                     kind,
                     width,
                     columns,
                     ..
-                } => Cow::Owned(TypeInner::Vector {
+                } => MaybeOwned::Owned(TypeInner::Vector {
                     kind,
                     width,
                     size: columns,
                 }),
-                TypeInner::Array { base, .. } => Cow::Borrowed(&module.types[base].inner),
+                TypeInner::Array { base, .. } => module.borrow_type(base),
                 _ => return Err(Error::Custom(format!("Cannot dynamically index {:?}", ty))),
             };
 
@@ -634,10 +635,10 @@ fn write_expression<'a, 'b>(
         Expression::AccessIndex { base, index } => {
             let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
 
-            match *ty.as_ref() {
+            match *ty.borrow() {
                 TypeInner::Vector { kind, width, .. } => (
                     Cow::Owned(format!("{}[{}]", base_expr, index)),
-                    Cow::Owned(TypeInner::Scalar { kind, width }),
+                    MaybeOwned::Owned(TypeInner::Scalar { kind, width }),
                 ),
                 TypeInner::Matrix {
                     kind,
@@ -646,7 +647,7 @@ fn write_expression<'a, 'b>(
                     ..
                 } => (
                     Cow::Owned(format!("{}[{}]", base_expr, index)),
-                    Cow::Owned(TypeInner::Vector {
+                    MaybeOwned::Owned(TypeInner::Vector {
                         kind,
                         width,
                         size: columns,
@@ -654,7 +655,7 @@ fn write_expression<'a, 'b>(
                 ),
                 TypeInner::Array { base, .. } => (
                     Cow::Owned(format!("{}[{}]", base_expr, index)),
-                    Cow::Borrowed(&module.types[base].inner),
+                    module.borrow_type(base),
                 ),
                 TypeInner::Struct { ref members } => (
                     if let MemberOrigin::BuiltIn(builtin) = members[index as usize].origin {
@@ -670,7 +671,7 @@ fn write_expression<'a, 'b>(
                                 .unwrap_or(&format!("_{}", index))
                         ))
                     },
-                    Cow::Borrowed(&module.types[members[index as usize].ty].inner),
+                    module.borrow_type(members[index as usize].ty),
                 ),
                 _ => return Err(Error::Custom(format!("Cannot index {:?}", ty))),
             }
@@ -682,7 +683,7 @@ fn write_expression<'a, 'b>(
                 builder,
                 builder.features,
             )?),
-            Cow::Borrowed(&module.types[module.constants[constant].ty].inner),
+            module.borrow_type(module.constants[constant].ty),
         ),
         Expression::Compose { ty, ref components } => {
             let constructor = match module.types[ty].inner {
@@ -756,21 +757,21 @@ fn write_expression<'a, 'b>(
                         .collect::<Result<Vec<_>, _>>()?
                         .join(","),
                 )),
-                Cow::Borrowed(&module.types[ty].inner),
+                module.borrow_type(ty),
             )
         }
         Expression::FunctionParameter(pos) => {
             let (arg, ty) = builder.args.get(&pos).unwrap();
 
-            (Cow::Borrowed(arg), Cow::Borrowed(&module.types[*ty].inner))
+            (Cow::Borrowed(arg), module.borrow_type(*ty))
         }
         Expression::GlobalVariable(handle) => (
             Cow::Borrowed(builder.globals.get(&handle).unwrap()),
-            Cow::Borrowed(&module.types[module.global_variables[handle].ty].inner),
+            module.borrow_type(module.global_variables[handle].ty),
         ),
         Expression::LocalVariable(handle) => (
             Cow::Borrowed(builder.locals_lookup.get(&handle).unwrap()),
-            Cow::Borrowed(&module.types[builder.locals[handle].ty].inner),
+            module.borrow_type(builder.locals[handle].ty),
         ),
         Expression::Load { pointer } => {
             write_expression(&builder.expressions[pointer], module, builder)?
@@ -789,7 +790,7 @@ fn write_expression<'a, 'b>(
             let (coordinate_expr, coordinate_ty) =
                 write_expression(&builder.expressions[coordinate], module, builder)?;
 
-            let (kind, dim, arrayed, class) = match *image_ty.as_ref() {
+            let (kind, dim, arrayed, class) = match *image_ty.borrow() {
                 TypeInner::Image {
                     kind,
                     dim,
@@ -803,8 +804,8 @@ fn write_expression<'a, 'b>(
                 crate::ImageClass::Multisampled => true,
                 _ => false,
             };
-            let shadow = match sampler_ty.as_ref() {
-                TypeInner::Sampler { comparison } => *comparison,
+            let shadow = match *sampler_ty.borrow() {
+                TypeInner::Sampler { comparison } => comparison,
                 _ => {
                     return Err(Error::Custom(format!(
                         "Cannot have a sampler of {:?}",
@@ -812,8 +813,8 @@ fn write_expression<'a, 'b>(
                     )))
                 }
             };
-            let size = match coordinate_ty.as_ref() {
-                TypeInner::Vector { size, .. } => *size,
+            let size = match *coordinate_ty.borrow() {
+                TypeInner::Vector { size, .. } => size,
                 _ => {
                     return Err(Error::Custom(format!(
                         "Cannot sample with coordinates of type {:?}",
@@ -874,9 +875,9 @@ fn write_expression<'a, 'b>(
 
             let width = 4;
             let ty = if shadow {
-                Cow::Owned(TypeInner::Scalar { kind, width })
+                MaybeOwned::Owned(TypeInner::Scalar { kind, width })
             } else {
-                Cow::Owned(TypeInner::Vector { kind, width, size })
+                MaybeOwned::Owned(TypeInner::Vector { kind, width, size })
             };
 
             (Cow::Owned(expr), ty)
@@ -891,7 +892,7 @@ fn write_expression<'a, 'b>(
             let (coordinate_expr, coordinate_ty) =
                 write_expression(&builder.expressions[coordinate], module, builder)?;
 
-            let (kind, dim, arrayed, class) = match *image_ty.as_ref() {
+            let (kind, dim, arrayed, class) = match *image_ty.borrow() {
                 TypeInner::Image {
                     kind,
                     dim,
@@ -901,8 +902,8 @@ fn write_expression<'a, 'b>(
                 _ => return Err(Error::Custom(format!("Cannot load {:?}", image_ty))),
             };
 
-            let size = match coordinate_ty.as_ref() {
-                TypeInner::Vector { size, .. } => *size,
+            let size = match *coordinate_ty.borrow() {
+                TypeInner::Vector { size, .. } => size,
                 _ => {
                     return Err(Error::Custom(format!(
                         "Cannot sample with coordinates of type {:?}",
@@ -957,7 +958,7 @@ fn write_expression<'a, 'b>(
             let width = 4;
             (
                 Cow::Owned(expr),
-                Cow::Owned(TypeInner::Vector { kind, width, size }),
+                MaybeOwned::Owned(TypeInner::Vector { kind, width, size }),
             )
         }
         Expression::Unary { op, expr } => {
@@ -968,7 +969,7 @@ fn write_expression<'a, 'b>(
                     "({} {})",
                     match op {
                         UnaryOperator::Negate => "-",
-                        UnaryOperator::Not => match ty.as_ref() {
+                        UnaryOperator::Not => match ty.borrow() {
                             TypeInner::Scalar {
                                 kind: ScalarKind::Sint,
                                 ..
@@ -1035,7 +1036,7 @@ fn write_expression<'a, 'b>(
                 | BinaryOperator::ShiftLeftLogical
                 | BinaryOperator::ShiftRightLogical
                 | BinaryOperator::ShiftRightArithmetic => {
-                    match (left_ty.as_ref(), right_ty.as_ref()) {
+                    match (left_ty.borrow(), right_ty.borrow()) {
                         (TypeInner::Scalar { .. }, TypeInner::Scalar { .. }) => left_ty,
                         (TypeInner::Scalar { .. }, TypeInner::Vector { .. }) => right_ty,
                         (TypeInner::Scalar { .. }, TypeInner::Matrix { .. }) => right_ty,
@@ -1058,7 +1059,7 @@ fn write_expression<'a, 'b>(
                 | BinaryOperator::Less
                 | BinaryOperator::LessEqual
                 | BinaryOperator::Greater
-                | BinaryOperator::GreaterEqual => Cow::Owned(TypeInner::Scalar {
+                | BinaryOperator::GreaterEqual => MaybeOwned::Owned(TypeInner::Scalar {
                     kind: ScalarKind::Bool,
                     width: 1,
                 }),
@@ -1092,13 +1093,13 @@ fn write_expression<'a, 'b>(
             let (matrix_expr, matrix_ty) =
                 write_expression(&builder.expressions[matrix], module, builder)?;
 
-            let ty = match *matrix_ty.as_ref() {
+            let ty = match *matrix_ty.borrow() {
                 TypeInner::Matrix {
                     columns,
                     rows,
                     kind,
                     width,
-                } => Cow::Owned(TypeInner::Matrix {
+                } => MaybeOwned::Owned(TypeInner::Matrix {
                     columns: rows,
                     rows: columns,
                     kind,
@@ -1119,9 +1120,9 @@ fn write_expression<'a, 'b>(
                 write_expression(&builder.expressions[left], module, builder)?;
             let (right_expr, _) = write_expression(&builder.expressions[right], module, builder)?;
 
-            let ty = match *left_ty.as_ref() {
+            let ty = match *left_ty.borrow() {
                 TypeInner::Vector { kind, width, .. } => {
-                    Cow::Owned(TypeInner::Scalar { kind, width })
+                    MaybeOwned::Owned(TypeInner::Scalar { kind, width })
                 }
                 _ => {
                     return Err(Error::Custom(format!(
@@ -1146,15 +1147,18 @@ fn write_expression<'a, 'b>(
         Expression::As(value, kind) => {
             let (value_expr, value_ty) =
                 write_expression(&builder.expressions[value], module, builder)?;
-            let (width, out_ty) = match *value_ty.as_ref() {
+            let (width, out_ty) = match *value_ty.borrow() {
                 TypeInner::Scalar { width, kind: _ } => {
-                    (width, Cow::Owned(TypeInner::Scalar { kind, width }))
+                    (width, MaybeOwned::Owned(TypeInner::Scalar { kind, width }))
                 }
                 TypeInner::Vector {
                     width,
                     kind: _,
                     size,
-                } => (width, Cow::Owned(TypeInner::Vector { kind, width, size })),
+                } => (
+                    width,
+                    MaybeOwned::Owned(TypeInner::Vector { kind, width, size }),
+                ),
                 _ => return Err(Error::Custom(format!("Cannot cast {}", value_expr))),
             };
             let ty_expr = map_scalar(kind, width, builder.features)?;
@@ -1184,8 +1188,8 @@ fn write_expression<'a, 'b>(
             let ty = match *origin {
                 FunctionOrigin::Local(function) => module.functions[function]
                     .return_type
-                    .map(|ty| Cow::Borrowed(&module.types[ty].inner))
-                    .unwrap_or(Cow::Owned(
+                    .map(|ty| module.borrow_type(ty))
+                    .unwrap_or(MaybeOwned::Owned(
                         TypeInner::Sampler { comparison: false }, /*Dummy type*/
                     )),
                 FunctionOrigin::External(_) => {

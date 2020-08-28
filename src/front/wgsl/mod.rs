@@ -38,8 +38,8 @@ pub enum Token<'a> {
 pub enum Error<'a> {
     #[error("unexpected token: {0:?}")]
     Unexpected(Token<'a>),
-    #[error(transparent)]
-    UnexpectedConstantType(#[from] crate::proc::UnexpectedConstantTypeError),
+    #[error("constant {0:?} doesn't match its type {1:?}")]
+    UnexpectedConstantType(crate::ConstantInner, Handle<crate::Type>),
     #[error("unable to parse `{0}` as integer: {1}")]
     BadInteger(&'a str, std::num::ParseIntError),
     #[error("unable to parse `{1}` as float: {1}")]
@@ -69,7 +69,7 @@ pub enum Error<'a> {
     #[error("array stride must not be 0")]
     ZeroStride,
     #[error("not a composite type: {0:?}")]
-    NotCompositeType(crate::TypeInner),
+    NotCompositeType(Handle<crate::Type>),
     #[error("function redefinition: `{0}`")]
     FunctionRedefinition(&'a str),
     //MutabilityViolation(&'a str),
@@ -287,20 +287,16 @@ impl Parser {
         ty: Handle<crate::Type>,
         index: usize,
     ) -> Result<Handle<crate::Type>, Error<'static>> {
-        let ty = match type_arena[ty].inner {
+        match type_arena[ty].inner {
             crate::TypeInner::Vector { kind, width, .. }
             | crate::TypeInner::Matrix { kind, width, .. } => {
-                type_arena.fetch_or_append(crate::Type {
-                    name: None,
-                    inner: crate::TypeInner::Scalar { kind, width },
-                })
+                let inner = crate::TypeInner::Scalar { kind, width };
+                Ok(type_arena.fetch_or_append(crate::Type { name: None, inner }))
             }
-            crate::TypeInner::Array { base, .. } => base,
-            crate::TypeInner::Struct { ref members } => members[index].ty,
-            ref inner => return Err(Error::NotCompositeType(inner.clone())),
-        };
-
-        Ok(ty)
+            crate::TypeInner::Array { base, .. } => Ok(base),
+            crate::TypeInner::Struct { ref members } => Ok(members[index].ty),
+            _ => Err(Error::NotCompositeType(ty)),
+        }
     }
 
     fn get_constant_inner(
@@ -389,12 +385,12 @@ impl Parser {
                     if !components.is_empty() {
                         lexer.expect(Token::Separator(','))?;
                     }
-                    let inner = self.parse_const_expression(lexer, type_arena, const_arena)?;
                     let ty = Self::deconstruct_composite_type(
                         type_arena,
                         composite_ty,
                         components.len(),
                     )?;
+                    let inner = self.parse_const_expression(lexer, type_arena, const_arena)?;
                     components.push(const_arena.fetch_or_append(crate::Constant {
                         name: None,
                         specialization: None,
@@ -1419,7 +1415,9 @@ impl Parser {
                 let inner =
                     self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
                 lexer.expect(Token::Separator(';'))?;
-                crate::proc::check_constant_types(&inner, &module.types[ty].inner)?;
+                if !crate::proc::check_constant_type(&inner, &module.types[ty].inner) {
+                    return Err(Error::UnexpectedConstantType(inner, ty));
+                }
                 let const_handle = module.constants.append(crate::Constant {
                     name: Some(name.to_owned()),
                     specialization: None,

@@ -14,9 +14,9 @@ the output struct. If there is a structure in the outputs, and it contains any b
 we move them up to the root output structure that we define ourselves.
 !*/
 
-use std::fmt::{Display, Error as FmtError, Formatter, Write};
-
+use super::{BorrowType, MaybeOwned};
 use crate::{arena::Handle, FastHashMap};
+use std::fmt::{Display, Error as FmtError, Formatter, Write};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BindTarget {
@@ -57,33 +57,33 @@ impl Display for Level {
 // Note: some of these should be removed in favor of proper IR validation.
 
 #[derive(Debug)]
-pub enum Error {
+pub enum Error<'a> {
     Format(FmtError),
     UnexpectedLocation,
-    MixedExecutionModels(crate::Handle<crate::Function>),
-    MissingBinding(crate::Handle<crate::GlobalVariable>),
+    MixedExecutionModels(Handle<crate::Function>),
+    MissingBinding(Handle<crate::GlobalVariable>),
     MissingBindTarget(BindSource),
     InvalidImageAccess(crate::StorageAccess),
-    MutabilityViolation(crate::Handle<crate::GlobalVariable>),
+    MutabilityViolation(Handle<crate::GlobalVariable>),
     BadName(String),
-    UnexpectedGlobalType(crate::Handle<crate::Type>),
+    UnexpectedGlobalType(Handle<crate::Type>),
     UnimplementedBindTarget(BindTarget),
-    UnexpectedIndexing(crate::TypeInner),
-    UnsupportedCompose(crate::Handle<crate::Type>),
-    UnexpectedLoadPointer(crate::TypeInner),
+    UnexpectedIndexing(BorrowType<'a>),
+    UnsupportedCompose(Handle<crate::Type>),
+    UnexpectedLoadPointer(BorrowType<'a>),
     UnsupportedBinaryOp(crate::BinaryOperator),
-    UnableToInferBinaryOpOutput(crate::TypeInner, crate::BinaryOperator, crate::TypeInner),
-    UnexpectedImageType(crate::TypeInner),
+    UnableToInferBinaryOpOutput(BorrowType<'a>, crate::BinaryOperator, BorrowType<'a>),
+    UnexpectedImageType(BorrowType<'a>),
     UnexpectedSampleLevel(crate::SampleLevel),
-    UnexpectedDistanceArgument(crate::TypeInner),
+    UnexpectedDistanceArgument(BorrowType<'a>),
     UnsupportedCall(String),
     UnsupportedExpression(crate::Expression),
-    UnableToReturnValue(crate::Handle<crate::Expression>),
+    UnableToReturnValue(Handle<crate::Expression>),
     UnsupportedStatement(crate::Statement),
     AccessIndexExceedsStaticLength(u32, u32),
 }
 
-impl From<FmtError> for Error {
+impl From<FmtError> for Error<'_> {
     fn from(e: FmtError) -> Self {
         Error::Format(e)
     }
@@ -137,25 +137,25 @@ trait Indexed {
     fn id(&self) -> usize;
 }
 
-impl Indexed for crate::Handle<crate::Type> {
+impl Indexed for Handle<crate::Type> {
     const CLASS: &'static str = "Type";
     fn id(&self) -> usize {
         self.index()
     }
 }
-impl Indexed for crate::Handle<crate::GlobalVariable> {
+impl Indexed for Handle<crate::GlobalVariable> {
     const CLASS: &'static str = "global";
     fn id(&self) -> usize {
         self.index()
     }
 }
-impl Indexed for crate::Handle<crate::LocalVariable> {
+impl Indexed for Handle<crate::LocalVariable> {
     const CLASS: &'static str = "local";
     fn id(&self) -> usize {
         self.index()
     }
 }
-impl Indexed for crate::Handle<crate::Function> {
+impl Indexed for Handle<crate::Function> {
     const CLASS: &'static str = "function";
     fn id(&self) -> usize {
         self.index()
@@ -176,7 +176,7 @@ impl Indexed for ParameterIndex {
         self.0
     }
 }
-struct InputStructIndex(crate::Handle<crate::Function>);
+struct InputStructIndex(Handle<crate::Function>);
 impl Indexed for InputStructIndex {
     const CLASS: &'static str = "Input";
     const PREFIX: bool = true;
@@ -184,7 +184,7 @@ impl Indexed for InputStructIndex {
         self.0.index()
     }
 }
-struct OutputStructIndex(crate::Handle<crate::Function>);
+struct OutputStructIndex(Handle<crate::Function>);
 impl Indexed for OutputStructIndex {
     const CLASS: &'static str = "Output";
     const PREFIX: bool = true;
@@ -252,12 +252,12 @@ impl AsName for Option<String> {
 
 struct TypedGlobalVariable<'a> {
     module: &'a crate::Module,
-    handle: crate::Handle<crate::GlobalVariable>,
+    handle: Handle<crate::GlobalVariable>,
     usage: crate::GlobalUse,
 }
 
 impl<'a> TypedGlobalVariable<'a> {
-    fn try_fmt<W: Write>(&self, formatter: &mut W) -> Result<(), Error> {
+    fn try_fmt<W: Write>(&self, formatter: &mut W) -> Result<(), Error<'a>> {
         let var = &self.module.global_variables[self.handle];
         let name = var.name.or_index(self.handle);
         let (space_qualifier, reference) = match var.class {
@@ -283,7 +283,7 @@ impl<'a> TypedGlobalVariable<'a> {
 }
 
 impl ResolvedBinding {
-    fn try_fmt<W: Write>(&self, formatter: &mut W) -> Result<(), Error> {
+    fn try_fmt<W: Write>(&self, formatter: &mut W) -> Result<(), Error<'static>> {
         match *self {
             ResolvedBinding::BuiltIn(built_in) => {
                 use crate::BuiltIn as Bi;
@@ -332,7 +332,7 @@ impl ResolvedBinding {
         &self,
         formatter: &mut W,
         terminator: &str,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error<'static>> {
         formatter.write_str(" [[")?;
         self.try_fmt(formatter)?;
         formatter.write_str("]]")?;
@@ -374,39 +374,19 @@ fn separate(is_last: bool) -> &'static str {
     }
 }
 
-#[derive(Debug)]
-enum MaybeOwned<'a, T: 'a> {
-    Borrowed(&'a T),
-    Owned(T),
-}
-
-impl<T> MaybeOwned<'_, T> {
-    fn borrow(&self) -> &T {
-        match *self {
-            MaybeOwned::Borrowed(inner) => inner,
-            MaybeOwned::Owned(ref inner) => inner,
-        }
-    }
-}
-
-impl crate::Module {
-    fn borrow_type(&self, handle: Handle<crate::Type>) -> MaybeOwned<crate::TypeInner> {
-        MaybeOwned::Borrowed(&self.types[handle].inner)
-    }
-}
-
 impl<W: Write> Writer<W> {
-    fn put_expression<'a>(
-        &mut self,
+    fn put_expression<'w, 'a: 'w>(
+        &'w mut self,
         expr_handle: Handle<crate::Expression>,
         function: &crate::Function,
         module: &'a crate::Module,
-    ) -> Result<MaybeOwned<'a, crate::TypeInner>, Error> {
+    ) -> Result<BorrowType<'a>, Error<'a>> {
         let expression = &function.expressions[expr_handle];
         log::trace!("expression {:?} = {:?}", expr_handle, expression);
         match *expression {
             crate::Expression::Access { base, index } => {
-                match *self.put_expression(base, function, module)?.borrow() {
+                let ty_base = self.put_expression(base, function, module)?;
+                match *ty_base.borrow() {
                     crate::TypeInner::Array { base, .. } => {
                         //TODO: add size check
                         self.out.write_str("[")?;
@@ -414,11 +394,12 @@ impl<W: Write> Writer<W> {
                         self.out.write_str("]")?;
                         Ok(module.borrow_type(base))
                     }
-                    ref other => Err(Error::UnexpectedIndexing(other.clone())),
+                    _ => Err(Error::UnexpectedIndexing(ty_base)),
                 }
             }
             crate::Expression::AccessIndex { base, index } => {
-                match *self.put_expression(base, function, module)?.borrow() {
+                let ty_base = self.put_expression(base, function, module)?;
+                match *ty_base.borrow() {
                     crate::TypeInner::Struct { ref members } => {
                         let member = &members[index as usize];
                         let name = member.name.or_index(MemberIndex(index as usize));
@@ -450,7 +431,7 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "[{}]", index)?;
                         Ok(module.borrow_type(base))
                     }
-                    ref other => Err(Error::UnexpectedIndexing(other.clone())),
+                    _ => Err(Error::UnexpectedIndexing(ty_base)),
                 }
             }
             crate::Expression::Constant(handle) => self.put_constant(handle, module),
@@ -511,9 +492,10 @@ impl<W: Write> Writer<W> {
             }
             crate::Expression::Load { pointer } => {
                 //write!(self.out, "*")?;
-                match *self.put_expression(pointer, function, module)?.borrow() {
+                let ty_ptr = self.put_expression(pointer, function, module)?;
+                match *ty_ptr.borrow() {
                     crate::TypeInner::Pointer { base, .. } => Ok(module.borrow_type(base)),
-                    ref other => Err(Error::UnexpectedLoadPointer(other.clone())),
+                    _ => Err(Error::UnexpectedLoadPointer(ty_ptr)),
                 }
             }
             crate::Expression::Unary { op, expr } => {
@@ -564,12 +546,8 @@ impl<W: Write> Writer<W> {
                             &crate::TypeInner::Vector { size, kind, width },
                             &crate::TypeInner::Vector { .. },
                         ) => MaybeOwned::Owned(crate::TypeInner::Vector { size, kind, width }),
-                        (other_left, other_right) => {
-                            return Err(Error::UnableToInferBinaryOpOutput(
-                                other_left.clone(),
-                                op,
-                                other_right.clone(),
-                            ))
+                        (_, _) => {
+                            return Err(Error::UnableToInferBinaryOpOutput(ty_left, op, ty_right))
                         }
                     }
                 } else {
@@ -614,7 +592,7 @@ impl<W: Write> Writer<W> {
                             width: 4,
                         }))
                     }
-                    ref other => Err(Error::UnexpectedImageType(other.clone())),
+                    _ => Err(Error::UnexpectedImageType(ty_image)),
                 }
             }
             crate::Expression::ImageSample {
@@ -667,7 +645,7 @@ impl<W: Write> Writer<W> {
                             width: 4,
                         }))
                     }
-                    ref other => Err(Error::UnexpectedImageType(other.clone())),
+                    _ => Err(Error::UnexpectedImageType(ty_image)),
                 }
             }
             crate::Expression::Call {
@@ -700,14 +678,12 @@ impl<W: Write> Writer<W> {
                 }
                 "distance" => {
                     write!(self.out, "distance(")?;
-                    let result = match *self
-                        .put_expression(arguments[0], function, module)?
-                        .borrow()
-                    {
+                    let ty_arg = self.put_expression(arguments[0], function, module)?;
+                    let result = match *ty_arg.borrow() {
                         crate::TypeInner::Vector { kind, width, .. } => {
                             crate::TypeInner::Scalar { kind, width }
                         }
-                        ref other => return Err(Error::UnexpectedDistanceArgument(other.clone())),
+                        _ => return Err(Error::UnexpectedDistanceArgument(ty_arg)),
                     };
                     write!(self.out, ", ")?;
                     self.put_expression(arguments[1], function, module)?;
@@ -716,14 +692,12 @@ impl<W: Write> Writer<W> {
                 }
                 "length" => {
                     write!(self.out, "length(")?;
-                    let result = match *self
-                        .put_expression(arguments[0], function, module)?
-                        .borrow()
-                    {
+                    let ty_arg = self.put_expression(arguments[0], function, module)?;
+                    let result = match *ty_arg.borrow() {
                         crate::TypeInner::Vector { kind, width, .. } => {
                             crate::TypeInner::Scalar { kind, width }
                         }
-                        ref other => return Err(Error::UnexpectedDistanceArgument(other.clone())),
+                        _ => return Err(Error::UnexpectedDistanceArgument(ty_arg)),
                     };
                     write!(self.out, ")")?;
                     Ok(MaybeOwned::Owned(result))
@@ -735,11 +709,11 @@ impl<W: Write> Writer<W> {
         }
     }
 
-    fn put_constant<'a>(
-        &mut self,
+    fn put_constant<'w, 'a: 'w>(
+        &'w mut self,
         handle: Handle<crate::Constant>,
         module: &'a crate::Module,
-    ) -> Result<MaybeOwned<'a, crate::TypeInner>, Error> {
+    ) -> Result<MaybeOwned<'a, crate::TypeInner>, Error<'a>> {
         let constant = &module.constants[handle];
         let ty = &module.types[constant.ty];
 
@@ -775,14 +749,14 @@ impl<W: Write> Writer<W> {
         Ok(MaybeOwned::Borrowed(&ty.inner))
     }
 
-    fn put_statement<'a>(
-        &mut self,
+    fn put_statement<'w, 'a: 'w>(
+        &'w mut self,
         level: Level,
         statement: &crate::Statement,
         function: &crate::Function,
         has_output: bool,
         module: &'a crate::Module,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error<'a>> {
         log::trace!("statement[{}] {:?}", level.0, statement);
         match *statement {
             crate::Statement::Empty => {}
@@ -851,7 +825,11 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    pub fn write(&mut self, module: &crate::Module, options: Options) -> Result<(), Error> {
+    pub fn write<'w, 'a: 'w>(
+        &'w mut self,
+        module: &'a crate::Module,
+        options: Options,
+    ) -> Result<(), Error<'a>> {
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out, "using namespace metal;")?;
@@ -865,7 +843,7 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_type_defs(&mut self, module: &crate::Module) -> Result<(), Error> {
+    fn write_type_defs<'a>(&mut self, module: &'a crate::Module) -> Result<(), Error<'a>> {
         for (handle, ty) in module.types.iter() {
             let name = ty.name.or_index(handle);
             match ty.inner {
@@ -996,7 +974,11 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_functions(&mut self, module: &crate::Module, options: Options) -> Result<(), Error> {
+    fn write_functions<'w, 'a: 'w>(
+        &'w mut self,
+        module: &'a crate::Module,
+        options: Options,
+    ) -> Result<(), Error<'a>> {
         for (fun_handle, fun) in module.functions.iter() {
             let fun_name = fun.name.or_index(fun_handle);
             // find the entry point(s) and inputs/outputs
@@ -1236,7 +1218,7 @@ impl<W: Write> Writer<W> {
     }
 }
 
-pub fn write_string(module: &crate::Module, options: Options) -> Result<String, Error> {
+pub fn write_string<'a>(module: &'a crate::Module, options: Options) -> Result<String, Error<'a>> {
     let mut w = Writer { out: String::new() };
     w.write(module, options)?;
     Ok(w.out)
