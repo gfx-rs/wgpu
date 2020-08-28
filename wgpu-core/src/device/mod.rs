@@ -2009,9 +2009,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             } => (
                                 wgt::BufferUsage::STORAGE,
                                 if readonly {
-                                    resource::BufferUse::STORAGE_STORE
-                                } else {
                                     resource::BufferUse::STORAGE_LOAD
+                                } else {
+                                    resource::BufferUse::STORAGE_STORE
                                 },
                                 min_binding_size,
                                 dynamic,
