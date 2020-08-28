@@ -561,6 +561,22 @@ pub fn is_power_of_two(val: u32) -> bool {
     val != 0 && (val & (val - 1)) == 0
 }
 
+pub fn is_valid_copy_src_texture_format(format: wgt::TextureFormat) -> bool {
+    use wgt::TextureFormat as Tf;
+    match format {
+        Tf::Depth24Plus | Tf::Depth24PlusStencil8 => false,
+        _ => true,
+    }
+}
+
+pub fn is_valid_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
+    use wgt::TextureFormat as Tf;
+    match format {
+        Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => false,
+        _ => true,
+    }
+}
+
 pub fn map_texture_dimension_size(
     dimension: wgt::TextureDimension,
     wgt::Extent3d {
