@@ -25,8 +25,8 @@ arrayvec = "0.5"
 bitflags = "1.0"
 copyless = "0.1"
 fxhash = "0.2"
-hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx.git", rev = "c9fcd08956eeddac8f6d85b02794fc5e3d1717f5" }
-gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx.git", rev = "c9fcd08956eeddac8f6d85b02794fc5e3d1717f5" }
+hal = { package = "gfx-hal", version = "0.6" }
+gfx-backend-empty = "0.6"
 parking_lot = "0.11"
 raw-window-handle = { version = "0.3", optional = true }
 ron = { version = "0.6", optional = true }
@@ -34,8 +34,8 @@ serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 thiserror = "1"
-gfx-descriptor = { git = "https://github.com/katharostech/gfx-extras.git", branch = "gl-final-showdown" }
-gfx-memory = { git = "https://github.com/katharostech/gfx-extras.git", branch = "gl-final-showdown" }
+gfx-descriptor = "0.2"
+gfx-memory = "0.2"
 
 [dependencies.naga]
 version = "0.2"
@@ -47,6 +47,9 @@ features = ["spv-in", "spv-out", "wgsl-in"]
 path = "../wgpu-types"
 package = "wgpu-types"
 version = "0.6"
+
+[target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
+gfx-backend-gl = { version = "0.6" }
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 gfx-backend-metal = { version = "0.6" }

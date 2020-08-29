@@ -19,6 +19,8 @@ pub mod backend {
     pub use gfx_backend_dx11::Backend as Dx11;
     #[cfg(dx12)]
     pub use gfx_backend_dx12::Backend as Dx12;
+    #[cfg(gl)]
+    pub use gfx_backend_gl::Backend as Gl;
     #[cfg(metal)]
     pub use gfx_backend_metal::Backend as Metal;
     #[cfg(vulkan)]
@@ -203,6 +205,8 @@ struct PrivateFeatures {
 #[macro_export]
 macro_rules! gfx_select {
     ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {
+        // Note: For some reason the cfg aliases defined in build.rs don't succesfully apply in this
+        // macro so we must specify their equivalents manually
         match $id.backend() {
             #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
             wgt::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),* ),
@@ -212,6 +216,8 @@ macro_rules! gfx_select {
             wgt::Backend::Dx12 => $global.$method::<$crate::backend::Dx12>( $($param),* ),
             #[cfg(windows)]
             wgt::Backend::Dx11 => $global.$method::<$crate::backend::Dx11>( $($param),* ),
+            #[cfg(all(unix, not(target_os = "ios")))]
+            wgt::Backend::Gl => $global.$method::<$crate::backend::Gl>( $($param),+ ),
             _ => unreachable!()
         }
     };

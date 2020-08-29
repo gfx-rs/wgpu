@@ -38,6 +38,8 @@ pub struct Instance {
     pub dx12: Option<gfx_backend_dx12::Instance>,
     #[cfg(dx11)]
     pub dx11: Option<gfx_backend_dx11::Instance>,
+    #[cfg(gl)]
+    pub gl: Option<gfx_backend_gl::Instance>,
 }
 
 impl Instance {
@@ -59,6 +61,8 @@ impl Instance {
                 dx12: map((Backend::Dx12, gfx_backend_dx12::Instance::create)),
                 #[cfg(dx11)]
                 dx11: map((Backend::Dx11, gfx_backend_dx11::Instance::create)),
+                #[cfg(gl)]
+                gl: map((Backend::Gl, gfx_backend_gl::Instance::create)),
             }
         }
     }
@@ -81,6 +85,8 @@ impl Instance {
             map((surface.dx12, &mut self.dx12)),
             #[cfg(dx11)]
             map((surface.dx11, &mut self.dx11)),
+            #[cfg(gl)]
+            map((surface.gl, &mut self.gl)),
         }
     }
 }
@@ -97,6 +103,8 @@ pub struct Surface {
     pub dx12: Option<GfxSurface<backend::Dx12>>,
     #[cfg(dx11)]
     pub dx11: Option<GfxSurface<backend::Dx11>>,
+    #[cfg(gl)]
+    pub gl: Option<GfxSurface<backend::Gl>>,
 }
 
 #[derive(Debug)]
@@ -341,7 +349,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     inst
                     .as_ref()
                     .and_then(|inst| inst.create_surface(handle).map_err(|e| {
-                        eprintln!("Error: {:?}", e);
+                        tracing::warn!("Error: {:?}", e);
                     }).ok())
                 };
 
@@ -354,6 +362,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     dx12: map(&self.instance.dx12),
                     #[cfg(dx11)]
                     dx11: map(&self.instance.dx11),
+                    #[cfg(gl)]
+                    gl: map(&self.instance.gl),
                 }
             }
         };
@@ -397,6 +407,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             map((&instance.dx12, Backend::Dx12, "Dx12", backend::Dx12::hub)),
             #[cfg(dx11)]
             map((&instance.dx11, Backend::Dx11, "Dx11", backend::Dx11::hub)),
+            #[cfg(gl)]
+            map((&instance.gl, Backend::Gl, "GL", backend::Gl::hub)),
         }
 
         adapters
@@ -426,6 +438,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut id_metal = inputs.find(Backend::Metal);
         let mut id_dx12 = inputs.find(Backend::Dx12);
         let mut id_dx11 = inputs.find(Backend::Dx11);
+        let mut id_gl = inputs.find(Backend::Gl);
 
         backends_map! {
             let map = |(instance_backend, id_backend, surface_backend)| {
@@ -476,6 +489,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     surf.dx11.as_ref()
                 }
                 surface_dx11
+            }));
+            #[cfg(gl)]
+            let adapters_gl = map((&instance.gl, &id_gl, {
+                fn surface_gl(surf: &Surface) -> Option<&GfxSurface<backend::Gl>> {
+                    surf.gl.as_ref()
+                }
+                surface_gl
             }));
         }
 
@@ -532,6 +552,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             map(("Dx12", &mut id_dx12, adapters_dx12, backend::Dx12::hub)),
             #[cfg(dx11)]
             map(("Dx11", &mut id_dx11, adapters_dx11, backend::Dx11::hub)),
+            #[cfg(gl)]
+            map(("GL", &mut id_dx11, adapters_gl, backend::Gl::hub)),
         }
 
         let _ = (
@@ -540,6 +562,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             id_metal.take(),
             id_dx12.take(),
             id_dx11.take(),
+            id_gl.take(),
         );
         tracing::warn!("Some adapters are present, but enumerating them failed!");
         Err(RequestAdapterError::NotFound)
