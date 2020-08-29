@@ -5,7 +5,7 @@
             name: "basic",
             buffer: (index: 0, epoch: 1),
             offset: 0,
-            data: [0x00, 0x00, 0x80, 0xBF],
+            data: Raw([0x00, 0x00, 0x80, 0xBF]),
         )
     ],
     actions: [

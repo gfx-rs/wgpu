@@ -259,7 +259,7 @@ impl<B: hal::Backend> Borrow<TextureSelector> for Texture<B> {
 /// Describes a [`TextureView`].
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize), serde(default))]
 pub struct TextureViewDescriptor<'a> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
