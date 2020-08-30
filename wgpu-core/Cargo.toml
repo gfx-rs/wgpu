@@ -62,3 +62,6 @@ gfx-backend-vulkan = { version = "0.6" }
 
 [dev-dependencies]
 loom = "0.3"
+
+[build-dependencies]
+cfg_aliases = "0.1"

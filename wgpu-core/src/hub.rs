@@ -647,32 +647,27 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
 
 #[derive(Debug)]
 pub struct Hubs<F: GlobalIdentityHandlerFactory> {
-    #[cfg(any(
-        not(any(target_os = "ios", target_os = "macos")),
-        feature = "gfx-backend-vulkan"
-    ))]
+    #[cfg(vulkan)]
     vulkan: Hub<backend::Vulkan, F>,
-    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    #[cfg(metal)]
     metal: Hub<backend::Metal, F>,
-    #[cfg(windows)]
+    #[cfg(dx12)]
     dx12: Hub<backend::Dx12, F>,
-    #[cfg(windows)]
+    #[cfg(dx11)]
     dx11: Hub<backend::Dx11, F>,
 }
 
 impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
     fn new(factory: &F) -> Self {
-        backends! {
-            Hubs {
-                #[vulkan]
-                vulkan: Hub::new(factory),
-                #[metal]
-                metal: Hub::new(factory),
-                #[dx12]
-                dx12: Hub::new(factory),
-                #[dx11]
-                dx11: Hub::new(factory),
-            }
+        Hubs {
+            #[cfg(vulkan)]
+            vulkan: Hub::new(factory),
+            #[cfg(metal)]
+            metal: Hub::new(factory),
+            #[cfg(dx12)]
+            dx12: Hub::new(factory),
+            #[cfg(dx11)]
+            dx11: Hub::new(factory),
         }
     }
 }
@@ -702,19 +697,21 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
             let mut surface_guard = self.surfaces.data.write();
 
             // destroy hubs
-            backends! {
-                #[vulkan] {
-                    self.hubs.vulkan.clear(&mut *surface_guard);
-                }
-                #[metal] {
-                    self.hubs.metal.clear(&mut *surface_guard);
-                }
-                #[dx12] {
-                    self.hubs.dx12.clear(&mut *surface_guard);
-                }
-                #[dx11] {
-                    self.hubs.dx11.clear(&mut *surface_guard);
-                }
+            #[cfg(vulkan)]
+            {
+                self.hubs.vulkan.clear(&mut *surface_guard);
+            }
+            #[cfg(metal)]
+            {
+                self.hubs.metal.clear(&mut *surface_guard);
+            }
+            #[cfg(dx12)]
+            {
+                self.hubs.dx12.clear(&mut *surface_guard);
+            }
+            #[cfg(dx11)]
+            {
+                self.hubs.dx11.clear(&mut *surface_guard);
             }
 
             // destroy surfaces
@@ -733,10 +730,7 @@ pub trait GfxBackend: hal::Backend {
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
 }
 
-#[cfg(any(
-    not(any(target_os = "ios", target_os = "macos")),
-    feature = "gfx-backend-vulkan"
-))]
+#[cfg(vulkan)]
 impl GfxBackend for backend::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
@@ -747,7 +741,7 @@ impl GfxBackend for backend::Vulkan {
     }
 }
 
-#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[cfg(metal)]
 impl GfxBackend for backend::Metal {
     const VARIANT: Backend = Backend::Metal;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
@@ -758,7 +752,7 @@ impl GfxBackend for backend::Metal {
     }
 }
 
-#[cfg(windows)]
+#[cfg(dx12)]
 impl GfxBackend for backend::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
@@ -769,7 +763,7 @@ impl GfxBackend for backend::Dx12 {
     }
 }
 
-#[cfg(windows)]
+#[cfg(dx11)]
 impl GfxBackend for backend::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {

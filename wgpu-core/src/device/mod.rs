@@ -3515,19 +3515,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         use crate::backend;
         let mut callbacks = Vec::new();
 
-        backends! {
-            #[vulkan] {
-                self.poll_devices::<backend::Vulkan>(force_wait, &mut callbacks)?;
-            }
-            #[metal] {
-                self.poll_devices::<backend::Metal>(force_wait, &mut callbacks)?;
-            }
-            #[dx12] {
-                self.poll_devices::<backend::Dx12>(force_wait, &mut callbacks)?;
-            }
-            #[dx11] {
-                self.poll_devices::<backend::Dx11>(force_wait, &mut callbacks)?;
-            }
+        #[cfg(vulkan)]
+        {
+            self.poll_devices::<backend::Vulkan>(force_wait, &mut callbacks)?;
+        }
+        #[cfg(metal)]
+        {
+            self.poll_devices::<backend::Metal>(force_wait, &mut callbacks)?;
+        }
+        #[cfg(dx12)]
+        {
+            self.poll_devices::<backend::Dx12>(force_wait, &mut callbacks)?;
+        }
+        #[cfg(dx11)]
+        {
+            self.poll_devices::<backend::Dx11>(force_wait, &mut callbacks)?;
         }
 
         fire_map_callbacks(callbacks);
