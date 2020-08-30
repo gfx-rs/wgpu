@@ -1739,12 +1739,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let actual_border = desc
             .border_color
             .map(|c| match c {
-                wgt::SamplerBorderColor::TransparentBlack => [0.0, 0.0, 0.0, 0.0],
-                wgt::SamplerBorderColor::OpaqueBlack => [0.0, 0.0, 0.0, 1.0],
-                wgt::SamplerBorderColor::OpaqueWhite => [1.0, 1.0, 1.0, 1.0],
+                wgt::SamplerBorderColor::TransparentBlack => {
+                    hal::image::BorderColor::TransparentBlack
+                }
+                wgt::SamplerBorderColor::OpaqueBlack => hal::image::BorderColor::OpaqueBlack,
+                wgt::SamplerBorderColor::OpaqueWhite => hal::image::BorderColor::OpaqueWhite,
             })
-            .map(hal::image::PackedColor::from)
-            .unwrap_or(hal::image::PackedColor(0));
+            .unwrap_or(hal::image::BorderColor::OpaqueBlack);
 
         let info = hal::image::SamplerDesc {
             min_filter: conv::map_filter(desc.min_filter),
