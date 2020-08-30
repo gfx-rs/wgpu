@@ -340,7 +340,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let map = |inst| {
                     inst
                     .as_ref()
-                    .and_then(|inst| inst.create_surface(handle).ok())
+                    .and_then(|inst| inst.create_surface(handle).map_err(|e| {
+                        eprintln!("Error: {:?}", e);
+                    }).ok())
                 };
 
                 Surface {
