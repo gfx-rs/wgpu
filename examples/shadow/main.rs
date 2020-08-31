@@ -471,7 +471,6 @@ impl framework::Example for Example {
 
             // Create the render pipeline
             let vs_module = device.create_shader_module(wgpu::include_spirv!("bake.vert.spv"));
-            let fs_module = device.create_shader_module(wgpu::include_spirv!("bake.frag.spv"));
 
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("shadow"),
@@ -480,10 +479,7 @@ impl framework::Example for Example {
                     module: &vs_module,
                     entry_point: "main",
                 },
-                fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
-                    module: &fs_module,
-                    entry_point: "main",
-                }),
+                fragment_stage: None,
                 rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                     front_face: wgpu::FrontFace::Ccw,
                     cull_mode: wgpu::CullMode::Back,
