@@ -15,16 +15,13 @@ mod macros;
 pub mod backend {
     pub use gfx_backend_empty::Backend as Empty;
 
-    #[cfg(windows)]
+    #[cfg(dx11)]
     pub use gfx_backend_dx11::Backend as Dx11;
-    #[cfg(windows)]
+    #[cfg(dx12)]
     pub use gfx_backend_dx12::Backend as Dx12;
-    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    #[cfg(metal)]
     pub use gfx_backend_metal::Backend as Metal;
-    #[cfg(any(
-        not(any(target_os = "ios", target_os = "macos")),
-        feature = "gfx-backend-vulkan"
-    ))]
+    #[cfg(vulkan)]
     pub use gfx_backend_vulkan::Backend as Vulkan;
 }
 

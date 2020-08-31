@@ -30,16 +30,13 @@ pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
 
 #[derive(Debug)]
 pub struct Instance {
-    #[cfg(any(
-        not(any(target_os = "ios", target_os = "macos")),
-        feature = "gfx-backend-vulkan"
-    ))]
+    #[cfg(vulkan)]
     pub vulkan: Option<gfx_backend_vulkan::Instance>,
-    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    #[cfg(metal)]
     pub metal: Option<gfx_backend_metal::Instance>,
-    #[cfg(windows)]
+    #[cfg(dx12)]
     pub dx12: Option<gfx_backend_dx12::Instance>,
-    #[cfg(windows)]
+    #[cfg(dx11)]
     pub dx11: Option<gfx_backend_dx11::Instance>,
 }
 
@@ -54,13 +51,13 @@ impl Instance {
                 }
             };
             Instance {
-                #[vulkan]
+                #[cfg(vulkan)]
                 vulkan: map((Backend::Vulkan, gfx_backend_vulkan::Instance::create)),
-                #[metal]
+                #[cfg(metal)]
                 metal: map((Backend::Metal, gfx_backend_metal::Instance::create)),
-                #[dx12]
+                #[cfg(dx12)]
                 dx12: map((Backend::Dx12, gfx_backend_dx12::Instance::create)),
-                #[dx11]
+                #[cfg(dx11)]
                 dx11: map((Backend::Dx11, gfx_backend_dx11::Instance::create)),
             }
         }
@@ -76,13 +73,13 @@ impl Instance {
                 }
             };
 
-            #[vulkan]
+            #[cfg(vulkan)]
             map((surface.vulkan, &mut self.vulkan)),
-            #[metal]
+            #[cfg(metal)]
             map((surface.metal, &mut self.metal)),
-            #[dx12]
+            #[cfg(dx12)]
             map((surface.dx12, &mut self.dx12)),
-            #[dx11]
+            #[cfg(dx11)]
             map((surface.dx11, &mut self.dx11)),
         }
     }
@@ -92,16 +89,13 @@ type GfxSurface<B> = <B as hal::Backend>::Surface;
 
 #[derive(Debug)]
 pub struct Surface {
-    #[cfg(any(
-        not(any(target_os = "ios", target_os = "macos")),
-        feature = "gfx-backend-vulkan"
-    ))]
+    #[cfg(vulkan)]
     pub vulkan: Option<GfxSurface<backend::Vulkan>>,
-    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    #[cfg(metal)]
     pub metal: Option<GfxSurface<backend::Metal>>,
-    #[cfg(windows)]
+    #[cfg(dx12)]
     pub dx12: Option<GfxSurface<backend::Dx12>>,
-    #[cfg(windows)]
+    #[cfg(dx11)]
     pub dx11: Option<GfxSurface<backend::Dx11>>,
 }
 
@@ -346,13 +340,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
 
                 Surface {
-                    #[vulkan]
+                    #[cfg(vulkan)]
                     vulkan: map(&self.instance.vulkan),
-                    #[metal]
+                    #[cfg(metal)]
                     metal: map(&self.instance.metal),
-                    #[dx12]
+                    #[cfg(dx12)]
                     dx12: map(&self.instance.dx12),
-                    #[dx11]
+                    #[cfg(dx11)]
                     dx11: map(&self.instance.dx11),
                 }
             }
@@ -389,13 +383,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
-            #[vulkan]
+            #[cfg(vulkan)]
             map((&instance.vulkan, Backend::Vulkan, "Vulkan", backend::Vulkan::hub)),
-            #[metal]
+            #[cfg(metal)]
             map((&instance.metal, Backend::Metal, "Metal", backend::Metal::hub)),
-            #[dx12]
+            #[cfg(dx12)]
             map((&instance.dx12, Backend::Dx12, "Dx12", backend::Dx12::hub)),
-            #[dx11]
+            #[cfg(dx11)]
             map((&instance.dx11, Backend::Dx11, "Dx11", backend::Dx11::hub)),
         }
 
@@ -449,28 +443,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // NB: The internal function definitions are a workaround for Rust
             // being weird with lifetimes for closure literals...
-            #[vulkan]
+            #[cfg(vulkan)]
             let adapters_vk = map((&instance.vulkan, &id_vulkan, {
                 fn surface_vulkan(surf: &Surface) -> Option<&GfxSurface<backend::Vulkan>> {
                     surf.vulkan.as_ref()
                 }
                 surface_vulkan
             }));
-            #[metal]
+            #[cfg(metal)]
             let adapters_mtl = map((&instance.metal, &id_metal, {
                 fn surface_metal(surf: &Surface) -> Option<&GfxSurface<backend::Metal>> {
                     surf.metal.as_ref()
                 }
                 surface_metal
             }));
-            #[dx12]
+            #[cfg(dx12)]
             let adapters_dx12 = map((&instance.dx12, &id_dx12, {
                 fn surface_dx12(surf: &Surface) -> Option<&GfxSurface<backend::Dx12>> {
                     surf.dx12.as_ref()
                 }
                 surface_dx12
             }));
-            #[dx11]
+            #[cfg(dx11)]
             let adapters_dx11 = map((&instance.dx11, &id_dx11, {
                 fn surface_dx11(surf: &Surface) -> Option<&GfxSurface<backend::Dx11>> {
                     surf.dx11.as_ref()
@@ -526,13 +520,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 selected -= adapters_backend.len();
             };
 
-            #[vulkan]
+            #[cfg(vulkan)]
             map(("Vulkan", &mut id_vulkan, adapters_vk, backend::Vulkan::hub)),
-            #[metal]
+            #[cfg(metal)]
             map(("Metal", &mut id_metal, adapters_mtl, backend::Metal::hub)),
-            #[dx12]
+            #[cfg(dx12)]
             map(("Dx12", &mut id_dx12, adapters_dx12, backend::Dx12::hub)),
-            #[dx11]
+            #[cfg(dx11)]
             map(("Dx11", &mut id_dx11, adapters_dx11, backend::Dx11::hub)),
         }
 
