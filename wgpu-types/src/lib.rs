@@ -855,7 +855,7 @@ impl StencilStateDescriptor {
     pub fn is_enabled(&self) -> bool {
         (self.front != StencilStateFaceDescriptor::IGNORE
             || self.back != StencilStateFaceDescriptor::IGNORE)
-            && self.read_mask != 0
+            && (self.read_mask != 0 || self.write_mask != 0)
     }
     pub fn is_read_only(&self) -> bool {
         self.write_mask == 0
