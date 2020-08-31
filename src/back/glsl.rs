@@ -129,7 +129,7 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
         .ok_or_else(|| Error::Custom(String::from("Entry point not found")))?;
     let func = &module.functions[entry_point.function];
 
-    if entry_point.stage == ShaderStage::Compute {
+    if let ShaderStage::Compute { .. } = entry_point.stage {
         if (es && version < 310) || (!es && version < 430) {
             return Err(Error::Custom(format!(
                 "Version {} doesn't support compute shaders",
@@ -293,12 +293,13 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
         }
 
         if let Some(interpolation) = global.interpolation {
-            if (entry_point.stage == ShaderStage::Fragment && global.class == StorageClass::Input)
-                || (entry_point.stage == ShaderStage::Vertex
-                    && global.class == StorageClass::Output)
-            {
-                write!(out, "{} ", write_interpolation(interpolation)?)?;
-            }
+            match (entry_point.stage, global.class) {
+                (ShaderStage::Fragment { .. }, StorageClass::Input)
+                | (ShaderStage::Vertex, StorageClass::Output) => {
+                    write!(out, "{} ", write_interpolation(interpolation)?)?;
+                }
+                _ => {}
+            };
         }
 
         let block = match global.class {

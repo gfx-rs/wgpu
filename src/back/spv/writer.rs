@@ -271,8 +271,8 @@ impl Writer {
 
         let exec_model = match entry_point.stage {
             crate::ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
-            crate::ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
-            crate::ShaderStage::Compute => spirv::ExecutionModel::GLCompute,
+            crate::ShaderStage::Fragment { .. } => spirv::ExecutionModel::Fragment,
+            crate::ShaderStage::Compute { .. } => spirv::ExecutionModel::GLCompute,
         };
 
         instruction.add_operand(exec_model as u32);
@@ -298,13 +298,13 @@ impl Writer {
         self.try_add_capabilities(exec_model.required_capabilities());
         match entry_point.stage {
             crate::ShaderStage::Vertex => {}
-            crate::ShaderStage::Fragment => {
+            crate::ShaderStage::Fragment { .. } => {
                 let execution_mode = spirv::ExecutionMode::OriginUpperLeft;
                 self.try_add_capabilities(execution_mode.required_capabilities());
                 self.instruction_execution_mode(function_id, execution_mode)
                     .to_words(&mut self.logical_layout.execution_modes);
             }
-            crate::ShaderStage::Compute => {}
+            crate::ShaderStage::Compute { .. } => {}
         }
 
         if self.writer_flags.contains(WriterFlags::DEBUG) {

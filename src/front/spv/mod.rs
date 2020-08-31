@@ -29,7 +29,11 @@ use crate::{
 use num_traits::cast::FromPrimitive;
 use std::{convert::TryInto, num::NonZeroU32};
 
-pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[spirv::Capability::Shader];
+pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
+    spirv::Capability::Shader,
+    spirv::Capability::CullDistance,
+    spirv::Capability::StorageImageExtendedFormats,
+];
 pub const SUPPORTED_EXTENSIONS: &[&str] = &[];
 pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
 
@@ -235,7 +239,7 @@ struct LookupFunctionType {
 
 #[derive(Debug)]
 struct EntryPoint {
-    exec_model: spirv::ExecutionModel,
+    stage: crate::ShaderStage,
     name: String,
     function_id: spirv::Word,
     variable_ids: Vec<spirv::Word>,
@@ -300,6 +304,7 @@ pub struct Parser<I> {
     lookup_sampled_image: FastHashMap<spirv::Word, LookupSampledImage>,
     lookup_function_type: FastHashMap<spirv::Word, LookupFunctionType>,
     lookup_function: FastHashMap<spirv::Word, Handle<crate::Function>>,
+    lookup_entry_point: FastHashMap<spirv::Word, EntryPoint>,
     deferred_function_calls: Vec<DeferredFunctionCall>,
 }
 
@@ -322,6 +327,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             lookup_sampled_image: FastHashMap::default(),
             lookup_function_type: FastHashMap::default(),
             lookup_function: FastHashMap::default(),
+            lookup_entry_point: FastHashMap::default(),
             deferred_function_calls: Vec::new(),
         }
     }
@@ -1402,7 +1408,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 generator,
             }
         });
-        let mut entry_points = Vec::new();
 
         while let Ok(inst) = self.next_inst() {
             use spirv::Op;
@@ -1412,7 +1417,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::Extension => self.parse_extension(inst),
                 Op::ExtInstImport => self.parse_ext_inst_import(inst),
                 Op::MemoryModel => self.parse_memory_model(inst),
-                Op::EntryPoint => self.parse_entry_point(inst, &mut entry_points),
+                Op::EntryPoint => self.parse_entry_point(inst),
                 Op::ExecutionMode => self.parse_execution_mode(inst),
                 Op::Source => self.parse_source(inst),
                 Op::SourceExtension => self.parse_source_extension(inst),
@@ -1492,16 +1497,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             self.future_member_decor.clear();
         }
 
-        module.entry_points.reserve(entry_points.len());
-        for raw in entry_points {
+        module.entry_points.reserve(self.lookup_entry_point.len());
+        for raw in self.lookup_entry_point.values() {
             module.entry_points.push(crate::EntryPoint {
-                stage: match raw.exec_model {
-                    spirv::ExecutionModel::Vertex => crate::ShaderStage::Vertex,
-                    spirv::ExecutionModel::Fragment => crate::ShaderStage::Fragment,
-                    spirv::ExecutionModel::GLCompute => crate::ShaderStage::Compute,
-                    other => return Err(Error::UnsupportedExecutionModel(other as u32)),
-                },
-                name: raw.name,
+                stage: raw.stage,
+                name: raw.name.clone(),
                 function: *self.lookup_function.lookup(raw.function_id)?,
             });
         }
@@ -1557,11 +1557,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
-    fn parse_entry_point(
-        &mut self,
-        inst: Instruction,
-        entry_points: &mut Vec<EntryPoint>,
-    ) -> Result<(), Error> {
+    fn parse_entry_point(&mut self, inst: Instruction) -> Result<(), Error> {
         self.switch(ModuleState::EntryPoint, inst.op)?;
         inst.expect_at_least(4)?;
         let exec_model = self.next()?;
@@ -1570,23 +1566,93 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let function_id = self.next()?;
         let (name, left) = self.next_string(inst.wc - 3)?;
         let ep = EntryPoint {
-            exec_model,
+            stage: match exec_model {
+                spirv::ExecutionModel::Vertex => crate::ShaderStage::Vertex,
+                spirv::ExecutionModel::Fragment => crate::ShaderStage::Fragment {
+                    early_depth_test: None,
+                },
+                spirv::ExecutionModel::GLCompute => crate::ShaderStage::Compute {
+                    local_size: (0, 0, 0),
+                },
+                _ => return Err(Error::UnsupportedExecutionModel(exec_model as u32)),
+            },
             name,
             function_id,
             variable_ids: self.data.by_ref().take(left as usize).collect(),
         };
-        entry_points.push(ep);
+        self.lookup_entry_point.insert(function_id, ep);
         Ok(())
     }
 
     fn parse_execution_mode(&mut self, inst: Instruction) -> Result<(), Error> {
+        use crate::ShaderStage;
+        use spirv::ExecutionMode;
+
         self.switch(ModuleState::ExecutionMode, inst.op)?;
         inst.expect_at_least(3)?;
-        let _ep_id = self.next()?;
-        let _mode = self.next()?;
-        for _ in 3..inst.wc {
-            let _ = self.next()?; //TODO
-        }
+
+        let ep_id = self.next()?;
+        let mode_id = self.next()?;
+        let args: Vec<spirv::Word> = self.data.by_ref().take(inst.wc as usize - 3).collect();
+
+        let ep: &mut EntryPoint = self
+            .lookup_entry_point
+            .get_mut(&ep_id)
+            .ok_or(Error::InvalidId(ep_id))?;
+        let mode = spirv::ExecutionMode::from_u32(mode_id)
+            .ok_or(Error::UnsupportedExecutionMode(mode_id))?;
+
+        match ep.stage {
+            ShaderStage::Fragment {
+                ref mut early_depth_test,
+            } => {
+                match mode {
+                    ExecutionMode::EarlyFragmentTests => {
+                        if early_depth_test.is_none() {
+                            *early_depth_test = Some(crate::EarlyDepthTest { conservative: None });
+                        }
+                    }
+                    ExecutionMode::DepthUnchanged => {
+                        *early_depth_test = Some(crate::EarlyDepthTest {
+                            conservative: Some(crate::ConservativeDepth::Unchanged),
+                        });
+                    }
+                    ExecutionMode::DepthGreater => {
+                        *early_depth_test = Some(crate::EarlyDepthTest {
+                            conservative: Some(crate::ConservativeDepth::GreaterEqual),
+                        });
+                    }
+                    ExecutionMode::DepthLess => {
+                        *early_depth_test = Some(crate::EarlyDepthTest {
+                            conservative: Some(crate::ConservativeDepth::LessEqual),
+                        });
+                    }
+                    ExecutionMode::DepthReplacing => {
+                        // Ignored because it can be deduced from the IR.
+                    }
+                    ExecutionMode::OriginUpperLeft => {
+                        // Ignored because the other option (OriginLowerLeft) is not valid in Vulkan mode.
+                    }
+                    _ => {
+                        return Err(Error::UnsupportedExecutionMode(mode_id));
+                    }
+                };
+            }
+            ShaderStage::Compute { ref mut local_size } => {
+                match mode {
+                    ExecutionMode::LocalSize => {
+                        *local_size = (args[0], args[1], args[2]);
+                    }
+                    _ => {
+                        return Err(Error::UnsupportedExecutionMode(mode_id));
+                    }
+                };
+            }
+            _ => {
+                return Err(Error::UnsupportedExecutionMode(mode_id));
+            }
+        };
+
         Ok(())
     }
 

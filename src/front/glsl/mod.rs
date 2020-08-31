@@ -638,7 +638,7 @@ impl<'a> Parser<'a> {
                             name: Some(name),
                             class: match self.shader_stage {
                                 ShaderStage::Vertex => StorageClass::Output,
-                                ShaderStage::Fragment => StorageClass::Input,
+                                ShaderStage::Fragment { .. } => StorageClass::Input,
                                 _ => panic!(),
                             },
                             binding: Some(Binding::BuiltIn(BuiltIn::Position)),
@@ -1327,7 +1327,13 @@ mod tests {
 
         println!(
             "{:#?}",
-            parse_str(data, String::from("main"), crate::ShaderStage::Fragment)
+            parse_str(
+                data,
+                String::from("main"),
+                crate::ShaderStage::Fragment {
+                    early_depth_test: None
+                }
+            )
         );
     }
 

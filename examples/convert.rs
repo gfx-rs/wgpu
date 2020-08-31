@@ -91,7 +91,9 @@ fn main() {
                         naga::front::glsl_new::parse_str(
                             &input,
                             "main".to_string(),
-                            naga::ShaderStage::Fragment,
+                            naga::ShaderStage::Fragment {
+                                early_depth_test: None,
+                            },
                         )
                         .unwrap(),
                     )
@@ -104,7 +106,9 @@ fn main() {
                         naga::front::glsl::parse_str(
                             &input,
                             "main".to_string(),
-                            naga::ShaderStage::Fragment,
+                            naga::ShaderStage::Fragment {
+                                early_depth_test: None,
+                            },
                         )
                         .unwrap(),
                     )
@@ -115,8 +119,14 @@ fn main() {
         #[cfg(feature = "glsl")]
         "comp" => {
             let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::glsl::parse_str(&input, "main".to_string(), naga::ShaderStage::Compute)
-                .unwrap()
+            naga::front::glsl::parse_str(
+                &input,
+                "main".to_string(),
+                naga::ShaderStage::Compute {
+                    local_size: (0, 0, 0),
+                },
+            )
+            .unwrap()
         }
         #[cfg(feature = "deserialize")]
         "ron" => {
@@ -209,8 +219,12 @@ fn main() {
                     String::from("main"),
                     match stage {
                         "vert" => ShaderStage::Vertex,
-                        "frag" => ShaderStage::Fragment,
-                        "comp" => ShaderStage::Compute,
+                        "frag" => ShaderStage::Fragment {
+                            early_depth_test: None,
+                        },
+                        "comp" => ShaderStage::Compute {
+                            local_size: (0, 0, 0),
+                        },
                         _ => unreachable!(),
                     },
                 ),

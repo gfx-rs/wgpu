@@ -265,8 +265,12 @@ impl Parser {
     fn get_shader_stage(word: &str) -> Result<crate::ShaderStage, Error<'_>> {
         match word {
             "vertex" => Ok(crate::ShaderStage::Vertex),
-            "fragment" => Ok(crate::ShaderStage::Fragment),
-            "compute" => Ok(crate::ShaderStage::Compute),
+            "fragment" => Ok(crate::ShaderStage::Fragment {
+                early_depth_test: None,
+            }),
+            "compute" => Ok(crate::ShaderStage::Compute {
+                local_size: (0, 0, 0),
+            }),
             _ => Err(Error::UnknownShaderStage(word)),
         }
     }

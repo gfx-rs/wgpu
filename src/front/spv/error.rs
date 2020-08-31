@@ -15,6 +15,7 @@ pub enum Error {
     UnsupportedExtInst(spirv::Word),
     UnsupportedType(Handle<crate::Type>),
     UnsupportedExecutionModel(spirv::Word),
+    UnsupportedExecutionMode(spirv::Word),
     UnsupportedStorageClass(spirv::Word),
     UnsupportedImageDim(spirv::Word),
     UnsupportedImageFormat(spirv::Word),

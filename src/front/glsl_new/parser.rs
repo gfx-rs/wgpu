@@ -130,52 +130,56 @@ pomelo! {
 
     // expression
     variable_identifier ::= Identifier(v) {
-        if v.1.as_str() == "gl_Position" &&
-            (extra.shader_stage == ShaderStage::Vertex ||
-            extra.shader_stage == ShaderStage::Fragment) {
-            let h = extra.global_variables.fetch_or_append(
-                GlobalVariable {
-                    name: Some(v.1.clone()),
-                    class: match extra.shader_stage {
-                        ShaderStage::Vertex => StorageClass::Output,
-                        ShaderStage::Fragment => StorageClass::Input,
-                        _ => StorageClass::Input,
-                    },
-                    binding: Some(Binding::BuiltIn(BuiltIn::Position)),
-                    ty: extra.types.fetch_or_append(Type {
-                        name: None,
-                        inner: TypeInner::Vector {
-                            size: VectorSize::Quad,
-                            kind: ScalarKind::Float,
-                            width: 4,
+        let gl_position = if let ShaderStage::Vertex | ShaderStage::Fragment { .. } = extra.shader_stage {
+            if v.1.as_str() == "gl_Position" {
+                let h = extra.global_variables.fetch_or_append(
+                    GlobalVariable {
+                        name: Some(v.1.clone()),
+                        class: match extra.shader_stage {
+                            ShaderStage::Vertex => StorageClass::Output,
+                            ShaderStage::Fragment { .. } => StorageClass::Input,
+                            _ => StorageClass::Input,
                         },
-                    }),
-                    interpolation: None,
-                },
-            );
-            extra.lookup_global_variables.insert(v.1.clone(), h);
-            let expression = extra.context.expressions.append(
-                Expression::GlobalVariable(h)
-            );
-            extra.context.lookup_global_var_exps.insert(v.1, expression);
-            ExpressionRule{
-                expression,
-                statements: vec![],
+                        binding: Some(Binding::BuiltIn(BuiltIn::Position)),
+                        ty: extra.types.fetch_or_append(Type {
+                            name: None,
+                            inner: TypeInner::Vector {
+                                size: VectorSize::Quad,
+                                kind: ScalarKind::Float,
+                                width: 4,
+                            },
+                        }),
+                        interpolation: None,
+                    },
+                );
+                extra.lookup_global_variables.insert(v.1.clone(), h);
+                let expression = extra.context.expressions.append(
+                    Expression::GlobalVariable(h)
+                );
+                extra.context.lookup_global_var_exps.insert(v.1.clone(), expression);
+
+                Some(expression)
+            } else {
+                None
             }
         } else {
-            // try global and local vars
-            let expression =
-                if let Some(local_var) = extra.context.lookup_local_var(&v.1) {
-                    local_var
-                } else if let Some(global_var) = extra.context.lookup_global_var_exps.get(&v.1) {
-                    *global_var
-                } else {
-                    return Err(ErrorKind::UnknownVariable(v.0, v.1))
-                };
-            ExpressionRule{
-                expression,
-                statements: vec![],
-            }
+            None
+        };
+
+        let expression =
+        if let Some(gl_position) = gl_position {
+            gl_position
+        }  else if let Some(local_var) = extra.context.lookup_local_var(&v.1) {
+            local_var
+        } else if let Some(global_var) = extra.context.lookup_global_var_exps.get(&v.1) {
+            *global_var
+        } else {
+            return Err(ErrorKind::UnknownVariable(v.0, v.1));
+        };
+
+        ExpressionRule {
+            expression,
+            statements: vec![],
         }
     }
 

@@ -1020,111 +1020,116 @@ impl<W: Write> Writer<W> {
                         LocationMode::VertexInput,
                         LocationMode::Intermediate,
                     ),
-                    crate::ShaderStage::Fragment => (
+                    crate::ShaderStage::Fragment { .. } => (
                         "fragment",
                         LocationMode::Intermediate,
                         LocationMode::FragmentOutput,
                     ),
-                    crate::ShaderStage::Compute => {
+                    crate::ShaderStage::Compute { .. } => {
                         ("kernel", LocationMode::Uniform, LocationMode::Uniform)
                     }
                 };
                 let location_input_name = fun.name.or_index(InputStructIndex(fun_handle));
 
-                if stage != crate::ShaderStage::Compute {
-                    writeln!(self.out, "struct {} {{", location_input_name)?;
-                    for ((handle, var), &usage) in
-                        module.global_variables.iter().zip(&fun.global_usage)
-                    {
-                        if var.class != crate::StorageClass::Input
-                            || !usage.contains(crate::GlobalUse::LOAD)
+                match stage {
+                    crate::ShaderStage::Compute { .. } => {
+                        writeln!(self.out, "struct {} {{", location_input_name)?;
+                        for ((handle, var), &usage) in
+                            module.global_variables.iter().zip(&fun.global_usage)
                         {
-                            continue;
-                        }
-                        // if it's a struct, lift all the built-in contents up to the root
-                        let ty_handle = var.ty;
-                        if let crate::TypeInner::Struct { ref members } =
-                            module.types[ty_handle].inner
-                        {
-                            for (index, member) in members.iter().enumerate() {
-                                if let crate::MemberOrigin::BuiltIn(built_in) = member.origin {
-                                    let name = member.name.or_index(MemberIndex(index));
-                                    let ty_name = module.types[member.ty].name.or_index(member.ty);
-                                    write!(self.out, "\t{} {}", ty_name, name)?;
-                                    ResolvedBinding::BuiltIn(built_in)
-                                        .try_fmt_decorated(&mut self.out, ";\n")?;
-                                }
+                            if var.class != crate::StorageClass::Input
+                                || !usage.contains(crate::GlobalUse::LOAD)
+                            {
+                                continue;
                             }
-                        } else if let Some(ref binding @ crate::Binding::Location(_)) = var.binding
-                        {
-                            let tyvar = TypedGlobalVariable {
-                                module,
-                                handle,
-                                usage: crate::GlobalUse::empty(),
-                            };
-                            let resolved = options.resolve_binding(binding, in_mode)?;
-
-                            write!(self.out, "\t")?;
-                            tyvar.try_fmt(&mut self.out)?;
-                            resolved.try_fmt_decorated(&mut self.out, ";\n")?;
-                        }
-                    }
-                    writeln!(self.out, "}};")?;
-                    writeln!(self.out, "struct {} {{", output_name)?;
-                    for ((handle, var), &usage) in
-                        module.global_variables.iter().zip(&fun.global_usage)
-                    {
-                        if var.class != crate::StorageClass::Output
-                            || !usage.contains(crate::GlobalUse::STORE)
-                        {
-                            continue;
-                        }
-                        // if it's a struct, lift all the built-in contents up to the root
-                        let ty_handle = var.ty;
-                        if let crate::TypeInner::Struct { ref members } =
-                            module.types[ty_handle].inner
-                        {
-                            for (index, member) in members.iter().enumerate() {
-                                let name = member.name.or_index(MemberIndex(index));
-                                let ty_name = module.types[member.ty].name.or_index(member.ty);
-                                match member.origin {
-                                    crate::MemberOrigin::Empty => {}
-                                    crate::MemberOrigin::BuiltIn(built_in) => {
+                            // if it's a struct, lift all the built-in contents up to the root
+                            let ty_handle = var.ty;
+                            if let crate::TypeInner::Struct { ref members } =
+                                module.types[ty_handle].inner
+                            {
+                                for (index, member) in members.iter().enumerate() {
+                                    if let crate::MemberOrigin::BuiltIn(built_in) = member.origin {
+                                        let name = member.name.or_index(MemberIndex(index));
+                                        let ty_name =
+                                            module.types[member.ty].name.or_index(member.ty);
                                         write!(self.out, "\t{} {}", ty_name, name)?;
                                         ResolvedBinding::BuiltIn(built_in)
                                             .try_fmt_decorated(&mut self.out, ";\n")?;
                                     }
-                                    crate::MemberOrigin::Offset(_) => {
-                                        //TODO
+                                }
+                            } else if let Some(ref binding @ crate::Binding::Location(_)) =
+                                var.binding
+                            {
+                                let tyvar = TypedGlobalVariable {
+                                    module,
+                                    handle,
+                                    usage: crate::GlobalUse::empty(),
+                                };
+                                let resolved = options.resolve_binding(binding, in_mode)?;
+
+                                write!(self.out, "\t")?;
+                                tyvar.try_fmt(&mut self.out)?;
+                                resolved.try_fmt_decorated(&mut self.out, ";\n")?;
+                            }
+                        }
+                        writeln!(self.out, "}};")?;
+                        writeln!(self.out, "struct {} {{", output_name)?;
+                        for ((handle, var), &usage) in
+                            module.global_variables.iter().zip(&fun.global_usage)
+                        {
+                            if var.class != crate::StorageClass::Output
+                                || !usage.contains(crate::GlobalUse::STORE)
+                            {
+                                continue;
+                            }
+                            // if it's a struct, lift all the built-in contents up to the root
+                            let ty_handle = var.ty;
+                            if let crate::TypeInner::Struct { ref members } =
+                                module.types[ty_handle].inner
+                            {
+                                for (index, member) in members.iter().enumerate() {
+                                    let name = member.name.or_index(MemberIndex(index));
+                                    let ty_name = module.types[member.ty].name.or_index(member.ty);
+                                    match member.origin {
+                                        crate::MemberOrigin::Empty => {}
+                                        crate::MemberOrigin::BuiltIn(built_in) => {
+                                            write!(self.out, "\t{} {}", ty_name, name)?;
+                                            ResolvedBinding::BuiltIn(built_in)
+                                                .try_fmt_decorated(&mut self.out, ";\n")?;
+                                        }
+                                        crate::MemberOrigin::Offset(_) => {
+                                            //TODO
+                                        }
                                     }
                                 }
+                            } else {
+                                let tyvar = TypedGlobalVariable {
+                                    module,
+                                    handle,
+                                    usage: crate::GlobalUse::empty(),
+                                };
+                                write!(self.out, "\t")?;
+                                tyvar.try_fmt(&mut self.out)?;
+                                if let Some(ref binding) = var.binding {
+                                    let resolved = options.resolve_binding(binding, out_mode)?;
+                                    resolved.try_fmt_decorated(&mut self.out, "")?;
+                                }
+                                writeln!(self.out, ";")?;
                             }
-                        } else {
-                            let tyvar = TypedGlobalVariable {
-                                module,
-                                handle,
-                                usage: crate::GlobalUse::empty(),
-                            };
-                            write!(self.out, "\t")?;
-                            tyvar.try_fmt(&mut self.out)?;
-                            if let Some(ref binding) = var.binding {
-                                let resolved = options.resolve_binding(binding, out_mode)?;
-                                resolved.try_fmt_decorated(&mut self.out, "")?;
-                            }
-                            writeln!(self.out, ";")?;
                         }
+                        writeln!(self.out, "}};")?;
+                        writeln!(self.out, "{} {} {}(", em_str, output_name, fun_name)?;
+                        let separator = separate(last_used_global.is_none());
+                        writeln!(
+                            self.out,
+                            "\t{} {} [[stage_in]]{}",
+                            location_input_name, LOCATION_INPUT_STRUCT_NAME, separator
+                        )?;
                     }
-                    writeln!(self.out, "}};")?;
-                    writeln!(self.out, "{} {} {}(", em_str, output_name, fun_name)?;
-                    let separator = separate(last_used_global.is_none());
-                    writeln!(
-                        self.out,
-                        "\t{} {} [[stage_in]]{}",
-                        location_input_name, LOCATION_INPUT_STRUCT_NAME, separator
-                    )?;
-                } else {
-                    writeln!(self.out, "{} void {}(", em_str, fun_name)?;
-                }
+                    _ => {
+                        writeln!(self.out, "{} void {}(", em_str, fun_name)?;
+                    }
+                };
 
                 for ((handle, var), &usage) in module.global_variables.iter().zip(&fun.global_usage)
                 {
@@ -1142,10 +1147,10 @@ impl<W: Write> Writer<W> {
                             LocationMode::VertexInput
                         }
                         (crate::ShaderStage::Vertex, crate::StorageClass::Output)
-                        | (crate::ShaderStage::Fragment, crate::StorageClass::Input) => {
+                        | (crate::ShaderStage::Fragment { .. }, crate::StorageClass::Input) => {
                             LocationMode::Intermediate
                         }
-                        (crate::ShaderStage::Fragment, crate::StorageClass::Output) => {
+                        (crate::ShaderStage::Fragment { .. }, crate::StorageClass::Output) => {
                             LocationMode::FragmentOutput
                         }
                         _ => LocationMode::Uniform,
@@ -1188,11 +1193,11 @@ impl<W: Write> Writer<W> {
 
             // write down function body
             let has_output = match shader_stage {
-                Some(crate::ShaderStage::Vertex) | Some(crate::ShaderStage::Fragment) => {
+                Some(crate::ShaderStage::Vertex) | Some(crate::ShaderStage::Fragment { .. }) => {
                     writeln!(self.out, "\t{} {};", output_name, OUTPUT_STRUCT_NAME)?;
                     true
                 }
-                Some(crate::ShaderStage::Compute) | None => false,
+                Some(crate::ShaderStage::Compute { .. }) | None => false,
             };
             for (local_handle, local) in fun.local_variables.iter() {
                 let ty_name = module.types[local.ty].name.or_index(local.ty);

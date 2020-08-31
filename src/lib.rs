@@ -45,6 +45,48 @@ pub struct Header {
     pub generator: u32,
 }
 
+/// Early fragment tests. In a standard situation if a driver determines that it is possible to
+/// switch on early depth test it will. Typical situations when early depth test is switched off:
+///   - Calling ```discard``` in a shader.
+///   - Writing to the depth buffer, unless ConservativeDepth is enabled.
+///
+/// SPIR-V: ExecutionMode EarlyFragmentTests
+/// In GLSL: layout(early_fragment_tests) in;
+/// HLSL: Attribute earlydepthstencil
+///
+/// For more, see:
+///   - https://www.khronos.org/opengl/wiki/Early_Fragment_Test#Explicit_specification
+///   - https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-earlydepthstencil
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub struct EarlyDepthTest {
+    conservative: Option<ConservativeDepth>,
+}
+/// Enables adjusting depth without disabling early Z.
+///
+/// SPIR-V: ExecutionMode DepthGreater/DepthLess/DepthUnchanged
+/// GLSL: layout (depth_<greater/less/unchanged/any>) out float gl_FragDepth;
+///   - ```depth_any``` option behaves as if the layout qualifier was not present.
+/// HLSL: SV_Depth/SV_DepthGreaterEqual/SV_DepthLessEqual
+///
+/// For more, see:
+///   - https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt
+///   - https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-semantics#system-value-semantics
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum ConservativeDepth {
+    /// Shader may rewrite depth only with a value greater than calculated;
+    GreaterEqual,
+
+    /// Shader may rewrite depth smaller than one that would have been written without the modification.
+    LessEqual,
+
+    /// Shader may not rewrite depth value.
+    Unchanged,
+}
+
 /// Stage of the programmable pipeline.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -52,8 +94,12 @@ pub struct Header {
 #[allow(missing_docs)] // The names are self evident
 pub enum ShaderStage {
     Vertex,
-    Fragment,
-    Compute,
+    Fragment {
+        early_depth_test: Option<EarlyDepthTest>,
+    },
+    Compute {
+        local_size: (u32, u32, u32),
+    },
 }
 
 /// Class of storage for variables.
