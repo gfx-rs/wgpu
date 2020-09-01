@@ -16,6 +16,7 @@
 use player::{gfx_select, GlobalPlay, IdentityPassThroughFactory};
 use std::{
     fs::{read_to_string, File},
+    io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     ptr, slice,
 };
@@ -27,11 +28,26 @@ struct RawId {
 }
 
 #[derive(serde::Deserialize)]
+enum ExpectedData {
+    Raw(Vec<u8>),
+    File(String, usize),
+}
+
+impl ExpectedData {
+    fn len(&self) -> usize {
+        match self {
+            ExpectedData::Raw(vec) => vec.len(),
+            ExpectedData::File(_, size) => *size,
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
 struct Expectation {
     name: String,
     buffer: RawId,
     offset: wgt::BufferAddress,
-    data: Vec<u8>,
+    data: ExpectedData,
 }
 
 #[derive(serde::Deserialize)]
@@ -67,6 +83,7 @@ impl Test<'_> {
         dir: &Path,
         global: &wgc::hub::Global<IdentityPassThroughFactory>,
         adapter: wgc::id::AdapterId,
+        test_num: u32,
     ) {
         let backend = adapter.backend();
         let device = gfx_select!(adapter => global.adapter_request_device(
@@ -77,7 +94,7 @@ impl Test<'_> {
                 shader_validation: true,
             },
             None,
-            wgc::id::TypedId::zip(1, 0, backend)
+            wgc::id::TypedId::zip(test_num, 0, backend)
         ))
         .unwrap();
 
@@ -111,7 +128,19 @@ impl Test<'_> {
                 gfx_select!(device => global.buffer_get_mapped_range(buffer, expect.offset, None))
                     .unwrap();
             let contents = unsafe { slice::from_raw_parts(ptr, expect.data.len()) };
-            assert_eq!(&expect.data[..], contents);
+            let expected_data = match expect.data {
+                ExpectedData::Raw(vec) => vec,
+                ExpectedData::File(name, size) => {
+                    let mut bin = vec![0; size];
+                    let mut file = File::open(dir.join(name)).unwrap();
+                    file.seek(SeekFrom::Start(expect.offset)).unwrap();
+                    file.read_exact(&mut bin[..]).unwrap();
+
+                    bin
+                }
+            };
+
+            assert_eq!(&expected_data[..], contents);
         }
     }
 }
@@ -158,6 +187,7 @@ impl Corpus {
             println!("\tBackend {:?}", backend);
             let supported_features =
                 gfx_select!(adapter => global.adapter_features(adapter)).unwrap();
+            let mut test_num = 0;
             for test_path in &corpus.tests {
                 println!("\t\tTest '{:?}'", test_path);
                 let test = Test::load(dir.join(test_path), adapter.backend());
@@ -168,7 +198,8 @@ impl Corpus {
                     );
                     continue;
                 }
-                test.run(dir, &global, adapter);
+                test.run(dir, &global, adapter, test_num);
+                test_num += 1;
             }
         }
     }

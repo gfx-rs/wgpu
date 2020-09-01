@@ -1838,6 +1838,7 @@ pub struct TextureCopyView<T> {
     /// The target mip level of the texture.
     pub mip_level: u32,
     /// The base texel of the texture in the selected `mip_level`.
+    #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
     pub origin: Origin3d,
 }
 

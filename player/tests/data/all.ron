@@ -2,5 +2,6 @@
 	backends: (bits: 0x7),
 	tests: [
 		"buffer-copy.ron",
+		"quad.ron",
 	],
 )
