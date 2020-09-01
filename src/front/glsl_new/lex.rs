@@ -136,6 +136,9 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                     Some(Token::Interpolation((meta, crate::Interpolation::Sample))),
                     rest,
                 ),
+                // values
+                "true" => (Some(Token::BoolConstant((meta, true))), rest),
+                "false" => (Some(Token::BoolConstant((meta, false))), rest),
                 // types
                 "void" => (Some(Token::Void(meta)), rest),
                 word => {

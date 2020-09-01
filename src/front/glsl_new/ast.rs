@@ -102,6 +102,15 @@ pub struct ExpressionRule {
     pub statements: Vec<Statement>,
 }
 
+impl ExpressionRule {
+    pub fn from_expression(expression: Handle<Expression>) -> ExpressionRule {
+        ExpressionRule {
+            expression,
+            statements: vec![],
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum TypeQualifier {
     StorageClass(StorageClass),

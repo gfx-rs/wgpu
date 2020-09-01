@@ -76,10 +76,10 @@ pomelo! {
     %type and_expression Handle<Expression>;
     %type exclusive_or_expression Handle<Expression>;
     %type inclusive_or_expression Handle<Expression>;
-    %type logical_and_expression Handle<Expression>;
-    %type logical_xor_expression Handle<Expression>;
-    %type logical_or_expression Handle<Expression>;
-    %type conditional_expression Handle<Expression>;
+    %type logical_and_expression ExpressionRule;
+    %type logical_xor_expression ExpressionRule;
+    %type logical_or_expression ExpressionRule;
+    %type conditional_expression ExpressionRule;
 
     %type assignment_expression ExpressionRule;
     %type assignment_operator BinaryOperator;
@@ -177,10 +177,9 @@ pomelo! {
             return Err(ErrorKind::UnknownVariable(v.0, v.1));
         };
 
-        ExpressionRule {
-            expression,
-            statements: vec![],
-        }
+        ExpressionRule::from_expression(
+            expression
+        )
     }
 
     primary_expression ::= variable_identifier;
@@ -198,10 +197,9 @@ pomelo! {
             ty,
             inner: ConstantInner::Sint(i.1)
         });
-        ExpressionRule {
-            expression: extra.context.expressions.append(Expression::Constant(ch)),
-            statements: vec![],
-        }
+        ExpressionRule::from_expression(
+            extra.context.expressions.append(Expression::Constant(ch))
+        )
     }
     // primary_expression ::= UintConstant;
     primary_expression ::= FloatConstant(f) {
@@ -218,12 +216,28 @@ pomelo! {
             ty,
             inner: ConstantInner::Float(f.1 as f64)
         });
-        ExpressionRule {
-            expression: extra.context.expressions.append(Expression::Constant(ch)),
-            statements: vec![],
-        }
+        ExpressionRule::from_expression(
+            extra.context.expressions.append(Expression::Constant(ch))
+        )
     }
-    // primary_expression ::= BoolConstant;
+    primary_expression ::= BoolConstant(b) {
+        let ty = extra.types.fetch_or_append(Type {
+            name: None,
+            inner: TypeInner::Scalar {
+                kind: ScalarKind::Bool,
+                width: 4,
+            }
+        });
+        let ch = extra.constants.fetch_or_append(Constant {
+            name: None,
+            specialization: None,
+            ty,
+            inner: ConstantInner::Bool(b.1)
+        });
+        ExpressionRule::from_expression(
+            extra.context.expressions.append(Expression::Constant(ch))
+        )
+    }
     // primary_expression ::= DoubleConstant;
     primary_expression ::= LeftParen expression(e) RightParen {e}
 
@@ -387,9 +401,17 @@ pomelo! {
     inclusive_or_expression ::= inclusive_or_expression(left) VerticalBar exclusive_or_expression(right) {
         extra.context.expressions.append(Expression::Binary{op: BinaryOperator::InclusiveOr, left, right})
     }
-    logical_and_expression ::= inclusive_or_expression;
+    logical_and_expression ::= inclusive_or_expression(e) {
+        ExpressionRule::from_expression(e)
+    }
     logical_and_expression ::= logical_and_expression(left) AndOp inclusive_or_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::LogicalAnd, left, right})
+        ExpressionRule::from_expression(
+            extra.context.expressions.append(Expression::Binary{
+                op: BinaryOperator::LogicalAnd,
+                left: left.expression,
+                right
+            })
+        )
     }
     logical_xor_expression ::= logical_and_expression;
     logical_xor_expression ::= logical_xor_expression(left) XorOp logical_and_expression(right) {
@@ -399,7 +421,13 @@ pomelo! {
     }
     logical_or_expression ::= logical_xor_expression;
     logical_or_expression ::= logical_or_expression(left) OrOp logical_xor_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::LogicalOr, left, right})
+        ExpressionRule::from_expression(
+            extra.context.expressions.append(Expression::Binary{
+                op: BinaryOperator::LogicalOr,
+                left: left.expression,
+                right: right.expression,
+            })
+        )
     }
 
     conditional_expression ::= logical_or_expression;
@@ -408,12 +436,7 @@ pomelo! {
         return Err(ErrorKind::NotImplemented("ternary exp"))
     }
 
-    assignment_expression ::= conditional_expression(ce) {
-        ExpressionRule{
-            expression: ce,
-            statements: vec![],
-        }
-    }
+    assignment_expression ::= conditional_expression;
     assignment_expression ::= unary_expression(mut pointer) assignment_operator(op) assignment_expression(value) {
         match op {
             BinaryOperator::Equal => {
