@@ -355,7 +355,10 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     #[cfg(feature = "trace")]
                     trace.map(|t| t.lock().add(trace::Action::DestroyRenderBundle(id.0)));
                     let res = hub.render_bundles.unregister_locked(id.0, &mut *guard);
-                    self.suspected_resources.add_trackers(&res.used);
+
+                    if let Some(res) = res {
+                        self.suspected_resources.add_trackers(&res.used);
+                    }
                 }
             }
         }
@@ -370,15 +373,17 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     trace.map(|t| t.lock().add(trace::Action::DestroyBindGroup(id.0)));
                     let res = hub.bind_groups.unregister_locked(id.0, &mut *guard);
 
-                    self.suspected_resources.add_trackers(&res.used);
+                    if let Some(res) = res {
+                        self.suspected_resources.add_trackers(&res.used);
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .desc_sets
-                        .push(res.raw);
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .desc_sets
+                            .push(res.raw);
+                    }
                 }
             }
         }
@@ -393,21 +398,23 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     trace.map(|t| t.lock().add(trace::Action::DestroyTextureView(id.0)));
                     let res = hub.texture_views.unregister_locked(id.0, &mut *guard);
 
-                    let raw = match res.inner {
-                        resource::TextureViewInner::Native { raw, source_id } => {
-                            self.suspected_resources.textures.push(source_id.value);
-                            raw
-                        }
-                        resource::TextureViewInner::SwapChain { .. } => unreachable!(),
-                    };
+                    if let Some(res) = res {
+                        let raw = match res.inner {
+                            resource::TextureViewInner::Native { raw, source_id } => {
+                                self.suspected_resources.textures.push(source_id.value);
+                                raw
+                            }
+                            resource::TextureViewInner::SwapChain { .. } => unreachable!(),
+                        };
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .image_views
-                        .push((id, raw));
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .image_views
+                            .push((id, raw));
+                    }
                 }
             }
         }
@@ -422,13 +429,15 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     trace.map(|t| t.lock().add(trace::Action::DestroyTexture(id.0)));
                     let res = hub.textures.unregister_locked(id.0, &mut *guard);
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .images
-                        .push((res.raw, res.memory));
+                    if let Some(res) = res {
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .images
+                            .push((res.raw, res.memory));
+                    }
                 }
             }
         }
@@ -443,13 +452,15 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     trace.map(|t| t.lock().add(trace::Action::DestroySampler(id.0)));
                     let res = hub.samplers.unregister_locked(id.0, &mut *guard);
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .samplers
-                        .push(res.raw);
+                    if let Some(res) = res {
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .samplers
+                            .push(res.raw);
+                    }
                 }
             }
         }
@@ -465,13 +476,15 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     let res = hub.buffers.unregister_locked(id.0, &mut *guard);
                     tracing::debug!("Buffer {:?} is detached", id);
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .buffers
-                        .push((res.raw, res.memory));
+                    if let Some(res) = res {
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .buffers
+                            .push((res.raw, res.memory));
+                    }
                 }
             }
         }
@@ -486,13 +499,15 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     trace.map(|t| t.lock().add(trace::Action::DestroyComputePipeline(id.0)));
                     let res = hub.compute_pipelines.unregister_locked(id.0, &mut *guard);
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .compute_pipes
-                        .push(res.raw);
+                    if let Some(res) = res {
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .compute_pipes
+                            .push(res.raw);
+                    }
                 }
             }
         }
@@ -507,13 +522,15 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     trace.map(|t| t.lock().add(trace::Action::DestroyRenderPipeline(id.0)));
                     let res = hub.render_pipelines.unregister_locked(id.0, &mut *guard);
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .graphics_pipes
-                        .push(res.raw);
+                    if let Some(res) = res {
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .graphics_pipes
+                            .push(res.raw);
+                    }
                 }
             }
         }
@@ -532,10 +549,12 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     trace.map(|t| t.lock().add(trace::Action::DestroyPipelineLayout(id.0)));
                     let layout = hub.pipeline_layouts.unregister_locked(id.0, &mut *guard);
 
-                    self.suspected_resources
-                        .bind_group_layouts
-                        .extend_from_slice(&layout.bind_group_layout_ids);
-                    self.free_resources.pipeline_layouts.push(layout.raw);
+                    if let Some(lay) = layout {
+                        self.suspected_resources
+                            .bind_group_layouts
+                            .extend_from_slice(&lay.bind_group_layout_ids);
+                        self.free_resources.pipeline_layouts.push(lay.raw);
+                    }
                 }
             }
         }
@@ -552,7 +571,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     #[cfg(feature = "trace")]
                     trace.map(|t| t.lock().add(trace::Action::DestroyBindGroupLayout(id.0)));
                     let layout = hub.bind_group_layouts.unregister_locked(id.0, &mut *guard);
-                    self.free_resources.descriptor_set_layouts.push(layout.raw);
+                    if let Some(lay) = layout {
+                        self.free_resources.descriptor_set_layouts.push(lay.raw);
+                    }
                 }
             }
         }
@@ -679,9 +700,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                 let buffer = hub
                     .buffers
                     .unregister_locked(buffer_id.0, &mut *buffer_guard);
-                self.free_resources
-                    .buffers
-                    .push((buffer.raw, buffer.memory));
+                if let Some(buf) = buffer {
+                    self.free_resources.buffers.push((buf.raw, buf.memory));
+                }
             } else {
                 let mapping = match std::mem::replace(
                     &mut buffer.map_state,

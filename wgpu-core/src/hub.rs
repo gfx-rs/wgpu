@@ -451,10 +451,11 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
         id
     }
 
-    pub fn unregister_locked(&self, id: I, guard: &mut Storage<T, I>) -> T {
-        let value = guard.remove(id).unwrap();
+    pub fn unregister_locked(&self, id: I, guard: &mut Storage<T, I>) -> Option<T> {
+        let value = guard.remove(id);
         //Note: careful about the order here!
         self.identity.free(id);
+        //Returning None is legal if it's an error ID
         value
     }
 
