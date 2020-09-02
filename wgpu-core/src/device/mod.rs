@@ -1032,13 +1032,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 },
                 gfx_memory::Kind::Linear,
             )?;
-            let ptr = stage
+            let mapped = stage
                 .memory
                 .map(&device.raw, hal::memory::Segment::ALL)
-                .map_err(resource::BufferAccessError::from)?
-                .ptr();
+                .map_err(resource::BufferAccessError::from)?;
             buffer.map_state = resource::BufferMapState::Init {
-                ptr,
+                ptr: mapped.ptr(),
+                needs_flush: !mapped.is_coherent(),
                 stage_buffer: stage.raw,
                 stage_memory: stage.memory,
             };
@@ -3681,6 +3681,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ptr,
                 stage_buffer,
                 stage_memory,
+                needs_flush,
             } => {
                 #[cfg(feature = "trace")]
                 match device.trace {
@@ -3699,6 +3700,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     None => (),
                 };
                 let _ = ptr;
+
+                if needs_flush {
+                    let segment = hal::memory::Segment::default();
+                    unsafe {
+                        device
+                            .raw
+                            .flush_mapped_memory_ranges(iter::once((
+                                stage_memory.memory(),
+                                segment,
+                            )))
+                            .unwrap()
+                    };
+                }
 
                 buffer.life_guard.use_at(device.active_submission_index + 1);
                 let region = hal::command::BufferCopy {
