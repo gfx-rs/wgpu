@@ -1,6 +1,10 @@
 # Change Log
 
-## v0.6.1 (tbd)
+## wgpu-core-0.6.2, wgpu-types-0.6.1 (2020-09-02)
+  - fix flushing of temporary staging buffers (affects DX11 mostly)
+  - fix write-only stencil states
+
+## wgpu-core-0.6.1 (2020-08-28)
   - allow copying from `Depth32Float` textures
   - fix usage tracking of read-only buffer storages
 
