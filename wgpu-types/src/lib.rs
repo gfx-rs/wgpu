@@ -216,6 +216,14 @@ bitflags::bitflags! {
         ///
         /// `#extension GL_EXT_nonuniform_qualifier : require`
         ///
+        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
+        ///
+        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        ///
+        /// or as `nonuniformEXT` constructor:
+        ///
+        /// eg. `texture_array[nonuniformEXT(vertex_data)]`
+        ///
         /// HLSL does not need any extension.
         ///
         /// This capability means the hardware will also support SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
