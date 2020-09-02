@@ -1,6 +1,6 @@
 use crate::{
-    Arena, Binding, Constant, Expression, FastHashMap, Function, GlobalVariable, Handle,
-    Interpolation, LocalVariable, ShaderStage, Statement, StorageClass, Type,
+    Arena, BinaryOperator, Binding, Constant, Expression, FastHashMap, Function, GlobalVariable,
+    Handle, Interpolation, LocalVariable, ShaderStage, Statement, StorageClass, Type,
 };
 
 #[derive(Debug)]
@@ -38,6 +38,19 @@ impl Program {
                 lookup_global_var_exps: FastHashMap::default(),
             },
         }
+    }
+
+    pub fn binary_expr(
+        &mut self,
+        op: BinaryOperator,
+        left: ExpressionRule,
+        right: ExpressionRule,
+    ) -> ExpressionRule {
+        ExpressionRule::from_expression(self.context.expressions.append(Expression::Binary {
+            op,
+            left: left.expression,
+            right: right.expression,
+        }))
     }
 }
 

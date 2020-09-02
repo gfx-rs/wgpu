@@ -68,14 +68,14 @@ pomelo! {
     %type function_call_header FunctionCall;
     %type function_identifier FunctionCallKind;
 
-    %type multiplicative_expression Handle<Expression>;
-    %type additive_expression Handle<Expression>;
-    %type shift_expression Handle<Expression>;
-    %type relational_expression Handle<Expression>;
-    %type equality_expression Handle<Expression>;
-    %type and_expression Handle<Expression>;
-    %type exclusive_or_expression Handle<Expression>;
-    %type inclusive_or_expression Handle<Expression>;
+    %type multiplicative_expression ExpressionRule;
+    %type additive_expression ExpressionRule;
+    %type shift_expression ExpressionRule;
+    %type relational_expression ExpressionRule;
+    %type equality_expression ExpressionRule;
+    %type and_expression ExpressionRule;
+    %type exclusive_or_expression ExpressionRule;
+    %type inclusive_or_expression ExpressionRule;
     %type logical_and_expression ExpressionRule;
     %type logical_xor_expression ExpressionRule;
     %type logical_or_expression ExpressionRule;
@@ -332,86 +332,66 @@ pomelo! {
     unary_operator ::= Dash;
     unary_operator ::= Bang;
     unary_operator ::= Tilde;
-    multiplicative_expression ::= unary_expression(e) {e.expression}
+    multiplicative_expression ::= unary_expression;
     multiplicative_expression ::= multiplicative_expression(left) Star unary_expression(right) {
-        extra.context.expressions.append(Expression::Binary{
-            op: BinaryOperator::Multiply,
-            left,
-            right: right.expression,
-        })
+        extra.binary_expr(BinaryOperator::Multiply, left, right)
     }
     multiplicative_expression ::= multiplicative_expression(left) Slash unary_expression(right) {
-        extra.context.expressions.append(Expression::Binary{
-            op: BinaryOperator::Divide,
-            left,
-            right: right.expression
-        })
+        extra.binary_expr(BinaryOperator::Divide, left, right)
     }
     multiplicative_expression ::= multiplicative_expression(left) Percent unary_expression(right) {
-        extra.context.expressions.append(Expression::Binary{
-            op: BinaryOperator::Modulo,
-            left,
-            right: right.expression,
-        })
+        extra.binary_expr(BinaryOperator::Modulo, left, right)
     }
     additive_expression ::= multiplicative_expression;
     additive_expression ::= additive_expression(left) Plus multiplicative_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Add, left, right})
+        extra.binary_expr(BinaryOperator::Add, left, right)
     }
     additive_expression ::= additive_expression(left) Dash multiplicative_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Subtract, left, right})
+        extra.binary_expr(BinaryOperator::Subtract, left, right)
     }
     shift_expression ::= additive_expression;
     shift_expression ::= shift_expression(left) LeftOp additive_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::ShiftLeftLogical, left, right})
+        extra.binary_expr(BinaryOperator::ShiftLeftLogical, left, right)
     }
     shift_expression ::= shift_expression(left) RightOp additive_expression(right) {
         //TODO: when to use ShiftRightArithmetic
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::ShiftRightLogical, left, right})
+        extra.binary_expr(BinaryOperator::ShiftRightLogical, left, right)
     }
     relational_expression ::= shift_expression;
     relational_expression ::= relational_expression(left) LeftAngle shift_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Less, left, right})
+        extra.binary_expr(BinaryOperator::Less, left, right)
     }
     relational_expression ::= relational_expression(left) RightAngle shift_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Greater, left, right})
+        extra.binary_expr(BinaryOperator::Greater, left, right)
     }
     relational_expression ::= relational_expression(left) LeOp shift_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::LessEqual, left, right})
+        extra.binary_expr(BinaryOperator::LessEqual, left, right)
     }
     relational_expression ::= relational_expression(left) GeOp shift_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::GreaterEqual, left, right})
+        extra.binary_expr(BinaryOperator::GreaterEqual, left, right)
     }
     equality_expression ::= relational_expression;
     equality_expression ::= equality_expression(left) EqOp relational_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Equal, left, right})
+        extra.binary_expr(BinaryOperator::Equal, left, right)
     }
     equality_expression ::= equality_expression(left) NeOp relational_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::NotEqual, left, right})
+        extra.binary_expr(BinaryOperator::NotEqual, left, right)
     }
     and_expression ::= equality_expression;
     and_expression ::= and_expression(left) Ampersand equality_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::And, left, right})
+        extra.binary_expr(BinaryOperator::And, left, right)
     }
     exclusive_or_expression ::= and_expression;
     exclusive_or_expression ::= exclusive_or_expression(left) Caret and_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::ExclusiveOr, left, right})
+        extra.binary_expr(BinaryOperator::ExclusiveOr, left, right)
     }
     inclusive_or_expression ::= exclusive_or_expression;
     inclusive_or_expression ::= inclusive_or_expression(left) VerticalBar exclusive_or_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::InclusiveOr, left, right})
+        extra.binary_expr(BinaryOperator::InclusiveOr, left, right)
     }
-    logical_and_expression ::= inclusive_or_expression(e) {
-        ExpressionRule::from_expression(e)
-    }
+    logical_and_expression ::= inclusive_or_expression;
     logical_and_expression ::= logical_and_expression(left) AndOp inclusive_or_expression(right) {
-        ExpressionRule::from_expression(
-            extra.context.expressions.append(Expression::Binary{
-                op: BinaryOperator::LogicalAnd,
-                left: left.expression,
-                right
-            })
-        )
+        extra.binary_expr(BinaryOperator::LogicalAnd, left, right)
     }
     logical_xor_expression ::= logical_and_expression;
     logical_xor_expression ::= logical_xor_expression(left) XorOp logical_and_expression(right) {
@@ -421,13 +401,7 @@ pomelo! {
     }
     logical_or_expression ::= logical_xor_expression;
     logical_or_expression ::= logical_or_expression(left) OrOp logical_xor_expression(right) {
-        ExpressionRule::from_expression(
-            extra.context.expressions.append(Expression::Binary{
-                op: BinaryOperator::LogicalOr,
-                left: left.expression,
-                right: right.expression,
-            })
-        )
+        extra.binary_expr(BinaryOperator::LogicalOr, left, right)
     }
 
     conditional_expression ::= logical_or_expression;
