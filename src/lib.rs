@@ -12,7 +12,7 @@ mod macros;
 
 use std::{
     borrow::Cow,
-    error::Error,
+    error,
     fmt::{Debug, Display},
     future::Future,
     marker::PhantomData,
@@ -1266,7 +1266,7 @@ impl Display for SwapChainError {
     }
 }
 
-impl Error for SwapChainError {}
+impl error::Error for SwapChainError {}
 
 impl Instance {
     /// Create an new instance of wgpu.
@@ -1562,7 +1562,7 @@ impl Display for RequestDeviceError {
     }
 }
 
-impl Error for RequestDeviceError {}
+impl error::Error for RequestDeviceError {}
 
 /// Error occurred when trying to async map a buffer.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -1574,7 +1574,7 @@ impl Display for BufferAsyncError {
     }
 }
 
-impl Error for BufferAsyncError {}
+impl error::Error for BufferAsyncError {}
 
 /// Type of buffer mapping.
 #[derive(Debug, Clone, Copy, PartialEq)]
