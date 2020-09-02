@@ -103,23 +103,23 @@ impl framework::Example for Example {
     ) -> Self {
         let mut uniform_workaround = false;
         let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
-        let fs_bytes: Vec<u8> = match device.features() {
+        let fs_source = match device.features() {
             f if f.contains(wgpu::Features::UNSIZED_BINDING_ARRAY) => {
-                include_bytes!("unsized-non-uniform.frag.spv").to_vec()
+                wgpu::include_spirv!("unsized-non-uniform.frag.spv")
             }
             f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) => {
-                include_bytes!("non-uniform.frag.spv").to_vec()
+                wgpu::include_spirv!("non-uniform.frag.spv")
             }
             f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING) => {
                 uniform_workaround = true;
-                include_bytes!("uniform.frag.spv").to_vec()
+                wgpu::include_spirv!("uniform.frag.spv")
             }
             f if f.contains(wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY) => {
-                include_bytes!("constant.frag.spv").to_vec()
+                wgpu::include_spirv!("constant.frag.spv")
             }
             _ => unreachable!(),
         };
-        let fs_module = device.create_shader_module(wgpu::util::make_spirv(&fs_bytes));
+        let fs_module = device.create_shader_module(fs_source);
 
         let vertex_size = std::mem::size_of::<Vertex>();
         let vertex_data = create_vertices();
