@@ -85,6 +85,7 @@ pub(crate) enum BufferMapState<B: hal::Backend> {
         ptr: NonNull<u8>,
         stage_buffer: B::Buffer,
         stage_memory: MemoryBlock<B>,
+        needs_flush: bool,
     },
     /// Waiting for GPU to be done before mapping
     Waiting(BufferPendingMapping),
