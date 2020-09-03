@@ -7,9 +7,13 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
+use fmt::Debug;
 use futures::future::{ready, Ready};
+use parking_lot::Mutex;
 use smallvec::SmallVec;
-use std::{borrow::Cow::Borrowed, error::Error, fmt, marker::PhantomData, ops::Range, slice};
+use std::{
+    borrow::Cow::Borrowed, error::Error, fmt, marker::PhantomData, ops::Range, slice, sync::Arc,
+};
 use typed_arena::Arena;
 
 pub struct Context(wgc::hub::Global<wgc::hub::IdentityManagerFactory>);
@@ -500,6 +504,7 @@ fn map_pass_channel<V: Copy + Default>(
 #[derive(Debug)]
 pub(crate) struct Device {
     id: wgc::id::DeviceId,
+    error_sink: ErrorSink,
 }
 
 impl crate::Context for Context {
@@ -572,7 +577,10 @@ impl crate::Context for Context {
             *adapter => global.adapter_request_device(*adapter, desc, trace_dir, PhantomData)
         )
         .unwrap_pretty();
-        let device = Device { id: device_id };
+        let device = Device {
+            id: device_id,
+            error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
+        };
         ready(Ok((device, device_id)))
     }
 
@@ -619,10 +627,19 @@ impl crate::Context for Context {
             ShaderModuleSource::Wgsl(code) => wgc::pipeline::ShaderModuleSource::Wgsl(code),
         };
         let global = &self.0;
-        wgc::gfx_select!(
+        let res = wgc::gfx_select!(
             device.id => global.device_create_shader_module(device.id, desc, PhantomData)
-        )
-        .unwrap_pretty()
+        );
+
+        match res {
+            Ok(val) => val,
+
+            Err(err) => {
+                let error_sink = device.error_sink.lock();
+                error_sink.handle_error(crate::Error::from(err));
+                wgc::gfx_select!( device.id => global.shader_module_error(PhantomData))
+            }
+        }
     }
 
     fn device_create_bind_group_layout(
@@ -761,7 +778,7 @@ impl crate::Context for Context {
         };
 
         let global = &self.0;
-        wgc::gfx_select!(device.id => global.device_create_render_pipeline(
+        let res = wgc::gfx_select!(device.id => global.device_create_render_pipeline(
             device.id,
             &pipe::RenderPipelineDescriptor {
                 label: desc.label.map(Borrowed),
@@ -779,9 +796,17 @@ impl crate::Context for Context {
             },
             PhantomData,
             None
-        ))
-        .unwrap_pretty()
-        .0
+        ));
+
+        match res {
+            Ok(val) => val.0,
+
+            Err(err) => {
+                let error_sink = device.error_sink.lock();
+                error_sink.handle_error(crate::Error::from(err));
+                wgc::gfx_select!( device.id => global.render_pipeline_error(PhantomData))
+            }
+        }
     }
 
     fn device_create_compute_pipeline(
@@ -938,10 +963,11 @@ impl crate::Context for Context {
 
     fn device_on_uncaptured_error(
         &self,
-        _device: &Self::DeviceId,
-        _handler: impl crate::UncapturedErrorHandler,
+        device: &Self::DeviceId,
+        handler: impl crate::UncapturedErrorHandler,
     ) {
-        todo!();
+        let mut error_sink = device.error_sink.lock();
+        error_sink.uncaptured_handler = Box::new(handler);
     }
 
     fn buffer_map_async(
@@ -1369,4 +1395,38 @@ where
     fn unwrap_pretty(self) -> T {
         self.unwrap_or_else(|err| panic!("{}", err))
     }
+}
+
+type ErrorSink = Arc<Mutex<ErrorSinkRaw>>;
+
+impl<E: Error + Send + Sync + 'static> From<E> for crate::Error {
+    fn from(err: E) -> Self {
+        crate::Error::ValidationError { source: err.into() }
+    }
+}
+
+struct ErrorSinkRaw {
+    uncaptured_handler: Box<dyn crate::UncapturedErrorHandler>,
+}
+
+impl ErrorSinkRaw {
+    fn new() -> ErrorSinkRaw {
+        ErrorSinkRaw {
+            uncaptured_handler: Box::from(default_error_handler),
+        }
+    }
+    fn handle_error(&self, err: crate::Error) {
+        (self.uncaptured_handler)(err);
+    }
+}
+
+impl Debug for ErrorSinkRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ErrorSink")
+    }
+}
+
+fn default_error_handler(err: crate::Error) {
+    eprintln!("WGPU Error: {}", err);
+    panic!("Handling wgpu errors as fatal by default");
 }
