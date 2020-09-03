@@ -930,6 +930,14 @@ impl crate::Context for Context {
         .unwrap_pretty()
     }
 
+    fn device_on_uncaptured_error(
+        &self,
+        _device: &Self::DeviceId,
+        _handler: impl crate::UncapturedErrorHandler,
+    ) {
+        todo!();
+    }
+
     fn buffer_map_async(
         &self,
         buffer: &Self::BufferId,

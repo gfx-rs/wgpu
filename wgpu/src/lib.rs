@@ -262,6 +262,11 @@ trait Context: Debug + Send + Sized + Sync {
     ) -> Self::RenderBundleEncoderId;
     fn device_drop(&self, device: &Self::DeviceId);
     fn device_poll(&self, device: &Self::DeviceId, maintain: Maintain);
+    fn device_on_uncaptured_error(
+        &self,
+        device: &Self::DeviceId,
+        handler: impl UncapturedErrorHandler,
+    );
 
     fn buffer_map_async(
         &self,
@@ -1542,6 +1547,11 @@ impl Device {
             id: Context::device_create_swap_chain(&*self.context, &self.id, &surface.id, desc),
         }
     }
+
+    /// Set a callback for errors that are not handled in error scopes.
+    pub fn on_uncaptured_error(&self, handler: impl UncapturedErrorHandler) {
+        self.context.device_on_uncaptured_error(&self.id, handler);
+    }
 }
 
 impl Drop for Device {
@@ -2607,6 +2617,30 @@ impl SwapChain {
             SwapChainStatus::Timeout => Err(SwapChainError::Timeout),
             SwapChainStatus::Outdated => Err(SwapChainError::Outdated),
             SwapChainStatus::Lost => Err(SwapChainError::Lost),
+        }
+    }
+}
+
+/// Type for the callback of uncaptured error handler
+pub trait UncapturedErrorHandler: Fn(Error) + Send + Sync + 'static {}
+impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + Sync + 'static {}
+
+/// Error type
+#[derive(Debug)]
+pub enum Error {
+    /// Out of memory error
+    OutOfMemoryError,
+    /// Validation error, signifying a bug in code or data
+    ValidationError {
+        ///
+        source: Box<dyn error::Error + Send + Sync + 'static>,
+    },
+}
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::OutOfMemoryError => f.write_str("Out of Memory"),
+            Error::ValidationError { source } => std::fmt::Display::fmt(source, f),
         }
     }
 }
