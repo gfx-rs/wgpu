@@ -627,19 +627,13 @@ impl crate::Context for Context {
             ShaderModuleSource::Wgsl(code) => wgc::pipeline::ShaderModuleSource::Wgsl(code),
         };
         let global = &self.0;
-        let res = wgc::gfx_select!(
+        wgc::gfx_select!(
             device.id => global.device_create_shader_module(device.id, desc, PhantomData)
-        );
-
-        match res {
-            Ok(val) => val,
-
-            Err(err) => {
-                let error_sink = device.error_sink.lock();
-                error_sink.handle_error(crate::Error::from(err));
-                wgc::gfx_select!( device.id => global.shader_module_error(PhantomData))
-            }
-        }
+        )
+        .unwrap_error_sink(
+            &device.error_sink,
+            || wgc::gfx_select!( device.id => global.shader_module_error(PhantomData)),
+        )
     }
 
     fn device_create_bind_group_layout(
@@ -654,7 +648,7 @@ impl crate::Context for Context {
                 entries: Borrowed(desc.entries),
             }, PhantomData)
         )
-        .unwrap_pretty()
+        .unwrap_error_sink(&device.error_sink, || wgc::gfx_select!( device.id => global.bind_group_layout_error(PhantomData)))
     }
 
     fn device_create_bind_group(
@@ -705,7 +699,10 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
-        .unwrap_pretty()
+        .unwrap_error_sink(
+            &device.error_sink,
+            || wgc::gfx_select!( device.id => global.bind_group_error(PhantomData)),
+        )
     }
 
     fn device_create_pipeline_layout(
@@ -740,7 +737,10 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
-        .unwrap_pretty()
+        .unwrap_error_sink(
+            &device.error_sink,
+            || wgc::gfx_select!( device.id => global.pipeline_layout_error(PhantomData)),
+        )
     }
 
     fn device_create_render_pipeline(
@@ -778,7 +778,7 @@ impl crate::Context for Context {
         };
 
         let global = &self.0;
-        let res = wgc::gfx_select!(device.id => global.device_create_render_pipeline(
+        wgc::gfx_select!(device.id => global.device_create_render_pipeline(
             device.id,
             &pipe::RenderPipelineDescriptor {
                 label: desc.label.map(Borrowed),
@@ -796,17 +796,12 @@ impl crate::Context for Context {
             },
             PhantomData,
             None
-        ));
-
-        match res {
-            Ok(val) => val.0,
-
-            Err(err) => {
-                let error_sink = device.error_sink.lock();
-                error_sink.handle_error(crate::Error::from(err));
-                wgc::gfx_select!( device.id => global.render_pipeline_error(PhantomData))
-            }
-        }
+        ))
+        .unwrap_error_sink(&device.error_sink, || {
+            let err = wgc::gfx_select!( device.id => global.render_pipeline_error(PhantomData));
+            (err, 0u8)
+        })
+        .0
     }
 
     fn device_create_compute_pipeline(
@@ -830,7 +825,10 @@ impl crate::Context for Context {
             PhantomData,
             None
         ))
-        .unwrap_pretty()
+        .unwrap_error_sink(&device.error_sink, || {
+            let err = wgc::gfx_select!( device.id => global.compute_pipeline_error(PhantomData));
+            (err, 0u8)
+        })
         .0
     }
 
@@ -850,7 +848,10 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
-        .unwrap_pretty()
+        .unwrap_error_sink(
+            &device.error_sink,
+            || wgc::gfx_select!( device.id => global.buffer_error(PhantomData)),
+        )
     }
 
     fn device_create_texture(
@@ -872,7 +873,10 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
-        .unwrap_pretty()
+        .unwrap_error_sink(
+            &device.error_sink,
+            || wgc::gfx_select!( device.id => global.texture_error(PhantomData)),
+        )
     }
 
     fn device_create_sampler(
@@ -897,7 +901,10 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
-        .unwrap_pretty()
+        .unwrap_error_sink(
+            &device.error_sink,
+            || wgc::gfx_select!( device.id => global.sampler_error(PhantomData)),
+        )
     }
 
     fn device_create_command_encoder(
@@ -913,7 +920,10 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
-        .unwrap_pretty()
+        .unwrap_error_sink(
+            &device.error_sink,
+            || wgc::gfx_select!( device.id => global.command_encoder_error(PhantomData)),
+        )
     }
 
     fn device_create_render_bundle_encoder(
@@ -931,7 +941,7 @@ impl crate::Context for Context {
             device.id,
             None,
         )
-        .unwrap_pretty()
+        .unwrap_pretty() // TODO: errorsink, but missing render_bundle_error
     }
 
     fn device_drop(&self, device: &Self::DeviceId) {
@@ -1386,14 +1396,23 @@ pub(crate) struct SwapChainOutputDetail {
 
 trait PrettyResult<T> {
     fn unwrap_pretty(self) -> T;
+    fn unwrap_error_sink(self, error_sink: &ErrorSink, fallback: impl FnOnce() -> T) -> T;
 }
 
 impl<T, E> PrettyResult<T> for Result<T, E>
 where
-    E: Error,
+    E: Error + Send + Sync + 'static,
 {
     fn unwrap_pretty(self) -> T {
         self.unwrap_or_else(|err| panic!("{}", err))
+    }
+
+    fn unwrap_error_sink(self, error_sink: &ErrorSink, fallback: impl FnOnce() -> T) -> T {
+        self.unwrap_or_else(|err| {
+            let error_sink = error_sink.lock();
+            error_sink.handle_error(crate::Error::from(err));
+            fallback()
+        })
     }
 }
 
