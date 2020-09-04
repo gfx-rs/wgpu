@@ -2636,11 +2636,21 @@ pub enum Error {
         source: Box<dyn error::Error + Send + Sync + 'static>,
     },
 }
+
+impl error::Error for Error {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            Error::OutOfMemoryError => None,
+            Error::ValidationError { source } => Some(source.as_ref()),
+        }
+    }
+}
+
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::OutOfMemoryError => f.write_str("Out of Memory"),
-            Error::ValidationError { source } => std::fmt::Display::fmt(source, f),
+            Error::ValidationError { .. } => f.write_str("Validation error"),
         }
     }
 }

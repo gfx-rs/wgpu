@@ -1410,19 +1410,15 @@ where
     fn unwrap_error_sink(self, error_sink: &ErrorSink, fallback: impl FnOnce() -> T) -> T {
         self.unwrap_or_else(|err| {
             let error_sink = error_sink.lock();
-            error_sink.handle_error(crate::Error::from(err));
+            error_sink.handle_error(crate::Error::ValidationError {
+                source: Box::new(err),
+            });
             fallback()
         })
     }
 }
 
 type ErrorSink = Arc<Mutex<ErrorSinkRaw>>;
-
-impl<E: Error + Send + Sync + 'static> From<E> for crate::Error {
-    fn from(err: E) -> Self {
-        crate::Error::ValidationError { source: err.into() }
-    }
-}
 
 struct ErrorSinkRaw {
     uncaptured_handler: Box<dyn crate::UncapturedErrorHandler>,
@@ -1446,6 +1442,17 @@ impl Debug for ErrorSinkRaw {
 }
 
 fn default_error_handler(err: crate::Error) {
-    eprintln!("WGPU Error: {}", err);
+    eprintln!("wgpu error: {}\n", err);
+
+    if err.source().is_some() {
+        eprintln!("Caused by:");
+        let mut source_opt = err.source();
+        while let Some(source) = source_opt {
+            eprintln!("    {}", source);
+            source_opt = source.source();
+        }
+        eprintln!();
+    }
+
     panic!("Handling wgpu errors as fatal by default");
 }
