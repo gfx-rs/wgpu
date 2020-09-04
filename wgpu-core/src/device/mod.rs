@@ -2595,7 +2595,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
     ) -> Result<
         (id::RenderPipelineId, pipeline::ImplicitBindGroupCount),
-        pipeline::CreateRenderPipelineError,
+        crate::LabeledContextError<pipeline::CreateRenderPipelineError>,
     > {
         span!(_guard, INFO, "Device::create_render_pipeline");
 
@@ -2605,7 +2605,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let samples = {
             let sc = desc.sample_count;
             if sc == 0 || sc > 32 || !conv::is_power_of_two(sc) {
-                return Err(pipeline::CreateRenderPipelineError::InvalidSampleCount(sc));
+                return Err(pipeline::CreateRenderPipelineError::InvalidSampleCount(sc)
+                    .with_label(&desc.label));
             }
             sc as u8
         };
@@ -2638,7 +2639,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(pipeline::CreateRenderPipelineError::UnalignedVertexStride {
                     index: i as u32,
                     stride: vb_state.stride,
-                });
+                }
+                .with_label(&desc.label));
             }
             vertex_buffers.alloc().init(hal::pso::VertexBufferDesc {
                 binding: i as u32,
@@ -2655,7 +2657,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
                             location: attribute.shader_location,
                             offset: attribute.offset,
-                        },
+                        }
+                        .with_label(&desc.label),
                     );
                 }
                 attributes.alloc().init(hal::pso::AttributeDesc {
@@ -2711,15 +2714,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
+        let device = device_guard.get(device_id).map_err(|_| {
+            pipeline::CreateRenderPipelineError::from(DeviceError::Invalid).with_label(&desc.label)
+        })?;
         if rasterization_state.clamp_depth
             && !device.features.contains(wgt::Features::DEPTH_CLAMPING)
         {
             return Err(pipeline::CreateRenderPipelineError::MissingFeature(
                 wgt::Features::DEPTH_CLAMPING,
-            ));
+            )
+            .with_label(&desc.label));
         }
 
         let (raw_pipeline, layout_id, layout_ref_count, derived_bind_group_count) = {
@@ -2781,17 +2785,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let shader_module =
                     shader_module_guard
                         .get(desc.vertex_stage.module)
-                        .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
-                            flag,
-                            error: validation::StageError::InvalidModule,
+                        .map_err(|_| {
+                            pipeline::CreateRenderPipelineError::Stage {
+                                flag,
+                                error: validation::StageError::InvalidModule,
+                            }
+                            .with_label(&desc.label)
                         })?;
 
                 if let Some(ref module) = shader_module.module {
                     let group_layouts = match desc.layout {
                         Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
-                            pipeline_layout_guard
-                                .get(pipeline_layout_id)
-                                .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?,
+                            pipeline_layout_guard.get(pipeline_layout_id).map_err(|_| {
+                                pipeline::CreateRenderPipelineError::InvalidLayout
+                                    .with_label(&desc.label)
+                            })?,
                             &*bgl_guard,
                         ),
                         None => validation::IntrospectionBindGroupLayouts::Derived(
@@ -2806,7 +2814,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         naga::ShaderStage::Vertex,
                         interface,
                     )
-                    .map_err(|error| pipeline::CreateRenderPipelineError::Stage { flag, error })?;
+                    .map_err(|error| {
+                        pipeline::CreateRenderPipelineError::Stage { flag, error }
+                            .with_label(&desc.label)
+                    })?;
                     validated_stages |= flag;
                 }
 
@@ -2827,13 +2838,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             flag,
                             error: validation::StageError::InvalidModule,
                         }
+                        .with_label(&desc.label)
                     })?;
 
                     let group_layouts = match desc.layout {
                         Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
-                            pipeline_layout_guard
-                                .get(pipeline_layout_id)
-                                .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?,
+                            pipeline_layout_guard.get(pipeline_layout_id).map_err(|_| {
+                                pipeline::CreateRenderPipelineError::InvalidLayout
+                                    .with_label(&desc.label)
+                            })?,
                             &*bgl_guard,
                         ),
                         None => validation::IntrospectionBindGroupLayouts::Derived(
@@ -2852,6 +2865,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             )
                             .map_err(|error| {
                                 pipeline::CreateRenderPipelineError::Stage { flag, error }
+                                    .with_label(&desc.label)
                             })?;
                             validated_stages |= flag;
                         }
@@ -2879,7 +2893,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         return Err(
                             pipeline::CreateRenderPipelineError::IncompatibleOutputFormat {
                                 index: i as u8,
-                            },
+                            }
+                            .with_label(&desc.label),
                         );
                     }
                 }
@@ -2889,7 +2904,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 None => wgt::ShaderStage::VERTEX,
             };
             if desc.layout.is_none() && !validated_stages.contains(last_stage) {
-                Err(pipeline::ImplicitLayoutError::ReflectionError(last_stage))?
+                Err(pipeline::CreateRenderPipelineError::from(
+                    pipeline::ImplicitLayoutError::ReflectionError(last_stage),
+                )
+                .with_label(&desc.label))?
             }
 
             let primitive_assembler = hal::pso::PrimitiveAssemblerDesc::Vertex {
@@ -2908,18 +2926,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let (pipeline_layout_id, derived_bind_group_count) = match desc.layout {
                 Some(id) => (id, 0),
-                None => self.derive_pipeline_layout(
-                    device,
-                    device_id,
-                    implicit_pipeline_ids,
-                    derived_group_layouts,
-                    &mut *bgl_guard,
-                    &mut *pipeline_layout_guard,
-                )?,
+                None => self
+                    .derive_pipeline_layout(
+                        device,
+                        device_id,
+                        implicit_pipeline_ids,
+                        derived_group_layouts,
+                        &mut *bgl_guard,
+                        &mut *pipeline_layout_guard,
+                    )
+                    .map_err(|e| {
+                        pipeline::CreateRenderPipelineError::from(e).with_label(&desc.label)
+                    })?,
             };
-            let layout = pipeline_layout_guard
-                .get(pipeline_layout_id)
-                .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
+            let layout = pipeline_layout_guard.get(pipeline_layout_id).map_err(|_| {
+                pipeline::CreateRenderPipelineError::InvalidLayout.with_label(&desc.label)
+            })?;
 
             let mut render_pass_cache = device.render_passes.lock();
             let pipeline_desc = hal::pso::GraphicsPipelineDesc {
@@ -2936,9 +2958,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     main_pass: match render_pass_cache.entry(rp_key) {
                         Entry::Occupied(e) => e.into_mut(),
                         Entry::Vacant(e) => {
-                            let pass = device
-                                .create_compatible_render_pass(e.key())
-                                .or(Err(DeviceError::OutOfMemory))?;
+                            let pass = device.create_compatible_render_pass(e.key()).or(Err(
+                                pipeline::CreateRenderPipelineError::from(DeviceError::OutOfMemory)
+                                    .with_label(&desc.label),
+                            ))?;
                             e.insert(pass)
                         }
                     },
@@ -2952,7 +2975,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .raw
                     .create_graphics_pipeline(&pipeline_desc, None)
                     .map_err(|err| match err {
-                        hal::pso::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                        hal::pso::CreationError::OutOfMemory(_) => {
+                            pipeline::CreateRenderPipelineError::from(DeviceError::OutOfMemory)
+                                .with_label(&desc.label)
+                        }
                         _ => panic!("failed to create graphics pipeline: {}", err),
                     })?
             };

@@ -183,11 +183,25 @@ pub enum CreateRenderPipelineError {
     },
     #[error("missing required device features {0:?}")]
     MissingFeature(wgt::Features),
-    #[error("error in stage {flag:?}: {error}")]
+    #[error("error in stage {flag:?}")]
     Stage {
         flag: wgt::ShaderStage,
+        #[source]
         error: StageError,
     },
+}
+
+impl CreateRenderPipelineError {
+    pub(crate) fn with_label<'a>(
+        self,
+        label: &Option<Cow<'a, str>>,
+    ) -> crate::LabeledContextError<CreateRenderPipelineError> {
+        crate::LabeledContextError {
+            source: self,
+            description: "Creating render pipeline",
+            label: label.as_ref().map(|inner| inner.to_string()),
+        }
+    }
 }
 
 bitflags::bitflags! {
