@@ -1,5 +1,8 @@
 # Change Log
 
+## wgpu-core-0.6.3 (2020-09-04)
+  - fix group bindings that aren't related to the current pipeline
+
 ## wgpu-core-0.6.2, wgpu-types-0.6.1 (2020-09-02)
   - fix flushing of temporary staging buffers (affects DX11 mostly)
   - fix write-only stencil states
