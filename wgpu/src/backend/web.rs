@@ -1148,6 +1148,14 @@ impl crate::Context for Context {
         // Device is polled automatically
     }
 
+    fn device_on_uncaptured_error(
+        &self,
+        _device: &Self::DeviceId,
+        _handler: impl crate::UncapturedErrorHandler,
+    ) {
+        // TODO:
+    }
+
     fn buffer_map_async(
         &self,
         _buffer: &Self::BufferId,
