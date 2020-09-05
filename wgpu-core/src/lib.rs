@@ -202,16 +202,16 @@ struct PrivateFeatures {
 
 #[macro_export]
 macro_rules! gfx_select {
-    ($id:expr => $global:ident.$method:ident( $($param:expr),+ )) => {
+    ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {
         match $id.backend() {
             #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
-            wgt::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),+ ),
+            wgt::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),* ),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
-            wgt::Backend::Metal => $global.$method::<$crate::backend::Metal>( $($param),+ ),
+            wgt::Backend::Metal => $global.$method::<$crate::backend::Metal>( $($param),* ),
             #[cfg(windows)]
-            wgt::Backend::Dx12 => $global.$method::<$crate::backend::Dx12>( $($param),+ ),
+            wgt::Backend::Dx12 => $global.$method::<$crate::backend::Dx12>( $($param),* ),
             #[cfg(windows)]
-            wgt::Backend::Dx11 => $global.$method::<$crate::backend::Dx11>( $($param),+ ),
+            wgt::Backend::Dx11 => $global.$method::<$crate::backend::Dx11>( $($param),* ),
             _ => unreachable!()
         }
     };

@@ -520,7 +520,7 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
 }
 
 impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
-    fn clear(&mut self, surface_guard: &mut Storage<Surface, SurfaceId>) {
+    fn clear(&self, surface_guard: &mut Storage<Surface, SurfaceId>) {
         use crate::resource::TextureViewInner;
         use hal::{device::Device as _, window::PresentationSurface as _};
 
@@ -687,6 +687,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
         }
+    }
+
+    pub fn clear_backend<B: GfxBackend>(&self, _dummy: ()) {
+        let mut surface_guard = self.surfaces.data.write();
+        let hub = B::hub(self);
+        hub.clear(&mut *surface_guard);
     }
 }
 

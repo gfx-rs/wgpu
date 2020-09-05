@@ -142,6 +142,8 @@ impl Test<'_> {
 
             assert_eq!(&expected_data[..], contents);
         }
+
+        gfx_select!(device => global.clear_backend(()));
     }
 }
 

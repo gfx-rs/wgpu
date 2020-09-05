@@ -1,0 +1,76 @@
+(
+    features: (bits: 0x0),
+    expectations: [], //not crash!
+    actions: [
+        CreatePipelineLayout(Id(0, 1, Empty), (
+            label: Some("empty"),
+            bind_group_layouts: [],
+            push_constant_ranges: [],
+        )),
+        CreateShaderModule(
+            id: Id(0, 1, Empty),
+            data: "empty.comp.spv",
+        ),
+        CreateComputePipeline(Id(0, 1, Empty), (
+            label: None,
+            layout: Some(Id(0, 1, Empty)),
+            compute_stage: (
+                module: Id(0, 1, Empty),
+                entry_point: "main",
+            ),
+        )),
+        CreateBuffer(Id(0, 1, Empty), (
+            label: None,
+            size: 16,
+            usage: (
+                bits: 64,
+            ),
+            mapped_at_creation: false,
+        )),
+        CreateBindGroupLayout(Id(0, 1, Empty), (
+            label: None,
+            entries: [
+                (
+                    binding: 0,
+                    visibility: (bits: 0x3),
+                    ty: UniformBuffer(
+                        dynamic: false,
+                        min_binding_size: None,
+                    ),
+                    count: None,
+                ),
+            ],
+        )),
+        CreateBindGroup(Id(0, 1, Empty), (
+            label: None,
+            layout: Id(0, 1, Empty),
+            entries: [
+                (
+                    binding: 0,
+                    resource: Buffer((
+                        buffer_id: Id(0, 1, Empty),
+                        offset: 0,
+                        size: None,
+                    )),
+                )
+            ],
+        )),
+        Submit(1, [
+            RunComputePass(
+                base: (
+                    commands: [
+                        SetPipeline(Id(0, 1, Empty)),
+                        SetBindGroup(
+                            index: 0,
+                            num_dynamic_offsets: 0,
+                            bind_group_id: Id(0, 1, Empty),
+                        ),
+                    ],
+                    dynamic_offsets: [],
+                    string_data: [],
+                    push_constant_data: [],
+                ),
+            ),
+        ]),
+    ],
+)

@@ -3,7 +3,7 @@
     expectations: [
         (
             name: "Quad",
-            buffer: (index: 1, epoch: 1),
+            buffer: (index: 0, epoch: 1),
             offset: 0,
             data: File("quad.bin", 16384),
         )
@@ -38,7 +38,7 @@
             desc: (),
         ),
         CreateBuffer(
-            Id(1, 1, Empty),
+            Id(0, 1, Empty),
             (
                 label: Some("Output Buffer"),
                 size: 16384,
@@ -135,7 +135,7 @@
                     array_layer: 0,
                 ),
                 dst:  (
-                    buffer: Id(1, 1, Empty),
+                    buffer: Id(0, 1, Empty),
                     layout: (
                         offset: 0,
                         bytes_per_row: 256,
@@ -149,7 +149,5 @@
                 ),
             ),
         ]),
-        DestroyShaderModule(Id(0, 1, Empty)),
-        DestroyShaderModule(Id(1, 1, Empty)),
     ],
 )
