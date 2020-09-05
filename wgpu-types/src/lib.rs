@@ -298,6 +298,16 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const ADDRESS_MODE_CLAMP_TO_BORDER = 0x0000_0000_0100_0000;
+        /// Allows the user to set a non-fill polygon mode in [`RasterizationStateDescriptor::polygon_mode`]
+        ///
+        /// This allows drawing polygons/triangles as lines (wireframe) or points instead of filled
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const NON_FILL_POLYGON_MODE = 0x0000_0000_0200_0000;
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).
@@ -603,6 +613,26 @@ impl Default for CullMode {
     }
 }
 
+/// Type of drawing mode for polygons
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub enum PolygonMode {
+    /// Polygons are filled
+    Fill = 0,
+    /// Polygons are draw as line segments
+    Line = 1,
+    /// Polygons are draw as points
+    Point = 2,
+}
+
+impl Default for PolygonMode {
+    fn default() -> Self {
+        PolygonMode::Fill
+    }
+}
+
 /// Describes the state of the rasterizer in a render pipeline.
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -611,6 +641,10 @@ impl Default for CullMode {
 pub struct RasterizationStateDescriptor {
     pub front_face: FrontFace,
     pub cull_mode: CullMode,
+    /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
+    ///
+    /// Setting this to something other than `Fill` requires `Features::NON_FILL_POLYGON_MODE` to be enabled.
+    pub polygon_mode: PolygonMode,
     /// If enabled polygon depth is clamped to 0-1 range instead of being clipped.
     ///
     /// Requires `Features::DEPTH_CLAMPING` enabled.
