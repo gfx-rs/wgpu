@@ -112,11 +112,12 @@ impl BindGroupEntry {
         }
     }
 
-    fn is_valid(&self) -> bool {
+    fn is_valid(&self) -> Option<bool> {
         match (self.expected_layout_id, self.provided.as_ref()) {
-            (None, _) => true,
-            (Some(_), None) => false,
-            (Some(layout), Some(pair)) => layout == pair.layout_id,
+            (None, None) => Some(true),
+            (None, Some(_)) => None,
+            (Some(_), None) => Some(false),
+            (Some(layout), Some(pair)) => Some(layout == pair.layout_id),
         }
     }
 
@@ -220,7 +221,7 @@ impl Binder {
 
     pub(super) fn invalid_mask(&self) -> BindGroupMask {
         self.entries.iter().enumerate().fold(0, |mask, (i, entry)| {
-            if entry.is_valid() {
+            if entry.is_valid().unwrap_or(true) {
                 mask
             } else {
                 mask | 1u8 << i
@@ -231,7 +232,7 @@ impl Binder {
     fn compatible_count(&self) -> usize {
         self.entries
             .iter()
-            .position(|entry| !entry.is_valid())
+            .position(|entry| !entry.is_valid().unwrap_or(false))
             .unwrap_or_else(|| self.entries.len())
     }
 }
