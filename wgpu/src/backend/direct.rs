@@ -121,10 +121,10 @@ mod pass_impl {
         }
         fn dispatch_indirect(
             &mut self,
-            indirect_buffer: &wgc::id::BufferId,
+            indirect_buffer: &super::Buffer,
             indirect_offset: wgt::BufferAddress,
         ) {
-            wgpu_compute_pass_dispatch_indirect(self, *indirect_buffer, indirect_offset)
+            wgpu_compute_pass_dispatch_indirect(self, indirect_buffer.id, indirect_offset)
         }
     }
 
@@ -150,20 +150,20 @@ mod pass_impl {
         }
         fn set_index_buffer(
             &mut self,
-            buffer: &wgc::id::BufferId,
+            buffer: &super::Buffer,
             offset: wgt::BufferAddress,
             size: Option<wgt::BufferSize>,
         ) {
-            wgpu_render_pass_set_index_buffer(self, *buffer, offset, size)
+            wgpu_render_pass_set_index_buffer(self, buffer.id, offset, size)
         }
         fn set_vertex_buffer(
             &mut self,
             slot: u32,
-            buffer: &wgc::id::BufferId,
+            buffer: &super::Buffer,
             offset: wgt::BufferAddress,
             size: Option<wgt::BufferSize>,
         ) {
-            wgpu_render_pass_set_vertex_buffer(self, slot, *buffer, offset, size)
+            wgpu_render_pass_set_vertex_buffer(self, slot, buffer.id, offset, size)
         }
         fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u32]) {
             unsafe {
@@ -199,69 +199,69 @@ mod pass_impl {
         }
         fn draw_indirect(
             &mut self,
-            indirect_buffer: &wgc::id::BufferId,
+            indirect_buffer: &super::Buffer,
             indirect_offset: wgt::BufferAddress,
         ) {
-            wgpu_render_pass_draw_indirect(self, *indirect_buffer, indirect_offset)
+            wgpu_render_pass_draw_indirect(self, indirect_buffer.id, indirect_offset)
         }
         fn draw_indexed_indirect(
             &mut self,
-            indirect_buffer: &wgc::id::BufferId,
+            indirect_buffer: &super::Buffer,
             indirect_offset: wgt::BufferAddress,
         ) {
-            wgpu_render_pass_draw_indexed_indirect(self, *indirect_buffer, indirect_offset)
+            wgpu_render_pass_draw_indexed_indirect(self, indirect_buffer.id, indirect_offset)
         }
         fn multi_draw_indirect(
             &mut self,
-            indirect_buffer: &wgc::id::BufferId,
+            indirect_buffer: &super::Buffer,
             indirect_offset: wgt::BufferAddress,
             count: u32,
         ) {
-            wgpu_render_pass_multi_draw_indirect(self, *indirect_buffer, indirect_offset, count)
+            wgpu_render_pass_multi_draw_indirect(self, indirect_buffer.id, indirect_offset, count)
         }
         fn multi_draw_indexed_indirect(
             &mut self,
-            indirect_buffer: &wgc::id::BufferId,
+            indirect_buffer: &super::Buffer,
             indirect_offset: wgt::BufferAddress,
             count: u32,
         ) {
             wgpu_render_pass_multi_draw_indexed_indirect(
                 self,
-                *indirect_buffer,
+                indirect_buffer.id,
                 indirect_offset,
                 count,
             )
         }
         fn multi_draw_indirect_count(
             &mut self,
-            indirect_buffer: &wgc::id::BufferId,
+            indirect_buffer: &super::Buffer,
             indirect_offset: wgt::BufferAddress,
-            count_buffer: &wgc::id::BufferId,
+            count_buffer: &super::Buffer,
             count_buffer_offset: wgt::BufferAddress,
             max_count: u32,
         ) {
             wgpu_render_pass_multi_draw_indirect_count(
                 self,
-                *indirect_buffer,
+                indirect_buffer.id,
                 indirect_offset,
-                *count_buffer,
+                count_buffer.id,
                 count_buffer_offset,
                 max_count,
             )
         }
         fn multi_draw_indexed_indirect_count(
             &mut self,
-            indirect_buffer: &wgc::id::BufferId,
+            indirect_buffer: &super::Buffer,
             indirect_offset: wgt::BufferAddress,
-            count_buffer: &wgc::id::BufferId,
+            count_buffer: &super::Buffer,
             count_buffer_offset: wgt::BufferAddress,
             max_count: u32,
         ) {
             wgpu_render_pass_multi_draw_indexed_indirect_count(
                 self,
-                *indirect_buffer,
+                indirect_buffer.id,
                 indirect_offset,
-                *count_buffer,
+                count_buffer.id,
                 count_buffer_offset,
                 max_count,
             )
@@ -346,20 +346,20 @@ mod pass_impl {
         }
         fn set_index_buffer(
             &mut self,
-            buffer: &wgc::id::BufferId,
+            buffer: &super::Buffer,
             offset: wgt::BufferAddress,
             size: Option<wgt::BufferSize>,
         ) {
-            wgpu_render_bundle_set_index_buffer(self, *buffer, offset, size)
+            wgpu_render_bundle_set_index_buffer(self, buffer.id, offset, size)
         }
         fn set_vertex_buffer(
             &mut self,
             slot: u32,
-            buffer: &wgc::id::BufferId,
+            buffer: &super::Buffer,
             offset: wgt::BufferAddress,
             size: Option<wgt::BufferSize>,
         ) {
-            wgpu_render_bundle_set_vertex_buffer(self, slot, *buffer, offset, size)
+            wgpu_render_bundle_set_vertex_buffer(self, slot, buffer.id, offset, size)
         }
 
         fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u32]) {
@@ -396,21 +396,21 @@ mod pass_impl {
         }
         fn draw_indirect(
             &mut self,
-            indirect_buffer: &wgc::id::BufferId,
+            indirect_buffer: &super::Buffer,
             indirect_offset: wgt::BufferAddress,
         ) {
-            wgpu_render_bundle_draw_indirect(self, *indirect_buffer, indirect_offset)
+            wgpu_render_bundle_draw_indirect(self, indirect_buffer.id, indirect_offset)
         }
         fn draw_indexed_indirect(
             &mut self,
-            indirect_buffer: &wgc::id::BufferId,
+            indirect_buffer: &super::Buffer,
             indirect_offset: wgt::BufferAddress,
         ) {
-            wgpu_render_pass_bundle_indexed_indirect(self, *indirect_buffer, indirect_offset)
+            wgpu_render_pass_bundle_indexed_indirect(self, indirect_buffer.id, indirect_offset)
         }
         fn multi_draw_indirect(
             &mut self,
-            _indirect_buffer: &wgc::id::BufferId,
+            _indirect_buffer: &super::Buffer,
             _indirect_offset: wgt::BufferAddress,
             _count: u32,
         ) {
@@ -418,7 +418,7 @@ mod pass_impl {
         }
         fn multi_draw_indexed_indirect(
             &mut self,
-            _indirect_buffer: &wgc::id::BufferId,
+            _indirect_buffer: &super::Buffer,
             _indirect_offset: wgt::BufferAddress,
             _count: u32,
         ) {
@@ -426,9 +426,9 @@ mod pass_impl {
         }
         fn multi_draw_indirect_count(
             &mut self,
-            _indirect_buffer: &wgc::id::BufferId,
+            _indirect_buffer: &super::Buffer,
             _indirect_offset: wgt::BufferAddress,
-            _count_buffer: &wgc::id::BufferId,
+            _count_buffer: &super::Buffer,
             _count_buffer_offset: wgt::BufferAddress,
             _max_count: u32,
         ) {
@@ -436,9 +436,9 @@ mod pass_impl {
         }
         fn multi_draw_indexed_indirect_count(
             &mut self,
-            _indirect_buffer: &wgc::id::BufferId,
+            _indirect_buffer: &super::Buffer,
             _indirect_offset: wgt::BufferAddress,
-            _count_buffer: &wgc::id::BufferId,
+            _count_buffer: &super::Buffer,
             _count_buffer_offset: wgt::BufferAddress,
             _max_count: u32,
         ) {
@@ -449,7 +449,7 @@ mod pass_impl {
 
 fn map_buffer_copy_view(view: crate::BufferCopyView) -> wgc::command::BufferCopyView {
     wgc::command::BufferCopyView {
-        buffer: view.buffer.id,
+        buffer: view.buffer.id.id,
         layout: view.layout,
     }
 }
@@ -506,6 +506,11 @@ pub(crate) struct Device {
     id: wgc::id::DeviceId,
     error_sink: ErrorSink,
 }
+#[derive(Debug)]
+pub(crate) struct Buffer {
+    id: wgc::id::BufferId,
+    error_sink: ErrorSink,
+}
 
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
@@ -516,7 +521,7 @@ impl crate::Context for Context {
     type BindGroupId = wgc::id::BindGroupId;
     type TextureViewId = wgc::id::TextureViewId;
     type SamplerId = wgc::id::SamplerId;
-    type BufferId = wgc::id::BufferId;
+    type BufferId = Buffer;
     type TextureId = wgc::id::TextureId;
     type PipelineLayoutId = wgc::id::PipelineLayoutId;
     type RenderPipelineId = wgc::id::RenderPipelineId;
@@ -671,7 +676,7 @@ impl crate::Context for Context {
                         offset,
                         size,
                     } => bm::BindingResource::Buffer(bm::BufferBinding {
-                        buffer_id: buffer.id,
+                        buffer_id: buffer.id.id,
                         offset,
                         size,
                     }),
@@ -854,7 +859,7 @@ impl crate::Context for Context {
         desc: &crate::BufferDescriptor<'_>,
     ) -> Self::BufferId {
         let global = &self.0;
-        wgc::gfx_select!(device.id => global.device_create_buffer(
+        let buffer_id = wgc::gfx_select!(device.id => global.device_create_buffer(
             device.id,
             &wgt::BufferDescriptor {
                 label: desc.label.map(Borrowed),
@@ -867,7 +872,11 @@ impl crate::Context for Context {
         .unwrap_error_sink(
             &device.error_sink,
             || wgc::gfx_select!( device.id => global.buffer_error(PhantomData)),
-        )
+        );
+        Buffer {
+            id: buffer_id,
+            error_sink: device.error_sink.clone()
+        }
     }
 
     fn device_create_texture(
@@ -1028,8 +1037,8 @@ impl crate::Context for Context {
         };
 
         let global = &self.0;
-        wgc::gfx_select!(*buffer => global.buffer_map_async(*buffer, range, operation))
-            .unwrap_pretty();
+        wgc::gfx_select!(buffer.id => global.buffer_map_async(buffer.id, range, operation))
+            .unwrap_error_sink(&buffer.error_sink, ||());
 
         future
     }
@@ -1041,8 +1050,8 @@ impl crate::Context for Context {
     ) -> &[u8] {
         let size = sub_range.end - sub_range.start;
         let global = &self.0;
-        let ptr = wgc::gfx_select!(*buffer => global.buffer_get_mapped_range(
-            *buffer,
+        let ptr = wgc::gfx_select!(buffer.id => global.buffer_get_mapped_range(
+            buffer.id,
             sub_range.start,
             wgt::BufferSize::new(size)
         ))
@@ -1057,8 +1066,8 @@ impl crate::Context for Context {
     ) -> &mut [u8] {
         let size = sub_range.end - sub_range.start;
         let global = &self.0;
-        let ptr = wgc::gfx_select!(*buffer => global.buffer_get_mapped_range(
-            *buffer,
+        let ptr = wgc::gfx_select!(buffer.id => global.buffer_get_mapped_range(
+            buffer.id,
             sub_range.start,
             wgt::BufferSize::new(size)
         ))
@@ -1068,7 +1077,8 @@ impl crate::Context for Context {
 
     fn buffer_unmap(&self, buffer: &Self::BufferId) {
         let global = &self.0;
-        wgc::gfx_select!(*buffer => global.buffer_unmap(*buffer)).unwrap_pretty()
+        wgc::gfx_select!(buffer.id => global.buffer_unmap(buffer.id))
+            .unwrap_error_sink(&buffer.error_sink, ||());
     }
 
     fn swap_chain_get_current_texture_view(
@@ -1135,7 +1145,7 @@ impl crate::Context for Context {
     }
     fn buffer_drop(&self, buffer: &Self::BufferId) {
         let global = &self.0;
-        wgc::gfx_select!(*buffer => global.buffer_drop(*buffer, false))
+        wgc::gfx_select!(buffer.id => global.buffer_drop(buffer.id, false))
     }
     fn bind_group_drop(&self, bind_group: &Self::BindGroupId) {
         let global = &self.0;
@@ -1199,9 +1209,9 @@ impl crate::Context for Context {
         let global = &self.0;
         wgc::gfx_select!(*encoder => global.command_encoder_copy_buffer_to_buffer(
             *encoder,
-            *source,
+            source.id,
             source_offset,
-            *destination,
+            destination.id,
             destination_offset,
             copy_size
         ))
@@ -1368,7 +1378,7 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         wgc::gfx_select!(
-            *queue => global.queue_write_buffer(*queue, *buffer, offset, data)
+            *queue => global.queue_write_buffer(*queue, buffer.id, offset, data)
         )
         .unwrap_pretty()
     }
