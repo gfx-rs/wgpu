@@ -139,6 +139,11 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                 // values
                 "true" => (Some(Token::BoolConstant((meta, true))), rest),
                 "false" => (Some(Token::BoolConstant((meta, false))), rest),
+                // jump statements
+                "continue" => (Some(Token::Continue(meta)), rest),
+                "break" => (Some(Token::Break(meta)), rest),
+                "return" => (Some(Token::Return(meta)), rest),
+                "discard" => (Some(Token::Discard(meta)), rest),
                 // types
                 "void" => (Some(Token::Void(meta)), rest),
                 word => {

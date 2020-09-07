@@ -53,6 +53,7 @@ pomelo! {
     %type simple_statement Statement;
     %type expression_statement Statement;
     %type declaration_statement Statement;
+    %type jump_statement Statement;
 
     // expressions
     %type unary_expression ExpressionRule;
@@ -600,7 +601,7 @@ pomelo! {
     //simple_statement ::= switch_statement;
     //simple_statement ::= case_label;
     //simple_statement ::= iteration_statement;
-    //simple_statement ::= jump_statement;
+    simple_statement ::= jump_statement;
 
     compound_statement ::= LeftBrace RightBrace {vec![]}
     compound_statement ::= left_brace_scope statement_list(sl) RightBrace {
@@ -670,6 +671,21 @@ pomelo! {
 
     type_specifier_nonarray ::= Void { None }
     type_specifier_nonarray ::= TypeName(t) {Some(t.1)};
+
+    jump_statement ::= Continue Semicolon { Statement::Continue }
+    jump_statement ::= Break Semicolon { Statement::Break }
+    jump_statement ::= Return Semicolon { Statement::Return{ value: None } }
+    jump_statement ::= Return expression(mut e) Semicolon {
+        let ret = Statement::Return{ value: Some(e.expression) };
+        if !e.statements.is_empty() {
+            e.statements.push(ret);
+            Statement::Block(e.statements)
+        } else {
+            ret
+        }
+    }
+    jump_statement ::= Discard Semicolon  { Statement::Kill } // Fragment shader only
+    // Grammar Note: No 'goto'. Gotos are not supported.
 
     // misc
     translation_unit ::= external_declaration;
