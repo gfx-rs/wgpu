@@ -8,14 +8,11 @@ use wgpu::util::DeviceExt;
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 struct Vertex {
     #[allow(dead_code)]
     pos: [f32; 4],
 }
-
-unsafe impl Pod for Vertex {}
-unsafe impl Zeroable for Vertex {}
 
 fn create_vertices() -> Vec<Vertex> {
     vec![
