@@ -6,6 +6,7 @@ mod point_gen;
 use cgmath::Point3;
 use std::{iter, mem};
 use wgpu::util::DeviceExt;
+use bytemuck::{Pod, Zeroable};
 
 ///
 /// Radius of the terrain.
@@ -34,17 +35,14 @@ struct Matrices {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Pod, Zeroable)]
 struct TerrainUniforms {
     view_projection: [f32; 16],
     clipping_plane: [f32; 4],
 }
 
-unsafe impl bytemuck::Zeroable for TerrainUniforms {}
-unsafe impl bytemuck::Pod for TerrainUniforms {}
-
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Pod, Zeroable)]
 struct WaterUniforms {
     view: [f32; 16],
     projection: [f32; 16],
@@ -57,9 +55,6 @@ struct Uniforms {
     terrain_flipped: TerrainUniforms,
     water: WaterUniforms,
 }
-
-unsafe impl bytemuck::Zeroable for WaterUniforms {}
-unsafe impl bytemuck::Pod for WaterUniforms {}
 
 struct Example {
     water_vertex_buf: wgpu::Buffer,
