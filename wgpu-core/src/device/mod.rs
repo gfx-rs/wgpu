@@ -3702,13 +3702,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let _ = ptr;
 
                 if needs_flush {
-                    let segment = hal::memory::Segment::default();
+                    //TODO: gfx-memory needs a helper method for this.
+                    // It needs to align the mapped range to the non-coherent atom size.
                     unsafe {
                         device
                             .raw
                             .flush_mapped_memory_ranges(iter::once((
                                 stage_memory.memory(),
-                                segment,
+                                stage_memory.segment(),
                             )))
                             .unwrap()
                     };
