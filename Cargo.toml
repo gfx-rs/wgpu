@@ -56,7 +56,7 @@ log = "0.4"
 png = "0.16"
 winit = { version = "0.22.1", features = ["web-sys"] }
 rand = { version = "0.7.2", features = ["wasm-bindgen"] }
-bytemuck = "1"
+bytemuck = { version = "1.4", features = ["derive"] }
 noise = "0.6"
 ddsfile = "0.4"
 futures = { version = "0.3", default-features = false, features = ["std", "executor"] }
