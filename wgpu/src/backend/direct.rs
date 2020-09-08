@@ -456,7 +456,7 @@ fn map_buffer_copy_view(view: crate::BufferCopyView) -> wgc::command::BufferCopy
 
 fn map_texture_copy_view(view: crate::TextureCopyView) -> wgc::command::TextureCopyView {
     wgc::command::TextureCopyView {
-        texture: view.texture.id,
+        texture: view.texture.id.id,
         mip_level: view.mip_level,
         origin: view.origin,
     }
@@ -512,6 +512,12 @@ pub(crate) struct Buffer {
     error_sink: ErrorSink,
 }
 
+#[derive(Debug)]
+pub(crate) struct Texture {
+    id: wgc::id::TextureId,
+    error_sink: ErrorSink,
+}
+
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
     type DeviceId = Device;
@@ -522,7 +528,7 @@ impl crate::Context for Context {
     type TextureViewId = wgc::id::TextureViewId;
     type SamplerId = wgc::id::SamplerId;
     type BufferId = Buffer;
-    type TextureId = wgc::id::TextureId;
+    type TextureId = Texture;
     type PipelineLayoutId = wgc::id::PipelineLayoutId;
     type RenderPipelineId = wgc::id::RenderPipelineId;
     type ComputePipelineId = wgc::id::ComputePipelineId;
@@ -875,7 +881,7 @@ impl crate::Context for Context {
         );
         Buffer {
             id: buffer_id,
-            error_sink: device.error_sink.clone()
+            error_sink: device.error_sink.clone(),
         }
     }
 
@@ -885,7 +891,7 @@ impl crate::Context for Context {
         desc: &TextureDescriptor,
     ) -> Self::TextureId {
         let global = &self.0;
-        wgc::gfx_select!(device.id => global.device_create_texture(
+        let texture_id = wgc::gfx_select!(device.id => global.device_create_texture(
             device.id,
             &wgt::TextureDescriptor {
                 label: desc.label.map(Borrowed),
@@ -901,7 +907,11 @@ impl crate::Context for Context {
         .unwrap_error_sink(
             &device.error_sink,
             || wgc::gfx_select!( device.id => global.texture_error(PhantomData)),
-        )
+        );
+        Texture {
+            id: texture_id,
+            error_sink: device.error_sink.clone(),
+        }
     }
 
     fn device_create_sampler(
@@ -1038,7 +1048,7 @@ impl crate::Context for Context {
 
         let global = &self.0;
         wgc::gfx_select!(buffer.id => global.buffer_map_async(buffer.id, range, operation))
-            .unwrap_error_sink(&buffer.error_sink, ||());
+            .unwrap_error_sink(&buffer.error_sink, || ());
 
         future
     }
@@ -1078,7 +1088,7 @@ impl crate::Context for Context {
     fn buffer_unmap(&self, buffer: &Self::BufferId) {
         let global = &self.0;
         wgc::gfx_select!(buffer.id => global.buffer_unmap(buffer.id))
-            .unwrap_error_sink(&buffer.error_sink, ||());
+            .unwrap_error_sink(&buffer.error_sink, || ());
     }
 
     fn swap_chain_get_current_texture_view(
@@ -1126,14 +1136,17 @@ impl crate::Context for Context {
         };
         let global = &self.0;
         wgc::gfx_select!(
-            *texture => global.texture_create_view(*texture, &descriptor, PhantomData)
+            texture.id => global.texture_create_view(texture.id, &descriptor, PhantomData)
         )
-        .unwrap_pretty()
+        .unwrap_error_sink(
+            &texture.error_sink,
+            || wgc::gfx_select!( texture.id =>global.texture_view_error(PhantomData)),
+        )
     }
 
     fn texture_drop(&self, texture: &Self::TextureId) {
         let global = &self.0;
-        wgc::gfx_select!(*texture => global.texture_drop(*texture))
+        wgc::gfx_select!(texture.id => global.texture_drop(texture.id))
     }
     fn texture_view_drop(&self, texture_view: &Self::TextureViewId) {
         let global = &self.0;
