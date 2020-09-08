@@ -419,7 +419,7 @@ impl<B: GfxBackend> Device<B> {
         self_id: id::DeviceId,
         desc: &resource::BufferDescriptor,
         memory_kind: gfx_memory::Kind,
-    ) -> Result<resource::Buffer<B>, resource::CreateBufferError> {
+    ) -> Result<resource::Buffer<B>, crate::LabeledContextError<resource::CreateBufferError>> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
         let (mut usage, _memory_properties) = conv::map_buffer_usage(desc.usage);
         if desc.mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
@@ -443,7 +443,8 @@ impl<B: GfxBackend> Device<B> {
                     .features
                     .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS);
                 if !is_native_only {
-                    return Err(resource::CreateBufferError::UsageMismatch(desc.usage));
+                    return Err(resource::CreateBufferError::UsageMismatch(desc.usage)
+                        .with_label(&desc.label));
                 }
                 MemoryUsage::Dynamic {
                     sparse_updates: false,
@@ -453,7 +454,10 @@ impl<B: GfxBackend> Device<B> {
 
         let mut buffer = unsafe { self.raw.create_buffer(desc.size.max(1), usage) }.map_err(
             |err| match err {
-                hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                hal::buffer::CreationError::OutOfMemory(_) => {
+                    resource::CreateBufferError::from(DeviceError::OutOfMemory)
+                        .with_label(&desc.label)
+                }
                 _ => panic!("failed to create buffer: {}", err),
             },
         )?;
@@ -466,12 +470,15 @@ impl<B: GfxBackend> Device<B> {
             .mem_allocator
             .lock()
             .allocate(&self.raw, &requirements, mem_usage, memory_kind)
-            .map_err(DeviceError::from_heaps)?;
+            .map_err(DeviceError::from_heaps)
+            .map_err(|err| resource::CreateBufferError::from(err).with_label(&desc.label))?;
         unsafe {
             self.raw
                 .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut buffer)
         }
-        .map_err(DeviceError::from_bind)?;
+        .map_err(DeviceError::from_bind)
+        .map_err(resource::CreateBufferError::from)
+        .map_err(|err| err.with_label(&desc.label))?;
 
         Ok(resource::Buffer {
             raw: buffer,
@@ -986,7 +993,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &resource::BufferDescriptor,
         id_in: Input<G, id::BufferId>,
-    ) -> Result<id::BufferId, resource::CreateBufferError> {
+    ) -> Result<id::BufferId, crate::LabeledContextError<resource::CreateBufferError>> {
         span!(_guard, INFO, "Device::create_buffer");
 
         let hub = B::hub(self);
@@ -995,13 +1002,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         tracing::info!("Create buffer {:?} with ID {:?}", desc, id_in);
 
         if desc.mapped_at_creation && desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(resource::CreateBufferError::UnalignedSize);
+            return Err(resource::CreateBufferError::UnalignedSize.with_label(&desc.label));
         }
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
+        let device = device_guard.get(device_id).map_err(|_| {
+            resource::CreateBufferError::from(DeviceError::Invalid).with_label(&desc.label)
+        })?;
         let mut buffer = device.create_buffer(device_id, desc, gfx_memory::Kind::General)?;
         let ref_count = buffer.life_guard.add_ref();
 
@@ -1014,7 +1021,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &mut buffer,
                 hal::buffer::SubRange::WHOLE,
                 HostMap::Write,
-            )?;
+            )
+            .map_err(|err| resource::CreateBufferError::from(err).with_label(&desc.label))?;
 
             buffer.map_state = resource::BufferMapState::Active {
                 ptr,
@@ -1038,7 +1046,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mapped = stage
                 .memory
                 .map(&device.raw, hal::memory::Segment::ALL)
-                .map_err(resource::BufferAccessError::from)?;
+                .map_err(resource::BufferAccessError::from)
+                .map_err(|err| resource::CreateBufferError::from(err).with_label(&desc.label))?;
             buffer.map_state = resource::BufferMapState::Init {
                 ptr: mapped.ptr(),
                 needs_flush: !mapped.is_coherent(),

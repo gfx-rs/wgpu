@@ -15,6 +15,7 @@ use thiserror::Error;
 
 use std::{
     borrow::Borrow,
+    borrow::Cow,
     num::{NonZeroU32, NonZeroU8},
     ptr::NonNull,
 };
@@ -184,6 +185,19 @@ pub enum CreateBufferError {
     UnalignedSize,
     #[error("`MAP` usage can only be combined with the opposite `COPY`, requested {0:?}")]
     UsageMismatch(wgt::BufferUsage),
+}
+
+impl CreateBufferError {
+    pub(crate) fn with_label<'a>(
+        self,
+        label: &Option<Cow<'a, str>>,
+    ) -> crate::LabeledContextError<Self> {
+        crate::LabeledContextError {
+            source: self,
+            description: "Creating buffer",
+            label: label.as_ref().map(|inner| inner.to_string()),
+        }
+    }
 }
 
 impl<B: hal::Backend> Borrow<RefCount> for Buffer<B> {
