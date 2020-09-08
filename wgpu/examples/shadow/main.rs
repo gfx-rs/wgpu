@@ -7,15 +7,11 @@ use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
-#[derive(Clone, Copy)]
-
+#[derive(Clone, Copy, Pod, Zeroable)]
 struct Vertex {
     _pos: [i8; 4],
     _normal: [i8; 4],
 }
-
-unsafe impl Pod for Vertex {}
-unsafe impl Zeroable for Vertex {}
 
 fn vertex(pos: [i8; 3], nor: [i8; 3]) -> Vertex {
     Vertex {
@@ -102,15 +98,12 @@ struct Light {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 struct LightRaw {
     proj: [[f32; 4]; 4],
     pos: [f32; 4],
     color: [f32; 4],
 }
-
-unsafe impl Pod for LightRaw {}
-unsafe impl Zeroable for LightRaw {}
 
 impl Light {
     fn to_raw(&self) -> LightRaw {
@@ -140,24 +133,18 @@ impl Light {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 struct ForwardUniforms {
     proj: [[f32; 4]; 4],
     num_lights: [u32; 4],
 }
 
-unsafe impl Pod for ForwardUniforms {}
-unsafe impl Zeroable for ForwardUniforms {}
-
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 struct EntityUniforms {
     model: [[f32; 4]; 4],
     color: [f32; 4],
 }
-
-unsafe impl Pod for EntityUniforms {}
-unsafe impl Zeroable for EntityUniforms {}
 
 #[repr(C)]
 struct ShadowUniforms {

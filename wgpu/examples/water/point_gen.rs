@@ -3,6 +3,7 @@
 //!
 
 use cgmath::{InnerSpace, Point3, Vector3};
+use bytemuck::{Pod, Zeroable};
 use std::collections::HashMap;
 
 // The following constants are used in calculations.
@@ -32,27 +33,19 @@ const C45: f32 = S45;
 const SQRT_3: f32 = 1.73205080757;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Pod, Zeroable)]
 pub struct TerrainVertexAttributes {
     position: [f32; 3],
     normal: [f32; 3],
     colour: [u8; 4],
 }
 
-unsafe impl bytemuck::Pod for TerrainVertexAttributes {}
-
-unsafe impl bytemuck::Zeroable for TerrainVertexAttributes {}
-
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Pod, Zeroable)]
 pub struct WaterVertexAttributes {
     position: [i16; 2],
     offsets: [i8; 4],
 }
-
-unsafe impl bytemuck::Pod for WaterVertexAttributes {}
-
-unsafe impl bytemuck::Zeroable for WaterVertexAttributes {}
 
 ///
 /// Represents the center of a single hexagon.

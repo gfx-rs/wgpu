@@ -6,24 +6,18 @@ use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 struct Vertex {
     _pos: [f32; 2],
     _tex_coord: [f32; 2],
     _index: u32,
 }
 
-unsafe impl Pod for Vertex {}
-unsafe impl Zeroable for Vertex {}
-
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 struct Uniform {
     index: u32,
 }
-
-unsafe impl Pod for Uniform {}
-unsafe impl Zeroable for Uniform {}
 
 fn vertex(pos: [i8; 2], tc: [i8; 2], index: i8) -> Vertex {
     Vertex {
