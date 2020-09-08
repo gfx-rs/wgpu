@@ -1261,17 +1261,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
-    ) -> Result<id::TextureId, resource::CreateTextureError> {
+    ) -> Result<id::TextureId, crate::LabeledContextError<resource::CreateTextureError>> {
         span!(_guard, INFO, "Device::create_texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
-        let texture = device.create_texture(device_id, desc)?;
+        let device = device_guard.get(device_id).map_err(|_| {
+            resource::CreateTextureError::from(DeviceError::Invalid).with_label(&desc.label)
+        })?;
+        let texture = device
+            .create_texture(device_id, desc)
+            .map_err(|err| err.with_label(&desc.label))?;
         let num_levels = texture.full_range.levels.end;
         let num_layers = texture.full_range.layers.end;
         let ref_count = texture.life_guard.add_ref();
@@ -1291,7 +1293,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(resource::CreateTextureError::MissingFeature(
                 texture_features,
                 desc.format,
-            ));
+            )
+            .with_label(&desc.label));
         }
 
         device
