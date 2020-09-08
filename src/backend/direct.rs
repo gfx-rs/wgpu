@@ -518,6 +518,12 @@ pub(crate) struct Texture {
     error_sink: ErrorSink,
 }
 
+#[derive(Debug)]
+pub(crate) struct CommandEncoder {
+    id: wgc::id::CommandEncoderId,
+    error_sink: ErrorSink,
+}
+
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
     type DeviceId = Device;
@@ -532,7 +538,7 @@ impl crate::Context for Context {
     type PipelineLayoutId = wgc::id::PipelineLayoutId;
     type RenderPipelineId = wgc::id::RenderPipelineId;
     type ComputePipelineId = wgc::id::ComputePipelineId;
-    type CommandEncoderId = wgc::id::CommandEncoderId;
+    type CommandEncoderId = CommandEncoder;
     type ComputePassId = wgc::command::ComputePass;
     type RenderPassId = wgc::command::RenderPass;
     type CommandBufferId = wgc::id::CommandBufferId;
@@ -948,7 +954,7 @@ impl crate::Context for Context {
         desc: &CommandEncoderDescriptor,
     ) -> Self::CommandEncoderId {
         let global = &self.0;
-        wgc::gfx_select!(device.id => global.device_create_command_encoder(
+        let encoder_id = wgc::gfx_select!(device.id => global.device_create_command_encoder(
             device.id,
             &wgt::CommandEncoderDescriptor {
                 label: desc.label.map(Borrowed),
@@ -958,7 +964,11 @@ impl crate::Context for Context {
         .unwrap_error_sink(
             &device.error_sink,
             || wgc::gfx_select!( device.id => global.command_encoder_error(PhantomData)),
-        )
+        );
+        CommandEncoder {
+            id: encoder_id,
+            error_sink: device.error_sink.clone(),
+        }
     }
 
     fn device_create_render_bundle_encoder(
@@ -1220,15 +1230,15 @@ impl crate::Context for Context {
         copy_size: wgt::BufferAddress,
     ) {
         let global = &self.0;
-        wgc::gfx_select!(*encoder => global.command_encoder_copy_buffer_to_buffer(
-            *encoder,
+        wgc::gfx_select!(encoder.id => global.command_encoder_copy_buffer_to_buffer(
+            encoder.id,
             source.id,
             source_offset,
             destination.id,
             destination_offset,
             copy_size
         ))
-        .unwrap_pretty()
+        .unwrap_error_sink(&encoder.error_sink, || ());
     }
 
     fn command_encoder_copy_buffer_to_texture(
@@ -1239,13 +1249,13 @@ impl crate::Context for Context {
         copy_size: wgt::Extent3d,
     ) {
         let global = &self.0;
-        wgc::gfx_select!(*encoder => global.command_encoder_copy_buffer_to_texture(
-            *encoder,
+        wgc::gfx_select!(encoder.id => global.command_encoder_copy_buffer_to_texture(
+            encoder.id,
             &map_buffer_copy_view(source),
             &map_texture_copy_view(destination),
             &copy_size
         ))
-        .unwrap_pretty()
+        .unwrap_error_sink(&encoder.error_sink, || ())
     }
 
     fn command_encoder_copy_texture_to_buffer(
@@ -1256,13 +1266,13 @@ impl crate::Context for Context {
         copy_size: wgt::Extent3d,
     ) {
         let global = &self.0;
-        wgc::gfx_select!(*encoder => global.command_encoder_copy_texture_to_buffer(
-            *encoder,
+        wgc::gfx_select!(encoder.id => global.command_encoder_copy_texture_to_buffer(
+            encoder.id,
             &map_texture_copy_view(source),
             &map_buffer_copy_view(destination),
             &copy_size
         ))
-        .unwrap_pretty()
+        .unwrap_error_sink(&encoder.error_sink, || ())
     }
 
     fn command_encoder_copy_texture_to_texture(
@@ -1273,20 +1283,20 @@ impl crate::Context for Context {
         copy_size: wgt::Extent3d,
     ) {
         let global = &self.0;
-        wgc::gfx_select!(*encoder => global.command_encoder_copy_texture_to_texture(
-            *encoder,
+        wgc::gfx_select!(encoder.id => global.command_encoder_copy_texture_to_texture(
+            encoder.id,
             &map_texture_copy_view(source),
             &map_texture_copy_view(destination),
             &copy_size
         ))
-        .unwrap_pretty()
+        .unwrap_error_sink(&encoder.error_sink, || ())
     }
 
     fn command_encoder_begin_compute_pass(
         &self,
         encoder: &Self::CommandEncoderId,
     ) -> Self::ComputePassId {
-        wgc::command::ComputePass::new(*encoder)
+        wgc::command::ComputePass::new(encoder.id)
     }
 
     fn command_encoder_end_compute_pass(
@@ -1296,9 +1306,9 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         wgc::gfx_select!(
-            *encoder => global.command_encoder_run_compute_pass(*encoder, pass)
+            encoder.id => global.command_encoder_run_compute_pass(encoder.id, pass)
         )
-        .unwrap_pretty()
+        .unwrap_error_sink(&encoder.error_sink, || ())
     }
 
     fn command_encoder_begin_render_pass<'a>(
@@ -1326,7 +1336,7 @@ impl crate::Context for Context {
         });
 
         wgc::command::RenderPass::new(
-            *encoder,
+            encoder.id,
             wgc::command::RenderPassDescriptor {
                 color_attachments: Borrowed(&colors),
                 depth_stencil_attachment: depth_stencil.as_ref(),
@@ -1340,30 +1350,34 @@ impl crate::Context for Context {
         pass: &mut Self::RenderPassId,
     ) {
         let global = &self.0;
-        wgc::gfx_select!(*encoder => global.command_encoder_run_render_pass(*encoder, pass))
-            .unwrap_pretty()
+        wgc::gfx_select!(encoder.id => global.command_encoder_run_render_pass(encoder.id, pass))
+            .unwrap_error_sink(&encoder.error_sink, || ())
     }
 
     fn command_encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId {
         let desc = wgt::CommandBufferDescriptor::default();
         let global = &self.0;
-        wgc::gfx_select!(*encoder => global.command_encoder_finish(*encoder, &desc)).unwrap_pretty()
+        wgc::gfx_select!(encoder.id => global.command_encoder_finish(encoder.id, &desc))
+            .unwrap_error_sink(
+                &encoder.error_sink,
+                || wgc::gfx_select!( encoder.id => global.command_buffer_error(PhantomData)),
+            )
     }
 
     fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str) {
         let global = &self.0;
-        wgc::gfx_select!(*encoder => global.command_encoder_insert_debug_marker(*encoder, &label))
-            .unwrap_pretty()
+        wgc::gfx_select!(encoder.id => global.command_encoder_insert_debug_marker(encoder.id, &label))
+        .unwrap_error_sink(&encoder.error_sink, ||())
     }
     fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str) {
         let global = &self.0;
-        wgc::gfx_select!(*encoder => global.command_encoder_push_debug_group(*encoder, &label))
-            .unwrap_pretty()
+        wgc::gfx_select!(encoder.id => global.command_encoder_push_debug_group(encoder.id, &label))
+            .unwrap_error_sink(&encoder.error_sink, || ())
     }
     fn command_encoder_pop_debug_group(&self, encoder: &Self::CommandEncoderId) {
         let global = &self.0;
-        wgc::gfx_select!(*encoder => global.command_encoder_pop_debug_group(*encoder))
-            .unwrap_pretty()
+        wgc::gfx_select!(encoder.id => global.command_encoder_pop_debug_group(encoder.id))
+            .unwrap_error_sink(&encoder.error_sink, || ())
     }
 
     fn render_bundle_encoder_finish(
