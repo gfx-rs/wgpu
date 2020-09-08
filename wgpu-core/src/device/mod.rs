@@ -515,7 +515,10 @@ impl<B: GfxBackend> Device<B> {
         let usage = conv::map_texture_usage(desc.usage, aspects);
 
         let mip_level_count = desc.mip_level_count;
-        if mip_level_count == 0 && mip_level_count > kind.compute_num_levels() as u32 {
+        if mip_level_count == 0
+            || mip_level_count > MAX_MIP_LEVELS
+            || mip_level_count > kind.compute_num_levels() as u32
+        {
             return Err(resource::CreateTextureError::InvalidMipLevelCount(
                 mip_level_count,
             ));

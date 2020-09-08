@@ -239,7 +239,7 @@ pub enum CreateTextureError {
     CannotCopyD24Plus,
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
-    #[error("texture descriptor mip level count ({0}) must be less than `MAX_MIP_LEVELS`")]
+    #[error("texture descriptor mip level count ({0}) is invalid")]
     InvalidMipLevelCount(u32),
     #[error("Feature {0:?} must be enabled to create a texture of type {1:?}")]
     MissingFeature(wgt::Features, wgt::TextureFormat),
