@@ -5,5 +5,6 @@
 fn main() -> void {
   var w: f32 = 1.0;
   o_pos = vec4<f32>(a_pos, 0.0, w);
+  return;
 }
 entry_point vertex as "main" = main;

@@ -99,6 +99,9 @@
                     pointer: 2,
                     value: 6,
                 ),
+                Return(
+                    value: None,
+                ),
             ],
         ),
     ],
