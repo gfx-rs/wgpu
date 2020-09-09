@@ -145,6 +145,14 @@ struct Block {
     buffer: bool,
 }
 
+bitflags::bitflags! {
+    #[derive(Default)]
+    struct DecorationFlags: u32 {
+        const NON_READABLE = 0x1;
+        const NON_WRITABLE = 0x2;
+    }
+}
+
 #[derive(Debug, Default)]
 struct Decoration {
     name: Option<String>,
@@ -156,6 +164,7 @@ struct Decoration {
     offset: Option<spirv::Word>,
     array_stride: Option<NonZeroU32>,
     interpolation: Option<crate::Interpolation>,
+    flags: DecorationFlags,
 }
 
 impl Decoration {
@@ -424,6 +433,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
             spirv::Decoration::Sample => {
                 dec.interpolation = Some(crate::Interpolation::Sample);
+            }
+            spirv::Decoration::NonReadable => {
+                dec.flags |= DecorationFlags::NON_READABLE;
+            }
+            spirv::Decoration::NonWritable => {
+                dec.flags |= DecorationFlags::NON_WRITABLE;
             }
             other => {
                 log::warn!("Unknown decoration {:?}", other);
@@ -2033,7 +2048,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         module: &mut crate::Module,
     ) -> Result<(), Error> {
         self.switch(ModuleState::Type, inst.op)?;
-        inst.expect_at_least(9)?;
+        inst.expect(9)?;
 
         let id = self.next()?;
         let sample_type_id = self.next()?;
@@ -2050,18 +2065,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             _ => return Err(Error::InvalidImageBaseType(base_handle)),
         };
 
-        let class = if inst.wc > 9 {
-            let storage_format = map_image_format(format)?;
-            let mut flags = crate::StorageAccess::empty();
-            inst.expect(10)?;
-            let access = self.next()?;
-            if access == 0 || access == 2 {
-                flags |= crate::StorageAccess::LOAD;
-            }
-            if access == 1 || access == 2 {
-                flags |= crate::StorageAccess::STORE;
-            }
-            crate::ImageClass::Storage(storage_format, flags)
+        let class = if format != 0 {
+            crate::ImageClass::Storage(map_image_format(format)?)
         } else if is_msaa {
             crate::ImageClass::Multisampled
         } else {
@@ -2277,6 +2282,27 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             _ => return Err(Error::UnsupportedType(lookup_type.handle)),
         };
         let class = map_storage_class(storage)?;
+        let is_storage = match module.types[ty].inner {
+            crate::TypeInner::Struct { .. } => class == crate::StorageClass::StorageBuffer,
+            crate::TypeInner::Image {
+                class: crate::ImageClass::Storage(_),
+                ..
+            } => true,
+            _ => false,
+        };
+
+        let storage_access = if is_storage {
+            let mut access = crate::StorageAccess::all();
+            if dec.flags.contains(DecorationFlags::NON_READABLE) {
+                access ^= crate::StorageAccess::LOAD;
+            }
+            if dec.flags.contains(DecorationFlags::NON_WRITABLE) {
+                access ^= crate::StorageAccess::STORE;
+            }
+            access
+        } else {
+            crate::StorageAccess::empty()
+        };
 
         let var = crate::GlobalVariable {
             name: dec.name,
@@ -2284,6 +2310,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             binding,
             ty,
             interpolation: dec.interpolation,
+            storage_access,
         };
         self.lookup_variable.insert(
             id,

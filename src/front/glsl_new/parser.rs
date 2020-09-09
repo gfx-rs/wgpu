@@ -7,7 +7,8 @@ pomelo! {
         use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{Arena, BinaryOperator, Binding, Block, BuiltIn, Constant, ConstantInner, Expression,
             Function, GlobalVariable, Handle, LocalVariable, ScalarKind,
-            ShaderStage, Statement, StorageClass, Type, TypeInner, VectorSize, Interpolation};
+            ShaderStage, Statement, StorageAccess, StorageClass, Type, TypeInner,
+            VectorSize, Interpolation};
     }
     %token #[derive(Debug)] pub enum Token {};
     %parser pub struct Parser<'a> {};
@@ -151,6 +152,7 @@ pomelo! {
                             },
                         }),
                         interpolation: None,
+                        storage_access: StorageAccess::empty(),
                     },
                 );
                 extra.lookup_global_variables.insert(v.1.clone(), h);
@@ -719,6 +721,7 @@ pomelo! {
                     binding: binding.clone(),
                     ty: d.ty,
                     interpolation,
+                    storage_access: StorageAccess::empty(), //TODO
                 },
             );
             extra.lookup_global_variables.insert(id, h);

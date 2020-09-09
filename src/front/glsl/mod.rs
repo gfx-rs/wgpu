@@ -2,8 +2,8 @@
 use crate::{
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Constant, ConstantInner, EntryPoint,
     Expression, FastHashMap, Function, GlobalVariable, Handle, Header, Interpolation,
-    LocalVariable, Module, ScalarKind, ShaderStage, StorageClass, StructMember, Type, TypeInner,
-    VectorSize,
+    LocalVariable, Module, ScalarKind, ShaderStage, StorageAccess, StorageClass, StructMember,
+    Type, TypeInner, VectorSize,
 };
 use glsl::{
     parser::{Parse, ParseError},
@@ -236,6 +236,7 @@ impl<'a> Parser<'a> {
                             name,
                             ty,
                             interpolation,
+                            storage_access: StorageAccess::empty(), //TODO
                         });
 
                         for (name, index) in reexports {
@@ -586,6 +587,7 @@ impl<'a> Parser<'a> {
                                 },
                             }),
                             interpolation: None,
+                            storage_access: StorageAccess::empty(),
                         }),
                     )),
                     "gl_InstanceIndex" => Ok(Expression::GlobalVariable(
@@ -601,6 +603,7 @@ impl<'a> Parser<'a> {
                                 },
                             }),
                             interpolation: None,
+                            storage_access: StorageAccess::empty(),
                         }),
                     )),
                     "gl_BaseVertex" => Ok(Expression::GlobalVariable(
@@ -616,6 +619,7 @@ impl<'a> Parser<'a> {
                                 },
                             }),
                             interpolation: None,
+                            storage_access: StorageAccess::empty(),
                         }),
                     )),
                     "gl_BaseInstance" => Ok(Expression::GlobalVariable(
@@ -631,6 +635,7 @@ impl<'a> Parser<'a> {
                                 },
                             }),
                             interpolation: None,
+                            storage_access: StorageAccess::empty(),
                         }),
                     )),
                     "gl_Position" => Ok(Expression::GlobalVariable(self.globals.fetch_or_append(
@@ -651,6 +656,7 @@ impl<'a> Parser<'a> {
                                 },
                             }),
                             interpolation: None,
+                            storage_access: StorageAccess::empty(),
                         },
                     ))),
                     "gl_PointSize" => Ok(Expression::GlobalVariable(self.globals.fetch_or_append(
@@ -666,6 +672,7 @@ impl<'a> Parser<'a> {
                                 },
                             }),
                             interpolation: None,
+                            storage_access: StorageAccess::empty(),
                         },
                     ))),
                     "gl_ClipDistance" => Ok(Expression::GlobalVariable(
@@ -681,6 +688,7 @@ impl<'a> Parser<'a> {
                                 },
                             }),
                             interpolation: None,
+                            storage_access: StorageAccess::empty(),
                         }),
                     )),
                     other => {
@@ -1090,6 +1098,7 @@ impl<'a> Parser<'a> {
             binding,
             ty,
             interpolation,
+            storage_access: StorageAccess::empty(), //TODO
         }))
     }
 

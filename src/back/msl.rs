@@ -944,17 +944,23 @@ impl<W: Write> Writer<W> {
                     };
                     let array_str = if arrayed { "_array" } else { "" };
                     let access = match class {
-                        crate::ImageClass::Storage(_, access) => {
-                            if access
+                        crate::ImageClass::Storage(_) => {
+                            let (_, global) = module
+                                .global_variables
+                                .iter()
+                                .find(|(_, var)| var.ty == handle)
+                                .expect("Unable to find a global variable using the image type");
+                            if global
+                                .storage_access
                                 .contains(crate::StorageAccess::LOAD | crate::StorageAccess::STORE)
                             {
                                 "read_write"
-                            } else if access.contains(crate::StorageAccess::STORE) {
+                            } else if global.storage_access.contains(crate::StorageAccess::STORE) {
                                 "write"
-                            } else if access.contains(crate::StorageAccess::LOAD) {
+                            } else if global.storage_access.contains(crate::StorageAccess::LOAD) {
                                 "read"
                             } else {
-                                return Err(Error::InvalidImageAccess(access));
+                                return Err(Error::InvalidImageAccess(global.storage_access));
                             }
                         }
                         _ => "sample",

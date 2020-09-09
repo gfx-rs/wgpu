@@ -49,6 +49,9 @@
             binding: Some(Location(0)),
             ty: 1,
             interpolation: None,
+            storage_access: (
+                bits: 0,
+            ),
         ),
         (
             name: Some("o_pos"),
@@ -56,6 +59,9 @@
             binding: Some(Location(0)),
             ty: 2,
             interpolation: None,
+            storage_access: (
+                bits: 0,
+            ),
         ),
     ],
     functions: [

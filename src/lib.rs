@@ -325,7 +325,7 @@ pub enum ImageClass {
     /// Depth comparison image.
     Depth,
     /// Storage image.
-    Storage(StorageFormat, StorageAccess),
+    Storage(StorageFormat),
 }
 
 /// A data type declared in the module.
@@ -450,6 +450,8 @@ pub struct GlobalVariable {
     /// or fragment input, `None` corresponds to the
     /// `smooth`/`perspective` interpolation qualifier.
     pub interpolation: Option<Interpolation>,
+    /// Access bit for storage types of images and buffers.
+    pub storage_access: StorageAccess,
 }
 
 /// Variable defined at function level.

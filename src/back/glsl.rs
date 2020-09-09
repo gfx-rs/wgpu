@@ -254,7 +254,7 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
 
         let storage_format = match module.types[global.ty].inner {
             TypeInner::Image {
-                class: ImageClass::Storage(format, _),
+                class: ImageClass::Storage(format),
                 ..
             } => Some(format),
             _ => None,
@@ -280,16 +280,10 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
             write!(out, ") ")?;
         }
 
-        if let TypeInner::Image {
-            class: ImageClass::Storage(_, access),
-            ..
-        } = module.types[global.ty].inner
-        {
-            if access == StorageAccess::LOAD {
-                write!(out, "readonly ")?;
-            } else if access == StorageAccess::STORE {
-                write!(out, "writeonly ")?;
-            }
+        if global.storage_access == StorageAccess::LOAD {
+            write!(out, "readonly ")?;
+        } else if global.storage_access == StorageAccess::STORE {
+            write!(out, "writeonly ")?;
         }
 
         if let Some(interpolation) = global.interpolation {
@@ -950,9 +944,7 @@ fn write_expression<'a, 'b>(
                         )
                     }
                 }
-                ImageClass::Storage(_, _) => {
-                    format!("imageLoad({},{})", image_expr, coordinate_expr)
-                }
+                ImageClass::Storage(_) => format!("imageLoad({},{})", image_expr, coordinate_expr),
                 ImageClass::Depth => todo!(),
             };
 
@@ -1402,7 +1394,7 @@ fn write_type<'a>(
                         ))),
                 },
                 match class {
-                    ImageClass::Storage(_, _) => "image",
+                    ImageClass::Storage(_) => "image",
                     _ => "texture",
                 },
                 ImageDimension(dim),
