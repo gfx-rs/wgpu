@@ -2725,6 +2725,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )
             .with_label(&desc.label));
         }
+        if rasterization_state.polygon_mode != wgt::PolygonMode::Fill
+            && !device.features.contains(wgt::Features::NON_FILL_POLYGON_MODE)
+        {
+            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
+                wgt::Features::NON_FILL_POLYGON_MODE,
+            )
+            .with_label(&desc.label));
+        }
 
         let (raw_pipeline, layout_id, layout_ref_count, derived_bind_group_count) = {
             //TODO: only lock mutable if the layout is derived

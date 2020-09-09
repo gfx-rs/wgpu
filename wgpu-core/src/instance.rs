@@ -148,6 +148,10 @@ impl<B: hal::Backend> Adapter<B> {
             wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
             adapter_features.contains(hal::Features::DRAW_INDIRECT_COUNT),
         );
+        features.set(
+            wgt::Features::NON_FILL_POLYGON_MODE,
+            adapter_features.contains(hal::Features::NON_FILL_POLYGON_MODE),
+        );
         #[cfg(not(target_os = "ios"))]
         //TODO: https://github.com/gfx-rs/gfx/issues/3346
         features.set(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER, true);

@@ -797,7 +797,11 @@ pub fn map_rasterization_state_descriptor(
     use hal::pso;
     pso::Rasterizer {
         depth_clamping: desc.clamp_depth,
-        polygon_mode: pso::PolygonMode::Fill,
+        polygon_mode: match desc.polygon_mode {
+            wgt::PolygonMode::Fill => pso::PolygonMode::Fill,
+            wgt::PolygonMode::Line => pso::PolygonMode::Line,
+            wgt::PolygonMode::Point => pso::PolygonMode::Point,
+        },
         cull_face: match desc.cull_mode {
             wgt::CullMode::None => pso::Face::empty(),
             wgt::CullMode::Front => pso::Face::FRONT,
