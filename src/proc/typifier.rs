@@ -186,7 +186,11 @@ impl Typifier {
                 }
             }
             crate::Expression::CrossProduct(_, _) => unimplemented!(),
-            crate::Expression::As(expr, kind) => {
+            crate::Expression::As {
+                expr,
+                kind,
+                convert: _,
+            } => {
                 let ty_handle = self.types[expr.index()];
                 match arena[ty_handle].inner {
                     crate::TypeInner::Scalar { kind: _, width } => {

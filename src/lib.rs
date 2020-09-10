@@ -615,8 +615,15 @@ pub enum Expression {
     DotProduct(Handle<Expression>, Handle<Expression>),
     /// Cross product between two vectors.
     CrossProduct(Handle<Expression>, Handle<Expression>),
-    /// Cast a scalar or a vector to another kind.
-    As(Handle<Expression>, ScalarKind),
+    /// Cast a simply type to another kind.
+    As {
+        /// Source expression, which can only be a scalar or a vector.
+        expr: Handle<Expression>,
+        /// Target scalar kind.
+        kind: ScalarKind,
+        /// True = conversion needs to take place; False = bitcast.
+        convert: bool,
+    },
     /// Compute the derivative on an axis.
     Derivative {
         axis: DerivativeAxis,

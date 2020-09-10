@@ -1087,7 +1087,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
-                Op::ConvertSToF | Op::ConvertUToF | Op::ConvertFToU | Op::ConvertFToS => {
+                Op::Bitcast
+                | Op::ConvertSToF
+                | Op::ConvertUToF
+                | Op::ConvertFToU
+                | Op::ConvertFToS => {
                     inst.expect_at_least(4)?;
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
@@ -1101,7 +1105,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         _ => return Err(Error::InvalidAsType(ty_lookup.handle)),
                     };
 
-                    let expr = crate::Expression::As(value_lexp.handle, kind);
+                    let expr = crate::Expression::As {
+                        expr: value_lexp.handle,
+                        kind,
+                        convert: inst.op != Op::Bitcast,
+                    };
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {

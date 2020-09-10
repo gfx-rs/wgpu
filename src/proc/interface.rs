@@ -89,7 +89,7 @@ where
                 self.traverse_expr(left);
                 self.traverse_expr(right);
             }
-            E::As(expr, _) => {
+            E::As { expr, .. } => {
                 self.traverse_expr(expr);
             }
             E::Derivative { expr, .. } => {

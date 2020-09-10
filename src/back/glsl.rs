@@ -684,20 +684,7 @@ fn write_expression<'a, 'b>(
             let constructor = match module.types[ty].inner {
                 TypeInner::Vector { size, kind, width } => format!(
                     "{}vec{}",
-                    match kind {
-                        ScalarKind::Sint => "i",
-                        ScalarKind::Uint => "u",
-                        ScalarKind::Float => match width {
-                            4 => "",
-                            8 => "d",
-                            _ =>
-                                return Err(Error::Custom(format!(
-                                    "Cannot build float of width {}",
-                                    width
-                                ))),
-                        },
-                        ScalarKind::Bool => "b",
-                    },
+                    map_scalar(kind, width, builder.features)?.prefix,
                     size as u8,
                 ),
                 TypeInner::Matrix {
@@ -707,20 +694,7 @@ fn write_expression<'a, 'b>(
                     width,
                 } => format!(
                     "{}mat{}x{}",
-                    match kind {
-                        ScalarKind::Sint => "i",
-                        ScalarKind::Uint => "u",
-                        ScalarKind::Float => match width {
-                            4 => "",
-                            8 => "d",
-                            _ =>
-                                return Err(Error::Custom(format!(
-                                    "Cannot build float of width {}",
-                                    width
-                                ))),
-                        },
-                        ScalarKind::Bool => "b",
-                    },
+                    map_scalar(kind, width, builder.features)?.prefix,
                     columns as u8,
                     rows as u8,
                 ),
@@ -820,12 +794,7 @@ fn write_expression<'a, 'b>(
 
             let sampler_constructor = format!(
                 "{}sampler{}{}{}{}({},{})",
-                match kind {
-                    ScalarKind::Sint => "i",
-                    ScalarKind::Uint => "u",
-                    ScalarKind::Float => "",
-                    _ => return Err(Error::Custom(String::from("Cannot build image of bools",))),
-                },
+                map_scalar(kind, 4, builder.features)?.prefix,
                 ImageDimension(dim),
                 if ms { "MS" } else { "" },
                 if arrayed { "Array" } else { "" },
@@ -917,15 +886,7 @@ fn write_expression<'a, 'b>(
                     //TODO: fix this
                     let sampler_constructor = format!(
                         "{}sampler{}{}{}({})",
-                        match kind {
-                            ScalarKind::Sint => "i",
-                            ScalarKind::Uint => "u",
-                            ScalarKind::Float => "",
-                            _ =>
-                                return Err(Error::Custom(String::from(
-                                    "Cannot build image of bools"
-                                ))),
-                        },
+                        map_scalar(kind, 4, builder.features)?.prefix,
                         ImageDimension(dim),
                         if ms { "MS" } else { "" },
                         if arrayed { "Array" } else { "" },
@@ -1137,26 +1098,47 @@ fn write_expression<'a, 'b>(
                 left_ty,
             )
         }
-        Expression::As(value, kind) => {
+        Expression::As {
+            expr,
+            kind,
+            convert,
+        } => {
             let (value_expr, value_ty) =
-                write_expression(&builder.expressions[value], module, builder)?;
-            let (width, out_ty) = match *value_ty.borrow() {
-                TypeInner::Scalar { width, kind: _ } => {
-                    (width, MaybeOwned::Owned(TypeInner::Scalar { kind, width }))
-                }
-                TypeInner::Vector {
-                    width,
-                    kind: _,
-                    size,
-                } => (
-                    width,
+                write_expression(&builder.expressions[expr], module, builder)?;
+            let (source_kind, ty_expr, out_ty) = match *value_ty.borrow() {
+                TypeInner::Scalar { width, kind } => (
+                    kind,
+                    Cow::Borrowed(map_scalar(kind, width, builder.features)?.full),
+                    MaybeOwned::Owned(TypeInner::Scalar { kind, width }),
+                ),
+                TypeInner::Vector { width, kind, size } => (
+                    kind,
+                    Cow::Owned(format!(
+                        "{}vec",
+                        map_scalar(kind, width, builder.features)?.prefix
+                    )),
                     MaybeOwned::Owned(TypeInner::Vector { kind, width, size }),
                 ),
-                _ => return Err(Error::Custom(format!("Cannot cast {}", value_expr))),
+                _ => return Err(Error::Custom(format!("Cannot convert {}", value_expr))),
             };
-            let ty_expr = map_scalar(kind, width, builder.features)?;
+            let op = if convert {
+                ty_expr
+            } else {
+                Cow::Borrowed(match (source_kind, kind) {
+                    (ScalarKind::Float, ScalarKind::Sint) => "floatBitsToInt",
+                    (ScalarKind::Float, ScalarKind::Uint) => "floatBitsToUInt",
+                    (ScalarKind::Sint, ScalarKind::Float) => "intBitsToFloat",
+                    (ScalarKind::Uint, ScalarKind::Float) => "uintBitsToFloat",
+                    _ => {
+                        return Err(Error::Custom(format!(
+                            "Cannot bitcast {:?} to {:?}",
+                            source_kind, kind
+                        )))
+                    }
+                })
+            };
 
-            (Cow::Owned(format!("{}({})", ty_expr, value_expr)), out_ty)
+            (Cow::Owned(format!("{}({})", op, value_expr)), out_ty)
         }
         Expression::Derivative { axis, expr } => {
             let (expr, ty) = write_expression(&builder.expressions[expr], module, builder)?;
@@ -1255,17 +1237,34 @@ fn write_constant(
     })
 }
 
+struct ScalarString<'a> {
+    prefix: &'a str,
+    full: &'a str,
+}
+
 fn map_scalar(
     kind: ScalarKind,
     width: crate::Bytes,
     features: SupportedFeatures,
-) -> Result<&'static str, Error> {
+) -> Result<ScalarString<'static>, Error> {
     Ok(match kind {
-        ScalarKind::Sint => "int",
-        ScalarKind::Uint => "uint",
+        ScalarKind::Sint => ScalarString {
+            prefix: "i",
+            full: "int",
+        },
+        ScalarKind::Uint => ScalarString {
+            prefix: "u",
+            full: "uint",
+        },
         ScalarKind::Float => match width {
-            4 => "float",
-            8 if features.contains(SupportedFeatures::DOUBLE_TYPE) => "double",
+            4 => ScalarString {
+                prefix: "",
+                full: "float",
+            },
+            8 if features.contains(SupportedFeatures::DOUBLE_TYPE) => ScalarString {
+                prefix: "d",
+                full: "double",
+            },
             _ => {
                 return Err(Error::Custom(format!(
                     "Cannot build float of width {}",
@@ -1273,7 +1272,10 @@ fn map_scalar(
                 )))
             }
         },
-        ScalarKind::Bool => "bool",
+        ScalarKind::Bool => ScalarString {
+            prefix: "b",
+            full: "bool",
+        },
     })
 }
 
@@ -1285,23 +1287,10 @@ fn write_type<'a>(
     features: SupportedFeatures,
 ) -> Result<Cow<'a, str>, Error> {
     Ok(match types[ty].inner {
-        TypeInner::Scalar { kind, width } => Cow::Borrowed(map_scalar(kind, width, features)?),
+        TypeInner::Scalar { kind, width } => Cow::Borrowed(map_scalar(kind, width, features)?.full),
         TypeInner::Vector { size, kind, width } => Cow::Owned(format!(
             "{}vec{}",
-            match kind {
-                ScalarKind::Sint => "i",
-                ScalarKind::Uint => "u",
-                ScalarKind::Float => match width {
-                    4 => "",
-                    8 if features.contains(SupportedFeatures::DOUBLE_TYPE) => "d",
-                    _ =>
-                        return Err(Error::Custom(format!(
-                            "Cannot build float of width {}",
-                            width
-                        ))),
-                },
-                ScalarKind::Bool => "b",
-            },
+            map_scalar(kind, width, features)?.prefix,
             size as u8
         )),
         TypeInner::Matrix {
@@ -1311,27 +1300,15 @@ fn write_type<'a>(
             width,
         } => Cow::Owned(format!(
             "{}mat{}x{}",
-            match kind {
-                ScalarKind::Sint if features.contains(SupportedFeatures::NON_FLOAT_MATRICES) => "i",
-                ScalarKind::Uint if features.contains(SupportedFeatures::NON_FLOAT_MATRICES) => "u",
-                ScalarKind::Float => match width {
-                    4 => "",
-                    8 if features.contains(
-                        SupportedFeatures::DOUBLE_TYPE & SupportedFeatures::NON_FLOAT_MATRICES
-                    ) =>
-                        "d",
-                    _ =>
-                        return Err(Error::Custom(format!(
-                            "Cannot build float of width {}",
-                            width
-                        ))),
-                },
-                ScalarKind::Bool if features.contains(SupportedFeatures::NON_FLOAT_MATRICES) => "b",
-                _ =>
-                    return Err(Error::Custom(format!(
-                        "Cannot build matrix of base type {:?}",
-                        kind
-                    ))),
+            if (width == 4 && kind == ScalarKind::Float)
+                || features.contains(SupportedFeatures::NON_FLOAT_MATRICES)
+            {
+                map_scalar(kind, width, features)?.prefix
+            } else {
+                return Err(Error::Custom(format!(
+                    "Cannot build matrix of base type {:?}",
+                    kind
+                )));
             },
             columns as u8,
             rows as u8
@@ -1384,15 +1361,7 @@ fn write_type<'a>(
 
             Cow::Owned(format!(
                 "{}{}{}{}",
-                match kind {
-                    ScalarKind::Sint => "i",
-                    ScalarKind::Uint => "u",
-                    ScalarKind::Float => "",
-                    ScalarKind::Bool =>
-                        return Err(Error::Custom(String::from(
-                            "Cannot build image of booleans",
-                        ))),
-                },
+                map_scalar(kind, 4, features)?.prefix,
                 match class {
                     ImageClass::Storage(_) => "image",
                     _ => "texture",
