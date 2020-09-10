@@ -9,6 +9,9 @@ mod test_framework;
 #[cfg(test)]
 mod layout_tests;
 
+#[cfg(all(test, feature = "deserialize"))]
+mod rosetta_tests;
+
 pub use writer::Writer;
 
 use spirv::*;
