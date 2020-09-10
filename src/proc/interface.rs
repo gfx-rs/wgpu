@@ -1,8 +1,8 @@
 use crate::arena::{Arena, Handle};
 
 pub struct Interface<'a, T> {
-    expressions: &'a Arena<crate::Expression>,
-    visitor: &'a mut T,
+    pub expressions: &'a Arena<crate::Expression>,
+    pub visitor: &'a mut T,
 }
 
 pub trait Visitor {
