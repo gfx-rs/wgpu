@@ -2726,7 +2726,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .with_label(&desc.label));
         }
         if rasterization_state.polygon_mode != wgt::PolygonMode::Fill
-            && !device.features.contains(wgt::Features::NON_FILL_POLYGON_MODE)
+            && !device
+                .features
+                .contains(wgt::Features::NON_FILL_POLYGON_MODE)
         {
             return Err(pipeline::CreateRenderPipelineError::MissingFeature(
                 wgt::Features::NON_FILL_POLYGON_MODE,
@@ -2819,7 +2821,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         module,
                         group_layouts,
                         &entry_point_name,
-                        naga::ShaderStage::Vertex,
+                        flag,
                         interface,
                     )
                     .map_err(|error| {
@@ -2868,7 +2870,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 module,
                                 group_layouts,
                                 &entry_point_name,
-                                naga::ShaderStage::Fragment,
+                                flag,
                                 interface,
                             )
                             .map_err(|error| {
@@ -3172,6 +3174,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     )
                 })?;
 
+            let flag = wgt::ShaderStage::COMPUTE;
             if let Some(ref module) = shader_module.module {
                 let group_layouts = match desc.layout {
                     Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
@@ -3193,14 +3196,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     module,
                     group_layouts,
                     &entry_point_name,
-                    naga::ShaderStage::Compute,
+                    flag,
                     interface,
                 )
                 .map_err(pipeline::CreateComputePipelineError::Stage)?;
             } else if desc.layout.is_none() {
-                Err(pipeline::ImplicitLayoutError::ReflectionError(
-                    wgt::ShaderStage::COMPUTE,
-                ))?
+                Err(pipeline::ImplicitLayoutError::ReflectionError(flag))?
             }
 
             let shader = hal::pso::EntryPoint::<B> {
