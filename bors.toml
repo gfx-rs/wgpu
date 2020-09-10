@@ -6,5 +6,5 @@ status = [
   "Ubuntu Stable",
   "Ubuntu Nightly",
   "Windows Stable",
-  #"Windows Nightly",
+  "Windows Nightly",
 ]
