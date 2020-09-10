@@ -139,11 +139,12 @@ impl crate::RenderInner<Context> for RenderPass {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        self.0.set_index_buffer_with_f64_and_f64(
-            &buffer.0,
-            offset as f64,
-            size.expect("TODO").get() as f64,
-        );
+        let mapped_size = match size {
+            Some(s) => s.get() as f64,
+            None => 0f64,
+        };
+        self.0
+            .set_index_buffer_with_f64_and_f64(&buffer.0, offset as f64, mapped_size);
     }
     fn set_vertex_buffer(
         &mut self,
@@ -152,12 +153,12 @@ impl crate::RenderInner<Context> for RenderPass {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        self.0.set_vertex_buffer_with_f64_and_f64(
-            slot,
-            &buffer.0,
-            offset as f64,
-            size.expect("TODO").get() as f64,
-        );
+        let mapped_size = match size {
+            Some(s) => s.get() as f64,
+            None => 0f64,
+        };
+        self.0
+            .set_vertex_buffer_with_f64_and_f64(slot, &buffer.0, offset as f64, mapped_size);
     }
     fn set_push_constants(&mut self, _stages: wgt::ShaderStage, _offset: u32, _data: &[u32]) {
         panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
@@ -593,7 +594,7 @@ fn map_texture_view_dimension(
 }
 
 fn map_buffer_copy_view(view: crate::BufferCopyView) -> web_sys::GpuBufferCopyView {
-    let mut mapped = web_sys::GpuBufferCopyView::new(&view.buffer.id.0, view.layout.bytes_per_row);
+    let mut mapped = web_sys::GpuBufferCopyView::new(view.layout.bytes_per_row, &view.buffer.id.0);
     mapped.rows_per_image(view.layout.rows_per_image);
     mapped.offset(view.layout.offset as f64);
     mapped
@@ -1023,11 +1024,13 @@ impl crate::Context for Context {
         let mapped_vertex_stage = map_stage_descriptor(&desc.vertex_stage);
 
         let mut mapped_desc = web_sys::GpuRenderPipelineDescriptor::new(
-            &desc.layout.as_ref().unwrap().id.0,
             &mapped_color_states,
             mapped_primitive_topology,
             &mapped_vertex_stage,
         );
+        if let Some(layout) = desc.layout {
+            mapped_desc.layout(&layout.id.0);
+        }
 
         // TODO: label
 
@@ -1057,11 +1060,11 @@ impl crate::Context for Context {
         desc: &ComputePipelineDescriptor,
     ) -> Self::ComputePipelineId {
         let mapped_compute_stage = map_stage_descriptor(&desc.compute_stage);
-        let mapped_desc = web_sys::GpuComputePipelineDescriptor::new(
-            &desc.layout.as_ref().unwrap().id.0,
-            &mapped_compute_stage,
-        );
+        let mut mapped_desc = web_sys::GpuComputePipelineDescriptor::new(&mapped_compute_stage);
         // TODO: label
+        if let Some(layout) = desc.layout {
+            mapped_desc.layout(&layout.id.0);
+        }
         Sendable(device.0.create_compute_pipeline(&mapped_desc))
     }
 
@@ -1481,23 +1484,38 @@ impl crate::Context for Context {
 
     fn queue_write_buffer(
         &self,
-        _queue: &Self::QueueId,
-        _buffer: &Self::BufferId,
-        _offset: wgt::BufferAddress,
-        _data: &[u8],
+        queue: &Self::QueueId,
+        buffer: &Self::BufferId,
+        offset: wgt::BufferAddress,
+        data: &[u8],
     ) {
-        unimplemented!()
+        queue.0.write_buffer_with_f64_and_f64_and_f64(
+            &buffer.0,
+            offset as f64,
+            &js_sys::Uint8Array::from(data).buffer(),
+            0f64,
+            data.len() as f64,
+        );
     }
 
     fn queue_write_texture(
         &self,
-        _queue: &Self::QueueId,
-        _texture: crate::TextureCopyView,
-        _data: &[u8],
-        _data_layout: wgt::TextureDataLayout,
-        _size: wgt::Extent3d,
+        queue: &Self::QueueId,
+        texture: crate::TextureCopyView,
+        data: &[u8],
+        data_layout: wgt::TextureDataLayout,
+        size: wgt::Extent3d,
     ) {
-        unimplemented!()
+        let mut mapped_data_layout = web_sys::GpuTextureDataLayout::new(data_layout.bytes_per_row);
+        mapped_data_layout.rows_per_image(data_layout.rows_per_image);
+        mapped_data_layout.offset(data_layout.offset as f64);
+
+        queue.0.write_texture_with_gpu_extent_3d_dict(
+            &map_texture_copy_view(texture),
+            &js_sys::Uint8Array::from(data).buffer(),
+            &mapped_data_layout,
+            &map_extent_3d(size),
+        );
     }
 
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
