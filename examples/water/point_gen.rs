@@ -2,8 +2,8 @@
 //! This module covers generating points in a hexagonal fashion.
 //!
 
-use cgmath::{InnerSpace, Point3, Vector3};
 use bytemuck::{Pod, Zeroable};
+use cgmath::{InnerSpace, Point3, Vector3};
 use std::collections::HashMap;
 
 // The following constants are used in calculations.

@@ -470,6 +470,7 @@ impl framework::Example for Example {
                 rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                     front_face: wgpu::FrontFace::Ccw,
                     cull_mode: wgpu::CullMode::Back,
+                    polygon_mode: wgpu::PolygonMode::Fill,
                     depth_bias: 2, // corresponds to bilinear filtering
                     depth_bias_slope_scale: 2.0,
                     depth_bias_clamp: 0.0,

@@ -777,6 +777,14 @@ impl crate::Context for Context {
             vertex_buffers: Borrowed(&vertex_buffers),
         };
 
+        let implicit_pipeline_ids = match desc.layout {
+            Some(_) => None,
+            None => Some(wgc::device::ImplicitPipelineIds {
+                root_id: PhantomData,
+                group_ids: &[PhantomData; wgc::MAX_BIND_GROUPS],
+            }),
+        };
+
         let global = &self.0;
         wgc::gfx_select!(device.id => global.device_create_render_pipeline(
             device.id,
@@ -795,7 +803,7 @@ impl crate::Context for Context {
                 alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
             },
             PhantomData,
-            None
+            implicit_pipeline_ids
         ))
         .unwrap_error_sink(&device.error_sink, || {
             let err = wgc::gfx_select!( device.id => global.render_pipeline_error(PhantomData));
@@ -811,6 +819,14 @@ impl crate::Context for Context {
     ) -> Self::ComputePipelineId {
         use wgc::pipeline as pipe;
 
+        let implicit_pipeline_ids = match desc.layout {
+            Some(_) => None,
+            None => Some(wgc::device::ImplicitPipelineIds {
+                root_id: PhantomData,
+                group_ids: &[PhantomData; wgc::MAX_BIND_GROUPS],
+            }),
+        };
+
         let global = &self.0;
         wgc::gfx_select!(device.id => global.device_create_compute_pipeline(
             device.id,
@@ -823,7 +839,7 @@ impl crate::Context for Context {
                 },
             },
             PhantomData,
-            None
+            implicit_pipeline_ids
         ))
         .unwrap_error_sink(&device.error_sink, || {
             let err = wgc::gfx_select!( device.id => global.compute_pipeline_error(PhantomData));
