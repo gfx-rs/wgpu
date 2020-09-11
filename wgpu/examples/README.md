@@ -16,7 +16,7 @@ All framework-based examples render to the window.
 | instancing                | :star: |        |        |           |        |        |                |        |
 | lines and points          |        |        |        | :star:    |        |        |                |        |
 | dynamic buffer offsets    |        |        |        |           | :star: |        |                |        |
-| implicit layout           |        |        |        |           |        |        |                |        |
+| implicit layout           |        |        | :star: |           |        |        |                |        |
 | sampled color textures    | :star: | :star: | :star: |           |        | :star: | :star:         | :star: |
 | storage textures          | :star: |        |        |           |        |        |                |        |
 | binding array             |        |        |        |           |        |        | :star:         |        |
@@ -29,7 +29,7 @@ All framework-based examples render to the window.
 | depth testing             |        |        |        |           | :star: |        |                | :star: |
 | depth biasing             |        |        |        |           | :star: |        |                |        |
 | read-only depth           |        |        |        |           |        |        |                | :star: |
-| blending                  |        |        |        |           |        |        |                | :star: |
+| blending                  |        | :star: |        |           |        |        |                | :star: |
 | render bundles            |        |        |        | :star:    |        |        |                | :star: |
 | compute passes            | :star: |        |        |           |        |        |                |        |
 | optional extensions       |        |        |        |           |        |        | :star:         |        |
@@ -37,6 +37,7 @@ All framework-based examples render to the window.
 | - push constants          |        |        |        |           |        |        | :star:         |        |
 | - depth clamping          |        |        |        |           | :star: |        |                |        |
 | - BCn compressed textures |        |        |        |           |        | :star: |                |        |
+| - polygon mode            |        | :star: |        |           |        |        |                |        |
 | WGSL shaders              |        |        |        |           |        |        |                |        |
 
 ## Hacking

@@ -94,6 +94,7 @@ struct Example {
     bind_group: wgpu::BindGroup,
     uniform_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
+    pipeline_wire: Option<wgpu::RenderPipeline>,
 }
 
 impl Example {
@@ -110,6 +111,10 @@ impl Example {
 }
 
 impl framework::Example for Example {
+    fn optional_features() -> wgt::Features {
+        wgt::Features::NON_FILL_POLYGON_MODE
+    }
+
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
@@ -242,6 +247,26 @@ impl framework::Example for Example {
         });
 
         // Create the render pipeline
+        let vertex_state = wgpu::VertexStateDescriptor {
+            index_format: wgpu::IndexFormat::Uint16,
+            vertex_buffers: &[wgpu::VertexBufferDescriptor {
+                stride: vertex_size as wgpu::BufferAddress,
+                step_mode: wgpu::InputStepMode::Vertex,
+                attributes: &[
+                    wgpu::VertexAttributeDescriptor {
+                        format: wgpu::VertexFormat::Float4,
+                        offset: 0,
+                        shader_location: 0,
+                    },
+                    wgpu::VertexAttributeDescriptor {
+                        format: wgpu::VertexFormat::Float2,
+                        offset: 4 * 4,
+                        shader_location: 1,
+                    },
+                ],
+            }],
+        };
+
         let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
         let fs_module = device.create_shader_module(wgpu::include_spirv!("shader.frag.spv"));
 
@@ -269,29 +294,55 @@ impl framework::Example for Example {
                 write_mask: wgpu::ColorWrite::ALL,
             }],
             depth_stencil_state: None,
-            vertex_state: wgpu::VertexStateDescriptor {
-                index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: &[wgpu::VertexBufferDescriptor {
-                    stride: vertex_size as wgpu::BufferAddress,
-                    step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &[
-                        wgpu::VertexAttributeDescriptor {
-                            format: wgpu::VertexFormat::Float4,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        wgpu::VertexAttributeDescriptor {
-                            format: wgpu::VertexFormat::Float2,
-                            offset: 4 * 4,
-                            shader_location: 1,
-                        },
-                    ],
-                }],
-            },
+            vertex_state: vertex_state.clone(),
             sample_count: 1,
             sample_mask: !0,
             alpha_to_coverage_enabled: false,
         });
+
+        let pipeline_wire = if device
+            .features()
+            .contains(wgt::Features::NON_FILL_POLYGON_MODE)
+        {
+            let fs_wire_module = device.create_shader_module(wgpu::include_spirv!("wire.frag.spv"));
+            let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                vertex_stage: wgpu::ProgrammableStageDescriptor {
+                    module: &vs_module,
+                    entry_point: "main",
+                },
+                fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
+                    module: &fs_wire_module,
+                    entry_point: "main",
+                }),
+                rasterization_state: Some(wgpu::RasterizationStateDescriptor {
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: wgpu::CullMode::Back,
+                    polygon_mode: wgpu::PolygonMode::Line,
+                    ..Default::default()
+                }),
+                primitive_topology: wgpu::PrimitiveTopology::TriangleList,
+                color_states: &[wgpu::ColorStateDescriptor {
+                    format: sc_desc.format,
+                    color_blend: wgpu::BlendDescriptor {
+                        operation: wgpu::BlendOperation::Add,
+                        src_factor: wgpu::BlendFactor::SrcAlpha,
+                        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                    },
+                    alpha_blend: wgpu::BlendDescriptor::REPLACE,
+                    write_mask: wgpu::ColorWrite::ALL,
+                }],
+                depth_stencil_state: None,
+                vertex_state,
+                sample_count: 1,
+                sample_mask: !0,
+                alpha_to_coverage_enabled: false,
+            });
+            Some(pipeline_wire)
+        } else {
+            None
+        };
 
         // Done
         Example {
@@ -301,6 +352,7 @@ impl framework::Example for Example {
             bind_group,
             uniform_buf,
             pipeline,
+            pipeline_wire,
         }
     }
 
@@ -353,6 +405,10 @@ impl framework::Example for Example {
             rpass.pop_debug_group();
             rpass.insert_debug_marker("Draw!");
             rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
+            if let Some(ref pipe) = self.pipeline_wire {
+                rpass.set_pipeline(pipe);
+                rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
+            }
         }
 
         queue.submit(Some(encoder.finish()));
