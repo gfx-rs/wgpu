@@ -34,5 +34,5 @@ wgsl-in = []
 [dev-dependencies]
 difference = "2.0"
 env_logger = "0.6"
-ron = "0.5"
+ron = "0.6"
 serde = { version = "1.0", features = ["derive"] }

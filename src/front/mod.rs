@@ -11,6 +11,7 @@ use crate::arena::Arena;
 
 pub const GENERATOR: u32 = 0;
 
+#[allow(dead_code)]
 impl crate::Module {
     fn from_header(header: crate::Header) -> Self {
         crate::Module {

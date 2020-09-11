@@ -105,6 +105,43 @@ fn convert_cube() {
     validator.validate(&vs).unwrap();
     let fs = load_spv("cube.frag.spv");
     validator.validate(&fs).unwrap();
+
+    {
+        use naga::back::msl;
+        let mut binding_map = msl::BindingMap::default();
+        binding_map.insert(
+            msl::BindSource { set: 0, binding: 0 },
+            msl::BindTarget {
+                buffer: Some(0),
+                texture: None,
+                sampler: None,
+                mutable: false,
+            },
+        );
+        binding_map.insert(
+            msl::BindSource { set: 0, binding: 1 },
+            msl::BindTarget {
+                buffer: None,
+                texture: Some(1),
+                sampler: None,
+                mutable: false,
+            },
+        );
+        binding_map.insert(
+            msl::BindSource { set: 0, binding: 2 },
+            msl::BindTarget {
+                buffer: None,
+                texture: None,
+                sampler: Some(1),
+                mutable: false,
+            },
+        );
+        let options = msl::Options {
+            binding_map: &binding_map,
+        };
+        msl::write_string(&vs, options).unwrap();
+        msl::write_string(&fs, options).unwrap();
+    }
 }
 
 #[cfg(feature = "glsl-in")]

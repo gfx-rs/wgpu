@@ -35,8 +35,6 @@ pub enum Error {
     InvalidAccessType(spirv::Word),
     InvalidAccess(Handle<crate::Expression>),
     InvalidAccessIndex(spirv::Word),
-    InvalidLoadType(spirv::Word),
-    InvalidStoreType(spirv::Word),
     InvalidBinding(spirv::Word),
     InvalidImageExpression(Handle<crate::Expression>),
     InvalidImageBaseType(Handle<crate::Type>),

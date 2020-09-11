@@ -181,7 +181,11 @@ fn main() {
         }
         #[cfg(feature = "serialize")]
         "ron" => {
-            let output = ron::ser::to_string_pretty(&module, Default::default()).unwrap();
+            let config = ron::ser::PrettyConfig::new()
+                .with_enumerate_arrays(true)
+                .with_decimal_floats(true);
+
+            let output = ron::ser::to_string_pretty(&module, config).unwrap();
             fs::write(&args[2], output).unwrap();
         }
         other => {

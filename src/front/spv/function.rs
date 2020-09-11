@@ -119,7 +119,7 @@ pub fn parse_function<I: Iterator<Item = u32>>(
     // Scan the blocks and add them as nodes
     loop {
         let fun_inst = parser.next_inst()?;
-        log::debug!("\t\t{:?}", fun_inst.op);
+        log::debug!("{:?}", fun_inst.op);
         match fun_inst.op {
             spirv::Op::Label => {
                 // Read the label ID

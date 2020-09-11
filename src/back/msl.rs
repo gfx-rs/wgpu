@@ -546,6 +546,19 @@ impl<W: Write> Writer<W> {
                             &crate::TypeInner::Vector { size, kind, width },
                             &crate::TypeInner::Vector { .. },
                         ) => MaybeOwned::Owned(crate::TypeInner::Vector { size, kind, width }),
+                        (
+                            &crate::TypeInner::Matrix {
+                                rows,
+                                columns: _,
+                                kind,
+                                width,
+                            },
+                            &crate::TypeInner::Vector { .. },
+                        ) => MaybeOwned::Owned(crate::TypeInner::Vector {
+                            size: rows,
+                            kind,
+                            width,
+                        }),
                         (_, _) => {
                             return Err(Error::UnableToInferBinaryOpOutput(ty_left, op, ty_right))
                         }
@@ -702,7 +715,16 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ")")?;
                     Ok(MaybeOwned::Owned(result))
                 }
-
+                "mix" => {
+                    write!(self.out, "mix(")?;
+                    let result = self.put_expression(arguments[0], function, module)?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(arguments[1], function, module)?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(arguments[2], function, module)?;
+                    write!(self.out, ")")?;
+                    Ok(result)
+                }
                 other => Err(Error::UnsupportedCall(other.to_owned())),
             },
             ref other => Err(Error::UnsupportedExpression(other.clone())),
