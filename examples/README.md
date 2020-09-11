@@ -16,7 +16,7 @@ All framework-based examples render to the window.
 | instancing                | :star: |        |        |           |        |        |                |        |
 | lines and points          |        |        |        | :star:    |        |        |                |        |
 | dynamic buffer offsets    |        |        |        |           | :star: |        |                |        |
-| implicit layout           |        |        |        |           |        |        |                |        |
+| implicit layout           |        |        | :star: |           |        |        |                |        |
 | sampled color textures    | :star: | :star: | :star: |           |        | :star: | :star:         | :star: |
 | storage textures          | :star: |        |        |           |        |        |                |        |
 | binding array             |        |        |        |           |        |        | :star:         |        |
