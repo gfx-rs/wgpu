@@ -3,10 +3,10 @@ mod framework;
 
 mod point_gen;
 
+use bytemuck::{Pod, Zeroable};
 use cgmath::Point3;
 use std::{iter, mem};
 use wgpu::util::DeviceExt;
-use bytemuck::{Pod, Zeroable};
 
 ///
 /// Radius of the terrain.
