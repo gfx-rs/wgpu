@@ -248,40 +248,44 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .take()
             .ok_or(SwapChainError::AlreadyAcquired)?;
         let (view, _) = hub.texture_views.unregister(view_id.value.0, &mut token);
-        let image = match view.inner {
-            resource::TextureViewInner::Native { .. } => unreachable!(),
-            resource::TextureViewInner::SwapChain { image, .. } => image,
-        };
+        if let Some(view) = view {
+            let image = match view.inner {
+                resource::TextureViewInner::Native { .. } => unreachable!(),
+                resource::TextureViewInner::SwapChain { image, .. } => image,
+            };
 
-        let sem = if sc.active_submission_index > device.last_completed_submission_index() {
-            Some(&sc.semaphore)
-        } else {
-            None
-        };
-        let queue = &mut device.queue_group.queues[0];
-        let result = unsafe { queue.present(B::get_surface_mut(surface), image, sem) };
+            let sem = if sc.active_submission_index > device.last_completed_submission_index() {
+                Some(&sc.semaphore)
+            } else {
+                None
+            };
+            let queue = &mut device.queue_group.queues[0];
+            let result = unsafe { queue.present(B::get_surface_mut(surface), image, sem) };
 
-        tracing::debug!(trace = true, "Presented. End of Frame");
+            tracing::debug!(trace = true, "Presented. End of Frame");
 
-        for fbo in sc.acquired_framebuffers.drain(..) {
-            unsafe {
-                device.raw.destroy_framebuffer(fbo);
+            for fbo in sc.acquired_framebuffers.drain(..) {
+                unsafe {
+                    device.raw.destroy_framebuffer(fbo);
+                }
             }
-        }
 
-        match result {
-            Ok(None) => Ok(SwapChainStatus::Good),
-            Ok(Some(_)) => Ok(SwapChainStatus::Suboptimal),
-            Err(err) => match err {
-                hal::window::PresentError::OutOfMemory(_) => {
-                    Err(SwapChainError::Device(DeviceError::OutOfMemory))
-                }
-                hal::window::PresentError::OutOfDate => Ok(SwapChainStatus::Outdated),
-                hal::window::PresentError::SurfaceLost(_) => Ok(SwapChainStatus::Lost),
-                hal::window::PresentError::DeviceLost(_) => {
-                    Err(SwapChainError::Device(DeviceError::Lost))
-                }
-            },
+            match result {
+                Ok(None) => Ok(SwapChainStatus::Good),
+                Ok(Some(_)) => Ok(SwapChainStatus::Suboptimal),
+                Err(err) => match err {
+                    hal::window::PresentError::OutOfMemory(_) => {
+                        Err(SwapChainError::Device(DeviceError::OutOfMemory))
+                    }
+                    hal::window::PresentError::OutOfDate => Ok(SwapChainStatus::Outdated),
+                    hal::window::PresentError::SurfaceLost(_) => Ok(SwapChainStatus::Lost),
+                    hal::window::PresentError::DeviceLost(_) => {
+                        Err(SwapChainError::Device(DeviceError::Lost))
+                    }
+                },
+            }
+        } else {
+            Err(SwapChainError::Invalid)
         }
     }
 }

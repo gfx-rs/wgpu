@@ -173,16 +173,23 @@ impl<T, I: TypedId> Storage<T, I> {
 
     pub(crate) fn remove(&mut self, id: I) -> Option<T> {
         let (index, epoch, _) = id.unzip();
-        if index as usize >= self.map.len() {
-            None
-        } else if let Element::Occupied(value, storage_epoch) =
-            std::mem::replace(&mut self.map[index as usize], Element::Vacant)
-        {
-            assert_eq!(epoch, storage_epoch);
-            Some(value)
-        } else {
-            None
+        match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
+            Element::Occupied(value, storage_epoch) => {
+                assert_eq!(epoch, storage_epoch);
+                Some(value)
+            }
+            Element::Error(_) => None,
+            Element::Vacant => panic!("Cannot remove a vacant resource"),
         }
+    }
+
+    //Prevents panic on out of range access.
+    pub(crate) fn try_remove(&mut self, id: I) -> Option<T> {
+        let (index, epoch, backend) = id.unzip();
+        if index as usize >= self.map.len() {
+            return None;
+        }
+        self.remove(I::zip(index, epoch, backend))
     }
 
     pub(crate) fn iter(&self, backend: Backend) -> impl Iterator<Item = (I, &T)> {
@@ -463,10 +470,11 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
         &self,
         id: I,
         _token: &'a mut Token<A>,
-    ) -> (T, Token<'a, T>) {
-        let value = self.data.write().remove(id).unwrap();
+    ) -> (Option<T>, Token<'a, T>) {
+        let value = self.data.write().remove(id);
         //Note: careful about the order here!
         self.identity.free(id);
+        //Returning None is legal if it's an error ID
         (value, Token::new())
     }
 

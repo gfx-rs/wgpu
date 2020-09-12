@@ -2439,17 +2439,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (module, _) = hub.shader_modules.unregister(shader_module_id, &mut token);
-
-        let device = &device_guard[module.device_id.value];
-        #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace
-                .lock()
-                .add(trace::Action::DestroyShaderModule(shader_module_id)),
-            None => (),
-        };
-        unsafe {
-            device.raw.destroy_shader_module(module.raw);
+        if let Some(module) = module {
+            let device = &device_guard[module.device_id.value];
+            #[cfg(feature = "trace")]
+            match device.trace {
+                Some(ref trace) => trace
+                    .lock()
+                    .add(trace::Action::DestroyShaderModule(shader_module_id)),
+                None => (),
+            };
+            unsafe {
+                device.raw.destroy_shader_module(module.raw);
+            }
         }
     }
 
@@ -2528,10 +2529,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (cmdbuf, _) = hub
             .command_buffers
             .unregister(command_encoder_id, &mut token);
-
-        let device = &mut device_guard[cmdbuf.device_id.value];
-        device.untrack::<G>(&hub, &cmdbuf.trackers, &mut token);
-        device.cmd_allocator.discard(cmdbuf);
+        if let Some(cmdbuf) = cmdbuf {
+            let device = &mut device_guard[cmdbuf.device_id.value];
+            device.untrack::<G>(&hub, &cmdbuf.trackers, &mut token);
+            device.cmd_allocator.discard(cmdbuf);
+        }
     }
 
     pub fn command_buffer_drop<B: GfxBackend>(&self, command_buffer_id: id::CommandBufferId) {
@@ -2726,7 +2728,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .with_label(&desc.label));
         }
         if rasterization_state.polygon_mode != wgt::PolygonMode::Fill
-            && !device.features.contains(wgt::Features::NON_FILL_POLYGON_MODE)
+            && !device
+                .features
+                .contains(wgt::Features::NON_FILL_POLYGON_MODE)
         {
             return Err(pipeline::CreateRenderPipelineError::MissingFeature(
                 wgt::Features::NON_FILL_POLYGON_MODE,
@@ -3454,7 +3458,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let sc_id = surface_id.to_swap_chain_id(B::VARIANT);
-        if let Some(sc) = swap_chain_guard.remove(sc_id) {
+        if let Some(sc) = swap_chain_guard.try_remove(sc_id) {
             if !sc.acquired_view_id.is_none() {
                 return Err(swap_chain::CreateSwapChainError::SwapChainOutputExists);
             }
@@ -3585,21 +3589,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
-        let device = {
-            let (mut device, _) = hub.devices.unregister(device_id, &mut token);
+        let (device, _) = hub.devices.unregister(device_id, &mut token);
+        if let Some(mut device) = device {
             device.prepare_to_die();
-            device
-        };
 
-        // Adapter is only referenced by the device and itself.
-        // This isn't a robust way to destroy them, we should find a better one.
-        if device.adapter_id.ref_count.load() == 1 {
-            let (_adapter, _) = hub
-                .adapters
-                .unregister(device.adapter_id.value.0, &mut token);
+            // Adapter is only referenced by the device and itself.
+            // This isn't a robust way to destroy them, we should find a better one.
+            if device.adapter_id.ref_count.load() == 1 {
+                let (_adapter, _) = hub
+                    .adapters
+                    .unregister(device.adapter_id.value.0, &mut token);
+            }
+
+            device.dispose();
         }
-
-        device.dispose();
     }
 
     pub fn buffer_map_async<B: GfxBackend>(
