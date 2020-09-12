@@ -87,6 +87,19 @@ pub enum CreateComputePipelineError {
     Stage(StageError),
 }
 
+impl CreateComputePipelineError {
+    pub(crate) fn with_label<'a>(
+        self,
+        label: &Option<Cow<'a, str>>,
+    ) -> crate::LabeledContextError<Self> {
+        crate::LabeledContextError {
+            source: self,
+            description: "Creating render pipeline",
+            label: label.as_ref().map(|inner| inner.to_string()),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ComputePipeline<B: hal::Backend> {
     pub(crate) raw: B::ComputePipeline,

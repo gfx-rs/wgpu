@@ -2738,7 +2738,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .with_label(&desc.label));
         }
         if rasterization_state.polygon_mode != wgt::PolygonMode::Fill
-            && !device.features.contains(wgt::Features::NON_FILL_POLYGON_MODE)
+            && !device
+                .features
+                .contains(wgt::Features::NON_FILL_POLYGON_MODE)
         {
             return Err(pipeline::CreateRenderPipelineError::MissingFeature(
                 wgt::Features::NON_FILL_POLYGON_MODE,
@@ -3152,7 +3154,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
     ) -> Result<
         (id::ComputePipelineId, pipeline::ImplicitBindGroupCount),
-        pipeline::CreateComputePipelineError,
+        crate::LabeledContextError<pipeline::CreateComputePipelineError>,
     > {
         span!(_guard, INFO, "Device::create_compute_pipeline");
 
@@ -3160,9 +3162,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
+        let device = device_guard.get(device_id).map_err(|_| {
+            pipeline::CreateComputePipelineError::from(DeviceError::Invalid).with_label(&desc.label)
+        })?;
         let (raw_pipeline, layout_id, layout_ref_count, derived_bind_group_count) = {
             //TODO: only lock mutable if the layout is derived
             let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
@@ -3182,14 +3184,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     pipeline::CreateComputePipelineError::Stage(
                         validation::StageError::InvalidModule,
                     )
+                    .with_label(&desc.label)
                 })?;
 
             if let Some(ref module) = shader_module.module {
                 let group_layouts = match desc.layout {
                     Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
-                        pipeline_layout_guard
-                            .get(pipeline_layout_id)
-                            .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?,
+                        pipeline_layout_guard.get(pipeline_layout_id).map_err(|_| {
+                            pipeline::CreateComputePipelineError::InvalidLayout
+                                .with_label(&desc.label)
+                        })?,
                         &*bgl_guard,
                     ),
                     None => {
@@ -3208,11 +3212,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     naga::ShaderStage::Compute,
                     interface,
                 )
-                .map_err(pipeline::CreateComputePipelineError::Stage)?;
+                .map_err(|err| {
+                    pipeline::CreateComputePipelineError::Stage(err).with_label(&desc.label)
+                })?;
             } else if desc.layout.is_none() {
-                Err(pipeline::ImplicitLayoutError::ReflectionError(
-                    wgt::ShaderStage::COMPUTE,
-                ))?
+                Err(pipeline::CreateComputePipelineError::from(
+                    pipeline::ImplicitLayoutError::ReflectionError(wgt::ShaderStage::COMPUTE),
+                )
+                .with_label(&desc.label))?
             }
 
             let shader = hal::pso::EntryPoint::<B> {
@@ -3228,18 +3235,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let (pipeline_layout_id, derived_bind_group_count) = match desc.layout {
                 Some(id) => (id, 0),
-                None => self.derive_pipeline_layout(
-                    device,
-                    device_id,
-                    implicit_pipeline_ids,
-                    derived_group_layouts,
-                    &mut *bgl_guard,
-                    &mut *pipeline_layout_guard,
-                )?,
+                None => self
+                    .derive_pipeline_layout(
+                        device,
+                        device_id,
+                        implicit_pipeline_ids,
+                        derived_group_layouts,
+                        &mut *bgl_guard,
+                        &mut *pipeline_layout_guard,
+                    )
+                    .map_err(|err| {
+                        pipeline::CreateComputePipelineError::from(err).with_label(&desc.label)
+                    })?,
             };
-            let layout = pipeline_layout_guard
-                .get(pipeline_layout_id)
-                .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
+            let layout = pipeline_layout_guard.get(pipeline_layout_id).map_err(|_| {
+                pipeline::CreateComputePipelineError::InvalidLayout.with_label(&desc.label)
+            })?;
 
             let pipeline_desc = hal::pso::ComputePipelineDesc {
                 shader,
@@ -3253,7 +3264,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(hal::pso::CreationError::OutOfMemory(_)) => {
                     return Err(pipeline::CreateComputePipelineError::Device(
                         DeviceError::OutOfMemory,
-                    ))
+                    )
+                    .with_label(&desc.label))
                 }
                 other => panic!("Compute pipeline creation error: {:?}", other),
             };
