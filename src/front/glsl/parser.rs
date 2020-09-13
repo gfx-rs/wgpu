@@ -1,4 +1,4 @@
-#![allow(clippy::panic, unused_braces)]
+#![allow(clippy::panic)]
 use pomelo::pomelo;
 
 pomelo! {
@@ -242,7 +242,9 @@ pomelo! {
         )
     }
     // primary_expression ::= DoubleConstant;
-    primary_expression ::= LeftParen expression(e) RightParen {e}
+    primary_expression ::= LeftParen expression(e) RightParen {
+        e
+    }
 
     postfix_expression ::= primary_expression;
     postfix_expression ::= postfix_expression LeftBracket integer_expression RightBracket {
@@ -280,9 +282,15 @@ pomelo! {
         }
     }
     function_call_or_method ::= function_call_generic;
-    function_call_generic ::= function_call_header_with_parameters(h) RightParen {h}
-    function_call_generic ::= function_call_header_no_parameters(h) RightParen {h}
-    function_call_header_no_parameters ::= function_call_header(h) Void {h}
+    function_call_generic ::= function_call_header_with_parameters(h) RightParen {
+        h
+    }
+    function_call_generic ::= function_call_header_no_parameters(h) RightParen {
+        h
+    }
+    function_call_header_no_parameters ::= function_call_header(h) Void {
+        h
+    }
     function_call_header_no_parameters ::= function_call_header;
     function_call_header_with_parameters ::= function_call_header(mut h) assignment_expression(ae) {
         h.args.push(ae.expression);
@@ -429,17 +437,39 @@ pomelo! {
         }
     }
 
-    assignment_operator ::= Equal {BinaryOperator::Equal}
-    assignment_operator ::= MulAssign {BinaryOperator::Multiply}
-    assignment_operator ::= DivAssign {BinaryOperator::Divide}
-    assignment_operator ::= ModAssign {BinaryOperator::Modulo}
-    assignment_operator ::= AddAssign {BinaryOperator::Add}
-    assignment_operator ::= SubAssign {BinaryOperator::Subtract}
-    assignment_operator ::= LeftAssign {BinaryOperator::ShiftLeftLogical}
-    assignment_operator ::= RightAssign {BinaryOperator::ShiftRightLogical}
-    assignment_operator ::= AndAssign {BinaryOperator::And}
-    assignment_operator ::= XorAssign {BinaryOperator::ExclusiveOr}
-    assignment_operator ::= OrAssign {BinaryOperator::InclusiveOr}
+    assignment_operator ::= Equal {
+        BinaryOperator::Equal
+    }
+    assignment_operator ::= MulAssign {
+        BinaryOperator::Multiply
+    }
+    assignment_operator ::= DivAssign {
+        BinaryOperator::Divide
+    }
+    assignment_operator ::= ModAssign {
+        BinaryOperator::Modulo
+    }
+    assignment_operator ::= AddAssign {
+        BinaryOperator::Add
+    }
+    assignment_operator ::= SubAssign {
+        BinaryOperator::Subtract
+    }
+    assignment_operator ::= LeftAssign {
+        BinaryOperator::ShiftLeftLogical
+    }
+    assignment_operator ::= RightAssign {
+        BinaryOperator::ShiftRightLogical
+    }
+    assignment_operator ::= AndAssign {
+        BinaryOperator::And
+    }
+    assignment_operator ::= XorAssign {
+        BinaryOperator::ExclusiveOr
+    }
+    assignment_operator ::= OrAssign {
+        BinaryOperator::InclusiveOr
+    }
 
     expression ::= assignment_expression;
     expression ::= expression(e) Comma assignment_expression(mut ae) {
@@ -460,7 +490,9 @@ pomelo! {
     // }
 
     // declaration
-    declaration ::= init_declarator_list(idl) Semicolon {idl}
+    declaration ::= init_declarator_list(idl) Semicolon {
+        idl
+    }
 
     init_declarator_list ::= single_declaration;
     init_declarator_list ::= init_declarator_list(mut idl) Comma Identifier(i) {
@@ -504,10 +536,16 @@ pomelo! {
         }
     }
 
-    fully_specified_type ::= type_specifier(t) {(vec![], t)}
-    fully_specified_type ::= type_qualifier(q) type_specifier(t) {(q,t)}
+    fully_specified_type ::= type_specifier(t) {
+        (vec![], t)
+    }
+    fully_specified_type ::= type_qualifier(q) type_specifier(t) {
+        (q,t)
+    }
 
-    layout_qualifier ::= Layout LeftParen layout_qualifier_id_list(l) RightParen {l}
+    layout_qualifier ::= Layout LeftParen layout_qualifier_id_list(l) RightParen {
+        l
+    }
     layout_qualifier_id_list ::= layout_qualifier_id;
     layout_qualifier_id_list ::= layout_qualifier_id_list Comma layout_qualifier_id(l) {
         //TODO: for now always pick last
@@ -547,12 +585,20 @@ pomelo! {
     // single_type_qualifier ::= invariant_qualifier;
     // single_type_qualifier ::= precise_qualifier;
 
-    storage_qualifier ::= Const {StorageClass::Constant}
+    storage_qualifier ::= Const {
+        StorageClass::Constant
+    }
     // storage_qualifier ::= InOut;
-    storage_qualifier ::= In {StorageClass::Input}
-    storage_qualifier ::= Out {StorageClass::Output}
+    storage_qualifier ::= In {
+        StorageClass::Input
+    }
+    storage_qualifier ::= Out {
+        StorageClass::Output
+    }
     //TODO: other storage qualifiers
-    interpolation_qualifier ::= Interpolation((_, i)) { i }
+    interpolation_qualifier ::= Interpolation((_, i)) {
+        i
+    }
 
     initializer ::= assignment_expression;
     // initializer ::= LeftBrace initializer_list RightBrace;
@@ -593,7 +639,9 @@ pomelo! {
     }
 
     // statement
-    statement ::= compound_statement(cs) {Statement::Block(cs)}
+    statement ::= compound_statement(cs) {
+        Statement::Block(cs)
+    }
     statement ::= simple_statement;
 
     // Grammar Note: labeled statements for SWITCH only; 'goto' is not supported.
@@ -605,7 +653,9 @@ pomelo! {
     //simple_statement ::= iteration_statement;
     simple_statement ::= jump_statement;
 
-    compound_statement ::= LeftBrace RightBrace {vec![]}
+    compound_statement ::= LeftBrace RightBrace {
+        vec![]
+    }
     compound_statement ::= left_brace_scope statement_list(sl) RightBrace {
         extra.context.remove_current_scope();
         sl
@@ -617,13 +667,21 @@ pomelo! {
     }
 
 
-    compound_statement_no_new_scope ::= LeftBrace RightBrace  {vec![]}
-    compound_statement_no_new_scope ::= LeftBrace statement_list(sl) RightBrace {sl}
+    compound_statement_no_new_scope ::= LeftBrace RightBrace {
+        vec![]
+    }
+    compound_statement_no_new_scope ::= LeftBrace statement_list(sl) RightBrace {
+        sl
+    }
 
-    statement_list ::= statement(s) { vec![s] }
+    statement_list ::= statement(s) {
+        vec![s]
+    }
     statement_list ::= statement_list(mut ss) statement(s) { ss.push(s); ss }
 
-    expression_statement ::= Semicolon  {Statement::Empty}
+    expression_statement ::= Semicolon  {
+        Statement::Empty
+    }
     expression_statement ::= expression(mut e) Semicolon {
         match e.statements.len() {
             1 => e.statements.remove(0),
@@ -671,12 +729,22 @@ pomelo! {
         })
     }
 
-    type_specifier_nonarray ::= Void { None }
-    type_specifier_nonarray ::= TypeName(t) {Some(t.1)};
+    type_specifier_nonarray ::= Void {
+        None
+    }
+    type_specifier_nonarray ::= TypeName(t) {
+        Some(t.1)
+    };
 
-    jump_statement ::= Continue Semicolon { Statement::Continue }
-    jump_statement ::= Break Semicolon { Statement::Break }
-    jump_statement ::= Return Semicolon { Statement::Return{ value: None } }
+    jump_statement ::= Continue Semicolon {
+        Statement::Continue
+    }
+    jump_statement ::= Break Semicolon {
+        Statement::Break
+    }
+    jump_statement ::= Return Semicolon {
+        Statement::Return{ value: None }
+    }
     jump_statement ::= Return expression(mut e) Semicolon {
         let ret = Statement::Return{ value: Some(e.expression) };
         if !e.statements.is_empty() {
@@ -686,7 +754,10 @@ pomelo! {
             ret
         }
     }
-    jump_statement ::= Discard Semicolon  { Statement::Kill } // Fragment shader only
+    jump_statement ::= Discard Semicolon  {
+        Statement::Kill
+    } // Fragment shader only
+
     // Grammar Note: No 'goto'. Gotos are not supported.
 
     // misc
