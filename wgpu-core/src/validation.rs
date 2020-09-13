@@ -79,8 +79,8 @@ pub enum BindingError {
     WrongSamplerComparison,
     #[error("derived bind group layout type is not consistent between stages")]
     InconsistentlyDerivedType,
-    #[error("texture format {0:?} isn't recognized")]
-    UnknownStorageFormat(wgt::TextureFormat),
+    #[error("texture format {0:?} is not supported for storage use")]
+    BadStorageFormat(wgt::TextureFormat),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -96,8 +96,8 @@ pub enum InputError {
 pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,
-    #[error("unable to find an entry point matching the {0:?} execution model")]
-    MissingEntryPoint(naga::ShaderStage),
+    #[error("unable to find an entry point at {0:?} stage")]
+    MissingEntryPoint(wgt::ShaderStage),
     #[error("error matching global binding at index {binding} in set {set} against the pipeline layout: {error}")]
     Binding {
         set: u32,
@@ -167,6 +167,70 @@ fn get_aligned_type_size(
             offset + get_aligned_type_size(module, member.ty, false)
         }),
         _ => panic!("Unexpected struct field"),
+    }
+}
+
+fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
+    use naga::StorageFormat as Sf;
+    use wgt::TextureFormat as Tf;
+    // Using the table in https://gpuweb.github.io/gpuweb/#plain-color-formats
+    Some(match format {
+        Tf::R32Uint => Sf::R32Uint,
+        Tf::R32Sint => Sf::R32Sint,
+        Tf::R32Float => Sf::R32Float,
+        Tf::Rgba8Unorm => Sf::Rgba8Unorm,
+        Tf::Rgba8Snorm => Sf::Rgba8Snorm,
+        Tf::Rgba8Uint => Sf::Rgba8Uint,
+        Tf::Rgba8Sint => Sf::Rgba8Sint,
+        Tf::Rg32Uint => Sf::Rg32Uint,
+        Tf::Rg32Sint => Sf::Rg32Sint,
+        Tf::Rg32Float => Sf::Rg32Float,
+        Tf::Rgba16Uint => Sf::Rgba16Uint,
+        Tf::Rgba16Sint => Sf::Rgba16Sint,
+        Tf::Rgba16Float => Sf::Rgba16Float,
+        Tf::Rgba32Uint => Sf::Rgba32Uint,
+        Tf::Rgba32Sint => Sf::Rgba32Sint,
+        Tf::Rgba32Float => Sf::Rgba32Float,
+        _ => return None,
+    })
+}
+
+fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureFormat {
+    use naga::StorageFormat as Sf;
+    use wgt::TextureFormat as Tf;
+    match format {
+        Sf::R8Unorm => Tf::R8Unorm,
+        Sf::R8Snorm => Tf::R8Snorm,
+        Sf::R8Uint => Tf::R8Uint,
+        Sf::R8Sint => Tf::R8Sint,
+        Sf::R16Uint => Tf::R16Uint,
+        Sf::R16Sint => Tf::R16Sint,
+        Sf::R16Float => Tf::R16Float,
+        Sf::Rg8Unorm => Tf::Rg8Unorm,
+        Sf::Rg8Snorm => Tf::Rg8Snorm,
+        Sf::Rg8Uint => Tf::Rg8Uint,
+        Sf::Rg8Sint => Tf::Rg8Sint,
+        Sf::R32Uint => Tf::R32Uint,
+        Sf::R32Sint => Tf::R32Sint,
+        Sf::R32Float => Tf::R32Float,
+        Sf::Rg16Uint => Tf::Rg16Uint,
+        Sf::Rg16Sint => Tf::Rg16Sint,
+        Sf::Rg16Float => Tf::Rg16Float,
+        Sf::Rgba8Unorm => Tf::Rgba8Unorm,
+        Sf::Rgba8Snorm => Tf::Rgba8Snorm,
+        Sf::Rgba8Uint => Tf::Rgba8Uint,
+        Sf::Rgba8Sint => Tf::Rgba8Sint,
+        Sf::Rgb10a2Unorm => Tf::Rgb10a2Unorm,
+        Sf::Rg11b10Float => Tf::Rg11b10Float,
+        Sf::Rg32Uint => Tf::Rg32Uint,
+        Sf::Rg32Sint => Tf::Rg32Sint,
+        Sf::Rg32Float => Tf::Rg32Float,
+        Sf::Rgba16Uint => Tf::Rgba16Uint,
+        Sf::Rgba16Sint => Tf::Rgba16Sint,
+        Sf::Rgba16Float => Tf::Rgba16Float,
+        Sf::Rgba32Uint => Tf::Rgba32Uint,
+        Sf::Rgba32Sint => Tf::Rgba32Sint,
+        Sf::Rgba32Float => Tf::Rgba32Float,
     }
 }
 
@@ -259,7 +323,7 @@ fn check_binding_use(
                     }
                 }
             }
-            let expected_class = match entry.ty {
+            let (expected_class, usage) = match entry.ty {
                 BindingType::SampledTexture {
                     dimension: _,
                     component_type,
@@ -279,29 +343,28 @@ fn check_binding_use(
                             shader: kind,
                         });
                     }
-                    if multisampled {
+                    let class = if multisampled {
                         naga::ImageClass::Multisampled
                     } else if comparison {
                         naga::ImageClass::Depth
                     } else {
                         naga::ImageClass::Sampled
-                    }
+                    };
+                    (class, naga::GlobalUse::LOAD)
                 }
                 BindingType::StorageTexture {
                     readonly,
                     format,
                     dimension: _,
                 } => {
-                    let naga_format = match format {
-                        wgt::TextureFormat::Rgba32Float => naga::StorageFormat::Rgba32f,
-                        _ => return Err(BindingError::UnknownStorageFormat(format)),
-                    };
-                    let access = if readonly {
-                        naga::StorageAccess::LOAD
+                    let naga_format = map_storage_format_to_naga(format)
+                        .ok_or(BindingError::BadStorageFormat(format))?;
+                    let usage = if readonly {
+                        naga::GlobalUse::LOAD
                     } else {
-                        naga::StorageAccess::STORE
+                        naga::GlobalUse::STORE
                     };
-                    naga::ImageClass::Storage(naga_format, access)
+                    (naga::ImageClass::Storage(naga_format), usage)
                 }
                 _ => return Err(BindingError::WrongType),
             };
@@ -311,14 +374,7 @@ fn check_binding_use(
                     shader: class,
                 });
             }
-            Ok(match class {
-                naga::ImageClass::Storage(_, access)
-                    if access.contains(naga::StorageAccess::STORE) =>
-                {
-                    naga::GlobalUse::STORE
-                }
-                _ => naga::GlobalUse::LOAD,
-            })
+            Ok(usage)
         }
         _ => Err(BindingError::WrongType),
     }
@@ -747,7 +803,7 @@ fn derive_binding_type(
                 naga::StorageClass::StorageBuffer => BindingType::StorageBuffer {
                     dynamic,
                     min_binding_size: wgt::BufferSize::new(actual_size),
-                    readonly: !usage.contains(naga::GlobalUse::STORE), //TODO: clarify
+                    readonly: !usage.contains(naga::GlobalUse::STORE),
                 },
                 _ => return Err(BindingError::WrongType),
             }
@@ -789,12 +845,16 @@ fn derive_binding_type(
                     component_type: wgt::TextureComponentType::DepthComparison,
                     multisampled: false,
                 },
-                naga::ImageClass::Storage(format, access) => BindingType::StorageTexture {
+                naga::ImageClass::Storage(format) => BindingType::StorageTexture {
                     dimension,
-                    format: match format {
-                        naga::StorageFormat::Rgba32f => wgt::TextureFormat::Rgba32Float,
+                    format: {
+                        let f = map_storage_format_from_naga(format);
+                        let original = map_storage_format_to_naga(f)
+                            .ok_or(BindingError::BadStorageFormat(f))?;
+                        debug_assert_eq!(format, original);
+                        f
                     },
-                    readonly: !access.contains(naga::StorageAccess::STORE),
+                    readonly: !usage.contains(naga::GlobalUse::STORE),
                 },
             }
         }
@@ -806,7 +866,7 @@ pub fn check_stage<'a>(
     module: &'a naga::Module,
     mut group_layouts: IntrospectionBindGroupLayouts,
     entry_point_name: &str,
-    stage: naga::ShaderStage,
+    stage_bit: wgt::ShaderStage,
     inputs: StageInterface<'a>,
 ) -> Result<StageInterface<'a>, StageError> {
     // Since a shader module can have multiple entry points with the same name,
@@ -814,13 +874,15 @@ pub fn check_stage<'a>(
     let entry_point = module
         .entry_points
         .iter()
-        .find(|entry_point| entry_point.name == entry_point_name && entry_point.stage == stage)
-        .ok_or(StageError::MissingEntryPoint(stage))?;
-    let stage_bit = match stage {
-        naga::ShaderStage::Vertex => wgt::ShaderStage::VERTEX,
-        naga::ShaderStage::Fragment => wgt::ShaderStage::FRAGMENT,
-        naga::ShaderStage::Compute => wgt::ShaderStage::COMPUTE,
-    };
+        .find(|entry_point| {
+            entry_point.name == entry_point_name
+                && stage_bit.contains(match entry_point.stage {
+                    naga::ShaderStage::Vertex { .. } => wgt::ShaderStage::VERTEX,
+                    naga::ShaderStage::Fragment { .. } => wgt::ShaderStage::FRAGMENT,
+                    naga::ShaderStage::Compute { .. } => wgt::ShaderStage::COMPUTE,
+                })
+        })
+        .ok_or(StageError::MissingEntryPoint(stage_bit))?;
 
     let function = &module.functions[entry_point.function];
     let mut outputs = StageInterface::default();

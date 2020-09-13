@@ -40,8 +40,8 @@ gfx-memory = "0.2"
 [dependencies.naga]
 version = "0.2"
 git = "https://github.com/gfx-rs/naga"
-rev = "bd9efe5915e548b9a2ec1f3d3e9296c90b31e69a"
-features = ["spirv-in", "spirv-out"]
+rev = "b278e10ea7c144b2387585c4e81c1d86db8e2def"
+features = ["spirv-in", "spirv-out", "wgsl-in"]
 
 [dependencies.wgt]
 path = "../wgpu-types"
