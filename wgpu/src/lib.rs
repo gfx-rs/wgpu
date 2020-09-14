@@ -2633,7 +2633,10 @@ impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + Sync + 'static 
 #[derive(Debug)]
 pub enum Error {
     /// Out of memory error
-    OutOfMemoryError,
+    OutOfMemoryError {
+        ///
+        source: Box<dyn error::Error + Send + Sync + 'static>,
+    },
     /// Validation error, signifying a bug in code or data
     ValidationError {
         ///
@@ -2644,7 +2647,7 @@ pub enum Error {
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            Error::OutOfMemoryError => None,
+            Error::OutOfMemoryError { source } => Some(source.as_ref()),
             Error::ValidationError { source } => Some(source.as_ref()),
         }
     }
@@ -2653,7 +2656,7 @@ impl error::Error for Error {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::OutOfMemoryError => f.write_str("Out of Memory"),
+            Error::OutOfMemoryError { .. } => f.write_str("Out of Memory"),
             Error::ValidationError { .. } => f.write_str("Validation error"),
         }
     }
