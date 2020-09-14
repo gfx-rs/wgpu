@@ -1,4 +1,4 @@
-use super::{BorrowType, MaybeOwned};
+use super::BorrowType;
 use crate::{
     proc::{Interface, Visitor},
     Arena, ArraySize, BinaryOperator, BuiltIn, Constant, ConstantInner, DerivativeAxis, Expression,
@@ -661,14 +661,14 @@ fn write_expression<'a, 'b>(
 
             let inner = match *ty.borrow() {
                 TypeInner::Vector { kind, width, .. } => {
-                    MaybeOwned::Owned(TypeInner::Scalar { kind, width })
+                    BorrowType::Owned(TypeInner::Scalar { kind, width })
                 }
                 TypeInner::Matrix {
                     kind,
                     width,
                     columns,
                     ..
-                } => MaybeOwned::Owned(TypeInner::Vector {
+                } => BorrowType::Owned(TypeInner::Vector {
                     kind,
                     width,
                     size: columns,
@@ -692,7 +692,7 @@ fn write_expression<'a, 'b>(
             match *ty.borrow() {
                 TypeInner::Vector { kind, width, .. } => (
                     Cow::Owned(format!("{}[{}]", base_expr, index)),
-                    MaybeOwned::Owned(TypeInner::Scalar { kind, width }),
+                    BorrowType::Owned(TypeInner::Scalar { kind, width }),
                 ),
                 TypeInner::Matrix {
                     kind,
@@ -701,7 +701,7 @@ fn write_expression<'a, 'b>(
                     ..
                 } => (
                     Cow::Owned(format!("{}[{}]", base_expr, index)),
-                    MaybeOwned::Owned(TypeInner::Vector {
+                    BorrowType::Owned(TypeInner::Vector {
                         kind,
                         width,
                         size: columns,
@@ -869,9 +869,9 @@ fn write_expression<'a, 'b>(
 
             let width = 4;
             let ty = if shadow {
-                MaybeOwned::Owned(TypeInner::Scalar { kind, width })
+                BorrowType::Owned(TypeInner::Scalar { kind, width })
             } else {
-                MaybeOwned::Owned(TypeInner::Vector { kind, width, size })
+                BorrowType::Owned(TypeInner::Vector { kind, width, size })
             };
 
             (Cow::Owned(expr), ty)
@@ -942,7 +942,7 @@ fn write_expression<'a, 'b>(
             let width = 4;
             (
                 Cow::Owned(expr),
-                MaybeOwned::Owned(TypeInner::Vector { kind, width, size }),
+                BorrowType::Owned(TypeInner::Vector { kind, width, size }),
             )
         }
         Expression::Unary { op, expr } => {
@@ -1043,7 +1043,7 @@ fn write_expression<'a, 'b>(
                 | BinaryOperator::Less
                 | BinaryOperator::LessEqual
                 | BinaryOperator::Greater
-                | BinaryOperator::GreaterEqual => MaybeOwned::Owned(TypeInner::Scalar {
+                | BinaryOperator::GreaterEqual => BorrowType::Owned(TypeInner::Scalar {
                     kind: ScalarKind::Bool,
                     width: 1,
                 }),
@@ -1083,7 +1083,7 @@ fn write_expression<'a, 'b>(
                     rows,
                     kind,
                     width,
-                } => MaybeOwned::Owned(TypeInner::Matrix {
+                } => BorrowType::Owned(TypeInner::Matrix {
                     columns: rows,
                     rows: columns,
                     kind,
@@ -1106,7 +1106,7 @@ fn write_expression<'a, 'b>(
 
             let ty = match *left_ty.borrow() {
                 TypeInner::Vector { kind, width, .. } => {
-                    MaybeOwned::Owned(TypeInner::Scalar { kind, width })
+                    BorrowType::Owned(TypeInner::Scalar { kind, width })
                 }
                 _ => {
                     return Err(Error::Custom(format!(
@@ -1140,7 +1140,7 @@ fn write_expression<'a, 'b>(
                 TypeInner::Scalar { width, kind } => (
                     kind,
                     Cow::Borrowed(map_scalar(kind, width, builder.features)?.full),
-                    MaybeOwned::Owned(TypeInner::Scalar { kind, width }),
+                    BorrowType::Owned(TypeInner::Scalar { kind, width }),
                 ),
                 TypeInner::Vector { width, kind, size } => (
                     kind,
@@ -1148,7 +1148,7 @@ fn write_expression<'a, 'b>(
                         "{}vec",
                         map_scalar(kind, width, builder.features)?.prefix
                     )),
-                    MaybeOwned::Owned(TypeInner::Vector { kind, width, size }),
+                    BorrowType::Owned(TypeInner::Vector { kind, width, size }),
                 ),
                 _ => return Err(Error::Custom(format!("Cannot convert {}", value_expr))),
             };
@@ -1196,7 +1196,7 @@ fn write_expression<'a, 'b>(
                 FunctionOrigin::Local(function) => module.functions[function]
                     .return_type
                     .map(|ty| module.borrow_type(ty))
-                    .unwrap_or(MaybeOwned::Owned(
+                    .unwrap_or(BorrowType::Owned(
                         TypeInner::Sampler { comparison: false }, /*Dummy type*/
                     )),
                 FunctionOrigin::External(_) => {

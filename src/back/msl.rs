@@ -14,7 +14,7 @@ the output struct. If there is a structure in the outputs, and it contains any b
 we move them up to the root output structure that we define ourselves.
 !*/
 
-use super::{BorrowType, MaybeOwned};
+use super::BorrowType;
 use crate::{arena::Handle, FastHashMap};
 use std::fmt::{Display, Error as FmtError, Formatter, Write};
 
@@ -410,7 +410,7 @@ impl<W: Write> Writer<W> {
                         rows, kind, width, ..
                     } => {
                         write!(self.out, ".{}", COMPONENTS[index as usize])?;
-                        Ok(MaybeOwned::Owned(crate::TypeInner::Vector {
+                        Ok(BorrowType::Owned(crate::TypeInner::Vector {
                             size: rows,
                             kind,
                             width,
@@ -418,7 +418,7 @@ impl<W: Write> Writer<W> {
                     }
                     crate::TypeInner::Vector { kind, width, .. } => {
                         write!(self.out, ".{}", COMPONENTS[index as usize])?;
-                        Ok(MaybeOwned::Owned(crate::TypeInner::Scalar { kind, width }))
+                        Ok(BorrowType::Owned(crate::TypeInner::Scalar { kind, width }))
                     }
                     crate::TypeInner::Array {
                         base,
@@ -460,7 +460,7 @@ impl<W: Write> Writer<W> {
                     }
                     _ => return Err(Error::UnsupportedCompose(ty)),
                 }
-                Ok(MaybeOwned::Borrowed(inner))
+                Ok(BorrowType::Borrowed(inner))
             }
             crate::Expression::GlobalVariable(handle) => {
                 let var = &module.global_variables[handle];
@@ -468,7 +468,7 @@ impl<W: Write> Writer<W> {
                 match var.class {
                     crate::StorageClass::Output => {
                         if let crate::TypeInner::Struct { .. } = *inner {
-                            return Ok(MaybeOwned::Borrowed(inner));
+                            return Ok(BorrowType::Borrowed(inner));
                         }
                         write!(self.out, "{}.", OUTPUT_STRUCT_NAME)?;
                     }
@@ -481,14 +481,14 @@ impl<W: Write> Writer<W> {
                 }
                 let name = var.name.or_index(handle);
                 write!(self.out, "{}", name)?;
-                Ok(MaybeOwned::Borrowed(inner))
+                Ok(BorrowType::Borrowed(inner))
             }
             crate::Expression::LocalVariable(handle) => {
                 let var = &function.local_variables[handle];
                 let inner = &module.types[var.ty].inner;
                 let name = var.name.or_index(handle);
                 write!(self.out, "{}", name)?;
-                Ok(MaybeOwned::Borrowed(inner))
+                Ok(BorrowType::Borrowed(inner))
             }
             crate::Expression::Load { pointer } => {
                 //write!(self.out, "*")?;
@@ -533,7 +533,7 @@ impl<W: Write> Writer<W> {
                         (
                             &crate::TypeInner::Scalar { kind, width },
                             &crate::TypeInner::Scalar { .. },
-                        ) => MaybeOwned::Owned(crate::TypeInner::Scalar { kind, width }),
+                        ) => BorrowType::Owned(crate::TypeInner::Scalar { kind, width }),
                         (
                             &crate::TypeInner::Scalar { .. },
                             &crate::TypeInner::Vector { size, kind, width },
@@ -545,7 +545,7 @@ impl<W: Write> Writer<W> {
                         | (
                             &crate::TypeInner::Vector { size, kind, width },
                             &crate::TypeInner::Vector { .. },
-                        ) => MaybeOwned::Owned(crate::TypeInner::Vector { size, kind, width }),
+                        ) => BorrowType::Owned(crate::TypeInner::Vector { size, kind, width }),
                         (
                             &crate::TypeInner::Matrix {
                                 rows,
@@ -554,7 +554,7 @@ impl<W: Write> Writer<W> {
                                 width,
                             },
                             &crate::TypeInner::Vector { .. },
-                        ) => MaybeOwned::Owned(crate::TypeInner::Vector {
+                        ) => BorrowType::Owned(crate::TypeInner::Vector {
                             size: rows,
                             kind,
                             width,
@@ -564,7 +564,7 @@ impl<W: Write> Writer<W> {
                         }
                     }
                 } else {
-                    MaybeOwned::Owned(crate::TypeInner::Scalar {
+                    BorrowType::Owned(crate::TypeInner::Scalar {
                         kind: crate::ScalarKind::Bool,
                         width: 1,
                     })
@@ -599,7 +599,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
                 match *ty_image.borrow() {
                     crate::TypeInner::Image { kind, .. } => {
-                        Ok(MaybeOwned::Owned(crate::TypeInner::Vector {
+                        Ok(BorrowType::Owned(crate::TypeInner::Vector {
                             size: crate::VectorSize::Quad,
                             kind,
                             width: 4,
@@ -633,7 +633,7 @@ impl<W: Write> Writer<W> {
                     crate::SampleLevel::Bias(_) => return Err(Error::UnexpectedSampleLevel(level)),
                 }
                 write!(self.out, ")")?;
-                Ok(MaybeOwned::Owned(crate::TypeInner::Scalar {
+                Ok(BorrowType::Owned(crate::TypeInner::Scalar {
                     kind: crate::ScalarKind::Float,
                     width: 4,
                 }))
@@ -652,7 +652,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
                 match *ty_image.borrow() {
                     crate::TypeInner::Image { kind, .. } => {
-                        Ok(MaybeOwned::Owned(crate::TypeInner::Vector {
+                        Ok(BorrowType::Owned(crate::TypeInner::Vector {
                             size: crate::VectorSize::Quad,
                             kind,
                             width: 4,
@@ -701,7 +701,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ", ")?;
                     self.put_expression(arguments[1], function, module)?;
                     write!(self.out, ")")?;
-                    Ok(MaybeOwned::Owned(result))
+                    Ok(BorrowType::Owned(result))
                 }
                 "length" => {
                     write!(self.out, "length(")?;
@@ -713,7 +713,7 @@ impl<W: Write> Writer<W> {
                         _ => return Err(Error::UnexpectedDistanceArgument(ty_arg)),
                     };
                     write!(self.out, ")")?;
-                    Ok(MaybeOwned::Owned(result))
+                    Ok(BorrowType::Owned(result))
                 }
                 "mix" => {
                     write!(self.out, "mix(")?;
@@ -735,7 +735,7 @@ impl<W: Write> Writer<W> {
         &'w mut self,
         handle: Handle<crate::Constant>,
         module: &'a crate::Module,
-    ) -> Result<MaybeOwned<'a, crate::TypeInner>, Error<'a>> {
+    ) -> Result<BorrowType<'a>, Error<'a>> {
         let constant = &module.constants[handle];
         let ty = &module.types[constant.ty];
 
@@ -768,7 +768,7 @@ impl<W: Write> Writer<W> {
             }
         }
 
-        Ok(MaybeOwned::Borrowed(&ty.inner))
+        Ok(BorrowType::Borrowed(&ty.inner))
     }
 
     fn put_statement<'w, 'a: 'w>(

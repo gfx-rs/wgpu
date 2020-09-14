@@ -12,8 +12,7 @@ fn rosetta_test(file_name: &str) {
     let module = super::parse_u8_slice(&input).unwrap();
     let output = ron::ser::to_string_pretty(&module, Default::default()).unwrap();
 
-    let expected =
-        fs::read_to_string(file_path.with_extension("expected.ron")).unwrap();
+    let expected = fs::read_to_string(file_path.with_extension("expected.ron")).unwrap();
 
     difference::assert_diff!(output.as_str(), expected.as_str(), "", 0);
 }

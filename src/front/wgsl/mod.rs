@@ -8,7 +8,7 @@ mod rosetta_tests;
 
 use crate::{
     arena::{Arena, Handle},
-    proc::{ResolveError, Typifier},
+    proc::{ResolveContext, ResolveError, Typifier},
     FastHashMap,
 };
 
@@ -156,19 +156,22 @@ impl<'a> ExpressionContext<'a, '_, '_> {
     fn resolve_type(
         &mut self,
         handle: Handle<crate::Expression>,
-    ) -> Result<Handle<crate::Type>, Error<'a>> {
-        self.typifier
-            .resolve(
-                handle,
-                self.expressions,
-                self.types,
-                self.constants,
-                self.global_vars,
-                self.local_vars,
-                &Arena::new(), //TODO
-                self.parameter_types,
-            )
-            .map_err(Error::InvalidResolve)
+    ) -> Result<&crate::TypeInner, Error<'a>> {
+        let functions = Arena::new(); //TODO
+        let resolve_ctx = ResolveContext {
+            constants: self.constants,
+            global_vars: self.global_vars,
+            local_vars: self.local_vars,
+            functions: &functions,
+            parameter_types: self.parameter_types,
+        };
+        match self
+            .typifier
+            .grow(handle, self.expressions, self.types, &resolve_ctx)
+        {
+            Err(e) => Err(Error::InvalidResolve(e)),
+            Ok(()) => Ok(self.typifier.get(handle, self.types)),
+        }
     }
 
     fn parse_binary_op(
@@ -191,6 +194,51 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             left = self.expressions.append(expression);
         }
         Ok(left)
+    }
+}
+
+enum Composition {
+    Single(crate::Expression),
+    Multi(crate::VectorSize, Vec<Handle<crate::Expression>>),
+}
+
+impl Composition {
+    fn make<'a>(
+        base: Handle<crate::Expression>,
+        base_size: crate::VectorSize,
+        name: &'a str,
+        expressions: &mut Arena<crate::Expression>,
+    ) -> Result<Self, Error<'a>> {
+        const MEMBERS: [char; 4] = ['x', 'y', 'z', 'w'];
+
+        Ok(if name.len() > 1 {
+            let mut components = Vec::with_capacity(name.len());
+            for ch in name.chars() {
+                let expr = crate::Expression::AccessIndex {
+                    base,
+                    index: MEMBERS[..base_size as usize]
+                        .iter()
+                        .position(|&m| m == ch)
+                        .ok_or(Error::BadAccessor(name))? as u32,
+                };
+                components.push(expressions.append(expr));
+            }
+
+            let size = match name.len() {
+                2 => crate::VectorSize::Bi,
+                3 => crate::VectorSize::Tri,
+                4 => crate::VectorSize::Quad,
+                _ => return Err(Error::BadAccessor(name)),
+            };
+            Composition::Multi(size, components)
+        } else {
+            let ch = name.chars().next().ok_or(Error::BadAccessor(name))?;
+            let index = MEMBERS[..base_size as usize]
+                .iter()
+                .position(|&m| m == ch)
+                .ok_or(Error::BadAccessor(name))? as u32;
+            Composition::Single(crate::Expression::AccessIndex { base, index })
+        })
     }
 }
 
@@ -515,9 +563,8 @@ impl Parser {
                 Token::Separator('.') => {
                     let _ = lexer.next();
                     let name = lexer.next_ident()?;
-                    let type_handle = ctx.resolve_type(handle)?;
-                    let base_type = &ctx.types[type_handle];
-                    let expression = match base_type.inner {
+                    println!("Resolving '{}' for {:?}", name, ctx.resolve_type(handle)); //TEMP
+                    let expression = match *ctx.resolve_type(handle)? {
                         crate::TypeInner::Struct { ref members } => {
                             let index = members
                                 .iter()
@@ -529,44 +576,32 @@ impl Parser {
                                 index,
                             }
                         }
-                        crate::TypeInner::Vector { size, kind, width }
-                        | crate::TypeInner::Matrix {
-                            columns: size,
+                        crate::TypeInner::Vector { size, kind, width } => {
+                            match Composition::make(handle, size, name, ctx.expressions)? {
+                                Composition::Multi(size, components) => {
+                                    let inner = crate::TypeInner::Vector { size, kind, width };
+                                    crate::Expression::Compose {
+                                        ty: ctx
+                                            .types
+                                            .fetch_or_append(crate::Type { name: None, inner }),
+                                        components,
+                                    }
+                                }
+                                Composition::Single(expr) => expr,
+                            }
+                        }
+                        crate::TypeInner::Matrix {
+                            rows,
+                            columns,
                             kind,
                             width,
-                            ..
-                        } => {
-                            const MEMBERS: [char; 4] = ['x', 'y', 'z', 'w'];
-                            if name.len() > 1 {
-                                let mut components = Vec::with_capacity(name.len());
-                                for ch in name.chars() {
-                                    let expr = crate::Expression::AccessIndex {
-                                        base: handle,
-                                        index: MEMBERS[..size as usize]
-                                            .iter()
-                                            .position(|&m| m == ch)
-                                            .ok_or(Error::BadAccessor(name))?
-                                            as u32,
-                                    };
-                                    components.push(ctx.expressions.append(expr));
-                                }
-                                let size = match name.len() {
-                                    2 => crate::VectorSize::Bi,
-                                    3 => crate::VectorSize::Tri,
-                                    4 => crate::VectorSize::Quad,
-                                    _ => return Err(Error::BadAccessor(name)),
-                                };
-                                let inner = if let crate::TypeInner::Matrix { rows, .. } =
-                                    base_type.inner
-                                {
-                                    crate::TypeInner::Matrix {
-                                        columns: size,
-                                        rows,
-                                        kind,
-                                        width,
-                                    }
-                                } else {
-                                    crate::TypeInner::Vector { size, kind, width }
+                        } => match Composition::make(handle, columns, name, ctx.expressions)? {
+                            Composition::Multi(columns, components) => {
+                                let inner = crate::TypeInner::Matrix {
+                                    columns,
+                                    rows,
+                                    kind,
+                                    width,
                                 };
                                 crate::Expression::Compose {
                                     ty: ctx
@@ -574,19 +609,9 @@ impl Parser {
                                         .fetch_or_append(crate::Type { name: None, inner }),
                                     components,
                                 }
-                            } else {
-                                let ch = name.chars().next().unwrap();
-                                let index = MEMBERS[..size as usize]
-                                    .iter()
-                                    .position(|&m| m == ch)
-                                    .ok_or(Error::BadAccessor(name))?
-                                    as u32;
-                                crate::Expression::AccessIndex {
-                                    base: handle,
-                                    index,
-                                }
                             }
-                        }
+                            Composition::Single(expr) => expr,
+                        },
                         _ => return Err(Error::BadAccessor(name)),
                     };
                     handle = ctx.expressions.append(expression);
