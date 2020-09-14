@@ -248,9 +248,8 @@ impl Typifier {
                     }
                     ref other => panic!("Unexpected argument {:?}", other),
                 },
-                "normalize" | "fclamp" | "max" | "reflect" | "pow" | "clamp" | "mix" => {
-                    self.resolutions[arguments[0].index()].clone()
-                }
+                "atan2" | "cos" | "sin" | "normalize" | "max" | "reflect" | "pow" | "clamp"
+                | "fclamp" | "mix" => self.resolutions[arguments[0].index()].clone(),
                 _ => return Err(ResolveError::FunctionNotDefined { name: name.clone() }),
             },
             crate::Expression::Call {
