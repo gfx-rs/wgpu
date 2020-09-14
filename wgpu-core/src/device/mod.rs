@@ -3487,6 +3487,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
+    pub fn swap_chain_error<B: GfxBackend>(
+        &self,
+        id_in: Input<G, id::SwapChainId>,
+    ) -> id::SwapChainId {
+        B::hub(self)
+            .swap_chains
+            .register_error(id_in, &mut Token::root())
+    }
+
     pub fn device_poll<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
