@@ -37,6 +37,7 @@ impl Clone for Resolution {
     }
 }
 
+#[derive(Debug)]
 pub struct Typifier {
     resolutions: Vec<Resolution>,
 }

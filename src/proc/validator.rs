@@ -1,7 +1,12 @@
+use super::typifier::{ResolveContext, ResolveError, Typifier};
 use crate::arena::Handle;
 
 #[derive(Debug)]
-pub struct Validator {}
+pub struct Validator {
+    //Note: this is a bit tricky: some of the front-ends as well as backends
+    // already have to use the typifier, so the work here is redundant in a way.
+    typifier: Typifier,
+}
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum ValidationError {
@@ -9,6 +14,8 @@ pub enum ValidationError {
     InvalidTypeWidth(crate::ScalarKind, crate::Bytes),
     #[error("The type handle can not be resolved")]
     UnresolvedType(Handle<crate::Type>),
+    #[error("Expression type can't be resolved")]
+    Resolve(Handle<crate::Function>, ResolveError),
     #[error("There are instructions after `return`/`break`/`continue`")]
     InvalidControlFlowExitTail,
 }
@@ -16,11 +23,14 @@ pub enum ValidationError {
 impl Validator {
     /// Construct a new validator instance.
     pub fn new() -> Self {
-        Validator {}
+        Validator {
+            typifier: Typifier::new(),
+        }
     }
 
     /// Check the given module to be valid.
     pub fn validate(&mut self, module: &crate::Module) -> Result<(), ValidationError> {
+        // check the types
         for (handle, ty) in module.types.iter() {
             use crate::TypeInner as Ti;
             match ty.inner {
@@ -55,6 +65,23 @@ impl Validator {
                 }
                 Ti::Image { .. } => {}
                 Ti::Sampler { comparison: _ } => {}
+            }
+        }
+
+        // check the type resolution of expressions
+        for (fun_handle, fun) in module.functions.iter() {
+            let resolve_ctx = ResolveContext {
+                constants: &module.constants,
+                global_vars: &module.global_variables,
+                local_vars: &fun.local_variables,
+                functions: &module.functions,
+                parameter_types: &fun.parameter_types,
+            };
+            if let Err(e) = self
+                .typifier
+                .resolve_all(&fun.expressions, &module.types, &resolve_ctx)
+            {
+                return Err(ValidationError::Resolve(fun_handle, e));
             }
         }
 
