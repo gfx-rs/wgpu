@@ -191,19 +191,6 @@ pub enum CreateRenderPipelineError {
     },
 }
 
-impl CreateRenderPipelineError {
-    pub(crate) fn with_label<'a>(
-        self,
-        label: &Option<Cow<'a, str>>,
-    ) -> crate::LabeledContextError<CreateRenderPipelineError> {
-        crate::LabeledContextError {
-            source: self,
-            description: "Creating render pipeline",
-            label: label.as_ref().map(|inner| inner.to_string()),
-        }
-    }
-}
-
 bitflags::bitflags! {
     #[repr(transparent)]
     pub struct PipelineFlags: u32 {
