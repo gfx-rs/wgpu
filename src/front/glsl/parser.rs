@@ -5,10 +5,10 @@ pomelo! {
     //%verbose;
     %include {
         use super::super::{error::ErrorKind, token::*, ast::*};
-        use crate::{Arena, BinaryOperator, Binding, Block, BuiltIn, Constant, ConstantInner, Expression,
+        use crate::{Arena, BinaryOperator, Binding, Block, Constant, ConstantInner, Expression,
             Function, GlobalVariable, Handle, LocalVariable, ScalarKind,
-            ShaderStage, Statement, StorageAccess, StorageClass, Type, TypeInner,
-            VectorSize, Interpolation};
+            Statement, StorageAccess, StorageClass, Type, TypeInner,
+            Interpolation};
     }
     %token #[derive(Debug)] pub enum Token {};
     %parser pub struct Parser<'a> {};
@@ -132,57 +132,17 @@ pomelo! {
 
     // expression
     variable_identifier ::= Identifier(v) {
-        let gl_position = if let ShaderStage::Vertex | ShaderStage::Fragment { .. } = extra.shader_stage {
-            if v.1.as_str() == "gl_Position" {
-                let h = extra.global_variables.fetch_or_append(
-                    GlobalVariable {
-                        name: Some(v.1.clone()),
-                        class: match extra.shader_stage {
-                            ShaderStage::Vertex => StorageClass::Output,
-                            ShaderStage::Fragment { .. } => StorageClass::Input,
-                            _ => StorageClass::Input,
-                        },
-                        binding: Some(Binding::BuiltIn(BuiltIn::Position)),
-                        ty: extra.types.fetch_or_append(Type {
-                            name: None,
-                            inner: TypeInner::Vector {
-                                size: VectorSize::Quad,
-                                kind: ScalarKind::Float,
-                                width: 4,
-                            },
-                        }),
-                        interpolation: None,
-                        storage_access: StorageAccess::empty(),
-                    },
-                );
-                extra.lookup_global_variables.insert(v.1.clone(), h);
-                let expression = extra.context.expressions.append(
-                    Expression::GlobalVariable(h)
-                );
-                extra.context.lookup_global_var_exps.insert(v.1.clone(), expression);
-
-                Some(expression)
-            } else {
-                None
+        let var = extra.lookup_variable(&v.1)?;
+        match var {
+            Some(expression) => {
+                ExpressionRule::from_expression(
+                    expression
+                )
+            },
+            None => {
+                return Err(ErrorKind::UnknownVariable(v.0, v.1));
             }
-        } else {
-            None
-        };
-
-        let expression =
-        if let Some(gl_position) = gl_position {
-            gl_position
-        }  else if let Some(local_var) = extra.context.lookup_local_var(&v.1) {
-            local_var
-        } else if let Some(global_var) = extra.context.lookup_global_var_exps.get(&v.1) {
-            *global_var
-        } else {
-            return Err(ErrorKind::UnknownVariable(v.0, v.1));
-        };
-
-        ExpressionRule::from_expression(
-            expression
-        )
+        }
     }
 
     primary_expression ::= variable_identifier;
