@@ -1,6 +1,5 @@
-use super::BorrowType;
 use crate::{
-    proc::{Interface, Visitor},
+    proc::{Interface, ResolveContext, ResolveError, Typifier, Visitor},
     Arena, ArraySize, BinaryOperator, BuiltIn, Constant, ConstantInner, DerivativeAxis, Expression,
     FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageClass, Interpolation,
     IntrinsicFunction, LocalVariable, MemberOrigin, Module, ScalarKind, ShaderStage, Statement,
@@ -16,6 +15,7 @@ use std::{
 pub enum Error {
     FormatError(FmtError),
     IoError(IoError),
+    Type(ResolveError),
     Custom(String),
 }
 
@@ -31,11 +31,18 @@ impl From<IoError> for Error {
     }
 }
 
+impl From<ResolveError> for Error {
+    fn from(err: ResolveError) -> Self {
+        Error::Type(err)
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::FormatError(err) => write!(f, "Formatting error {}", err),
             Error::IoError(err) => write!(f, "Io error: {}", err),
+            Error::Type(err) => write!(f, "Type error: {:?}", err),
             Error::Custom(err) => write!(f, "{}", err),
         }
     }
@@ -428,15 +435,27 @@ pub fn write<'a>(
     }
 
     writeln!(out)?;
+    let mut typifier = Typifier::new();
 
     for (handle, name) in functions.iter() {
         let func = &module.functions[*handle];
+        typifier.resolve_all(
+            &func.expressions,
+            &module.types,
+            &ResolveContext {
+                constants: &module.constants,
+                global_vars: &module.global_variables,
+                local_vars: &func.local_variables,
+                functions: &module.functions,
+                parameter_types: &func.parameter_types,
+            },
+        )?;
 
         let args: FastHashMap<_, _> = func
             .parameter_types
             .iter()
             .enumerate()
-            .map(|(pos, ty)| (pos as u32, (namer(None), *ty)))
+            .map(|(pos, _ty)| (pos as u32, namer(None)))
             .collect();
 
         writeln!(
@@ -448,8 +467,10 @@ pub fn write<'a>(
                 .as_deref()
                 .unwrap_or("void"),
             name,
-            args.values()
-                .map::<Result<_, Error>, _>(|(name, ty)| {
+            func.parameter_types
+                .iter()
+                .zip(args.values())
+                .map::<Result<_, Error>, _>(|(ty, name)| {
                     let ty = write_type(*ty, &module.types, &structs, None, features)?;
 
                     Ok(format!("{} {}", ty, name))
@@ -481,19 +502,19 @@ pub fn write<'a>(
 
         writeln!(out)?;
 
-        let mut builder = StatementBuilder {
+        let builder = StatementBuilder {
             functions: &functions,
             globals: &globals_lookup,
             locals_lookup: &locals,
             structs: &structs,
             args: &args,
             expressions: &func.expressions,
-            locals: &func.local_variables,
             features,
+            typifier: &typifier,
         };
 
         for sta in func.body.iter() {
-            writeln!(out, "{}", write_statement(sta, module, &mut builder, 1)?)?;
+            writeln!(out, "{}", write_statement(sta, module, &builder, 1)?)?;
         }
 
         writeln!(out, "}}")?;
@@ -503,20 +524,20 @@ pub fn write<'a>(
 }
 
 struct StatementBuilder<'a> {
-    pub functions: &'a FastHashMap<Handle<Function>, String>,
-    pub globals: &'a FastHashMap<Handle<GlobalVariable>, String>,
-    pub locals_lookup: &'a FastHashMap<Handle<LocalVariable>, String>,
-    pub structs: &'a FastHashMap<Handle<Type>, String>,
-    pub args: &'a FastHashMap<u32, (String, Handle<Type>)>,
-    pub expressions: &'a Arena<Expression>,
-    pub locals: &'a Arena<LocalVariable>,
-    pub features: SupportedFeatures,
+    functions: &'a FastHashMap<Handle<Function>, String>,
+    globals: &'a FastHashMap<Handle<GlobalVariable>, String>,
+    locals_lookup: &'a FastHashMap<Handle<LocalVariable>, String>,
+    structs: &'a FastHashMap<Handle<Type>, String>,
+    args: &'a FastHashMap<u32, String>,
+    expressions: &'a Arena<Expression>,
+    features: SupportedFeatures,
+    typifier: &'a Typifier,
 }
 
 fn write_statement<'a, 'b>(
     sta: &Statement,
     module: &'a Module,
-    builder: &'b mut StatementBuilder<'a>,
+    builder: &'b StatementBuilder<'a>,
     indent: usize,
 ) -> Result<String, Error> {
     Ok(match sta {
@@ -537,7 +558,7 @@ fn write_statement<'a, 'b>(
                 &mut out,
                 "{}if({}) {{",
                 "\t".repeat(indent),
-                write_expression(&builder.expressions[*condition], module, builder)?.0
+                write_expression(&builder.expressions[*condition], module, builder)?
             )?;
 
             for sta in accept {
@@ -574,7 +595,7 @@ fn write_statement<'a, 'b>(
                 &mut out,
                 "{}switch({}) {{",
                 "\t".repeat(indent),
-                write_expression(&builder.expressions[*selector], module, builder)?.0
+                write_expression(&builder.expressions[*selector], module, builder)?
             )?;
 
             for (label, (block, fallthrough)) in cases {
@@ -634,7 +655,7 @@ fn write_statement<'a, 'b>(
             if let Some(expr) = value {
                 format!(
                     "return {};",
-                    write_expression(&builder.expressions[*expr], module, builder)?.0
+                    write_expression(&builder.expressions[*expr], module, builder)?
                 )
             } else {
                 String::from("return;")
@@ -644,8 +665,8 @@ fn write_statement<'a, 'b>(
         Statement::Store { pointer, value } => format!(
             "{}{} = {};",
             "\t".repeat(indent),
-            write_expression(&builder.expressions[*pointer], module, builder)?.0,
-            write_expression(&builder.expressions[*value], module, builder)?.0
+            write_expression(&builder.expressions[*pointer], module, builder)?,
+            write_expression(&builder.expressions[*value], module, builder)?
         ),
     })
 }
@@ -653,65 +674,26 @@ fn write_statement<'a, 'b>(
 fn write_expression<'a, 'b>(
     expr: &Expression,
     module: &'a Module,
-    builder: &'b mut StatementBuilder<'a>,
-) -> Result<(Cow<'a, str>, BorrowType<'a>), Error> {
+    builder: &'b StatementBuilder<'a>,
+) -> Result<Cow<'a, str>, Error> {
     Ok(match *expr {
         Expression::Access { base, index } => {
-            let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
-
-            let inner = match *ty.borrow() {
-                TypeInner::Vector { kind, width, .. } => {
-                    BorrowType::Owned(TypeInner::Scalar { kind, width })
-                }
-                TypeInner::Matrix {
-                    kind,
-                    width,
-                    columns,
-                    ..
-                } => BorrowType::Owned(TypeInner::Vector {
-                    kind,
-                    width,
-                    size: columns,
-                }),
-                TypeInner::Array { base, .. } => module.borrow_type(base),
-                _ => return Err(Error::Custom(format!("Cannot dynamically index {:?}", ty))),
-            };
-
-            (
-                Cow::Owned(format!(
-                    "{}[{}]",
-                    base_expr,
-                    write_expression(&builder.expressions[index], module, builder)?.0
-                )),
-                inner,
-            )
+            let base_expr = write_expression(&builder.expressions[base], module, builder)?;
+            Cow::Owned(format!(
+                "{}[{}]",
+                base_expr,
+                write_expression(&builder.expressions[index], module, builder)?
+            ))
         }
         Expression::AccessIndex { base, index } => {
-            let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
+            let base_expr = write_expression(&builder.expressions[base], module, builder)?;
 
-            match *ty.borrow() {
-                TypeInner::Vector { kind, width, .. } => (
-                    Cow::Owned(format!("{}[{}]", base_expr, index)),
-                    BorrowType::Owned(TypeInner::Scalar { kind, width }),
-                ),
-                TypeInner::Matrix {
-                    kind,
-                    width,
-                    columns,
-                    ..
-                } => (
-                    Cow::Owned(format!("{}[{}]", base_expr, index)),
-                    BorrowType::Owned(TypeInner::Vector {
-                        kind,
-                        width,
-                        size: columns,
-                    }),
-                ),
-                TypeInner::Array { base, .. } => (
-                    Cow::Owned(format!("{}[{}]", base_expr, index)),
-                    module.borrow_type(base),
-                ),
-                TypeInner::Struct { ref members } => (
+            match *builder.typifier.get(base, &module.types) {
+                TypeInner::Vector { .. } => Cow::Owned(format!("{}[{}]", base_expr, index)),
+                TypeInner::Matrix { .. } | TypeInner::Array { .. } => {
+                    Cow::Owned(format!("{}[{}]", base_expr, index))
+                }
+                TypeInner::Struct { ref members } => {
                     if let MemberOrigin::BuiltIn(builtin) = members[index as usize].origin {
                         Cow::Borrowed(builtin_to_glsl(builtin))
                     } else {
@@ -724,21 +706,17 @@ fn write_expression<'a, 'b>(
                                 .filter(|s| is_valid_ident(s))
                                 .unwrap_or(&format!("_{}", index))
                         ))
-                    },
-                    module.borrow_type(members[index as usize].ty),
-                ),
-                _ => return Err(Error::Custom(format!("Cannot index {:?}", ty))),
+                    }
+                }
+                ref other => return Err(Error::Custom(format!("Cannot index {:?}", other))),
             }
         }
-        Expression::Constant(constant) => (
-            Cow::Owned(write_constant(
-                &module.constants[constant],
-                module,
-                builder,
-                builder.features,
-            )?),
-            module.borrow_type(module.constants[constant].ty),
-        ),
+        Expression::Constant(constant) => Cow::Owned(write_constant(
+            &module.constants[constant],
+            module,
+            builder,
+            builder.features,
+        )?),
         Expression::Compose { ty, ref components } => {
             let constructor = match module.types[ty].inner {
                 TypeInner::Vector { size, kind, width } => format!(
@@ -770,37 +748,25 @@ fn write_expression<'a, 'b>(
                 }
             };
 
-            (
-                Cow::Owned(format!(
-                    "{}({})",
-                    constructor,
-                    components
-                        .iter()
-                        .map::<Result<_, Error>, _>(|arg| Ok(write_expression(
-                            &builder.expressions[*arg],
-                            module,
-                            builder
-                        )?
-                        .0))
-                        .collect::<Result<Vec<_>, _>>()?
-                        .join(","),
-                )),
-                module.borrow_type(ty),
-            )
+            Cow::Owned(format!(
+                "{}({})",
+                constructor,
+                components
+                    .iter()
+                    .map::<Result<_, Error>, _>(|arg| Ok(write_expression(
+                        &builder.expressions[*arg],
+                        module,
+                        builder
+                    )?))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .join(","),
+            ))
         }
-        Expression::FunctionParameter(pos) => {
-            let (arg, ty) = builder.args.get(&pos).unwrap();
-
-            (Cow::Borrowed(arg), module.borrow_type(*ty))
+        Expression::FunctionParameter(pos) => Cow::Borrowed(builder.args.get(&pos).unwrap()),
+        Expression::GlobalVariable(handle) => Cow::Borrowed(builder.globals.get(&handle).unwrap()),
+        Expression::LocalVariable(handle) => {
+            Cow::Borrowed(builder.locals_lookup.get(&handle).unwrap())
         }
-        Expression::GlobalVariable(handle) => (
-            Cow::Borrowed(builder.globals.get(&handle).unwrap()),
-            module.borrow_type(module.global_variables[handle].ty),
-        ),
-        Expression::LocalVariable(handle) => (
-            Cow::Borrowed(builder.locals_lookup.get(&handle).unwrap()),
-            module.borrow_type(builder.locals[handle].ty),
-        ),
         Expression::Load { pointer } => {
             write_expression(&builder.expressions[pointer], module, builder)?
         }
@@ -811,102 +777,68 @@ fn write_expression<'a, 'b>(
             level,
             depth_ref,
         } => {
-            let (image_expr, image_ty) =
-                write_expression(&builder.expressions[image], module, builder)?;
-            let (_, sampler_ty) = write_expression(&builder.expressions[sampler], module, builder)?;
-            let (coordinate_expr, coordinate_ty) =
+            let image_expr = write_expression(&builder.expressions[image], module, builder)?;
+            write_expression(&builder.expressions[sampler], module, builder)?;
+            let coordinate_expr =
                 write_expression(&builder.expressions[coordinate], module, builder)?;
 
-            let kind = match *image_ty.borrow() {
-                TypeInner::Image { kind, .. } => kind,
-                _ => return Err(Error::Custom(format!("Cannot sample {:?}", image_ty))),
-            };
-
-            let shadow = match *sampler_ty.borrow() {
-                TypeInner::Sampler { comparison } => comparison,
-                _ => {
-                    return Err(Error::Custom(format!(
-                        "Cannot have a sampler of {:?}",
-                        sampler_ty
-                    )))
-                }
-            };
-            let size = match *coordinate_ty.borrow() {
+            let size = match *builder.typifier.get(coordinate, &module.types) {
                 TypeInner::Vector { size, .. } => size,
-                _ => {
+                ref other => {
                     return Err(Error::Custom(format!(
                         "Cannot sample with coordinates of type {:?}",
-                        coordinate_ty
+                        other
                     )))
                 }
             };
 
-            let coordinate = if let Some(depth_ref) = depth_ref {
+            let coordinate_expr = if let Some(depth_ref) = depth_ref {
                 Cow::Owned(format!(
                     "vec{}({},{})",
                     size as u8 + 1,
                     coordinate_expr,
-                    write_expression(&builder.expressions[depth_ref], module, builder)?.0
+                    write_expression(&builder.expressions[depth_ref], module, builder)?
                 ))
             } else {
                 coordinate_expr
             };
 
             //TODO: handle MS
-            let expr = match level {
-                crate::SampleLevel::Auto => format!("texture({},{})", image_expr, coordinate),
+            Cow::Owned(match level {
+                crate::SampleLevel::Auto => format!("texture({},{})", image_expr, coordinate_expr),
                 crate::SampleLevel::Exact(expr) => {
-                    let (level_expr, _) =
-                        write_expression(&builder.expressions[expr], module, builder)?;
-                    format!("textureLod({}, {}, {})", image_expr, coordinate, level_expr)
+                    let level_expr = write_expression(&builder.expressions[expr], module, builder)?;
+                    format!(
+                        "textureLod({}, {}, {})",
+                        image_expr, coordinate_expr, level_expr
+                    )
                 }
                 crate::SampleLevel::Bias(bias) => {
-                    let (bias_expr, _) =
-                        write_expression(&builder.expressions[bias], module, builder)?;
-                    format!("texture({},{},{})", image_expr, coordinate, bias_expr)
+                    let bias_expr = write_expression(&builder.expressions[bias], module, builder)?;
+                    format!("texture({},{},{})", image_expr, coordinate_expr, bias_expr)
                 }
-            };
-
-            let width = 4;
-            let ty = if shadow {
-                BorrowType::Owned(TypeInner::Scalar { kind, width })
-            } else {
-                BorrowType::Owned(TypeInner::Vector { kind, width, size })
-            };
-
-            (Cow::Owned(expr), ty)
+            })
         }
         Expression::ImageLoad {
             image,
             coordinate,
             index,
         } => {
-            let (image_expr, image_ty) =
-                write_expression(&builder.expressions[image], module, builder)?;
-            let (coordinate_expr, coordinate_ty) =
+            let image_expr = write_expression(&builder.expressions[image], module, builder)?;
+            let coordinate_expr =
                 write_expression(&builder.expressions[coordinate], module, builder)?;
 
-            let (kind, dim, arrayed, class) = match *image_ty.borrow() {
+            let (kind, dim, arrayed, class) = match *builder.typifier.get(image, &module.types) {
                 TypeInner::Image {
                     kind,
                     dim,
                     arrayed,
                     class,
                 } => (kind, dim, arrayed, class),
-                _ => return Err(Error::Custom(format!("Cannot load {:?}", image_ty))),
+                ref other => return Err(Error::Custom(format!("Cannot load {:?}", other))),
             };
 
-            let size = match *coordinate_ty.borrow() {
-                TypeInner::Vector { size, .. } => size,
-                _ => {
-                    return Err(Error::Custom(format!(
-                        "Cannot sample with coordinates of type {:?}",
-                        coordinate_ty
-                    )))
-                }
-            };
-
-            let expr = match class {
+            Cow::Owned(match class {
                 ImageClass::Sampled | ImageClass::Multisampled => {
                     let ms = match class {
                         crate::ImageClass::Multisampled => true,
@@ -926,7 +858,7 @@ fn write_expression<'a, 'b>(
                     if !ms {
                         format!("texelFetch({},{})", sampler_constructor, coordinate_expr)
                     } else {
-                        let (index_expr, _) =
+                        let index_expr =
                             write_expression(&builder.expressions[index], module, builder)?;
 
                         format!(
@@ -937,52 +869,41 @@ fn write_expression<'a, 'b>(
                 }
                 ImageClass::Storage(_) => format!("imageLoad({},{})", image_expr, coordinate_expr),
                 ImageClass::Depth => todo!(),
-            };
-
-            let width = 4;
-            (
-                Cow::Owned(expr),
-                BorrowType::Owned(TypeInner::Vector { kind, width, size }),
-            )
+            })
         }
         Expression::Unary { op, expr } => {
-            let (expr, ty) = write_expression(&builder.expressions[expr], module, builder)?;
+            let base_expr = write_expression(&builder.expressions[expr], module, builder)?;
 
-            (
-                Cow::Owned(format!(
-                    "({} {})",
-                    match op {
-                        UnaryOperator::Negate => "-",
-                        UnaryOperator::Not => match *ty.borrow() {
-                            TypeInner::Scalar {
-                                kind: ScalarKind::Sint,
-                                ..
-                            } => "~",
-                            TypeInner::Scalar {
-                                kind: ScalarKind::Uint,
-                                ..
-                            } => "~",
-                            TypeInner::Scalar {
-                                kind: ScalarKind::Bool,
-                                ..
-                            } => "!",
-                            _ =>
-                                return Err(Error::Custom(format!(
-                                    "Cannot apply not to type {:?}",
-                                    ty
-                                ))),
-                        },
+            Cow::Owned(format!(
+                "({} {})",
+                match op {
+                    UnaryOperator::Negate => "-",
+                    UnaryOperator::Not => match *builder.typifier.get(expr, &module.types) {
+                        TypeInner::Scalar {
+                            kind: ScalarKind::Sint,
+                            ..
+                        } => "~",
+                        TypeInner::Scalar {
+                            kind: ScalarKind::Uint,
+                            ..
+                        } => "~",
+                        TypeInner::Scalar {
+                            kind: ScalarKind::Bool,
+                            ..
+                        } => "!",
+                        ref other =>
+                            return Err(Error::Custom(format!(
+                                "Cannot apply not to type {:?}",
+                                other
+                            ))),
                     },
-                    expr
-                )),
-                ty,
-            )
+                },
+                base_expr
+            ))
         }
         Expression::Binary { op, left, right } => {
-            let (left_expr, left_ty) =
-                write_expression(&builder.expressions[left], module, builder)?;
-            let (right_expr, right_ty) =
-                write_expression(&builder.expressions[right], module, builder)?;
+            let left_expr = write_expression(&builder.expressions[left], module, builder)?;
+            let right_expr = write_expression(&builder.expressions[right], module, builder)?;
 
             let op_str = match op {
                 BinaryOperator::Add => "+",
@@ -1006,149 +927,57 @@ fn write_expression<'a, 'b>(
                 BinaryOperator::ShiftRightArithmetic => ">>",
             };
 
-            let ty = match op {
-                BinaryOperator::Add
-                | BinaryOperator::Subtract
-                | BinaryOperator::Multiply
-                | BinaryOperator::Divide
-                | BinaryOperator::Modulo
-                | BinaryOperator::And
-                | BinaryOperator::ExclusiveOr
-                | BinaryOperator::InclusiveOr
-                | BinaryOperator::LogicalAnd
-                | BinaryOperator::LogicalOr
-                | BinaryOperator::ShiftLeftLogical
-                | BinaryOperator::ShiftRightLogical
-                | BinaryOperator::ShiftRightArithmetic => {
-                    match (left_ty.borrow(), right_ty.borrow()) {
-                        (TypeInner::Scalar { .. }, TypeInner::Scalar { .. }) => left_ty,
-                        (TypeInner::Scalar { .. }, TypeInner::Vector { .. }) => right_ty,
-                        (TypeInner::Scalar { .. }, TypeInner::Matrix { .. }) => right_ty,
-                        (TypeInner::Vector { .. }, TypeInner::Scalar { .. }) => left_ty,
-                        (TypeInner::Vector { .. }, TypeInner::Vector { .. }) => left_ty,
-                        (TypeInner::Vector { .. }, TypeInner::Matrix { .. }) => left_ty,
-                        (TypeInner::Matrix { .. }, TypeInner::Scalar { .. }) => left_ty,
-                        (TypeInner::Matrix { .. }, TypeInner::Vector { .. }) => right_ty,
-                        (TypeInner::Matrix { .. }, TypeInner::Matrix { .. }) => left_ty,
-                        _ => {
-                            return Err(Error::Custom(format!(
-                                "Cannot apply '{}' to {} and {}",
-                                op_str, left_expr, right_expr
-                            )))
-                        }
-                    }
-                }
-                BinaryOperator::Equal
-                | BinaryOperator::NotEqual
-                | BinaryOperator::Less
-                | BinaryOperator::LessEqual
-                | BinaryOperator::Greater
-                | BinaryOperator::GreaterEqual => BorrowType::Owned(TypeInner::Scalar {
-                    kind: ScalarKind::Bool,
-                    width: 1,
-                }),
-            };
-
-            (
-                Cow::Owned(format!("({} {} {})", left_expr, op_str, right_expr)),
-                ty,
-            )
+            Cow::Owned(format!("({} {} {})", left_expr, op_str, right_expr))
         }
         Expression::Intrinsic { fun, argument } => {
-            let (expr, ty) = write_expression(&builder.expressions[argument], module, builder)?;
+            let expr = write_expression(&builder.expressions[argument], module, builder)?;
 
-            (
-                Cow::Owned(format!(
-                    "{:?}({})",
-                    match fun {
-                        IntrinsicFunction::IsFinite => "!isinf",
-                        IntrinsicFunction::IsInf => "isinf",
-                        IntrinsicFunction::IsNan => "isnan",
-                        IntrinsicFunction::IsNormal => "!isnan",
-                        IntrinsicFunction::All => "all",
-                        IntrinsicFunction::Any => "any",
-                    },
-                    expr
-                )),
-                ty,
-            )
+            Cow::Owned(format!(
+                "{:?}({})",
+                match fun {
+                    IntrinsicFunction::IsFinite => "!isinf",
+                    IntrinsicFunction::IsInf => "isinf",
+                    IntrinsicFunction::IsNan => "isnan",
+                    IntrinsicFunction::IsNormal => "!isnan",
+                    IntrinsicFunction::All => "all",
+                    IntrinsicFunction::Any => "any",
+                },
+                expr
+            ))
         }
         Expression::Transpose(matrix) => {
-            let (matrix_expr, matrix_ty) =
-                write_expression(&builder.expressions[matrix], module, builder)?;
-
-            let ty = match *matrix_ty.borrow() {
-                TypeInner::Matrix {
-                    columns,
-                    rows,
-                    kind,
-                    width,
-                } => BorrowType::Owned(TypeInner::Matrix {
-                    columns: rows,
-                    rows: columns,
-                    kind,
-                    width,
-                }),
-                _ => {
-                    return Err(Error::Custom(format!(
-                        "Cannot apply transpose to {}",
-                        matrix_expr
-                    )))
-                }
-            };
-
-            (Cow::Owned(format!("transpose({})", matrix_expr)), ty)
+            let matrix_expr = write_expression(&builder.expressions[matrix], module, builder)?;
+            Cow::Owned(format!("transpose({})", matrix_expr))
         }
         Expression::DotProduct(left, right) => {
-            let (left_expr, left_ty) =
-                write_expression(&builder.expressions[left], module, builder)?;
-            let (right_expr, _) = write_expression(&builder.expressions[right], module, builder)?;
-
-            let ty = match *left_ty.borrow() {
-                TypeInner::Vector { kind, width, .. } => {
-                    BorrowType::Owned(TypeInner::Scalar { kind, width })
-                }
-                _ => {
-                    return Err(Error::Custom(format!(
-                        "Cannot apply dot product to {}",
-                        left_expr
-                    )))
-                }
-            };
-
-            (Cow::Owned(format!("dot({},{})", left_expr, right_expr)), ty)
+            let left_expr = write_expression(&builder.expressions[left], module, builder)?;
+            let right_expr = write_expression(&builder.expressions[right], module, builder)?;
+            Cow::Owned(format!("dot({},{})", left_expr, right_expr))
         }
         Expression::CrossProduct(left, right) => {
-            let (left_expr, left_ty) =
-                write_expression(&builder.expressions[left], module, builder)?;
-            let (right_expr, _) = write_expression(&builder.expressions[right], module, builder)?;
-
-            (
-                Cow::Owned(format!("cross({},{})", left_expr, right_expr)),
-                left_ty,
-            )
+            let left_expr = write_expression(&builder.expressions[left], module, builder)?;
+            let right_expr = write_expression(&builder.expressions[right], module, builder)?;
+            Cow::Owned(format!("cross({},{})", left_expr, right_expr))
         }
         Expression::As {
             expr,
             kind,
             convert,
         } => {
-            let (value_expr, value_ty) =
-                write_expression(&builder.expressions[expr], module, builder)?;
+            let value_expr = write_expression(&builder.expressions[expr], module, builder)?;
 
-            let (source_kind, ty_expr, out_ty) = match *value_ty.borrow() {
+            let (source_kind, ty_expr) = match *builder.typifier.get(expr, &module.types) {
                 TypeInner::Scalar { width, kind } => (
                     kind,
                     Cow::Borrowed(map_scalar(kind, width, builder.features)?.full),
-                    BorrowType::Owned(TypeInner::Scalar { kind, width }),
                 ),
                 TypeInner::Vector { width, kind, size } => (
                     kind,
                     Cow::Owned(format!(
-                        "{}vec",
-                        map_scalar(kind, width, builder.features)?.prefix
+                        "{}vec{}",
+                        map_scalar(kind, width, builder.features)?.prefix,
+                        size as u32,
                     )),
-                    BorrowType::Owned(TypeInner::Vector { kind, width, size }),
                 ),
                 _ => return Err(Error::Custom(format!("Cannot convert {}", value_expr))),
             };
@@ -1170,60 +999,48 @@ fn write_expression<'a, 'b>(
                 })
             };
 
-            (Cow::Owned(format!("{}({})", op, value_expr)), out_ty)
+            Cow::Owned(format!("{}({})", op, value_expr))
         }
         Expression::Derivative { axis, expr } => {
-            let (expr, ty) = write_expression(&builder.expressions[expr], module, builder)?;
+            let expr = write_expression(&builder.expressions[expr], module, builder)?;
 
-            (
-                Cow::Owned(format!(
-                    "{}({})",
-                    match axis {
-                        DerivativeAxis::X => "dFdx",
-                        DerivativeAxis::Y => "dFdy",
-                        DerivativeAxis::Width => "fwidth",
-                    },
-                    expr
-                )),
-                ty,
-            )
+            Cow::Owned(format!(
+                "{}({})",
+                match axis {
+                    DerivativeAxis::X => "dFdx",
+                    DerivativeAxis::Y => "dFdy",
+                    DerivativeAxis::Width => "fwidth",
+                },
+                expr
+            ))
         }
         Expression::Call {
             ref origin,
             ref arguments,
         } => {
-            let ty = match *origin {
-                FunctionOrigin::Local(function) => module.functions[function]
-                    .return_type
-                    .map(|ty| module.borrow_type(ty))
-                    .unwrap_or(BorrowType::Owned(
-                        TypeInner::Sampler { comparison: false }, /*Dummy type*/
-                    )),
+            match *origin {
+                FunctionOrigin::Local(_) => {}
                 FunctionOrigin::External(_) => {
-                    write_expression(&builder.expressions[arguments[0]], module, builder)?.1
+                    write_expression(&builder.expressions[arguments[0]], module, builder)?;
                 }
             };
 
-            (
-                Cow::Owned(format!(
-                    "{}({})",
-                    match *origin {
-                        FunctionOrigin::External(ref name) => name,
-                        FunctionOrigin::Local(handle) => builder.functions.get(&handle).unwrap(),
-                    },
-                    arguments
-                        .iter()
-                        .map::<Result<_, Error>, _>(|arg| Ok(write_expression(
-                            &builder.expressions[*arg],
-                            module,
-                            builder
-                        )?
-                        .0))
-                        .collect::<Result<Vec<_>, _>>()?
-                        .join(","),
-                )),
-                ty,
-            )
+            Cow::Owned(format!(
+                "{}({})",
+                match *origin {
+                    FunctionOrigin::External(ref name) => name,
+                    FunctionOrigin::Local(handle) => builder.functions.get(&handle).unwrap(),
+                },
+                arguments
+                    .iter()
+                    .map(|arg| Ok(write_expression(
+                        &builder.expressions[*arg],
+                        module,
+                        builder
+                    )?))
+                    .collect::<Result<Vec<_>, Error>>()?
+                    .join(","),
+            ))
         }
     })
 }
