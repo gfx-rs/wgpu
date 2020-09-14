@@ -247,7 +247,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .acquired_view_id
             .take()
             .ok_or(SwapChainError::AlreadyAcquired)?;
-        let (view, _) = hub.texture_views.unregister(view_id.value.0, &mut token);
+        let (view_maybe, _) = hub.texture_views.unregister(view_id.value.0, &mut token);
+        let view = view_maybe.ok_or(SwapChainError::Invalid)?;
         let image = match view.inner {
             resource::TextureViewInner::Native { .. } => unreachable!(),
             resource::TextureViewInner::SwapChain { image, .. } => image,

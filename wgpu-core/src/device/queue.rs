@@ -616,8 +616,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // finally, return the command buffers to the allocator
             for &cmb_id in command_buffer_ids {
-                let (cmd_buf, _) = hub.command_buffers.unregister(cmb_id, &mut token);
-                device.cmd_allocator.after_submit(cmd_buf, submit_index);
+                if let (Some(cmd_buf), _) = hub.command_buffers.unregister(cmb_id, &mut token) {
+                    device.cmd_allocator.after_submit(cmd_buf, submit_index);
+                }
             }
 
             callbacks
