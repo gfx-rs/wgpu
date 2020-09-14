@@ -1,160 +1,415 @@
-use super::lex::Lexer;
-use super::parser::Token;
+use super::{lex::Lexer, parser::Token::*, token::TokenMetadata};
 
 #[test]
 fn glsl_lex_simple() {
     let source = "void main() {\n}";
-    let lex = Lexer::new(source);
-    let tokens: Vec<Token> = lex.collect();
-    assert_eq!(tokens.len(), 6);
+    let mut lex = Lexer::new(source);
 
-    let mut iter = tokens.iter();
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Void(TokenMetadata { line: 0, chars: 0..4 })"
+        lex.next().unwrap(),
+        Void(TokenMetadata {
+            line: 0,
+            chars: 0..4
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 5..9 }, \"main\"))"
+        lex.next().unwrap(),
+        Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 5..9
+            },
+            "main".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "LeftParen(TokenMetadata { line: 0, chars: 9..10 })"
+        lex.next().unwrap(),
+        LeftParen(TokenMetadata {
+            line: 0,
+            chars: 9..10
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "RightParen(TokenMetadata { line: 0, chars: 10..11 })"
+        lex.next().unwrap(),
+        RightParen(TokenMetadata {
+            line: 0,
+            chars: 10..11
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "LeftBrace(TokenMetadata { line: 0, chars: 12..13 })"
+        lex.next().unwrap(),
+        LeftBrace(TokenMetadata {
+            line: 0,
+            chars: 12..13
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "RightBrace(TokenMetadata { line: 1, chars: 0..1 })"
+        lex.next().unwrap(),
+        RightBrace(TokenMetadata {
+            line: 1,
+            chars: 0..1
+        })
     );
+    assert_eq!(lex.next(), None);
 }
 
 #[test]
 fn glsl_lex_line_comment() {
     let source = "void main // myfunction\n//()\n{}";
-    let lex = Lexer::new(source);
-    let tokens: Vec<Token> = lex.collect();
-    assert_eq!(tokens.len(), 4);
-
-    let mut iter = tokens.iter();
+    let mut lex = Lexer::new(source);
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Void(TokenMetadata { line: 0, chars: 0..4 })"
+        lex.next().unwrap(),
+        Void(TokenMetadata {
+            line: 0,
+            chars: 0..4
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 5..9 }, \"main\"))"
+        lex.next().unwrap(),
+        Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 5..9
+            },
+            "main".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "LeftBrace(TokenMetadata { line: 2, chars: 0..1 })"
+        lex.next().unwrap(),
+        LeftBrace(TokenMetadata {
+            line: 2,
+            chars: 0..1
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "RightBrace(TokenMetadata { line: 2, chars: 1..2 })"
+        lex.next().unwrap(),
+        RightBrace(TokenMetadata {
+            line: 2,
+            chars: 1..2
+        })
     );
+    assert_eq!(lex.next(), None);
 }
 
 #[test]
 fn glsl_lex_multi_line_comment() {
     let source = "void main /* comment [] {}\n/**\n{}*/{}";
-    let lex = Lexer::new(source);
-    let tokens: Vec<Token> = lex.collect();
-    assert_eq!(tokens.len(), 4);
+    let mut lex = Lexer::new(source);
 
-    let mut iter = tokens.iter();
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Void(TokenMetadata { line: 0, chars: 0..4 })"
+        lex.next().unwrap(),
+        Void(TokenMetadata {
+            line: 0,
+            chars: 0..4
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 5..9 }, \"main\"))"
+        lex.next().unwrap(),
+        Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 5..9
+            },
+            "main".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "LeftBrace(TokenMetadata { line: 2, chars: 4..5 })"
+        lex.next().unwrap(),
+        LeftBrace(TokenMetadata {
+            line: 2,
+            chars: 4..5
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "RightBrace(TokenMetadata { line: 2, chars: 5..6 })"
+        lex.next().unwrap(),
+        RightBrace(TokenMetadata {
+            line: 2,
+            chars: 5..6
+        })
     );
+    assert_eq!(lex.next(), None);
 }
 
 #[test]
 fn glsl_lex_identifier() {
     let source = "id123_OK 92No æNoø No¾ No好";
-    let lex = Lexer::new(source);
-    let tokens: Vec<Token> = lex.collect();
-    assert_eq!(tokens.len(), 10);
+    let mut lex = Lexer::new(source);
 
-    let mut iter = tokens.iter();
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 0..8 }, \"id123_OK\"))"
+        lex.next().unwrap(),
+        Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 0..8
+            },
+            "id123_OK".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "IntConstant((TokenMetadata { line: 0, chars: 9..11 }, 92))"
+        lex.next().unwrap(),
+        IntConstant((
+            TokenMetadata {
+                line: 0,
+                chars: 9..11
+            },
+            92
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 11..13 }, \"No\"))"
+        lex.next().unwrap(),
+        Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 11..13
+            },
+            "No".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Unknown((TokenMetadata { line: 0, chars: 14..15 }, \'æ\'))"
+        lex.next().unwrap(),
+        Unknown((
+            TokenMetadata {
+                line: 0,
+                chars: 14..15
+            },
+            'æ'
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 15..17 }, \"No\"))"
+        lex.next().unwrap(),
+        Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 15..17
+            },
+            "No".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Unknown((TokenMetadata { line: 0, chars: 17..18 }, \'ø\'))"
+        lex.next().unwrap(),
+        Unknown((
+            TokenMetadata {
+                line: 0,
+                chars: 17..18
+            },
+            'ø'
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 19..21 }, \"No\"))"
+        lex.next().unwrap(),
+        Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 19..21
+            },
+            "No".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Unknown((TokenMetadata { line: 0, chars: 21..22 }, \'¾\'))"
+        lex.next().unwrap(),
+        Unknown((
+            TokenMetadata {
+                line: 0,
+                chars: 21..22
+            },
+            '¾'
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 23..25 }, \"No\"))"
+        lex.next().unwrap(),
+        Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 23..25
+            },
+            "No".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Unknown((TokenMetadata { line: 0, chars: 25..26 }, \'好\'))"
+        lex.next().unwrap(),
+        Unknown((
+            TokenMetadata {
+                line: 0,
+                chars: 25..26
+            },
+            '好'
+        ))
     );
+    assert_eq!(lex.next(), None);
 }
 
 #[test]
 fn glsl_lex_version() {
     let source = "#version 890 core";
-    let lex = Lexer::new(source);
-    let tokens: Vec<Token> = lex.collect();
-    assert_eq!(tokens.len(), 3);
+    let mut lex = Lexer::new(source);
 
-    let mut iter = tokens.iter();
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Version(TokenMetadata { line: 0, chars: 0..8 })"
+        lex.next().unwrap(),
+        Version(TokenMetadata {
+            line: 0,
+            chars: 0..8
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "IntConstant((TokenMetadata { line: 0, chars: 9..12 }, 890))"
+        lex.next().unwrap(),
+        IntConstant((
+            TokenMetadata {
+                line: 0,
+                chars: 9..12
+            },
+            890
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 13..17 }, \"core\"))"
+        lex.next().unwrap(),
+        Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 13..17
+            },
+            "core".into()
+        ))
     );
+    assert_eq!(lex.next(), None);
+}
+
+#[test]
+fn glsl_lex_operators() {
+    let source = "+ - * | & % / += -= *= |= &= %= /= ++ -- || && ^^";
+    let mut lex = Lexer::new(source);
+
+    assert_eq!(
+        lex.next().unwrap(),
+        Plus(TokenMetadata {
+            line: 0,
+            chars: 0..1
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        Dash(TokenMetadata {
+            line: 0,
+            chars: 2..3
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        Star(TokenMetadata {
+            line: 0,
+            chars: 4..5
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        VerticalBar(TokenMetadata {
+            line: 0,
+            chars: 6..7
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        Ampersand(TokenMetadata {
+            line: 0,
+            chars: 8..9
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        Percent(TokenMetadata {
+            line: 0,
+            chars: 10..11
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        Slash(TokenMetadata {
+            line: 0,
+            chars: 12..13
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        AddAssign(TokenMetadata {
+            line: 0,
+            chars: 14..16
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        SubAssign(TokenMetadata {
+            line: 0,
+            chars: 17..19
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        MulAssign(TokenMetadata {
+            line: 0,
+            chars: 20..22
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        OrAssign(TokenMetadata {
+            line: 0,
+            chars: 23..25
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        AndAssign(TokenMetadata {
+            line: 0,
+            chars: 26..28
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        ModAssign(TokenMetadata {
+            line: 0,
+            chars: 29..31
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        DivAssign(TokenMetadata {
+            line: 0,
+            chars: 32..34
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        IncOp(TokenMetadata {
+            line: 0,
+            chars: 35..37
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        DecOp(TokenMetadata {
+            line: 0,
+            chars: 38..40
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        OrOp(TokenMetadata {
+            line: 0,
+            chars: 41..43
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        AndOp(TokenMetadata {
+            line: 0,
+            chars: 44..46
+        })
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        XorOp(TokenMetadata {
+            line: 0,
+            chars: 47..49
+        })
+    );
+    assert_eq!(lex.next(), None);
 }

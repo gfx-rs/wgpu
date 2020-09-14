@@ -10,7 +10,7 @@ pomelo! {
             Statement, StorageAccess, StorageClass, Type, TypeInner,
             Interpolation};
     }
-    %token #[derive(Debug)] pub enum Token {};
+    %token #[derive(Debug)] #[cfg_attr(test, derive(PartialEq))] pub enum Token {};
     %parser pub struct Parser<'a> {};
     %extra_argument &'a mut Program;
     %extra_token TokenMetadata;

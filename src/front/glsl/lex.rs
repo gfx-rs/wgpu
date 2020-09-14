@@ -156,39 +156,41 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
             }
         }
 
-        '+' | '-' | '&' | '|' => {
+        '+' | '-' | '&' | '|' | '^' => {
             input = chars.as_str();
-            match chars.next() {
-                Some('=') => {
-                    meta.chars.end = start + 2;
-                    match cur {
-                        '+' => (Some(Token::AddAssign(meta)), chars.as_str()),
-                        '-' => (Some(Token::SubAssign(meta)), chars.as_str()),
-                        '&' => (Some(Token::AndAssign(meta)), chars.as_str()),
-                        '|' => (Some(Token::OrAssign(meta)), chars.as_str()),
-                        '^' => (Some(Token::XorAssign(meta)), chars.as_str()),
-                        _ => (None, input),
-                    }
-                }
-                Some(cur) => {
-                    meta.chars.end = start + 2;
-                    match cur {
-                        '+' => (Some(Token::IncOp(meta)), chars.as_str()),
-                        '-' => (Some(Token::DecOp(meta)), chars.as_str()),
-                        '&' => (Some(Token::AndOp(meta)), chars.as_str()),
-                        '|' => (Some(Token::OrOp(meta)), chars.as_str()),
-                        '^' => (Some(Token::XorOp(meta)), chars.as_str()),
-                        _ => (None, input),
-                    }
-                }
-                _ => match cur {
-                    '+' => (Some(Token::Plus(meta)), input),
-                    '-' => (Some(Token::Dash(meta)), input),
-                    '&' => (Some(Token::Ampersand(meta)), input),
-                    '|' => (Some(Token::VerticalBar(meta)), input),
-                    '^' => (Some(Token::Caret(meta)), input),
+            let next = chars.next();
+            if next == Some(cur) {
+                meta.chars.end = start + 2;
+                match cur {
+                    '+' => (Some(Token::IncOp(meta)), chars.as_str()),
+                    '-' => (Some(Token::DecOp(meta)), chars.as_str()),
+                    '&' => (Some(Token::AndOp(meta)), chars.as_str()),
+                    '|' => (Some(Token::OrOp(meta)), chars.as_str()),
+                    '^' => (Some(Token::XorOp(meta)), chars.as_str()),
                     _ => (None, input),
-                },
+                }
+            } else {
+                match next {
+                    Some('=') => {
+                        meta.chars.end = start + 2;
+                        match cur {
+                            '+' => (Some(Token::AddAssign(meta)), chars.as_str()),
+                            '-' => (Some(Token::SubAssign(meta)), chars.as_str()),
+                            '&' => (Some(Token::AndAssign(meta)), chars.as_str()),
+                            '|' => (Some(Token::OrAssign(meta)), chars.as_str()),
+                            '^' => (Some(Token::XorAssign(meta)), chars.as_str()),
+                            _ => (None, input),
+                        }
+                    }
+                    _ => match cur {
+                        '+' => (Some(Token::Plus(meta)), input),
+                        '-' => (Some(Token::Dash(meta)), input),
+                        '&' => (Some(Token::Ampersand(meta)), input),
+                        '|' => (Some(Token::VerticalBar(meta)), input),
+                        '^' => (Some(Token::Caret(meta)), input),
+                        _ => (None, input),
+                    },
+                }
             }
         }
 
@@ -224,7 +226,7 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                     meta.chars.end = start + 2;
                     (Some(Token::CommentEnd((meta, ()))), chars.as_str())
                 }
-                _ => (Some(Token::MulAssign(meta)), input),
+                _ => (Some(Token::Star(meta)), input),
             }
         }
         '/' => {
