@@ -2,6 +2,7 @@
 
 #[cfg(feature = "glsl-out")]
 pub mod glsl;
+#[cfg(feature = "msl-out")]
 pub mod msl;
-#[cfg(feature = "spirv-out")]
+#[cfg(feature = "spv-out")]
 pub mod spv;

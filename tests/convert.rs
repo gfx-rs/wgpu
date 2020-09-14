@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 fn load_test_data(name: &str) -> String {
     let path = format!("{}/test-data/{}", env!("CARGO_MANIFEST_DIR"), name);
     std::fs::read_to_string(path).unwrap()
@@ -9,7 +10,7 @@ fn load_wgsl(name: &str) -> naga::Module {
     naga::front::wgsl::parse_str(&input).unwrap()
 }
 
-#[cfg(feature = "spirv-in")]
+#[cfg(feature = "spv-in")]
 fn load_spv(name: &str) -> naga::Module {
     let path = format!("{}/test-data/spv/{}", env!("CARGO_MANIFEST_DIR"), name);
     let input = std::fs::read(path).unwrap();
@@ -27,6 +28,7 @@ fn load_glsl(name: &str, entry: &str, stage: naga::ShaderStage) -> naga::Module 
 fn convert_quad() {
     let module = load_wgsl("quad.wgsl");
     naga::proc::Validator::new().validate(&module).unwrap();
+    #[cfg(feature = "msl-out")]
     {
         use naga::back::msl;
         let mut binding_map = msl::BindingMap::default();
@@ -60,6 +62,7 @@ fn convert_quad() {
 fn convert_boids() {
     let module = load_wgsl("boids.wgsl");
     naga::proc::Validator::new().validate(&module).unwrap();
+    #[cfg(feature = "msl-out")]
     {
         use naga::back::msl;
         let mut binding_map = msl::BindingMap::default();
@@ -97,7 +100,7 @@ fn convert_boids() {
     }
 }
 
-#[cfg(feature = "spirv-in")]
+#[cfg(feature = "spv-in")]
 #[test]
 fn convert_cube() {
     let mut validator = naga::proc::Validator::new();
@@ -105,7 +108,7 @@ fn convert_cube() {
     validator.validate(&vs).unwrap();
     let fs = load_spv("cube.frag.spv");
     validator.validate(&fs).unwrap();
-
+    #[cfg(feature = "msl-out")]
     {
         use naga::back::msl;
         let mut binding_map = msl::BindingMap::default();

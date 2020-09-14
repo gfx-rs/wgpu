@@ -35,7 +35,7 @@ fn main() {
         .to_str()
         .unwrap()
     {
-        #[cfg(feature = "spirv-in")]
+        #[cfg(feature = "spv-in")]
         "spv" => {
             let input = fs::read(&args[1]).unwrap();
             naga::front::spv::parse_u8_slice(&input).unwrap()
@@ -80,7 +80,13 @@ fn main() {
             let mut input = fs::File::open(&args[1]).unwrap();
             ron::de::from_reader(&mut input).unwrap()
         }
-        other => panic!("Unknown input extension: {}", other),
+        other => {
+            if true {
+                // prevent "unreachable_code" warnings
+                panic!("Unknown input extension: {}", other);
+            }
+            naga::Module::generate_empty()
+        }
     };
 
     if args.len() <= 2 {
@@ -100,6 +106,7 @@ fn main() {
         .to_str()
         .unwrap()
     {
+        #[cfg(feature = "msl-out")]
         "metal" => {
             use naga::back::msl;
             let mut binding_map = msl::BindingMap::default();
@@ -123,7 +130,7 @@ fn main() {
             let msl = msl::write_string(&module, options).unwrap();
             fs::write(&args[2], msl).unwrap();
         }
-        #[cfg(feature = "spirv-out")]
+        #[cfg(feature = "spv-out")]
         "spv" => {
             use naga::back::spv;
 
@@ -189,6 +196,7 @@ fn main() {
             fs::write(&args[2], output).unwrap();
         }
         other => {
+            let _ = params;
             panic!("Unknown output extension: {}", other);
         }
     }
