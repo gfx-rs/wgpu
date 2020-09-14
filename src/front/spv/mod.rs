@@ -15,7 +15,7 @@ mod convert;
 mod error;
 mod flow;
 mod function;
-#[cfg(test)]
+#[cfg(all(test, feature = "serialize"))]
 mod rosetta;
 
 use convert::*;
@@ -1400,19 +1400,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     }
 
     pub fn parse(mut self) -> Result<crate::Module, Error> {
-        let mut module = crate::Module::from_header({
+        let mut module = {
             if self.next()? != spirv::MAGIC_NUMBER {
                 return Err(Error::InvalidHeader);
             }
-            let version_raw = self.next()?.to_le_bytes();
-            let generator = self.next()?;
+            let _version_raw = self.next()?.to_le_bytes();
+            let _generator = self.next()?;
             let _bound = self.next()?;
             let _schema = self.next()?;
-            crate::Header {
-                version: (version_raw[2], version_raw[1], version_raw[0]),
-                generator,
-            }
-        });
+            crate::Module::generate_empty()
+        };
 
         while let Ok(inst) = self.next_inst() {
             use spirv::Op;

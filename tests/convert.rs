@@ -22,7 +22,7 @@ fn load_glsl(name: &str, entry: &str, stage: naga::ShaderStage) -> naga::Module 
     naga::front::glsl::parse_str(&input, entry.to_owned(), stage).unwrap()
 }
 
-#[cfg(feature = "spirv-in")]
+#[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_quad() {
     let module = load_wgsl("quad.wgsl");
