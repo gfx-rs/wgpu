@@ -238,11 +238,3 @@ fn test_default_limits() {
     let limits = wgt::Limits::default();
     assert!(limits.max_bind_groups <= MAX_BIND_GROUPS as u32);
 }
-
-#[derive(Clone, Debug, thiserror::Error)]
-#[error("{description} (label: {label:?})")]
-pub struct LabeledContextError<E: std::error::Error + 'static> {
-    source: E,
-    description: &'static str,
-    label: Option<String>,
-}
