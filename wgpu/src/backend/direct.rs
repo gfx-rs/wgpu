@@ -7,7 +7,7 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use fmt::Debug;
+use fmt::{Debug, Display};
 use futures::future::{ready, Ready};
 use parking_lot::Mutex;
 use smallvec::SmallVec;
@@ -647,6 +647,7 @@ impl crate::Context for Context {
         wgc::gfx_select!(
             device.id => global.device_create_shader_module(device.id, desc, PhantomData)
         )
+        .map_err(|err| err.with_context("In Device::create_shader_module".to_string()))
         .unwrap_error_sink(
             &device.error_sink,
             || wgc::gfx_select!( device.id => global.shader_module_error(PhantomData)),
@@ -665,6 +666,7 @@ impl crate::Context for Context {
                 entries: Borrowed(desc.entries),
             }, PhantomData)
         )
+            .map_err(|err| err.with_context(format!("In Device::create_bind_group_layout with label {:?}", desc.label)))
         .unwrap_error_sink(&device.error_sink, || wgc::gfx_select!( device.id => global.bind_group_layout_error(PhantomData)))
     }
 
@@ -716,6 +718,12 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
+        .map_err(|err| {
+            err.with_context(format!(
+                "In Device::create_bind_group with label {:?}",
+                desc.label
+            ))
+        })
         .unwrap_error_sink(
             &device.error_sink,
             || wgc::gfx_select!( device.id => global.bind_group_error(PhantomData)),
@@ -754,6 +762,12 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
+        .map_err(|err| {
+            err.with_context(format!(
+                "In Device::create_pipeline_layout with label {:?}",
+                desc.label
+            ))
+        })
         .unwrap_error_sink(
             &device.error_sink,
             || wgc::gfx_select!( device.id => global.pipeline_layout_error(PhantomData)),
@@ -822,6 +836,12 @@ impl crate::Context for Context {
             PhantomData,
             implicit_pipeline_ids
         ))
+        .map_err(|err| {
+            err.with_context(format!(
+                "In Device::create_render_pipeline with label {:?}",
+                desc.label
+            ))
+        })
         .unwrap_error_sink(&device.error_sink, || {
             let err = wgc::gfx_select!( device.id => global.render_pipeline_error(PhantomData));
             (err, 0u8)
@@ -858,6 +878,12 @@ impl crate::Context for Context {
             PhantomData,
             implicit_pipeline_ids
         ))
+        .map_err(|err| {
+            err.with_context(format!(
+                "In Device::create_compute_pipeline with label {:?}",
+                desc.label
+            ))
+        })
         .unwrap_error_sink(&device.error_sink, || {
             let err = wgc::gfx_select!( device.id => global.compute_pipeline_error(PhantomData));
             (err, 0u8)
@@ -881,6 +907,12 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
+        .map_err(|err| {
+            err.with_context(format!(
+                "In Device::create_buffer with label {:?}",
+                desc.label
+            ))
+        })
         .unwrap_error_sink(
             &device.error_sink,
             || wgc::gfx_select!( device.id => global.buffer_error(PhantomData)),
@@ -910,6 +942,12 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
+        .map_err(|err| {
+            err.with_context(format!(
+                "In Device::create_texture with label {:?}",
+                desc.label
+            ))
+        })
         .unwrap_error_sink(
             &device.error_sink,
             || wgc::gfx_select!( device.id => global.texture_error(PhantomData)),
@@ -942,6 +980,12 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
+        .map_err(|err| {
+            err.with_context(format!(
+                "In Device::create_sampler with label {:?}",
+                desc.label
+            ))
+        })
         .unwrap_error_sink(
             &device.error_sink,
             || wgc::gfx_select!( device.id => global.sampler_error(PhantomData)),
@@ -961,6 +1005,12 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
+        .map_err(|err| {
+            err.with_context(format!(
+                "In Device::create_command_encoder with label {:?}",
+                desc.label
+            ))
+        })
         .unwrap_error_sink(
             &device.error_sink,
             || wgc::gfx_select!( device.id => global.command_encoder_error(PhantomData)),
@@ -1058,6 +1108,7 @@ impl crate::Context for Context {
 
         let global = &self.0;
         wgc::gfx_select!(buffer.id => global.buffer_map_async(buffer.id, range, operation))
+            .map_err(|err| err.with_context("In Buffer::map_async".to_string()))
             .unwrap_error_sink(&buffer.error_sink, || ());
 
         future
@@ -1098,6 +1149,7 @@ impl crate::Context for Context {
     fn buffer_unmap(&self, buffer: &Self::BufferId) {
         let global = &self.0;
         wgc::gfx_select!(buffer.id => global.buffer_unmap(buffer.id))
+            .map_err(|err| err.with_context("In Buffer::get_mapped_range".to_string()))
             .unwrap_error_sink(&buffer.error_sink, || ());
     }
 
@@ -1148,6 +1200,12 @@ impl crate::Context for Context {
         wgc::gfx_select!(
             texture.id => global.texture_create_view(texture.id, &descriptor, PhantomData)
         )
+        .map_err(|err| {
+            err.with_context(format!(
+                "In Texture::create_view with label {:?}",
+                desc.label
+            ))
+        })
         .unwrap_error_sink(
             &texture.error_sink,
             || wgc::gfx_select!( texture.id =>global.texture_view_error(PhantomData)),
@@ -1238,6 +1296,7 @@ impl crate::Context for Context {
             destination_offset,
             copy_size
         ))
+        .map_err(|err| err.with_context("In CommandEncoder::copy_buffer_to_buffer".to_string()))
         .unwrap_error_sink(&encoder.error_sink, || ());
     }
 
@@ -1255,6 +1314,7 @@ impl crate::Context for Context {
             &map_texture_copy_view(destination),
             &copy_size
         ))
+        .map_err(|err| err.with_context("In CommandEncoder::copy_buffer_to_texture".to_string()))
         .unwrap_error_sink(&encoder.error_sink, || ())
     }
 
@@ -1272,6 +1332,7 @@ impl crate::Context for Context {
             &map_buffer_copy_view(destination),
             &copy_size
         ))
+        .map_err(|err| err.with_context("In CommandEncoder::copy_texture_to_buffer".to_string()))
         .unwrap_error_sink(&encoder.error_sink, || ())
     }
 
@@ -1289,6 +1350,7 @@ impl crate::Context for Context {
             &map_texture_copy_view(destination),
             &copy_size
         ))
+        .map_err(|err| err.with_context("In CommandEncoder::copy_texture_to_texture".to_string()))
         .unwrap_error_sink(&encoder.error_sink, || ())
     }
 
@@ -1367,16 +1429,19 @@ impl crate::Context for Context {
     fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str) {
         let global = &self.0;
         wgc::gfx_select!(encoder.id => global.command_encoder_insert_debug_marker(encoder.id, &label))
+                                   .map_err(|err| err.with_context("In CommandEncoder::insert_debug_marker".to_string()))
         .unwrap_error_sink(&encoder.error_sink, ||())
     }
     fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str) {
         let global = &self.0;
         wgc::gfx_select!(encoder.id => global.command_encoder_push_debug_group(encoder.id, &label))
+            .map_err(|err| err.with_context("In CommandEncoder::push_debug_group".to_string()))
             .unwrap_error_sink(&encoder.error_sink, || ())
     }
     fn command_encoder_pop_debug_group(&self, encoder: &Self::CommandEncoderId) {
         let global = &self.0;
         wgc::gfx_select!(encoder.id => global.command_encoder_pop_debug_group(encoder.id))
+            .map_err(|err| err.with_context("In CommandEncoder::pop_debug_group".to_string()))
             .unwrap_error_sink(&encoder.error_sink, || ())
     }
 
@@ -1487,6 +1552,37 @@ where
             });
             fallback()
         })
+    }
+}
+
+trait WithContextError: Error + Send + Sync + 'static + Sized {
+    fn with_context(self, string: String) -> ContextError<Self>;
+}
+
+impl<E: Error + Send + Sync + 'static> WithContextError for E {
+    fn with_context(self, string: String) -> ContextError<Self> {
+        ContextError {
+            string,
+            cause: self,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ContextError<E: Error + Send + Sync + 'static> {
+    string: String,
+    cause: E,
+}
+
+impl<E: Error + Send + Sync + 'static> Display for ContextError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.string)
+    }
+}
+
+impl<E: Error + Send + Sync + 'static> Error for ContextError<E> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.cause)
     }
 }
 
