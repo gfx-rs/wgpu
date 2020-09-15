@@ -113,6 +113,7 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                 "layout" => (Some(Token::Layout(meta)), rest),
                 "in" => (Some(Token::In(meta)), rest),
                 "out" => (Some(Token::Out(meta)), rest),
+                "uniform" => (Some(Token::Uniform(meta)), rest),
                 "flat" => (
                     Some(Token::Interpolation((meta, crate::Interpolation::Flat))),
                     rest,

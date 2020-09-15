@@ -6,8 +6,8 @@ pomelo! {
     %include {
         use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{Arena, BinaryOperator, Binding, Block, Constant, ConstantInner, Expression,
-            Function, GlobalVariable, Handle, LocalVariable, ScalarKind,
-            Statement, StorageAccess, StorageClass, Type, TypeInner,
+            Function, GlobalVariable, Handle, LocalVariable, MemberOrigin, ScalarKind,
+            Statement, StorageAccess, StorageClass, StructMember, Type, TypeInner,
             Interpolation};
     }
     %token #[derive(Debug)] #[cfg_attr(test, derive(PartialEq))] pub enum Token {};
@@ -95,8 +95,8 @@ pomelo! {
     %type init_declarator_list VarDeclaration;
     %type single_declaration VarDeclaration;
     %type layout_qualifier Binding;
-    %type layout_qualifier_id_list Binding;
-    %type layout_qualifier_id Binding;
+    %type layout_qualifier_id_list Vec<(String, u32)>;
+    %type layout_qualifier_id (String, u32);
     %type type_qualifier Vec<TypeQualifier>;
     %type single_type_qualifier TypeQualifier;
     %type storage_qualifier StorageClass;
@@ -107,6 +107,11 @@ pomelo! {
     %type fully_specified_type (Vec<TypeQualifier>, Option<Handle<Type>>);
     %type type_specifier Option<Handle<Type>>;
     %type type_specifier_nonarray Option<Type>;
+    %type struct_specifier Type;
+    %type struct_declaration_list Vec<StructMember>;
+    %type struct_declaration Vec<StructMember>;
+    %type struct_declarator_list Vec<String>;
+    %type struct_declarator String;
 
     %type TypeName Type;
 
@@ -454,6 +459,37 @@ pomelo! {
         idl
     }
 
+    declaration ::= type_qualifier(t) Identifier(i) LeftBrace
+        struct_declaration_list(sdl) RightBrace Semicolon {
+        VarDeclaration{
+            type_qualifiers: t,
+            ids_initializers: vec![],
+            ty: extra.types.fetch_or_append(Type{
+                name: Some(i.1),
+                inner: TypeInner::Struct {
+                    members: sdl
+                }
+            }),
+        }
+    }
+
+    declaration ::= type_qualifier(t) Identifier(i1) LeftBrace
+        struct_declaration_list(sdl) RightBrace Identifier(i2) Semicolon {
+        VarDeclaration{
+            type_qualifiers: t,
+            ids_initializers: vec![(i2.1, None)],
+            ty: extra.types.fetch_or_append(Type{
+                name: Some(i1.1),
+                inner: TypeInner::Struct {
+                    members: sdl
+                }
+            }),
+        }
+    }
+
+    // declaration ::= type_qualifier(t) Identifier(i1) LeftBrace
+    //     struct_declaration_list RightBrace Identifier(i2) array_specifier Semicolon;
+
     init_declarator_list ::= single_declaration;
     init_declarator_list ::= init_declarator_list(mut idl) Comma Identifier(i) {
         idl.ids_initializers.push((i.1, None));
@@ -503,22 +539,37 @@ pomelo! {
         (q,t)
     }
 
+    interpolation_qualifier ::= Interpolation((_, i)) {
+        i
+    }
+
     layout_qualifier ::= Layout LeftParen layout_qualifier_id_list(l) RightParen {
+        if let Some((_, loc)) = l.iter().find(|&q| q.0.as_str() == "location") {
+            Binding::Location(*loc)
+        } else if let Some((_, binding)) = l.iter().find(|&q| q.0.as_str() == "binding") {
+            let set = if let Some((_, set)) = l.iter().find(|&q| q.0.as_str() == "set") {
+                *set
+            } else {
+                0
+            };
+            Binding::Descriptor{set, binding: *binding}
+        } else {
+            return Err(ErrorKind::NotImplemented("unsupported layout qualifier(s)"));
+        }
+    }
+    layout_qualifier_id_list ::= layout_qualifier_id(lqi) {
+        vec![lqi]
+    }
+    layout_qualifier_id_list ::= layout_qualifier_id_list(mut l) Comma layout_qualifier_id(lqi) {
+        l.push(lqi);
         l
     }
-    layout_qualifier_id_list ::= layout_qualifier_id;
-    layout_qualifier_id_list ::= layout_qualifier_id_list Comma layout_qualifier_id(l) {
-        //TODO: for now always pick last
-        l
+    layout_qualifier_id ::= Identifier(i) {
+        (i.1, 0)
     }
-    // layout_qualifier_id ::= Identifier;
     //TODO: handle full constant_expression instead of IntConstant
     layout_qualifier_id ::= Identifier(i) Equal IntConstant(ic) {
-        if i.1.as_str() == "location" {
-            Binding::Location(ic.1 as u32)
-        } else {
-            return Err(ErrorKind::NotImplemented("non location layout qualifier"));
-        }
+        (i.1, ic.1 as u32)
     }
     // layout_qualifier_id ::= Shared;
 
@@ -555,10 +606,81 @@ pomelo! {
     storage_qualifier ::= Out {
         StorageClass::Output
     }
-    //TODO: other storage qualifiers
-    interpolation_qualifier ::= Interpolation((_, i)) {
-        i
+    // storage_qualifier ::= Centroid;
+    // storage_qualifier ::= Patch;
+    // storage_qualifier ::= Sample;
+    storage_qualifier ::= Uniform {
+        StorageClass::Uniform
     }
+    //TODO: other storage qualifiers
+
+    type_specifier ::= type_specifier_nonarray(t) {
+        t.map(|t| {
+            let name = t.name.clone();
+            let handle = extra.types.fetch_or_append(t);
+            if let Some(name) = name {
+                extra.lookup_type.insert(name, handle);
+            }
+            handle
+        })
+    }
+    //TODO: array
+
+    type_specifier_nonarray ::= Void {
+        None
+    }
+    type_specifier_nonarray ::= TypeName(t) {
+        Some(t.1)
+    };
+    type_specifier_nonarray ::= struct_specifier(s) {
+        Some(s)
+    }
+
+    // struct
+    struct_specifier ::= Struct Identifier(i) LeftBrace  struct_declaration_list RightBrace {
+        Type{
+            name: Some(i.1),
+            inner: TypeInner::Struct {
+                members: vec![]
+            }
+        }
+    }
+    //struct_specifier ::= Struct LeftBrace  struct_declaration_list RightBrace;
+
+    struct_declaration_list ::= struct_declaration(sd) {
+        sd
+    }
+    struct_declaration_list ::= struct_declaration_list(mut sdl) struct_declaration(sd) {
+        sdl.extend(sd);
+        sdl
+    }
+
+    struct_declaration ::= type_specifier(t) struct_declarator_list(sdl) Semicolon {
+        if let Some(ty) = t {
+            sdl.iter().map(|name| StructMember{
+                name: Some(name.clone()),
+                origin: MemberOrigin::Empty,
+                ty,
+            }).collect()
+        } else {
+            return Err(ErrorKind::SemanticError("Struct member can't be void"))
+        }
+    }
+    //struct_declaration ::= type_qualifier type_specifier struct_declarator_list Semicolon;
+
+    struct_declarator_list ::= struct_declarator(sd) {
+        vec![sd]
+    }
+    struct_declarator_list ::= struct_declarator_list(mut sdl) Comma struct_declarator(sd) {
+        sdl.push(sd);
+        sdl
+    }
+
+    struct_declarator ::= Identifier(i) {
+        i.1
+    }
+    //struct_declarator ::= Identifier array_specifier;
+
 
     initializer ::= assignment_expression;
     // initializer ::= LeftBrace initializer_list RightBrace;
@@ -676,25 +798,6 @@ pomelo! {
             body: vec![],
         }
     }
-
-    // type
-    type_specifier ::= type_specifier_nonarray(t) {
-        t.map(|t| {
-            let name = t.name.clone();
-            let handle = extra.types.fetch_or_append(t);
-            if let Some(name) = name {
-                extra.lookup_type.insert(name, handle);
-            }
-            handle
-        })
-    }
-
-    type_specifier_nonarray ::= Void {
-        None
-    }
-    type_specifier_nonarray ::= TypeName(t) {
-        Some(t.1)
-    };
 
     jump_statement ::= Continue Semicolon {
         Statement::Continue
