@@ -1463,6 +1463,25 @@ where
     fn unwrap_error_sink(self, error_sink: &ErrorSink, fallback: impl FnOnce() -> T) -> T {
         self.unwrap_or_else(|err| {
             let error_sink = error_sink.lock();
+
+            // Check to see if it is a out of memory error
+            let mut source_opt: Option<&(dyn std::error::Error + 'static)> = Some(&err);
+            while let Some(source) = source_opt {
+                if let Some(device_error) = source.downcast_ref::<wgc::device::DeviceError>() {
+                    match device_error {
+                        wgc::device::DeviceError::OutOfMemory => {
+                            error_sink.handle_error(crate::Error::OutOfMemoryError {
+                                source: Box::new(err)
+                            });
+                            return fallback();
+                        },
+                        _ => {}
+                    }
+                }
+                source_opt = source.source();
+            }
+
+            // Otherwise, it is a validation error
             error_sink.handle_error(crate::Error::ValidationError {
                 source: Box::new(err),
             });
