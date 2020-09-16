@@ -100,6 +100,9 @@ where
                     self.traverse_expr(argument);
                 }
             }
+            E::ArrayLength(expr) => {
+                self.traverse_expr(expr);
+            }
         }
     }
 

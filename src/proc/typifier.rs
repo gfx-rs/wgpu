@@ -262,6 +262,10 @@ impl Typifier {
                     .ok_or(ResolveError::FunctionReturnsVoid)?;
                 Resolution::Handle(ty)
             }
+            crate::Expression::ArrayLength(_) => Resolution::Value(crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Uint,
+                width: 4,
+            }),
         })
     }
 

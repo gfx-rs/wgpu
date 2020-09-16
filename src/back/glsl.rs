@@ -1042,6 +1042,10 @@ fn write_expression<'a, 'b>(
                     .join(","),
             ))
         }
+        Expression::ArrayLength(expr) => {
+            let base = write_expression(&builder.expressions[expr], module, builder)?;
+            Cow::Owned(format!("uint({}.length())", base))
+        }
     })
 }
 

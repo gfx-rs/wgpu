@@ -635,6 +635,8 @@ pub enum Expression {
         origin: FunctionOrigin,
         arguments: Vec<Handle<Expression>>,
     },
+    /// Get dynamic array length.
+    ArrayLength(Handle<Expression>),
 }
 
 /// A code block is just a vector of statements.
