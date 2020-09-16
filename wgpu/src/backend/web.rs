@@ -90,15 +90,15 @@ impl crate::ComputePassInner<Context> for ComputePass {
     }
 
     fn insert_debug_marker(&mut self, _label: &str) {
-        unimplemented!()
+        // TODO
     }
 
     fn push_debug_group(&mut self, _group_label: &str) {
-        unimplemented!()
+        // TODO
     }
 
     fn pop_debug_group(&mut self) {
-        unimplemented!()
+        // TODO
     }
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
@@ -263,15 +263,15 @@ impl crate::RenderPassInner<Context> for RenderPass {
     }
 
     fn insert_debug_marker(&mut self, _label: &str) {
-        unimplemented!()
+        // TODO
     }
 
     fn push_debug_group(&mut self, _group_label: &str) {
-        unimplemented!()
+        // TODO
     }
 
     fn pop_debug_group(&mut self) {
-        unimplemented!()
+        // TODO
     }
 
     fn execute_bundles<'a, I: Iterator<Item = &'a ()>>(&mut self, _render_bundles: I) {
@@ -1465,13 +1465,13 @@ impl crate::Context for Context {
     }
 
     fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str) {
-        unimplemented!()
+        // TODO
     }
     fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str) {
-        unimplemented!()
+        // TODO
     }
     fn command_encoder_pop_debug_group(&self, encoder: &Self::CommandEncoderId) {
-        unimplemented!()
+        // TODO
     }
 
     fn render_bundle_encoder_finish(
