@@ -80,9 +80,6 @@ async fn setup<E: Example>(title: &str) -> Setup {
         );
     };
 
-    #[cfg(target_arch = "wasm32")]
-    console_log::init().expect("could not initialize logger");
-
     let event_loop = EventLoop::new();
     let mut builder = winit::window::WindowBuilder::new();
     builder = builder.with_title(title);
@@ -93,6 +90,22 @@ async fn setup<E: Example>(title: &str) -> Setup {
     }
     let window = builder.build(&event_loop).unwrap();
 
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::platform::web::WindowExtWebSys;
+        console_log::init().expect("could not initialize logger");
+        std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+        // On wasm, append the canvas to the document body
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| doc.body())
+            .and_then(|body| {
+                body.append_child(&web_sys::Element::from(window.canvas()))
+                    .ok()
+            })
+            .expect("couldn't append canvas to document body");
+    }
+
     log::info!("Initializing the surface...");
 
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
@@ -101,7 +114,6 @@ async fn setup<E: Example>(title: &str) -> Setup {
         let surface = instance.create_surface(&window);
         (size, surface)
     };
-
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::Default,
@@ -109,7 +121,6 @@ async fn setup<E: Example>(title: &str) -> Setup {
         })
         .await
         .unwrap();
-
     let optional_features = E::optional_features();
     let required_features = E::required_features();
     let adapter_features = adapter.features();
@@ -168,7 +179,6 @@ fn start<E: Example>(
     #[cfg(target_arch = "wasm32")]
     let spawner = {
         use futures::{future::LocalFutureObj, task::SpawnError};
-        use winit::platform::web::WindowExtWebSys;
 
         struct WebSpawner {}
         impl LocalSpawn for WebSpawner {
@@ -179,18 +189,6 @@ fn start<E: Example>(
                 Ok(wasm_bindgen_futures::spawn_local(future))
             }
         }
-
-        std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-
-        // On wasm, append the canvas to the document body
-        web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| doc.body())
-            .and_then(|body| {
-                body.append_child(&web_sys::Element::from(window.canvas()))
-                    .ok()
-            })
-            .expect("couldn't append canvas to document body");
 
         WebSpawner {}
     };
