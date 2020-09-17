@@ -5,10 +5,10 @@ pomelo! {
     //%verbose;
     %include {
         use super::super::{error::ErrorKind, token::*, ast::*};
-        use crate::{Arena, BinaryOperator, Binding, Block, Constant, ConstantInner, EntryPoint, Expression,
-            Function, GlobalVariable, Handle, LocalVariable, MemberOrigin, ScalarKind,
-            Statement, StorageAccess, StorageClass, StructMember, Type, TypeInner,
-            Interpolation};
+        use crate::{proc::Typifier, Arena, BinaryOperator, Binding, Block, Constant,
+            ConstantInner, EntryPoint, Expression, Function, GlobalVariable, Handle, Interpolation,
+            LocalVariable, MemberOrigin, ScalarKind, Statement, StorageAccess,
+            StorageClass, StructMember, Type, TypeInner};
     }
     %token #[derive(Debug)] #[cfg_attr(test, derive(PartialEq))] pub enum Token {};
     %parser pub struct Parser<'a> {};
@@ -213,20 +213,32 @@ pomelo! {
 
     postfix_expression ::= primary_expression;
     postfix_expression ::= postfix_expression LeftBracket integer_expression RightBracket {
-        // TODO
+        //TODO
         return Err(ErrorKind::NotImplemented("[]"))
     }
     postfix_expression ::= function_call;
-    postfix_expression ::= postfix_expression Dot FieldSelection {
-        // TODO
-        return Err(ErrorKind::NotImplemented(".field"))
+    postfix_expression ::= postfix_expression(e) Dot Identifier(i) /* FieldSelection in spec */ {
+        let type_inner = extra.resolve_type(e.expression)?;
+        if let TypeInner::Struct{members} = type_inner {
+            let index = members.iter().position(|m| m.name == Some(i.1.clone()))
+                .ok_or(ErrorKind::UnknownField(i.0, i.1))?;
+            ExpressionRule::from_expression(
+                extra.context.expressions.append(Expression::AccessIndex {
+                    base: e.expression,
+                    index: index as u32,
+                })
+            )
+        } else {
+            //TODO: swizzle
+            return Err(ErrorKind::SemanticError("Can't lookup field on this type"))
+        }
     }
     postfix_expression ::= postfix_expression(pe) IncOp {
-        // TODO
+        //TODO
         return Err(ErrorKind::NotImplemented("post++"))
     }
     postfix_expression ::= postfix_expression(pe) DecOp {
-        // TODO
+        //TODO
         return Err(ErrorKind::NotImplemented("post--"))
     }
 
@@ -292,15 +304,15 @@ pomelo! {
     unary_expression ::= postfix_expression;
 
     unary_expression ::= IncOp unary_expression {
-        // TODO
+        //TODO
         return Err(ErrorKind::NotImplemented("++pre"))
     }
     unary_expression ::= DecOp unary_expression {
-        // TODO
+        //TODO
         return Err(ErrorKind::NotImplemented("--pre"))
     }
     unary_expression ::= unary_operator unary_expression {
-        // TODO
+        //TODO
         return Err(ErrorKind::NotImplemented("unary_op"))
     }
 
@@ -877,6 +889,7 @@ pomelo! {
         std::mem::swap(&mut f.local_variables, &mut extra.context.local_variables);
         extra.context.clear_scopes();
         extra.context.lookup_global_var_exps.clear();
+        extra.context.typifier = Typifier::new();
         f.body = cs;
         f.fill_global_use(&extra.module.global_variables);
         f

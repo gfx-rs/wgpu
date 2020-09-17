@@ -1,4 +1,6 @@
+use super::error::ErrorKind;
 use crate::{
+    proc::{ResolveContext, Typifier},
     Arena, BinaryOperator, Binding, Expression, FastHashMap, Function, GlobalVariable, Handle,
     Interpolation, LocalVariable, Module, ShaderStage, Statement, StorageClass, Type,
 };
@@ -31,6 +33,7 @@ impl Program {
                 local_variables: Arena::<LocalVariable>::new(),
                 scopes: vec![FastHashMap::default()],
                 lookup_global_var_exps: FastHashMap::default(),
+                typifier: Typifier::new(),
             },
             module: Module::generate_empty(),
         }
@@ -48,6 +51,31 @@ impl Program {
             right: right.expression,
         }))
     }
+
+    pub fn resolve_type(
+        &mut self,
+        handle: Handle<crate::Expression>,
+    ) -> Result<&crate::TypeInner, ErrorKind> {
+        let functions = Arena::new(); //TODO
+        let parameter_types: Vec<Handle<Type>> = vec![]; //TODO
+        let resolve_ctx = ResolveContext {
+            constants: &self.module.constants,
+            global_vars: &self.module.global_variables,
+            local_vars: &self.context.local_variables,
+            functions: &functions,
+            parameter_types: &parameter_types,
+        };
+        match self.context.typifier.grow(
+            handle,
+            &self.context.expressions,
+            &mut self.module.types,
+            &resolve_ctx,
+        ) {
+            //TODO: better error report
+            Err(_) => Err(ErrorKind::SemanticError("Can't resolve type")),
+            Ok(()) => Ok(self.context.typifier.get(handle, &self.module.types)),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -62,6 +90,7 @@ pub struct Context {
     //TODO: Find less allocation heavy representation
     pub scopes: Vec<FastHashMap<String, Handle<Expression>>>,
     pub lookup_global_var_exps: FastHashMap<String, Handle<Expression>>,
+    pub typifier: Typifier,
 }
 
 impl Context {

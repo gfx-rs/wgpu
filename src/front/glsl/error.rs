@@ -14,6 +14,7 @@ pub enum ErrorKind {
     ParserStackOverflow,
     NotImplemented(&'static str),
     UnknownVariable(TokenMetadata, String),
+    UnknownField(TokenMetadata, String),
     #[cfg(feature = "glsl-validate")]
     VariableAlreadyDeclared(String),
     #[cfg(feature = "glsl-validate")]
@@ -41,6 +42,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::UnknownVariable(meta, val) => {
                 write!(f, "Unknown variable {} at {:?}", val, meta)
             }
+            ErrorKind::UnknownField(meta, val) => write!(f, "Unknown field {} at {:?}", val, meta),
             #[cfg(feature = "glsl-validate")]
             ErrorKind::VariableAlreadyDeclared(val) => {
                 write!(f, "Variable {} already decalred in current scope", val)
