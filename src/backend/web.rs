@@ -42,6 +42,30 @@ impl fmt::Debug for Context {
     }
 }
 
+impl Context {
+    pub fn create_buffer_init_polyfill(
+        device: &Sendable<web_sys::GpuDevice>,
+        desc: &BufferDescriptor<'_>,
+        contents: &[u8],
+    ) -> Sendable<web_sys::GpuBuffer> {
+        // Emulate buffer mapping with the old API. This is a temporary
+        // polyfill until the new buffer mapping API is available on gecko.
+        let mut mapped_desc =
+        web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
+        if let Some(label) = desc.label {
+            mapped_desc.label(label);
+        }
+        let pair = device.0.create_buffer_mapped(&mapped_desc);
+        let buffer: web_sys::GpuBuffer = pair.get(0).into();
+        let array_buffer: js_sys::ArrayBuffer = pair.get(1).into();
+        let mapped = js_sys::Uint8Array::new(&array_buffer);
+        let js_contents: js_sys::Uint8Array = contents.into();
+        mapped.set(&js_contents, 0);
+        buffer.unmap();
+        Sendable(buffer)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ComputePass(web_sys::GpuComputePassEncoder);
 #[derive(Debug)]
