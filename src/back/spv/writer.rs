@@ -248,26 +248,121 @@ impl Writer {
         }
     }
 
+    fn write_function(
+        &mut self,
+        ir_function: &crate::Function,
+        ir_module: &crate::Module,
+    ) -> spirv::Word {
+        let mut function = Function::new();
+
+        for (_, variable) in ir_function.local_variables.iter() {
+            let id = self.generate_id();
+
+            let init_word = match variable.init {
+                Some(exp) => match &ir_function.expressions[exp] {
+                    crate::Expression::Constant(handle) => {
+                        Some(self.get_constant_id(*handle, ir_module))
+                    }
+                    _ => unreachable!(),
+                },
+                None => None,
+            };
+
+            let pointer_id =
+                self.get_pointer_id(&ir_module.types, variable.ty, spirv::StorageClass::Function);
+            function.variables.push(LocalVariable {
+                id,
+                name: variable.name.clone(),
+                instruction: super::instructions::instruction_variable(
+                    pointer_id,
+                    id,
+                    spirv::StorageClass::Function,
+                    init_word,
+                ),
+            });
+        }
+
+        let return_type_id =
+            self.get_function_return_type(ir_function.return_type, &ir_module.types);
+        let mut parameter_type_ids = Vec::with_capacity(ir_function.parameter_types.len());
+
+        let mut function_parameter_pointer_ids = vec![];
+
+        for parameter_type in ir_function.parameter_types.iter() {
+            let id = self.generate_id();
+            let pointer_id = self.get_pointer_id(
+                &ir_module.types,
+                *parameter_type,
+                spirv::StorageClass::Function,
+            );
+
+            function_parameter_pointer_ids.push(pointer_id);
+            parameter_type_ids
+                .push(self.get_type_id(&ir_module.types, LookupType::Handle(*parameter_type)));
+            function
+                .parameters
+                .push(super::instructions::instruction_function_parameter(
+                    pointer_id, id,
+                ));
+        }
+
+        let lookup_function_type = LookupFunctionType {
+            return_type_id,
+            parameter_type_ids,
+        };
+
+        let id = self.generate_id();
+        let function_type =
+            self.get_function_type(lookup_function_type, function_parameter_pointer_ids);
+        function.signature = Some(super::instructions::instruction_function(
+            return_type_id,
+            id,
+            spirv::FunctionControl::empty(),
+            function_type,
+        ));
+
+        let mut block = Block::new();
+        let id = self.generate_id();
+        block.label = Some(super::instructions::instruction_label(id));
+        for statement in ir_function.body.iter() {
+            self.write_function_statement(
+                ir_module,
+                ir_function,
+                &statement,
+                &mut block,
+                &mut function,
+            );
+        }
+        function.blocks.push(block);
+
+        function.to_words(&mut self.logical_layout.function_definitions);
+        super::instructions::instruction_function_end()
+            .to_words(&mut self.logical_layout.function_definitions);
+
+        id
+    }
+
     // TODO Move to instructions module
     fn write_entry_point(
         &mut self,
         entry_point: &crate::EntryPoint,
+        stage: crate::ShaderStage,
+        name: &str,
         ir_module: &crate::Module,
     ) -> Instruction {
-        let function_id = *self.lookup_function.get(&entry_point.function).unwrap();
+        let function_id = self.write_function(&entry_point.function, ir_module);
 
-        let exec_model = match entry_point.stage {
+        let exec_model = match stage {
             crate::ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
             crate::ShaderStage::Fragment { .. } => spirv::ExecutionModel::Fragment,
             crate::ShaderStage::Compute { .. } => spirv::ExecutionModel::GLCompute,
         };
 
         let mut interface_ids = vec![];
-        let function = &ir_module.functions[entry_point.function];
         for ((handle, _), &usage) in ir_module
             .global_variables
             .iter()
-            .zip(&function.global_usage)
+            .zip(&entry_point.function.global_usage)
         {
             if usage.contains(crate::GlobalUse::STORE) || usage.contains(crate::GlobalUse::LOAD) {
                 let id = self.get_global_variable_id(
@@ -280,28 +375,26 @@ impl Writer {
         }
 
         self.try_add_capabilities(exec_model.required_capabilities());
-        match entry_point.stage {
+        match stage {
             crate::ShaderStage::Vertex => {}
-            crate::ShaderStage::Fragment { .. } => {
+            crate::ShaderStage::Fragment => {
                 let execution_mode = spirv::ExecutionMode::OriginUpperLeft;
                 self.try_add_capabilities(execution_mode.required_capabilities());
                 super::instructions::instruction_execution_mode(function_id, execution_mode)
                     .to_words(&mut self.logical_layout.execution_modes);
             }
-            crate::ShaderStage::Compute { .. } => {}
+            crate::ShaderStage::Compute => {}
         }
 
         if self.writer_flags.contains(WriterFlags::DEBUG) {
-            self.debugs.push(super::instructions::instruction_name(
-                function_id,
-                entry_point.name.as_str(),
-            ));
+            self.debugs
+                .push(super::instructions::instruction_name(function_id, name));
         }
 
         super::instructions::instruction_entry_point(
             exec_model,
             function_id,
-            entry_point.name.as_str(),
+            name,
             interface_ids.as_slice(),
         )
     }
@@ -604,27 +697,27 @@ impl Writer {
             }
         }
 
-        match global_variable.binding.as_ref().unwrap() {
+        match *global_variable.binding.as_ref().unwrap() {
             crate::Binding::Location(location) => {
                 self.annotations
                     .push(super::instructions::instruction_decorate(
                         id,
                         spirv::Decoration::Location,
-                        &[*location],
+                        &[location],
                     ));
             }
-            crate::Binding::Descriptor { set, binding } => {
+            crate::Binding::Resource { group, binding } => {
                 self.annotations
                     .push(super::instructions::instruction_decorate(
                         id,
                         spirv::Decoration::DescriptorSet,
-                        &[*set],
+                        &[group],
                     ));
                 self.annotations
                     .push(super::instructions::instruction_decorate(
                         id,
                         spirv::Decoration::Binding,
-                        &[*binding],
+                        &[binding],
                     ));
             }
             crate::Binding::BuiltIn(built_in) => {
@@ -1000,100 +1093,12 @@ impl Writer {
         }
 
         for (handle, ir_function) in ir_module.functions.iter() {
-            let mut function = Function::new();
-
-            for (_, variable) in ir_function.local_variables.iter() {
-                let id = self.generate_id();
-
-                let init_word = match variable.init {
-                    Some(exp) => match &ir_function.expressions[exp] {
-                        crate::Expression::Constant(handle) => {
-                            Some(self.get_constant_id(*handle, ir_module))
-                        }
-                        _ => unreachable!(),
-                    },
-                    None => None,
-                };
-
-                let pointer_id = self.get_pointer_id(
-                    &ir_module.types,
-                    variable.ty,
-                    spirv::StorageClass::Function,
-                );
-                function.variables.push(LocalVariable {
-                    id,
-                    name: variable.name.clone(),
-                    instruction: super::instructions::instruction_variable(
-                        pointer_id,
-                        id,
-                        spirv::StorageClass::Function,
-                        init_word,
-                    ),
-                });
-            }
-
-            let return_type_id =
-                self.get_function_return_type(ir_function.return_type, &ir_module.types);
-            let mut parameter_type_ids = Vec::with_capacity(ir_function.parameter_types.len());
-
-            let mut function_parameter_pointer_ids = vec![];
-
-            for parameter_type in ir_function.parameter_types.iter() {
-                let id = self.generate_id();
-                let pointer_id = self.get_pointer_id(
-                    &ir_module.types,
-                    *parameter_type,
-                    spirv::StorageClass::Function,
-                );
-
-                function_parameter_pointer_ids.push(pointer_id);
-                parameter_type_ids
-                    .push(self.get_type_id(&ir_module.types, LookupType::Handle(*parameter_type)));
-                function
-                    .parameters
-                    .push(super::instructions::instruction_function_parameter(
-                        pointer_id, id,
-                    ));
-            }
-
-            let lookup_function_type = LookupFunctionType {
-                return_type_id,
-                parameter_type_ids,
-            };
-
-            let id = self.generate_id();
-            let function_type =
-                self.get_function_type(lookup_function_type, function_parameter_pointer_ids);
-            function.signature = Some(super::instructions::instruction_function(
-                return_type_id,
-                id,
-                spirv::FunctionControl::empty(),
-                function_type,
-            ));
-
+            let id = self.write_function(ir_function, ir_module);
             self.lookup_function.insert(handle, id);
-
-            let mut block = Block::new();
-            let id = self.generate_id();
-            block.label = Some(super::instructions::instruction_label(id));
-            for statement in ir_function.body.iter() {
-                self.write_function_statement(
-                    ir_module,
-                    ir_function,
-                    &statement,
-                    &mut block,
-                    &mut function,
-                );
-            }
-            function.blocks.push(block);
-
-            function.to_words(&mut self.logical_layout.function_definitions);
-            super::instructions::instruction_function_end()
-                .to_words(&mut self.logical_layout.function_definitions);
         }
 
-        for entry_point in ir_module.entry_points.iter() {
-            let entry_point_instruction = self.write_entry_point(entry_point, ir_module);
+        for (&(stage, ref name), ir_ep) in ir_module.entry_points.iter() {
+            let entry_point_instruction = self.write_entry_point(ir_ep, stage, name, ir_module);
             entry_point_instruction.to_words(&mut self.logical_layout.entry_points);
         }
 

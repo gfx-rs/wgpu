@@ -19,7 +19,7 @@ impl crate::Module {
             constants: Arena::new(),
             global_variables: Arena::new(),
             functions: Arena::new(),
-            entry_points: Vec::new(),
+            entry_points: crate::FastHashMap::default(),
         }
     }
 

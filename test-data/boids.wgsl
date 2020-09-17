@@ -16,12 +16,13 @@ import "GLSL.std.450" as std;
 
 # vertex shader
 
-[[location 0]] var<in> a_particlePos : vec2<f32>;
-[[location 1]] var<in> a_particleVel : vec2<f32>;
-[[location 2]] var<in> a_pos : vec2<f32>;
-[[builtin position]] var gl_Position : vec4<f32>;
+[[location(0)]] var<in> a_particlePos : vec2<f32>;
+[[location(1)]] var<in> a_particleVel : vec2<f32>;
+[[location(2)]] var<in> a_pos : vec2<f32>;
+[[builtin(position)]] var gl_Position : vec4<f32>;
 
-fn vtx_main() -> void {
+[[stage(vertex)]]
+fn main() -> void {
   var angle : f32 = -std::atan2(a_particleVel.x, a_particleVel.y);
   var pos : vec2<f32> = vec2<f32>(
       (a_pos.x * std::cos(angle)) - (a_pos.y * std::sin(angle)),
@@ -29,45 +30,45 @@ fn vtx_main() -> void {
   gl_Position = vec4<f32>(pos + a_particlePos, 0.0, 1.0);
   return;
 }
-entry_point vertex as "main" = vtx_main;
 
 # fragment shader
-[[location 0]] var<out> fragColor : vec4<f32>;
+[[location(0)]] var<out> fragColor : vec4<f32>;
 
-fn frag_main() -> void {
+[[stage(fragment)]]
+fn main() -> void {
   fragColor = vec4<f32>(1.0, 1.0, 1.0, 1.0);
   return;
 }
-entry_point fragment as "main" = frag_main;
 
 # compute shader
 type Particle = struct {
-  [[offset 0]] pos : vec2<f32>;
-  [[offset 8]] vel : vec2<f32>;
+  [[offset(0)]] pos : vec2<f32>;
+  [[offset(8)]] vel : vec2<f32>;
 };
 
 type SimParams = struct {
-  [[offset 0]] deltaT : f32;
-  [[offset 4]] rule1Distance : f32;
-  [[offset 8]] rule2Distance : f32;
-  [[offset 12]] rule3Distance : f32;
-  [[offset 16]] rule1Scale : f32;
-  [[offset 20]] rule2Scale : f32;
-  [[offset 24]] rule3Scale : f32;
+  [[offset(0)]] deltaT : f32;
+  [[offset(4)]] rule1Distance : f32;
+  [[offset(8)]] rule2Distance : f32;
+  [[offset(12)]] rule3Distance : f32;
+  [[offset(16)]] rule1Scale : f32;
+  [[offset(20)]] rule2Scale : f32;
+  [[offset(24)]] rule3Scale : f32;
 };
 
 type Particles = struct {
-  [[offset 0]] particles : [[stride 16]] array<Particle, 5>;
+  [[offset(0)]] particles : [[stride 16]] array<Particle, 5>;
 };
 
-[[binding 0, set 0]] var<uniform> params : SimParams;
-[[binding 1, set 0]] var<storage_buffer> particlesA : Particles;
-[[binding 2, set 0]] var<storage_buffer> particlesB : Particles;
+[[group(0), binding(0)]] var<uniform> params : SimParams;
+[[group(0), binding(1)]] var<storage_buffer> particlesA : Particles;
+[[group(0), binding(2)]] var<storage_buffer> particlesB : Particles;
 
-[[builtin global_invocation_id]] var gl_GlobalInvocationID : vec3<u32>;
+[[builtin(global_invocation_id)]] var gl_GlobalInvocationID : vec3<u32>;
 
 # https://github.com/austinEng/Project6-Vulkan-Flocking/blob/master/data/shaders/computeparticles/particle.comp
-fn compute_main() -> void {
+[[stage(compute)]]
+fn main() -> void {
   var index : u32 = gl_GlobalInvocationID.x;
   if (index >= 5) {
     return;
@@ -148,5 +149,3 @@ fn compute_main() -> void {
 
   return;
 }
-entry_point compute as "main" = compute_main;
-

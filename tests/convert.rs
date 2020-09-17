@@ -33,7 +33,10 @@ fn convert_quad() {
         use naga::back::msl;
         let mut binding_map = msl::BindingMap::default();
         binding_map.insert(
-            msl::BindSource { set: 0, binding: 0 },
+            msl::BindSource {
+                group: 0,
+                binding: 0,
+            },
             msl::BindTarget {
                 buffer: None,
                 texture: Some(1),
@@ -42,7 +45,10 @@ fn convert_quad() {
             },
         );
         binding_map.insert(
-            msl::BindSource { set: 0, binding: 1 },
+            msl::BindSource {
+                group: 0,
+                binding: 1,
+            },
             msl::BindTarget {
                 buffer: None,
                 texture: None,
@@ -67,7 +73,10 @@ fn convert_boids() {
         use naga::back::msl;
         let mut binding_map = msl::BindingMap::default();
         binding_map.insert(
-            msl::BindSource { set: 0, binding: 0 },
+            msl::BindSource {
+                group: 0,
+                binding: 0,
+            },
             msl::BindTarget {
                 buffer: Some(0),
                 texture: None,
@@ -76,7 +85,10 @@ fn convert_boids() {
             },
         );
         binding_map.insert(
-            msl::BindSource { set: 0, binding: 1 },
+            msl::BindSource {
+                group: 0,
+                binding: 1,
+            },
             msl::BindTarget {
                 buffer: Some(1),
                 texture: None,
@@ -85,7 +97,10 @@ fn convert_boids() {
             },
         );
         binding_map.insert(
-            msl::BindSource { set: 0, binding: 2 },
+            msl::BindSource {
+                group: 0,
+                binding: 2,
+            },
             msl::BindTarget {
                 buffer: Some(2),
                 texture: None,
@@ -113,7 +128,10 @@ fn convert_cube() {
         use naga::back::msl;
         let mut binding_map = msl::BindingMap::default();
         binding_map.insert(
-            msl::BindSource { set: 0, binding: 0 },
+            msl::BindSource {
+                group: 0,
+                binding: 0,
+            },
             msl::BindTarget {
                 buffer: Some(0),
                 texture: None,
@@ -122,7 +140,10 @@ fn convert_cube() {
             },
         );
         binding_map.insert(
-            msl::BindSource { set: 0, binding: 1 },
+            msl::BindSource {
+                group: 0,
+                binding: 1,
+            },
             msl::BindTarget {
                 buffer: None,
                 texture: Some(1),
@@ -131,7 +152,10 @@ fn convert_cube() {
             },
         );
         binding_map.insert(
-            msl::BindSource { set: 0, binding: 2 },
+            msl::BindSource {
+                group: 0,
+                binding: 2,
+            },
             msl::BindTarget {
                 buffer: None,
                 texture: None,
@@ -154,9 +178,7 @@ fn convert_phong_lighting() {
     let module = load_glsl(
         "glsl_phong_lighting.frag",
         "main",
-        naga::ShaderStage::Fragment {
-            early_depth_test: None,
-        },
+        naga::ShaderStage::Fragment,
     );
     naga::proc::Validator::new().validate(&module).unwrap();
 
@@ -176,9 +198,7 @@ fn convert_phong_lighting() {
 //     let module = load_glsl(
 //         "glsl_constant_expression.vert",
 //         "main",
-//         naga::ShaderStage::Fragment {
-//             early_depth_test: None,
-//         },
+//         naga::ShaderStage::Fragment,
 //     );
 //     naga::proc::Validator::new().validate(&module).unwrap();
 // }

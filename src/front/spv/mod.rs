@@ -197,10 +197,10 @@ impl Decoration {
             Decoration {
                 built_in: None,
                 location: None,
-                desc_set: Some(set),
+                desc_set: Some(group),
                 desc_index: Some(binding),
                 ..
-            } => Some(crate::Binding::Descriptor { set, binding }),
+            } => Some(crate::Binding::Resource { group, binding }),
             _ => None,
         }
     }
@@ -252,6 +252,8 @@ struct LookupFunctionType {
 struct EntryPoint {
     stage: crate::ShaderStage,
     name: String,
+    early_depth_test: Option<crate::EarlyDepthTest>,
+    workgroup_size: [u32; 3],
     function_id: spirv::Word,
     variable_ids: Vec<spirv::Word>,
 }
@@ -285,8 +287,13 @@ struct LookupSampledImage {
     image: Handle<crate::Expression>,
     sampler: Handle<crate::Expression>,
 }
+#[derive(Clone, Debug)]
+enum DeferredSource {
+    EntryPoint(crate::ShaderStage, String),
+    Function(Handle<crate::Function>),
+}
 struct DeferredFunctionCall {
-    source_handle: Handle<crate::Function>,
+    source: DeferredSource,
     expr_handle: Handle<crate::Expression>,
     dst_id: spirv::Word,
 }
@@ -1444,7 +1451,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::Constant | Op::SpecConstant => self.parse_constant(inst, &mut module),
                 Op::ConstantComposite => self.parse_composite_constant(inst, &mut module),
                 Op::Variable => self.parse_global_variable(inst, &mut module),
-                Op::Function => parse_function(&mut self, inst, &mut module),
+                Op::Function => self.parse_function(inst, &mut module),
                 _ => Err(Error::UnsupportedInstruction(self.state, inst.op)), //TODO
             }?;
         }
@@ -1476,12 +1483,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         for dfc in self.deferred_function_calls.drain(..) {
             let dst_handle = *self.lookup_function.lookup(dfc.dst_id)?;
-            match *module
-                .functions
-                .get_mut(dfc.source_handle)
-                .expressions
-                .get_mut(dfc.expr_handle)
-            {
+            let fun = match dfc.source {
+                DeferredSource::Function(fun_handle) => module.functions.get_mut(fun_handle),
+                DeferredSource::EntryPoint(stage, name) => {
+                    &mut module
+                        .entry_points
+                        .get_mut(&(stage, name))
+                        .unwrap()
+                        .function
+                }
+            };
+            match *fun.expressions.get_mut(dfc.expr_handle) {
                 crate::Expression::Call {
                     ref mut origin,
                     arguments: _,
@@ -1497,15 +1509,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         if !self.future_member_decor.is_empty() {
             log::warn!("Unused member decorations: {:?}", self.future_member_decor);
             self.future_member_decor.clear();
-        }
-
-        module.entry_points.reserve(self.lookup_entry_point.len());
-        for raw in self.lookup_entry_point.values() {
-            module.entry_points.push(crate::EntryPoint {
-                stage: raw.stage,
-                name: raw.name.clone(),
-                function: *self.lookup_function.lookup(raw.function_id)?,
-            });
         }
 
         Ok(module)
@@ -1570,15 +1573,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let ep = EntryPoint {
             stage: match exec_model {
                 spirv::ExecutionModel::Vertex => crate::ShaderStage::Vertex,
-                spirv::ExecutionModel::Fragment => crate::ShaderStage::Fragment {
-                    early_depth_test: None,
-                },
-                spirv::ExecutionModel::GLCompute => crate::ShaderStage::Compute {
-                    local_size: (0, 0, 0),
-                },
+                spirv::ExecutionModel::Fragment => crate::ShaderStage::Fragment,
+                spirv::ExecutionModel::GLCompute => crate::ShaderStage::Compute,
                 _ => return Err(Error::UnsupportedExecutionModel(exec_model as u32)),
             },
             name,
+            early_depth_test: None,
+            workgroup_size: [0; 3],
             function_id,
             variable_ids: self.data.by_ref().take(left as usize).collect(),
         };
@@ -1587,7 +1588,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     }
 
     fn parse_execution_mode(&mut self, inst: Instruction) -> Result<(), Error> {
-        use crate::ShaderStage;
         use spirv::ExecutionMode;
 
         self.switch(ModuleState::ExecutionMode, inst.op)?;
@@ -1597,63 +1597,47 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let mode_id = self.next()?;
         let args: Vec<spirv::Word> = self.data.by_ref().take(inst.wc as usize - 3).collect();
 
-        let ep: &mut EntryPoint = self
+        let ep = self
             .lookup_entry_point
             .get_mut(&ep_id)
             .ok_or(Error::InvalidId(ep_id))?;
         let mode = spirv::ExecutionMode::from_u32(mode_id)
             .ok_or(Error::UnsupportedExecutionMode(mode_id))?;
 
-        match ep.stage {
-            ShaderStage::Fragment {
-                ref mut early_depth_test,
-            } => {
-                match mode {
-                    ExecutionMode::EarlyFragmentTests => {
-                        if early_depth_test.is_none() {
-                            *early_depth_test = Some(crate::EarlyDepthTest { conservative: None });
-                        }
-                    }
-                    ExecutionMode::DepthUnchanged => {
-                        *early_depth_test = Some(crate::EarlyDepthTest {
-                            conservative: Some(crate::ConservativeDepth::Unchanged),
-                        });
-                    }
-                    ExecutionMode::DepthGreater => {
-                        *early_depth_test = Some(crate::EarlyDepthTest {
-                            conservative: Some(crate::ConservativeDepth::GreaterEqual),
-                        });
-                    }
-                    ExecutionMode::DepthLess => {
-                        *early_depth_test = Some(crate::EarlyDepthTest {
-                            conservative: Some(crate::ConservativeDepth::LessEqual),
-                        });
-                    }
-                    ExecutionMode::DepthReplacing => {
-                        // Ignored because it can be deduced from the IR.
-                    }
-                    ExecutionMode::OriginUpperLeft => {
-                        // Ignored because the other option (OriginLowerLeft) is not valid in Vulkan mode.
-                    }
-                    _ => {
-                        return Err(Error::UnsupportedExecutionMode(mode_id));
-                    }
-                };
+        match mode {
+            ExecutionMode::EarlyFragmentTests => {
+                if ep.early_depth_test.is_none() {
+                    ep.early_depth_test = Some(crate::EarlyDepthTest { conservative: None });
+                }
             }
-            ShaderStage::Compute { ref mut local_size } => {
-                match mode {
-                    ExecutionMode::LocalSize => {
-                        *local_size = (args[0], args[1], args[2]);
-                    }
-                    _ => {
-                        return Err(Error::UnsupportedExecutionMode(mode_id));
-                    }
-                };
+            ExecutionMode::DepthUnchanged => {
+                ep.early_depth_test = Some(crate::EarlyDepthTest {
+                    conservative: Some(crate::ConservativeDepth::Unchanged),
+                });
+            }
+            ExecutionMode::DepthGreater => {
+                ep.early_depth_test = Some(crate::EarlyDepthTest {
+                    conservative: Some(crate::ConservativeDepth::GreaterEqual),
+                });
+            }
+            ExecutionMode::DepthLess => {
+                ep.early_depth_test = Some(crate::EarlyDepthTest {
+                    conservative: Some(crate::ConservativeDepth::LessEqual),
+                });
+            }
+            ExecutionMode::DepthReplacing => {
+                // Ignored because it can be deduced from the IR.
+            }
+            ExecutionMode::OriginUpperLeft => {
+                // Ignored because the other option (OriginLowerLeft) is not valid in Vulkan mode.
+            }
+            ExecutionMode::LocalSize => {
+                ep.workgroup_size = [args[0], args[1], args[2]];
             }
             _ => {
                 return Err(Error::UnsupportedExecutionMode(mode_id));
             }
-        };
+        }
 
         Ok(())
     }

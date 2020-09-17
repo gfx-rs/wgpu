@@ -320,12 +320,8 @@ impl Parser {
     fn get_shader_stage(word: &str) -> Result<crate::ShaderStage, Error<'_>> {
         match word {
             "vertex" => Ok(crate::ShaderStage::Vertex),
-            "fragment" => Ok(crate::ShaderStage::Fragment {
-                early_depth_test: None,
-            }),
-            "compute" => Ok(crate::ShaderStage::Compute {
-                local_size: (0, 0, 0),
-            }),
+            "fragment" => Ok(crate::ShaderStage::Fragment),
+            "compute" => Ok(crate::ShaderStage::Compute),
             _ => Err(Error::UnknownShaderStage(word)),
         }
     }
@@ -563,7 +559,6 @@ impl Parser {
                 Token::Separator('.') => {
                     let _ = lexer.next();
                     let name = lexer.next_ident()?;
-                    println!("Resolving '{}' for {:?}", name, ctx.resolve_type(handle)); //TEMP
                     let expression = match *ctx.resolve_type(handle)? {
                         crate::TypeInner::Struct { ref members } => {
                             let index = members
@@ -918,7 +913,9 @@ impl Parser {
                             ready = true;
                         }
                         Token::Word("offset") if ready => {
+                            lexer.expect(Token::Paren('('))?;
                             offset = lexer.next_uint_literal()?;
+                            lexer.expect(Token::Paren(')'))?;
                             ready = false;
                         }
                         other => return Err(Error::Unexpected(other)),
@@ -1288,7 +1285,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         module: &mut crate::Module,
         lookup_global_expression: &FastHashMap<&'a str, crate::Expression>,
-    ) -> Result<Handle<crate::Function>, Error<'a>> {
+    ) -> Result<(crate::Function, &'a str), Error<'a>> {
         self.scopes.push(Scope::FunctionDecl);
         // read function name
         let mut lookup_ident = FastHashMap::default();
@@ -1322,7 +1319,7 @@ impl Parser {
             Some(self.parse_type_decl(lexer, None, &mut module.types)?.0)
         };
 
-        let fun_handle = module.functions.append(crate::Function {
+        let mut fun = crate::Function {
             name: Some(fun_name.to_string()),
             parameter_types,
             return_type,
@@ -1330,15 +1327,7 @@ impl Parser {
             local_variables: Arena::new(),
             expressions,
             body: Vec::new(),
-        });
-        if self
-            .function_lookup
-            .insert(fun_name.to_string(), fun_handle)
-            .is_some()
-        {
-            return Err(Error::FunctionRedefinition(fun_name));
-        }
-        let fun = module.functions.get_mut(fun_handle);
+        };
 
         // read body
         let mut typifier = Typifier::new();
@@ -1356,11 +1345,10 @@ impl Parser {
             },
         )?;
         // done
-        fun.global_usage =
-            crate::GlobalUse::scan(&fun.expressions, &fun.body, &module.global_variables);
+        fun.fill_global_use(&module.global_variables);
         self.scopes.pop();
 
-        Ok(fun_handle)
+        Ok((fun, fun_name))
     }
 
     fn parse_global_decl<'a>(
@@ -1373,30 +1361,56 @@ impl Parser {
         let mut binding = None;
         // Perspective is the default qualifier.
         let mut interpolation = None;
+        let mut stage = None;
+        let mut workgroup_size = [1u32; 3];
+
         if lexer.skip(Token::DoubleParen('[')) {
-            let (mut bind_index, mut bind_set) = (None, None);
+            let (mut bind_index, mut bind_group) = (None, None);
             self.scopes.push(Scope::Decoration);
             loop {
                 match lexer.next_ident()? {
                     "location" => {
+                        lexer.expect(Token::Paren('('))?;
                         let loc = lexer.next_uint_literal()?;
+                        lexer.expect(Token::Paren(')'))?;
                         binding = Some(crate::Binding::Location(loc));
                     }
                     "builtin" => {
+                        lexer.expect(Token::Paren('('))?;
                         let builtin = Self::get_built_in(lexer.next_ident()?)?;
+                        lexer.expect(Token::Paren(')'))?;
                         binding = Some(crate::Binding::BuiltIn(builtin));
                     }
                     "binding" => {
+                        lexer.expect(Token::Paren('('))?;
                         bind_index = Some(lexer.next_uint_literal()?);
+                        lexer.expect(Token::Paren(')'))?;
                     }
-                    "set" => {
-                        bind_set = Some(lexer.next_uint_literal()?);
+                    "group" => {
+                        lexer.expect(Token::Paren('('))?;
+                        bind_group = Some(lexer.next_uint_literal()?);
+                        lexer.expect(Token::Paren(')'))?;
                     }
                     "interpolate" => {
-                        if interpolation.is_some() {
-                            return Err(Error::UnknownDecoration(lexer.next_ident()?));
-                        }
+                        lexer.expect(Token::Paren('('))?;
                         interpolation = Some(Self::get_interpolation(lexer.next_ident()?)?);
+                        lexer.expect(Token::Paren(')'))?;
+                    }
+                    "stage" => {
+                        lexer.expect(Token::Paren('('))?;
+                        stage = Some(Self::get_shader_stage(lexer.next_ident()?)?);
+                        lexer.expect(Token::Paren(')'))?;
+                    }
+                    "workgroup_size" => {
+                        lexer.expect(Token::Paren('('))?;
+                        for (i, size) in workgroup_size.iter_mut().enumerate() {
+                            *size = lexer.next_uint_literal()?;
+                            match lexer.next() {
+                                Token::Paren(')') => break,
+                                Token::Separator(',') if i != 2 => (),
+                                other => return Err(Error::Unexpected(other)),
+                            }
+                        }
                     }
                     word => return Err(Error::UnknownDecoration(word)),
                 }
@@ -1408,15 +1422,11 @@ impl Parser {
                     other => return Err(Error::Unexpected(other)),
                 }
             }
-            match (bind_set, bind_index) {
-                (Some(set), Some(index)) if binding.is_none() => {
-                    binding = Some(crate::Binding::Descriptor {
-                        set,
-                        binding: index,
-                    });
-                }
-                _ if binding.is_none() => return Err(Error::Other),
-                _ => {}
+            if let (Some(group), Some(index)) = (bind_group, bind_index) {
+                binding = Some(crate::Binding::Resource {
+                    group,
+                    binding: index,
+                });
             }
             self.scopes.pop();
         }
@@ -1494,31 +1504,30 @@ impl Parser {
                     .insert(pvar.name, crate::Expression::GlobalVariable(var_handle));
             }
             Token::Word("fn") => {
-                self.parse_function_decl(lexer, module, &lookup_global_expression)?;
-            }
-            Token::Word("entry_point") => {
-                let stage = Self::get_shader_stage(lexer.next_ident()?)?;
-                let export_name = if lexer.skip(Token::Word("as")) {
-                    match lexer.next() {
-                        Token::String(name) => Some(name),
-                        other => return Err(Error::Unexpected(other)),
+                let (function, name) =
+                    self.parse_function_decl(lexer, module, &lookup_global_expression)?;
+                let already_declared = match stage {
+                    Some(stage) => module
+                        .entry_points
+                        .insert(
+                            (stage, name.to_string()),
+                            crate::EntryPoint {
+                                early_depth_test: None,
+                                workgroup_size,
+                                function,
+                            },
+                        )
+                        .is_some(),
+                    None => {
+                        let fun_handle = module.functions.append(function);
+                        self.function_lookup
+                            .insert(name.to_string(), fun_handle)
+                            .is_some()
                     }
-                } else {
-                    None
                 };
-                lexer.expect(Token::Operation('='))?;
-                let fun_ident = lexer.next_ident()?;
-                lexer.expect(Token::Separator(';'))?;
-                let (fun_handle, _) = module
-                    .functions
-                    .iter()
-                    .find(|(_, fun)| fun.name.as_deref() == Some(fun_ident))
-                    .ok_or(Error::UnknownFunction(fun_ident))?;
-                module.entry_points.push(crate::EntryPoint {
-                    stage,
-                    name: export_name.unwrap_or(fun_ident).to_owned(),
-                    function: fun_handle,
-                });
+                if already_declared {
+                    return Err(Error::FunctionRedefinition(name));
+                }
             }
             Token::End => return Ok(false),
             token => return Err(Error::Unexpected(token)),

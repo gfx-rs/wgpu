@@ -3,7 +3,7 @@ use std::{env, fs, path::Path};
 
 #[derive(Hash, PartialEq, Eq, Serialize, Deserialize)]
 struct BindSource {
-    set: u32,
+    group: u32,
     binding: u32,
 }
 
@@ -54,26 +54,14 @@ fn main() {
         #[cfg(feature = "glsl-in")]
         "frag" => {
             let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::glsl::parse_str(
-                &input,
-                "main".to_string(),
-                naga::ShaderStage::Fragment {
-                    early_depth_test: None,
-                },
-            )
-            .unwrap()
+            naga::front::glsl::parse_str(&input, "main".to_string(), naga::ShaderStage::Fragment)
+                .unwrap()
         }
         #[cfg(feature = "glsl-in")]
         "comp" => {
             let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::glsl::parse_str(
-                &input,
-                "main".to_string(),
-                naga::ShaderStage::Compute {
-                    local_size: (0, 0, 0),
-                },
-            )
-            .unwrap()
+            naga::front::glsl::parse_str(&input, "main".to_string(), naga::ShaderStage::Compute)
+                .unwrap()
         }
         #[cfg(feature = "deserialize")]
         "ron" => {
@@ -113,7 +101,7 @@ fn main() {
             for (key, value) in params.metal_bindings {
                 binding_map.insert(
                     msl::BindSource {
-                        set: key.set,
+                        group: key.group,
                         binding: key.binding,
                     },
                     msl::BindTarget {
@@ -170,17 +158,13 @@ fn main() {
             let options = Options {
                 version: Version::Embedded(310),
                 entry_point: (
-                    String::from("main"),
                     match stage {
                         "vert" => ShaderStage::Vertex,
-                        "frag" => ShaderStage::Fragment {
-                            early_depth_test: None,
-                        },
-                        "comp" => ShaderStage::Compute {
-                            local_size: (0, 0, 0),
-                        },
+                        "frag" => ShaderStage::Fragment,
+                        "comp" => ShaderStage::Compute,
                         _ => unreachable!(),
                     },
+                    String::from("main"),
                 ),
             };
 

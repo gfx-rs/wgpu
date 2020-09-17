@@ -1,6 +1,6 @@
 use crate::{
-    Arena, BinaryOperator, Binding, Constant, Expression, FastHashMap, Function, GlobalVariable,
-    Handle, Interpolation, LocalVariable, ShaderStage, Statement, StorageClass, Type,
+    Arena, BinaryOperator, Binding, Expression, FastHashMap, Function, GlobalVariable, Handle,
+    Interpolation, LocalVariable, Module, ShaderStage, Statement, StorageClass, Type,
 };
 
 #[derive(Debug)]
@@ -8,28 +8,23 @@ pub struct Program {
     pub version: u16,
     pub profile: Profile,
     pub shader_stage: ShaderStage,
+    pub entry: Option<String>,
     pub lookup_function: FastHashMap<String, Handle<Function>>,
-    pub functions: Arena<Function>,
     pub lookup_type: FastHashMap<String, Handle<Type>>,
-    pub types: Arena<Type>,
-    pub constants: Arena<Constant>,
-    pub global_variables: Arena<GlobalVariable>,
     pub lookup_global_variables: FastHashMap<String, Handle<GlobalVariable>>,
     pub context: Context,
+    pub module: Module,
 }
 
 impl Program {
-    pub fn new(shader_stage: ShaderStage) -> Program {
+    pub fn new(shader_stage: ShaderStage, entry: String) -> Program {
         Program {
             version: 0,
             profile: Profile::Core,
             shader_stage,
+            entry: Some(entry),
             lookup_function: FastHashMap::default(),
-            functions: Arena::<Function>::new(),
             lookup_type: FastHashMap::default(),
-            types: Arena::<Type>::new(),
-            constants: Arena::<Constant>::new(),
-            global_variables: Arena::<GlobalVariable>::new(),
             lookup_global_variables: FastHashMap::default(),
             context: Context {
                 expressions: Arena::<Expression>::new(),
@@ -37,6 +32,7 @@ impl Program {
                 scopes: vec![FastHashMap::default()],
                 lookup_global_var_exps: FastHashMap::default(),
             },
+            module: Module::generate_empty(),
         }
     }
 

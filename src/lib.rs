@@ -88,18 +88,14 @@ pub enum ConservativeDepth {
 }
 
 /// Stage of the programmable pipeline.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[allow(missing_docs)] // The names are self evident
 pub enum ShaderStage {
     Vertex,
-    Fragment {
-        early_depth_test: Option<EarlyDepthTest>,
-    },
-    Compute {
-        local_size: (u32, u32, u32),
-    },
+    Fragment,
+    Compute,
 }
 
 /// Class of storage for variables.
@@ -416,8 +412,8 @@ pub enum Binding {
     BuiltIn(BuiltIn),
     /// Indexed location.
     Location(u32),
-    /// Binding within a descriptor set.
-    Descriptor { set: u32, binding: u32 },
+    /// Binding within a resource group.
+    Resource { group: u32, binding: u32 },
 }
 
 bitflags::bitflags! {
@@ -635,7 +631,7 @@ pub enum Expression {
         origin: FunctionOrigin,
         arguments: Vec<Handle<Expression>>,
     },
-    /// Get dynamic array length.
+    /// Get the length of an array.
     ArrayLength(Handle<Expression>),
 }
 
@@ -718,12 +714,12 @@ pub struct Function {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct EntryPoint {
-    /// The stage in the programmable pipeline this entry point is for.
-    pub stage: ShaderStage,
-    /// Name identifying this entry point.
-    pub name: String,
-    /// The function to be used.
-    pub function: Handle<Function>,
+    /// Early depth test for fragment stages.
+    pub early_depth_test: Option<EarlyDepthTest>,
+    /// Workgroup size for compute stages
+    pub workgroup_size: [u32; 3],
+    /// The entrance function.
+    pub function: Function,
 }
 
 /// Shader module.
@@ -751,6 +747,6 @@ pub struct Module {
     pub global_variables: Arena<GlobalVariable>,
     /// Storage for the functions defined in this module.
     pub functions: Arena<Function>,
-    /// Vector of exported entry points.
-    pub entry_points: Vec<EntryPoint>,
+    /// Exported entry points.
+    pub entry_points: FastHashMap<(ShaderStage, String), EntryPoint>,
 }

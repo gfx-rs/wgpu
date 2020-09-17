@@ -2,12 +2,13 @@ use crate::arena::{Arena, Handle};
 
 pub struct Interface<'a, T> {
     pub expressions: &'a Arena<crate::Expression>,
-    pub visitor: &'a mut T,
+    pub visitor: T,
 }
 
 pub trait Visitor {
     fn visit_expr(&mut self, _: &crate::Expression) {}
     fn visit_lhs_expr(&mut self, _: &crate::Expression) {}
+    fn visit_fun(&mut self, _: Handle<crate::Function>) {}
 }
 
 impl<'a, T> Interface<'a, T>
@@ -95,9 +96,15 @@ where
             E::Derivative { expr, .. } => {
                 self.traverse_expr(expr);
             }
-            E::Call { ref arguments, .. } => {
+            E::Call {
+                ref origin,
+                ref arguments,
+            } => {
                 for &argument in arguments {
                     self.traverse_expr(argument);
+                }
+                if let crate::FunctionOrigin::Local(fun) = *origin {
+                    self.visitor.visit_fun(fun);
                 }
             }
             E::ArrayLength(expr) => {
@@ -168,9 +175,9 @@ where
     }
 }
 
-struct GlobalUseVisitor(Vec<crate::GlobalUse>);
+struct GlobalUseVisitor<'a>(&'a mut [crate::GlobalUse]);
 
-impl Visitor for GlobalUseVisitor {
+impl Visitor for GlobalUseVisitor<'_> {
     fn visit_expr(&mut self, expr: &crate::Expression) {
         if let crate::Expression::GlobalVariable(handle) = expr {
             self.0[handle.index()] |= crate::GlobalUse::LOAD;
@@ -184,20 +191,17 @@ impl Visitor for GlobalUseVisitor {
     }
 }
 
-impl crate::GlobalUse {
-    pub fn scan(
-        expressions: &Arena<crate::Expression>,
-        body: &[crate::Statement],
-        globals: &Arena<crate::GlobalVariable>,
-    ) -> Vec<Self> {
-        let mut visitor = GlobalUseVisitor(vec![crate::GlobalUse::empty(); globals.len()]);
+impl crate::Function {
+    pub fn fill_global_use(&mut self, globals: &Arena<crate::GlobalVariable>) {
+        self.global_usage.clear();
+        self.global_usage
+            .resize(globals.len(), crate::GlobalUse::empty());
 
         let mut io = Interface {
-            expressions,
-            visitor: &mut visitor,
+            expressions: &self.expressions,
+            visitor: GlobalUseVisitor(&mut self.global_usage),
         };
-        io.traverse(body);
-        visitor.0
+        io.traverse(&self.body);
     }
 }
 
@@ -248,14 +252,25 @@ mod tests {
             },
         ];
 
+        let mut function = crate::Function {
+            name: None,
+            parameter_types: Vec::new(),
+            return_type: None,
+            local_variables: Arena::new(),
+            expressions,
+            global_usage: Vec::new(),
+            body: test_body,
+        };
+        function.fill_global_use(&test_globals);
+
         assert_eq!(
-            GlobalUse::scan(&expressions, &test_body, &test_globals),
-            vec![
+            &function.global_usage,
+            &[
                 GlobalUse::LOAD,
                 GlobalUse::STORE,
                 GlobalUse::STORE,
                 GlobalUse::LOAD,
-            ]
+            ],
         )
     }
 }

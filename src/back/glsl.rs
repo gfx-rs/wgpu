@@ -66,7 +66,7 @@ impl fmt::Display for Version {
 #[derive(Debug, Clone)]
 pub struct Options {
     pub version: Version,
-    pub entry_point: (String, ShaderStage),
+    pub entry_point: (ShaderStage, String),
 }
 
 #[derive(Debug, Clone)]
@@ -141,12 +141,12 @@ pub fn write<'a>(
 
     let entry_point = module
         .entry_points
-        .iter()
-        .find(|entry| entry.name == options.entry_point.0 && entry.stage == options.entry_point.1)
+        .get(&options.entry_point)
         .ok_or_else(|| Error::Custom(String::from("Entry point not found")))?;
-    let func = &module.functions[entry_point.function];
+    let func = &entry_point.function;
+    let stage = options.entry_point.0;
 
-    if let ShaderStage::Compute { .. } = entry_point.stage {
+    if let ShaderStage::Compute = stage {
         if (es && version < 310) || (!es && version < 430) {
             return Err(Error::Custom(format!(
                 "Version {} doesn't support compute shaders",
@@ -233,21 +233,7 @@ pub fn write<'a>(
     let mut functions = FastHashMap::default();
 
     for (handle, func) in module.functions.iter() {
-        // Discard all entry points
-        if entry_point.function != handle
-            && module
-                .entry_points
-                .iter()
-                .any(|entry| entry.function == handle)
-        {
-            continue;
-        }
-
-        let name = if entry_point.function != handle {
-            namer(func.name.as_ref())
-        } else {
-            String::from("main")
-        };
+        let name = namer(func.name.as_ref());
 
         writeln!(
             out,
@@ -406,8 +392,8 @@ pub fn write<'a>(
         }
 
         if let Some(interpolation) = global.interpolation {
-            match (entry_point.stage, global.class) {
-                (ShaderStage::Fragment { .. }, StorageClass::Input)
+            match (stage, global.class) {
+                (ShaderStage::Fragment, StorageClass::Input)
                 | (ShaderStage::Vertex, StorageClass::Output) => {
                     write!(out, "{} ", write_interpolation(interpolation)?)?;
                 }
@@ -1449,7 +1435,7 @@ fn write_format_glsl(format: StorageFormat) -> &'static str {
 
 struct TextureMappingVisitor<'a> {
     expressions: &'a Arena<Expression>,
-    map: FastHashMap<Handle<GlobalVariable>, Option<Handle<GlobalVariable>>>,
+    map: &'a mut FastHashMap<Handle<GlobalVariable>, Option<Handle<GlobalVariable>>>,
     error: Option<Error>,
 }
 
@@ -1503,19 +1489,15 @@ fn collect_texture_mapping(
     for function in functions.keys() {
         let func = &module.functions[*function];
 
-        let mut visitor = TextureMappingVisitor {
-            expressions: &func.expressions,
-            map: FastHashMap::default(),
-            error: None,
-        };
-
         let mut interface = Interface {
             expressions: &func.expressions,
-            visitor: &mut visitor,
+            visitor: TextureMappingVisitor {
+                expressions: &func.expressions,
+                map: &mut mappings,
+                error: None,
+            },
         };
         interface.traverse(&func.body);
-
-        mappings.extend(visitor.map);
     }
 
     Ok(mappings)

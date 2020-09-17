@@ -5,7 +5,7 @@ pomelo! {
     //%verbose;
     %include {
         use super::super::{error::ErrorKind, token::*, ast::*};
-        use crate::{Arena, BinaryOperator, Binding, Block, Constant, ConstantInner, Expression,
+        use crate::{Arena, BinaryOperator, Binding, Block, Constant, ConstantInner, EntryPoint, Expression,
             Function, GlobalVariable, Handle, LocalVariable, MemberOrigin, ScalarKind,
             Statement, StorageAccess, StorageClass, StructMember, Type, TypeInner,
             Interpolation};
@@ -152,14 +152,14 @@ pomelo! {
 
     primary_expression ::= variable_identifier;
     primary_expression ::= IntConstant(i) {
-        let ty = extra.types.fetch_or_append(Type {
+        let ty = extra.module.types.fetch_or_append(Type {
             name: None,
             inner: TypeInner::Scalar {
                 kind: ScalarKind::Sint,
                 width: 4,
             }
         });
-        let ch = extra.constants.fetch_or_append(Constant {
+        let ch = extra.module.constants.fetch_or_append(Constant {
             name: None,
             specialization: None,
             ty,
@@ -171,14 +171,14 @@ pomelo! {
     }
     // primary_expression ::= UintConstant;
     primary_expression ::= FloatConstant(f) {
-        let ty = extra.types.fetch_or_append(Type {
+        let ty = extra.module.types.fetch_or_append(Type {
             name: None,
             inner: TypeInner::Scalar {
                 kind: ScalarKind::Float,
                 width: 4,
             }
         });
-        let ch = extra.constants.fetch_or_append(Constant {
+        let ch = extra.module.constants.fetch_or_append(Constant {
             name: None,
             specialization: None,
             ty,
@@ -189,14 +189,14 @@ pomelo! {
         )
     }
     primary_expression ::= BoolConstant(b) {
-        let ty = extra.types.fetch_or_append(Type {
+        let ty = extra.module.types.fetch_or_append(Type {
             name: None,
             inner: TypeInner::Scalar {
                 kind: ScalarKind::Bool,
                 width: 4,
             }
         });
-        let ch = extra.constants.fetch_or_append(Constant {
+        let ch = extra.module.constants.fetch_or_append(Constant {
             name: None,
             specialization: None,
             ty,
@@ -464,7 +464,7 @@ pomelo! {
         VarDeclaration{
             type_qualifiers: t,
             ids_initializers: vec![],
-            ty: extra.types.fetch_or_append(Type{
+            ty: extra.module.types.fetch_or_append(Type{
                 name: Some(i.1),
                 inner: TypeInner::Struct {
                     members: sdl
@@ -478,7 +478,7 @@ pomelo! {
         VarDeclaration{
             type_qualifiers: t,
             ids_initializers: vec![(i2.1, None)],
-            ty: extra.types.fetch_or_append(Type{
+            ty: extra.module.types.fetch_or_append(Type{
                 name: Some(i1.1),
                 inner: TypeInner::Struct {
                     members: sdl
@@ -544,15 +544,15 @@ pomelo! {
     }
 
     layout_qualifier ::= Layout LeftParen layout_qualifier_id_list(l) RightParen {
-        if let Some((_, loc)) = l.iter().find(|&q| q.0.as_str() == "location") {
-            Binding::Location(*loc)
-        } else if let Some((_, binding)) = l.iter().find(|&q| q.0.as_str() == "binding") {
-            let set = if let Some((_, set)) = l.iter().find(|&q| q.0.as_str() == "set") {
-                *set
+        if let Some(&(_, loc)) = l.iter().find(|&q| q.0.as_str() == "location") {
+            Binding::Location(loc)
+        } else if let Some(&(_, binding)) = l.iter().find(|&q| q.0.as_str() == "binding") {
+            let group = if let Some(&(_, set)) = l.iter().find(|&q| q.0.as_str() == "set") {
+                set
             } else {
                 0
             };
-            Binding::Descriptor{set, binding: *binding}
+            Binding::Resource{ group, binding }
         } else {
             return Err(ErrorKind::NotImplemented("unsupported layout qualifier(s)"));
         }
@@ -617,7 +617,7 @@ pomelo! {
     type_specifier ::= type_specifier_nonarray(t) {
         t.map(|t| {
             let name = t.name.clone();
-            let handle = extra.types.fetch_or_append(t);
+            let handle = extra.module.types.fetch_or_append(t);
             if let Some(name) = name {
                 extra.lookup_type.insert(name, handle);
             }
@@ -776,7 +776,7 @@ pomelo! {
     // function
     function_prototype ::= function_declarator(f) RightParen {
         // prelude, add global var expressions
-        for (var_handle, var) in extra.global_variables.iter() {
+        for (var_handle, var) in extra.module.global_variables.iter() {
             if let Some(name) = var.name.as_ref() {
                 let exp = extra.context.expressions.append(
                     Expression::GlobalVariable(var_handle)
@@ -828,9 +828,19 @@ pomelo! {
     translation_unit ::= translation_unit external_declaration;
 
     external_declaration ::= function_definition(f) {
-        let name = f.name.clone();
-        let handle = extra.functions.append(f);
-        if let Some(name) = name {
+        if f.name == extra.entry {
+            let name = extra.entry.take().unwrap();
+            extra.module.entry_points.insert(
+                (extra.shader_stage, name),
+                EntryPoint {
+                    early_depth_test: None,
+                    workgroup_size: [1; 3], //TODO
+                    function: f,
+                },
+            );
+        } else {
+            let name = f.name.clone().unwrap();
+            let handle = extra.module.functions.append(f);
             extra.lookup_function.insert(name, handle);
         }
     }
@@ -848,7 +858,7 @@ pomelo! {
         });
 
         for (id, initializer) in d.ids_initializers {
-            let h = extra.global_variables.fetch_or_append(
+            let h = extra.module.global_variables.fetch_or_append(
                 GlobalVariable {
                     name: Some(id.clone()),
                     class,
@@ -868,7 +878,7 @@ pomelo! {
         extra.context.clear_scopes();
         extra.context.lookup_global_var_exps.clear();
         f.body = cs;
-        f.global_usage = crate::GlobalUse::scan(&f.expressions, &f.body, &extra.global_variables);
+        f.fill_global_use(&extra.module.global_variables);
         f
     };
 }
