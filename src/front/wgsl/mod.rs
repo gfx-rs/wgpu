@@ -431,7 +431,7 @@ impl Parser {
                 inner
             }
             _ => {
-                let (composite_ty, _) = self.parse_type_decl(lexer, None, type_arena)?;
+                let composite_ty = self.parse_type_decl(lexer, None, type_arena)?;
                 lexer.expect(Token::Paren('('))?;
                 let mut components = Vec::new();
                 while !lexer.skip(Token::Paren(')')) {
@@ -527,7 +527,7 @@ impl Parser {
                     expr
                 } else {
                     *lexer = backup;
-                    let (ty, _) = self.parse_type_decl(lexer, None, ctx.types)?;
+                    let ty = self.parse_type_decl(lexer, None, ctx.types)?;
                     lexer.expect(Token::Paren('('))?;
                     let mut components = Vec::new();
                     while !lexer.skip(Token::Paren(')')) {
@@ -856,7 +856,7 @@ impl Parser {
     ) -> Result<(&'a str, Handle<crate::Type>), Error<'a>> {
         let name = lexer.next_ident()?;
         lexer.expect(Token::Separator(':'))?;
-        let (ty, _) = self.parse_type_decl(lexer, None, type_arena)?;
+        let ty = self.parse_type_decl(lexer, None, type_arena)?;
         Ok((name, ty))
     }
 
@@ -875,7 +875,12 @@ impl Parser {
         }
         let name = lexer.next_ident()?;
         lexer.expect(Token::Separator(':'))?;
-        let (ty, access) = self.parse_type_decl(lexer, None, type_arena)?;
+        let ty = self.parse_type_decl(lexer, None, type_arena)?;
+        let access = match class {
+            Some(crate::StorageClass::StorageBuffer) => crate::StorageAccess::all(),
+            Some(crate::StorageClass::Constant) => crate::StorageAccess::LOAD,
+            _ => crate::StorageAccess::empty(),
+        };
         if lexer.skip(Token::Operation('=')) {
             let _inner = self.parse_const_expression(lexer, type_arena, const_arena)?;
             //TODO
@@ -930,7 +935,7 @@ impl Parser {
                 return Err(Error::MissingMemberOffset(name));
             }
             lexer.expect(Token::Separator(':'))?;
-            let (ty, _) = self.parse_type_decl(lexer, None, type_arena)?;
+            let ty = self.parse_type_decl(lexer, None, type_arena)?;
             lexer.expect(Token::Separator(';'))?;
             members.push(crate::StructMember {
                 name: Some(name.to_owned()),
@@ -945,7 +950,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         self_name: Option<&'a str>,
         type_arena: &mut Arena<crate::Type>,
-    ) -> Result<(Handle<crate::Type>, crate::StorageAccess), Error<'a>> {
+    ) -> Result<Handle<crate::Type>, Error<'a>> {
         self.scopes.push(Scope::TypeDecl);
         let decoration_lexer = if lexer.skip(Token::DoubleParen('[')) {
             Some(lexer.take_until(Token::DoubleParen(']'))?)
@@ -1075,13 +1080,13 @@ impl Parser {
                 lexer.expect(Token::Paren('<'))?;
                 let class = Self::get_storage_class(lexer.next_ident()?)?;
                 lexer.expect(Token::Separator(','))?;
-                let (base, _) = self.parse_type_decl(lexer, None, type_arena)?;
+                let base = self.parse_type_decl(lexer, None, type_arena)?;
                 lexer.expect(Token::Paren('>'))?;
                 crate::TypeInner::Pointer { base, class }
             }
             Token::Word("array") => {
                 lexer.expect(Token::Paren('<'))?;
-                let (base, _) = self.parse_type_decl(lexer, None, type_arena)?;
+                let base = self.parse_type_decl(lexer, None, type_arena)?;
                 let size = match lexer.next() {
                     Token::Separator(',') => {
                         let value = lexer.next_uint_literal()?;
@@ -1120,7 +1125,7 @@ impl Parser {
             Token::Word(name) => {
                 self.scopes.pop();
                 return match self.lookup_type.get(name) {
-                    Some(&handle) => Ok((handle, crate::StorageAccess::empty())),
+                    Some(&handle) => Ok(handle),
                     None => Err(Error::UnknownType(name)),
                 };
             }
@@ -1132,7 +1137,7 @@ impl Parser {
             name: self_name.map(|s| s.to_string()),
             inner,
         });
-        Ok((handle, crate::StorageAccess::empty()))
+        Ok(handle)
     }
 
     fn parse_statement<'a>(
@@ -1314,7 +1319,7 @@ impl Parser {
         let return_type = if lexer.skip(Token::Word("void")) {
             None
         } else {
-            Some(self.parse_type_decl(lexer, None, &mut module.types)?.0)
+            Some(self.parse_type_decl(lexer, None, &mut module.types)?)
         };
 
         let mut fun = crate::Function {
@@ -1360,7 +1365,7 @@ impl Parser {
         // Perspective is the default qualifier.
         let mut interpolation = None;
         let mut stage = None;
-        let mut workgroup_size = [1u32; 3];
+        let mut workgroup_size = [0u32; 3];
 
         if lexer.skip(Token::DoubleParen('[')) {
             let (mut bind_index, mut bind_group) = (None, None);
@@ -1409,6 +1414,11 @@ impl Parser {
                                 other => return Err(Error::Unexpected(other)),
                             }
                         }
+                        for size in workgroup_size.iter_mut() {
+                            if *size == 0 {
+                                *size = 1;
+                            }
+                        }
                     }
                     word => return Err(Error::UnknownDecoration(word)),
                 }
@@ -1455,7 +1465,7 @@ impl Parser {
             Token::Word("type") => {
                 let name = lexer.next_ident()?;
                 lexer.expect(Token::Operation('='))?;
-                let (ty, _) = self.parse_type_decl(lexer, Some(name), &mut module.types)?;
+                let ty = self.parse_type_decl(lexer, Some(name), &mut module.types)?;
                 self.lookup_type.insert(name.to_owned(), ty);
                 lexer.expect(Token::Separator(';'))?;
             }

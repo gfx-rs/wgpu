@@ -67,7 +67,7 @@ type Particles = struct {
 [[builtin(global_invocation_id)]] var gl_GlobalInvocationID : vec3<u32>;
 
 # https://github.com/austinEng/Project6-Vulkan-Flocking/blob/master/data/shaders/computeparticles/particle.comp
-[[stage(compute)]]
+[[stage(compute), workgroup_size(1)]]
 fn main() -> void {
   var index : u32 = gl_GlobalInvocationID.x;
   if (index >= 5) {

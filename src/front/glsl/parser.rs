@@ -846,7 +846,7 @@ pomelo! {
                 (extra.shader_stage, name),
                 EntryPoint {
                     early_depth_test: None,
-                    workgroup_size: [1; 3], //TODO
+                    workgroup_size: [0; 3], //TODO
                     function: f,
                 },
             );

@@ -9,6 +9,7 @@ fn test_rosetta(dir_name: &str) {
     {
         use naga::back::*;
         let module = ron::de::from_str::<naga::Module>(&expected).unwrap();
+        naga::proc::Validator::new().validate(&module).unwrap();
 
         #[cfg(feature = "spv-out")]
         {
