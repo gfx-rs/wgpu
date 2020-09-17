@@ -3,8 +3,6 @@
 //! [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
 
 mod lexer;
-#[cfg(all(test, feature = "serialize"))]
-mod rosetta_tests;
 
 use crate::{
     arena::{Arena, Handle},

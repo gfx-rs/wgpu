@@ -91,6 +91,7 @@ impl<T> Handle<T> {
     any(feature = "serialize", feature = "deserialize"),
     serde(transparent)
 )]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct Arena<T> {
     /// Values of this arena.
     data: Vec<T>,

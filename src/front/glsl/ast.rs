@@ -17,12 +17,12 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn new(shader_stage: ShaderStage, entry: String) -> Program {
+    pub fn new(shader_stage: ShaderStage, entry: &str) -> Program {
         Program {
             version: 0,
             profile: Profile::Core,
             shader_stage,
-            entry: Some(entry),
+            entry: Some(entry.to_string()),
             lookup_function: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
             lookup_global_variables: FastHashMap::default(),

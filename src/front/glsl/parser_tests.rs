@@ -5,7 +5,7 @@ use super::parser;
 use crate::ShaderStage;
 
 fn parse_program(source: &str, stage: ShaderStage) -> Result<Program, ErrorKind> {
-    let mut program = Program::new(stage, "".to_string());
+    let mut program = Program::new(stage, "");
     let lex = Lexer::new(source);
     let mut parser = parser::Parser::new(&mut program);
 

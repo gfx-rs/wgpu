@@ -17,10 +17,7 @@ mod token;
 mod types;
 mod variables;
 
-#[cfg(all(test, feature = "serialize"))]
-mod rosetta_tests;
-
-pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<Module, ParseError> {
+pub fn parse_str(source: &str, entry: &str, stage: ShaderStage) -> Result<Module, ParseError> {
     log::debug!("------ GLSL-pomelo ------");
 
     let mut program = Program::new(stage, entry);

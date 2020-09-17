@@ -20,7 +20,7 @@ fn load_spv(name: &str) -> naga::Module {
 #[cfg(feature = "glsl-in")]
 fn load_glsl(name: &str, entry: &str, stage: naga::ShaderStage) -> naga::Module {
     let input = load_test_data(name);
-    naga::front::glsl::parse_str(&input, entry.to_owned(), stage).unwrap()
+    naga::front::glsl::parse_str(&input, entry, stage).unwrap()
 }
 
 #[cfg(feature = "wgsl-in")]
