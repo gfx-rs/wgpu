@@ -538,681 +538,695 @@ mod tests {
     use spirv::*;
 
     #[test]
-    fn test_instruction_source() {
-        let version = 450;
-        let instruction = super::instruction_source(SourceLanguage::GLSL, version);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Source,
-            wc: 3,
-            type_id: false,
-            result_id: false,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
+    fn test_spec_conformance() {
+        let suite = SpecConformanceSuite {};
+        suite.test_all_instructions()
     }
 
-    #[test]
-    fn test_instruction_name() {
-        let instruction = super::instruction_name(1, "Test");
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Name,
-            wc: 3,
-            type_id: false,
-            result_id: false,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_decorate() {
-        let instruction = super::instruction_decorate(1, Decoration::Location, &[1]);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Decorate,
-            wc: 3,
-            type_id: false,
-            result_id: false,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_ext_inst_import() {
-        let import_name = "GLSL.std.450";
-        let instruction = super::instruction_ext_inst_import(1, import_name);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::ExtInstImport,
-            wc: 3,
-            type_id: false,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_memory_model() {
-        let instruction =
-            super::instruction_memory_model(AddressingModel::Logical, MemoryModel::GLSL450);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::MemoryModel,
-            wc: 3,
-            type_id: false,
-            result_id: false,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_entry_point() {
-        let instruction =
-            super::instruction_entry_point(spirv::ExecutionModel::Fragment, 1, "main", &[1, 2]);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::EntryPoint,
-            wc: 4,
-            type_id: false,
-            result_id: false,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_execution_mode() {
-        let instruction = super::instruction_execution_mode(1, ExecutionMode::OriginUpperLeft);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::ExecutionMode,
-            wc: 3,
-            type_id: false,
-            result_id: false,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_capability() {
-        let instruction = super::instruction_capability(Capability::Shader);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Capability,
-            wc: 2,
-            type_id: false,
-            result_id: false,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_void() {
-        let instruction = super::instruction_type_void(1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypeVoid,
-            wc: 2,
-            type_id: false,
-            result_id: true,
-            operands: false,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_bool() {
-        let instruction = super::instruction_type_bool(1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypeBool,
-            wc: 2,
-            type_id: false,
-            result_id: true,
-            operands: false,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_int() {
-        let instruction = super::instruction_type_int(1, 32, super::Signedness::Signed);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypeInt,
-            wc: 4,
-            type_id: false,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_float() {
-        let instruction = super::instruction_type_float(1, 32);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypeFloat,
-            wc: 3,
-            type_id: false,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_vector() {
-        let instruction = super::instruction_type_vector(1, 1, crate::VectorSize::Bi);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypeVector,
-            wc: 4,
-            type_id: false,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_matrix() {
-        let instruction = super::instruction_type_matrix(1, 1, crate::VectorSize::Bi);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypeMatrix,
-            wc: 4,
-            type_id: false,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_image() {
-        let instruction = super::instruction_type_image(
-            1,
-            1,
-            spirv::Dim::Dim3D,
-            true,
-            crate::ImageClass::Sampled {
-                kind: crate::ScalarKind::Float,
-                multi: true,
-            },
-        );
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypeImage,
-            wc: 9,
-            type_id: false,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_sampler() {
-        let instruction = super::instruction_type_sampler(1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypeSampler,
-            wc: 2,
-            type_id: false,
-            result_id: true,
-            operands: false,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_array() {
-        let instruction = super::instruction_type_array(1, 1, 1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypeArray,
-            wc: 4,
-            type_id: false,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_runtime_array() {
-        let instruction = super::instruction_type_runtime_array(1, 1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypeRuntimeArray,
-            wc: 3,
-            type_id: false,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_struct() {
-        let instruction = super::instruction_type_struct(1, &[1, 2]);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypeStruct,
-            wc: 2,
-            type_id: false,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_pointer() {
-        let instruction = super::instruction_type_pointer(1, spirv::StorageClass::Function, 1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypePointer,
-            wc: 4,
-            type_id: false,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_type_function() {
-        let instruction = super::instruction_type_function(1, 1, &[1, 2]);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::TypeFunction,
-            wc: 3,
-            type_id: false,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_constant_true() {
-        let instruction = super::instruction_constant_true(1, 1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::ConstantTrue,
-            wc: 3,
-            type_id: true,
-            result_id: true,
-            operands: false,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_constant_false() {
-        let instruction = super::instruction_constant_false(1, 1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::ConstantFalse,
-            wc: 3,
-            type_id: true,
-            result_id: true,
-            operands: false,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_constant() {
-        let instruction = super::instruction_constant(1, 1, &[1, 2]);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Constant,
-            wc: 3,
-            type_id: true,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_constant_composite() {
-        let instruction = super::instruction_constant_composite(1, 1, &[1, 2]);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::ConstantComposite,
-            wc: 3,
-            type_id: true,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_variable() {
-        let instruction = super::instruction_variable(1, 1, spirv::StorageClass::Function, Some(1));
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Variable,
-            wc: 4,
-            type_id: true,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_load() {
-        let instruction = super::instruction_load(1, 1, 1, None);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Load,
-            wc: 4,
-            type_id: true,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_store() {
-        let instruction = super::instruction_store(1, 1, None);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Store,
-            wc: 3,
-            type_id: false,
-            result_id: false,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_function() {
-        let instruction = super::instruction_function(1, 1, spirv::FunctionControl::NONE, 1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Function,
-            wc: 5,
-            type_id: true,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_function_parameter() {
-        let instruction = super::instruction_function_parameter(1, 1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::FunctionParameter,
-            wc: 3,
-            type_id: true,
-            result_id: true,
-            operands: false,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_function_end() {
-        let instruction = super::instruction_function_end();
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::FunctionEnd,
-            wc: 1,
-            type_id: false,
-            result_id: false,
-            operands: false,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_function_call() {
-        let instruction = super::instruction_function_call(1, 1, 1, &[1, 2]);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::FunctionCall,
-            wc: 4,
-            type_id: true,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_composite_construct() {
-        let instruction = super::instruction_composite_construct(1, 1, &[1, 2]);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::CompositeConstruct,
-            wc: 3,
-            type_id: true,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_vector_times_scalar() {
-        let instruction = super::instruction_vector_times_scalar(1, 1, 1, 1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::VectorTimesScalar,
-            wc: 5,
-            type_id: true,
-            result_id: true,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_label() {
-        let instruction = super::instruction_label(1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Label,
-            wc: 2,
-            type_id: false,
-            result_id: true,
-            operands: false,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_return() {
-        let instruction = super::instruction_return();
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Return,
-            wc: 1,
-            type_id: false,
-            result_id: false,
-            operands: false,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_return_value() {
-        let instruction = super::instruction_return_value(1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::ReturnValue,
-            wc: 2,
-            type_id: false,
-            result_id: false,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
+    struct SpecConformanceSuite;
+
+    impl SpecConformanceSuite {
+        fn test_all_instructions(&self) {
+            self.test_instruction_source();
+            self.test_instruction_name();
+            self.test_instruction_decorate();
+            self.test_instruction_ext_inst_import();
+            self.test_instruction_memory_model();
+            self.test_instruction_entry_point();
+            self.test_instruction_execution_mode();
+            self.test_instruction_capability();
+            self.test_instruction_type_void();
+            self.test_instruction_type_bool();
+            self.test_instruction_type_int();
+            self.test_instruction_type_float();
+            self.test_instruction_type_vector();
+            self.test_instruction_type_matrix();
+            self.test_instruction_type_image();
+            self.test_instruction_type_sampler();
+            self.test_instruction_type_array();
+            self.test_instruction_type_runtime_array();
+            self.test_instruction_type_struct();
+            self.test_instruction_type_pointer();
+            self.test_instruction_type_function();
+            self.test_instruction_constant_true();
+            self.test_instruction_constant_false();
+            self.test_instruction_constant();
+            self.test_instruction_constant_composite();
+            self.test_instruction_variable();
+            self.test_instruction_load();
+            self.test_instruction_store();
+            self.test_instruction_function();
+            self.test_instruction_function_parameter();
+            self.test_instruction_function_end();
+            self.test_instruction_function_call();
+            self.test_instruction_composite_construct();
+            self.test_instruction_vector_times_scalar();
+            self.test_instruction_label();
+            self.test_instruction_return();
+            self.test_instruction_return_value();
+        }
+
+        fn test_instruction_source(&self) {
+            let version = 450;
+            let instruction = super::instruction_source(SourceLanguage::GLSL, version);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::Source,
+                wc: 3,
+                type_id: false,
+                result_id: false,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_name(&self) {
+            let instruction = super::instruction_name(1, "Test");
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::Name,
+                wc: 3,
+                type_id: false,
+                result_id: false,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_decorate(&self) {
+            let instruction = super::instruction_decorate(1, Decoration::Location, &[1]);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::Decorate,
+                wc: 3,
+                type_id: false,
+                result_id: false,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_ext_inst_import(&self) {
+            let import_name = "GLSL.std.450";
+            let instruction = super::instruction_ext_inst_import(1, import_name);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::ExtInstImport,
+                wc: 3,
+                type_id: false,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_memory_model(&self) {
+            let instruction =
+                super::instruction_memory_model(AddressingModel::Logical, MemoryModel::GLSL450);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::MemoryModel,
+                wc: 3,
+                type_id: false,
+                result_id: false,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_entry_point(&self) {
+            let instruction =
+                super::instruction_entry_point(spirv::ExecutionModel::Fragment, 1, "main", &[1, 2]);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::EntryPoint,
+                wc: 4,
+                type_id: false,
+                result_id: false,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_execution_mode(&self) {
+            let instruction = super::instruction_execution_mode(1, ExecutionMode::OriginUpperLeft);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::ExecutionMode,
+                wc: 3,
+                type_id: false,
+                result_id: false,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_capability(&self) {
+            let instruction = super::instruction_capability(Capability::Shader);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::Capability,
+                wc: 2,
+                type_id: false,
+                result_id: false,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_void(&self) {
+            let instruction = super::instruction_type_void(1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypeVoid,
+                wc: 2,
+                type_id: false,
+                result_id: true,
+                operands: false,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_bool(&self) {
+            let instruction = super::instruction_type_bool(1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypeBool,
+                wc: 2,
+                type_id: false,
+                result_id: true,
+                operands: false,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_int(&self) {
+            let instruction = super::instruction_type_int(1, 32, super::Signedness::Signed);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypeInt,
+                wc: 4,
+                type_id: false,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_float(&self) {
+            let instruction = super::instruction_type_float(1, 32);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypeFloat,
+                wc: 3,
+                type_id: false,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_vector(&self) {
+            let instruction = super::instruction_type_vector(1, 1, crate::VectorSize::Bi);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypeVector,
+                wc: 4,
+                type_id: false,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_matrix(&self) {
+            let instruction = super::instruction_type_matrix(1, 1, crate::VectorSize::Bi);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypeMatrix,
+                wc: 4,
+                type_id: false,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_image(&self) {
+            let instruction = super::instruction_type_image(
+                1,
+                1,
+                spirv::Dim::Dim3D,
+                true,
+                crate::ImageClass::Sampled {
+                    kind: crate::ScalarKind::Float,
+                    multi: true,
+                },
+            );
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypeImage,
+                wc: 9,
+                type_id: false,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_sampler(&self) {
+            let instruction = super::instruction_type_sampler(1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypeSampler,
+                wc: 2,
+                type_id: false,
+                result_id: true,
+                operands: false,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_array(&self) {
+            let instruction = super::instruction_type_array(1, 1, 1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypeArray,
+                wc: 4,
+                type_id: false,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_runtime_array(&self) {
+            let instruction = super::instruction_type_runtime_array(1, 1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypeRuntimeArray,
+                wc: 3,
+                type_id: false,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_struct(&self) {
+            let instruction = super::instruction_type_struct(1, &[1, 2]);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypeStruct,
+                wc: 2,
+                type_id: false,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_pointer(&self) {
+            let instruction = super::instruction_type_pointer(1, spirv::StorageClass::Function, 1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypePointer,
+                wc: 4,
+                type_id: false,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_type_function(&self) {
+            let instruction = super::instruction_type_function(1, 1, &[1, 2]);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::TypeFunction,
+                wc: 3,
+                type_id: false,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_constant_true(&self) {
+            let instruction = super::instruction_constant_true(1, 1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::ConstantTrue,
+                wc: 3,
+                type_id: true,
+                result_id: true,
+                operands: false,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_constant_false(&self) {
+            let instruction = super::instruction_constant_false(1, 1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::ConstantFalse,
+                wc: 3,
+                type_id: true,
+                result_id: true,
+                operands: false,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_constant(&self) {
+            let instruction = super::instruction_constant(1, 1, &[1, 2]);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::Constant,
+                wc: 3,
+                type_id: true,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_constant_composite(&self) {
+            let instruction = super::instruction_constant_composite(1, 1, &[1, 2]);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::ConstantComposite,
+                wc: 3,
+                type_id: true,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_variable(&self) {
+            let instruction =
+                super::instruction_variable(1, 1, spirv::StorageClass::Function, Some(1));
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::Variable,
+                wc: 4,
+                type_id: true,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_load(&self) {
+            let instruction = super::instruction_load(1, 1, 1, None);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::Load,
+                wc: 4,
+                type_id: true,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_store(&self) {
+            let instruction = super::instruction_store(1, 1, None);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::Store,
+                wc: 3,
+                type_id: false,
+                result_id: false,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_function(&self) {
+            let instruction = super::instruction_function(1, 1, spirv::FunctionControl::NONE, 1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::Function,
+                wc: 5,
+                type_id: true,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_function_parameter(&self) {
+            let instruction = super::instruction_function_parameter(1, 1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::FunctionParameter,
+                wc: 3,
+                type_id: true,
+                result_id: true,
+                operands: false,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_function_end(&self) {
+            let instruction = super::instruction_function_end();
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::FunctionEnd,
+                wc: 1,
+                type_id: false,
+                result_id: false,
+                operands: false,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_function_call(&self) {
+            let instruction = super::instruction_function_call(1, 1, 1, &[1, 2]);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::FunctionCall,
+                wc: 4,
+                type_id: true,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_composite_construct(&self) {
+            let instruction = super::instruction_composite_construct(1, 1, &[1, 2]);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::CompositeConstruct,
+                wc: 3,
+                type_id: true,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_vector_times_scalar(&self) {
+            let instruction = super::instruction_vector_times_scalar(1, 1, 1, 1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::VectorTimesScalar,
+                wc: 5,
+                type_id: true,
+                result_id: true,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_label(&self) {
+            let instruction = super::instruction_label(1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::Label,
+                wc: 2,
+                type_id: false,
+                result_id: true,
+                operands: false,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_return(&self) {
+            let instruction = super::instruction_return();
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::Return,
+                wc: 1,
+                type_id: false,
+                result_id: false,
+                operands: false,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
+
+        fn test_instruction_return_value(&self) {
+            let instruction = super::instruction_return_value(1);
+            let mut output = vec![];
+
+            let requirements = SpecRequirements {
+                op: Op::ReturnValue,
+                wc: 2,
+                type_id: false,
+                result_id: false,
+                operands: true,
+            };
+            validate_spec_requirements(requirements, &instruction);
+
+            instruction.to_words(&mut output);
+            validate_instruction(output.as_slice(), &instruction);
+        }
     }
 }
