@@ -779,6 +779,9 @@ fn write_expression<'a, 'b>(
             //TODO: handle MS
             Cow::Owned(match level {
                 crate::SampleLevel::Auto => format!("texture({},{})", image_expr, coordinate_expr),
+                crate::SampleLevel::Zero => {
+                    format!("textureLod({},{},0)", image_expr, coordinate_expr)
+                }
                 crate::SampleLevel::Exact(expr) => {
                     let level_expr = write_expression(&builder.expressions[expr], module, builder)?;
                     format!(
@@ -822,17 +825,12 @@ fn write_expression<'a, 'b>(
                         image_expr,
                     );
 
-                    if !multi {
-                        format!("texelFetch({},{})", sampler_constructor, coordinate_expr)
-                    } else {
-                        let index_expr =
-                            write_expression(&builder.expressions[index], module, builder)?;
-
-                        format!(
-                            "texelFetch({},{},{})",
-                            sampler_constructor, coordinate_expr, index_expr
-                        )
-                    }
+                    let index_expr =
+                        write_expression(&builder.expressions[index.unwrap()], module, builder)?;
+                    format!(
+                        "texelFetch({},{},{})",
+                        sampler_constructor, coordinate_expr, index_expr
+                    )
                 }
                 ImageClass::Storage(_) => format!("imageLoad({},{})", image_expr, coordinate_expr),
                 ImageClass::Depth => todo!(),

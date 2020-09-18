@@ -51,7 +51,7 @@ where
                 self.traverse_expr(sampler);
                 self.traverse_expr(coordinate);
                 match level {
-                    crate::SampleLevel::Auto => (),
+                    crate::SampleLevel::Auto | crate::SampleLevel::Zero => (),
                     crate::SampleLevel::Exact(h) | crate::SampleLevel::Bias(h) => {
                         self.traverse_expr(h)
                     }
@@ -67,7 +67,9 @@ where
             } => {
                 self.traverse_expr(image);
                 self.traverse_expr(coordinate);
-                self.traverse_expr(index);
+                if let Some(index) = index {
+                    self.traverse_expr(index);
+                }
             }
             E::Unary { expr, .. } => {
                 self.traverse_expr(expr);

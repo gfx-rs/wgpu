@@ -515,16 +515,27 @@ impl<W: Write> Writer<W> {
                 sampler,
                 coordinate,
                 level,
-                depth_ref: None,
+                depth_ref,
             } => {
+                let op = match depth_ref {
+                    Some(_) => "sample_compare",
+                    None => "sample",
+                };
                 //TODO: handle arrayed images
                 self.put_expression(image, function, module)?;
-                write!(self.out, ".sample(")?;
+                write!(self.out, ".{}(", op)?;
                 self.put_expression(sampler, function, module)?;
                 write!(self.out, ", ")?;
                 self.put_expression(coordinate, function, module)?;
+                if let Some(dref) = depth_ref {
+                    write!(self.out, ", ")?;
+                    self.put_expression(dref, function, module)?;
+                }
                 match level {
                     crate::SampleLevel::Auto => {}
+                    crate::SampleLevel::Zero => {
+                        write!(self.out, ", level(0)")?;
+                    }
                     crate::SampleLevel::Exact(h) => {
                         write!(self.out, ", level(")?;
                         self.put_expression(h, function, module)?;
@@ -538,32 +549,6 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, ")")?;
             }
-            crate::Expression::ImageSample {
-                image,
-                sampler,
-                coordinate,
-                level,
-                depth_ref: Some(dref),
-            } => {
-                //TODO: handle arrayed images
-                self.put_expression(image, function, module)?;
-                write!(self.out, ".sample_compare(")?;
-                self.put_expression(sampler, function, module)?;
-                write!(self.out, ", ")?;
-                self.put_expression(coordinate, function, module)?;
-                write!(self.out, ", ")?;
-                self.put_expression(dref, function, module)?;
-                match level {
-                    crate::SampleLevel::Auto => {}
-                    crate::SampleLevel::Exact(h) => {
-                        write!(self.out, ", level(")?;
-                        self.put_expression(h, function, module)?;
-                        write!(self.out, ")")?;
-                    }
-                    crate::SampleLevel::Bias(_) => return Err(Error::UnexpectedSampleLevel(level)),
-                }
-                write!(self.out, ")")?;
-            }
             crate::Expression::ImageLoad {
                 image,
                 coordinate,
@@ -573,8 +558,10 @@ impl<W: Write> Writer<W> {
                 self.put_expression(image, function, module)?;
                 write!(self.out, ".read(")?;
                 self.put_expression(coordinate, function, module)?;
-                write!(self.out, ", ")?;
-                self.put_expression(index, function, module)?;
+                if let Some(index) = index {
+                    write!(self.out, ", ")?;
+                    self.put_expression(index, function, module)?;
+                }
                 write!(self.out, ")")?;
             }
             crate::Expression::Call {

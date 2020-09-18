@@ -542,6 +542,7 @@ pub enum FunctionOrigin {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum SampleLevel {
     Auto,
+    Zero,
     Exact(Handle<Expression>),
     Bias(Handle<Expression>),
 }
@@ -588,8 +589,10 @@ pub enum Expression {
     ImageLoad {
         image: Handle<Expression>,
         coordinate: Handle<Expression>,
-        /// This is either LOD index, or sample index, based on the image class.
-        index: Handle<Expression>,
+        /// For storage images, this is None.
+        /// For sampled images, this is the Some(Level).
+        /// For multisampled images, this is Some(Sample).
+        index: Option<Handle<Expression>>,
     },
     /// Apply an unary operator.
     Unary {

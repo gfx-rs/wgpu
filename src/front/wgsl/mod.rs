@@ -760,8 +760,36 @@ impl Parser {
                                 image: ctx.lookup_ident.lookup(image_name)?,
                                 sampler: ctx.lookup_ident.lookup(sampler_name)?,
                                 coordinate,
-                                level: crate::SampleLevel::Auto, //TODO: create a constant expression for 0?
+                                level: crate::SampleLevel::Zero,
                                 depth_ref: Some(reference),
+                            })
+                        }
+                        "textureLoad" => {
+                            lexer.expect(Token::Paren('('))?;
+                            let image_name = lexer.next_ident()?;
+                            let image = ctx.lookup_ident.lookup(image_name)?;
+                            lexer.expect(Token::Separator(','))?;
+                            let coordinate =
+                                self.parse_primary_expression(lexer, ctx.reborrow())?;
+                            let is_storage = match *ctx.resolve_type(image)? {
+                                crate::TypeInner::Image {
+                                    class: crate::ImageClass::Storage(_),
+                                    ..
+                                } => true,
+                                _ => false,
+                            };
+                            let index = if is_storage {
+                                None
+                            } else {
+                                lexer.expect(Token::Separator(','))?;
+                                let index_name = lexer.next_ident()?;
+                                Some(ctx.lookup_ident.lookup(index_name)?)
+                            };
+                            lexer.expect(Token::Paren(')'))?;
+                            Some(crate::Expression::ImageLoad {
+                                image,
+                                coordinate,
+                                index,
                             })
                         }
                         _ => None,
