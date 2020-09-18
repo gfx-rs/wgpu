@@ -9,9 +9,13 @@ struct BindSource {
 
 #[derive(Serialize, Deserialize)]
 struct BindTarget {
+    #[serde(default)]
     buffer: Option<u8>,
+    #[serde(default)]
     texture: Option<u8>,
+    #[serde(default)]
     sampler: Option<u8>,
+    #[serde(default)]
     mutable: bool,
 }
 

@@ -249,20 +249,25 @@ impl<'a> TypedGlobalVariable<'a> {
     fn try_fmt<W: Write>(&self, formatter: &mut W) -> Result<(), Error> {
         let var = &self.module.global_variables[self.handle];
         let name = var.name.or_index(self.handle);
-        let (space_qualifier, reference) = match var.class {
-            crate::StorageClass::Constant
-            | crate::StorageClass::Uniform
-            | crate::StorageClass::StorageBuffer => {
-                let space = if self.usage.contains(crate::GlobalUse::STORE) {
-                    "device "
-                } else {
-                    "constant "
-                };
-                (space, "&")
-            }
+        let ty = &self.module.types[var.ty];
+        let ty_name = ty.name.or_index(var.ty);
+
+        let (space_qualifier, reference) = match ty.inner {
+            crate::TypeInner::Struct { .. } => match var.class {
+                crate::StorageClass::Constant
+                | crate::StorageClass::Uniform
+                | crate::StorageClass::StorageBuffer => {
+                    let space = if self.usage.contains(crate::GlobalUse::STORE) {
+                        "device "
+                    } else {
+                        "constant "
+                    };
+                    (space, "&")
+                }
+                _ => ("", ""),
+            },
             _ => ("", ""),
         };
-        let ty_name = self.module.types[var.ty].name.or_index(var.ty);
         Ok(write!(
             formatter,
             "{}{}{} {}",
@@ -941,7 +946,7 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, "}}")?;
         }
 
-        for (&(stage, ref name), ep) in module.entry_points.iter() {
+        for (&(stage, ref ep_name), ep) in module.entry_points.iter() {
             let fun = &ep.function;
             self.typifier.resolve_all(
                 &fun.expressions,
@@ -972,9 +977,13 @@ impl<W: Write> Writer<W> {
                 }
             }
 
+            let fun_name = format!("{}{:?}", ep_name, stage);
             let output_name = Name {
                 class: "Output",
-                source: NameSource::Custom { name, prefix: true },
+                source: NameSource::Custom {
+                    name: &fun_name,
+                    prefix: true,
+                },
             };
 
             let (em_str, in_mode, out_mode) = match stage {
@@ -994,7 +1003,10 @@ impl<W: Write> Writer<W> {
             };
             let location_input_name = Name {
                 class: "Input",
-                source: NameSource::Custom { name, prefix: true },
+                source: NameSource::Custom {
+                    name: &fun_name,
+                    prefix: true,
+                },
             };
 
             match stage {
@@ -1086,7 +1098,7 @@ impl<W: Write> Writer<W> {
                     }
                     writeln!(self.out, "}};")?;
 
-                    writeln!(self.out, "{} {} {}(", em_str, output_name, name)?;
+                    writeln!(self.out, "{} {} {}(", em_str, output_name, fun_name)?;
                     let separator = separate(last_used_global.is_none());
                     writeln!(
                         self.out,
@@ -1095,7 +1107,7 @@ impl<W: Write> Writer<W> {
                     )?;
                 }
                 crate::ShaderStage::Compute => {
-                    writeln!(self.out, "{} void {}(", em_str, name)?;
+                    writeln!(self.out, "{} void {}(", em_str, fun_name)?;
                 }
             };
 
