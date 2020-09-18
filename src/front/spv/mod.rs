@@ -899,10 +899,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     match type_arena[image_type_handle].inner {
                         //TODO: compare the result type
                         crate::TypeInner::Image {
-                            kind: _,
                             dim,
                             arrayed,
-                            class: crate::ImageClass::Sampled,
+                            class:
+                                crate::ImageClass::Sampled {
+                                    kind: _,
+                                    multi: false,
+                                },
                         } => {
                             if !check_sample_coordinates(
                                 &type_arena[coord_type_handle],
@@ -982,7 +985,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     match type_arena[image_type_handle].inner {
                         //TODO: compare the result type
                         crate::TypeInner::Image {
-                            kind: _,
                             dim,
                             arrayed,
                             class: crate::ImageClass::Depth,
@@ -1472,10 +1474,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         assert!(!*comparison)
                     };
                     *comparison = true;
-                }
-                crate::TypeInner::Image { ref mut class, .. } => {
-                    assert_eq!(*class, crate::ImageClass::Sampled);
-                    *class = crate::ImageClass::Multisampled;
                 }
                 _ => panic!("Unexpected comparison type {:?}", ty),
             }
@@ -2034,17 +2032,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let class = if format != 0 {
             crate::ImageClass::Storage(map_image_format(format)?)
-        } else if is_msaa {
-            crate::ImageClass::Multisampled
         } else {
-            crate::ImageClass::Sampled
+            crate::ImageClass::Sampled {
+                kind,
+                multi: is_msaa,
+            }
         };
 
         let decor = self.future_decor.remove(&id).unwrap_or_default();
 
         let inner = crate::TypeInner::Image {
             class,
-            kind,
             dim: map_image_dim(dim)?,
             arrayed: is_array,
         };

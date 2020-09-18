@@ -315,9 +315,12 @@ pub enum StorageFormat {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ImageClass {
     /// Regular sampled image.
-    Sampled,
-    /// Multi-sampled image.
-    Multisampled,
+    Sampled {
+        /// Kind of values to sample.
+        kind: ScalarKind,
+        // Multi-sampled.
+        multi: bool,
+    },
     /// Depth comparison image.
     Depth,
     /// Storage image.
@@ -370,7 +373,6 @@ pub enum TypeInner {
     Struct { members: Vec<StructMember> },
     /// Possibly multidimensional array of texels.
     Image {
-        kind: ScalarKind,
         dim: ImageDimension,
         arrayed: bool,
         class: ImageClass,

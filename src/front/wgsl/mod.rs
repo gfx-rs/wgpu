@@ -1207,95 +1207,83 @@ impl Parser {
             Token::Word("texture_sampled_1d") => {
                 let (kind, _) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Image {
-                    kind,
                     dim: crate::ImageDimension::D1,
                     arrayed: false,
-                    class: crate::ImageClass::Sampled,
+                    class: crate::ImageClass::Sampled { kind, multi: false },
                 }
             }
             Token::Word("texture_sampled_1d_array") => {
                 let (kind, _) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Image {
-                    kind,
                     dim: crate::ImageDimension::D1,
                     arrayed: true,
-                    class: crate::ImageClass::Sampled,
+                    class: crate::ImageClass::Sampled { kind, multi: false },
                 }
             }
             Token::Word("texture_sampled_2d") => {
                 let (kind, _) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Image {
-                    kind,
                     dim: crate::ImageDimension::D2,
                     arrayed: false,
-                    class: crate::ImageClass::Sampled,
+                    class: crate::ImageClass::Sampled { kind, multi: false },
                 }
             }
             Token::Word("texture_sampled_2d_array") => {
                 let (kind, _) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Image {
-                    kind,
                     dim: crate::ImageDimension::D2,
                     arrayed: true,
-                    class: crate::ImageClass::Sampled,
+                    class: crate::ImageClass::Sampled { kind, multi: false },
                 }
             }
             Token::Word("texture_sampled_3d") => {
                 let (kind, _) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Image {
-                    kind,
                     dim: crate::ImageDimension::D3,
                     arrayed: false,
-                    class: crate::ImageClass::Sampled,
+                    class: crate::ImageClass::Sampled { kind, multi: false },
                 }
             }
             Token::Word("texture_sampled_cube") => {
                 let (kind, _) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Image {
-                    kind,
                     dim: crate::ImageDimension::Cube,
                     arrayed: false,
-                    class: crate::ImageClass::Sampled,
+                    class: crate::ImageClass::Sampled { kind, multi: false },
                 }
             }
             Token::Word("texture_sampled_cube_array") => {
                 let (kind, _) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Image {
-                    kind,
                     dim: crate::ImageDimension::Cube,
                     arrayed: true,
-                    class: crate::ImageClass::Sampled,
+                    class: crate::ImageClass::Sampled { kind, multi: false },
                 }
             }
             Token::Word("texture_multisampled_2d") => {
                 let (kind, _) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Image {
-                    kind,
                     dim: crate::ImageDimension::D2,
                     arrayed: false,
-                    class: crate::ImageClass::Multisampled,
+                    class: crate::ImageClass::Sampled { kind, multi: true },
                 }
             }
             Token::Word("texture_depth_2d") => crate::TypeInner::Image {
-                kind: crate::ScalarKind::Float,
                 dim: crate::ImageDimension::D2,
                 arrayed: false,
                 class: crate::ImageClass::Depth,
             },
             Token::Word("texture_depth_2d_array") => crate::TypeInner::Image {
-                kind: crate::ScalarKind::Float,
                 dim: crate::ImageDimension::D2,
                 arrayed: true,
                 class: crate::ImageClass::Depth,
             },
             Token::Word("texture_depth_cube") => crate::TypeInner::Image {
-                kind: crate::ScalarKind::Float,
                 dim: crate::ImageDimension::Cube,
                 arrayed: false,
                 class: crate::ImageClass::Depth,
             },
             Token::Word("texture_depth_cube_array") => crate::TypeInner::Image {
-                kind: crate::ScalarKind::Float,
                 dim: crate::ImageDimension::Cube,
                 arrayed: true,
                 class: crate::ImageClass::Depth,
@@ -1303,7 +1291,6 @@ impl Parser {
             Token::Word("texture_ro_1d") => {
                 let format = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
-                    kind: format.into(),
                     dim: crate::ImageDimension::D1,
                     arrayed: false,
                     class: crate::ImageClass::Storage(format),
@@ -1312,7 +1299,6 @@ impl Parser {
             Token::Word("texture_ro_1d_array") => {
                 let format = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
-                    kind: format.into(),
                     dim: crate::ImageDimension::D1,
                     arrayed: true,
                     class: crate::ImageClass::Storage(format),
@@ -1321,7 +1307,6 @@ impl Parser {
             Token::Word("texture_ro_2d") => {
                 let format = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
-                    kind: format.into(),
                     dim: crate::ImageDimension::D2,
                     arrayed: false,
                     class: crate::ImageClass::Storage(format),
@@ -1330,7 +1315,6 @@ impl Parser {
             Token::Word("texture_ro_2d_array") => {
                 let format = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
-                    kind: format.into(),
                     dim: crate::ImageDimension::D2,
                     arrayed: true,
                     class: crate::ImageClass::Storage(format),
@@ -1339,7 +1323,6 @@ impl Parser {
             Token::Word("texture_ro_3d") => {
                 let format = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
-                    kind: format.into(),
                     dim: crate::ImageDimension::D3,
                     arrayed: false,
                     class: crate::ImageClass::Storage(format),
@@ -1348,7 +1331,6 @@ impl Parser {
             Token::Word("texture_wo_1d") => {
                 let format = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
-                    kind: format.into(),
                     dim: crate::ImageDimension::D1,
                     arrayed: false,
                     class: crate::ImageClass::Storage(format),
@@ -1357,7 +1339,6 @@ impl Parser {
             Token::Word("texture_wo_1d_array") => {
                 let format = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
-                    kind: format.into(),
                     dim: crate::ImageDimension::D1,
                     arrayed: true,
                     class: crate::ImageClass::Storage(format),
@@ -1366,7 +1347,6 @@ impl Parser {
             Token::Word("texture_wo_2d") => {
                 let format = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
-                    kind: format.into(),
                     dim: crate::ImageDimension::D2,
                     arrayed: false,
                     class: crate::ImageClass::Storage(format),
@@ -1375,7 +1355,6 @@ impl Parser {
             Token::Word("texture_wo_2d_array") => {
                 let format = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
-                    kind: format.into(),
                     dim: crate::ImageDimension::D2,
                     arrayed: true,
                     class: crate::ImageClass::Storage(format),
@@ -1384,7 +1363,6 @@ impl Parser {
             Token::Word("texture_wo_3d") => {
                 let format = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
-                    kind: format.into(),
                     dim: crate::ImageDimension::D3,
                     arrayed: false,
                     class: crate::ImageClass::Storage(format),

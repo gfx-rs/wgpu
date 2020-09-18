@@ -179,11 +179,11 @@ pub(super) fn instruction_type_image(
     });
     instruction.add_operand(arrayed as u32);
     instruction.add_operand(match image_class {
-        crate::ImageClass::Multisampled => 1,
+        crate::ImageClass::Sampled { multi: true, .. } => 1,
         _ => 0,
     });
     instruction.add_operand(match image_class {
-        crate::ImageClass::Sampled => 1,
+        crate::ImageClass::Sampled { .. } => 1,
         _ => 0,
     });
 
@@ -800,7 +800,10 @@ mod tests {
             1,
             spirv::Dim::Dim3D,
             true,
-            crate::ImageClass::Multisampled,
+            crate::ImageClass::Sampled {
+                kind: crate::ScalarKind::Float,
+                multi: true,
+            },
         );
         let mut output = vec![];
 

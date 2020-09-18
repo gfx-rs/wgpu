@@ -136,18 +136,22 @@ impl Typifier {
             crate::Expression::Load { .. } => unimplemented!(),
             crate::Expression::ImageSample { image, .. }
             | crate::Expression::ImageLoad { image, .. } => match *self.get(image, types) {
-                crate::TypeInner::Image {
-                    kind,
-                    class: crate::ImageClass::Depth,
-                    ..
-                } => Resolution::Value(crate::TypeInner::Scalar { kind, width: 4 }),
-                crate::TypeInner::Image { kind, .. } => {
-                    Resolution::Value(crate::TypeInner::Vector {
+                crate::TypeInner::Image { class, .. } => Resolution::Value(match class {
+                    crate::ImageClass::Depth => crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Float,
+                        width: 4,
+                    },
+                    crate::ImageClass::Sampled { kind, multi: _ } => crate::TypeInner::Vector {
                         kind,
                         width: 4,
                         size: crate::VectorSize::Quad,
-                    })
-                }
+                    },
+                    crate::ImageClass::Storage(format) => crate::TypeInner::Vector {
+                        kind: format.into(),
+                        width: 4,
+                        size: crate::VectorSize::Quad,
+                    },
+                }),
                 _ => unreachable!(),
             },
             crate::Expression::Unary { expr, .. } => self.resolutions[expr.index()].clone(),

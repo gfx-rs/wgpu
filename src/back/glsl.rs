@@ -268,7 +268,6 @@ pub fn write<'a>(
     {
         match module.types[global.ty].inner {
             TypeInner::Image {
-                kind,
                 dim,
                 arrayed,
                 class,
@@ -300,22 +299,10 @@ pub fn write<'a>(
 
                 let name = namer(global.name.as_ref());
 
-                let comparison = if let Some(sampler) = mapping.1 {
-                    if let TypeInner::Sampler { comparison } =
-                        module.types[module.global_variables[*sampler].ty].inner
-                    {
-                        comparison
-                    } else {
-                        false
-                    }
-                } else {
-                    unreachable!()
-                };
-
                 writeln!(
                     out,
                     "uniform {} {};",
-                    write_image_type(kind, dim, arrayed, class, comparison, features)?,
+                    write_image_type(dim, arrayed, class, features)?,
                     name
                 )?;
 
@@ -814,34 +801,28 @@ fn write_expression<'a, 'b>(
             let coordinate_expr =
                 write_expression(&builder.expressions[coordinate], module, builder)?;
 
-            let (kind, dim, arrayed, class) = match *builder.typifier.get(image, &module.types) {
+            let (dim, arrayed, class) = match *builder.typifier.get(image, &module.types) {
                 TypeInner::Image {
-                    kind,
                     dim,
                     arrayed,
                     class,
-                } => (kind, dim, arrayed, class),
+                } => (dim, arrayed, class),
                 ref other => return Err(Error::Custom(format!("Cannot load {:?}", other))),
             };
 
             Cow::Owned(match class {
-                ImageClass::Sampled | ImageClass::Multisampled => {
-                    let ms = match class {
-                        crate::ImageClass::Multisampled => true,
-                        _ => false,
-                    };
-
+                ImageClass::Sampled { kind, multi } => {
                     //TODO: fix this
                     let sampler_constructor = format!(
                         "{}sampler{}{}{}({})",
                         map_scalar(kind, 4, builder.features)?.prefix,
                         ImageDimension(dim),
-                        if ms { "MS" } else { "" },
+                        if multi { "MS" } else { "" },
                         if arrayed { "Array" } else { "" },
                         image_expr,
                     );
 
-                    if !ms {
+                    if !multi {
                         format!("texelFetch({},{})", sampler_constructor, coordinate_expr)
                     } else {
                         let index_expr =
@@ -1188,11 +1169,9 @@ fn write_type<'a>(
 }
 
 fn write_image_type(
-    kind: ScalarKind,
     dim: crate::ImageDimension,
     arrayed: bool,
     class: ImageClass,
-    comparison: bool,
     features: SupportedFeatures,
 ) -> Result<String, Error> {
     if arrayed
@@ -1204,16 +1183,33 @@ fn write_image_type(
         )));
     }
 
+    let (base, kind, ms, comparison) = match class {
+        ImageClass::Sampled { kind, multi: true } => {
+            if !features.contains(SupportedFeatures::MULTISAMPLED_TEXTURES) {
+                return Err(Error::Custom(String::from(
+                    "Multi sampled textures aren't supported",
+                )));
+            }
+            if arrayed && !features.contains(SupportedFeatures::MULTISAMPLED_TEXTURE_ARRAYS) {
+                return Err(Error::Custom(String::from(
+                    "Multi sampled texture arrays aren't supported",
+                )));
+            }
+            ("sampler", kind, "MS", "")
+        }
+        ImageClass::Sampled { kind, multi: false } => ("sampler", kind, "", ""),
+        ImageClass::Depth => ("sampler", crate::ScalarKind::Float, "", "Shadow"),
+        ImageClass::Storage(format) => ("image", format.into(), "", ""),
+    };
+
     Ok(format!(
-        "{}{}{}{}{}",
+        "{}{}{}{}{}{}",
         map_scalar(kind, 4, features)?.prefix,
-        match class {
-            ImageClass::Storage(_) => "image",
-            _ => "sampler",
-        },
+        base,
         ImageDimension(dim),
-        write_image_flags(arrayed, class, features)?,
-        if comparison { "Shadow" } else { "" }
+        ms,
+        if arrayed { "Array" } else { "" },
+        comparison
     ))
 }
 
@@ -1269,33 +1265,6 @@ fn write_array_size(size: ArraySize) -> Result<String, Error> {
         ArraySize::Static(size) => size.to_string(),
         ArraySize::Dynamic => String::from(""),
     })
-}
-
-fn write_image_flags(
-    arrayed: bool,
-    class: ImageClass,
-    features: SupportedFeatures,
-) -> Result<String, Error> {
-    let ms = match class {
-        ImageClass::Multisampled => {
-            if !features.contains(SupportedFeatures::MULTISAMPLED_TEXTURES) {
-                return Err(Error::Custom(String::from(
-                    "Multi sampled textures aren't supported",
-                )));
-            }
-            if arrayed && !features.contains(SupportedFeatures::MULTISAMPLED_TEXTURE_ARRAYS) {
-                return Err(Error::Custom(String::from(
-                    "Multi sampled texture arrays aren't supported",
-                )));
-            }
-            "MS"
-        }
-        _ => "",
-    };
-
-    let array = if arrayed { "Array" } else { "" };
-
-    Ok(format!("{}{}", ms, array))
 }
 
 struct ImageDimension(crate::ImageDimension);

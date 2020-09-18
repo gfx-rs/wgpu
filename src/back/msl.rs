@@ -839,35 +839,30 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "}}")?;
                 }
                 crate::TypeInner::Image {
-                    kind,
                     dim,
                     arrayed,
                     class,
                 } => {
-                    let base_name = scalar_kind_string(kind);
                     let dim_str = match dim {
                         crate::ImageDimension::D1 => "1d",
                         crate::ImageDimension::D2 => "2d",
                         crate::ImageDimension::D3 => "3d",
                         crate::ImageDimension::Cube => "Cube",
                     };
-                    let texture_str = match class {
-                        crate::ImageClass::Depth => "depth",
-                        _ => "texture",
-                    };
-                    let msaa_str = match class {
-                        crate::ImageClass::Multisampled => "_ms",
-                        _ => "",
-                    };
-                    let array_str = if arrayed { "_array" } else { "" };
-                    let access = match class {
-                        crate::ImageClass::Storage(_) => {
+                    let (texture_str, msaa_str, kind, access) = match class {
+                        crate::ImageClass::Sampled { kind, multi } => {
+                            ("texture", if multi { "_ms" } else { "" }, kind, "sample")
+                        }
+                        crate::ImageClass::Depth => {
+                            ("depth", "", crate::ScalarKind::Float, "sample")
+                        }
+                        crate::ImageClass::Storage(format) => {
                             let (_, global) = module
                                 .global_variables
                                 .iter()
                                 .find(|(_, var)| var.ty == handle)
                                 .expect("Unable to find a global variable using the image type");
-                            if global
+                            let access = if global
                                 .storage_access
                                 .contains(crate::StorageAccess::LOAD | crate::StorageAccess::STORE)
                             {
@@ -878,10 +873,12 @@ impl<W: Write> Writer<W> {
                                 "read"
                             } else {
                                 return Err(Error::InvalidImageAccess(global.storage_access));
-                            }
+                            };
+                            ("texture", "", format.into(), access)
                         }
-                        _ => "sample",
                     };
+                    let base_name = scalar_kind_string(kind);
+                    let array_str = if arrayed { "_array" } else { "" };
                     write!(
                         self.out,
                         "typedef {}{}{}{}<{}, access::{}> {}",

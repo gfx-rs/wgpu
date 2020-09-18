@@ -490,19 +490,28 @@ impl Writer {
                 super::instructions::instruction_type_matrix(id, vector_id, columns)
             }
             crate::TypeInner::Image {
-                kind,
                 dim,
                 arrayed,
                 class,
             } => {
-                let type_id = self.get_type_id(
-                    arena,
-                    LookupType::Local(LocalType::Vector {
+                let width = 4;
+                let local_type = match class {
+                    crate::ImageClass::Sampled { kind, multi: _ } => LocalType::Vector {
                         size: crate::VectorSize::Quad,
                         kind,
-                        width: 4,
-                    }),
-                );
+                        width,
+                    },
+                    crate::ImageClass::Depth => LocalType::Scalar {
+                        kind: crate::ScalarKind::Float,
+                        width,
+                    },
+                    crate::ImageClass::Storage(format) => LocalType::Vector {
+                        size: crate::VectorSize::Quad,
+                        kind: format.into(),
+                        width,
+                    },
+                };
+                let type_id = self.get_type_id(arena, LookupType::Local(local_type));
                 let dim = map_dim(dim);
                 self.try_add_capabilities(dim.required_capabilities());
                 super::instructions::instruction_type_image(id, type_id, dim, arrayed, class)
