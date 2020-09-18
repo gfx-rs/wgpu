@@ -247,11 +247,18 @@ impl Typifier {
                 origin: crate::FunctionOrigin::External(ref name),
                 ref arguments,
             } => match name.as_str() {
-                "distance" | "length" | "dot" => match *self.get(arguments[0], types) {
+                "distance" | "length" => match *self.get(arguments[0], types) {
+                    crate::TypeInner::Vector { kind, width, .. }
+                    | crate::TypeInner::Scalar { kind, width } => {
+                        Resolution::Value(crate::TypeInner::Scalar { kind, width })
+                    }
+                    ref other => panic!("Unexpected argument {:?} on {}", other, name),
+                },
+                "dot" => match *self.get(arguments[0], types) {
                     crate::TypeInner::Vector { kind, width, .. } => {
                         Resolution::Value(crate::TypeInner::Scalar { kind, width })
                     }
-                    ref other => panic!("Unexpected argument {:?}", other),
+                    ref other => panic!("Unexpected argument {:?} on {}", other, name),
                 },
                 "atan2" | "cos" | "sin" | "normalize" | "max" | "reflect" | "pow" | "clamp"
                 | "fclamp" | "mix" => self.resolutions[arguments[0].index()].clone(),

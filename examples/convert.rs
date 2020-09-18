@@ -149,15 +149,19 @@ fn main() {
                 ShaderStage,
             };
 
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .create(true)
-                .open(&args[2])
-                .unwrap();
+            let version = match args.get(3).map(|p| p.as_str()) {
+                Some("core") => {
+                    Version::Desktop(args.get(4).and_then(|v| v.parse().ok()).unwrap_or(330))
+                }
+                Some("es") => {
+                    Version::Embedded(args.get(4).and_then(|v| v.parse().ok()).unwrap_or(310))
+                }
+                Some(_) => panic!("Unknown profile"),
+                _ => Version::Embedded(310),
+            };
 
             let options = Options {
-                version: Version::Embedded(310),
+                version,
                 entry_point: (
                     match stage {
                         "vert" => ShaderStage::Vertex,
@@ -169,7 +173,19 @@ fn main() {
                 ),
             };
 
-            glsl::write(&module, &mut file, options).unwrap();
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .create(true)
+                .open(&args[2])
+                .unwrap();
+
+            glsl::write(&module, &mut file, options)
+                .map_err(|e| {
+                    fs::remove_file(&args[2]).unwrap();
+                    e
+                })
+                .unwrap();
         }
         #[cfg(feature = "serialize")]
         "ron" => {
