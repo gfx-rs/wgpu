@@ -15,14 +15,6 @@ clean:
 %.metallib: %.air
 	xcrun -sdk macosx metallib $< -o $@
 
-%.vert: test-data/%.wgsl $(wildcard src/*.rs src/**/*.rs examples/*.rs)
+%.vert %.frag %.comp: test-data/%.wgsl $(wildcard src/*.rs src/**/*.rs examples/*.rs)
 	cargo run --example convert --features wgsl-in,glsl-out -- $< $@
-
-%.frag: test-data/%.wgsl $(wildcard src/*.rs src/**/*.rs examples/*.rs)
-	cargo run --example convert --features wgsl-in,glsl-out -- $< $@
-
-%.comp: test-data/%.wgsl $(wildcard src/*.rs src/**/*.rs examples/*.rs)
-	cargo run --example convert --features wgsl-in,glsl-out -- $< $@
-
-%.glsl_validate: %.vert %.frag %.comp
-	glslangValidator $<
+	glslangValidator $@
