@@ -286,3 +286,51 @@ impl<'a> Lexer<'a> {
         source.len() - self.input.len()
     }
 }
+
+#[cfg(test)]
+fn sub_test(source: &str, expected_tokens: &[Token]) {
+    let mut lex = Lexer::new(source);
+    for &token in expected_tokens {
+        assert_eq!(lex.next(), token);
+    }
+    assert_eq!(lex.next(), Token::End);
+}
+
+#[test]
+fn test_tokens() {
+    sub_test("id123_OK", &[Token::Word("id123_OK")]);
+    sub_test("92No", &[Token::Number("92"), Token::Word("No")]);
+    sub_test(
+        "æNoø",
+        &[Token::Unknown('æ'), Token::Word("No"), Token::Unknown('ø')],
+    );
+    sub_test("No¾", &[Token::Word("No"), Token::Unknown('¾')]);
+    sub_test("No好", &[Token::Word("No"), Token::Unknown('好')]);
+    sub_test("\"\u{2}ПЀ\u{0}\"", &[Token::String("\u{2}ПЀ\u{0}")]); // https://github.com/gfx-rs/naga/issues/90
+}
+
+#[test]
+fn test_variable_decl() {
+    sub_test(
+        "[[ group(0 )]] var< uniform> texture:   texture_multisampled_2d <f32 >;",
+        &[
+            Token::DoubleParen('['),
+            Token::Word("group"),
+            Token::Paren('('),
+            Token::Number("0"),
+            Token::Paren(')'),
+            Token::DoubleParen(']'),
+            Token::Word("var"),
+            Token::Paren('<'),
+            Token::Word("uniform"),
+            Token::Paren('>'),
+            Token::Word("texture"),
+            Token::Separator(':'),
+            Token::Word("texture_multisampled_2d"),
+            Token::Paren('<'),
+            Token::Word("f32"),
+            Token::Paren('>'),
+            Token::Separator(';'),
+        ],
+    )
+}
