@@ -119,7 +119,7 @@ where
         for statement in block {
             use crate::Statement as S;
             match *statement {
-                S::Empty | S::Break | S::Continue | S::Kill => (),
+                S::Break | S::Continue | S::Kill => (),
                 S::Block(ref b) => {
                     self.traverse(b);
                 }

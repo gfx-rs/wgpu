@@ -1,4 +1,4 @@
-use super::{Error, Token};
+use super::{conv, Error, Token};
 
 fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
     if input.starts_with(what) {
@@ -214,56 +214,17 @@ impl<'a> Lexer<'a> {
         &mut self,
     ) -> Result<(crate::ScalarKind, crate::Bytes), Error<'a>> {
         self.expect(Token::Paren('<'))?;
-        let pair = match self.next() {
-            Token::Word("f32") => (crate::ScalarKind::Float, 4),
-            Token::Word("i32") => (crate::ScalarKind::Sint, 4),
-            Token::Word("u32") => (crate::ScalarKind::Uint, 4),
-            other => return Err(Error::Unexpected(other)),
-        };
+        let word = self.next_ident()?;
+        let pair = conv::get_scalar_type(word).ok_or(Error::UnknownScalarType(word))?;
         self.expect(Token::Paren('>'))?;
         Ok(pair)
     }
 
     pub(super) fn next_format_generic(&mut self) -> Result<crate::StorageFormat, Error<'a>> {
-        use crate::StorageFormat as Sf;
         self.expect(Token::Paren('<'))?;
-        let pair = match self.next() {
-            Token::Word("r8unorm") => Sf::R8Unorm,
-            Token::Word("r8snorm") => Sf::R8Snorm,
-            Token::Word("r8uint") => Sf::R8Uint,
-            Token::Word("r8sint") => Sf::R8Sint,
-            Token::Word("r16uint") => Sf::R16Uint,
-            Token::Word("r16sint") => Sf::R16Sint,
-            Token::Word("r16float") => Sf::R16Float,
-            Token::Word("rg8unorm") => Sf::Rg8Unorm,
-            Token::Word("rg8snorm") => Sf::Rg8Snorm,
-            Token::Word("rg8uint") => Sf::Rg8Uint,
-            Token::Word("rg8sint") => Sf::Rg8Sint,
-            Token::Word("r32uint") => Sf::R32Uint,
-            Token::Word("r32sint") => Sf::R32Sint,
-            Token::Word("r32float") => Sf::R32Float,
-            Token::Word("rg16uint") => Sf::Rg16Uint,
-            Token::Word("rg16sint") => Sf::Rg16Sint,
-            Token::Word("rg16float") => Sf::Rg16Float,
-            Token::Word("rgba8unorm") => Sf::Rgba8Unorm,
-            Token::Word("rgba8snorm") => Sf::Rgba8Snorm,
-            Token::Word("rgba8uint") => Sf::Rgba8Uint,
-            Token::Word("rgba8sint") => Sf::Rgba8Sint,
-            Token::Word("rgb10a2unorm") => Sf::Rgb10a2Unorm,
-            Token::Word("rg11b10float") => Sf::Rg11b10Float,
-            Token::Word("rg32uint") => Sf::Rg32Uint,
-            Token::Word("rg32sint") => Sf::Rg32Sint,
-            Token::Word("rg32float") => Sf::Rg32Float,
-            Token::Word("rgba16uint") => Sf::Rgba16Uint,
-            Token::Word("rgba16sint") => Sf::Rgba16Sint,
-            Token::Word("rgba16float") => Sf::Rgba16Float,
-            Token::Word("rgba32uint") => Sf::Rgba32Uint,
-            Token::Word("rgba32sint") => Sf::Rgba32Sint,
-            Token::Word("rgba32float") => Sf::Rgba32Float,
-            other => return Err(Error::Unexpected(other)),
-        };
+        let format = conv::map_storage_format(self.next_ident()?)?;
         self.expect(Token::Paren('>'))?;
-        Ok(pair)
+        Ok(format)
     }
 
     pub(super) fn take_until(&mut self, what: Token<'_>) -> Result<Lexer<'a>, Error<'a>> {

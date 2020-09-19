@@ -645,7 +645,7 @@ pub type Block = Vec<Statement>;
 
 /// Marker type, used for falling through in a switch statement.
 // Clone is used only for error reporting and is not intended for end users
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct FallThrough;
@@ -656,8 +656,6 @@ pub struct FallThrough;
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Statement {
-    /// Empty statement, does nothing.
-    Empty,
     /// A block containing more statements, to be executed sequentially.
     Block(Block),
     /// Conditionally executes one of two blocks, based on the value of the condition.

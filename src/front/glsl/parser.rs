@@ -726,7 +726,6 @@ pomelo! {
             extra.context.add_local_var(id, exp);
         }
         match statements.len() {
-            0 => Statement::Empty,
             1 => statements.remove(0),
             _ => Statement::Block(statements),
         }
@@ -774,7 +773,7 @@ pomelo! {
     statement_list ::= statement_list(mut ss) statement(s) { ss.push(s); ss }
 
     expression_statement ::= Semicolon  {
-        Statement::Empty
+        Statement::Block(Vec::new())
     }
     expression_statement ::= expression(mut e) Semicolon {
         match e.statements.len() {

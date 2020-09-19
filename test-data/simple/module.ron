@@ -104,7 +104,7 @@
                     ),
                 ],
                 body: [
-                    Empty,
+                    Block([]),
                     Store(
                         pointer: 2,
                         value: 6,

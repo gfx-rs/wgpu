@@ -321,19 +321,7 @@ impl Writer {
             function_type,
         ));
 
-        let mut block = Block::new();
-        let id = self.generate_id();
-        block.label = Some(super::instructions::instruction_label(id));
-        for statement in ir_function.body.iter() {
-            self.write_function_statement(
-                ir_module,
-                ir_function,
-                &statement,
-                &mut block,
-                &mut function,
-            );
-        }
-        function.blocks.push(block);
+        let id = self.write_block(&ir_function.body, ir_module, ir_function, &mut function);
 
         function.to_words(&mut self.logical_layout.function_definitions);
         super::instructions::instruction_function_end()
@@ -996,74 +984,111 @@ impl Writer {
         }
     }
 
-    fn write_function_statement(
+    fn write_block(
         &mut self,
+        statements: &[crate::Statement],
         ir_module: &crate::Module,
         ir_function: &crate::Function,
-        statement: &crate::Statement,
-        block: &mut Block,
         function: &mut Function,
-    ) {
-        match statement {
-            crate::Statement::Return { value } => match ir_function.return_type {
-                Some(_) => {
-                    let expression = &ir_function.expressions[value.unwrap()];
-                    let (id, ty) = self
-                        .write_expression(ir_module, ir_function, expression, block, function)
+    ) -> spirv::Word {
+        let mut block = Block::new();
+        let id = self.generate_id();
+        block.label = Some(super::instructions::instruction_label(id));
+
+        for statement in statements {
+            match *statement {
+                crate::Statement::Block(ref ir_block) => {
+                    if !ir_block.is_empty() {
+                        //TODO: link the block with `OpBranch`
+                        self.write_block(ir_block, ir_module, ir_function, function);
+                    }
+                }
+                crate::Statement::Return { value } => {
+                    block.termination = Some(match ir_function.return_type {
+                        Some(_) => {
+                            let expression = &ir_function.expressions[value.unwrap()];
+                            let (id, ty) = self
+                                .write_expression(
+                                    ir_module,
+                                    ir_function,
+                                    expression,
+                                    &mut block,
+                                    function,
+                                )
+                                .unwrap();
+
+                            let id = match *expression {
+                                crate::Expression::LocalVariable(_) => {
+                                    let load_id = self.generate_id();
+                                    let value_ty_id = self.get_type_id(
+                                        &ir_module.types,
+                                        LookupType::Handle(ty.unwrap()),
+                                    );
+                                    block.body.push(super::instructions::instruction_load(
+                                        value_ty_id,
+                                        load_id,
+                                        id,
+                                        None,
+                                    ));
+                                    load_id
+                                }
+                                _ => id,
+                            };
+                            super::instructions::instruction_return_value(id)
+                        }
+                        None => super::instructions::instruction_return(),
+                    });
+                }
+                crate::Statement::Store { pointer, value } => {
+                    let pointer_expression = &ir_function.expressions[pointer];
+                    let value_expression = &ir_function.expressions[value];
+                    let (pointer_id, _) = self
+                        .write_expression(
+                            ir_module,
+                            ir_function,
+                            pointer_expression,
+                            &mut block,
+                            function,
+                        )
+                        .unwrap();
+                    let (value_id, value_ty) = self
+                        .write_expression(
+                            ir_module,
+                            ir_function,
+                            value_expression,
+                            &mut block,
+                            function,
+                        )
                         .unwrap();
 
-                    let id = match expression {
+                    let value_id = match value_expression {
                         crate::Expression::LocalVariable(_) => {
                             let load_id = self.generate_id();
-                            let value_ty_id =
-                                self.get_type_id(&ir_module.types, LookupType::Handle(ty.unwrap()));
+                            let value_ty_id = self.get_type_id(
+                                &ir_module.types,
+                                LookupType::Handle(value_ty.unwrap()),
+                            );
                             block.body.push(super::instructions::instruction_load(
                                 value_ty_id,
                                 load_id,
-                                id,
+                                value_id,
                                 None,
                             ));
                             load_id
                         }
-                        _ => id,
+                        _ => value_id,
                     };
-                    block.termination = Some(super::instructions::instruction_return_value(id));
+
+                    block.body.push(super::instructions::instruction_store(
+                        pointer_id, value_id, None,
+                    ));
                 }
-                None => block.termination = Some(super::instructions::instruction_return()),
-            },
-            crate::Statement::Store { pointer, value } => {
-                let pointer_expression = &ir_function.expressions[*pointer];
-                let value_expression = &ir_function.expressions[*value];
-                let (pointer_id, _) = self
-                    .write_expression(ir_module, ir_function, pointer_expression, block, function)
-                    .unwrap();
-                let (value_id, value_ty) = self
-                    .write_expression(ir_module, ir_function, value_expression, block, function)
-                    .unwrap();
-
-                let value_id = match value_expression {
-                    crate::Expression::LocalVariable(_) => {
-                        let load_id = self.generate_id();
-                        let value_ty_id = self
-                            .get_type_id(&ir_module.types, LookupType::Handle(value_ty.unwrap()));
-                        block.body.push(super::instructions::instruction_load(
-                            value_ty_id,
-                            load_id,
-                            value_id,
-                            None,
-                        ));
-                        load_id
-                    }
-                    _ => value_id,
-                };
-
-                block.body.push(super::instructions::instruction_store(
-                    pointer_id, value_id, None,
-                ));
+                _ => unimplemented!("{:?}", statement),
             }
-            crate::Statement::Empty => {}
-            _ => unimplemented!("{:?}", statement),
         }
+
+        function.blocks.push(block);
+        id
     }
 
     fn write_physical_layout(&mut self) {

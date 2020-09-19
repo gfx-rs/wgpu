@@ -756,7 +756,6 @@ fn write_statement<'a, 'b>(
     indent: usize,
 ) -> Result<String, Error> {
     Ok(match sta {
-        Statement::Empty => String::new(),
         Statement::Block(block) => block
             .iter()
             .map(|sta| write_statement(sta, module, builder, indent))
@@ -1173,12 +1172,19 @@ fn write_expression<'a, 'b>(
             let value_expr = write_expression(&builder.expressions[expr], module, builder)?;
 
             let (source_kind, ty_expr) = match *builder.typifier.get(expr, &module.types) {
-                TypeInner::Scalar { width, kind } => (
-                    kind,
+                TypeInner::Scalar {
+                    width,
+                    kind: source_kind,
+                } => (
+                    source_kind,
                     Cow::Borrowed(map_scalar(kind, width, builder.manager)?.full),
                 ),
-                TypeInner::Vector { width, kind, size } => (
-                    kind,
+                TypeInner::Vector {
+                    width,
+                    kind: source_kind,
+                    size,
+                } => (
+                    source_kind,
                     Cow::Owned(format!(
                         "{}vec{}",
                         map_scalar(kind, width, builder.manager)?.prefix,

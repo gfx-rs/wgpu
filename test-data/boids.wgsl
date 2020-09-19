@@ -70,7 +70,7 @@ type Particles = struct {
 [[stage(compute), workgroup_size(1)]]
 fn main() -> void {
   var index : u32 = gl_GlobalInvocationID.x;
-  if (index >= 5) {
+  if (index >= u32(5)) {
     return;
   }
 
@@ -87,7 +87,7 @@ fn main() -> void {
   var vel : vec2<f32>;
   var i : u32 = 0;
   loop {
-    if (i >= 5) {
+    if (i >= u32(5)) {
       break;
     }
     if (i == index) {
@@ -110,7 +110,7 @@ fn main() -> void {
     }
 
     continuing {
-      i = i + 1;
+      i = i + u32(1);
     }
   }
   if (cMassCount > 0) {

@@ -71,15 +71,15 @@ pub enum Error {
     BadName(String),
     UnexpectedGlobalType(Handle<crate::Type>),
     UnimplementedBindTarget(BindTarget),
-    UnexpectedIndexing(crate::Expression),
     UnsupportedCompose(Handle<crate::Type>),
     UnsupportedBinaryOp(crate::BinaryOperator),
     UnexpectedSampleLevel(crate::SampleLevel),
     UnsupportedCall(String),
-    UnsupportedExpression(crate::Expression),
+    UnsupportedDynamicArrayLength,
     UnableToReturnValue(Handle<crate::Expression>),
-    UnsupportedStatement(crate::Statement),
     AccessIndexExceedsStaticLength(u32, u32),
+    /// The source IR is not valid.
+    Validation,
 }
 
 impl From<FmtError> for Error {
@@ -370,6 +370,24 @@ fn separate(is_last: bool) -> &'static str {
 }
 
 impl<W: Write> Writer<W> {
+    fn put_call(
+        &mut self,
+        name: &str,
+        parameters: &[Handle<crate::Expression>],
+        function: &crate::Function,
+        module: &crate::Module,
+    ) -> Result<(), Error> {
+        write!(self.out, "{}(", name)?;
+        for (i, &handle) in parameters.iter().enumerate() {
+            if i != 0 {
+                write!(self.out, ", ")?;
+            }
+            self.put_expression(handle, function, module)?;
+        }
+        write!(self.out, ")")?;
+        Ok(())
+    }
+
     fn put_expression(
         &mut self,
         expr_handle: Handle<crate::Expression>,
@@ -381,19 +399,9 @@ impl<W: Write> Writer<W> {
         match *expression {
             crate::Expression::Access { base, index } => {
                 self.put_expression(base, function, module)?;
-                match *self.typifier.get(base, &module.types) {
-                    crate::TypeInner::Array { .. } => {
-                        //TODO: add size check
-                        self.out.write_str("[")?;
-                        self.put_expression(index, function, module)?;
-                        self.out.write_str("]")?;
-                    }
-                    _ => {
-                        return Err(Error::UnexpectedIndexing(
-                            function.expressions[base].clone(),
-                        ))
-                    }
-                }
+                self.out.write_str("[")?;
+                self.put_expression(index, function, module)?;
+                self.out.write_str("]")?;
             }
             crate::Expression::AccessIndex { base, index } => {
                 self.put_expression(base, function, module)?;
@@ -419,9 +427,7 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "[{}]", index)?;
                     }
                     _ => {
-                        return Err(Error::UnexpectedIndexing(
-                            function.expressions[base].clone(),
-                        ))
+                        // unexpected indexing, should fail validation
                     }
                 }
             }
@@ -432,25 +438,21 @@ impl<W: Write> Writer<W> {
                     crate::TypeInner::Vector { size, kind, .. } => {
                         write!(
                             self.out,
-                            "{}{}(",
+                            "{}{}",
                             scalar_kind_string(kind),
                             vector_size_string(size)
                         )?;
-                        for (i, &handle) in components.iter().enumerate() {
-                            if i != 0 {
-                                write!(self.out, ", ")?;
-                            }
-                            self.put_expression(handle, function, module)?;
-                        }
-                        write!(self.out, ")")?;
+                        self.put_call("", components, function, module)?;
                     }
                     crate::TypeInner::Scalar { width: 4, kind } if components.len() == 1 => {
-                        write!(self.out, "{}(", scalar_kind_string(kind))?;
-                        self.put_expression(components[0], function, module)?;
-                        write!(self.out, ")")?;
+                        self.put_call(scalar_kind_string(kind), components, function, module)?;
                     }
                     _ => return Err(Error::UnsupportedCompose(ty)),
                 }
+            }
+            crate::Expression::FunctionParameter(index) => {
+                let name = Name::from(ParameterIndex(index as usize));
+                write!(self.out, "{}", name)?;
             }
             crate::Expression::GlobalVariable(handle) => {
                 let var = &module.global_variables[handle];
@@ -479,36 +481,6 @@ impl<W: Write> Writer<W> {
             crate::Expression::Load { pointer } => {
                 //write!(self.out, "*")?;
                 self.put_expression(pointer, function, module)?;
-            }
-            crate::Expression::Unary { op, expr } => {
-                let op_str = match op {
-                    crate::UnaryOperator::Negate => "-",
-                    crate::UnaryOperator::Not => "!",
-                };
-                write!(self.out, "{}", op_str)?;
-                self.put_expression(expr, function, module)?;
-            }
-            crate::Expression::Binary { op, left, right } => {
-                let op_str = match op {
-                    crate::BinaryOperator::Add => "+",
-                    crate::BinaryOperator::Subtract => "-",
-                    crate::BinaryOperator::Multiply => "*",
-                    crate::BinaryOperator::Divide => "/",
-                    crate::BinaryOperator::Modulo => "%",
-                    crate::BinaryOperator::Equal => "==",
-                    crate::BinaryOperator::NotEqual => "!=",
-                    crate::BinaryOperator::Less => "<",
-                    crate::BinaryOperator::LessEqual => "<=",
-                    crate::BinaryOperator::Greater => "==",
-                    crate::BinaryOperator::GreaterEqual => ">=",
-                    crate::BinaryOperator::And => "&",
-                    other => return Err(Error::UnsupportedBinaryOp(other)),
-                };
-                //write!(self.out, "(")?;
-                self.put_expression(left, function, module)?;
-                write!(self.out, " {} ", op_str)?;
-                self.put_expression(right, function, module)?;
-                //write!(self.out, ")")?;
             }
             crate::Expression::ImageSample {
                 image,
@@ -564,55 +536,113 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, ")")?;
             }
+            crate::Expression::Unary { op, expr } => {
+                let op_str = match op {
+                    crate::UnaryOperator::Negate => "-",
+                    crate::UnaryOperator::Not => "!",
+                };
+                write!(self.out, "{}", op_str)?;
+                self.put_expression(expr, function, module)?;
+            }
+            crate::Expression::Binary { op, left, right } => {
+                let op_str = match op {
+                    crate::BinaryOperator::Add => "+",
+                    crate::BinaryOperator::Subtract => "-",
+                    crate::BinaryOperator::Multiply => "*",
+                    crate::BinaryOperator::Divide => "/",
+                    crate::BinaryOperator::Modulo => "%",
+                    crate::BinaryOperator::Equal => "==",
+                    crate::BinaryOperator::NotEqual => "!=",
+                    crate::BinaryOperator::Less => "<",
+                    crate::BinaryOperator::LessEqual => "<=",
+                    crate::BinaryOperator::Greater => "==",
+                    crate::BinaryOperator::GreaterEqual => ">=",
+                    crate::BinaryOperator::And => "&",
+                    other => return Err(Error::UnsupportedBinaryOp(other)),
+                };
+                //write!(self.out, "(")?;
+                self.put_expression(left, function, module)?;
+                write!(self.out, " {} ", op_str)?;
+                self.put_expression(right, function, module)?;
+                //write!(self.out, ")")?;
+            }
+            crate::Expression::Intrinsic { fun, argument } => {
+                let op = match fun {
+                    crate::IntrinsicFunction::Any => "any",
+                    crate::IntrinsicFunction::All => "all",
+                    crate::IntrinsicFunction::IsNan => "",
+                    crate::IntrinsicFunction::IsInf => "",
+                    crate::IntrinsicFunction::IsFinite => "",
+                    crate::IntrinsicFunction::IsNormal => "",
+                };
+                self.put_call(op, &[argument], function, module)?;
+            }
+            crate::Expression::Transpose(expr) => {
+                self.put_call("transpose", &[expr], function, module)?;
+            }
+            crate::Expression::DotProduct(a, b) => {
+                self.put_call("dot", &[a, b], function, module)?;
+            }
+            crate::Expression::CrossProduct(a, b) => {
+                self.put_call("cross", &[a, b], function, module)?;
+            }
+            crate::Expression::As {
+                expr,
+                kind,
+                convert,
+            } => {
+                let scalar = scalar_kind_string(kind);
+                let size = match *self.typifier.get(expr, &module.types) {
+                    crate::TypeInner::Scalar { .. } => "",
+                    crate::TypeInner::Vector { size, .. } => vector_size_string(size),
+                    _ => return Err(Error::Validation),
+                };
+                let op = if convert { "static_cast" } else { "as_type" };
+                write!(self.out, "{}<{}{}>(", op, scalar, size)?;
+                self.put_expression(expr, function, module)?;
+                write!(self.out, ")")?;
+            }
+            crate::Expression::Derivative { axis, expr } => {
+                let op = match axis {
+                    crate::DerivativeAxis::X => "dfdx",
+                    crate::DerivativeAxis::Y => "dfdy",
+                    crate::DerivativeAxis::Width => "fwidth",
+                };
+                self.put_call(op, &[expr], function, module)?;
+            }
+            crate::Expression::Call {
+                origin: crate::FunctionOrigin::Local(handle),
+                ref arguments,
+            } => {
+                let name = module.functions[handle].name.or_index(handle);
+                write!(self.out, "{}", name)?;
+                self.put_call("", arguments, function, module)?;
+            }
             crate::Expression::Call {
                 origin: crate::FunctionOrigin::External(ref name),
                 ref arguments,
             } => match name.as_str() {
-                "cos" | "normalize" | "sin" => {
-                    write!(self.out, "{}(", name)?;
-                    self.put_expression(arguments[0], function, module)?;
-                    write!(self.out, ")")?;
+                "atan2" | "cos" | "distance" | "length" | "mix" | "normalize" | "sin" => {
+                    self.put_call(name, arguments, function, module)?;
                 }
                 "fclamp" => {
-                    write!(self.out, "clamp(")?;
-                    self.put_expression(arguments[0], function, module)?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(arguments[1], function, module)?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(arguments[2], function, module)?;
-                    write!(self.out, ")")?;
-                }
-                "atan2" => {
-                    write!(self.out, "{}(", name)?;
-                    self.put_expression(arguments[0], function, module)?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(arguments[1], function, module)?;
-                    write!(self.out, ")")?;
-                }
-                "distance" => {
-                    write!(self.out, "distance(")?;
-                    self.put_expression(arguments[0], function, module)?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(arguments[1], function, module)?;
-                    write!(self.out, ")")?;
-                }
-                "length" => {
-                    write!(self.out, "length(")?;
-                    self.put_expression(arguments[0], function, module)?;
-                    write!(self.out, ")")?;
-                }
-                "mix" => {
-                    write!(self.out, "mix(")?;
-                    self.put_expression(arguments[0], function, module)?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(arguments[1], function, module)?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(arguments[2], function, module)?;
-                    write!(self.out, ")")?;
+                    self.put_call("clamp", arguments, function, module)?;
                 }
                 other => return Err(Error::UnsupportedCall(other.to_owned())),
             },
-            ref other => return Err(Error::UnsupportedExpression(other.clone())),
+            crate::Expression::ArrayLength(expr) => {
+                let size = match *self.typifier.get(expr, &module.types) {
+                    crate::TypeInner::Array {
+                        size: crate::ArraySize::Static(size),
+                        ..
+                    } => size,
+                    crate::TypeInner::Array { .. } => {
+                        return Err(Error::UnsupportedDynamicArrayLength)
+                    }
+                    _ => return Err(Error::Validation),
+                };
+                write!(self.out, "{}", size)?;
+            }
         }
         Ok(())
     }
@@ -657,79 +687,100 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn put_statement(
+    fn put_block(
         &mut self,
         level: Level,
-        statement: &crate::Statement,
+        statements: &[crate::Statement],
         function: &crate::Function,
-        has_output: bool,
         module: &crate::Module,
     ) -> Result<(), Error> {
-        log::trace!("statement[{}] {:?}", level.0, statement);
-        match *statement {
-            crate::Statement::Empty => {}
-            crate::Statement::If {
-                condition,
-                ref accept,
-                ref reject,
-            } => {
-                write!(self.out, "{}if (", level)?;
-                self.put_expression(condition, function, module)?;
-                writeln!(self.out, ") {{")?;
-                for s in accept {
-                    self.put_statement(level.next(), s, function, has_output, module)?;
-                }
-                if !reject.is_empty() {
-                    writeln!(self.out, "{}}} else {{", level)?;
-                    for s in reject {
-                        self.put_statement(level.next(), s, function, has_output, module)?;
+        for statement in statements {
+            log::trace!("statement[{}] {:?}", level.0, statement);
+            match *statement {
+                crate::Statement::Block(ref block) => {
+                    if !block.is_empty() {
+                        writeln!(self.out, "{}{{", level)?;
+                        self.put_block(level.next(), block, function, module)?;
+                        writeln!(self.out, "{}}}", level)?;
                     }
                 }
-                writeln!(self.out, "{}}}", level)?;
-            }
-            crate::Statement::Loop {
-                ref body,
-                ref continuing,
-            } => {
-                writeln!(self.out, "{}while(true) {{", level)?;
-                for s in body {
-                    self.put_statement(level.next(), s, function, has_output, module)?;
-                }
-                if !continuing.is_empty() {
-                    //TODO
-                }
-                writeln!(self.out, "{}}}", level)?;
-            }
-            crate::Statement::Store { pointer, value } => {
-                //write!(self.out, "\t*")?;
-                write!(self.out, "{}", level)?;
-                self.put_expression(pointer, function, module)?;
-                write!(self.out, " = ")?;
-                self.put_expression(value, function, module)?;
-                writeln!(self.out, ";")?;
-            }
-            crate::Statement::Break => {
-                writeln!(self.out, "{}break;", level)?;
-            }
-            crate::Statement::Continue => {
-                writeln!(self.out, "{}continue;", level)?;
-            }
-            crate::Statement::Return { value } => {
-                write!(self.out, "{}return ", level)?;
-                match value {
-                    None if has_output => self.out.write_str(OUTPUT_STRUCT_NAME)?,
-                    None => {}
-                    Some(expr_handle) if has_output => {
-                        return Err(Error::UnableToReturnValue(expr_handle));
+                crate::Statement::If {
+                    condition,
+                    ref accept,
+                    ref reject,
+                } => {
+                    write!(self.out, "{}if (", level)?;
+                    self.put_expression(condition, function, module)?;
+                    writeln!(self.out, ") {{")?;
+                    self.put_block(level.next(), accept, function, module)?;
+                    if !reject.is_empty() {
+                        writeln!(self.out, "{}}} else {{", level)?;
+                        self.put_block(level.next(), reject, function, module)?;
                     }
-                    Some(expr_handle) => {
-                        self.put_expression(expr_handle, function, module)?;
-                    }
+                    writeln!(self.out, "{}}}", level)?;
                 }
-                writeln!(self.out, ";")?;
+                crate::Statement::Switch {
+                    selector,
+                    ref cases,
+                    ref default,
+                } => {
+                    write!(self.out, "{}switch(", level)?;
+                    self.put_expression(selector, function, module)?;
+                    writeln!(self.out, ") {{")?;
+                    let lcase = level.next();
+                    for (&value, &(ref block, ref fall_through)) in cases.iter() {
+                        writeln!(self.out, "{}case {}: {{", lcase, value)?;
+                        self.put_block(lcase.next(), block, function, module)?;
+                        if fall_through.is_none() {
+                            writeln!(self.out, "{}break;", lcase.next())?;
+                        }
+                        writeln!(self.out, "{}}}", lcase)?;
+                    }
+                    writeln!(self.out, "{}default: {{", lcase)?;
+                    self.put_block(lcase.next(), default, function, module)?;
+                    writeln!(self.out, "{}}}", lcase)?;
+                    writeln!(self.out, "{}}}", level)?;
+                }
+                crate::Statement::Loop {
+                    ref body,
+                    ref continuing,
+                } => {
+                    writeln!(self.out, "{}while(true) {{", level)?;
+                    self.put_block(level.next(), body, function, module)?;
+                    if !continuing.is_empty() {
+                        //TODO
+                    }
+                    writeln!(self.out, "{}}}", level)?;
+                }
+                crate::Statement::Break => {
+                    writeln!(self.out, "{}break;", level)?;
+                }
+                crate::Statement::Continue => {
+                    writeln!(self.out, "{}continue;", level)?;
+                }
+                crate::Statement::Return { value } => {
+                    write!(self.out, "{}return ", level)?;
+                    match value {
+                        None => self.out.write_str(OUTPUT_STRUCT_NAME)?,
+                        Some(expr_handle) => {
+                            self.put_expression(expr_handle, function, module)?;
+                        }
+                    }
+                    writeln!(self.out, ";")?;
+                }
+                crate::Statement::Kill => {
+                    writeln!(self.out, "{}discard_fragment();", level)?;
+                }
+                crate::Statement::Store { pointer, value } => {
+                    //write!(self.out, "\t*")?;
+                    write!(self.out, "{}", level)?;
+                    self.put_expression(pointer, function, module)?;
+                    write!(self.out, " = ")?;
+                    self.put_expression(value, function, module)?;
+                    writeln!(self.out, ";")?;
+                }
             }
-            ref other => return Err(Error::UnsupportedStatement(other.clone())),
-        };
+        }
         Ok(())
     }
 
@@ -924,9 +975,7 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ";")?;
             }
-            for statement in fun.body.iter() {
-                self.put_statement(Level(1), statement, fun, false, module)?;
-            }
+            self.put_block(Level(1), &fun.body, fun, module)?;
             writeln!(self.out, "}}")?;
         }
 
@@ -1132,13 +1181,12 @@ impl<W: Write> Writer<W> {
             }
             writeln!(self.out, ") {{")?;
 
-            let has_output = match stage {
+            match stage {
                 crate::ShaderStage::Vertex | crate::ShaderStage::Fragment => {
                     writeln!(self.out, "\t{} {};", output_name, OUTPUT_STRUCT_NAME)?;
-                    true
                 }
-                crate::ShaderStage::Compute => false,
-            };
+                crate::ShaderStage::Compute => {}
+            }
             for (local_handle, local) in fun.local_variables.iter() {
                 let ty_name = module.types[local.ty].name.or_index(local.ty);
                 write!(
@@ -1153,9 +1201,7 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ";")?;
             }
-            for statement in fun.body.iter() {
-                self.put_statement(Level(1), statement, fun, has_output, module)?;
-            }
+            self.put_block(Level(1), &fun.body, fun, module)?;
             writeln!(self.out, "}}")?;
         }
 

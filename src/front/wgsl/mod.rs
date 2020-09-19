@@ -2,6 +2,7 @@
 //!
 //! [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
 
+mod conv;
 mod lexer;
 
 use crate::{
@@ -60,10 +61,14 @@ pub enum Error<'a> {
     UnknownShaderStage(&'a str),
     #[error("unknown identifier: `{0}`")]
     UnknownIdent(&'a str),
+    #[error("unknown scalar type: `{0}`")]
+    UnknownScalarType(&'a str),
     #[error("unknown type: `{0}`")]
     UnknownType(&'a str),
     #[error("unknown function: `{0}`")]
     UnknownFunction(&'a str),
+    #[error("unknown storage format: `{0}`")]
+    UnknownStorageFormat(&'a str),
     #[error("missing offset for structure member `{0}`")]
     MissingMemberOffset(&'a str),
     #[error("array stride must not be 0")]
@@ -72,8 +77,6 @@ pub enum Error<'a> {
     NotCompositeType(Handle<crate::Type>),
     #[error("function redefinition: `{0}`")]
     FunctionRedefinition(&'a str),
-    //MutabilityViolation(&'a str),
-    // TODO: these could be replaced with more detailed errors
     #[error("other error")]
     Other,
 }
@@ -286,54 +289,6 @@ impl Parser {
             lookup_type: FastHashMap::default(),
             function_lookup: FastHashMap::default(),
             std_namespace: None,
-        }
-    }
-
-    fn get_storage_class(word: &str) -> Result<crate::StorageClass, Error<'_>> {
-        match word {
-            "in" => Ok(crate::StorageClass::Input),
-            "out" => Ok(crate::StorageClass::Output),
-            "uniform" => Ok(crate::StorageClass::Uniform),
-            "storage_buffer" => Ok(crate::StorageClass::StorageBuffer),
-            _ => Err(Error::UnknownStorageClass(word)),
-        }
-    }
-
-    fn get_built_in(word: &str) -> Result<crate::BuiltIn, Error<'_>> {
-        Ok(match word {
-            // vertex
-            "position" => crate::BuiltIn::Position,
-            "vertex_idx" => crate::BuiltIn::VertexIndex,
-            "instance_idx" => crate::BuiltIn::InstanceIndex,
-            // fragment
-            "front_facing" => crate::BuiltIn::FrontFacing,
-            "frag_coord" => crate::BuiltIn::FragCoord,
-            "frag_depth" => crate::BuiltIn::FragDepth,
-            // compute
-            "global_invocation_id" => crate::BuiltIn::GlobalInvocationId,
-            "local_invocation_id" => crate::BuiltIn::LocalInvocationId,
-            "local_invocation_idx" => crate::BuiltIn::LocalInvocationIndex,
-            _ => return Err(Error::UnknownBuiltin(word)),
-        })
-    }
-
-    fn get_shader_stage(word: &str) -> Result<crate::ShaderStage, Error<'_>> {
-        match word {
-            "vertex" => Ok(crate::ShaderStage::Vertex),
-            "fragment" => Ok(crate::ShaderStage::Fragment),
-            "compute" => Ok(crate::ShaderStage::Compute),
-            _ => Err(Error::UnknownShaderStage(word)),
-        }
-    }
-
-    fn get_interpolation(word: &str) -> Result<crate::Interpolation, Error<'_>> {
-        match word {
-            "linear" => Ok(crate::Interpolation::Linear),
-            "flat" => Ok(crate::Interpolation::Flat),
-            "centroid" => Ok(crate::Interpolation::Centroid),
-            "sample" => Ok(crate::Interpolation::Sample),
-            "perspective" => Ok(crate::Interpolation::Perspective),
-            _ => Err(Error::UnknownDecoration(word)),
         }
     }
 
@@ -631,25 +586,6 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
-        fn get_intrinsic(word: &str) -> Option<crate::IntrinsicFunction> {
-            match word {
-                "any" => Some(crate::IntrinsicFunction::Any),
-                "all" => Some(crate::IntrinsicFunction::All),
-                "is_nan" => Some(crate::IntrinsicFunction::IsNan),
-                "is_inf" => Some(crate::IntrinsicFunction::IsInf),
-                "is_normal" => Some(crate::IntrinsicFunction::IsNormal),
-                _ => None,
-            }
-        }
-        fn get_derivative(word: &str) -> Option<crate::DerivativeAxis> {
-            match word {
-                "dpdx" => Some(crate::DerivativeAxis::X),
-                "dpdy" => Some(crate::DerivativeAxis::Y),
-                "dwidth" => Some(crate::DerivativeAxis::Width),
-                _ => None,
-            }
-        }
-
         self.scopes.push(Scope::SingularExpr);
         let backup = lexer.clone();
         let expression = match lexer.next() {
@@ -662,16 +598,25 @@ impl Parser {
                 expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
             }),
             Token::Word(word) => {
-                if let Some(fun) = get_intrinsic(word) {
+                if let Some(fun) = conv::get_intrinsic(word) {
                     lexer.expect(Token::Paren('('))?;
                     let argument = self.parse_primary_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Paren(')'))?;
                     Some(crate::Expression::Intrinsic { fun, argument })
-                } else if let Some(axis) = get_derivative(word) {
+                } else if let Some(axis) = conv::get_derivative(word) {
                     lexer.expect(Token::Paren('('))?;
                     let expr = self.parse_primary_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Paren(')'))?;
                     Some(crate::Expression::Derivative { axis, expr })
+                } else if let Some((kind, _width)) = conv::get_scalar_type(word) {
+                    lexer.expect(Token::Paren('('))?;
+                    let expr = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                    lexer.expect(Token::Paren(')'))?;
+                    Some(crate::Expression::As {
+                        expr,
+                        kind,
+                        convert: true,
+                    })
                 } else {
                     match word {
                         "dot" => {
@@ -978,7 +923,7 @@ impl Parser {
         let mut class = None;
         if lexer.skip(Token::Paren('<')) {
             let class_str = lexer.next_ident()?;
-            class = Some(Self::get_storage_class(class_str)?);
+            class = Some(conv::map_storage_class(class_str)?);
             lexer.expect(Token::Paren('>'))?;
         }
         let name = lexer.next_ident()?;
@@ -1186,7 +1131,7 @@ impl Parser {
             }
             Token::Word("ptr") => {
                 lexer.expect(Token::Paren('<'))?;
-                let class = Self::get_storage_class(lexer.next_ident()?)?;
+                let class = conv::map_storage_class(lexer.next_ident()?)?;
                 lexer.expect(Token::Separator(','))?;
                 let base = self.parse_type_decl(lexer, None, type_arena)?;
                 lexer.expect(Token::Paren('>'))?;
@@ -1418,11 +1363,10 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         mut context: StatementContext<'a, '_, '_>,
-    ) -> Result<Option<crate::Statement>, Error<'a>> {
+    ) -> Result<crate::Statement, Error<'a>> {
         let backup = lexer.clone();
         match lexer.next() {
-            Token::Separator(';') => Ok(Some(crate::Statement::Empty)),
-            Token::Paren('}') => Ok(None),
+            Token::Separator(';') => Ok(crate::Statement::Block(Vec::new())),
             Token::Word(word) => {
                 self.scopes.push(Scope::Statement);
                 let statement = match word {
@@ -1462,7 +1406,7 @@ impl Parser {
                                 pointer: expr_id,
                                 value,
                             },
-                            _ => crate::Statement::Empty,
+                            _ => crate::Statement::Block(Vec::new()),
                         }
                     }
                     "return" => {
@@ -1501,10 +1445,11 @@ impl Parser {
                                 lexer.expect(Token::Paren('}'))?;
                                 break;
                             }
-                            match self.parse_statement(lexer, context.reborrow())? {
-                                Some(s) => body.push(s),
-                                None => break,
+                            if lexer.skip(Token::Paren('}')) {
+                                break;
                             }
+                            let s = self.parse_statement(lexer, context.reborrow())?;
+                            body.push(s);
                         }
                         crate::Statement::Loop { body, continuing }
                     }
@@ -1529,14 +1474,14 @@ impl Parser {
                             *lexer = new_lexer;
                             context.expressions.append(expr);
                             lexer.expect(Token::Separator(';'))?;
-                            crate::Statement::Empty
+                            crate::Statement::Block(Vec::new())
                         } else {
                             return Err(Error::UnknownIdent(ident));
                         }
                     }
                 };
                 self.scopes.pop();
-                Ok(Some(statement))
+                Ok(statement)
             }
             other => Err(Error::Unexpected(other)),
         }
@@ -1550,7 +1495,8 @@ impl Parser {
         self.scopes.push(Scope::Block);
         lexer.expect(Token::Paren('{'))?;
         let mut statements = Vec::new();
-        while let Some(s) = self.parse_statement(lexer, context.reborrow())? {
+        while !lexer.skip(Token::Paren('}')) {
+            let s = self.parse_statement(lexer, context.reborrow())?;
             statements.push(s);
         }
         self.scopes.pop();
@@ -1654,7 +1600,7 @@ impl Parser {
                     }
                     "builtin" => {
                         lexer.expect(Token::Paren('('))?;
-                        let builtin = Self::get_built_in(lexer.next_ident()?)?;
+                        let builtin = conv::map_built_in(lexer.next_ident()?)?;
                         lexer.expect(Token::Paren(')'))?;
                         binding = Some(crate::Binding::BuiltIn(builtin));
                     }
@@ -1670,12 +1616,12 @@ impl Parser {
                     }
                     "interpolate" => {
                         lexer.expect(Token::Paren('('))?;
-                        interpolation = Some(Self::get_interpolation(lexer.next_ident()?)?);
+                        interpolation = Some(conv::map_interpolation(lexer.next_ident()?)?);
                         lexer.expect(Token::Paren(')'))?;
                     }
                     "stage" => {
                         lexer.expect(Token::Paren('('))?;
-                        stage = Some(Self::get_shader_stage(lexer.next_ident()?)?);
+                        stage = Some(conv::map_shader_stage(lexer.next_ident()?)?);
                         lexer.expect(Token::Paren(')'))?;
                     }
                     "workgroup_size" => {
