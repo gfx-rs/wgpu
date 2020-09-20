@@ -2599,7 +2599,7 @@ impl SwapChain {
     ///
     /// If a SwapChainFrame referencing this surface is alive when the swapchain is recreated,
     /// recreating the swapchain will panic.
-    pub fn get_current_frame(&mut self) -> Result<SwapChainFrame, SwapChainError> {
+    pub fn get_current_frame(&self) -> Result<SwapChainFrame, SwapChainError> {
         let (view_id, status, detail) =
             Context::swap_chain_get_current_texture_view(&*self.context, &self.id);
         let output = view_id.map(|id| SwapChainTexture {
