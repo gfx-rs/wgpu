@@ -1658,6 +1658,18 @@ impl std::ops::DerefMut for BufferViewMut<'_> {
     }
 }
 
+impl AsRef<[u8]> for BufferView<'_> {
+    fn as_ref(&self) -> &[u8] {
+        self.data
+    }
+}
+
+impl AsMut<[u8]> for BufferViewMut<'_> {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.data
+    }
+}
+
 impl Drop for BufferView<'_> {
     fn drop(&mut self) {
         self.slice
