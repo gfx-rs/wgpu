@@ -389,7 +389,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let (src_buffer, src_pending) = cmd_buf
                         .trackers
                         .buffers
-                        .use_replace(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
+                        .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                         .map_err(ComputePassError::InvalidIndirectBuffer)?;
                     check_buffer_usage(src_buffer.usage, BufferUsage::INDIRECT)?;
 
