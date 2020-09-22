@@ -159,7 +159,7 @@ pub enum TypeQualifier {
 #[derive(Debug)]
 pub struct VarDeclaration {
     pub type_qualifiers: Vec<TypeQualifier>,
-    pub ids_initializers: Vec<(String, Option<ExpressionRule>)>,
+    pub ids_initializers: Vec<(Option<String>, Option<ExpressionRule>)>,
     pub ty: Handle<Type>,
 }
 

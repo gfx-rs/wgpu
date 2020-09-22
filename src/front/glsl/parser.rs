@@ -475,7 +475,7 @@ pomelo! {
         struct_declaration_list(sdl) RightBrace Semicolon {
         VarDeclaration{
             type_qualifiers: t,
-            ids_initializers: vec![],
+            ids_initializers: vec![(None, None)],
             ty: extra.module.types.fetch_or_append(Type{
                 name: Some(i.1),
                 inner: TypeInner::Struct {
@@ -489,7 +489,7 @@ pomelo! {
         struct_declaration_list(sdl) RightBrace Identifier(i2) Semicolon {
         VarDeclaration{
             type_qualifiers: t,
-            ids_initializers: vec![(i2.1, None)],
+            ids_initializers: vec![(Some(i2.1), None)],
             ty: extra.module.types.fetch_or_append(Type{
                 name: Some(i1.1),
                 inner: TypeInner::Struct {
@@ -504,13 +504,13 @@ pomelo! {
 
     init_declarator_list ::= single_declaration;
     init_declarator_list ::= init_declarator_list(mut idl) Comma Identifier(i) {
-        idl.ids_initializers.push((i.1, None));
+        idl.ids_initializers.push((Some(i.1), None));
         idl
     }
     // init_declarator_list ::= init_declarator_list Comma Identifier array_specifier;
     // init_declarator_list ::= init_declarator_list Comma Identifier array_specifier Equal initializer;
     init_declarator_list ::= init_declarator_list(mut idl) Comma Identifier(i) Equal initializer(init) {
-        idl.ids_initializers.push((i.1, Some(init)));
+        idl.ids_initializers.push((Some(i.1), Some(init)));
         idl
     }
 
@@ -528,7 +528,7 @@ pomelo! {
 
         VarDeclaration{
             type_qualifiers: t.0,
-            ids_initializers: vec![(i.1, None)],
+            ids_initializers: vec![(Some(i.1), None)],
             ty,
         }
     }
@@ -539,7 +539,7 @@ pomelo! {
 
         VarDeclaration{
             type_qualifiers: t.0,
-            ids_initializers: vec![(i.1, Some(init))],
+            ids_initializers: vec![(Some(i.1), Some(init))],
             ty,
         }
     }
@@ -705,6 +705,7 @@ pomelo! {
         let mut statements = Vec::<Statement>::new();
         // local variables
         for (id, initializer) in d.ids_initializers {
+            let id = id.ok_or(ErrorKind::SemanticError("local var must be named"))?;
             // check if already declared in current scope
             #[cfg(feature = "glsl-validate")]
             {
@@ -793,6 +794,25 @@ pomelo! {
                     Expression::GlobalVariable(var_handle)
                 );
                 extra.context.lookup_global_var_exps.insert(name.clone(), exp);
+            } else {
+                let ty = &extra.module.types[var.ty];
+                // anonymous structs
+                if let TypeInner::Struct { members } = &ty.inner {
+                    let base = extra.context.expressions.append(
+                        Expression::GlobalVariable(var_handle)
+                    );
+                    for (idx, member) in members.iter().enumerate() {
+                        if let Some(name) = member.name.as_ref() {
+                            let exp = extra.context.expressions.append(
+                                Expression::AccessIndex{
+                                    base,
+                                    index: idx as u32,
+                                }
+                            );
+                            extra.context.lookup_global_var_exps.insert(name.clone(), exp);
+                        }
+                    }
+                }
             }
         }
         f
@@ -871,7 +891,7 @@ pomelo! {
         for (id, initializer) in d.ids_initializers {
             let h = extra.module.global_variables.fetch_or_append(
                 GlobalVariable {
-                    name: Some(id.clone()),
+                    name: id.clone(),
                     class,
                     binding: binding.clone(),
                     ty: d.ty,
@@ -879,7 +899,9 @@ pomelo! {
                     storage_access: StorageAccess::empty(), //TODO
                 },
             );
-            extra.lookup_global_variables.insert(id, h);
+            if let Some(id) = id {
+                extra.lookup_global_variables.insert(id, h);
+            }
         }
     }
 
