@@ -47,7 +47,7 @@ use crate::{
     id,
     resource::BufferUse,
     span,
-    track::TrackerSet,
+    track::{TrackerSet, UsageConflict},
     validation::check_buffer_usage,
     Label, LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
 };
@@ -630,6 +630,8 @@ pub enum RenderBundleError {
     #[error(transparent)]
     RenderCommand(#[from] RenderCommandError),
     #[error(transparent)]
+    ResourceUsageConflict(#[from] UsageConflict),
+    #[error(transparent)]
     Draw(#[from] DrawError),
 }
 
@@ -710,7 +712,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
-                        state.trackers.merge_extend(&bind_group.used);
+                        state.trackers.merge_extend(&bind_group.used)?;
                     }
                     RenderCommand::SetPipeline(pipeline_id) => {
                         let pipeline = state

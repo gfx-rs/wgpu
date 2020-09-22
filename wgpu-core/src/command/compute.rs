@@ -3,16 +3,16 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    binding_model::{BindError, PushConstantUploadError},
+    binding_model::{BindError, BindGroup, PushConstantUploadError},
     command::{
         bind::{Binder, LayoutChange},
-        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, UsageConflict,
+        BasePass, BasePassRef, CommandBuffer, CommandEncoderError,
     },
-    device::all_buffer_stages,
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
+    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
-    resource::BufferUse,
+    resource::{Buffer, BufferUse, Texture},
     span,
+    track::{TrackerSet, UsageConflict},
     validation::{check_buffer_usage, MissingBufferUsageError},
     MAX_BIND_GROUPS,
 };
@@ -124,7 +124,7 @@ pub enum ComputePassError {
     #[error("indirect buffer {0:?} is invalid")]
     InvalidIndirectBuffer(id::BufferId),
     #[error(transparent)]
-    ResourceUsageConflict(UsageConflict),
+    ResourceUsageConflict(#[from] UsageConflict),
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("cannot pop debug group, because number of pushed debug groups is zero")]
@@ -147,6 +147,7 @@ enum PipelineState {
 struct State {
     binder: Binder,
     pipeline: PipelineState,
+    trackers: TrackerSet,
     debug_scope_depth: u32,
 }
 
@@ -163,6 +164,32 @@ impl State {
         if self.pipeline == PipelineState::Required {
             return Err(DispatchError::MissingPipeline);
         }
+        Ok(())
+    }
+
+    fn flush_states<B: GfxBackend>(
+        &mut self,
+        raw_cmd_buf: &mut B::CommandBuffer,
+        base_trackers: &mut TrackerSet,
+        bind_group_guard: &Storage<BindGroup<B>, id::BindGroupId>,
+        buffer_guard: &Storage<Buffer<B>, id::BufferId>,
+        texture_guard: &Storage<Texture<B>, id::TextureId>,
+    ) -> Result<(), UsageConflict> {
+        for id in self.binder.list_active() {
+            self.trackers.merge_extend(&bind_group_guard[id].used)?;
+        }
+
+        tracing::trace!("Encoding dispatch barriers");
+
+        CommandBuffer::insert_barriers(
+            raw_cmd_buf,
+            base_trackers,
+            &self.trackers,
+            buffer_guard,
+            texture_guard,
+        );
+
+        self.trackers.clear();
         Ok(())
     }
 }
@@ -212,6 +239,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut state = State {
             binder: Binder::new(cmd_buf.limits.max_bind_groups),
             pipeline: PipelineState::Required,
+            trackers: TrackerSet::new(B::VARIANT),
             debug_scope_depth: 0,
         };
         let mut temp_offsets = Vec::new();
@@ -242,19 +270,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*bind_group_guard, bind_group_id, (), ())
                         .map_err(|_| ComputePassError::InvalidBindGroup(bind_group_id))?;
                     bind_group.validate_dynamic_bindings(&temp_offsets)?;
-
-                    tracing::trace!(
-                        "Encoding barriers on binding of {:?} to {:?}",
-                        bind_group_id,
-                        encoder_id
-                    );
-                    CommandBuffer::insert_barriers(
-                        raw,
-                        &mut cmd_buf.trackers,
-                        &bind_group.used,
-                        &*buffer_guard,
-                        &*texture_guard,
-                    );
 
                     if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
                         index as usize,
@@ -379,6 +394,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 ComputeCommand::Dispatch(groups) => {
                     state.is_ready()?;
+                    state.flush_states(
+                        raw,
+                        &mut cmd_buf.trackers,
+                        &*bind_group_guard,
+                        &*buffer_guard,
+                        &*texture_guard,
+                    )?;
                     unsafe {
                         raw.dispatch(groups);
                     }
@@ -386,22 +408,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ComputeCommand::DispatchIndirect { buffer_id, offset } => {
                     state.is_ready()?;
 
-                    let (src_buffer, src_pending) = cmd_buf
+                    let indirect_buffer = state
                         .trackers
                         .buffers
-                        .use_replace(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
-                        .map_err(ComputePassError::InvalidIndirectBuffer)?;
-                    check_buffer_usage(src_buffer.usage, BufferUsage::INDIRECT)?;
+                        .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
+                        .map_err(|_| ComputePassError::InvalidIndirectBuffer(buffer_id))?;
+                    check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)?;
 
-                    let barriers = src_pending.map(|pending| pending.into_hal(src_buffer));
-
+                    state.flush_states(
+                        raw,
+                        &mut cmd_buf.trackers,
+                        &*bind_group_guard,
+                        &*buffer_guard,
+                        &*texture_guard,
+                    )?;
                     unsafe {
-                        raw.pipeline_barrier(
-                            all_buffer_stages()..all_buffer_stages(),
-                            hal::memory::Dependencies::empty(),
-                            barriers,
-                        );
-                        raw.dispatch_indirect(&src_buffer.raw, offset);
+                        raw.dispatch_indirect(&indirect_buffer.raw, offset);
                     }
                 }
                 ComputeCommand::PushDebugGroup { color, len } => {
