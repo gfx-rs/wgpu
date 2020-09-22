@@ -17,7 +17,8 @@ fn parse_program(source: &str, stage: ShaderStage) -> Result<Program, ErrorKind>
 }
 
 #[test]
-fn glsl_parser_version_invalid() {
+fn version() {
+    // invalid versions
     assert_eq!(
         format!(
             "{:?}",
@@ -47,10 +48,8 @@ fn glsl_parser_version_invalid() {
         ),
         "InvalidProfile(TokenMetadata { line: 0, chars: 13..18 }, \"smart\")"
     );
-}
 
-#[test]
-fn glsl_parser_version_valid() {
+    // valid versions
     let program = parse_program("#version 450\nvoid main() {}", ShaderStage::Vertex).unwrap();
     assert_eq!(
         format!("{:?}", (program.version, program.profile)),

@@ -1,62 +1,9 @@
 use super::{lex::Lexer, parser::Token::*, token::TokenMetadata};
 
 #[test]
-fn glsl_lex_simple() {
-    let source = "void main() {\n}";
-    let mut lex = Lexer::new(source);
-
-    assert_eq!(
-        lex.next().unwrap(),
-        Void(TokenMetadata {
-            line: 0,
-            chars: 0..4
-        })
-    );
-    assert_eq!(
-        lex.next().unwrap(),
-        Identifier((
-            TokenMetadata {
-                line: 0,
-                chars: 5..9
-            },
-            "main".into()
-        ))
-    );
-    assert_eq!(
-        lex.next().unwrap(),
-        LeftParen(TokenMetadata {
-            line: 0,
-            chars: 9..10
-        })
-    );
-    assert_eq!(
-        lex.next().unwrap(),
-        RightParen(TokenMetadata {
-            line: 0,
-            chars: 10..11
-        })
-    );
-    assert_eq!(
-        lex.next().unwrap(),
-        LeftBrace(TokenMetadata {
-            line: 0,
-            chars: 12..13
-        })
-    );
-    assert_eq!(
-        lex.next().unwrap(),
-        RightBrace(TokenMetadata {
-            line: 1,
-            chars: 0..1
-        })
-    );
-    assert_eq!(lex.next(), None);
-}
-
-#[test]
-fn glsl_lex_line_comment() {
-    let source = "void main // myfunction\n//()\n{}";
-    let mut lex = Lexer::new(source);
+fn tokens() {
+    // line comments
+    let mut lex = Lexer::new("void main // myfunction\n//()\n{}");
     assert_eq!(
         lex.next().unwrap(),
         Void(TokenMetadata {
@@ -89,13 +36,9 @@ fn glsl_lex_line_comment() {
         })
     );
     assert_eq!(lex.next(), None);
-}
 
-#[test]
-fn glsl_lex_multi_line_comment() {
-    let source = "void main /* comment [] {}\n/**\n{}*/{}";
-    let mut lex = Lexer::new(source);
-
+    // multi line comment
+    let mut lex = Lexer::new("void main /* comment [] {}\n/**\n{}*/{}");
     assert_eq!(
         lex.next().unwrap(),
         Void(TokenMetadata {
@@ -128,13 +71,9 @@ fn glsl_lex_multi_line_comment() {
         })
     );
     assert_eq!(lex.next(), None);
-}
 
-#[test]
-fn glsl_lex_identifier() {
-    let source = "id123_OK 92No æNoø No¾ No好";
-    let mut lex = Lexer::new(source);
-
+    // identifiers
+    let mut lex = Lexer::new("id123_OK 92No æNoø No¾ No好");
     assert_eq!(
         lex.next().unwrap(),
         Identifier((
@@ -236,13 +175,9 @@ fn glsl_lex_identifier() {
         ))
     );
     assert_eq!(lex.next(), None);
-}
 
-#[test]
-fn glsl_lex_version() {
-    let source = "#version 890 core";
-    let mut lex = Lexer::new(source);
-
+    // version
+    let mut lex = Lexer::new("#version 890 core");
     assert_eq!(
         lex.next().unwrap(),
         Version(TokenMetadata {
@@ -271,13 +206,9 @@ fn glsl_lex_version() {
         ))
     );
     assert_eq!(lex.next(), None);
-}
 
-#[test]
-fn glsl_lex_operators() {
-    let source = "+ - * | & % / += -= *= |= &= %= /= ++ -- || && ^^";
-    let mut lex = Lexer::new(source);
-
+    // operators
+    let mut lex = Lexer::new("+ - * | & % / += -= *= |= &= %= /= ++ -- || && ^^");
     assert_eq!(
         lex.next().unwrap(),
         Plus(TokenMetadata {
