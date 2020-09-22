@@ -1262,6 +1262,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+
+        let texture_features = conv::texture_features(desc.format);
+        if texture_features != wgt::Features::empty() && !device.features.contains(texture_features)
+        {
+            return Err(resource::CreateTextureError::MissingFeature(
+                texture_features,
+                desc.format,
+            ));
+        }
+
         let texture = device.create_texture(device_id, desc)?;
         let num_levels = texture.full_range.levels.end;
         let num_layers = texture.full_range.layers.end;
@@ -1275,15 +1285,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .add(trace::Action::CreateTexture(id.0, desc.clone())),
             None => (),
         };
-
-        let texture_features = conv::texture_features(desc.format);
-        if texture_features != wgt::Features::empty() && !device.features.contains(texture_features)
-        {
-            return Err(resource::CreateTextureError::MissingFeature(
-                texture_features,
-                desc.format,
-            ));
-        }
 
         device
             .trackers
