@@ -27,3 +27,5 @@ AIR             |                    |       |
 DXIR            |                    |       |
 DXIL            |                    |       |
 DXBC            |                    |       |
+
+:heavy_check_mark: = Primary support — :white_check_mark: = Secondary support — :construction: = Unsupported, but support in progress
