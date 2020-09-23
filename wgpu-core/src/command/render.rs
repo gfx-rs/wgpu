@@ -19,7 +19,7 @@ use crate::{
     pipeline::PipelineFlags,
     resource::{BufferUse, TextureUse, TextureView, TextureViewInner},
     span,
-    track::{TextureSelector, TrackerSet},
+    track::{TextureSelector, TrackerSet, UsageConflict},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
     },
@@ -361,6 +361,8 @@ pub enum RenderPassError {
     },
     #[error("cannot pop debug group, because number of pushed debug groups is zero")]
     InvalidPopDebugGroup,
+    #[error(transparent)]
+    ResourceUsageConflict(#[from] UsageConflict),
     #[error("render bundle is incompatible, {0}")]
     IncompatibleRenderBundle(#[from] RenderPassCompatibilityError),
     #[error(transparent)]
@@ -983,7 +985,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .validate_dynamic_bindings(&temp_offsets)
                         .map_err(RenderPassError::from)?;
 
-                    trackers.merge_extend(&bind_group.used);
+                    trackers.merge_extend(&bind_group.used)?;
 
                     if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
                         index as usize,
@@ -1527,7 +1529,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         )
                     }
 
-                    trackers.merge_extend(&bundle.used);
+                    trackers.merge_extend(&bundle.used)?;
                     state.reset_bundle();
                 }
             }

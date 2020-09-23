@@ -219,6 +219,13 @@ impl Binder {
         }
     }
 
+    pub(super) fn list_active(&self) -> impl Iterator<Item = Valid<BindGroupId>> + '_ {
+        self.entries.iter().filter_map(|e| match e.provided {
+            Some(ref pair) if e.expected_layout_id.is_some() => Some(pair.group_id.value),
+            _ => None,
+        })
+    }
+
     pub(super) fn invalid_mask(&self) -> BindGroupMask {
         self.entries.iter().enumerate().fold(0, |mask, (i, entry)| {
             if entry.is_valid().unwrap_or(true) {

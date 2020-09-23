@@ -480,6 +480,24 @@ impl<I: Copy + fmt::Debug + TypedId> ResourceState for PhantomData<I> {
 
 pub const DUMMY_SELECTOR: () = ();
 
+#[derive(Clone, Debug, Error)]
+pub enum UsageConflict {
+    #[error(
+        "Attempted to use buffer {id:?} as a combination of {combined_use:?} within a usage scope."
+    )]
+    Buffer {
+        id: id::BufferId,
+        combined_use: resource::BufferUse,
+    },
+    #[error("Attempted to use texture {id:?} mips {mip_levels:?} layers {array_layers:?} as a combination of {combined_use:?} within a usage scope.")]
+    Texture {
+        id: id::TextureId,
+        mip_levels: ops::Range<u32>,
+        array_layers: ops::Range<u32>,
+        combined_use: resource::TextureUse,
+    },
+}
+
 /// A set of trackers for all relevant resources.
 #[derive(Debug)]
 pub(crate) struct TrackerSet {
@@ -534,9 +552,21 @@ impl TrackerSet {
 
     /// Merge all the trackers of another instance by extending
     /// the usage. Panics on a conflict.
-    pub fn merge_extend(&mut self, other: &Self) {
-        self.buffers.merge_extend(&other.buffers).unwrap();
-        self.textures.merge_extend(&other.textures).unwrap();
+    pub fn merge_extend(&mut self, other: &Self) -> Result<(), UsageConflict> {
+        self.buffers
+            .merge_extend(&other.buffers)
+            .map_err(|e| UsageConflict::Buffer {
+                id: e.id.0,
+                combined_use: e.usage.end,
+            })?;
+        self.textures
+            .merge_extend(&other.textures)
+            .map_err(|e| UsageConflict::Texture {
+                id: e.id.0,
+                mip_levels: e.selector.levels.start as u32..e.selector.levels.end as u32,
+                array_layers: e.selector.layers.start as u32..e.selector.layers.end as u32,
+                combined_use: e.usage.end,
+            })?;
         self.views.merge_extend(&other.views).unwrap();
         self.bind_groups.merge_extend(&other.bind_groups).unwrap();
         self.samplers.merge_extend(&other.samplers).unwrap();
@@ -545,6 +575,7 @@ impl TrackerSet {
             .unwrap();
         self.render_pipes.merge_extend(&other.render_pipes).unwrap();
         self.bundles.merge_extend(&other.bundles).unwrap();
+        Ok(())
     }
 
     pub fn backend(&self) -> wgt::Backend {

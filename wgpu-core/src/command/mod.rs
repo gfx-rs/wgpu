@@ -251,14 +251,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 }
 
-#[derive(Clone, Debug, Error)]
-pub enum UsageConflict {
-    #[error("buffer {0:?} combined usage is {1:?}")]
-    Buffer(id::BufferId, wgt::BufferUsage),
-    #[error("texture {0:?} combined usage is {1:?}")]
-    Texture(id::TextureId, wgt::TextureUsage),
-}
-
 fn push_constant_clear<PushFn>(offset: u32, size_bytes: u32, mut push_fn: PushFn)
 where
     PushFn: FnMut(u32, &[u32]),
