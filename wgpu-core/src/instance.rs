@@ -677,12 +677,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
             );
             enabled_features.set(
-                hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
-                adapter
-                    .features
-                    .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
-            );
-            enabled_features.set(
                 hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
                 adapter
                     .features
