@@ -294,7 +294,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => {}
         }
 
-        if size.width == 0 || size.height == 0 || size.width == 0 {
+        if size.width == 0 || size.height == 0 || size.depth == 0 {
             tracing::trace!("Ignoring write_texture of size 0");
             return Ok(());
         }
