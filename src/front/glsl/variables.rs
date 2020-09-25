@@ -5,6 +5,7 @@ use crate::{
 
 use super::ast::*;
 use super::error::ErrorKind;
+use super::token::TokenMetadata;
 
 impl Program {
     pub fn lookup_variable(&mut self, name: &str) -> Result<Option<Handle<Expression>>, ErrorKind> {
@@ -94,6 +95,89 @@ impl Program {
             Ok(Some(*global_var))
         } else {
             Ok(None)
+        }
+    }
+
+    pub fn field_selection(
+        &mut self,
+        expression: Handle<Expression>,
+        name: &str,
+        meta: TokenMetadata,
+    ) -> Result<Handle<Expression>, ErrorKind> {
+        match *self.resolve_type(expression)? {
+            TypeInner::Struct { ref members } => {
+                let index = members
+                    .iter()
+                    .position(|m| m.name == Some(name.into()))
+                    .ok_or_else(|| ErrorKind::UnknownField(meta, name.into()))?;
+                Ok(self.context.expressions.append(Expression::AccessIndex {
+                    base: expression,
+                    index: index as u32,
+                }))
+            }
+            // swizzles (xyzw, rgba, stpq)
+            TypeInner::Vector { size, kind, width } => {
+                let check_swizzle_components = |comps: &str| {
+                    name.chars()
+                        .map(|c| {
+                            comps
+                                .find(c)
+                                .and_then(|i| if i < size as usize { Some(i) } else { None })
+                        })
+                        .fold(Some(Vec::<usize>::new()), |acc, cur| {
+                            cur.and_then(|i| {
+                                acc.map(|mut v| {
+                                    v.push(i);
+                                    v
+                                })
+                            })
+                        })
+                };
+
+                let indices = check_swizzle_components("xyzw")
+                    .or_else(|| check_swizzle_components("rgba"))
+                    .or_else(|| check_swizzle_components("stpq"));
+
+                if let Some(v) = indices {
+                    let components: Vec<Handle<Expression>> = v
+                        .iter()
+                        .map(|idx| {
+                            self.context.expressions.append(Expression::AccessIndex {
+                                base: expression,
+                                index: *idx as u32,
+                            })
+                        })
+                        .collect();
+                    if components.len() == 1 {
+                        // only single element swizzle, like pos.y, just return that component
+                        Ok(components[0])
+                    } else {
+                        Ok(self.context.expressions.append(Expression::Compose {
+                            ty: self.module.types.fetch_or_append(Type {
+                                name: None,
+                                inner: TypeInner::Vector {
+                                    kind,
+                                    width,
+                                    size: match components.len() {
+                                        2 => VectorSize::Bi,
+                                        3 => VectorSize::Tri,
+                                        4 => VectorSize::Quad,
+                                        _ => {
+                                            return Err(ErrorKind::SemanticError(
+                                                "Bad swizzle size",
+                                            ));
+                                        }
+                                    },
+                                },
+                            }),
+                            components,
+                        }))
+                    }
+                } else {
+                    Err(ErrorKind::SemanticError("Invalid swizzle for vector"))
+                }
+            }
+            _ => Err(ErrorKind::SemanticError("Can't lookup field on this type")),
         }
     }
 }

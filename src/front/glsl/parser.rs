@@ -218,20 +218,9 @@ pomelo! {
     }
     postfix_expression ::= function_call;
     postfix_expression ::= postfix_expression(e) Dot Identifier(i) /* FieldSelection in spec */ {
-        let type_inner = extra.resolve_type(e.expression)?;
-        if let TypeInner::Struct{members} = type_inner {
-            let index = members.iter().position(|m| m.name == Some(i.1.clone()))
-                .ok_or(ErrorKind::UnknownField(i.0, i.1))?;
-            ExpressionRule::from_expression(
-                extra.context.expressions.append(Expression::AccessIndex {
-                    base: e.expression,
-                    index: index as u32,
-                })
-            )
-        } else {
-            //TODO: swizzle
-            return Err(ErrorKind::SemanticError("Can't lookup field on this type"))
-        }
+        //TODO: how will this work as l-value?
+        let expression = extra.field_selection(e.expression, &*i.1, i.0)?;
+        ExpressionRule { expression, statements: e.statements }
     }
     postfix_expression ::= postfix_expression(pe) IncOp {
         //TODO
