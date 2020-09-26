@@ -45,7 +45,7 @@ impl PendingTransition<TextureState> {
 
 impl TextureState {
     pub fn new(mip_level_count: hal::image::Level, array_layer_count: hal::image::Layer) -> Self {
-        TextureState {
+        Self {
             mips: iter::repeat_with(|| {
                 PlaneStates::from_range(0..array_layer_count, Unit::new(TextureUse::UNINITIALIZED))
             })

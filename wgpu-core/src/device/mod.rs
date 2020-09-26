@@ -272,7 +272,7 @@ impl<B: GfxBackend> Device<B> {
             None => (),
         }
 
-        Ok(Device {
+        Ok(Self {
             raw,
             adapter_id,
             cmd_allocator,
@@ -923,8 +923,8 @@ pub enum DeviceError {
 impl From<hal::device::OomOrDeviceLost> for DeviceError {
     fn from(err: hal::device::OomOrDeviceLost) -> Self {
         match err {
-            hal::device::OomOrDeviceLost::OutOfMemory(_) => DeviceError::OutOfMemory,
-            hal::device::OomOrDeviceLost::DeviceLost(_) => DeviceError::Lost,
+            hal::device::OomOrDeviceLost::OutOfMemory(_) => Self::OutOfMemory,
+            hal::device::OomOrDeviceLost::DeviceLost(_) => Self::Lost,
         }
     }
 }
@@ -934,14 +934,14 @@ impl DeviceError {
         match err {
             gfx_memory::HeapsError::AllocationError(hal::device::AllocationError::OutOfMemory(
                 _,
-            )) => DeviceError::OutOfMemory,
+            )) => Self::OutOfMemory,
             _ => panic!("Unable to allocate memory: {:?}", err),
         }
     }
 
     fn from_bind(err: hal::device::BindError) -> Self {
         match err {
-            hal::device::BindError::OutOfMemory(_) => DeviceError::OutOfMemory,
+            hal::device::BindError::OutOfMemory(_) => Self::OutOfMemory,
             _ => panic!("failed to bind memory: {}", err),
         }
     }

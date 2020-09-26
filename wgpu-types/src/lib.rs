@@ -66,8 +66,8 @@ pub enum PowerPreference {
 }
 
 impl Default for PowerPreference {
-    fn default() -> PowerPreference {
-        PowerPreference::Default
+    fn default() -> Self {
+        Self::Default
     }
 }
 
@@ -106,7 +106,7 @@ bitflags::bitflags! {
 
 impl From<Backend> for BackendBit {
     fn from(backend: Backend) -> Self {
-        BackendBit::from_bits(1 << backend as u32).unwrap()
+        Self::from_bits(1 << backend as u32).unwrap()
     }
 }
 
@@ -364,7 +364,7 @@ pub struct Limits {
 
 impl Default for Limits {
     fn default() -> Self {
-        Limits {
+        Self {
             max_bind_groups: 4,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
@@ -476,7 +476,7 @@ pub enum BlendOperation {
 
 impl Default for BlendOperation {
     fn default() -> Self {
-        BlendOperation::Add
+        Self::Add
     }
 }
 
@@ -513,7 +513,7 @@ impl BlendDescriptor {
 
 impl Default for BlendDescriptor {
     fn default() -> Self {
-        BlendDescriptor::REPLACE
+        Self::REPLACE
     }
 }
 
@@ -536,7 +536,7 @@ pub struct ColorStateDescriptor {
 
 impl From<TextureFormat> for ColorStateDescriptor {
     fn from(format: TextureFormat) -> Self {
-        ColorStateDescriptor {
+        Self {
             format,
             alpha_blend: BlendDescriptor::REPLACE,
             color_blend: BlendDescriptor::REPLACE,
@@ -589,7 +589,7 @@ pub enum FrontFace {
 
 impl Default for FrontFace {
     fn default() -> Self {
-        FrontFace::Ccw
+        Self::Ccw
     }
 }
 
@@ -609,7 +609,7 @@ pub enum CullMode {
 
 impl Default for CullMode {
     fn default() -> Self {
-        CullMode::None
+        Self::None
     }
 }
 
@@ -629,7 +629,7 @@ pub enum PolygonMode {
 
 impl Default for PolygonMode {
     fn default() -> Self {
-        PolygonMode::Fill
+        Self::Fill
     }
 }
 
@@ -874,7 +874,7 @@ bitflags::bitflags! {
 
 impl Default for ColorWrite {
     fn default() -> Self {
-        ColorWrite::ALL
+        Self::ALL
     }
 }
 
@@ -946,7 +946,7 @@ pub enum IndexFormat {
 
 impl Default for IndexFormat {
     fn default() -> Self {
-        IndexFormat::Uint32
+        Self::Uint32
     }
 }
 
@@ -976,7 +976,7 @@ pub enum StencilOperation {
 
 impl Default for StencilOperation {
     fn default() -> Self {
-        StencilOperation::Keep
+        Self::Keep
     }
 }
 
@@ -1009,7 +1009,7 @@ impl StencilStateFaceDescriptor {
 
 impl Default for StencilStateFaceDescriptor {
     fn default() -> Self {
-        StencilStateFaceDescriptor::IGNORE
+        Self::IGNORE
     }
 }
 
@@ -1040,7 +1040,7 @@ pub enum CompareFunction {
 impl CompareFunction {
     pub fn needs_ref_value(self) -> bool {
         match self {
-            CompareFunction::Never | CompareFunction::Always => false,
+            Self::Never | Self::Always => false,
             _ => true,
         }
     }
@@ -1145,32 +1145,29 @@ pub enum VertexFormat {
 impl VertexFormat {
     pub fn size(&self) -> u64 {
         match self {
-            VertexFormat::Uchar2
-            | VertexFormat::Char2
-            | VertexFormat::Uchar2Norm
-            | VertexFormat::Char2Norm => 2,
-            VertexFormat::Uchar4
-            | VertexFormat::Char4
-            | VertexFormat::Uchar4Norm
-            | VertexFormat::Char4Norm
-            | VertexFormat::Ushort2
-            | VertexFormat::Short2
-            | VertexFormat::Ushort2Norm
-            | VertexFormat::Short2Norm
-            | VertexFormat::Half2
-            | VertexFormat::Float
-            | VertexFormat::Uint
-            | VertexFormat::Int => 4,
-            VertexFormat::Ushort4
-            | VertexFormat::Short4
-            | VertexFormat::Ushort4Norm
-            | VertexFormat::Short4Norm
-            | VertexFormat::Half4
-            | VertexFormat::Float2
-            | VertexFormat::Uint2
-            | VertexFormat::Int2 => 8,
-            VertexFormat::Float3 | VertexFormat::Uint3 | VertexFormat::Int3 => 12,
-            VertexFormat::Float4 | VertexFormat::Uint4 | VertexFormat::Int4 => 16,
+            Self::Uchar2 | Self::Char2 | Self::Uchar2Norm | Self::Char2Norm => 2,
+            Self::Uchar4
+            | Self::Char4
+            | Self::Uchar4Norm
+            | Self::Char4Norm
+            | Self::Ushort2
+            | Self::Short2
+            | Self::Ushort2Norm
+            | Self::Short2Norm
+            | Self::Half2
+            | Self::Float
+            | Self::Uint
+            | Self::Int => 4,
+            Self::Ushort4
+            | Self::Short4
+            | Self::Ushort4Norm
+            | Self::Short4Norm
+            | Self::Half4
+            | Self::Float2
+            | Self::Uint2
+            | Self::Int2 => 8,
+            Self::Float3 | Self::Uint3 | Self::Int3 => 12,
+            Self::Float4 | Self::Uint4 | Self::Int4 => 16,
         }
     }
 }
@@ -1357,37 +1354,37 @@ pub struct Color {
 }
 
 impl Color {
-    pub const TRANSPARENT: Self = Color {
+    pub const TRANSPARENT: Self = Self {
         r: 0.0,
         g: 0.0,
         b: 0.0,
         a: 0.0,
     };
-    pub const BLACK: Self = Color {
+    pub const BLACK: Self = Self {
         r: 0.0,
         g: 0.0,
         b: 0.0,
         a: 1.0,
     };
-    pub const WHITE: Self = Color {
+    pub const WHITE: Self = Self {
         r: 1.0,
         g: 1.0,
         b: 1.0,
         a: 1.0,
     };
-    pub const RED: Self = Color {
+    pub const RED: Self = Self {
         r: 1.0,
         g: 0.0,
         b: 0.0,
         a: 1.0,
     };
-    pub const GREEN: Self = Color {
+    pub const GREEN: Self = Self {
         r: 0.0,
         g: 1.0,
         b: 0.0,
         a: 1.0,
     };
-    pub const BLUE: Self = Color {
+    pub const BLUE: Self = Self {
         r: 0.0,
         g: 0.0,
         b: 1.0,
@@ -1421,12 +1418,12 @@ pub struct Origin3d {
 }
 
 impl Origin3d {
-    pub const ZERO: Self = Origin3d { x: 0, y: 0, z: 0 };
+    pub const ZERO: Self = Self { x: 0, y: 0, z: 0 };
 }
 
 impl Default for Origin3d {
     fn default() -> Self {
-        Origin3d::ZERO
+        Self::ZERO
     }
 }
 
@@ -1443,7 +1440,7 @@ pub struct Extent3d {
 
 impl Default for Extent3d {
     fn default() -> Self {
-        Extent3d {
+        Self {
             width: 1,
             height: 1,
             depth: 1,
@@ -1504,7 +1501,7 @@ pub enum TextureAspect {
 
 impl Default for TextureAspect {
     fn default() -> Self {
-        TextureAspect::All
+        Self::All
     }
 }
 
@@ -1539,7 +1536,7 @@ pub enum AddressMode {
 
 impl Default for AddressMode {
     fn default() -> Self {
-        AddressMode::ClampToEdge
+        Self::ClampToEdge
     }
 }
 
@@ -1561,7 +1558,7 @@ pub enum FilterMode {
 
 impl Default for FilterMode {
     fn default() -> Self {
-        FilterMode::Nearest
+        Self::Nearest
     }
 }
 
@@ -1832,8 +1829,7 @@ pub enum BindingType {
 impl BindingType {
     pub fn has_dynamic_offset(&self) -> bool {
         match *self {
-            BindingType::UniformBuffer { dynamic, .. }
-            | BindingType::StorageBuffer { dynamic, .. } => dynamic,
+            Self::UniformBuffer { dynamic, .. } | Self::StorageBuffer { dynamic, .. } => dynamic,
             _ => false,
         }
     }

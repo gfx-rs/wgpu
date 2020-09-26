@@ -128,7 +128,7 @@ pub struct BasePass<C> {
 
 impl<C: Clone> BasePass<C> {
     fn new() -> Self {
-        BasePass {
+        Self {
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
@@ -138,7 +138,7 @@ impl<C: Clone> BasePass<C> {
 
     #[cfg(feature = "trace")]
     fn from_ref(base: BasePassRef<C>) -> Self {
-        BasePass {
+        Self {
             commands: base.commands.to_vec(),
             dynamic_offsets: base.dynamic_offsets.to_vec(),
             string_data: base.string_data.to_vec(),

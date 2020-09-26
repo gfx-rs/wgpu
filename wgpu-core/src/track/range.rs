@@ -18,13 +18,13 @@ pub struct RangedStates<I, T> {
 
 impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
     pub fn empty() -> Self {
-        RangedStates {
+        Self {
             ranges: SmallVec::new(),
         }
     }
 
     pub fn from_range(range: Range<I>, value: T) -> Self {
-        RangedStates {
+        Self {
             ranges: iter::once((range, value)).collect(),
         }
     }
@@ -32,7 +32,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
     /// Construct a new instance from a slice of ranges.
     #[cfg(test)]
     pub fn from_slice(values: &[(Range<I>, T)]) -> Self {
-        RangedStates {
+        Self {
             ranges: values.iter().cloned().collect(),
         }
     }

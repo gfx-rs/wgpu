@@ -93,7 +93,7 @@ impl RenderBundleEncoder {
         base: Option<BasePass<RenderCommand>>,
     ) -> Result<Self, CreateRenderBundleError> {
         span!(_guard, INFO, "RenderBundleEncoder::new");
-        Ok(RenderBundleEncoder {
+        Ok(Self {
             base: base.unwrap_or_else(BasePass::new),
             parent_id,
             context: RenderPassContext {
@@ -330,7 +330,7 @@ struct IndexState {
 
 impl IndexState {
     fn new() -> Self {
-        IndexState {
+        Self {
             buffer: None,
             format: wgt::IndexFormat::default(),
             range: 0..0,
@@ -385,7 +385,7 @@ struct VertexState {
 
 impl VertexState {
     fn new() -> Self {
-        VertexState {
+        Self {
             buffer: None,
             range: 0..0,
             stride: 0,
@@ -424,7 +424,7 @@ struct BindState {
 
 impl BindState {
     fn new() -> Self {
-        BindState {
+        Self {
             bind_group: None,
             dynamic_offsets: 0..0,
             is_dirty: false,

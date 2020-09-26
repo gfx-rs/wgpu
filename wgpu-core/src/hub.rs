@@ -36,7 +36,7 @@ pub struct IdentityManager {
 
 impl Default for IdentityManager {
     fn default() -> Self {
-        IdentityManager {
+        Self {
             free: Default::default(),
             epochs: Default::default(),
         }
@@ -45,7 +45,7 @@ impl Default for IdentityManager {
 
 impl IdentityManager {
     pub fn from_index(min_index: u32) -> Self {
-        IdentityManager {
+        Self {
             free: (0..min_index).collect(),
             epochs: vec![1; min_index as usize],
         }
@@ -292,7 +292,7 @@ impl<'a, T> Token<'a, T> {
             assert_ne!(old, 0, "Root token was dropped");
             active.set(old + 1);
         });
-        Token { level: PhantomData }
+        Self { level: PhantomData }
     }
 }
 
@@ -303,7 +303,7 @@ impl Token<'static, Root> {
             assert_eq!(0, active.replace(1), "Root token is already active");
         });
 
-        Token { level: PhantomData }
+        Self { level: PhantomData }
     }
 }
 
@@ -381,7 +381,7 @@ pub struct Registry<T, I: TypedId, F: IdentityHandlerFactory<I>> {
 
 impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     fn new(backend: Backend, factory: &F, kind: &'static str) -> Self {
-        Registry {
+        Self {
             identity: factory.spawn(0),
             data: RwLock::new(Storage {
                 map: Vec::new(),
@@ -393,7 +393,7 @@ impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     }
 
     fn without_backend(factory: &F, kind: &'static str) -> Self {
-        Registry {
+        Self {
             identity: factory.spawn(1),
             data: RwLock::new(Storage {
                 map: Vec::new(),
@@ -508,7 +508,7 @@ pub struct Hub<B: hal::Backend, F: GlobalIdentityHandlerFactory> {
 
 impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
     fn new(factory: &F) -> Self {
-        Hub {
+        Self {
             adapters: Registry::new(B::VARIANT, factory, "Adapter"),
             devices: Registry::new(B::VARIANT, factory, "Device"),
             swap_chains: Registry::new(B::VARIANT, factory, "SwapChain"),
@@ -668,7 +668,7 @@ pub struct Hubs<F: GlobalIdentityHandlerFactory> {
 
 impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
     fn new(factory: &F) -> Self {
-        Hubs {
+        Self {
             #[cfg(vulkan)]
             vulkan: Hub::new(factory),
             #[cfg(metal)]
@@ -691,7 +691,7 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn new(name: &str, factory: G, backends: wgt::BackendBit) -> Self {
         span!(_guard, INFO, "Global::new");
-        Global {
+        Self {
             instance: Instance::new(name, 1, backends),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),

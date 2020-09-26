@@ -100,7 +100,7 @@ struct NonReferencedResources<B: hal::Backend> {
 
 impl<B: hal::Backend> NonReferencedResources<B> {
     fn new() -> Self {
-        NonReferencedResources {
+        Self {
             buffers: Vec::new(),
             images: Vec::new(),
             image_views: Vec::new(),
@@ -225,7 +225,7 @@ pub(crate) struct LifetimeTracker<B: hal::Backend> {
 
 impl<B: hal::Backend> LifetimeTracker<B> {
     pub fn new() -> Self {
-        LifetimeTracker {
+        Self {
             mapped: Vec::new(),
             future_suspected_buffers: Vec::new(),
             future_suspected_textures: Vec::new(),
