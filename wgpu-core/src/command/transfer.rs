@@ -315,15 +315,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut barriers = Vec::new();
 
         #[cfg(feature = "trace")]
-        match cmd_buf.commands {
-            Some(ref mut list) => list.push(TraceCommand::CopyBufferToBuffer {
+        if let Some(ref mut list) = cmd_buf.commands {
+            list.push(TraceCommand::CopyBufferToBuffer {
                 src: source,
                 src_offset: source_offset,
                 dst: destination,
                 dst_offset: destination_offset,
                 size,
-            }),
-            None => (),
+            });
         }
 
         let (src_buffer, src_pending) = cmd_buf
@@ -416,13 +415,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             texture_copy_view_to_hal(destination, copy_size, &*texture_guard)?;
 
         #[cfg(feature = "trace")]
-        match cmd_buf.commands {
-            Some(ref mut list) => list.push(TraceCommand::CopyBufferToTexture {
+        if let Some(ref mut list) = cmd_buf.commands {
+            list.push(TraceCommand::CopyBufferToTexture {
                 src: source.clone(),
                 dst: destination.clone(),
                 size: *copy_size,
-            }),
-            None => (),
+            });
         }
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
@@ -535,13 +533,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             texture_copy_view_to_hal(source, copy_size, &*texture_guard)?;
 
         #[cfg(feature = "trace")]
-        match cmd_buf.commands {
-            Some(ref mut list) => list.push(TraceCommand::CopyTextureToBuffer {
+        if let Some(ref mut list) = cmd_buf.commands {
+            list.push(TraceCommand::CopyTextureToBuffer {
                 src: source.clone(),
                 dst: destination.clone(),
                 size: *copy_size,
-            }),
-            None => (),
+            });
         }
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
@@ -663,13 +660,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         #[cfg(feature = "trace")]
-        match cmd_buf.commands {
-            Some(ref mut list) => list.push(TraceCommand::CopyTextureToTexture {
+        if let Some(ref mut list) = cmd_buf.commands {
+            list.push(TraceCommand::CopyTextureToTexture {
                 src: source.clone(),
                 dst: destination.clone(),
                 size: *copy_size,
-            }),
-            None => (),
+            });
         }
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {

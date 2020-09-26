@@ -931,19 +931,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .register_identity(id_in, render_bundle, &mut token);
 
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => {
-                use crate::device::trace;
-                let (bundle_guard, _) = hub.render_bundles.read(&mut token);
-                let bundle = &bundle_guard[id];
-                let label = desc.label.as_ref().map(|l| l.as_ref());
-                trace.lock().add(trace::Action::CreateRenderBundle {
-                    id: id.0,
-                    desc: trace::new_render_bundle_encoder_descriptor(label, &bundle.context),
-                    base: BasePass::from_ref(bundle.base.as_ref()),
-                });
-            }
-            None => {}
+        if let Some(ref trace) = device.trace {
+            use crate::device::trace;
+            let (bundle_guard, _) = hub.render_bundles.read(&mut token);
+            let bundle = &bundle_guard[id];
+            let label = desc.label.as_ref().map(|l| l.as_ref());
+            trace.lock().add(trace::Action::CreateRenderBundle {
+                id: id.0,
+                desc: trace::new_render_bundle_encoder_descriptor(label, &bundle.context),
+                base: BasePass::from_ref(bundle.base.as_ref()),
+            });
         }
 
         device

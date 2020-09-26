@@ -1051,17 +1051,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
         tracing::info!("Created buffer {:?} with {:?}", id, desc);
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => {
-                let mut desc = desc.clone();
-                let mapped_at_creation = mem::replace(&mut desc.mapped_at_creation, false);
-                if mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
-                    desc.usage |= wgt::BufferUsage::COPY_DST;
-                }
-                trace.lock().add(trace::Action::CreateBuffer(id.0, desc))
+        if let Some(ref trace) = device.trace {
+            let mut desc = desc.clone();
+            let mapped_at_creation = mem::replace(&mut desc.mapped_at_creation, false);
+            if mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
+                desc.usage |= wgt::BufferUsage::COPY_DST;
             }
-            None => (),
-        };
+            trace.lock().add(trace::Action::CreateBuffer(id.0, desc));
+        }
 
         device
             .trackers
@@ -1119,19 +1116,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //assert!(buffer isn't used by the GPU);
 
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => {
-                let mut trace = trace.lock();
-                let data_path = trace.make_binary("bin", data);
-                trace.add(trace::Action::WriteBuffer {
-                    id: buffer_id,
-                    data: data_path,
-                    range: offset..offset + data.len() as BufferAddress,
-                    queued: false,
-                });
-            }
-            None => (),
-        };
+        if let Some(ref trace) = device.trace {
+            let mut trace = trace.lock();
+            let data_path = trace.make_binary("bin", data);
+            trace.add(trace::Action::WriteBuffer {
+                id: buffer_id,
+                data: data_path,
+                range: offset..offset + data.len() as BufferAddress,
+                queued: false,
+            });
+        }
 
         let ptr = map_buffer(
             &device.raw,
@@ -1279,12 +1273,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = hub.textures.register_identity(id_in, texture, &mut token);
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace
+        if let Some(ref trace) = device.trace {
+            trace
                 .lock()
-                .add(trace::Action::CreateTexture(id.0, desc.clone())),
-            None => (),
-        };
+                .add(trace::Action::CreateTexture(id.0, desc.clone()));
+        }
 
         device
             .trackers
@@ -1443,14 +1436,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = hub.texture_views.register_identity(id_in, view, &mut token);
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateTextureView {
+        if let Some(ref trace) = device.trace {
+            trace.lock().add(trace::Action::CreateTextureView {
                 id: id.0,
                 parent_id: texture_id,
                 desc: desc.clone(),
-            }),
-            None => (),
-        };
+            });
+        }
 
         device
             .trackers
@@ -1605,12 +1597,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = hub.samplers.register_identity(id_in, sampler, &mut token);
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace
+        if let Some(ref trace) = device.trace {
+            trace
                 .lock()
-                .add(trace::Action::CreateSampler(id.0, desc.clone())),
-            None => (),
-        };
+                .add(trace::Action::CreateSampler(id.0, desc.clone()));
+        }
 
         device
             .trackers
@@ -1702,12 +1693,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .bind_group_layouts
             .register_identity(id_in, layout, &mut token);
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace
+        if let Some(ref trace) = device.trace {
+            trace
                 .lock()
-                .add(trace::Action::CreateBindGroupLayout(id.0, desc.clone())),
-            None => (),
-        };
+                .add(trace::Action::CreateBindGroupLayout(id.0, desc.clone()));
+        }
         Ok(id.0)
     }
 
@@ -1773,12 +1763,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .pipeline_layouts
             .register_identity(id_in, layout, &mut token);
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace
+        if let Some(ref trace) = device.trace {
+            trace
                 .lock()
-                .add(trace::Action::CreatePipelineLayout(id.0, desc.clone())),
-            None => (),
-        };
+                .add(trace::Action::CreatePipelineLayout(id.0, desc.clone()));
+        }
         Ok(id.0)
     }
 
@@ -1881,12 +1870,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             bgl_guard,
                         );
                         #[cfg(feature = "trace")]
-                        match device.trace {
-                            Some(ref trace) => trace
+                        if let Some(ref trace) = device.trace {
+                            trace
                                 .lock()
-                                .add(trace::Action::CreateBindGroupLayout(out_id.0, bgl_desc)),
-                            None => (),
-                        };
+                                .add(trace::Action::CreateBindGroupLayout(out_id.0, bgl_desc));
+                        }
                         out_id.0
                     }
                 };
@@ -1905,13 +1893,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             pipeline_layout_guard,
         );
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreatePipelineLayout(
+        if let Some(ref trace) = device.trace {
+            trace.lock().add(trace::Action::CreatePipelineLayout(
                 layout_id.0,
                 layout_desc,
-            )),
-            None => (),
-        };
+            ));
+        }
         Ok((layout_id.0, derived_bind_group_count))
     }
 
@@ -2264,12 +2251,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             hub.bind_groups.read(&mut token).0[id].used
         );
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace
+        if let Some(ref trace) = device.trace {
+            trace
                 .lock()
-                .add(trace::Action::CreateBindGroup(id.0, desc.clone())),
-            None => (),
-        };
+                .add(trace::Action::CreateBindGroup(id.0, desc.clone()));
+        }
 
         device
             .trackers
@@ -2410,16 +2396,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .shader_modules
             .register_identity(id_in, shader, &mut token);
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => {
-                let mut trace = trace.lock();
-                let data = trace.make_binary("spv", unsafe {
-                    std::slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)
-                });
-                trace.add(trace::Action::CreateShaderModule { id: id.0, data });
-            }
-            None => {}
-        };
+        if let Some(ref trace) = device.trace {
+            let mut trace = trace.lock();
+            let data = trace.make_binary("spv", unsafe {
+                std::slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)
+            });
+            trace.add(trace::Action::CreateShaderModule { id: id.0, data });
+        }
         Ok(id.0)
     }
 
@@ -2443,12 +2426,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(module) = module {
             let device = &device_guard[module.device_id.value];
             #[cfg(feature = "trace")]
-            match device.trace {
-                Some(ref trace) => trace
+            if let Some(ref trace) = device.trace {
+                trace
                     .lock()
-                    .add(trace::Action::DestroyShaderModule(shader_module_id)),
-                None => (),
-            };
+                    .add(trace::Action::DestroyShaderModule(shader_module_id));
+            }
             unsafe {
                 device.raw.destroy_shader_module(module.raw);
             }
@@ -3028,16 +3010,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .register_identity(id_in, pipeline, &mut token);
 
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateRenderPipeline(
+        if let Some(ref trace) = device.trace {
+            trace.lock().add(trace::Action::CreateRenderPipeline(
                 id.0,
                 pipeline::RenderPipelineDescriptor {
                     layout: Some(layout_id),
                     ..desc.clone()
                 },
-            )),
-            None => (),
-        };
+            ));
+        }
         Ok((id.0, derived_bind_group_count))
     }
 
@@ -3250,16 +3231,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .register_identity(id_in, pipeline, &mut token);
 
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateComputePipeline(
+        if let Some(ref trace) = device.trace {
+            trace.lock().add(trace::Action::CreateComputePipeline(
                 id.0,
                 pipeline::ComputePipelineDescriptor {
                     layout: Some(layout_id),
                     ..desc.clone()
                 },
-            )),
-            None => (),
-        };
+            ));
+        }
         Ok((id.0, derived_bind_group_count))
     }
 
@@ -3440,12 +3420,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace
+        if let Some(ref trace) = device.trace {
+            trace
                 .lock()
-                .add(Action::CreateSwapChain(sc_id, desc.clone())),
-            None => (),
-        };
+                .add(Action::CreateSwapChain(sc_id, desc.clone()));
+        }
 
         let swap_chain = swap_chain::SwapChain {
             life_guard: LifeGuard::new(),
@@ -3697,21 +3676,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 needs_flush,
             } => {
                 #[cfg(feature = "trace")]
-                match device.trace {
-                    Some(ref trace) => {
-                        let mut trace = trace.lock();
-                        let data = trace.make_binary("bin", unsafe {
-                            std::slice::from_raw_parts(ptr.as_ptr(), buffer.size as usize)
-                        });
-                        trace.add(trace::Action::WriteBuffer {
-                            id: buffer_id,
-                            data,
-                            range: 0..buffer.size,
-                            queued: true,
-                        });
-                    }
-                    None => (),
-                };
+                if let Some(ref trace) = device.trace {
+                    let mut trace = trace.lock();
+                    let data = trace.make_binary("bin", unsafe {
+                        std::slice::from_raw_parts(ptr.as_ptr(), buffer.size as usize)
+                    });
+                    trace.add(trace::Action::WriteBuffer {
+                        id: buffer_id,
+                        data,
+                        range: 0..buffer.size,
+                        queued: true,
+                    });
+                }
                 let _ = ptr;
 
                 if needs_flush {
@@ -3772,22 +3748,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             } => {
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
-                    match device.trace {
-                        Some(ref trace) => {
-                            let mut trace = trace.lock();
-                            let size = sub_range.size_to(buffer.size);
-                            let data = trace.make_binary("bin", unsafe {
-                                std::slice::from_raw_parts(ptr.as_ptr(), size as usize)
-                            });
-                            trace.add(trace::Action::WriteBuffer {
-                                id: buffer_id,
-                                data,
-                                range: sub_range.offset..sub_range.offset + size,
-                                queued: false,
-                            });
-                        }
-                        None => (),
-                    };
+                    if let Some(ref trace) = device.trace {
+                        let mut trace = trace.lock();
+                        let size = sub_range.size_to(buffer.size);
+                        let data = trace.make_binary("bin", unsafe {
+                            std::slice::from_raw_parts(ptr.as_ptr(), size as usize)
+                        });
+                        trace.add(trace::Action::WriteBuffer {
+                            id: buffer_id,
+                            data,
+                            range: sub_range.offset..sub_range.offset + size,
+                            queued: false,
+                        });
+                    }
                     let _ = (ptr, sub_range);
                 }
                 unmap_buffer(&device.raw, buffer)?;

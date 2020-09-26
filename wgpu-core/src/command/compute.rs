@@ -220,13 +220,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let raw = cmd_buf.raw.last_mut().unwrap();
 
         #[cfg(feature = "trace")]
-        match cmd_buf.commands {
-            Some(ref mut list) => {
-                list.push(crate::device::trace::Command::RunComputePass {
-                    base: BasePass::from_ref(base),
-                });
-            }
-            None => {}
+        if let Some(ref mut list) = cmd_buf.commands {
+            list.push(crate::device::trace::Command::RunComputePass {
+                base: BasePass::from_ref(base),
+            });
         }
 
         let (_, mut token) = hub.render_bundles.read(&mut token);
