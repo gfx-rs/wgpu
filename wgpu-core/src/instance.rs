@@ -50,7 +50,7 @@ impl Instance {
                     None
                 }
             };
-            Instance {
+            Self {
                 #[cfg(vulkan)]
                 vulkan: map((Backend::Vulkan, gfx_backend_vulkan::Instance::create)),
                 #[cfg(metal)]
@@ -200,7 +200,7 @@ impl<B: hal::Backend> Adapter<B> {
                 .max(MIN_PUSH_CONSTANT_SIZE), // As an extension, the default is always 0, so define a separate minimum.
         };
 
-        Adapter {
+        Self {
             raw,
             features,
             limits,
@@ -235,7 +235,7 @@ impl AdapterInfo {
             device_type,
         } = adapter_info;
 
-        AdapterInfo {
+        Self {
             name,
             vendor,
             device,
@@ -302,8 +302,8 @@ pub enum AdapterInputs<'a, I> {
 impl<I: Clone> AdapterInputs<'_, I> {
     fn find(&self, b: Backend) -> Option<I> {
         match *self {
-            AdapterInputs::IdSet(ids, ref fun) => ids.iter().find(|id| fun(id) == b).cloned(),
-            AdapterInputs::Mask(bits, ref fun) => {
+            Self::IdSet(ids, ref fun) => ids.iter().find(|id| fun(id) == b).cloned(),
+            Self::Mask(bits, ref fun) => {
                 if bits.contains(b.into()) {
                     Some(fun(b))
                 } else {

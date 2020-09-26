@@ -37,7 +37,7 @@ pub(crate) struct PendingWrites<B: hal::Backend> {
 
 impl<B: hal::Backend> PendingWrites<B> {
     pub fn new() -> Self {
-        PendingWrites {
+        Self {
             command_buffer: None,
             temp_buffers: Vec::new(),
         }

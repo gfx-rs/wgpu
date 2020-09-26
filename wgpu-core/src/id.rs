@@ -39,7 +39,7 @@ enum SerialId {
 impl<T> From<Id<T>> for SerialId {
     fn from(id: Id<T>) -> Self {
         let (index, epoch, backend) = id.unzip();
-        SerialId::Id(index, epoch, backend)
+        Self::Id(index, epoch, backend)
     }
 }
 #[cfg(feature = "replay")]

@@ -96,7 +96,7 @@ impl Clone for RefCount {
     fn clone(&self) -> Self {
         let old_size = unsafe { self.0.as_ref() }.fetch_add(1, Ordering::AcqRel);
         assert!(old_size < Self::MAX);
-        RefCount(self.0)
+        Self(self.0)
     }
 }
 
@@ -142,7 +142,7 @@ impl MultiRefCount {
     fn new() -> Self {
         let bx = Box::new(AtomicUsize::new(1));
         let ptr = Box::into_raw(bx);
-        MultiRefCount(unsafe { ptr::NonNull::new_unchecked(ptr) })
+        Self(unsafe { ptr::NonNull::new_unchecked(ptr) })
     }
 
     fn inc(&self) {
@@ -169,7 +169,7 @@ struct LifeGuard {
 impl LifeGuard {
     fn new() -> Self {
         let bx = Box::new(AtomicUsize::new(1));
-        LifeGuard {
+        Self {
             ref_count: ptr::NonNull::new(Box::into_raw(bx)).map(RefCount),
             submission_index: AtomicUsize::new(0),
         }

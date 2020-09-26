@@ -154,7 +154,7 @@ impl Trace {
         tracing::info!("Tracing into '{:?}'", path);
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
         file.write_all(b"[\n")?;
-        Ok(Trace {
+        Ok(Self {
             path: path.to_path_buf(),
             file,
             config: ron::ser::PrettyConfig::default(),

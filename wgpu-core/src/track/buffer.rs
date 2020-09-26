@@ -26,7 +26,7 @@ impl PendingTransition<BufferState> {
 
 impl Default for BufferState {
     fn default() -> Self {
-        BufferState {
+        Self {
             first: None,
             last: BufferUse::empty(),
         }

@@ -154,7 +154,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
                 pending: Vec::new(),
             },
         );
-        Ok(CommandAllocator {
+        Ok(Self {
             queue_family,
             internal_thread_id,
             inner: Mutex::new(Inner { pools }),

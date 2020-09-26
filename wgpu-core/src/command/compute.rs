@@ -70,7 +70,7 @@ pub struct ComputePass {
 
 impl ComputePass {
     pub fn new(parent_id: id::CommandEncoderId) -> Self {
-        ComputePass {
+        Self {
             base: BasePass::new(),
             parent_id,
         }

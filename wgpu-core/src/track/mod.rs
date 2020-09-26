@@ -32,7 +32,7 @@ pub struct Unit<U> {
 impl<U: Copy> Unit<U> {
     /// Create a new unit from a given usage.
     fn new(usage: U) -> Self {
-        Unit {
+        Self {
             first: None,
             last: usage,
         }
@@ -199,7 +199,7 @@ impl<S: ResourceState + fmt::Debug> fmt::Debug for ResourceTracker<S> {
 impl<S: ResourceState> ResourceTracker<S> {
     /// Create a new empty tracker.
     pub fn new(backend: wgt::Backend) -> Self {
-        ResourceTracker {
+        Self {
             map: FastHashMap::default(),
             temp: Vec::new(),
             backend,
@@ -514,7 +514,7 @@ pub(crate) struct TrackerSet {
 impl TrackerSet {
     /// Create an empty set.
     pub fn new(backend: wgt::Backend) -> Self {
-        TrackerSet {
+        Self {
             buffers: ResourceTracker::new(backend),
             textures: ResourceTracker::new(backend),
             views: ResourceTracker::new(backend),

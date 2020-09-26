@@ -152,7 +152,7 @@ pub struct RenderPass {
 
 impl RenderPass {
     pub fn new(parent_id: id::CommandEncoderId, desc: RenderPassDescriptor) -> Self {
-        RenderPass {
+        Self {
             base: BasePass::new(),
             parent_id,
             color_targets: desc.color_attachments.iter().cloned().collect(),
