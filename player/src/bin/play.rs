@@ -10,6 +10,7 @@ use wgc::device::trace;
 
 use std::{
     fs,
+    io::Read,
     path::{Path, PathBuf},
 };
 
@@ -38,8 +39,19 @@ fn main() {
     };
 
     log::info!("Loading trace '{:?}'", dir);
-    let file = fs::File::open(dir.join(trace::FILE_NAME)).unwrap();
-    let mut actions: Vec<trace::Action> = ron::de::from_reader(file).unwrap();
+    let mut file = fs::File::open(dir.join(trace::FILE_NAME)).unwrap();
+    let mut file_bytes = Vec::new();
+    file.read_to_end(&mut file_bytes).unwrap();
+    let mut actions: Vec<trace::Action> = match ron::de::from_bytes(&file_bytes) {
+        Ok(actions) => actions,
+        Err(_) => {
+            // If the application paniced, the trace will have a
+            // missing ']' at the end.
+            // Add a trailing ']' and try again in case of failure
+            file_bytes.push(b']');
+            ron::de::from_bytes(&file_bytes).unwrap()
+        }
+    };
     actions.reverse(); // allows us to pop from the top
     log::info!("Found {} actions", actions.len());
 
