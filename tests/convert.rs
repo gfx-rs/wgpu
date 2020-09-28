@@ -182,13 +182,16 @@ fn convert_phong_lighting() {
     );
     naga::proc::Validator::new().validate(&module).unwrap();
 
-    let header = naga::Header {
-        version: (1, 0, 0),
-        generator: 1234,
-    };
-    let writer_flags = naga::back::spv::WriterFlags::empty();
-    let mut w = naga::back::spv::Writer::new(&header, writer_flags);
-    w.write(&module);
+    #[cfg(feaure = "spv-out")]
+    {
+        let header = naga::Header {
+            version: (1, 0, 0),
+            generator: 1234,
+        };
+        let writer_flags = naga::back::spv::WriterFlags::empty();
+        let mut w = naga::back::spv::Writer::new(&header, writer_flags);
+        w.write(&module);
+    }
 }
 
 //TODO: get this working again (glsl-new)
