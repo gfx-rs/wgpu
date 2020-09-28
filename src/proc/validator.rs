@@ -56,7 +56,7 @@ pub enum EntryPointError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
-pub enum ValidationError<'a> {
+pub enum ValidationError {
     #[error("The type {0:?} width {1} is not supported")]
     InvalidTypeWidth(crate::ScalarKind, crate::Bytes),
     #[error("The type handle {0:?} can not be resolved")]
@@ -68,7 +68,7 @@ pub enum ValidationError<'a> {
     #[error("Entry point {name} at {stage:?} is invalid: {error:?}")]
     EntryPoint {
         stage: crate::ShaderStage,
-        name: &'a str,
+        name: String,
         error: EntryPointError,
     },
 }
@@ -314,7 +314,7 @@ impl Validator {
     }
 
     /// Check the given module to be valid.
-    pub fn validate<'a>(&mut self, module: &'a crate::Module) -> Result<(), ValidationError<'a>> {
+    pub fn validate(&mut self, module: &crate::Module) -> Result<(), ValidationError> {
         // check the types
         for (handle, ty) in module.types.iter() {
             use crate::TypeInner as Ti;
@@ -365,7 +365,11 @@ impl Validator {
 
         for (&(stage, ref name), entry_point) in module.entry_points.iter() {
             self.validate_entry_point(entry_point, stage, module)
-                .map_err(|error| ValidationError::EntryPoint { stage, name, error })?;
+                .map_err(|error| ValidationError::EntryPoint {
+                    stage,
+                    name: name.to_string(),
+                    error,
+                })?;
         }
 
         Ok(())
