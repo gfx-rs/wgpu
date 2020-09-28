@@ -265,8 +265,10 @@ impl Typifier {
                     }
                     ref other => panic!("Unexpected argument {:?} on {}", other, name),
                 },
-                "atan2" | "cos" | "sin" | "normalize" | "max" | "reflect" | "pow" | "clamp"
-                | "fclamp" | "mix" => self.resolutions[arguments[0].index()].clone(),
+                //Note: `cross` is here too, we still need to figure out what to do with it
+                "abs" | "atan2" | "cos" | "sin" | "floor" | "inverse" | "normalize" | "min"
+                | "max" | "reflect" | "pow" | "clamp" | "fclamp" | "mix" | "step"
+                | "smoothstep" | "cross" => self.resolutions[arguments[0].index()].clone(),
                 _ => return Err(ResolveError::FunctionNotDefined { name: name.clone() }),
             },
             crate::Expression::Call {
