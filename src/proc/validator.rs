@@ -51,6 +51,8 @@ pub enum EntryPointError {
     BindingCollision(Handle<crate::GlobalVariable>),
     #[error("Built-in {0:?} is not applicable to this entry point")]
     InvalidBuiltIn(crate::BuiltIn),
+    #[error("Interpolation of an integer has to be flat")]
+    InvalidIntegerInterpolation,
     #[error(transparent)]
     Function(#[from] FunctionError),
 }
@@ -102,15 +104,9 @@ impl Validator {
                             return Err(GlobalVariableError::OutOfRangeBinding);
                         }
                         match types[var.ty].inner {
-                            crate::TypeInner::Scalar { kind, .. }
-                            | crate::TypeInner::Vector { kind, .. }
-                            | crate::TypeInner::Matrix { kind, .. } => {
-                                if kind != crate::ScalarKind::Float
-                                    && var.interpolation != Some(crate::Interpolation::Flat)
-                                {
-                                    return Err(GlobalVariableError::InvalidInterpolation);
-                                }
-                            }
+                            crate::TypeInner::Scalar { .. }
+                            | crate::TypeInner::Vector { .. }
+                            | crate::TypeInner::Matrix { .. } => {}
                             _ => return Err(GlobalVariableError::InvalidType),
                         }
                     }
@@ -224,6 +220,27 @@ impl Validator {
         {
             if usage.is_empty() {
                 continue;
+            }
+
+            if let Some(crate::Binding::Location(_)) = var.binding {
+                match (stage, var.class) {
+                    (crate::ShaderStage::Vertex, crate::StorageClass::Output)
+                    | (crate::ShaderStage::Fragment, crate::StorageClass::Input) => {
+                        match module.types[var.ty].inner {
+                            crate::TypeInner::Scalar { kind, .. }
+                            | crate::TypeInner::Vector { kind, .. }
+                            | crate::TypeInner::Matrix { kind, .. } => {
+                                if kind != crate::ScalarKind::Float
+                                    && var.interpolation != Some(crate::Interpolation::Flat)
+                                {
+                                    return Err(EntryPointError::InvalidIntegerInterpolation);
+                                }
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    _ => {}
+                }
             }
 
             let allowed_usage = match var.class {
