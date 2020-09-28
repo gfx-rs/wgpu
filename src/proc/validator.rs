@@ -296,6 +296,7 @@ impl Validator {
                 }
             };
             if !allowed_usage.contains(usage) {
+                log::debug!("\tAllowed usage: {:?}", allowed_usage);
                 return Err(EntryPointError::InvalidGlobalUsage(var_handle, usage));
             }
 

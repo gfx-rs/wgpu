@@ -315,6 +315,7 @@ pub struct Parser<I> {
     handle_sampling: FastHashMap<Handle<crate::Type>, SamplingFlags>,
     lookup_type: FastHashMap<spirv::Word, LookupType>,
     lookup_void_type: FastHashSet<spirv::Word>,
+    lookup_storage_buffer_types: FastHashSet<Handle<crate::Type>>,
     // Lookup for samplers and sampled images, storing flags on how they are used.
     lookup_constant: FastHashMap<spirv::Word, LookupConstant>,
     lookup_variable: FastHashMap<spirv::Word, LookupVariable>,
@@ -339,6 +340,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             lookup_member_type_id: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
             lookup_void_type: FastHashSet::default(),
+            lookup_storage_buffer_types: FastHashSet::default(),
             lookup_constant: FastHashMap::default(),
             lookup_variable: FastHashMap::default(),
             lookup_expression: FastHashMap::default(),
@@ -1964,11 +1966,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect_at_least(2)?;
         let id = self.next()?;
         let parent_decor = self.future_decor.remove(&id);
-        if let Some(ref decor) = parent_decor {
-            if decor.block.is_some() {
-                // do nothing
-            }
-        }
+        let is_buffer_block = parent_decor
+            .as_ref()
+            .map_or(false, |decor| match decor.block {
+                Some(Block { buffer }) => buffer,
+                _ => false,
+            });
 
         let mut members = Vec::with_capacity(inst.wc as usize - 2);
         let mut member_type_ids = Vec::with_capacity(members.capacity());
@@ -1993,6 +1996,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             inner,
         });
 
+        if is_buffer_block {
+            self.lookup_storage_buffer_types.insert(ty_handle);
+        }
         for (i, type_id) in member_type_ids.into_iter().enumerate() {
             self.lookup_member_type_id
                 .insert((ty_handle, i as u32), type_id);
@@ -2225,7 +2231,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect_at_least(4)?;
         let type_id = self.next()?;
         let id = self.next()?;
-        let storage = self.next()?;
+        let storage_class = self.next()?;
         if inst.wc != 4 {
             inst.expect(5)?;
             let _init = self.next()?; //TODO
@@ -2235,7 +2241,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             .future_decor
             .remove(&id)
             .ok_or(Error::InvalidBinding(id))?;
-        let class = map_storage_class(storage)?;
+        let class = map_storage_class(storage_class)?;
         let binding = match (class, &module.types[lookup_type.handle].inner) {
             (crate::StorageClass::Input, &crate::TypeInner::Struct { .. })
             | (crate::StorageClass::Output, &crate::TypeInner::Struct { .. }) => None,
@@ -2243,8 +2249,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         };
         let is_storage = match module.types[lookup_type.handle].inner {
             crate::TypeInner::Struct { .. } => match class {
-                crate::StorageClass::StorageBuffer | crate::StorageClass::Constant => true, // careful with `Constant` here!
-                _ => false,
+                crate::StorageClass::StorageBuffer => true,
+                _ => self
+                    .lookup_storage_buffer_types
+                    .contains(&lookup_type.handle),
             },
             crate::TypeInner::Image {
                 class: crate::ImageClass::Storage(_),
