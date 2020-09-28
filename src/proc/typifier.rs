@@ -93,6 +93,11 @@ impl Typifier {
         Ok(match *expr {
             crate::Expression::Access { base, .. } => match *self.get(base, types) {
                 crate::TypeInner::Array { base, .. } => Resolution::Handle(base),
+                crate::TypeInner::Vector {
+                    size: _,
+                    kind,
+                    width,
+                } => Resolution::Value(crate::TypeInner::Scalar { kind, width }),
                 ref other => panic!("Can't access into {:?}", other),
             },
             crate::Expression::AccessIndex { base, index } => match *self.get(base, types) {
