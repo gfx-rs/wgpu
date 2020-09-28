@@ -206,13 +206,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace.lock().add(Action::GetSwapChainTexture {
+        if let Some(ref trace) = device.trace {
+            trace.lock().add(Action::GetSwapChainTexture {
                 id: view_id,
                 parent_id: swap_chain_id,
-            }),
-            None => (),
-        };
+            });
+        }
 
         Ok(SwapChainOutput { status, view_id })
     }
@@ -238,10 +237,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &mut device_guard[sc.device_id.value];
 
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace.lock().add(Action::PresentSwapChain(swap_chain_id)),
-            None => (),
-        };
+        if let Some(ref trace) = device.trace {
+            trace.lock().add(Action::PresentSwapChain(swap_chain_id));
+        }
 
         let view_id = sc
             .acquired_view_id

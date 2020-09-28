@@ -172,18 +172,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => {
-                let mut trace = trace.lock();
-                let data_path = trace.make_binary("bin", data);
-                trace.add(Action::WriteBuffer {
-                    id: buffer_id,
-                    data: data_path,
-                    range: buffer_offset..buffer_offset + data.len() as wgt::BufferAddress,
-                    queued: true,
-                });
-            }
-            None => {}
+        if let Some(ref trace) = device.trace {
+            let mut trace = trace.lock();
+            let data_path = trace.make_binary("bin", data);
+            trace.add(Action::WriteBuffer {
+                id: buffer_id,
+                data: data_path,
+                range: buffer_offset..buffer_offset + data.len() as wgt::BufferAddress,
+                queued: true,
+            });
         }
 
         let data_size = data.len() as wgt::BufferAddress;
@@ -280,18 +277,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             texture_copy_view_to_hal(destination, size, &*texture_guard)?;
 
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => {
-                let mut trace = trace.lock();
-                let data_path = trace.make_binary("bin", data);
-                trace.add(Action::WriteTexture {
-                    to: destination.clone(),
-                    data: data_path,
-                    layout: data_layout.clone(),
-                    size: *size,
-                });
-            }
-            None => {}
+        if let Some(ref trace) = device.trace {
+            let mut trace = trace.lock();
+            let data_path = trace.make_binary("bin", data);
+            trace.add(Action::WriteTexture {
+                to: destination.clone(),
+                data: data_path,
+                layout: data_layout.clone(),
+                size: *size,
+            });
         }
 
         if size.width == 0 || size.height == 0 || size.depth == 0 {
@@ -475,13 +469,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .get_mut(cmb_id)
                             .map_err(|_| QueueSubmitError::InvalidCommandBuffer(cmb_id))?;
                         #[cfg(feature = "trace")]
-                        match device.trace {
-                            Some(ref trace) => trace.lock().add(Action::Submit(
+                        if let Some(ref trace) = device.trace {
+                            trace.lock().add(Action::Submit(
                                 submit_index,
                                 cmdbuf.commands.take().unwrap(),
-                            )),
-                            None => (),
-                        };
+                            ));
+                        }
 
                         if let Some((sc_id, fbo)) = cmdbuf.used_swap_chain.take() {
                             let sc = &mut swap_chain_guard[sc_id.value];

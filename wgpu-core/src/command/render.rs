@@ -434,15 +434,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut raw = device.cmd_allocator.extend(cmd_buf);
 
         #[cfg(feature = "trace")]
-        match cmd_buf.commands {
-            Some(ref mut list) => {
-                list.push(crate::device::trace::Command::RunRenderPass {
-                    base: BasePass::from_ref(base),
-                    target_colors: color_attachments.iter().cloned().collect(),
-                    target_depth_stencil: depth_stencil_attachment.cloned(),
-                });
-            }
-            None => {}
+        if let Some(ref mut list) = cmd_buf.commands {
+            list.push(crate::device::trace::Command::RunRenderPass {
+                base: BasePass::from_ref(base),
+                target_colors: color_attachments.iter().cloned().collect(),
+                target_depth_stencil: depth_stencil_attachment.cloned(),
+            });
         }
 
         unsafe {
