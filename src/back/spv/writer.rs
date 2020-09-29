@@ -426,8 +426,9 @@ impl Writer {
         let id = self.generate_id();
         let instruction = match local_ty {
             LocalType::Scalar { kind, width } => self.write_scalar(id, kind, width),
-            LocalType::Vector { size, .. } => {
-                let scalar_id = self.get_type_id(arena, LookupType::Local(local_ty));
+            LocalType::Vector { size, kind, width } => {
+                let scalar_id =
+                    self.get_type_id(arena, LookupType::Local(LocalType::Scalar { kind, width }));
                 super::instructions::instruction_type_vector(id, scalar_id, size)
             }
             LocalType::Pointer { .. } => unimplemented!(),
