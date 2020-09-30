@@ -311,23 +311,23 @@ impl Writer {
             parameter_type_ids,
         };
 
-        let id = self.generate_id();
+        let function_id = self.generate_id();
         let function_type =
             self.get_function_type(lookup_function_type, function_parameter_pointer_ids);
         function.signature = Some(super::instructions::instruction_function(
             return_type_id,
-            id,
+            function_id,
             spirv::FunctionControl::empty(),
             function_type,
         ));
 
-        let id = self.write_block(&ir_function.body, ir_module, ir_function, &mut function);
+        self.write_block(&ir_function.body, ir_module, ir_function, &mut function);
 
         function.to_words(&mut self.logical_layout.function_definitions);
         super::instructions::instruction_function_end()
             .to_words(&mut self.logical_layout.function_definitions);
 
-        id
+        function_id
     }
 
     // TODO Move to instructions module
