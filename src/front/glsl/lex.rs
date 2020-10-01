@@ -16,7 +16,7 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str, usize) 
     (o, i, pos)
 }
 
-pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
+pub fn consume_token(mut input: &str, start_of_line: bool) -> (Option<Token>, &str) {
     let start = input
         .find(|c: char| !c.is_whitespace())
         .unwrap_or_else(|| input.chars().count());
@@ -246,13 +246,21 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
             }
         }
         '#' => {
-            input = chars.as_str();
-            let (word, rest, pos) = consume_any(input, |c| c.is_alphanumeric() || c == '_');
-            meta.chars.end = start + 1 + pos;
-            match word {
-                "version" => (Some(Token::Version(meta)), rest),
-                _ => (None, input),
-            }
+            if start_of_line {
+                input = chars.as_str();
+
+                // skip whitespace
+                let word_start = input
+                    .find(|c: char| !c.is_whitespace())
+                    .unwrap_or_else(|| input.chars().count());
+                input = &input[word_start..];
+
+                let (word, rest, pos) = consume_any(input, |c| c.is_alphanumeric() || c == '_');
+                meta.chars.end = start + word_start + 1 + pos;
+                match word {
+                    "version" => (Some(Token::Version(meta)), rest),
+                    _ => (None, input),
+                }
 
             //TODO: preprocessor
             // if chars.next() == Some(cur) {
@@ -260,6 +268,9 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
             // } else {
             //     (Token::Preprocessor, input, start, start + 1)
             // }
+            } else {
+                (Some(Token::Unknown((meta, '#'))), chars.as_str())
+            }
         }
         '~' => (Some(Token::Tilde(meta)), chars.as_str()),
         '?' => (Some(Token::Question(meta)), chars.as_str()),
@@ -302,7 +313,7 @@ impl<'a> Lexer<'a> {
 
     #[must_use]
     pub fn next(&mut self) -> Option<Token> {
-        let (token, rest) = consume_token(&self.input);
+        let (token, rest) = consume_token(&self.input, self.offset == 0);
 
         if let Some(mut token) = token {
             self.input = String::from(rest);

@@ -49,7 +49,23 @@ fn version() {
         "InvalidProfile(TokenMetadata { line: 0, chars: 13..18 }, \"smart\")"
     );
 
+    assert_eq!(
+        format!(
+            "{:?}",
+            parse_program("#version 450\nvoid f(){} #version 450", ShaderStage::Vertex)
+                .err()
+                .unwrap()
+        ),
+        "InvalidToken(Unknown((TokenMetadata { line: 1, chars: 11..12 }, \'#\')))"
+    );
+
     // valid versions
+    let program = parse_program("  #  version 450\nvoid main() {}", ShaderStage::Vertex).unwrap();
+    assert_eq!(
+        format!("{:?}", (program.version, program.profile)),
+        "(450, Core)"
+    );
+
     let program = parse_program("#version 450\nvoid main() {}", ShaderStage::Vertex).unwrap();
     assert_eq!(
         format!("{:?}", (program.version, program.profile)),
