@@ -65,11 +65,6 @@ pub enum BindingError {
         dim: naga::ImageDimension,
         is_array: bool,
     },
-    #[error("component type {binding:?} of a sampled texture doesn't match the shader {shader:?}")]
-    WrongTextureComponentType {
-        binding: naga::ScalarKind,
-        shader: naga::ScalarKind,
-    },
     #[error("texture class {binding:?} doesn't match the shader {shader:?}")]
     WrongTextureClass {
         binding: naga::ImageClass,
@@ -98,9 +93,9 @@ pub enum StageError {
     InvalidModule,
     #[error("unable to find an entry point at {0:?} stage")]
     MissingEntryPoint(wgt::ShaderStage),
-    #[error("error matching global binding at index {binding} in set {set} against the pipeline layout: {error}")]
+    #[error("error matching global binding at index {binding} in group {group} against the pipeline layout: {error}")]
     Binding {
-        set: u32,
+        group: u32,
         binding: u32,
         error: BindingError,
     },
@@ -283,7 +278,6 @@ fn check_binding_use(
             _ => Err(BindingError::WrongType),
         },
         naga::TypeInner::Image {
-            kind,
             dim,
             arrayed,
             class,
@@ -329,7 +323,7 @@ fn check_binding_use(
                     component_type,
                     multisampled,
                 } => {
-                    let (expected_scalar_kind, comparison) = match component_type {
+                    let (kind, comparison) = match component_type {
                         wgt::TextureComponentType::Float => (naga::ScalarKind::Float, false),
                         wgt::TextureComponentType::Sint => (naga::ScalarKind::Sint, false),
                         wgt::TextureComponentType::Uint => (naga::ScalarKind::Uint, false),
@@ -337,18 +331,13 @@ fn check_binding_use(
                             (naga::ScalarKind::Float, true)
                         }
                     };
-                    if kind != expected_scalar_kind {
-                        return Err(BindingError::WrongTextureComponentType {
-                            binding: expected_scalar_kind,
-                            shader: kind,
-                        });
-                    }
-                    let class = if multisampled {
-                        naga::ImageClass::Multisampled
-                    } else if comparison {
+                    let class = if comparison {
                         naga::ImageClass::Depth
                     } else {
-                        naga::ImageClass::Sampled
+                        naga::ImageClass::Sampled {
+                            kind,
+                            multi: multisampled,
+                        }
                     };
                     (class, naga::GlobalUse::LOAD)
                 }
@@ -810,7 +799,6 @@ fn derive_binding_type(
         }
         naga::TypeInner::Sampler { comparison } => BindingType::Sampler { comparison },
         naga::TypeInner::Image {
-            kind,
             dim,
             arrayed,
             class,
@@ -823,22 +811,16 @@ fn derive_binding_type(
                 naga::ImageDimension::Cube if arrayed => wgt::TextureViewDimension::CubeArray,
                 naga::ImageDimension::Cube => wgt::TextureViewDimension::Cube,
             };
-            let component_type = match kind {
-                naga::ScalarKind::Float => wgt::TextureComponentType::Float,
-                naga::ScalarKind::Sint => wgt::TextureComponentType::Sint,
-                naga::ScalarKind::Uint => wgt::TextureComponentType::Uint,
-                naga::ScalarKind::Bool => unreachable!(),
-            };
             match class {
-                naga::ImageClass::Sampled => BindingType::SampledTexture {
+                naga::ImageClass::Sampled { multi, kind } => BindingType::SampledTexture {
                     dimension,
-                    component_type,
-                    multisampled: false,
-                },
-                naga::ImageClass::Multisampled => BindingType::SampledTexture {
-                    dimension,
-                    component_type,
-                    multisampled: true,
+                    component_type: match kind {
+                        naga::ScalarKind::Float => wgt::TextureComponentType::Float,
+                        naga::ScalarKind::Sint => wgt::TextureComponentType::Sint,
+                        naga::ScalarKind::Uint => wgt::TextureComponentType::Uint,
+                        naga::ScalarKind::Bool => unreachable!(),
+                    },
+                    multisampled: multi,
                 },
                 naga::ImageClass::Depth => BindingType::SampledTexture {
                     dimension,
@@ -871,30 +853,31 @@ pub fn check_stage<'a>(
 ) -> Result<StageInterface<'a>, StageError> {
     // Since a shader module can have multiple entry points with the same name,
     // we need to look for one with the right execution model.
+    let shader_stage = match stage_bit {
+        wgt::ShaderStage::VERTEX => naga::ShaderStage::Vertex,
+        wgt::ShaderStage::FRAGMENT => naga::ShaderStage::Fragment,
+        wgt::ShaderStage::COMPUTE => naga::ShaderStage::Compute,
+        _ => unreachable!(),
+    };
     let entry_point = module
         .entry_points
-        .iter()
-        .find(|entry_point| {
-            entry_point.name == entry_point_name
-                && stage_bit.contains(match entry_point.stage {
-                    naga::ShaderStage::Vertex { .. } => wgt::ShaderStage::VERTEX,
-                    naga::ShaderStage::Fragment { .. } => wgt::ShaderStage::FRAGMENT,
-                    naga::ShaderStage::Compute { .. } => wgt::ShaderStage::COMPUTE,
-                })
-        })
+        .get(&(shader_stage, entry_point_name.to_string()))
         .ok_or(StageError::MissingEntryPoint(stage_bit))?;
 
-    let function = &module.functions[entry_point.function];
     let mut outputs = StageInterface::default();
-    for ((_, var), &usage) in module.global_variables.iter().zip(&function.global_usage) {
+    for ((_, var), &usage) in module
+        .global_variables
+        .iter()
+        .zip(&entry_point.function.global_usage)
+    {
         if usage.is_empty() {
             continue;
         }
         match var.binding {
-            Some(naga::Binding::Descriptor { set, binding }) => {
+            Some(naga::Binding::Resource { group, binding }) => {
                 let result = match group_layouts {
                     IntrospectionBindGroupLayouts::Given(ref layouts) => layouts
-                        .get(set as usize)
+                        .get(group as usize)
                         .and_then(|map| map.get(&binding))
                         .ok_or(BindingError::Missing)
                         .and_then(|entry| {
@@ -913,7 +896,7 @@ pub fn check_stage<'a>(
                             }
                         }),
                     IntrospectionBindGroupLayouts::Derived(ref mut layouts) => layouts
-                        .get_mut(set as usize)
+                        .get_mut(group as usize)
                         .ok_or(BindingError::Missing)
                         .and_then(|set| {
                             let ty = derive_binding_type(module, var, usage)?;
@@ -937,7 +920,7 @@ pub fn check_stage<'a>(
                 };
                 if let Err(error) = result {
                     return Err(StageError::Binding {
-                        set,
+                        group,
                         binding,
                         error,
                     });
