@@ -776,6 +776,23 @@ impl Writer {
         }
     }
 
+    fn write_composite_construct(
+        &mut self,
+        base_type_id: Word,
+        constituent_ids: &[Word],
+        block: &mut Block,
+    ) -> Word {
+        let id = self.generate_id();
+        block
+            .body
+            .push(super::instructions::instruction_composite_construct(
+                base_type_id,
+                id,
+                constituent_ids,
+            ));
+        id
+    }
+
     fn write_expression<'a>(
         &mut self,
         ir_module: &'a crate::Module,
@@ -800,8 +817,7 @@ impl Writer {
                 Some((id, Some(var.ty)))
             }
             crate::Expression::Compose { ty, components } => {
-                let id = self.generate_id();
-                let type_id = self.get_type_id(&ir_module.types, LookupType::Handle(*ty));
+                let base_type_id = self.get_type_id(&ir_module.types, LookupType::Handle(*ty));
 
                 let mut constituent_ids = Vec::with_capacity(components.len());
                 for component in components {
@@ -811,13 +827,49 @@ impl Writer {
                         .unwrap();
                     constituent_ids.push(component_id);
                 }
+                let constituent_ids_slice = constituent_ids.as_slice();
 
-                let instruction = super::instructions::instruction_composite_construct(
-                    type_id,
-                    id,
-                    constituent_ids.as_slice(),
-                );
-                block.body.push(instruction);
+                let id = match ir_module.types[*ty].inner {
+                    crate::TypeInner::Vector { .. } => {
+                        self.write_composite_construct(base_type_id, constituent_ids_slice, block)
+                    }
+                    crate::TypeInner::Matrix {
+                        rows,
+                        columns,
+                        kind,
+                        width,
+                    } => {
+                        let vector_type_id = self.get_type_id(
+                            &ir_module.types,
+                            LookupType::Local(LocalType::Vector {
+                                width,
+                                kind,
+                                size: columns,
+                            }),
+                        );
+
+                        let capacity = match rows {
+                            crate::VectorSize::Bi => 2,
+                            crate::VectorSize::Tri => 3,
+                            crate::VectorSize::Quad => 4,
+                        };
+
+                        let mut vector_ids = Vec::with_capacity(capacity);
+
+                        for _ in 0..capacity {
+                            let vector_id = self.write_composite_construct(
+                                vector_type_id,
+                                constituent_ids_slice,
+                                block,
+                            );
+                            vector_ids.push(vector_id);
+                        }
+
+                        self.write_composite_construct(base_type_id, vector_ids.as_slice(), block)
+                    }
+                    _ => unreachable!(),
+                };
+
                 Some((id, Some(*ty)))
             }
             crate::Expression::Binary { op, left, right } => {
