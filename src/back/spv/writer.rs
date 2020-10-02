@@ -1033,6 +1033,79 @@ impl Writer {
                 }
                 _ => unimplemented!("{:?}", origin),
             },
+            crate::Expression::As {
+                expr,
+                kind,
+                convert,
+            } => {
+                if !convert {
+                    return None;
+                }
+
+                let (expr_id, expr_type) = self
+                    .write_expression(
+                        ir_module,
+                        ir_function,
+                        &ir_function.expressions[*expr],
+                        block,
+                        function,
+                    )
+                    .unwrap();
+
+                let id = self.generate_id();
+                let instruction = match ir_module.types[expr_type.unwrap()].inner {
+                    crate::TypeInner::Scalar {
+                        kind: expr_kind,
+                        width,
+                    } => {
+                        let kind_type_id = self.get_type_id(
+                            &ir_module.types,
+                            LookupType::Local(LocalType::Scalar { kind: *kind, width }),
+                        );
+
+                        if *convert {
+                            super::instructions::instruction_bit_cast(kind_type_id, id, expr_id)
+                        } else {
+                            match (expr_kind, kind) {
+                                (crate::ScalarKind::Float, crate::ScalarKind::Uint) => {
+                                    super::instructions::instruction_convert_f_to_u(
+                                        kind_type_id,
+                                        id,
+                                        expr_id,
+                                    )
+                                }
+                                (crate::ScalarKind::Float, crate::ScalarKind::Sint) => {
+                                    super::instructions::instruction_convert_f_to_s(
+                                        kind_type_id,
+                                        id,
+                                        expr_id,
+                                    )
+                                }
+                                (crate::ScalarKind::Sint, crate::ScalarKind::Float) => {
+                                    super::instructions::instruction_convert_s_to_f(
+                                        kind_type_id,
+                                        id,
+                                        expr_id,
+                                    )
+                                }
+                                (crate::ScalarKind::Uint, crate::ScalarKind::Float) => {
+                                    super::instructions::instruction_convert_u_to_f(
+                                        kind_type_id,
+                                        id,
+                                        expr_id,
+                                    )
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                    }
+                    _ => unreachable!(),
+                };
+
+                block.body.push(instruction);
+
+                Some((id, None))
+            }
             _ => unimplemented!("{:?}", expression),
         }
     }
