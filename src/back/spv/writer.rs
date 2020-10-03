@@ -1,7 +1,7 @@
 /*! Standard Portable Intermediate Representation (SPIR-V) backend !*/
 use super::{Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
 use spirv::Word;
-use std::collections::hash_map::Entry;
+use std::{collections::hash_map::Entry, ops};
 use thiserror::Error;
 
 const BITS_PER_BYTE: crate::Bytes = 8;
@@ -16,6 +16,8 @@ pub enum Error {
     NotImage,
     #[error("empty value")]
     EmptyValue,
+    #[error("feature is not yet implemented")]
+    FeatureNotImplemented(),
 }
 
 struct Block {
@@ -90,7 +92,7 @@ enum LocalType {
     },
     Pointer {
         base: crate::Handle<crate::Type>,
-        class: spirv::StorageClass,
+        class: crate::StorageClass,
     },
     SampledImage {
         image_type: crate::Handle<crate::Type>,
@@ -118,6 +120,21 @@ struct LookupFunctionType {
     return_type_id: Word,
 }
 
+enum MaybeOwned<'a, T> {
+    Owned(T),
+    Borrowed(&'a T),
+}
+
+impl<'a, T> ops::Deref for MaybeOwned<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        match *self {
+            MaybeOwned::Owned(ref value) => value,
+            MaybeOwned::Borrowed(reference) => reference,
+        }
+    }
+}
+
 pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
@@ -135,7 +152,7 @@ pub struct Writer {
 }
 
 // type alias, for success return of write_expression
-type WriteExpressionOutput = Option<(Word, Option<crate::Handle<crate::Type>>)>;
+type WriteExpressionOutput = (Word, Option<LookupType>);
 
 impl Writer {
     pub fn new(header: &crate::Header, writer_flags: WriterFlags) -> Self {
@@ -232,7 +249,7 @@ impl Writer {
         &mut self,
         arena: &crate::Arena<crate::Type>,
         handle: crate::Handle<crate::Type>,
-        class: spirv::StorageClass,
+        class: crate::StorageClass,
     ) -> Word {
         let ty = &arena[handle];
         let ty_id = self.get_type_id(arena, LookupType::Handle(handle));
@@ -247,22 +264,34 @@ impl Writer {
                     })) {
                     Entry::Occupied(e) => *e.get(),
                     _ => {
-                        let pointer_id = self.generate_id();
-                        let instruction =
-                            super::instructions::instruction_type_pointer(pointer_id, class, ty_id);
-                        instruction.to_words(&mut self.logical_layout.declarations);
+                        let id =
+                            self.create_pointer(ty_id, self.parse_to_spirv_storage_class(class));
                         self.lookup_type.insert(
                             LookupType::Local(LocalType::Pointer {
                                 base: handle,
                                 class,
                             }),
-                            pointer_id,
+                            id,
                         );
-                        pointer_id
+                        id
                     }
                 }
             }
         }
+    }
+
+    fn create_pointer(&mut self, ty_id: Word, class: spirv::StorageClass) -> Word {
+        let id = self.generate_id();
+        let instruction = super::instructions::instruction_type_pointer(id, class, ty_id);
+        instruction.to_words(&mut self.logical_layout.declarations);
+        id
+    }
+
+    fn create_constant(&mut self, type_id: Word, value: &[Word]) -> Word {
+        let id = self.generate_id();
+        let instruction = super::instructions::instruction_constant(type_id, id, value);
+        instruction.to_words(&mut self.logical_layout.declarations);
+        id
     }
 
     fn write_function(
@@ -280,7 +309,7 @@ impl Writer {
                 .map(|constant| self.get_constant_id(constant, ir_module));
 
             let pointer_id =
-                self.get_pointer_id(&ir_module.types, variable.ty, spirv::StorageClass::Function);
+                self.get_pointer_id(&ir_module.types, variable.ty, crate::StorageClass::Function);
             function.variables.push(LocalVariable {
                 id,
                 name: variable.name.clone(),
@@ -304,7 +333,7 @@ impl Writer {
             let pointer_id = self.get_pointer_id(
                 &ir_module.types,
                 *parameter_type,
-                spirv::StorageClass::Function,
+                crate::StorageClass::Function,
             );
 
             function_parameter_pointer_ids.push(pointer_id);
@@ -361,6 +390,9 @@ impl Writer {
         for ((handle, _), &usage) in ir_module
             .global_variables
             .iter()
+            .filter(|&(_, var)| {
+                var.class == crate::StorageClass::Input || var.class == crate::StorageClass::Output
+            })
             .zip(&entry_point.function.global_usage)
         {
             if usage.contains(crate::GlobalUse::STORE) || usage.contains(crate::GlobalUse::LOAD) {
@@ -520,7 +552,7 @@ impl Writer {
             crate::TypeInner::Sampler { comparison: _ } => {
                 super::instructions::instruction_type_sampler(id)
             }
-            crate::TypeInner::Array { size, stride, .. } => {
+            crate::TypeInner::Array { base, size, stride } => {
                 if let Some(array_stride) = stride {
                     self.annotations
                         .push(super::instructions::instruction_decorate(
@@ -530,7 +562,7 @@ impl Writer {
                         ));
                 }
 
-                let type_id = self.get_type_id(arena, LookupType::Handle(handle));
+                let type_id = self.get_type_id(arena, LookupType::Handle(base));
                 match size {
                     crate::ArraySize::Static(length) => {
                         super::instructions::instruction_type_array(id, type_id, length)
@@ -550,13 +582,8 @@ impl Writer {
             }
             crate::TypeInner::Pointer { base, class } => {
                 let type_id = self.get_type_id(arena, LookupType::Handle(base));
-                self.lookup_type.insert(
-                    LookupType::Local(LocalType::Pointer {
-                        base,
-                        class: self.parse_to_spirv_storage_class(class),
-                    }),
-                    id,
-                );
+                self.lookup_type
+                    .insert(LookupType::Local(LocalType::Pointer { base, class }), id);
                 super::instructions::instruction_type_pointer(
                     id,
                     self.parse_to_spirv_storage_class(class),
@@ -681,7 +708,8 @@ impl Writer {
         let init_word = global_variable
             .init
             .map(|constant| self.get_constant_id(constant, ir_module));
-        let pointer_id = self.get_pointer_id(&ir_module.types, global_variable.ty, class);
+        let pointer_id =
+            self.get_pointer_id(&ir_module.types, global_variable.ty, global_variable.class);
         let instruction =
             super::instructions::instruction_variable(pointer_id, id, class, init_word);
 
@@ -809,6 +837,28 @@ impl Writer {
         id
     }
 
+    fn get_type_inner<'a>(
+        &self,
+        ty_arena: &'a crate::Arena<crate::Type>,
+        lookup_ty: LookupType,
+    ) -> MaybeOwned<'a, crate::TypeInner> {
+        match lookup_ty {
+            LookupType::Handle(handle) => MaybeOwned::Borrowed(&ty_arena[handle].inner),
+            LookupType::Local(local_ty) => match local_ty {
+                LocalType::Scalar { kind, width } => {
+                    MaybeOwned::Owned(crate::TypeInner::Scalar { kind, width })
+                }
+                LocalType::Vector { size, kind, width } => {
+                    MaybeOwned::Owned(crate::TypeInner::Vector { size, kind, width })
+                }
+                LocalType::Pointer { base, class } => {
+                    MaybeOwned::Owned(crate::TypeInner::Pointer { base, class })
+                }
+                _ => unreachable!(),
+            },
+        }
+    }
+
     fn write_expression<'a>(
         &mut self,
         ir_module: &'a crate::Module,
@@ -817,31 +867,152 @@ impl Writer {
         block: &mut Block,
         function: &mut Function,
     ) -> Result<WriteExpressionOutput, Error> {
-        match *expression {
+        match expression {
+            crate::Expression::Access { base, index } => {
+                let id = self.generate_id();
+
+                let (base_id, base_lookup_ty) = self.write_expression(
+                    ir_module,
+                    ir_function,
+                    &ir_function.expressions[*base],
+                    block,
+                    function,
+                )?;
+                let (index_id, _) = self.write_expression(
+                    ir_module,
+                    ir_function,
+                    &ir_function.expressions[*index],
+                    block,
+                    function,
+                )?;
+
+                let base_ty_inner = self.get_type_inner(&ir_module.types, base_lookup_ty.unwrap());
+
+                let (pointer_id, type_id, lookup_ty) = match *base_ty_inner {
+                    crate::TypeInner::Vector { kind, width, .. } => {
+                        let scalar_id = self.get_type_id(
+                            &ir_module.types,
+                            LookupType::Local(LocalType::Scalar { kind, width }),
+                        );
+                        (
+                            self.create_pointer(scalar_id, spirv::StorageClass::Function),
+                            scalar_id,
+                            LookupType::Local(LocalType::Scalar { kind, width }),
+                        )
+                    }
+                    _ => unimplemented!(),
+                };
+
+                block
+                    .body
+                    .push(super::instructions::instruction_access_chain(
+                        pointer_id,
+                        id,
+                        base_id,
+                        &[index_id],
+                    ));
+
+                let load_id = self.generate_id();
+                block.body.push(super::instructions::instruction_load(
+                    type_id, load_id, id, None,
+                ));
+
+                Ok((load_id, Some(lookup_ty)))
+            }
+            crate::Expression::AccessIndex { base, index } => {
+                let id = self.generate_id();
+                let (base_id, base_lookup_ty) = self
+                    .write_expression(
+                        ir_module,
+                        ir_function,
+                        &ir_function.expressions[*base],
+                        block,
+                        function,
+                    )
+                    .unwrap();
+
+                let base_ty_inner = self.get_type_inner(&ir_module.types, base_lookup_ty.unwrap());
+
+                let (pointer_id, type_id, lookup_ty) = match *base_ty_inner {
+                    crate::TypeInner::Vector { kind, width, .. } => {
+                        let scalar_id = self.get_type_id(
+                            &ir_module.types,
+                            LookupType::Local(LocalType::Scalar { kind, width }),
+                        );
+                        (
+                            self.create_pointer(scalar_id, spirv::StorageClass::Function),
+                            scalar_id,
+                            LookupType::Local(LocalType::Scalar { kind, width }),
+                        )
+                    }
+                    crate::TypeInner::Struct { ref members } => {
+                        let member = &members[*index as usize];
+                        let type_id =
+                            self.get_type_id(&ir_module.types, LookupType::Handle(member.ty));
+                        (
+                            self.create_pointer(type_id, spirv::StorageClass::Uniform),
+                            type_id,
+                            LookupType::Handle(member.ty),
+                        )
+                    }
+                    _ => unimplemented!(),
+                };
+
+                let const_ty_id = self.get_type_id(
+                    &ir_module.types,
+                    LookupType::Local(LocalType::Scalar {
+                        kind: crate::ScalarKind::Sint,
+                        width: 4,
+                    }),
+                );
+                let const_id = self.create_constant(const_ty_id, &[*index]);
+
+                block
+                    .body
+                    .push(super::instructions::instruction_access_chain(
+                        pointer_id,
+                        id,
+                        base_id,
+                        &[const_id],
+                    ));
+
+                let load_id = self.generate_id();
+                block.body.push(super::instructions::instruction_load(
+                    type_id, load_id, id, None,
+                ));
+
+                Ok((load_id, Some(lookup_ty)))
+            }
             crate::Expression::GlobalVariable(handle) => {
-                let var = &ir_module.global_variables[handle];
-                let id = self.get_global_variable_id(ir_module, handle);
-                Ok(Some((id, Some(var.ty))))
+                let var = &ir_module.global_variables[*handle];
+                let id = self.get_global_variable_id(&ir_module, *handle);
+
+                Ok((id, Some(LookupType::Handle(var.ty))))
             }
             crate::Expression::Constant(handle) => {
-                let var = &ir_module.constants[handle];
-                let id = self.get_constant_id(handle, ir_module);
-                Ok(Some((id, Some(var.ty))))
+                let var = &ir_module.constants[*handle];
+                let id = self.get_constant_id(*handle, ir_module);
+                Ok((id, Some(LookupType::Handle(var.ty))))
             }
             crate::Expression::Compose { ty, ref components } => {
-                let base_type_id = self.get_type_id(&ir_module.types, LookupType::Handle(ty));
+                let base_type_id = self.get_type_id(&ir_module.types, LookupType::Handle(*ty));
 
                 let mut constituent_ids = Vec::with_capacity(components.len());
                 for component in components {
                     let expression = &ir_function.expressions[*component];
-                    let (component_id, _) = self
-                        .write_expression(ir_module, &ir_function, expression, block, function)?
-                        .unwrap();
+                    let (component_id, _) = self.write_expression(
+                        ir_module,
+                        &ir_function,
+                        expression,
+                        block,
+                        function,
+                    )?;
+
                     constituent_ids.push(component_id);
                 }
                 let constituent_ids_slice = constituent_ids.as_slice();
 
-                let id = match ir_module.types[ty].inner {
+                let id = match ir_module.types[*ty].inner {
                     crate::TypeInner::Vector { .. } => {
                         self.write_composite_construct(base_type_id, constituent_ids_slice, block)
                     }
@@ -881,44 +1052,40 @@ impl Writer {
                     _ => unreachable!(),
                 };
 
-                Ok(Some((id, Some(ty))))
+                Ok((id, Some(LookupType::Handle(*ty))))
             }
             crate::Expression::Binary { op, left, right } => {
                 match op {
                     crate::BinaryOperator::Multiply => {
                         let id = self.generate_id();
-                        let left_expression = &ir_function.expressions[left];
-                        let right_expression = &ir_function.expressions[right];
-                        let (left_id, left_ty) = self
-                            .write_expression(
-                                ir_module,
-                                ir_function,
-                                left_expression,
-                                block,
-                                function,
-                            )?
-                            .unwrap();
-                        let (right_id, right_ty) = self
-                            .write_expression(
-                                ir_module,
-                                ir_function,
-                                right_expression,
-                                block,
-                                function,
-                            )?
-                            .unwrap();
+                        let left_expression = &ir_function.expressions[*left];
+                        let right_expression = &ir_function.expressions[*right];
+                        let (left_id, left_lookup_ty) = self.write_expression(
+                            ir_module,
+                            ir_function,
+                            left_expression,
+                            block,
+                            function,
+                        )?;
+                        let (right_id, right_lookup_ty) = self.write_expression(
+                            ir_module,
+                            ir_function,
+                            right_expression,
+                            block,
+                            function,
+                        )?;
 
-                        let left_ty = left_ty.unwrap();
-                        let right_ty = right_ty.unwrap();
+                        let left_lookup_ty = left_lookup_ty.unwrap();
+                        let right_lookup_ty = right_lookup_ty.unwrap();
 
-                        let left_ty_inner = &ir_module.types[left_ty].inner;
-                        let right_ty_inner = &ir_module.types[right_ty].inner;
+                        let left_ty_inner = self.get_type_inner(&ir_module.types, left_lookup_ty);
+                        let right_ty_inner = self.get_type_inner(&ir_module.types, right_lookup_ty);
 
                         let left_result_type_id =
-                            self.get_type_id(&ir_module.types, LookupType::Handle(left_ty));
+                            self.get_type_id(&ir_module.types, left_lookup_ty);
 
                         let right_result_type_id =
-                            self.get_type_id(&ir_module.types, LookupType::Handle(right_ty));
+                            self.get_type_id(&ir_module.types, right_lookup_ty);
 
                         let left_id = match *left_expression {
                             crate::Expression::LocalVariable(_)
@@ -950,8 +1117,8 @@ impl Writer {
                             _ => right_id,
                         };
 
-                        let (instruction, ty) = match left_ty_inner {
-                            crate::TypeInner::Vector { .. } => match right_ty_inner {
+                        let (instruction, lookup_ty) = match *left_ty_inner {
+                            crate::TypeInner::Vector { .. } => match *right_ty_inner {
                                 crate::TypeInner::Scalar { .. } => (
                                     super::instructions::instruction_vector_times_scalar(
                                         left_result_type_id,
@@ -959,7 +1126,7 @@ impl Writer {
                                         left_id,
                                         right_id,
                                     ),
-                                    left_ty,
+                                    left_lookup_ty,
                                 ),
                                 crate::TypeInner::Matrix { .. } => (
                                     super::instructions::instruction_vector_times_matrix(
@@ -968,11 +1135,11 @@ impl Writer {
                                         left_id,
                                         right_id,
                                     ),
-                                    left_ty,
+                                    left_lookup_ty,
                                 ),
                                 _ => unreachable!(),
                             },
-                            crate::TypeInner::Matrix { .. } => match right_ty_inner {
+                            crate::TypeInner::Matrix { .. } => match *right_ty_inner {
                                 crate::TypeInner::Scalar { .. } => (
                                     super::instructions::instruction_matrix_times_scalar(
                                         left_result_type_id,
@@ -980,7 +1147,7 @@ impl Writer {
                                         left_id,
                                         right_id,
                                     ),
-                                    left_ty,
+                                    left_lookup_ty,
                                 ),
                                 crate::TypeInner::Vector { .. } => (
                                     super::instructions::instruction_matrix_times_vector(
@@ -989,7 +1156,7 @@ impl Writer {
                                         left_id,
                                         right_id,
                                     ),
-                                    right_ty,
+                                    right_lookup_ty,
                                 ),
                                 crate::TypeInner::Matrix { .. } => (
                                     super::instructions::instruction_matrix_times_matrix(
@@ -998,7 +1165,7 @@ impl Writer {
                                         left_id,
                                         right_id,
                                     ),
-                                    left_ty,
+                                    left_lookup_ty,
                                 ),
                                 _ => unreachable!(),
                             },
@@ -1012,7 +1179,7 @@ impl Writer {
                                             left_id,
                                             right_id,
                                         ),
-                                        left_ty,
+                                        left_lookup_ty,
                                     ),
                                     crate::ScalarKind::Sint | crate::ScalarKind::Uint => (
                                         super::instructions::instruction_i_mul(
@@ -1021,7 +1188,7 @@ impl Writer {
                                             left_id,
                                             right_id,
                                         ),
-                                        left_ty,
+                                        left_lookup_ty,
                                     ),
                                     _ => unreachable!(),
                                 }
@@ -1030,33 +1197,33 @@ impl Writer {
                         };
 
                         block.body.push(instruction);
-                        Ok(Some((id, Some(ty))))
+                        Ok((id, Some(lookup_ty)))
                     }
 
                     _ => unimplemented!("{:?}", op),
                 }
             }
             crate::Expression::LocalVariable(variable) => {
-                let var = &ir_function.local_variables[variable];
+                let var = &ir_function.local_variables[*variable];
                 function
                     .variables
                     .iter()
                     .find(|&v| v.name.as_ref().unwrap() == var.name.as_ref().unwrap())
-                    .map(|local_var| Some((local_var.id, Some(var.ty))))
+                    .map(|local_var| (local_var.id, Some(LookupType::Handle(var.ty))))
                     .ok_or_else(|| Error::UnknownLocalVariable(var.clone()))
             }
             crate::Expression::FunctionParameter(index) => {
-                let handle = ir_function.parameter_types.get(index as usize).unwrap();
+                let handle = ir_function.parameter_types.get(*index as usize).unwrap();
                 let type_id = self.get_type_id(&ir_module.types, LookupType::Handle(*handle));
                 let load_id = self.generate_id();
 
                 block.body.push(super::instructions::instruction_load(
                     type_id,
                     load_id,
-                    function.parameters[index as usize].result_id.unwrap(),
+                    function.parameters[*index as usize].result_id.unwrap(),
                     None,
                 ));
-                Ok(Some((load_id, Some(*handle))))
+                Ok((load_id, Some(LookupType::Handle(*handle))))
             }
             crate::Expression::Call {
                 ref origin,
@@ -1069,18 +1236,27 @@ impl Writer {
 
                     for argument in arguments {
                         let expression = &ir_function.expressions[*argument];
-                        let (id, ty) = self
-                            .write_expression(ir_module, ir_function, expression, block, function)?
-                            .unwrap();
+                        let (id, lookup_ty) = self.write_expression(
+                            ir_module,
+                            ir_function,
+                            expression,
+                            block,
+                            function,
+                        )?;
 
                         // Create variable - OpVariable
                         // Store value to variable - OpStore
                         // Use id of variable
 
+                        let handle = match lookup_ty.unwrap() {
+                            LookupType::Handle(handle) => handle,
+                            LookupType::Local(_) => unreachable!(),
+                        };
+
                         let pointer_id = self.get_pointer_id(
                             &ir_module.types,
-                            ty.unwrap(),
-                            spirv::StorageClass::Function,
+                            handle,
+                            crate::StorageClass::Function,
                         );
 
                         let variable_id = self.generate_id();
@@ -1113,7 +1289,7 @@ impl Writer {
                             *self.lookup_function.get(&local_function).unwrap(),
                             argument_ids.as_slice(),
                         ));
-                    Ok(Some((id, None)))
+                    Ok((id, None))
                 }
                 _ => unimplemented!("{:?}", origin),
             },
@@ -1123,31 +1299,31 @@ impl Writer {
                 convert,
             } => {
                 if !convert {
-                    return Ok(None);
+                    return Err(Error::FeatureNotImplemented());
                 }
 
-                let (expr_id, expr_type) = self
-                    .write_expression(
-                        ir_module,
-                        ir_function,
-                        &ir_function.expressions[expr],
-                        block,
-                        function,
-                    )?
-                    .unwrap();
+                let (expr_id, expr_type) = self.write_expression(
+                    ir_module,
+                    ir_function,
+                    &ir_function.expressions[*expr],
+                    block,
+                    function,
+                )?;
 
                 let id = self.generate_id();
-                let instruction = match ir_module.types[expr_type.unwrap()].inner {
+                let expr_type_inner = self.get_type_inner(&ir_module.types, expr_type.unwrap());
+
+                let instruction = match *expr_type_inner {
                     crate::TypeInner::Scalar {
                         kind: expr_kind,
                         width,
                     } => {
                         let kind_type_id = self.get_type_id(
                             &ir_module.types,
-                            LookupType::Local(LocalType::Scalar { kind, width }),
+                            LookupType::Local(LocalType::Scalar { kind: *kind, width }),
                         );
 
-                        if convert {
+                        if *convert {
                             super::instructions::instruction_bit_cast(kind_type_id, id, expr_id)
                         } else {
                             match (expr_kind, kind) {
@@ -1188,7 +1364,7 @@ impl Writer {
 
                 block.body.push(instruction);
 
-                Ok(Some((id, None)))
+                Ok((id, None))
             }
             crate::Expression::ImageSample {
                 image,
@@ -1198,13 +1374,17 @@ impl Writer {
                 depth_ref: _,
             } => {
                 // image
-                let image_expression = &ir_function.expressions[image];
-                let (image_id, image_ty) = self
-                    .write_expression(ir_module, ir_function, image_expression, block, function)?
-                    .ok_or(Error::EmptyValue)?;
-                let image_ty = image_ty.ok_or(Error::EmptyValue)?;
-                let image_result_type_id =
-                    self.get_type_id(&ir_module.types, LookupType::Handle(image_ty));
+                let image_expression = &ir_function.expressions[*image];
+                let (image_id, image_lookup_ty) = self.write_expression(
+                    ir_module,
+                    ir_function,
+                    image_expression,
+                    block,
+                    function,
+                )?;
+
+                let image_lookup_ty = image_lookup_ty.ok_or(Error::EmptyValue)?;
+                let image_result_type_id = self.get_type_id(&ir_module.types, image_lookup_ty);
                 let image_id = match *image_expression {
                     crate::Expression::LocalVariable(_) | crate::Expression::GlobalVariable(_) => {
                         let load_id = self.generate_id();
@@ -1219,6 +1399,11 @@ impl Writer {
                     _ => image_id,
                 };
 
+                let image_ty = match image_lookup_ty {
+                    LookupType::Handle(handle) => handle,
+                    LookupType::Local(_) => unreachable!(),
+                };
+
                 // OpTypeSampledImage
                 let sampled_image_type_id = self.get_type_id(
                     &ir_module.types,
@@ -1228,13 +1413,17 @@ impl Writer {
                 );
 
                 // sampler
-                let sampler_expression = &ir_function.expressions[sampler];
-                let (sampler_id, sampler_ty) = self
-                    .write_expression(ir_module, ir_function, sampler_expression, block, function)?
-                    .ok_or(Error::EmptyValue)?;
-                let sampler_ty = sampler_ty.ok_or(Error::EmptyValue)?;
+                let sampler_expression = &ir_function.expressions[*sampler];
+                let (sampler_id, sampler_lookup_ty) = self.write_expression(
+                    ir_module,
+                    ir_function,
+                    sampler_expression,
+                    block,
+                    function,
+                )?;
+
                 let sampler_result_type_id =
-                    self.get_type_id(&ir_module.types, LookupType::Handle(sampler_ty));
+                    self.get_type_id(&ir_module.types, sampler_lookup_ty.unwrap());
                 let sampler_id = match *sampler_expression {
                     crate::Expression::LocalVariable(_) | crate::Expression::GlobalVariable(_) => {
                         let load_id = self.generate_id();
@@ -1250,19 +1439,17 @@ impl Writer {
                 };
 
                 // coordinate
-                let coordinate_expression = &ir_function.expressions[coordinate];
-                let (coordinate_id, coordinate_ty) = self
-                    .write_expression(
-                        ir_module,
-                        ir_function,
-                        coordinate_expression,
-                        block,
-                        function,
-                    )?
-                    .ok_or(Error::EmptyValue)?;
-                let coordinate_ty = coordinate_ty.ok_or(Error::EmptyValue)?;
+                let coordinate_expression = &ir_function.expressions[*coordinate];
+                let (coordinate_id, coordinate_lookup_ty) = self.write_expression(
+                    ir_module,
+                    ir_function,
+                    coordinate_expression,
+                    block,
+                    function,
+                )?;
+
                 let coordinate_result_type_id =
-                    self.get_type_id(&ir_module.types, LookupType::Handle(coordinate_ty));
+                    self.get_type_id(&ir_module.types, coordinate_lookup_ty.unwrap());
                 let coordinate_id = match *coordinate_expression {
                     crate::Expression::LocalVariable(_) | crate::Expression::GlobalVariable(_) => {
                         let load_id = self.generate_id();
@@ -1317,7 +1504,7 @@ impl Writer {
                         sampled_image_id,
                         coordinate_id,
                     ));
-                Ok(Some((id, None)))
+                Ok((id, None))
             }
             _ => unimplemented!("{:?}", expression),
         }
@@ -1346,7 +1533,7 @@ impl Writer {
                     block.termination = Some(match ir_function.return_type {
                         Some(_) => {
                             let expression = &ir_function.expressions[value.unwrap()];
-                            let (id, ty) = self
+                            let (id, lookup_ty) = self
                                 .write_expression(
                                     ir_module,
                                     ir_function,
@@ -1354,17 +1541,14 @@ impl Writer {
                                     &mut block,
                                     function,
                                 )
-                                .unwrap()
                                 .unwrap();
 
                             let id = match *expression {
                                 crate::Expression::LocalVariable(_)
                                 | crate::Expression::GlobalVariable(_) => {
                                     let load_id = self.generate_id();
-                                    let value_ty_id = self.get_type_id(
-                                        &ir_module.types,
-                                        LookupType::Handle(ty.unwrap()),
-                                    );
+                                    let value_ty_id =
+                                        self.get_type_id(&ir_module.types, lookup_ty.unwrap());
                                     block.body.push(super::instructions::instruction_load(
                                         value_ty_id,
                                         load_id,
@@ -1392,9 +1576,8 @@ impl Writer {
                             &mut block,
                             function,
                         )
-                        .unwrap()
                         .unwrap();
-                    let (value_id, value_ty) = self
+                    let (value_id, value_lookup_ty) = self
                         .write_expression(
                             ir_module,
                             ir_function,
@@ -1402,17 +1585,14 @@ impl Writer {
                             &mut block,
                             function,
                         )
-                        .unwrap()
                         .unwrap();
 
                     let value_id = match value_expression {
                         crate::Expression::LocalVariable(_)
                         | crate::Expression::GlobalVariable(_) => {
                             let load_id = self.generate_id();
-                            let value_ty_id = self.get_type_id(
-                                &ir_module.types,
-                                LookupType::Handle(value_ty.unwrap()),
-                            );
+                            let value_ty_id =
+                                self.get_type_id(&ir_module.types, value_lookup_ty.unwrap());
                             block.body.push(super::instructions::instruction_load(
                                 value_ty_id,
                                 load_id,
@@ -1450,21 +1630,6 @@ impl Writer {
                 spirv::SourceLanguage::GLSL,
                 450,
             ));
-        }
-
-        // Looking through all global variable, types, constants.
-        // Doing this because we also want to include not used parts of the module
-        // to be included in the output
-        for (handle, _) in ir_module.types.iter() {
-            self.get_type_id(&ir_module.types, LookupType::Handle(handle));
-        }
-
-        for (handle, _) in ir_module.global_variables.iter() {
-            self.get_global_variable_id(ir_module, handle);
-        }
-
-        for (handle, _) in ir_module.constants.iter() {
-            self.get_constant_id(handle, &ir_module);
         }
 
         for annotation in self.annotations.iter() {

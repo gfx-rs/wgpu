@@ -406,6 +406,24 @@ pub(super) fn instruction_store(
     instruction
 }
 
+pub(super) fn instruction_access_chain(
+    result_type_id: Word,
+    id: Word,
+    base_id: Word,
+    index_ids: &[Word],
+) -> Instruction {
+    let mut instruction = Instruction::new(Op::AccessChain);
+    instruction.set_type(result_type_id);
+    instruction.set_result(id);
+    instruction.add_operand(base_id);
+
+    for index_id in index_ids {
+        instruction.add_operand(*index_id);
+    }
+
+    instruction
+}
+
 //
 // Function Instructions
 //
