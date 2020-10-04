@@ -664,93 +664,98 @@ pub struct RasterizationStateDescriptor {
 pub enum TextureFormat {
     // Normal 8 bit formats
     /// Red channel only. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
-    R8Unorm = 0,
+    R8Unorm = 0x1,
     /// Red channel only. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
-    R8Snorm = 1,
+    R8Snorm = 0x2,
     /// Red channel only. 8 bit integer per channel. Unsigned in shader.
-    R8Uint = 2,
+    R8Uint = 0x3,
     /// Red channel only. 8 bit integer per channel. Signed in shader.
-    R8Sint = 3,
+    R8Sint = 0x4,
 
     // Normal 16 bit formats
     /// Red channel only. 16 bit integer per channel. Unsigned in shader.
-    R16Uint = 4,
+    R16Uint = 0x5,
     /// Red channel only. 16 bit integer per channel. Signed in shader.
-    R16Sint = 5,
+    R16Sint = 0x6,
     /// Red channel only. 16 bit float per channel. Float in shader.
-    R16Float = 6,
+    R16Float = 0x7,
     /// Red and green channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
-    Rg8Unorm = 7,
+    Rg8Unorm = 0x8,
     /// Red and green channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
-    Rg8Snorm = 8,
+    Rg8Snorm = 0x9,
     /// Red and green channels. 8 bit integer per channel. Unsigned in shader.
-    Rg8Uint = 9,
+    Rg8Uint = 0xA,
     /// Red and green channel s. 8 bit integer per channel. Signed in shader.
-    Rg8Sint = 10,
+    Rg8Sint = 0xB,
 
     // Normal 32 bit formats
     /// Red channel only. 32 bit integer per channel. Unsigned in shader.
-    R32Uint = 11,
+    R32Uint = 0xC,
     /// Red channel only. 32 bit integer per channel. Signed in shader.
-    R32Sint = 12,
+    R32Sint = 0xD,
     /// Red channel only. 32 bit float per channel. Float in shader.
-    R32Float = 13,
+    R32Float = 0xE,
     /// Red and green channels. 16 bit integer per channel. Unsigned in shader.
-    Rg16Uint = 14,
+    Rg16Uint = 0xF,
     /// Red and green channels. 16 bit integer per channel. Signed in shader.
-    Rg16Sint = 15,
+    Rg16Sint = 0x10,
     /// Red and green channels. 16 bit float per channel. Float in shader.
-    Rg16Float = 16,
+    Rg16Float = 0x11,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
-    Rgba8Unorm = 17,
+    Rgba8Unorm = 0x12,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
-    Rgba8UnormSrgb = 18,
+    Rgba8UnormSrgb = 0x13,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
-    Rgba8Snorm = 19,
+    Rgba8Snorm = 0x14,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Unsigned in shader.
-    Rgba8Uint = 20,
+    Rgba8Uint = 0x15,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Signed in shader.
-    Rgba8Sint = 21,
+    Rgba8Sint = 0x16,
     /// Blue, green, red, and alpha channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
-    Bgra8Unorm = 22,
+    Bgra8Unorm = 0x17,
     /// Blue, green, red, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
-    Bgra8UnormSrgb = 23,
+    Bgra8UnormSrgb = 0x18,
 
     // Packed 32 bit formats
     /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. [0, 1023] ([0, 3] for alpha) converted to/from float [0, 1] in shader.
-    Rgb10a2Unorm = 24,
+    Rgb10a2Unorm = 0x19,
     /// Red, green, and blue channels. 11 bit float with no sign bit for RG channels. 10 bit float with no sign bit for blue channel. Float in shader.
-    Rg11b10Float = 25,
+    Rg11b10Float = 0x1A,
+
+    Rgb9e5uFloat = 0x1B,
 
     // Normal 64 bit formats
-    /// Red and green channels. 32 bit integer per channel. Unsigned in shader.
-    Rg32Uint = 26,
-    /// Red and green channels. 32 bit integer per channel. Signed in shader.
-    Rg32Sint = 27,
     /// Red and green channels. 32 bit float per channel. Float in shader.
-    Rg32Float = 28,
+    Rg32Float = 0x1C,
+    /// Red and green channels. 32 bit integer per channel. Unsigned in shader.
+    Rg32Uint = 0x1D,
+    /// Red and green channels. 32 bit integer per channel. Signed in shader.
+    Rg32Sint = 0x1E,
+
     /// Red, green, blue, and alpha channels. 16 bit integer per channel. Unsigned in shader.
-    Rgba16Uint = 29,
+    Rgba16Uint = 0x1F,
     /// Red, green, blue, and alpha channels. 16 bit integer per channel. Signed in shader.
-    Rgba16Sint = 30,
+    Rgba16Sint = 0x20,
     /// Red, green, blue, and alpha channels. 16 bit float per channel. Float in shader.
-    Rgba16Float = 31,
+    Rgba16Float = 0x21,
 
     // Normal 128 bit formats
-    /// Red, green, blue, and alpha channels. 32 bit integer per channel. Unsigned in shader.
-    Rgba32Uint = 32,
-    /// Red, green, blue, and alpha channels. 32 bit integer per channel. Signed in shader.
-    Rgba32Sint = 33,
     /// Red, green, blue, and alpha channels. 32 bit float per channel. Float in shader.
-    Rgba32Float = 34,
+    Rgba32Float = 0x22,
+    /// Red, green, blue, and alpha channels. 32 bit integer per channel. Unsigned in shader.
+    Rgba32Uint = 0x23,
+    /// Red, green, blue, and alpha channels. 32 bit integer per channel. Signed in shader.
+    Rgba32Sint = 0x24,
 
     // Depth and stencil formats
     /// Special depth format with 32 bit floating point depth.
-    Depth32Float = 35,
+    Depth32Float = 0x25,
     /// Special depth format with at least 24 bit integer depth.
-    Depth24Plus = 36,
+    Depth24Plus = 0x26,
     /// Special depth/stencil format with at least 24 bit integer depth and 8 bits integer stencil.
-    Depth24PlusStencil8 = 37,
+    Depth24PlusStencil8 = 0x27,
+    /// Special stencil format with 8 bit integer stencil (1 bit / pixel).
+    Stencil8 = 0x28,
 
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
@@ -759,96 +764,96 @@ pub enum TextureFormat {
     /// Also known as DXT1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc1RgbaUnorm = 38,
+    Bc1RgbaUnorm = 0x29,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
     /// Srgb-color [0, 64] ([0, 16] for alpha) converted to/from linear-color float [0, 1] in shader.
     ///
     /// Also known as DXT1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc1RgbaUnormSrgb = 39,
+    Bc1RgbaUnormSrgb = 0x2A,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet. 5 bit R + 6 bit G + 5 bit B + 4 bit alpha.
     /// [0, 64] ([0, 16] for alpha) converted to/from float [0, 1] in shader.
     ///
     /// Also known as DXT3.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc2RgbaUnorm = 40,
+    Bc2RgbaUnorm = 0x2B,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet. 5 bit R + 6 bit G + 5 bit B + 4 bit alpha.
     /// Srgb-color [0, 64] ([0, 256] for alpha) converted to/from linear-color float [0, 1] in shader.
     ///
     /// Also known as DXT3.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc2RgbaUnormSrgb = 41,
+    Bc2RgbaUnormSrgb = 0x2C,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet + 8 alpha pallet. 5 bit R + 6 bit G + 5 bit B + 8 bit alpha.
     /// [0, 64] ([0, 256] for alpha) converted to/from float [0, 1] in shader.
     ///
     /// Also known as DXT5.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc3RgbaUnorm = 42,
+    Bc3RgbaUnorm = 0x2D,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet + 8 alpha pallet. 5 bit R + 6 bit G + 5 bit B + 8 bit alpha.
     /// Srgb-color [0, 64] ([0, 256] for alpha) converted to/from linear-color float [0, 1] in shader.
     ///
     /// Also known as DXT5.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc3RgbaUnormSrgb = 43,
+    Bc3RgbaUnormSrgb = 0x2E,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
     /// [0, 256] converted to/from float [0, 1] in shader.
     ///
     /// Also known as RGTC1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc4RUnorm = 44,
+    Bc4RUnorm = 0x2F,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
     ///
     /// Also known as RGTC1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc4RSnorm = 45,
+    Bc4RSnorm = 0x30,
     /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
     /// [0, 256] converted to/from float [0, 1] in shader.
     ///
     /// Also known as RGTC2.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc5RgUnorm = 46,
+    Bc5RgUnorm = 0x31,
     /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
     ///
     /// Also known as RGTC2.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc5RgSnorm = 47,
+    Bc5RgSnorm = 0x32,
     /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). Variable sized pallet. 16 bit unsigned float RGB. Float in shader.
     ///
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc6hRgbUfloat = 48,
+    Bc6hRgbUfloat = 0x33,
     /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). Variable sized pallet. 16 bit signed float RGB. Float in shader.
     ///
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc6hRgbSfloat = 49,
+    Bc6hRgbSfloat = 0x34,
     /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). Variable sized pallet. 8 bit integer RGBA.
     /// [0, 256] converted to/from float [0, 1] in shader.
     ///
     /// Also known as BPTC (unorm).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc7RgbaUnorm = 50,
+    Bc7RgbaUnorm = 0x35,
     /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). Variable sized pallet. 8 bit integer RGBA.
     /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     ///
     /// Also known as BPTC (unorm).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc7RgbaUnormSrgb = 51,
+    Bc7RgbaUnormSrgb = 0x36,
 }
 
 bitflags::bitflags! {
@@ -1645,7 +1650,8 @@ impl From<TextureFormat> for TextureComponentType {
             | TextureFormat::Rgba8Uint
             | TextureFormat::Rg32Uint
             | TextureFormat::Rgba16Uint
-            | TextureFormat::Rgba32Uint => Self::Uint,
+            | TextureFormat::Rgba32Uint
+            | TextureFormat::Stencil8 => Self::Uint,
 
             TextureFormat::R8Sint
             | TextureFormat::R16Sint
@@ -1665,6 +1671,7 @@ impl From<TextureFormat> for TextureComponentType {
             | TextureFormat::Rg8Snorm
             | TextureFormat::Rg16Float
             | TextureFormat::Rg11b10Float
+            | TextureFormat::Rgb9e5uFloat
             | TextureFormat::Rg32Float
             | TextureFormat::Rgba8Snorm
             | TextureFormat::Rgba16Float
