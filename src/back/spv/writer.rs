@@ -670,10 +670,10 @@ impl Writer {
         let instruction = super::instructions::instruction_variable(pointer_id, id, class, None);
 
         if self.writer_flags.contains(WriterFlags::DEBUG) {
-            self.debugs.push(super::instructions::instruction_name(
-                id,
-                global_variable.name.as_ref().unwrap().as_str(),
-            ));
+            if let Some(ref name) = global_variable.name {
+                self.debugs
+                    .push(super::instructions::instruction_name(id, name.as_str()));
+            }
         }
 
         if let Some(interpolation) = global_variable.interpolation {
