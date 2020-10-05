@@ -98,6 +98,12 @@ impl Typifier {
                     kind,
                     width,
                 } => Resolution::Value(crate::TypeInner::Scalar { kind, width }),
+                crate::TypeInner::Matrix {
+                    rows: size,
+                    columns: _,
+                    kind,
+                    width,
+                } => Resolution::Value(crate::TypeInner::Vector { size, kind, width }),
                 ref other => panic!("Can't access into {:?}", other),
             },
             crate::Expression::AccessIndex { base, index } => match *self.get(base, types) {
