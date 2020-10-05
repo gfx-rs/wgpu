@@ -389,9 +389,9 @@ dependencies = [
 
 [[package]]
 name = "generator"
-version = "0.6.21"
+version = "0.6.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "add72f17bb81521258fcc8a7a3245b1e184e916bfbe34f0ea89558f440df5c68"
+checksum = "f5e13c8f4607ff74f6d0fa37007cb95492531333f46bb9744f772d9e7830855c"
 dependencies = [
  "cc",
  "libc",
