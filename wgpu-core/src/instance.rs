@@ -648,7 +648,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let available_features = adapter.raw.physical_device.features();
 
             // Check features that are always needed
-            let wishful_features = hal::Features::VERTEX_STORES_AND_ATOMICS
+            let wishful_features = hal::Features::ROBUST_BUFFER_ACCESS
+                | hal::Features::VERTEX_STORES_AND_ATOMICS
                 | hal::Features::FRAGMENT_STORES_AND_ATOMICS
                 | hal::Features::NDC_Y_UP
                 | hal::Features::INDEPENDENT_BLENDING
@@ -667,11 +668,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
                 desc.features
                     .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
-            );
-            enabled_features.set(
-                hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
-                desc.features
-                    .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
             );
             enabled_features.set(
                 hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
