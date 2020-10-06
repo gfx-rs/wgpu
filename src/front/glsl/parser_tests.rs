@@ -56,7 +56,7 @@ fn version() {
                 .err()
                 .unwrap()
         ),
-        "InvalidToken(Unknown((TokenMetadata { line: 1, chars: 11..12 }, \'#\')))"
+        "InvalidToken(Unknown((TokenMetadata { line: 1, chars: 11..12 }, \"#\")))"
     );
 
     // valid versions

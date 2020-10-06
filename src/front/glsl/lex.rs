@@ -16,268 +16,6 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str, usize) 
     (o, i, pos)
 }
 
-pub fn consume_token(mut input: &str, start_of_line: bool) -> (Option<Token>, &str) {
-    let start = input
-        .find(|c: char| !c.is_whitespace())
-        .unwrap_or_else(|| input.chars().count());
-    input = &input[start..];
-
-    let mut chars = input.chars();
-    let cur = match chars.next() {
-        Some(c) => c,
-        None => return (None, input),
-    };
-    let mut meta = TokenMetadata {
-        line: 0,
-        chars: start..start + 1,
-    };
-    match cur {
-        ':' => (Some(Token::Colon(meta)), chars.as_str()),
-        ';' => (Some(Token::Semicolon(meta)), chars.as_str()),
-        ',' => (Some(Token::Comma(meta)), chars.as_str()),
-        '.' => (Some(Token::Dot(meta)), chars.as_str()),
-
-        '(' => (Some(Token::LeftParen(meta)), chars.as_str()),
-        ')' => (Some(Token::RightParen(meta)), chars.as_str()),
-        '{' => (Some(Token::LeftBrace(meta)), chars.as_str()),
-        '}' => (Some(Token::RightBrace(meta)), chars.as_str()),
-        '[' => (Some(Token::LeftBracket(meta)), chars.as_str()),
-        ']' => (Some(Token::RightBracket(meta)), chars.as_str()),
-        '<' | '>' => {
-            input = chars.as_str();
-            let n1 = chars.next();
-            let input1 = chars.as_str();
-            let n2 = chars.next();
-            match (cur, n1, n2) {
-                ('<', Some('<'), Some('=')) => {
-                    meta.chars.end = start + 3;
-                    (Some(Token::LeftAssign(meta)), chars.as_str())
-                }
-                ('>', Some('>'), Some('=')) => {
-                    meta.chars.end = start + 3;
-                    (Some(Token::RightAssign(meta)), chars.as_str())
-                }
-                ('<', Some('<'), _) => {
-                    meta.chars.end = start + 2;
-                    (Some(Token::LeftOp(meta)), input1)
-                }
-                ('>', Some('>'), _) => {
-                    meta.chars.end = start + 2;
-                    (Some(Token::RightOp(meta)), input1)
-                }
-                ('<', Some('='), _) => {
-                    meta.chars.end = start + 2;
-                    (Some(Token::LeOp(meta)), input1)
-                }
-                ('>', Some('='), _) => {
-                    meta.chars.end = start + 2;
-                    (Some(Token::GeOp(meta)), input1)
-                }
-                ('<', _, _) => (Some(Token::LeftAngle(meta)), input),
-                ('>', _, _) => (Some(Token::RightAngle(meta)), input),
-                _ => (None, input),
-            }
-        }
-        '0'..='9' => {
-            let (number, rest, pos) = consume_any(input, |c| (c >= '0' && c <= '9' || c == '.'));
-            if number.find('.').is_some() {
-                if (
-                    chars.next().map(|c| c.to_lowercase().next().unwrap()),
-                    chars.next().map(|c| c.to_lowercase().next().unwrap()),
-                ) == (Some('l'), Some('f'))
-                {
-                    meta.chars.end = start + pos + 2;
-                    (
-                        Some(Token::DoubleConstant((meta, number.parse().unwrap()))),
-                        chars.as_str(),
-                    )
-                } else {
-                    meta.chars.end = start + pos;
-                    (
-                        Some(Token::FloatConstant((meta, number.parse().unwrap()))),
-                        chars.as_str(),
-                    )
-                }
-            } else {
-                meta.chars.end = start + pos;
-                (
-                    Some(Token::IntConstant((meta, number.parse().unwrap()))),
-                    rest,
-                )
-            }
-        }
-        'a'..='z' | 'A'..='Z' | '_' => {
-            let (word, rest, pos) = consume_any(input, |c| c.is_ascii_alphanumeric() || c == '_');
-            meta.chars.end = start + pos;
-            match word {
-                "layout" => (Some(Token::Layout(meta)), rest),
-                "in" => (Some(Token::In(meta)), rest),
-                "out" => (Some(Token::Out(meta)), rest),
-                "uniform" => (Some(Token::Uniform(meta)), rest),
-                "flat" => (
-                    Some(Token::Interpolation((meta, crate::Interpolation::Flat))),
-                    rest,
-                ),
-                "noperspective" => (
-                    Some(Token::Interpolation((meta, crate::Interpolation::Linear))),
-                    rest,
-                ),
-                "smooth" => (
-                    Some(Token::Interpolation((
-                        meta,
-                        crate::Interpolation::Perspective,
-                    ))),
-                    rest,
-                ),
-                "centroid" => (
-                    Some(Token::Interpolation((meta, crate::Interpolation::Centroid))),
-                    rest,
-                ),
-                "sample" => (
-                    Some(Token::Interpolation((meta, crate::Interpolation::Sample))),
-                    rest,
-                ),
-                // values
-                "true" => (Some(Token::BoolConstant((meta, true))), rest),
-                "false" => (Some(Token::BoolConstant((meta, false))), rest),
-                // jump statements
-                "continue" => (Some(Token::Continue(meta)), rest),
-                "break" => (Some(Token::Break(meta)), rest),
-                "return" => (Some(Token::Return(meta)), rest),
-                "discard" => (Some(Token::Discard(meta)), rest),
-                // types
-                "void" => (Some(Token::Void(meta)), rest),
-                word => {
-                    let token = match parse_type(word) {
-                        Some(t) => Token::TypeName((meta, t)),
-                        None => Token::Identifier((meta, String::from(word))),
-                    };
-                    (Some(token), rest)
-                }
-            }
-        }
-
-        '+' | '-' | '&' | '|' | '^' => {
-            input = chars.as_str();
-            let next = chars.next();
-            if next == Some(cur) {
-                meta.chars.end = start + 2;
-                match cur {
-                    '+' => (Some(Token::IncOp(meta)), chars.as_str()),
-                    '-' => (Some(Token::DecOp(meta)), chars.as_str()),
-                    '&' => (Some(Token::AndOp(meta)), chars.as_str()),
-                    '|' => (Some(Token::OrOp(meta)), chars.as_str()),
-                    '^' => (Some(Token::XorOp(meta)), chars.as_str()),
-                    _ => (None, input),
-                }
-            } else {
-                match next {
-                    Some('=') => {
-                        meta.chars.end = start + 2;
-                        match cur {
-                            '+' => (Some(Token::AddAssign(meta)), chars.as_str()),
-                            '-' => (Some(Token::SubAssign(meta)), chars.as_str()),
-                            '&' => (Some(Token::AndAssign(meta)), chars.as_str()),
-                            '|' => (Some(Token::OrAssign(meta)), chars.as_str()),
-                            '^' => (Some(Token::XorAssign(meta)), chars.as_str()),
-                            _ => (None, input),
-                        }
-                    }
-                    _ => match cur {
-                        '+' => (Some(Token::Plus(meta)), input),
-                        '-' => (Some(Token::Dash(meta)), input),
-                        '&' => (Some(Token::Ampersand(meta)), input),
-                        '|' => (Some(Token::VerticalBar(meta)), input),
-                        '^' => (Some(Token::Caret(meta)), input),
-                        _ => (None, input),
-                    },
-                }
-            }
-        }
-
-        '%' | '!' | '=' => {
-            input = chars.as_str();
-            match chars.next() {
-                Some('=') => {
-                    meta.chars.end = start + 2;
-                    match cur {
-                        '%' => (Some(Token::ModAssign(meta)), chars.as_str()),
-                        '!' => (Some(Token::NeOp(meta)), chars.as_str()),
-                        '=' => (Some(Token::EqOp(meta)), chars.as_str()),
-                        _ => (None, input),
-                    }
-                }
-                _ => match cur {
-                    '%' => (Some(Token::Percent(meta)), input),
-                    '!' => (Some(Token::Bang(meta)), input),
-                    '=' => (Some(Token::Equal(meta)), input),
-                    _ => (None, input),
-                },
-            }
-        }
-
-        '*' => {
-            input = chars.as_str();
-            match chars.next() {
-                Some('=') => {
-                    meta.chars.end = start + 2;
-                    (Some(Token::MulAssign(meta)), chars.as_str())
-                }
-                Some('/') => {
-                    meta.chars.end = start + 2;
-                    (Some(Token::CommentEnd((meta, ()))), chars.as_str())
-                }
-                _ => (Some(Token::Star(meta)), input),
-            }
-        }
-        '/' => {
-            input = chars.as_str();
-            match chars.next() {
-                Some('=') => {
-                    meta.chars.end = start + 2;
-                    (Some(Token::DivAssign(meta)), chars.as_str())
-                }
-                Some('/') => (None, ""),
-                Some('*') => {
-                    meta.chars.end = start + 2;
-                    (Some(Token::CommentStart((meta, ()))), chars.as_str())
-                }
-                _ => (Some(Token::Slash(meta)), input),
-            }
-        }
-        '#' => {
-            if start_of_line {
-                input = chars.as_str();
-
-                // skip whitespace
-                let word_start = input
-                    .find(|c: char| !c.is_whitespace())
-                    .unwrap_or_else(|| input.chars().count());
-                input = &input[word_start..];
-
-                let (word, rest, pos) = consume_any(input, |c| c.is_alphanumeric() || c == '_');
-                meta.chars.end = start + word_start + 1 + pos;
-                match word {
-                    "version" => (Some(Token::Version(meta)), rest),
-                    _ => (None, input),
-                }
-
-            //TODO: preprocessor
-            // if chars.next() == Some(cur) {
-            //     (Token::TokenPasting, chars.as_str(), start, start + 2)
-            // } else {
-            //     (Token::Preprocessor, input, start, start + 1)
-            // }
-            } else {
-                (Some(Token::Unknown((meta, '#'))), chars.as_str())
-            }
-        }
-        '~' => (Some(Token::Tilde(meta)), chars.as_str()),
-        '?' => (Some(Token::Question(meta)), chars.as_str()),
-        ch => (Some(Token::Unknown((meta, ch))), chars.as_str()),
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct Lexer<'a> {
     lines: Enumerate<Lines<'a>>,
@@ -288,6 +26,262 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
+    pub fn consume_token(&mut self) -> Option<Token> {
+        let start = self
+            .input
+            .find(|c: char| !c.is_whitespace())
+            .unwrap_or_else(|| self.input.chars().count());
+        let input = &self.input[start..];
+
+        let mut chars = input.chars();
+        let cur = match chars.next() {
+            Some(c) => c,
+            None => {
+                self.input = self.input[start..].into();
+                return None;
+            }
+        };
+        let mut meta = TokenMetadata {
+            line: 0,
+            chars: start..start + 1,
+        };
+        let mut consume_all = false;
+        let token = match cur {
+            ':' => Some(Token::Colon(meta)),
+            ';' => Some(Token::Semicolon(meta)),
+            ',' => Some(Token::Comma(meta)),
+            '.' => Some(Token::Dot(meta)),
+
+            '(' => Some(Token::LeftParen(meta)),
+            ')' => Some(Token::RightParen(meta)),
+            '{' => Some(Token::LeftBrace(meta)),
+            '}' => Some(Token::RightBrace(meta)),
+            '[' => Some(Token::LeftBracket(meta)),
+            ']' => Some(Token::RightBracket(meta)),
+            '<' | '>' => {
+                let n1 = chars.next();
+                let n2 = chars.next();
+                match (cur, n1, n2) {
+                    ('<', Some('<'), Some('=')) => {
+                        meta.chars.end = start + 3;
+                        Some(Token::LeftAssign(meta))
+                    }
+                    ('>', Some('>'), Some('=')) => {
+                        meta.chars.end = start + 3;
+                        Some(Token::RightAssign(meta))
+                    }
+                    ('<', Some('<'), _) => {
+                        meta.chars.end = start + 2;
+                        Some(Token::LeftOp(meta))
+                    }
+                    ('>', Some('>'), _) => {
+                        meta.chars.end = start + 2;
+                        Some(Token::RightOp(meta))
+                    }
+                    ('<', Some('='), _) => {
+                        meta.chars.end = start + 2;
+                        Some(Token::LeOp(meta))
+                    }
+                    ('>', Some('='), _) => {
+                        meta.chars.end = start + 2;
+                        Some(Token::GeOp(meta))
+                    }
+                    ('<', _, _) => Some(Token::LeftAngle(meta)),
+                    ('>', _, _) => Some(Token::RightAngle(meta)),
+                    _ => None,
+                }
+            }
+            '0'..='9' => {
+                let (number, _, pos) = consume_any(input, |c| (c >= '0' && c <= '9' || c == '.'));
+                if number.find('.').is_some() {
+                    if (
+                        chars.next().map(|c| c.to_lowercase().next().unwrap()),
+                        chars.next().map(|c| c.to_lowercase().next().unwrap()),
+                    ) == (Some('l'), Some('f'))
+                    {
+                        meta.chars.end = start + pos + 2;
+                        Some(Token::DoubleConstant((meta, number.parse().unwrap())))
+                    } else {
+                        meta.chars.end = start + pos;
+
+                        Some(Token::FloatConstant((meta, number.parse().unwrap())))
+                    }
+                } else {
+                    meta.chars.end = start + pos;
+                    Some(Token::IntConstant((meta, number.parse().unwrap())))
+                }
+            }
+            'a'..='z' | 'A'..='Z' | '_' => {
+                let (word, _, pos) = consume_any(input, |c| c.is_ascii_alphanumeric() || c == '_');
+                meta.chars.end = start + pos;
+                match word {
+                    "layout" => Some(Token::Layout(meta)),
+                    "in" => Some(Token::In(meta)),
+                    "out" => Some(Token::Out(meta)),
+                    "uniform" => Some(Token::Uniform(meta)),
+                    "flat" => Some(Token::Interpolation((meta, crate::Interpolation::Flat))),
+                    "noperspective" => {
+                        Some(Token::Interpolation((meta, crate::Interpolation::Linear)))
+                    }
+                    "smooth" => Some(Token::Interpolation((
+                        meta,
+                        crate::Interpolation::Perspective,
+                    ))),
+                    "centroid" => {
+                        Some(Token::Interpolation((meta, crate::Interpolation::Centroid)))
+                    }
+                    "sample" => Some(Token::Interpolation((meta, crate::Interpolation::Sample))),
+                    // values
+                    "true" => Some(Token::BoolConstant((meta, true))),
+                    "false" => Some(Token::BoolConstant((meta, false))),
+                    // jump statements
+                    "continue" => Some(Token::Continue(meta)),
+                    "break" => Some(Token::Break(meta)),
+                    "return" => Some(Token::Return(meta)),
+                    "discard" => Some(Token::Discard(meta)),
+                    // types
+                    "void" => Some(Token::Void(meta)),
+                    word => {
+                        let token = match parse_type(word) {
+                            Some(t) => Token::TypeName((meta, t)),
+                            None => Token::Identifier((meta, String::from(word))),
+                        };
+                        Some(token)
+                    }
+                }
+            }
+            '+' | '-' | '&' | '|' | '^' => {
+                let next = chars.next();
+                if next == Some(cur) {
+                    meta.chars.end = start + 2;
+                    match cur {
+                        '+' => Some(Token::IncOp(meta)),
+                        '-' => Some(Token::DecOp(meta)),
+                        '&' => Some(Token::AndOp(meta)),
+                        '|' => Some(Token::OrOp(meta)),
+                        '^' => Some(Token::XorOp(meta)),
+                        _ => None,
+                    }
+                } else {
+                    match next {
+                        Some('=') => {
+                            meta.chars.end = start + 2;
+                            match cur {
+                                '+' => Some(Token::AddAssign(meta)),
+                                '-' => Some(Token::SubAssign(meta)),
+                                '&' => Some(Token::AndAssign(meta)),
+                                '|' => Some(Token::OrAssign(meta)),
+                                '^' => Some(Token::XorAssign(meta)),
+                                _ => None,
+                            }
+                        }
+                        _ => match cur {
+                            '+' => Some(Token::Plus(meta)),
+                            '-' => Some(Token::Dash(meta)),
+                            '&' => Some(Token::Ampersand(meta)),
+                            '|' => Some(Token::VerticalBar(meta)),
+                            '^' => Some(Token::Caret(meta)),
+                            _ => None,
+                        },
+                    }
+                }
+            }
+
+            '%' | '!' | '=' => match chars.next() {
+                Some('=') => {
+                    meta.chars.end = start + 2;
+                    match cur {
+                        '%' => Some(Token::ModAssign(meta)),
+                        '!' => Some(Token::NeOp(meta)),
+                        '=' => Some(Token::EqOp(meta)),
+                        _ => None,
+                    }
+                }
+                _ => match cur {
+                    '%' => Some(Token::Percent(meta)),
+                    '!' => Some(Token::Bang(meta)),
+                    '=' => Some(Token::Equal(meta)),
+                    _ => None,
+                },
+            },
+
+            '*' => match chars.next() {
+                Some('=') => {
+                    meta.chars.end = start + 2;
+                    Some(Token::MulAssign(meta))
+                }
+                Some('/') => {
+                    meta.chars.end = start + 2;
+                    Some(Token::CommentEnd((meta, ())))
+                }
+                _ => Some(Token::Star(meta)),
+            },
+            '/' => {
+                match chars.next() {
+                    Some('=') => {
+                        meta.chars.end = start + 2;
+                        Some(Token::DivAssign(meta))
+                    }
+                    Some('/') => {
+                        // consume rest of line
+                        consume_all = true;
+                        None
+                    }
+                    Some('*') => {
+                        meta.chars.end = start + 2;
+                        Some(Token::CommentStart((meta, ())))
+                    }
+                    _ => Some(Token::Slash(meta)),
+                }
+            }
+            '#' => {
+                if self.offset == 0 {
+                    let mut input = chars.as_str();
+
+                    // skip whitespace
+                    let word_start = input
+                        .find(|c: char| !c.is_whitespace())
+                        .unwrap_or_else(|| input.chars().count());
+                    input = &input[word_start..];
+
+                    let (word, _, pos) = consume_any(input, |c| c.is_alphanumeric() || c == '_');
+                    meta.chars.end = start + word_start + 1 + pos;
+                    match word {
+                        "version" => Some(Token::Version(meta)),
+                        w => Some(Token::Unknown((meta, w.into()))),
+                    }
+
+                //TODO: preprocessor
+                // if chars.next() == Some(cur) {
+                //     (Token::TokenPasting, chars.as_str(), start, start + 2)
+                // } else {
+                //     (Token::Preprocessor, input, start, start + 1)
+                // }
+                } else {
+                    Some(Token::Unknown((meta, '#'.to_string())))
+                }
+            }
+            '~' => Some(Token::Tilde(meta)),
+            '?' => Some(Token::Question(meta)),
+            ch => Some(Token::Unknown((meta, ch.to_string()))),
+        };
+        if let Some(token) = token {
+            let skip_bytes = input
+                .chars()
+                .take(token.extra().chars.end - start)
+                .fold(0, |acc, c| acc + c.len_utf8());
+            self.input = input[skip_bytes..].into();
+            Some(token)
+        } else {
+            if consume_all {
+                self.input = "".into();
+            } else {
+                self.input = self.input[start..].into();
+            }
+            None
+        }
+    }
+
     pub fn new(input: &'a str) -> Self {
         let mut lines = input.lines().enumerate();
         let (line, input) = lines.next().unwrap_or((0, ""));
@@ -313,10 +307,9 @@ impl<'a> Lexer<'a> {
 
     #[must_use]
     pub fn next(&mut self) -> Option<Token> {
-        let (token, rest) = consume_token(&self.input, self.offset == 0);
+        let token = self.consume_token();
 
         if let Some(mut token) = token {
-            self.input = String::from(rest);
             let meta = token.extra_mut();
             let end = meta.chars.end;
             meta.line = self.line;

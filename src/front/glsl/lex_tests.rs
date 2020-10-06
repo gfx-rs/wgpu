@@ -111,7 +111,7 @@ fn tokens() {
                 line: 0,
                 chars: 14..15
             },
-            'æ'
+            'æ'.to_string()
         ))
     );
     assert_eq!(
@@ -131,7 +131,7 @@ fn tokens() {
                 line: 0,
                 chars: 17..18
             },
-            'ø'
+            'ø'.to_string()
         ))
     );
     assert_eq!(
@@ -151,7 +151,7 @@ fn tokens() {
                 line: 0,
                 chars: 21..22
             },
-            '¾'
+            '¾'.to_string()
         ))
     );
     assert_eq!(
@@ -171,7 +171,7 @@ fn tokens() {
                 line: 0,
                 chars: 25..26
             },
-            '好'
+            '好'.to_string()
         ))
     );
     assert_eq!(lex.next(), None);

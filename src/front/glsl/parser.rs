@@ -28,7 +28,7 @@ pomelo! {
         ErrorKind::ParserStackOverflow
     }
 
-    %type Unknown char;
+    %type Unknown String;
     %type CommentStart ();
     %type CommentEnd ();
 
