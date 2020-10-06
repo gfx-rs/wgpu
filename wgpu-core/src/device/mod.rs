@@ -30,7 +30,13 @@ use thiserror::Error;
 use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat};
 
 use std::{
-    borrow::Cow, collections::hash_map::Entry, iter, marker::PhantomData, mem, ops::Range, ptr,
+    borrow::Cow,
+    collections::{hash_map::Entry, BTreeMap},
+    iter,
+    marker::PhantomData,
+    mem,
+    ops::Range,
+    ptr,
     sync::atomic::Ordering,
 };
 
@@ -1947,9 +1953,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
             let (sampler_guard, _) = hub.samplers.read(&mut token);
 
-            //TODO: group writes into contiguous sections
-            let mut write_map =
-                FastHashMap::with_capacity_and_hasher(desc.entries.len(), Default::default());
+            // `BTreeMap` has ordered bindings as keys, which allows us to coalesce
+            // the descriptor writes into a single transaction.
+            let mut write_map = BTreeMap::new();
             for entry in desc.entries.iter() {
                 let binding = entry.binding;
                 // Find the corresponding declaration in the layout
@@ -2220,17 +2226,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            let writes = write_map
-                .into_iter()
-                .map(|(binding, descriptors)| hal::pso::DescriptorSetWrite {
+            if let Some(start_binding) = write_map.keys().next().cloned() {
+                let descriptors = write_map
+                    .into_iter()
+                    .flat_map(|(_, list)| list)
+                    .collect::<Vec<_>>();
+                let write = hal::pso::DescriptorSetWrite {
                     set: desc_set.raw(),
-                    binding,
+                    binding: start_binding,
                     array_offset: 0,
                     descriptors,
-                })
-                .collect::<Vec<_>>();
-            unsafe {
-                device.raw.write_descriptor_sets(writes);
+                };
+                unsafe {
+                    device.raw.write_descriptor_sets(iter::once(write));
+                }
             }
             desc_set
         };
