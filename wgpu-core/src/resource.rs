@@ -104,6 +104,7 @@ unsafe impl<B: hal::Backend> Sync for BufferMapState<B> {}
 
 pub type BufferMapCallback = unsafe extern "C" fn(status: BufferMapAsyncStatus, userdata: *mut u8);
 
+#[repr(C)]
 #[derive(Debug)]
 pub struct BufferMapOperation {
     pub host: crate::device::HostMap,
