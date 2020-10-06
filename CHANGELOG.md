@@ -1,5 +1,10 @@
 # Change Log
 
+## wgpu-core-0.6.4 (2020-10-05)
+  - don't request device features that aren't needed
+  - fix texture depth == 0 checks
+  - fix the order of texture feature checks
+
 ## wgpu-core-0.6.3 (2020-09-04)
   - fix group bindings that aren't related to the current pipeline
 

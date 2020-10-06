@@ -648,7 +648,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let available_features = adapter.raw.physical_device.features();
 
             // Check features that are always needed
-            let wishful_features = hal::Features::VERTEX_STORES_AND_ATOMICS
+            let wishful_features = hal::Features::ROBUST_BUFFER_ACCESS
+                | hal::Features::VERTEX_STORES_AND_ATOMICS
                 | hal::Features::FRAGMENT_STORES_AND_ATOMICS
                 | hal::Features::NDC_Y_UP
                 | hal::Features::INDEPENDENT_BLENDING
@@ -657,7 +658,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut enabled_features = available_features & wishful_features;
             if enabled_features != wishful_features {
                 tracing::warn!(
-                    "Missing features: {:?}",
+                    "Missing internal features: {:?}",
                     wishful_features - enabled_features
                 );
             }
@@ -665,44 +666,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // Features
             enabled_features.set(
                 hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
-                adapter
-                    .features
+                desc.features
                     .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
             );
             enabled_features.set(
                 hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
-                adapter
-                    .features
-                    .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
-            );
-            enabled_features.set(
-                hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
-                adapter
-                    .features
+                desc.features
                     .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
             );
             enabled_features.set(
                 hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
-                adapter
-                    .features
+                desc.features
                     .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
             );
             enabled_features.set(
                 hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
-                adapter
-                    .features
-                    .contains(wgt::Features::UNSIZED_BINDING_ARRAY),
+                desc.features.contains(wgt::Features::UNSIZED_BINDING_ARRAY),
             );
             enabled_features.set(
                 hal::Features::MULTI_DRAW_INDIRECT,
-                adapter
-                    .features
-                    .contains(wgt::Features::MULTI_DRAW_INDIRECT),
+                desc.features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
             );
             enabled_features.set(
                 hal::Features::DRAW_INDIRECT_COUNT,
-                adapter
-                    .features
+                desc.features
                     .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT),
             );
 
