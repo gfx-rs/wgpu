@@ -1536,10 +1536,10 @@ where
                     match device_error {
                         wgc::device::DeviceError::OutOfMemory => {
                             error_sink.handle_error(crate::Error::OutOfMemoryError {
-                                source: Box::new(err)
+                                source: Box::new(err),
                             });
                             return fallback();
-                        },
+                        }
                         _ => {}
                     }
                 }

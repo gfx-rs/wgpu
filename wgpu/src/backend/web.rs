@@ -51,7 +51,7 @@ impl Context {
         // Emulate buffer mapping with the old API. This is a temporary
         // polyfill until the new buffer mapping API is available on gecko.
         let mut mapped_desc =
-        web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
+            web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
