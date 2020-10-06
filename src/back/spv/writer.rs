@@ -875,7 +875,6 @@ impl Writer {
             crate::Expression::Binary { op, left, right } => {
                 match op {
                     crate::BinaryOperator::Multiply => {
-                        // TODO OpVectorTimesScalar is only supported
                         let id = self.generate_id();
                         let left_expression = &ir_function.expressions[*left];
                         let right_expression = &ir_function.expressions[*right];
@@ -898,53 +897,129 @@ impl Writer {
                             )
                             .unwrap();
 
-                        let left_ty_inner = &ir_module.types[left_ty.unwrap()].inner;
-                        let right_ty_inner = &ir_module.types[right_ty.unwrap()].inner;
+                        let left_ty = left_ty.unwrap();
+                        let right_ty = right_ty.unwrap();
 
-                        let (result_type_id, vector_id, scalar_id) =
-                            match (left_ty_inner, right_ty_inner) {
-                                (
-                                    crate::TypeInner::Vector { .. },
-                                    crate::TypeInner::Scalar { .. },
-                                ) => (
-                                    self.get_type_id(
-                                        &ir_module.types,
-                                        LookupType::Handle(left_ty.unwrap()),
-                                    ),
+                        let left_ty_inner = &ir_module.types[left_ty].inner;
+                        let right_ty_inner = &ir_module.types[right_ty].inner;
+
+                        let left_result_type_id =
+                            self.get_type_id(&ir_module.types, LookupType::Handle(left_ty));
+
+                        let right_result_type_id =
+                            self.get_type_id(&ir_module.types, LookupType::Handle(right_ty));
+
+                        let left_id = match *left_expression {
+                            crate::Expression::LocalVariable(_)
+                            | crate::Expression::GlobalVariable(_) => {
+                                let load_id = self.generate_id();
+                                block.body.push(super::instructions::instruction_load(
+                                    left_result_type_id,
+                                    load_id,
                                     left_id,
+                                    None,
+                                ));
+                                load_id
+                            }
+                            _ => left_id,
+                        };
+
+                        let right_id = match *right_expression {
+                            crate::Expression::LocalVariable(..)
+                            | crate::Expression::GlobalVariable(..) => {
+                                let load_id = self.generate_id();
+                                block.body.push(super::instructions::instruction_load(
+                                    right_result_type_id,
+                                    load_id,
                                     right_id,
-                                ),
-                                (
-                                    crate::TypeInner::Scalar { .. },
-                                    crate::TypeInner::Vector { .. },
-                                ) => (
-                                    self.get_type_id(
-                                        &ir_module.types,
-                                        LookupType::Handle(right_ty.unwrap()),
+                                    None,
+                                ));
+                                load_id
+                            }
+                            _ => right_id,
+                        };
+
+                        let (instruction, ty) = match left_ty_inner {
+                            crate::TypeInner::Vector { .. } => match right_ty_inner {
+                                crate::TypeInner::Scalar { .. } => (
+                                    super::instructions::instruction_vector_times_scalar(
+                                        left_result_type_id,
+                                        id,
+                                        left_id,
+                                        right_id,
                                     ),
-                                    right_id,
-                                    left_id,
+                                    left_ty,
                                 ),
-                                _ => unreachable!("Expression requires both a scalar and vector"),
-                            };
+                                crate::TypeInner::Matrix { .. } => (
+                                    super::instructions::instruction_vector_times_matrix(
+                                        left_result_type_id,
+                                        id,
+                                        left_id,
+                                        right_id,
+                                    ),
+                                    left_ty,
+                                ),
+                                _ => unreachable!(),
+                            },
+                            crate::TypeInner::Matrix { .. } => match right_ty_inner {
+                                crate::TypeInner::Scalar { .. } => (
+                                    super::instructions::instruction_matrix_times_scalar(
+                                        left_result_type_id,
+                                        id,
+                                        left_id,
+                                        right_id,
+                                    ),
+                                    left_ty,
+                                ),
+                                crate::TypeInner::Vector { .. } => (
+                                    super::instructions::instruction_matrix_times_vector(
+                                        right_result_type_id,
+                                        id,
+                                        left_id,
+                                        right_id,
+                                    ),
+                                    right_ty,
+                                ),
+                                crate::TypeInner::Matrix { .. } => (
+                                    super::instructions::instruction_matrix_times_matrix(
+                                        left_result_type_id,
+                                        id,
+                                        left_id,
+                                        right_id,
+                                    ),
+                                    left_ty,
+                                ),
+                                _ => unreachable!(),
+                            },
+                            crate::TypeInner::Scalar { kind, .. } => {
+                                // Always assuming left and hand side are equal scalar types.
+                                match kind {
+                                    crate::ScalarKind::Float => (
+                                        super::instructions::instruction_f_mul(
+                                            left_result_type_id,
+                                            id,
+                                            left_id,
+                                            right_id,
+                                        ),
+                                        left_ty,
+                                    ),
+                                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => (
+                                        super::instructions::instruction_i_mul(
+                                            left_result_type_id,
+                                            id,
+                                            left_id,
+                                            right_id,
+                                        ),
+                                        left_ty,
+                                    ),
+                                    _ => unreachable!(),
+                                }
+                            }
+                            _ => unreachable!(),
+                        };
 
-                        let load_id = self.generate_id();
-                        let load_instruction = super::instructions::instruction_load(
-                            result_type_id,
-                            load_id,
-                            vector_id,
-                            None,
-                        );
-                        block.body.push(load_instruction);
-
-                        let instruction = super::instructions::instruction_vector_times_scalar(
-                            result_type_id,
-                            id,
-                            load_id,
-                            scalar_id,
-                        );
                         block.body.push(instruction);
-                        Some((id, None))
+                        Some((id, Some(ty)))
                     }
 
                     _ => unimplemented!("{:?}", op),
@@ -1144,7 +1219,8 @@ impl Writer {
                                 .unwrap();
 
                             let id = match *expression {
-                                crate::Expression::LocalVariable(_) => {
+                                crate::Expression::LocalVariable(_)
+                                | crate::Expression::GlobalVariable(_) => {
                                     let load_id = self.generate_id();
                                     let value_ty_id = self.get_type_id(
                                         &ir_module.types,
@@ -1158,6 +1234,7 @@ impl Writer {
                                     ));
                                     load_id
                                 }
+
                                 _ => id,
                             };
                             super::instructions::instruction_return_value(id)
@@ -1188,7 +1265,8 @@ impl Writer {
                         .unwrap();
 
                     let value_id = match value_expression {
-                        crate::Expression::LocalVariable(_) => {
+                        crate::Expression::LocalVariable(_)
+                        | crate::Expression::GlobalVariable(_) => {
                             let load_id = self.generate_id();
                             let value_ty_id = self.get_type_id(
                                 &ir_module.types,
