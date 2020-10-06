@@ -23,12 +23,10 @@ impl Clone for Resolution {
                 crate::TypeInner::Matrix {
                     rows,
                     columns,
-                    kind,
                     width,
                 } => crate::TypeInner::Matrix {
                     rows,
                     columns,
-                    kind,
                     width,
                 },
                 _ => panic!("Unepxected clone type: {:?}", v),
@@ -101,9 +99,12 @@ impl Typifier {
                 crate::TypeInner::Matrix {
                     rows: size,
                     columns: _,
-                    kind,
                     width,
-                } => Resolution::Value(crate::TypeInner::Vector { size, kind, width }),
+                } => Resolution::Value(crate::TypeInner::Vector {
+                    size,
+                    kind: crate::ScalarKind::Float,
+                    width,
+                }),
                 ref other => panic!("Can't access into {:?}", other),
             },
             crate::Expression::AccessIndex { base, index } => match *self.get(base, types) {
@@ -116,7 +117,6 @@ impl Typifier {
                 crate::TypeInner::Matrix {
                     columns,
                     rows,
-                    kind,
                     width,
                 } => {
                     if index >= columns as u32 {
@@ -124,7 +124,7 @@ impl Typifier {
                     }
                     Resolution::Value(crate::TypeInner::Vector {
                         size: rows,
-                        kind,
+                        kind: crate::ScalarKind::Float,
                         width,
                     })
                 }
@@ -186,11 +186,10 @@ impl Typifier {
                             crate::TypeInner::Matrix {
                                 columns,
                                 rows: _,
-                                kind,
                                 width,
                             } => Resolution::Value(crate::TypeInner::Vector {
                                 size: columns,
-                                kind,
+                                kind: crate::ScalarKind::Float,
                                 width,
                             }),
                             _ => panic!("Incompatible arguments {:?} x {:?}", ty_left, ty_right),
@@ -219,12 +218,10 @@ impl Typifier {
                 crate::TypeInner::Matrix {
                     columns,
                     rows,
-                    kind,
                     width,
                 } => Resolution::Value(crate::TypeInner::Matrix {
                     columns: rows,
                     rows: columns,
-                    kind,
                     width,
                 }),
                 ref other => panic!("incompatible transpose of {:?}", other),

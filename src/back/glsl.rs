@@ -940,11 +940,10 @@ fn write_expression<'a, 'b>(
                 TypeInner::Matrix {
                     columns,
                     rows,
-                    kind,
                     width,
                 } => format!(
                     "{}mat{}x{}",
-                    map_scalar(kind, width, builder.manager)?.prefix,
+                    map_scalar(crate::ScalarKind::Float, width, builder.manager)?.prefix,
                     columns as u8,
                     rows as u8,
                 ),
@@ -1405,20 +1404,15 @@ fn write_type<'a>(
         TypeInner::Matrix {
             columns,
             rows,
-            kind,
             width,
         } => {
-            if kind != ScalarKind::Float {
-                return Err(Error::Custom(String::from(
-                    "Non float matrices aren't allowed",
-                )));
-            } else if width == 8 {
+            if width == 8 {
                 manager.request(Features::DOUBLE_TYPE);
             }
 
             Cow::Owned(format!(
                 "{}mat{}x{}",
-                map_scalar(kind, width, manager)?.prefix,
+                map_scalar(crate::ScalarKind::Float, width, manager)?.prefix,
                 columns as u8,
                 rows as u8
             ))

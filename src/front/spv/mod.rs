@@ -1846,10 +1846,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let num_columns = self.next()?;
         let vector_type_lookup = self.lookup_type.lookup(vector_type_id)?;
         let inner = match module.types[vector_type_lookup.handle].inner {
-            crate::TypeInner::Vector { size, kind, width } => crate::TypeInner::Matrix {
+            crate::TypeInner::Vector { size, width, .. } => crate::TypeInner::Matrix {
                 columns: map_vector_size(num_columns)?,
                 rows: size,
-                kind,
                 width,
             },
             _ => return Err(Error::InvalidInnerType(vector_type_id)),

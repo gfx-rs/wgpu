@@ -228,14 +228,14 @@ impl Validator {
                     | (crate::ShaderStage::Fragment, crate::StorageClass::Input) => {
                         match module.types[var.ty].inner {
                             crate::TypeInner::Scalar { kind, .. }
-                            | crate::TypeInner::Vector { kind, .. }
-                            | crate::TypeInner::Matrix { kind, .. } => {
+                            | crate::TypeInner::Vector { kind, .. } => {
                                 if kind != crate::ScalarKind::Float
                                     && var.interpolation != Some(crate::Interpolation::Flat)
                                 {
                                     return Err(EntryPointError::InvalidIntegerInterpolation);
                                 }
                             }
+                            crate::TypeInner::Matrix { .. } => {}
                             _ => unreachable!(),
                         }
                     }
@@ -342,15 +342,21 @@ impl Validator {
         for (handle, ty) in module.types.iter() {
             use crate::TypeInner as Ti;
             match ty.inner {
-                Ti::Scalar { kind, width }
-                | Ti::Vector { kind, width, .. }
-                | Ti::Matrix { kind, width, .. } => {
+                Ti::Scalar { kind, width } | Ti::Vector { kind, width, .. } => {
                     let expected = match kind {
                         crate::ScalarKind::Bool => 1,
                         _ => 4,
                     };
                     if width != expected {
                         return Err(ValidationError::InvalidTypeWidth(kind, width));
+                    }
+                }
+                Ti::Matrix { width, .. } => {
+                    if width != 4 {
+                        return Err(ValidationError::InvalidTypeWidth(
+                            crate::ScalarKind::Float,
+                            width,
+                        ));
                     }
                 }
                 Ti::Pointer { base, class: _ } => {

@@ -1,4 +1,7 @@
-pub(super) fn validate_instruction(words: &[spirv::Word], instruction: &crate::back::spv::Instruction) {
+pub(super) fn validate_instruction(
+    words: &[spirv::Word],
+    instruction: &crate::back::spv::Instruction,
+) {
     let mut inst_index = 0;
     let (wc, op) = ((words[inst_index] >> 16) as u16, words[inst_index] as u16);
     inst_index += 1;

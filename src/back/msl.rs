@@ -814,16 +814,11 @@ impl<W: Write> Writer<W> {
                         name
                     )?;
                 }
-                crate::TypeInner::Matrix {
-                    columns,
-                    rows,
-                    kind,
-                    ..
-                } => {
+                crate::TypeInner::Matrix { columns, rows, .. } => {
                     write!(
                         self.out,
                         "typedef {}{}x{} {}",
-                        scalar_kind_string(kind),
+                        scalar_kind_string(crate::ScalarKind::Float),
                         vector_size_string(columns),
                         vector_size_string(rows),
                         name

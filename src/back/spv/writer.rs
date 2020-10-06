@@ -465,14 +465,13 @@ impl Writer {
             crate::TypeInner::Matrix {
                 columns,
                 rows: _,
-                kind,
                 width,
             } => {
                 let vector_id = self.get_type_id(
                     arena,
                     LookupType::Local(LocalType::Vector {
                         size: columns,
-                        kind,
+                        kind: crate::ScalarKind::Float,
                         width,
                     }),
                 );
@@ -836,14 +835,13 @@ impl Writer {
                     crate::TypeInner::Matrix {
                         rows,
                         columns,
-                        kind,
                         width,
                     } => {
                         let vector_type_id = self.get_type_id(
                             &ir_module.types,
                             LookupType::Local(LocalType::Vector {
                                 width,
-                                kind,
+                                kind: crate::ScalarKind::Float,
                                 size: columns,
                             }),
                         );

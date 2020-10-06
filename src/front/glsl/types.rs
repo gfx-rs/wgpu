@@ -77,7 +77,7 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
 
                 let kind = iter.next()?;
                 let size = iter.next()?;
-                let (kind, width) = kind_width_parse(kind)?;
+                let (_, width) = kind_width_parse(kind)?;
 
                 let (columns, rows) = if let Some(size) = size_parse(size) {
                     (size, size)
@@ -94,7 +94,6 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
                     inner: TypeInner::Matrix {
                         columns,
                         rows,
-                        kind,
                         width,
                     },
                 })

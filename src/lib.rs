@@ -351,11 +351,10 @@ pub enum TypeInner {
         kind: ScalarKind,
         width: Bytes,
     },
-    /// Matrix of numbers.
+    /// Matrix of floats.
     Matrix {
         columns: VectorSize,
         rows: VectorSize,
-        kind: ScalarKind,
         width: Bytes,
     },
     /// Pointer to a value.
