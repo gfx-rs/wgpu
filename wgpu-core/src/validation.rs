@@ -125,7 +125,6 @@ fn get_aligned_type_size(
         Ti::Matrix {
             rows,
             columns,
-            kind: _,
             width,
         } => {
             rows as wgt::BufferAddress * columns as wgt::BufferAddress * width as wgt::BufferAddress
@@ -410,16 +409,14 @@ fn is_sub_type(sub: &naga::TypeInner, provided: &naga::TypeInner) -> bool {
             &Ti::Matrix {
                 columns: c0,
                 rows: r0,
-                kind: k0,
                 width: w0,
             },
             &Ti::Matrix {
                 columns: c1,
                 rows: r1,
-                kind: k1,
                 width: w1,
             },
-        ) => c0 == c1 && r0 == r1 && k0 == k1 && w0 <= w1,
+        ) => c0 == c1 && r0 == r1 && w0 <= w1,
         (&Ti::Struct { members: ref m0 }, &Ti::Struct { members: ref m1 }) => m0 == m1,
         _ => false,
     }

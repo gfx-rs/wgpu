@@ -40,7 +40,7 @@ gfx-memory = "0.2"
 [dependencies.naga]
 version = "0.2"
 git = "https://github.com/gfx-rs/naga"
-rev = "8323521b838cf7a7cb4163c84f0f4ff237622f9a"
+rev = "aa35110471ee7915e1f4e1de61ea41f2f32f92c4"
 features = ["spv-in", "spv-out", "wgsl-in"]
 
 [dependencies.wgt]
