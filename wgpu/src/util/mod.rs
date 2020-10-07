@@ -78,7 +78,11 @@ impl DeviceExt for crate::Device {
         #[cfg(target_arch = "wasm32")]
         let buffer = crate::Buffer {
             context: Arc::clone(&self.context),
-            id: crate::backend::Context::create_buffer_init_polyfill(&self.id, &wgt_descriptor, descriptor.contents),
+            id: crate::backend::Context::create_buffer_init_polyfill(
+                &self.id,
+                &wgt_descriptor,
+                descriptor.contents,
+            ),
             map_context: parking_lot::Mutex::new(map_context),
             usage: descriptor.usage,
         };
@@ -90,14 +94,17 @@ impl DeviceExt for crate::Device {
                 map_context: parking_lot::Mutex::new(map_context),
                 usage: descriptor.usage,
             };
-    
-            let range =
-                crate::Context::buffer_get_mapped_range_mut(&*self.context, &buffer.id, 0..padded_size);
+
+            let range = crate::Context::buffer_get_mapped_range_mut(
+                &*self.context,
+                &buffer.id,
+                0..padded_size,
+            );
             range[0..unpadded_size as usize].copy_from_slice(descriptor.contents);
             for i in unpadded_size..padded_size {
                 range[i as usize] = 0;
             }
-    
+
             buffer.unmap();
             buffer
         };
