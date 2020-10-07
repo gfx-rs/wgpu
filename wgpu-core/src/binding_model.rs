@@ -62,6 +62,8 @@ pub enum CreateBindGroupError {
     BindingSizeTooSmall { actual: u64, min: u64 },
     #[error("number of bindings in bind group descriptor ({actual}) does not match the number of bindings defined in the bind group layout ({expected})")]
     BindingsNumMismatch { actual: usize, expected: usize },
+    #[error("binding {0} is used at least twice in the descriptor")]
+    DuplicateBinding(u32),
     #[error("unable to find a corresponding declaration for the given binding {0}")]
     MissingBindingDeclaration(u32),
     #[error(transparent)]

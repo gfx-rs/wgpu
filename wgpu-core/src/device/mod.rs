@@ -30,7 +30,13 @@ use thiserror::Error;
 use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat};
 
 use std::{
-    borrow::Cow, collections::hash_map::Entry, iter, marker::PhantomData, mem, ops::Range, ptr,
+    borrow::Cow,
+    collections::{hash_map::Entry, BTreeMap},
+    iter,
+    marker::PhantomData,
+    mem,
+    ops::Range,
+    ptr,
     sync::atomic::Ordering,
 };
 
@@ -1925,41 +1931,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(desc.layout)
             .map_err(|_| CreateBindGroupError::InvalidLayout)?;
 
-        // Check that the number of entries in the descriptor matches
-        // the number of entries in the layout.
-        let actual = desc.entries.len();
-        let expected = bind_group_layout.entries.len();
-        if actual != expected {
-            return Err(CreateBindGroupError::BindingsNumMismatch { expected, actual });
-        }
-
-        let mut desc_set = {
-            let mut desc_sets = ArrayVec::<[_; 1]>::new();
-            device
-                .desc_allocator
-                .lock()
-                .allocate(
-                    &device.raw,
-                    &bind_group_layout.raw,
-                    &bind_group_layout.desc_counts,
-                    1,
-                    &mut desc_sets,
-                )
-                .expect("failed to allocate descriptor set");
-            desc_sets.pop().unwrap()
-        };
-
-        // Set the descriptor set's label for easier debugging.
-        if let Some(label) = desc.label.as_ref() {
-            unsafe {
-                device
-                    .raw
-                    .set_descriptor_set_name(desc_set.raw_mut(), &label);
+        {
+            // Check that the number of entries in the descriptor matches
+            // the number of entries in the layout.
+            let actual = desc.entries.len();
+            let expected = bind_group_layout.entries.len();
+            if actual != expected {
+                return Err(CreateBindGroupError::BindingsNumMismatch { expected, actual });
             }
         }
-
-        // Rebind `desc_set` as immutable
-        let desc_set = desc_set;
 
         // TODO: arrayvec/smallvec
         // Record binding info for dynamic offset validation
@@ -1967,14 +1947,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         // fill out the descriptors
         let mut used = TrackerSet::new(B::VARIANT);
-        {
+        let desc_set = {
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token); //skip token
             let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
             let (sampler_guard, _) = hub.samplers.read(&mut token);
 
-            //TODO: group writes into contiguous sections
-            let mut writes = Vec::new();
+            // `BTreeMap` has ordered bindings as keys, which allows us to coalesce
+            // the descriptor writes into a single transaction.
+            let mut write_map = BTreeMap::new();
             for entry in desc.entries.iter() {
                 let binding = entry.binding;
                 // Find the corresponding declaration in the layout
@@ -2217,18 +2198,51 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .collect::<Result<_, _>>()?
                     }
                 };
-                writes.alloc().init(hal::pso::DescriptorSetWrite {
-                    set: desc_set.raw(),
-                    binding,
-                    array_offset: 0, //TODO
-                    descriptors,
-                });
+                if write_map.insert(binding, descriptors).is_some() {
+                    return Err(CreateBindGroupError::DuplicateBinding(binding));
+                }
             }
 
-            unsafe {
-                device.raw.write_descriptor_sets(writes);
+            let mut desc_sets = ArrayVec::<[_; 1]>::new();
+            device
+                .desc_allocator
+                .lock()
+                .allocate(
+                    &device.raw,
+                    &bind_group_layout.raw,
+                    &bind_group_layout.desc_counts,
+                    1,
+                    &mut desc_sets,
+                )
+                .expect("failed to allocate descriptor set");
+            let mut desc_set = desc_sets.pop().unwrap();
+
+            // Set the descriptor set's label for easier debugging.
+            if let Some(label) = desc.label.as_ref() {
+                unsafe {
+                    device
+                        .raw
+                        .set_descriptor_set_name(desc_set.raw_mut(), &label);
+                }
             }
-        }
+
+            if let Some(start_binding) = write_map.keys().next().cloned() {
+                let descriptors = write_map
+                    .into_iter()
+                    .flat_map(|(_, list)| list)
+                    .collect::<Vec<_>>();
+                let write = hal::pso::DescriptorSetWrite {
+                    set: desc_set.raw(),
+                    binding: start_binding,
+                    array_offset: 0,
+                    descriptors,
+                };
+                unsafe {
+                    device.raw.write_descriptor_sets(iter::once(write));
+                }
+            }
+            desc_set
+        };
 
         let bind_group = binding_model::BindGroup {
             raw: desc_set,
