@@ -289,7 +289,7 @@ impl Validator {
                         return Err(EntryPointError::BindingCollision(var_handle));
                     }
                     location_out_mask |= mask;
-                    crate::GlobalUse::STORE
+                    crate::GlobalUse::LOAD | crate::GlobalUse::STORE
                 }
                 crate::StorageClass::Constant => crate::GlobalUse::LOAD,
                 crate::StorageClass::Uniform | crate::StorageClass::StorageBuffer => {
