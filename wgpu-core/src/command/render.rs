@@ -1737,7 +1737,7 @@ pub mod render_ffi {
 
         pass.base.push_constant_data.extend(
             data_slice
-                .chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT)
+                .chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
