@@ -1721,12 +1721,12 @@ pub mod render_ffi {
     ) {
         span!(_guard, DEBUG, "RenderPass::set_push_constants");
         assert_eq!(
-            offset & 3,
+            offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
             "Push constant offset must be aligned to 4 bytes."
         );
         assert_eq!(
-            size_bytes & 3,
+            size_bytes & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
             "Push constant size must be aligned to 4 bytes."
         );
@@ -1737,7 +1737,7 @@ pub mod render_ffi {
 
         pass.base.push_constant_data.extend(
             data_slice
-                .chunks_exact(4)
+                .chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
