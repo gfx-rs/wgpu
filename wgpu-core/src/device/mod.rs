@@ -164,12 +164,16 @@ fn map_buffer<B: hal::Backend>(
     sub_range: hal::buffer::SubRange,
     kind: HostMap,
 ) -> Result<ptr::NonNull<u8>, resource::BufferAccessError> {
+    let &mut (_, ref mut memory) = buffer
+        .raw
+        .as_mut()
+        .ok_or(resource::BufferAccessError::Destroyed)?;
     let (ptr, segment, needs_sync) = {
         let segment = hal::memory::Segment {
             offset: sub_range.offset,
             size: sub_range.size,
         };
-        let mapped = buffer.memory.map(raw, segment)?;
+        let mapped = memory.map(raw, segment)?;
         let mr = mapped.range();
         let segment = hal::memory::Segment {
             offset: mr.start,
@@ -180,7 +184,7 @@ fn map_buffer<B: hal::Backend>(
 
     buffer.sync_mapped_writes = match kind {
         HostMap::Read if needs_sync => unsafe {
-            raw.invalidate_mapped_memory_ranges(iter::once((buffer.memory.memory(), segment)))
+            raw.invalidate_mapped_memory_ranges(iter::once((memory.memory(), segment)))
                 .or(Err(DeviceError::OutOfMemory))?;
             None
         },
@@ -194,9 +198,13 @@ fn unmap_buffer<B: hal::Backend>(
     raw: &B::Device,
     buffer: &mut resource::Buffer<B>,
 ) -> Result<(), resource::BufferAccessError> {
+    let &(_, ref memory) = buffer
+        .raw
+        .as_ref()
+        .ok_or(resource::BufferAccessError::Destroyed)?;
     if let Some(segment) = buffer.sync_mapped_writes.take() {
         unsafe {
-            raw.flush_mapped_memory_ranges(iter::once((buffer.memory.memory(), segment)))
+            raw.flush_mapped_memory_ranges(iter::once((memory.memory(), segment)))
                 .or(Err(DeviceError::OutOfMemory))?;
         }
     }
@@ -481,13 +489,12 @@ impl<B: GfxBackend> Device<B> {
         .map_err(DeviceError::from_bind)?;
 
         Ok(resource::Buffer {
-            raw: buffer,
+            raw: Some((buffer, memory)),
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
             },
             usage: desc.usage,
-            memory,
             size: desc.size,
             full_range: (),
             sync_mapped_writes: None,
@@ -872,9 +879,11 @@ impl<B: hal::Backend> Device<B> {
     }
 
     pub(crate) fn destroy_buffer(&self, buffer: resource::Buffer<B>) {
-        unsafe {
-            self.mem_allocator.lock().free(&self.raw, buffer.memory);
-            self.raw.destroy_buffer(buffer.raw);
+        if let Some((raw, memory)) = buffer.raw {
+            unsafe {
+                self.mem_allocator.lock().free(&self.raw, memory);
+                self.raw.destroy_buffer(raw);
+            }
         }
     }
 
@@ -1032,7 +1041,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             resource::BufferUse::MAP_WRITE
         } else {
             // buffer needs staging area for initialization only
-            let mut stage = device.create_buffer(
+            let stage = device.create_buffer(
                 device_id,
                 &wgt::BufferDescriptor {
                     label: Some(Cow::Borrowed("<init_buffer>")),
@@ -1042,15 +1051,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 },
                 gfx_memory::Kind::Linear,
             )?;
-            let mapped = stage
-                .memory
+            let (stage_buffer, mut stage_memory) = stage.raw.unwrap();
+            let mapped = stage_memory
                 .map(&device.raw, hal::memory::Segment::ALL)
                 .map_err(resource::BufferAccessError::from)?;
             buffer.map_state = resource::BufferMapState::Init {
                 ptr: mapped.ptr(),
                 needs_flush: !mapped.is_coherent(),
-                stage_buffer: stage.raw,
-                stage_memory: stage.memory,
+                stage_buffer,
+                stage_memory,
             };
             resource::BufferUse::COPY_DST
         };
@@ -1118,7 +1127,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| DeviceError::Invalid)?;
         let mut buffer = buffer_guard
             .get_mut(buffer_id)
-            .map_err(|_| resource::BufferAccessError::InvalidBuffer)?;
+            .map_err(|_| resource::BufferAccessError::Invalid)?;
         check_buffer_usage(buffer.usage, wgt::BufferUsage::MAP_WRITE)?;
         //assert!(buffer isn't used by the GPU);
 
@@ -1172,7 +1181,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| DeviceError::Invalid)?;
         let mut buffer = buffer_guard
             .get_mut(buffer_id)
-            .map_err(|_| resource::BufferAccessError::InvalidBuffer)?;
+            .map_err(|_| resource::BufferAccessError::Invalid)?;
         check_buffer_usage(buffer.usage, wgt::BufferUsage::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
@@ -1199,6 +1208,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         B::hub(self)
             .buffers
             .register_error(id_in, &mut Token::root())
+    }
+
+    pub fn buffer_destroy<B: GfxBackend>(
+        &self,
+        buffer_id: id::BufferId,
+    ) -> Result<(), resource::DestroyError> {
+        span!(_guard, INFO, "Buffer::destroy");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+
+        tracing::info!("Buffer {:?} is destroyed", buffer_id);
+        let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+        let buffer = buffer_guard
+            .get_mut(buffer_id)
+            .map_err(|_| resource::DestroyError::Invalid)?;
+
+        let device = &device_guard[buffer.device_id.value];
+
+        #[cfg(feature = "trace")]
+        if let Some(ref trace) = device.trace {
+            trace.lock().add(trace::Action::FreeBuffer(buffer_id));
+        }
+
+        let _ = device; //TODO: schedule buffer destruction
+        Ok(())
     }
 
     pub fn buffer_drop<B: GfxBackend>(&self, buffer_id: id::BufferId, now: bool) {
@@ -2006,8 +2043,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let buffer = used
                             .buffers
                             .use_extend(&*buffer_guard, bb.buffer_id, (), internal_use)
-                            .unwrap();
+                            .map_err(|_| CreateBindGroupError::InvalidBuffer(bb.buffer_id))?;
                         check_buffer_usage(buffer.usage, pub_usage)?;
+                        let &(ref buffer_raw, _) = buffer
+                            .raw
+                            .as_ref()
+                            .ok_or(CreateBindGroupError::InvalidBuffer(bb.buffer_id))?;
+
                         let (bind_size, bind_end) = match bb.size {
                             Some(size) => {
                                 let end = bb.offset + size.get();
@@ -2049,7 +2091,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             offset: bb.offset,
                             size: Some(bind_size),
                         };
-                        SmallVec::from([hal::pso::Descriptor::Buffer(&buffer.raw, sub_range)])
+                        SmallVec::from([hal::pso::Descriptor::Buffer(buffer_raw, sub_range)])
                     }
                     Br::Sampler(id) => {
                         match decl.ty {
@@ -2057,7 +2099,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 let sampler = used
                                     .samplers
                                     .use_extend(&*sampler_guard, id, (), ())
-                                    .unwrap();
+                                    .map_err(|_| CreateBindGroupError::InvalidSampler(id))?;
 
                                 // Check the actual sampler to also (not) be a comparison sampler
                                 if sampler.comparison != comparison {
@@ -2079,7 +2121,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let view = used
                             .views
                             .use_extend(&*texture_view_guard, id, (), ())
-                            .unwrap();
+                            .map_err(|_| CreateBindGroupError::InvalidTextureView(id))?;
                         let (pub_usage, internal_use) = match decl.ty {
                             wgt::BindingType::SampledTexture { .. } => (
                                 wgt::TextureUsage::SAMPLED,
@@ -2168,7 +2210,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 let view = used
                                     .views
                                     .use_extend(&*texture_view_guard, id, (), ())
-                                    .unwrap();
+                                    .map_err(|_| CreateBindGroupError::InvalidTextureView(id))?;
                                 match view.inner {
                                     resource::TextureViewInner::Native {
                                         ref raw,
@@ -3598,7 +3640,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = buffer_guard
                 .get_mut(buffer_id)
-                .map_err(|_| resource::BufferAccessError::InvalidBuffer)?;
+                .map_err(|_| resource::BufferAccessError::Invalid)?;
 
             check_buffer_usage(buffer.usage, pub_usage)?;
             buffer.map_state = match buffer.map_state {
@@ -3653,7 +3695,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (buffer_guard, _) = hub.buffers.read(&mut token);
         let buffer = buffer_guard
             .get(buffer_id)
-            .map_err(|_| resource::BufferAccessError::InvalidBuffer)?;
+            .map_err(|_| resource::BufferAccessError::Invalid)?;
 
         match buffer.map_state {
             resource::BufferMapState::Init { ptr, .. }
@@ -3679,7 +3721,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let buffer = buffer_guard
             .get_mut(buffer_id)
-            .map_err(|_| resource::BufferAccessError::InvalidBuffer)?;
+            .map_err(|_| resource::BufferAccessError::Invalid)?;
         let device = &mut device_guard[buffer.device_id.value];
 
         tracing::debug!("Buffer {:?} map state -> Idle", buffer_id);
@@ -3719,6 +3761,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
                 }
 
+                let &(ref buf_raw, _) = buffer
+                    .raw
+                    .as_ref()
+                    .ok_or(resource::BufferAccessError::Destroyed)?;
+
                 buffer.life_guard.use_at(device.active_submission_index + 1);
                 let region = hal::command::BufferCopy {
                     src: 0,
@@ -3733,7 +3780,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
                 let transition_dst = hal::memory::Barrier::Buffer {
                     states: hal::buffer::Access::empty()..hal::buffer::Access::TRANSFER_WRITE,
-                    target: &buffer.raw,
+                    target: buf_raw,
                     range: hal::buffer::SubRange::WHOLE,
                     families: None,
                 };
@@ -3745,7 +3792,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         iter::once(transition_src).chain(iter::once(transition_dst)),
                     );
                     if buffer.size > 0 {
-                        cmdbuf.copy_buffer(&stage_buffer, &buffer.raw, iter::once(region));
+                        cmdbuf.copy_buffer(&stage_buffer, buf_raw, iter::once(region));
                     }
                 }
                 device

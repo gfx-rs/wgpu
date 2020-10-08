@@ -139,6 +139,9 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.device_maintain_ids::<B>(device).unwrap();
                 self.device_create_buffer::<B>(device, &desc, id).unwrap();
             }
+            A::FreeBuffer(id) => {
+                self.buffer_destroy::<B>(id).unwrap();
+            }
             A::DestroyBuffer(id) => {
                 self.buffer_drop::<B>(id, true);
             }

@@ -143,8 +143,12 @@ pub enum QueueSubmitError {
     Queue(#[from] DeviceError),
     #[error("command buffer {0:?} is invalid")]
     InvalidCommandBuffer(id::CommandBufferId),
+    #[error("buffer {0:?} is destroyed")]
+    DestroyedBuffer(id::BufferId),
+    #[error("texture {0:?} is destroyed")]
+    DestroyedTexture(id::TextureId),
     #[error(transparent)]
-    BufferAccess(#[from] BufferAccessError),
+    Unmap(#[from] BufferAccessError),
     #[error("swap chain output was dropped before the command buffer got submitted")]
     SwapChainOutputDropped,
     #[error("GPU got stuck :(")]
@@ -209,6 +213,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .buffers
             .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST)
             .map_err(TransferError::InvalidBuffer)?;
+        let &(ref dst_raw, _) = dst
+            .raw
+            .as_ref()
+            .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         if !dst.usage.contains(wgt::BufferUsage::COPY_DST) {
             Err(TransferError::MissingCopyDstUsageFlag)?;
         }
@@ -248,7 +256,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
             stage
                 .cmdbuf
-                .copy_buffer(&stage.buffer, &dst.raw, iter::once(region));
+                .copy_buffer(&stage.buffer, dst_raw, iter::once(region));
         }
 
         device.pending_writes.consume(stage);
@@ -497,6 +505,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // update submission IDs
                         for id in cmdbuf.trackers.buffers.used() {
                             let buffer = &mut buffer_guard[id];
+                            if buffer.raw.is_none() {
+                                return Err(QueueSubmitError::DestroyedBuffer(id.0))?;
+                            }
                             if !buffer.life_guard.use_at(submit_index) {
                                 if let BufferMapState::Active { .. } = buffer.map_state {
                                     tracing::warn!("Dropped buffer has a pending mapping.");

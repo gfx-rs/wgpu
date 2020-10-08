@@ -477,7 +477,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                             .find(|a| a.index == submit_index)
                             .map_or(&mut self.free_resources, |a| &mut a.last_resources)
                             .buffers
-                            .push((res.raw, res.memory));
+                            .extend(res.raw);
                     }
                 }
             }
@@ -691,7 +691,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     .buffers
                     .unregister_locked(buffer_id.0, &mut *buffer_guard)
                 {
-                    self.free_resources.buffers.push((buf.raw, buf.memory));
+                    self.free_resources.buffers.extend(buf.raw);
                 }
             } else {
                 let mapping = match std::mem::replace(

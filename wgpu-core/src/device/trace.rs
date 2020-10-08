@@ -35,6 +35,7 @@ pub enum Action<'a> {
         backend: wgt::Backend,
     },
     CreateBuffer(id::BufferId, crate::resource::BufferDescriptor<'a>),
+    FreeBuffer(id::BufferId),
     DestroyBuffer(id::BufferId),
     CreateTexture(id::TextureId, crate::resource::TextureDescriptor<'a>),
     DestroyTexture(id::TextureId),

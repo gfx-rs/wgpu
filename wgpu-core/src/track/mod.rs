@@ -134,10 +134,11 @@ impl PendingTransition<BufferState> {
         buf: &'a resource::Buffer<B>,
     ) -> hal::memory::Barrier<'a, B> {
         tracing::trace!("\tbuffer -> {:?}", self);
+        let &(ref target, _) = buf.raw.as_ref().expect("Buffer is destroyed");
         hal::memory::Barrier::Buffer {
             states: conv::map_buffer_state(self.usage.start)
                 ..conv::map_buffer_state(self.usage.end),
-            target: &buf.raw,
+            target,
             range: hal::buffer::SubRange::WHOLE,
             families: None,
         }

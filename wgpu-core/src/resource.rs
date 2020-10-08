@@ -130,7 +130,9 @@ pub enum BufferAccessError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error("buffer is invalid")]
-    InvalidBuffer,
+    Invalid,
+    #[error("buffer is destroyed")]
+    Destroyed,
     #[error("buffer is already mapped")]
     AlreadyMapped,
     #[error(transparent)]
@@ -164,10 +166,9 @@ pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct Buffer<B: hal::Backend> {
-    pub(crate) raw: B::Buffer,
+    pub(crate) raw: Option<(B::Buffer, MemoryBlock<B>)>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) usage: wgt::BufferUsage,
-    pub(crate) memory: MemoryBlock<B>,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) full_range: (),
     pub(crate) sync_mapped_writes: Option<hal::memory::Segment>,
@@ -424,4 +425,12 @@ impl<B: hal::Backend> Borrow<()> for Sampler<B> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum DestroyError {
+    #[error("resource is invalid")]
+    Invalid,
+    #[error("resource is already destroyed")]
+    AlreadyDestroyed,
 }
