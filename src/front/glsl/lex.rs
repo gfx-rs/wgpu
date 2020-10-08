@@ -283,25 +283,36 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn new(input: &'a str) -> Self {
-        let mut lines = input.lines().enumerate();
-        let (line, input) = lines.next().unwrap_or((0, ""));
-        let mut input = String::from(input);
-
-        while input.ends_with('\\') {
-            if let Some((_, next)) = lines.next() {
-                input.pop();
-                input.push_str(next);
-            } else {
-                break;
-            }
-        }
-
-        Lexer {
-            lines,
-            input,
-            line,
+        let mut lexer = Lexer {
+            lines: input.lines().enumerate(),
+            input: "".to_string(),
+            line: 0,
             offset: 0,
             inside_comment: false,
+        };
+        lexer.next_line();
+        lexer
+    }
+
+    fn next_line(&mut self) -> bool {
+        if let Some((line, input)) = self.lines.next() {
+            let mut input = String::from(input);
+
+            while input.ends_with('\\') {
+                if let Some((_, next)) = self.lines.next() {
+                    input.pop();
+                    input.push_str(next);
+                } else {
+                    break;
+                }
+            }
+
+            self.input = input;
+            self.line = line;
+            self.offset = 0;
+            true
+        } else {
+            false
         }
     }
 
@@ -331,22 +342,9 @@ impl<'a> Lexer<'a> {
                 self.next()
             }
         } else {
-            let (line, input) = self.lines.next()?;
-
-            let mut input = String::from(input);
-
-            while input.ends_with('\\') {
-                if let Some((_, next)) = self.lines.next() {
-                    input.pop();
-                    input.push_str(next);
-                } else {
-                    break;
-                }
+            if !self.next_line() {
+                return None;
             }
-
-            self.input = input;
-            self.line = line;
-            self.offset = 0;
             self.next()
         }
     }
