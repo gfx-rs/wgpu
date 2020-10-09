@@ -301,10 +301,13 @@ trait Context: Debug + Send + Sized + Sync {
         texture: &Self::TextureId,
         desc: &TextureViewDescriptor,
     ) -> Self::TextureViewId;
+
+    fn buffer_destroy(&self, buffer: &Self::BufferId);
+    fn buffer_drop(&self, buffer: &Self::BufferId);
+    fn texture_destroy(&self, buffer: &Self::TextureId);
     fn texture_drop(&self, texture: &Self::TextureId);
     fn texture_view_drop(&self, texture_view: &Self::TextureViewId);
     fn sampler_drop(&self, sampler: &Self::SamplerId);
-    fn buffer_drop(&self, buffer: &Self::BufferId);
     fn bind_group_drop(&self, bind_group: &Self::BindGroupId);
     fn bind_group_layout_drop(&self, bind_group_layout: &Self::BindGroupLayoutId);
     fn pipeline_layout_drop(&self, pipeline_layout: &Self::PipelineLayoutId);
@@ -1716,6 +1719,11 @@ impl Buffer {
         self.map_context.lock().reset();
         Context::buffer_unmap(&*self.context, &self.id);
     }
+
+    /// Destroy the associated native resources as soon as possible.
+    pub fn destroy(&self) {
+        Context::buffer_destroy(&*self.context, &self.id);
+    }
 }
 
 impl<'a> BufferSlice<'a> {
@@ -1801,6 +1809,11 @@ impl Texture {
             id: Context::texture_create_view(&*self.context, &self.id, desc),
             owned: true,
         }
+    }
+
+    /// Destroy the associated native resources as soon as possible.
+    pub fn destroy(&self) {
+        Context::texture_destroy(&*self.context, &self.id);
     }
 }
 
