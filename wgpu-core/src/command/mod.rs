@@ -256,9 +256,9 @@ where
     PushFn: FnMut(u32, &[u32]),
 {
     let mut count_words = 0_u32;
-    let size_words = size_bytes / 4;
+    let size_words = size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT;
     while count_words < size_words {
-        let count_bytes = count_words * 4;
+        let count_bytes = count_words * wgt::PUSH_CONSTANT_ALIGNMENT;
         let size_to_write_words =
             (size_words - count_words).min(PUSH_CONSTANT_CLEAR_ARRAY.len() as u32);
 

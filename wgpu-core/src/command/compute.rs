@@ -368,7 +368,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     values_offset,
                 } => {
                     let end_offset_bytes = offset + size_bytes;
-                    let values_end_offset = (values_offset + size_bytes / 4) as usize;
+                    let values_end_offset =
+                        (values_offset + size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
                     let data_slice =
                         &base.push_constant_data[(values_offset as usize)..values_end_offset];
 
@@ -500,14 +501,30 @@ pub mod compute_ffi {
         pass: &mut ComputePass,
         offset: u32,
         size_bytes: u32,
-        data: *const u32,
+        data: *const u8,
     ) {
-        span!(_guard, DEBUG, "RenderPass::set_push_constant");
-        let data_slice = slice::from_raw_parts(data, (size_bytes / 4) as usize);
+        span!(_guard, DEBUG, "ComputePass::set_push_constant");
+        assert_eq!(
+            offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
+            0,
+            "Push constant offset must be aligned to 4 bytes."
+        );
+        assert_eq!(
+            size_bytes & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
+            0,
+            "Push constant size must be aligned to 4 bytes."
+        );
+        let data_slice = slice::from_raw_parts(data, size_bytes as usize);
         let value_offset = pass.base.push_constant_data.len().try_into().expect(
             "Ran out of push constant space. Don't set 4gb of push constants per ComputePass.",
         );
-        pass.base.push_constant_data.extend_from_slice(data_slice);
+
+        pass.base.push_constant_data.extend(
+            data_slice
+                .chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
+                .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
+        );
+
         pass.base.commands.push(ComputeCommand::SetPushConstant {
             offset,
             size_bytes,
