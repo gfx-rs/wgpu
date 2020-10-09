@@ -32,7 +32,7 @@ struct StagingData<B: hal::Backend> {
 #[derive(Debug)]
 pub enum TempResource<B: hal::Backend> {
     Buffer(B::Buffer),
-    //Image(B::Image),
+    Image(B::Image),
 }
 
 #[derive(Debug)]
@@ -68,9 +68,9 @@ impl<B: hal::Backend> PendingWrites<B> {
                 TempResource::Buffer(buffer) => unsafe {
                     device.destroy_buffer(buffer);
                 },
-                /*TempResource::Image(image) => unsafe {
+                TempResource::Image(image) => unsafe {
                     device.destroy_image(image);
-                },*/
+                },
             }
         }
     }
@@ -371,6 +371,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 TextureUse::COPY_DST,
             )
             .unwrap();
+        let &(ref dst_raw, _) = dst
+            .raw
+            .as_ref()
+            .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         if !dst.usage.contains(wgt::TextureUsage::COPY_DST) {
             Err(TransferError::MissingCopyDstUsageFlag)?
@@ -438,7 +442,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
             stage.cmdbuf.copy_buffer_to_image(
                 &stage.buffer,
-                &dst.raw,
+                dst_raw,
                 hal::image::Layout::TransferDstOptimal,
                 iter::once(region),
             );
@@ -545,7 +549,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         }
                         for id in cmdbuf.trackers.textures.used() {
-                            if !texture_guard[id].life_guard.use_at(submit_index) {
+                            let texture = &texture_guard[id];
+                            if texture.raw.is_none() {
+                                return Err(QueueSubmitError::DestroyedTexture(id.0))?;
+                            }
+                            if !texture.life_guard.use_at(submit_index) {
                                 device.temp_suspected.textures.push(id);
                             }
                         }

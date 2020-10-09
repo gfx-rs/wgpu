@@ -204,7 +204,7 @@ pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct Texture<B: hal::Backend> {
-    pub(crate) raw: B::Image,
+    pub(crate) raw: Option<(B::Image, MemoryBlock<B>)>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) usage: wgt::TextureUsage,
     pub(crate) aspects: hal::format::Aspects,
@@ -212,7 +212,6 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) kind: hal::image::Kind,
     pub(crate) format: wgt::TextureFormat,
     pub(crate) full_range: TextureSelector,
-    pub(crate) memory: MemoryBlock<B>,
     pub(crate) life_guard: LifeGuard,
 }
 
@@ -314,7 +313,7 @@ pub struct TextureView<B: hal::Backend> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateTextureViewError {
-    #[error("parent texture is invalid")]
+    #[error("parent texture is invalid or destroyed")]
     InvalidTexture,
     #[error("not enough memory left")]
     OutOfMemory,

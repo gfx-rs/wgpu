@@ -38,6 +38,7 @@ pub enum Action<'a> {
     FreeBuffer(id::BufferId),
     DestroyBuffer(id::BufferId),
     CreateTexture(id::TextureId, crate::resource::TextureDescriptor<'a>),
+    FreeTexture(id::TextureId),
     DestroyTexture(id::TextureId),
     CreateTextureView {
         id: id::TextureViewId,

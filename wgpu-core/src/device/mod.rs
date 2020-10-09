@@ -586,7 +586,7 @@ impl<B: GfxBackend> Device<B> {
         .map_err(DeviceError::from_bind)?;
 
         Ok(resource::Texture {
-            raw: image,
+            raw: Some((image, memory)),
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
@@ -600,7 +600,6 @@ impl<B: GfxBackend> Device<B> {
                 levels: 0..desc.mip_level_count as hal::image::Level,
                 layers: 0..kind.num_layers(),
             },
-            memory,
             life_guard: LifeGuard::new(),
         })
     }
@@ -888,9 +887,11 @@ impl<B: hal::Backend> Device<B> {
     }
 
     pub(crate) fn destroy_texture(&self, texture: resource::Texture<B>) {
-        unsafe {
-            self.mem_allocator.lock().free(&self.raw, texture.memory);
-            self.raw.destroy_image(texture.raw);
+        if let Some((raw, memory)) = texture.raw {
+            unsafe {
+                self.mem_allocator.lock().free(&self.raw, memory);
+                self.raw.destroy_image(raw);
+            }
         }
     }
 
@@ -1357,6 +1358,52 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .register_error(id_in, &mut Token::root())
     }
 
+    pub fn texture_destroy<B: GfxBackend>(
+        &self,
+        texture_id: id::TextureId,
+    ) -> Result<(), resource::DestroyError> {
+        span!(_guard, INFO, "Texture::destroy");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        //TODO: lock pending writes separately, keep the device read-only
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+
+        tracing::info!("Buffer {:?} is destroyed", texture_id);
+        let (mut texture_guard, _) = hub.textures.write(&mut token);
+        let texture = texture_guard
+            .get_mut(texture_id)
+            .map_err(|_| resource::DestroyError::Invalid)?;
+
+        let device = &mut device_guard[texture.device_id.value];
+
+        #[cfg(feature = "trace")]
+        if let Some(ref trace) = device.trace {
+            trace.lock().add(trace::Action::FreeTexture(texture_id));
+        }
+
+        let (raw, memory) = texture
+            .raw
+            .take()
+            .ok_or(resource::DestroyError::AlreadyDestroyed)?;
+        let temp = queue::TempResource::Image(raw);
+
+        if device.pending_writes.dst_textures.contains(&texture_id) {
+            device.pending_writes.temp_resources.push((temp, memory));
+        } else {
+            let last_submit_index = texture.life_guard.submission_index.load(Ordering::Acquire);
+            drop(texture_guard);
+            device.lock_life(&mut token).schedule_resource_destruction(
+                temp,
+                memory,
+                last_submit_index,
+            );
+        }
+
+        Ok(())
+    }
+
     pub fn texture_drop<B: GfxBackend>(&self, texture_id: id::TextureId, wait: bool) {
         span!(_guard, INFO, "Texture::drop");
 
@@ -1421,6 +1468,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let texture = texture_guard
             .get(texture_id)
             .map_err(|_| resource::CreateTextureViewError::InvalidTexture)?;
+        let &(ref texture_raw, _) = texture
+            .raw
+            .as_ref()
+            .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
         let device = &device_guard[texture.device_id.value];
 
         let view_kind = match desc.dimension {
@@ -1477,7 +1528,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device
                 .raw
                 .create_image_view(
-                    &texture.raw,
+                    texture_raw,
                     view_kind,
                     conv::map_texture_format(format, device.private_features),
                     hal::format::Swizzle::NO,

@@ -247,7 +247,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         for (res, memory) in temp_resources {
             match res {
                 TempResource::Buffer(raw) => last_resources.buffers.push((raw, memory)),
-                //TempResource::Image(raw) => last_resources.images.push((raw, memory)),
+                TempResource::Image(raw) => last_resources.images.push((raw, memory)),
             }
         }
 
@@ -357,7 +357,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
             .map_or(&mut self.free_resources, |a| &mut a.last_resources);
         match temp_resource {
             TempResource::Buffer(raw) => resources.buffers.push((raw, memory)),
-            //TempResource::Image(raw) => resources.images.push((raw, memory)),
+            TempResource::Image(raw) => resources.images.push((raw, memory)),
         }
     }
 }
@@ -456,7 +456,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                             .find(|a| a.index == submit_index)
                             .map_or(&mut self.free_resources, |a| &mut a.last_resources)
                             .images
-                            .push((res.raw, res.memory));
+                            .extend(res.raw);
                     }
                 }
             }
