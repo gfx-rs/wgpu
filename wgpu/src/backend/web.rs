@@ -1267,6 +1267,15 @@ impl crate::Context for Context {
         Sendable(texture.0.create_view_with_descriptor(&mapped))
     }
 
+    fn buffer_destroy(&self, _buffer: &Self::BufferId) {
+        // TODO
+    }
+    fn buffer_drop(&self, _buffer: &Self::BufferId) {
+        // Dropped automatically
+    }
+    fn texture_destroy(&self, _texture: &Self::TextureId) {
+        // TODO
+    }
     fn texture_drop(&self, _texture: &Self::TextureId) {
         // Dropped automatically
     }
@@ -1274,9 +1283,6 @@ impl crate::Context for Context {
         // Dropped automatically
     }
     fn sampler_drop(&self, _sampler: &Self::SamplerId) {
-        // Dropped automatically
-    }
-    fn buffer_drop(&self, _buffer: &Self::BufferId) {
         // Dropped automatically
     }
     fn bind_group_drop(&self, _bind_group: &Self::BindGroupId) {
