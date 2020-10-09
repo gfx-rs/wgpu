@@ -5,7 +5,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    device::DeviceError,
+    device::{queue::TempResource, DeviceError},
     hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Token},
     id, resource,
     track::TrackerSet,
@@ -241,10 +241,16 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         index: SubmissionIndex,
         fence: B::Fence,
         new_suspects: &SuspectedResources,
-        temp_buffers: impl Iterator<Item = (B::Buffer, MemoryBlock<B>)>,
+        temp_resources: impl Iterator<Item = (TempResource<B>, MemoryBlock<B>)>,
     ) {
         let mut last_resources = NonReferencedResources::new();
-        last_resources.buffers.extend(temp_buffers);
+        for (res, memory) in temp_resources {
+            match res {
+                TempResource::Buffer(raw) => last_resources.buffers.push((raw, memory)),
+                //TempResource::Image(raw) => last_resources.images.push((raw, memory)),
+            }
+        }
+
         self.suspected_resources.buffers.extend(
             self.future_suspected_buffers
                 .drain(..)
@@ -256,6 +262,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
                 .map(|stored| stored.value),
         );
         self.suspected_resources.extend(new_suspects);
+
         self.active.alloc().init(ActiveSubmission {
             index,
             fence,
@@ -334,6 +341,23 @@ impl<B: hal::Backend> LifetimeTracker<B> {
             self.free_resources
                 .clean(device, heaps_mutex, descriptor_allocator_mutex);
             descriptor_allocator_mutex.lock().cleanup(device);
+        }
+    }
+
+    pub fn schedule_resource_destruction(
+        &mut self,
+        temp_resource: TempResource<B>,
+        memory: MemoryBlock<B>,
+        last_submit_index: SubmissionIndex,
+    ) {
+        let resources = self
+            .active
+            .iter_mut()
+            .find(|a| a.index == last_submit_index)
+            .map_or(&mut self.free_resources, |a| &mut a.last_resources);
+        match temp_resource {
+            TempResource::Buffer(raw) => resources.buffers.push((raw, memory)),
+            //TempResource::Image(raw) => resources.images.push((raw, memory)),
         }
     }
 }

@@ -14,7 +14,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
     resource::{BufferAccessError, BufferMapState, BufferUse, TextureUse},
-    span,
+    span, FastHashSet,
 };
 
 use gfx_memory::{Block, Heaps, MemoryBlock};
@@ -29,17 +29,27 @@ struct StagingData<B: hal::Backend> {
     cmdbuf: B::CommandBuffer,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
+pub enum TempResource<B: hal::Backend> {
+    Buffer(B::Buffer),
+    //Image(B::Image),
+}
+
+#[derive(Debug)]
 pub(crate) struct PendingWrites<B: hal::Backend> {
     pub command_buffer: Option<B::CommandBuffer>,
-    pub temp_buffers: Vec<(B::Buffer, MemoryBlock<B>)>,
+    pub temp_resources: Vec<(TempResource<B>, MemoryBlock<B>)>,
+    pub dst_buffers: FastHashSet<id::BufferId>,
+    pub dst_textures: FastHashSet<id::TextureId>,
 }
 
 impl<B: hal::Backend> PendingWrites<B> {
     pub fn new() -> Self {
         Self {
             command_buffer: None,
-            temp_buffers: Vec::new(),
+            temp_resources: Vec::new(),
+            dst_buffers: FastHashSet::default(),
+            dst_textures: FastHashSet::default(),
         }
     }
 
@@ -52,21 +62,37 @@ impl<B: hal::Backend> PendingWrites<B> {
         if let Some(raw) = self.command_buffer {
             cmd_allocator.discard_internal(raw);
         }
-        for (buffer, memory) in self.temp_buffers {
+        for (resource, memory) in self.temp_resources {
             mem_allocator.free(device, memory);
-            unsafe {
-                device.destroy_buffer(buffer);
+            match resource {
+                TempResource::Buffer(buffer) => unsafe {
+                    device.destroy_buffer(buffer);
+                },
+                /*TempResource::Image(image) => unsafe {
+                    device.destroy_image(image);
+                },*/
             }
         }
     }
 
-    pub fn consume_temp(&mut self, buffer: B::Buffer, memory: MemoryBlock<B>) {
-        self.temp_buffers.push((buffer, memory));
+    pub fn consume_temp(&mut self, resource: TempResource<B>, memory: MemoryBlock<B>) {
+        self.temp_resources.push((resource, memory));
     }
 
     fn consume(&mut self, stage: StagingData<B>) {
-        self.temp_buffers.push((stage.buffer, stage.memory));
+        self.temp_resources
+            .push((TempResource::Buffer(stage.buffer), stage.memory));
         self.command_buffer = Some(stage.cmdbuf);
+    }
+
+    #[must_use]
+    fn finish(&mut self) -> Option<B::CommandBuffer> {
+        self.dst_buffers.clear();
+        self.dst_textures.clear();
+        self.command_buffer.take().map(|mut cmd_buf| unsafe {
+            cmd_buf.finish();
+            cmd_buf
+        })
     }
 }
 
@@ -260,6 +286,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         device.pending_writes.consume(stage);
+        device.pending_writes.dst_buffers.insert(buffer_id);
 
         Ok(())
     }
@@ -418,6 +445,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         device.pending_writes.consume(stage);
+        device
+            .pending_writes
+            .dst_textures
+            .insert(destination.texture);
 
         Ok(())
     }
@@ -437,15 +468,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let device = device_guard
                 .get_mut(queue_id)
                 .map_err(|_| DeviceError::Invalid)?;
-            let pending_write_command_buffer =
-                device
-                    .pending_writes
-                    .command_buffer
-                    .take()
-                    .map(|mut comb_raw| unsafe {
-                        comb_raw.finish();
-                        comb_raw
-                    });
+            let pending_write_command_buffer = device.pending_writes.finish();
             device.temp_suspected.clear();
             device.active_submission_index += 1;
             let submit_index = device.active_submission_index;
@@ -615,7 +638,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 submit_index,
                 fence,
                 &device.temp_suspected,
-                device.pending_writes.temp_buffers.drain(..),
+                device.pending_writes.temp_resources.drain(..),
             );
 
             // finally, return the command buffers to the allocator

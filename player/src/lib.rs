@@ -150,7 +150,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.device_create_texture::<B>(device, &desc, id).unwrap();
             }
             A::DestroyTexture(id) => {
-                self.texture_drop::<B>(id);
+                self.texture_drop::<B>(id, true);
             }
             A::CreateTextureView {
                 id,

@@ -1219,7 +1219,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+        //TODO: lock pending writes separately, keep the device read-only
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
         tracing::info!("Buffer {:?} is destroyed", buffer_id);
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
@@ -1227,18 +1228,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get_mut(buffer_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
-        let device = &device_guard[buffer.device_id.value];
+        let device = &mut device_guard[buffer.device_id.value];
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
             trace.lock().add(trace::Action::FreeBuffer(buffer_id));
         }
 
-        let _ = device; //TODO: schedule buffer destruction
+        let (raw, memory) = buffer
+            .raw
+            .take()
+            .ok_or(resource::DestroyError::AlreadyDestroyed)?;
+        let temp = queue::TempResource::Buffer(raw);
+
+        if device.pending_writes.dst_buffers.contains(&buffer_id) {
+            device.pending_writes.temp_resources.push((temp, memory));
+        } else {
+            let last_submit_index = buffer.life_guard.submission_index.load(Ordering::Acquire);
+            drop(buffer_guard);
+            device.lock_life(&mut token).schedule_resource_destruction(
+                temp,
+                memory,
+                last_submit_index,
+            );
+        }
+
         Ok(())
     }
 
-    pub fn buffer_drop<B: GfxBackend>(&self, buffer_id: id::BufferId, now: bool) {
+    pub fn buffer_drop<B: GfxBackend>(&self, buffer_id: id::BufferId, wait: bool) {
         span!(_guard, INFO, "Buffer::drop");
 
         let hub = B::hub(self);
@@ -1263,25 +1281,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        if now {
+        let mut life_lock = device_guard[device_id].lock_life(&mut token);
+
+        if device.pending_writes.dst_buffers.contains(&buffer_id) {
+            life_lock.future_suspected_buffers.push(Stored {
+                value: id::Valid(buffer_id),
+                ref_count,
+            });
+        } else {
             drop(ref_count);
-            device
-                .lock_life(&mut token)
+            life_lock
                 .suspected_resources
                 .buffers
                 .push(id::Valid(buffer_id));
+        }
+
+        if wait {
             match device.wait_for_submit(last_submit_index, &mut token) {
                 Ok(()) => (),
                 Err(e) => tracing::error!("Failed to wait for buffer {:?}: {:?}", buffer_id, e),
             }
-        } else {
-            device
-                .lock_life(&mut token)
-                .future_suspected_buffers
-                .push(Stored {
-                    value: id::Valid(buffer_id),
-                    ref_count,
-                });
         }
     }
 
@@ -1338,19 +1357,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .register_error(id_in, &mut Token::root())
     }
 
-    pub fn texture_drop<B: GfxBackend>(&self, texture_id: id::TextureId) {
+    pub fn texture_drop<B: GfxBackend>(&self, texture_id: id::TextureId, wait: bool) {
         span!(_guard, INFO, "Texture::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (ref_count, device_id) = {
+        let (ref_count, last_submit_index, device_id) = {
             let (mut texture_guard, _) = hub.textures.write(&mut token);
             match texture_guard.get_mut(texture_id) {
-                Ok(texture) => (
-                    texture.life_guard.ref_count.take().unwrap(),
-                    texture.device_id.value,
-                ),
+                Ok(texture) => {
+                    let ref_count = texture.life_guard.ref_count.take().unwrap();
+                    let last_submit_index =
+                        texture.life_guard.submission_index.load(Ordering::Acquire);
+                    (ref_count, last_submit_index, texture.device_id.value)
+                }
                 Err(InvalidId) => {
                     hub.textures
                         .unregister_locked(texture_id, &mut *texture_guard);
@@ -1360,13 +1381,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        device_guard[device_id]
-            .lock_life(&mut token)
-            .future_suspected_textures
-            .push(Stored {
+        let device = &device_guard[device_id];
+        let mut life_lock = device_guard[device_id].lock_life(&mut token);
+
+        if device.pending_writes.dst_textures.contains(&texture_id) {
+            life_lock.future_suspected_textures.push(Stored {
                 value: id::Valid(texture_id),
                 ref_count,
             });
+        } else {
+            drop(ref_count);
+            life_lock
+                .suspected_resources
+                .textures
+                .push(id::Valid(texture_id));
+        }
+
+        if wait {
+            match device.wait_for_submit(last_submit_index, &mut token) {
+                Ok(()) => (),
+                Err(e) => tracing::error!("Failed to wait for texture {:?}: {:?}", texture_id, e),
+            }
+        }
     }
 
     pub fn texture_create_view<B: GfxBackend>(
@@ -3797,7 +3833,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 device
                     .pending_writes
-                    .consume_temp(stage_buffer, stage_memory);
+                    .consume_temp(queue::TempResource::Buffer(stage_buffer), stage_memory);
             }
             resource::BufferMapState::Idle => {
                 return Err(resource::BufferAccessError::NotMapped);
