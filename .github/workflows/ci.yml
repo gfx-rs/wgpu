@@ -56,7 +56,7 @@ jobs:
           - name: MacOS Nightly
             os: macos-10.15
             channel: nightly
-            build_command: cargo test
+            build_command: cargo test -- --nocapture
             additional_core_features:
             additional_player_features:
           - name: Ubuntu Stable
@@ -68,7 +68,10 @@ jobs:
           - name: Ubuntu Nightly
             os: ubuntu-18.04
             channel: nightly
-            build_command: cargo test
+            build_command: | 
+              sudo add-apt-repository ppa:oibaf/graphics-drivers;
+              sudo apt-get install mesa-vulkan-drivers;
+              cargo test -- --nocapture; 
             additional_core_features: serial-pass
             additional_player_features: winit
           - name: Windows Stable
@@ -80,7 +83,7 @@ jobs:
           - name: Windows Nightly
             os: windows-2019
             channel: nightly
-            build_command: rustup default nightly-msvc; cargo test
+            build_command: rustup default nightly-msvc; cargo test -- --nocapture
             additional_core_features:
             additional_player_features:
     steps:
