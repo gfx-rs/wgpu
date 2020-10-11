@@ -121,7 +121,7 @@ pub enum ComputePassError {
     BindGroupIndexOutOfRange { index: u8, max: u32 },
     #[error("compute pipeline {0:?} is invalid")]
     InvalidPipeline(id::ComputePipelineId),
-    #[error("indirect buffer {0:?} is invalid")]
+    #[error("indirect buffer {0:?} is invalid or destroyed")]
     InvalidIndirectBuffer(id::BufferId),
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
@@ -412,6 +412,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                         .map_err(|_| ComputePassError::InvalidIndirectBuffer(buffer_id))?;
                     check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)?;
+                    let &(ref buf_raw, _) = indirect_buffer
+                        .raw
+                        .as_ref()
+                        .ok_or(ComputePassError::InvalidIndirectBuffer(buffer_id))?;
 
                     state.flush_states(
                         raw,
@@ -421,7 +425,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         &*texture_guard,
                     )?;
                     unsafe {
-                        raw.dispatch_indirect(&indirect_buffer.raw, offset);
+                        raw.dispatch_indirect(buf_raw, offset);
                     }
                 }
                 ComputeCommand::PushDebugGroup { color, len } => {

@@ -134,10 +134,11 @@ impl PendingTransition<BufferState> {
         buf: &'a resource::Buffer<B>,
     ) -> hal::memory::Barrier<'a, B> {
         tracing::trace!("\tbuffer -> {:?}", self);
+        let &(ref target, _) = buf.raw.as_ref().expect("Buffer is destroyed");
         hal::memory::Barrier::Buffer {
             states: conv::map_buffer_state(self.usage.start)
                 ..conv::map_buffer_state(self.usage.end),
-            target: &buf.raw,
+            target,
             range: hal::buffer::SubRange::WHOLE,
             families: None,
         }
@@ -151,11 +152,12 @@ impl PendingTransition<TextureState> {
         tex: &'a resource::Texture<B>,
     ) -> hal::memory::Barrier<'a, B> {
         tracing::trace!("\ttexture -> {:?}", self);
+        let &(ref target, _) = tex.raw.as_ref().expect("Texture is destroyed");
         let aspects = tex.aspects;
         hal::memory::Barrier::Image {
             states: conv::map_texture_state(self.usage.start, aspects)
                 ..conv::map_texture_state(self.usage.end, aspects),
-            target: &tex.raw,
+            target,
             range: hal::image::SubresourceRange {
                 aspects,
                 level_start: self.selector.levels.start,

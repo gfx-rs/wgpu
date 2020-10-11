@@ -14,7 +14,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
     resource::{BufferAccessError, BufferMapState, BufferUse, TextureUse},
-    span,
+    span, FastHashSet,
 };
 
 use gfx_memory::{Block, Heaps, MemoryBlock};
@@ -29,17 +29,27 @@ struct StagingData<B: hal::Backend> {
     cmdbuf: B::CommandBuffer,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
+pub enum TempResource<B: hal::Backend> {
+    Buffer(B::Buffer),
+    Image(B::Image),
+}
+
+#[derive(Debug)]
 pub(crate) struct PendingWrites<B: hal::Backend> {
     pub command_buffer: Option<B::CommandBuffer>,
-    pub temp_buffers: Vec<(B::Buffer, MemoryBlock<B>)>,
+    pub temp_resources: Vec<(TempResource<B>, MemoryBlock<B>)>,
+    pub dst_buffers: FastHashSet<id::BufferId>,
+    pub dst_textures: FastHashSet<id::TextureId>,
 }
 
 impl<B: hal::Backend> PendingWrites<B> {
     pub fn new() -> Self {
         Self {
             command_buffer: None,
-            temp_buffers: Vec::new(),
+            temp_resources: Vec::new(),
+            dst_buffers: FastHashSet::default(),
+            dst_textures: FastHashSet::default(),
         }
     }
 
@@ -52,21 +62,37 @@ impl<B: hal::Backend> PendingWrites<B> {
         if let Some(raw) = self.command_buffer {
             cmd_allocator.discard_internal(raw);
         }
-        for (buffer, memory) in self.temp_buffers {
+        for (resource, memory) in self.temp_resources {
             mem_allocator.free(device, memory);
-            unsafe {
-                device.destroy_buffer(buffer);
+            match resource {
+                TempResource::Buffer(buffer) => unsafe {
+                    device.destroy_buffer(buffer);
+                },
+                TempResource::Image(image) => unsafe {
+                    device.destroy_image(image);
+                },
             }
         }
     }
 
-    pub fn consume_temp(&mut self, buffer: B::Buffer, memory: MemoryBlock<B>) {
-        self.temp_buffers.push((buffer, memory));
+    pub fn consume_temp(&mut self, resource: TempResource<B>, memory: MemoryBlock<B>) {
+        self.temp_resources.push((resource, memory));
     }
 
     fn consume(&mut self, stage: StagingData<B>) {
-        self.temp_buffers.push((stage.buffer, stage.memory));
+        self.temp_resources
+            .push((TempResource::Buffer(stage.buffer), stage.memory));
         self.command_buffer = Some(stage.cmdbuf);
+    }
+
+    #[must_use]
+    fn finish(&mut self) -> Option<B::CommandBuffer> {
+        self.dst_buffers.clear();
+        self.dst_textures.clear();
+        self.command_buffer.take().map(|mut cmd_buf| unsafe {
+            cmd_buf.finish();
+            cmd_buf
+        })
     }
 }
 
@@ -143,8 +169,12 @@ pub enum QueueSubmitError {
     Queue(#[from] DeviceError),
     #[error("command buffer {0:?} is invalid")]
     InvalidCommandBuffer(id::CommandBufferId),
+    #[error("buffer {0:?} is destroyed")]
+    DestroyedBuffer(id::BufferId),
+    #[error("texture {0:?} is destroyed")]
+    DestroyedTexture(id::TextureId),
     #[error(transparent)]
-    BufferAccess(#[from] BufferAccessError),
+    Unmap(#[from] BufferAccessError),
     #[error("swap chain output was dropped before the command buffer got submitted")]
     SwapChainOutputDropped,
     #[error("GPU got stuck :(")]
@@ -209,6 +239,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .buffers
             .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST)
             .map_err(TransferError::InvalidBuffer)?;
+        let &(ref dst_raw, _) = dst
+            .raw
+            .as_ref()
+            .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         if !dst.usage.contains(wgt::BufferUsage::COPY_DST) {
             Err(TransferError::MissingCopyDstUsageFlag)?;
         }
@@ -248,10 +282,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
             stage
                 .cmdbuf
-                .copy_buffer(&stage.buffer, &dst.raw, iter::once(region));
+                .copy_buffer(&stage.buffer, dst_raw, iter::once(region));
         }
 
         device.pending_writes.consume(stage);
+        device.pending_writes.dst_buffers.insert(buffer_id);
 
         Ok(())
     }
@@ -336,6 +371,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 TextureUse::COPY_DST,
             )
             .unwrap();
+        let &(ref dst_raw, _) = dst
+            .raw
+            .as_ref()
+            .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         if !dst.usage.contains(wgt::TextureUsage::COPY_DST) {
             Err(TransferError::MissingCopyDstUsageFlag)?
@@ -403,13 +442,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
             stage.cmdbuf.copy_buffer_to_image(
                 &stage.buffer,
-                &dst.raw,
+                dst_raw,
                 hal::image::Layout::TransferDstOptimal,
                 iter::once(region),
             );
         }
 
         device.pending_writes.consume(stage);
+        device
+            .pending_writes
+            .dst_textures
+            .insert(destination.texture);
 
         Ok(())
     }
@@ -429,15 +472,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let device = device_guard
                 .get_mut(queue_id)
                 .map_err(|_| DeviceError::Invalid)?;
-            let pending_write_command_buffer =
-                device
-                    .pending_writes
-                    .command_buffer
-                    .take()
-                    .map(|mut comb_raw| unsafe {
-                        comb_raw.finish();
-                        comb_raw
-                    });
+            let pending_write_command_buffer = device.pending_writes.finish();
             device.temp_suspected.clear();
             device.active_submission_index += 1;
             let submit_index = device.active_submission_index;
@@ -497,6 +532,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // update submission IDs
                         for id in cmdbuf.trackers.buffers.used() {
                             let buffer = &mut buffer_guard[id];
+                            if buffer.raw.is_none() {
+                                return Err(QueueSubmitError::DestroyedBuffer(id.0))?;
+                            }
                             if !buffer.life_guard.use_at(submit_index) {
                                 if let BufferMapState::Active { .. } = buffer.map_state {
                                     tracing::warn!("Dropped buffer has a pending mapping.");
@@ -511,7 +549,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         }
                         for id in cmdbuf.trackers.textures.used() {
-                            if !texture_guard[id].life_guard.use_at(submit_index) {
+                            let texture = &texture_guard[id];
+                            if texture.raw.is_none() {
+                                return Err(QueueSubmitError::DestroyedTexture(id.0))?;
+                            }
+                            if !texture.life_guard.use_at(submit_index) {
                                 device.temp_suspected.textures.push(id);
                             }
                         }
@@ -604,7 +646,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 submit_index,
                 fence,
                 &device.temp_suspected,
-                device.pending_writes.temp_buffers.drain(..),
+                device.pending_writes.temp_resources.drain(..),
             );
 
             // finally, return the command buffers to the allocator

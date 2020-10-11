@@ -6,8 +6,8 @@ use crate::{
     binding_model::BindError,
     command::{
         bind::{Binder, LayoutChange},
-        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, DrawError, RenderCommand,
-        RenderCommandError,
+        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, DrawError, ExecutionError,
+        RenderCommand, RenderCommandError,
     },
     conv,
     device::{
@@ -197,7 +197,7 @@ impl OptionalState {
 
 #[derive(Debug, Default)]
 struct IndexState {
-    bound_buffer_view: Option<(id::BufferId, Range<BufferAddress>)>,
+    bound_buffer_view: Option<(id::Valid<id::BufferId>, Range<BufferAddress>)>,
     format: IndexFormat,
     limit: u32,
 }
@@ -1013,7 +1013,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let pipeline = trackers
                         .render_pipes
                         .use_extend(&*pipeline_guard, pipeline_id, (), ())
-                        .unwrap();
+                        .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))?;
 
                     context
                         .check_compatible(&pipeline.pass_context)
@@ -1101,13 +1101,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         state.index.update_limit();
 
                         if let Some((buffer_id, ref range)) = state.index.bound_buffer_view {
-                            let buffer = trackers
-                                .buffers
-                                .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
-                                .unwrap();
+                            let &(ref buffer, _) = buffer_guard[buffer_id].raw.as_ref().unwrap();
 
                             let view = hal::buffer::IndexBufferView {
-                                buffer: &buffer.raw,
+                                buffer,
                                 range: hal::buffer::SubRange {
                                     offset: range.start,
                                     size: Some(range.end - range.start),
@@ -1142,18 +1139,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
-                        .unwrap();
+                        .map_err(|e| RenderCommandError::Buffer(buffer_id, e))?;
                     check_buffer_usage(buffer.usage, BufferUsage::INDEX)?;
+                    let &(ref buf_raw, _) = buffer
+                        .raw
+                        .as_ref()
+                        .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))?;
 
                     let end = match size {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
-                    state.index.bound_buffer_view = Some((buffer_id, offset..end));
+                    state.index.bound_buffer_view = Some((id::Valid(buffer_id), offset..end));
                     state.index.update_limit();
 
                     let view = hal::buffer::IndexBufferView {
-                        buffer: &buffer.raw,
+                        buffer: buf_raw,
                         range: hal::buffer::SubRange {
                             offset,
                             size: Some(end - offset),
@@ -1174,8 +1175,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::VERTEX)
-                        .unwrap();
+                        .map_err(|e| RenderCommandError::Buffer(buffer_id, e))?;
                     check_buffer_usage(buffer.usage, BufferUsage::VERTEX)?;
+                    let &(ref buf_raw, _) = buffer
+                        .raw
+                        .as_ref()
+                        .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))?;
+
                     let empty_slots = (1 + slot as usize).saturating_sub(state.vertex.inputs.len());
                     state
                         .vertex
@@ -1191,7 +1197,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size: size.map(|s| s.get()),
                     };
                     unsafe {
-                        raw.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
+                        raw.bind_vertex_buffers(slot, iter::once((buf_raw, range)));
                     }
                     state.vertex.update_limits();
                 }
@@ -1374,33 +1380,37 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         check_device_features(device.features, wgt::Features::MULTI_DRAW_INDIRECT)?;
                     }
 
-                    let buffer = trackers
+                    let indirect_buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
-                        .unwrap();
-                    check_buffer_usage(buffer.usage, BufferUsage::INDIRECT)?;
+                        .map_err(|e| RenderCommandError::Buffer(buffer_id, e))?;
+                    check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)?;
+                    let &(ref indirect_raw, _) = indirect_buffer
+                        .raw
+                        .as_ref()
+                        .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))?;
 
                     let actual_count = count.map_or(1, |c| c.get());
 
                     let begin_offset = offset;
                     let end_offset = offset + stride * actual_count as u64;
-                    if end_offset > buffer.size {
+                    if end_offset > indirect_buffer.size {
                         return Err(RenderPassError::IndirectBufferOverrun {
                             offset,
                             count,
                             begin_offset,
                             end_offset,
-                            buffer_size: buffer.size,
+                            buffer_size: indirect_buffer.size,
                         });
                     }
 
                     match indexed {
                         false => unsafe {
-                            raw.draw_indirect(&buffer.raw, offset, actual_count, stride as u32);
+                            raw.draw_indirect(indirect_raw, offset, actual_count, stride as u32);
                         },
                         true => unsafe {
                             raw.draw_indexed_indirect(
-                                &buffer.raw,
+                                indirect_raw,
                                 offset,
                                 actual_count,
                                 stride as u32,
@@ -1428,26 +1438,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
                     )?;
 
-                    let buffer = trackers
+                    let indirect_buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
-                        .unwrap();
-                    check_buffer_usage(buffer.usage, BufferUsage::INDIRECT)?;
+                        .map_err(|e| RenderCommandError::Buffer(buffer_id, e))?;
+                    check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)?;
+                    let &(ref indirect_raw, _) = indirect_buffer
+                        .raw
+                        .as_ref()
+                        .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))?;
+
                     let count_buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, count_buffer_id, (), BufferUse::INDIRECT)
-                        .unwrap();
+                        .map_err(|e| RenderCommandError::Buffer(count_buffer_id, e))?;
                     check_buffer_usage(count_buffer.usage, BufferUsage::INDIRECT)?;
+                    let &(ref count_raw, _) = count_buffer
+                        .raw
+                        .as_ref()
+                        .ok_or(RenderCommandError::DestroyedBuffer(count_buffer_id))?;
 
                     let begin_offset = offset;
                     let end_offset = offset + stride * max_count as u64;
-                    if end_offset > buffer.size {
+                    if end_offset > indirect_buffer.size {
                         return Err(RenderPassError::IndirectBufferOverrun {
                             offset,
                             count: None,
                             begin_offset,
                             end_offset,
-                            buffer_size: buffer.size,
+                            buffer_size: indirect_buffer.size,
                         });
                     }
 
@@ -1464,9 +1483,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     match indexed {
                         false => unsafe {
                             raw.draw_indirect_count(
-                                &buffer.raw,
+                                indirect_raw,
                                 offset,
-                                &count_buffer.raw,
+                                count_raw,
                                 count_buffer_offset,
                                 max_count,
                                 stride as u32,
@@ -1474,9 +1493,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         },
                         true => unsafe {
                             raw.draw_indexed_indirect_count(
-                                &buffer.raw,
+                                indirect_raw,
                                 offset,
-                                &count_buffer.raw,
+                                count_raw,
                                 count_buffer_offset,
                                 max_count,
                                 stride as u32,
@@ -1526,6 +1545,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &*buffer_guard,
                         )
                     }
+                    .map_err(|e| match e {
+                        ExecutionError::DestroyedBuffer(id) => {
+                            RenderCommandError::DestroyedBuffer(id)
+                        }
+                    })?;
 
                     trackers.merge_extend(&bundle.used)?;
                     state.reset_bundle();

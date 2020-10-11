@@ -232,6 +232,8 @@ macro_rules! span {
 /// Fast hash map used internally.
 type FastHashMap<K, V> =
     std::collections::HashMap<K, V, std::hash::BuildHasherDefault<fxhash::FxHasher>>;
+/// Fast hash set used internally.
+type FastHashSet<K> = std::collections::HashSet<K, std::hash::BuildHasherDefault<fxhash::FxHasher>>;
 
 #[test]
 fn test_default_limits() {

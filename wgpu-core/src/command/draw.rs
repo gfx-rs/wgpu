@@ -65,6 +65,8 @@ pub enum RenderCommandError {
     IncompatibleReadOnlyDepthStencil,
     #[error("buffer {0:?} is in error {1:?}")]
     Buffer(id::BufferId, BufferError),
+    #[error("buffer {0:?} is destroyed")]
+    DestroyedBuffer(id::BufferId),
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error(transparent)]

@@ -130,7 +130,9 @@ pub enum BufferAccessError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error("buffer is invalid")]
-    InvalidBuffer,
+    Invalid,
+    #[error("buffer is destroyed")]
+    Destroyed,
     #[error("buffer is already mapped")]
     AlreadyMapped,
     #[error(transparent)]
@@ -164,10 +166,9 @@ pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct Buffer<B: hal::Backend> {
-    pub(crate) raw: B::Buffer,
+    pub(crate) raw: Option<(B::Buffer, MemoryBlock<B>)>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) usage: wgt::BufferUsage,
-    pub(crate) memory: MemoryBlock<B>,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) full_range: (),
     pub(crate) sync_mapped_writes: Option<hal::memory::Segment>,
@@ -203,7 +204,7 @@ pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct Texture<B: hal::Backend> {
-    pub(crate) raw: B::Image,
+    pub(crate) raw: Option<(B::Image, MemoryBlock<B>)>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) usage: wgt::TextureUsage,
     pub(crate) aspects: hal::format::Aspects,
@@ -211,7 +212,6 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) kind: hal::image::Kind,
     pub(crate) format: wgt::TextureFormat,
     pub(crate) full_range: TextureSelector,
-    pub(crate) memory: MemoryBlock<B>,
     pub(crate) life_guard: LifeGuard,
 }
 
@@ -313,7 +313,7 @@ pub struct TextureView<B: hal::Backend> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateTextureViewError {
-    #[error("parent texture is invalid")]
+    #[error("parent texture is invalid or destroyed")]
     InvalidTexture,
     #[error("not enough memory left")]
     OutOfMemory,
@@ -424,4 +424,12 @@ impl<B: hal::Backend> Borrow<()> for Sampler<B> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum DestroyError {
+    #[error("resource is invalid")]
+    Invalid,
+    #[error("resource is already destroyed")]
+    AlreadyDestroyed,
 }

@@ -125,6 +125,13 @@ pub enum CreateRenderBundleError {
     InvalidSampleCount(u32),
 }
 
+/// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
+#[derive(Clone, Debug, Error)]
+pub enum ExecutionError {
+    #[error("buffer {0:?} is destroyed")]
+    DestroyedBuffer(id::BufferId),
+}
+
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 
 //Note: here, `RenderBundle` is just wrapping a raw stream of render commands.
@@ -151,8 +158,9 @@ impl RenderBundle {
     /// However the point of this function is to be lighter, since we already had
     /// a chance to go through the commands in `render_bundle_encoder_finish`.
     ///
-    /// Note that the function isn't expected to fail.
+    /// Note that the function isn't expected to fail, generally.
     /// All the validation has already been done by this point.
+    /// The only failure condition is if some of the used buffers are destroyed.
     pub(crate) unsafe fn execute<B: GfxBackend>(
         &self,
         cmd_buf: &mut B::CommandBuffer,
@@ -163,7 +171,7 @@ impl RenderBundle {
         bind_group_guard: &Storage<crate::binding_model::BindGroup<B>, id::BindGroupId>,
         pipeline_guard: &Storage<crate::pipeline::RenderPipeline<B>, id::RenderPipelineId>,
         buffer_guard: &Storage<crate::resource::Buffer<B>, id::BufferId>,
-    ) {
+    ) -> Result<(), ExecutionError> {
         use hal::command::CommandBuffer as _;
 
         let mut offsets = self.base.dynamic_offsets.as_slice();
@@ -197,9 +205,14 @@ impl RenderBundle {
                     offset,
                     size,
                 } => {
-                    let buffer = buffer_guard.get(buffer_id).unwrap();
+                    let &(ref buffer, _) = buffer_guard
+                        .get(buffer_id)
+                        .unwrap()
+                        .raw
+                        .as_ref()
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let view = hal::buffer::IndexBufferView {
-                        buffer: &buffer.raw,
+                        buffer,
                         range: hal::buffer::SubRange {
                             offset,
                             size: size.map(|s| s.get()),
@@ -215,12 +228,17 @@ impl RenderBundle {
                     offset,
                     size,
                 } => {
-                    let buffer = buffer_guard.get(buffer_id).unwrap();
+                    let &(ref buffer, _) = buffer_guard
+                        .get(buffer_id)
+                        .unwrap()
+                        .raw
+                        .as_ref()
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let range = hal::buffer::SubRange {
                         offset,
                         size: size.map(|s| s.get()),
                     };
-                    cmd_buf.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
+                    cmd_buf.bind_vertex_buffers(slot, iter::once((buffer, range)));
                 }
                 RenderCommand::SetPushConstant {
                     stages,
@@ -288,8 +306,13 @@ impl RenderBundle {
                     count: None,
                     indexed: false,
                 } => {
-                    let buffer = buffer_guard.get(buffer_id).unwrap();
-                    cmd_buf.draw_indirect(&buffer.raw, offset, 1, 0);
+                    let &(ref buffer, _) = buffer_guard
+                        .get(buffer_id)
+                        .unwrap()
+                        .raw
+                        .as_ref()
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
+                    cmd_buf.draw_indirect(buffer, offset, 1, 0);
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
@@ -297,8 +320,13 @@ impl RenderBundle {
                     count: None,
                     indexed: true,
                 } => {
-                    let buffer = buffer_guard.get(buffer_id).unwrap();
-                    cmd_buf.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
+                    let &(ref buffer, _) = buffer_guard
+                        .get(buffer_id)
+                        .unwrap()
+                        .raw
+                        .as_ref()
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
+                    cmd_buf.draw_indexed_indirect(buffer, offset, 1, 0);
                 }
                 RenderCommand::MultiDrawIndirect { .. }
                 | RenderCommand::MultiDrawIndirectCount { .. } => unimplemented!(),
@@ -312,6 +340,8 @@ impl RenderBundle {
                 | RenderCommand::SetScissor(_) => unreachable!(),
             }
         }
+
+        Ok(())
     }
 }
 

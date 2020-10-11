@@ -45,7 +45,7 @@ pub enum CreateBindGroupError {
     Device(#[from] DeviceError),
     #[error("bind group layout is invalid")]
     InvalidLayout,
-    #[error("buffer {0:?} is invalid")]
+    #[error("buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
     #[error("texture view {0:?} is invalid")]
     InvalidTextureView(TextureViewId),
