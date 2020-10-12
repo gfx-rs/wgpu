@@ -108,7 +108,20 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     log::info!("Initializing the surface...");
 
-    let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+    let backend = if let Ok(backend) = std::env::var("WGPU_TRACE") {
+        match backend.to_lowercase().as_str() {
+            "vulkan" => wgpu::BackendBit::VULKAN,
+            "metal" => wgpu::BackendBit::METAL,
+            "dx12" => wgpu::BackendBit::DX12,
+            "dx11" => wgpu::BackendBit::DX11,
+            "gl" => wgpu::BackendBit::GL,
+            "webgpu" => wgpu::BackendBit::BROWSER_WEBGPU,
+            other => panic!("Unknown backend: {}", other),
+        }
+    } else {
+        wgpu::BackendBit::PRIMARY
+    };
+    let instance = wgpu::Instance::new(backend);
     let (size, surface) = unsafe {
         let size = window.inner_size();
         let surface = instance.create_surface(&window);
