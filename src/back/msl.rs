@@ -370,6 +370,14 @@ fn separate(is_last: bool) -> &'static str {
 }
 
 impl<W: Write> Writer<W> {
+    /// Creates a new `Writer` instance
+    pub fn new(out: W) -> Self {
+        Writer {
+            out,
+            typifier: Typifier::new(),
+        }
+    }
+
     fn put_call(
         &mut self,
         name: &str,
