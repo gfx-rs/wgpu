@@ -88,14 +88,12 @@ mod pass_impl {
                 )
             }
         }
-        fn set_push_constants(&mut self, offset: u32, data: &[u32]) {
+        fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
             unsafe {
                 wgpu_compute_pass_set_push_constant(
                     self,
                     offset,
-                    (data.len() * std::mem::size_of::<u32>())
-                        .try_into()
-                        .unwrap(),
+                    data.len().try_into().unwrap(),
                     data.as_ptr(),
                 )
             }
@@ -165,15 +163,13 @@ mod pass_impl {
         ) {
             wgpu_render_pass_set_vertex_buffer(self, slot, buffer.id, offset, size)
         }
-        fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u32]) {
+        fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]) {
             unsafe {
                 wgpu_render_pass_set_push_constants(
                     self,
                     stages,
                     offset,
-                    (data.len() * std::mem::size_of::<u32>())
-                        .try_into()
-                        .unwrap(),
+                    data.len().try_into().unwrap(),
                     data.as_ptr(),
                 )
             }
@@ -362,15 +358,13 @@ mod pass_impl {
             wgpu_render_bundle_set_vertex_buffer(self, slot, buffer.id, offset, size)
         }
 
-        fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u32]) {
+        fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]) {
             unsafe {
                 wgpu_render_bundle_set_push_constants(
                     self,
                     stages,
                     offset,
-                    (data.len() * std::mem::size_of::<u32>())
-                        .try_into()
-                        .unwrap(),
+                    data.len().try_into().unwrap(),
                     data.as_ptr(),
                 )
             }
@@ -1214,7 +1208,7 @@ impl crate::Context for Context {
 
     fn texture_drop(&self, texture: &Self::TextureId) {
         let global = &self.0;
-        wgc::gfx_select!(texture.id => global.texture_drop(texture.id))
+        wgc::gfx_select!(texture.id => global.texture_drop(texture.id, false))
     }
     fn texture_view_drop(&self, texture_view: &Self::TextureViewId) {
         let global = &self.0;
