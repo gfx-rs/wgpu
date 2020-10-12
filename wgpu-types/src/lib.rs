@@ -57,17 +57,15 @@ pub enum Backend {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum PowerPreference {
-    /// Prefer low power when on battery, high performance when on mains.
-    Default = 0,
     /// Adapter that uses the least possible power. This is often an integerated GPU.
-    LowPower = 1,
+    LowPower = 0,
     /// Adapter that has the highest performance. This is often a discrete GPU.
-    HighPerformance = 2,
+    HighPerformance = 1,
 }
 
 impl Default for PowerPreference {
     fn default() -> Self {
-        Self::Default
+        Self::LowPower
     }
 }
 

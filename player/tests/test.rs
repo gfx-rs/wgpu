@@ -174,7 +174,7 @@ impl Corpus {
             }
             let adapter = match global.request_adapter(
                 &wgc::instance::RequestAdapterOptions {
-                    power_preference: wgt::PowerPreference::Default,
+                    power_preference: wgt::PowerPreference::LowPower,
                     compatible_surface: None,
                 },
                 wgc::instance::AdapterInputs::IdSet(

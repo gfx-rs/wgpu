@@ -501,9 +501,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let preferred_gpu = match desc.power_preference {
-            PowerPreference::Default | PowerPreference::LowPower => {
-                integrated.or(other).or(discrete).or(virt)
-            }
+            PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt),
             PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt),
         };
 
