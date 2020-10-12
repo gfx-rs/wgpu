@@ -69,7 +69,7 @@ fn main() {
             let adapter = global
                 .request_adapter(
                     &wgc::instance::RequestAdapterOptions {
-                        power_preference: wgt::PowerPreference::Default,
+                        power_preference: wgt::PowerPreference::LowPower,
                         #[cfg(feature = "winit")]
                         compatible_surface: Some(surface),
                         #[cfg(not(feature = "winit"))]
