@@ -480,7 +480,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(RequestAdapterError::NotFound);
         }
 
-        let (mut integrated, mut discrete, mut virt, mut other) = (None, None, None, None);
+        let (mut integrated, mut discrete, mut virt, mut cpu, mut other) =
+            (None, None, None, None, None);
 
         for (i, ty) in device_types.into_iter().enumerate() {
             match ty {
@@ -493,7 +494,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::adapter::DeviceType::VirtualGpu => {
                     virt = virt.or(Some(i));
                 }
-                _ => {
+                hal::adapter::DeviceType::Cpu => {
+                    cpu = cpu.or(Some(i));
+                }
+                hal::adapter::DeviceType::Other => {
                     other = other.or(Some(i));
                 }
             }
@@ -501,9 +505,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let preferred_gpu = match desc.power_preference {
             PowerPreference::Default | PowerPreference::LowPower => {
-                integrated.or(other).or(discrete).or(virt)
+                integrated.or(other).or(discrete).or(virt).or(cpu)
             }
-            PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt),
+            PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt).or(cpu),
         };
 
         let mut selected = preferred_gpu.unwrap_or(0);
