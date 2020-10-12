@@ -26,7 +26,7 @@ These examples use the default syntax for running examples, as found in the [Car
 cargo run --example cube
 ```
 
-The `hello-triangle` and `hello-compute` examples show bare-bones setup without any helper code. For `hello-compute`, pass 4 numbers separated by spaces as arguments:
+The `hello*` examples show bare-bones setup without any helper code. For `hello-compute`, pass 4 numbers separated by spaces as arguments:
 
 ```bash
 cargo run --example hello-compute 1 2 3 4

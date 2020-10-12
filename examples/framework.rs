@@ -108,7 +108,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     log::info!("Initializing the surface...");
 
-    let backend = if let Ok(backend) = std::env::var("WGPU_TRACE") {
+    let backend = if let Ok(backend) = std::env::var("WGPU_BACKEND") {
         match backend.to_lowercase().as_str() {
             "vulkan" => wgpu::BackendBit::VULKAN,
             "metal" => wgpu::BackendBit::METAL,
