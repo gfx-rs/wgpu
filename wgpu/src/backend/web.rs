@@ -109,7 +109,7 @@ impl crate::ComputePassInner<Context> for ComputePass {
                 offsets.len() as u32,
             );
     }
-    fn set_push_constants(&mut self, _offset: u32, _data: &[u32]) {
+    fn set_push_constants(&mut self, _offset: u32, _data: &[u8]) {
         panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
     }
 
@@ -184,7 +184,7 @@ impl crate::RenderInner<Context> for RenderPass {
         self.0
             .set_vertex_buffer_with_f64_and_f64(slot, &buffer.0, offset as f64, mapped_size);
     }
-    fn set_push_constants(&mut self, _stages: wgt::ShaderStage, _offset: u32, _data: &[u32]) {
+    fn set_push_constants(&mut self, _stages: wgt::ShaderStage, _offset: u32, _data: &[u8]) {
         panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
     }
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
@@ -1267,6 +1267,15 @@ impl crate::Context for Context {
         Sendable(texture.0.create_view_with_descriptor(&mapped))
     }
 
+    fn buffer_destroy(&self, _buffer: &Self::BufferId) {
+        // TODO
+    }
+    fn buffer_drop(&self, _buffer: &Self::BufferId) {
+        // Dropped automatically
+    }
+    fn texture_destroy(&self, _texture: &Self::TextureId) {
+        // TODO
+    }
     fn texture_drop(&self, _texture: &Self::TextureId) {
         // Dropped automatically
     }
@@ -1274,9 +1283,6 @@ impl crate::Context for Context {
         // Dropped automatically
     }
     fn sampler_drop(&self, _sampler: &Self::SamplerId) {
-        // Dropped automatically
-    }
-    fn buffer_drop(&self, _buffer: &Self::BufferId) {
         // Dropped automatically
     }
     fn bind_group_drop(&self, _bind_group: &Self::BindGroupId) {

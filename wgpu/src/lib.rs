@@ -55,7 +55,7 @@ trait ComputePassInner<Ctx: Context> {
         bind_group: &Ctx::BindGroupId,
         offsets: &[DynamicOffset],
     );
-    fn set_push_constants(&mut self, offset: u32, data: &[u32]);
+    fn set_push_constants(&mut self, offset: u32, data: &[u8]);
     fn insert_debug_marker(&mut self, label: &str);
     fn push_debug_group(&mut self, group_label: &str);
     fn pop_debug_group(&mut self);
@@ -88,7 +88,7 @@ trait RenderInner<Ctx: Context> {
         offset: BufferAddress,
         size: Option<BufferSize>,
     );
-    fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u32]);
+    fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]);
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
     fn draw_indirect(&mut self, indirect_buffer: &Ctx::BufferId, indirect_offset: BufferAddress);
@@ -301,10 +301,13 @@ trait Context: Debug + Send + Sized + Sync {
         texture: &Self::TextureId,
         desc: &TextureViewDescriptor,
     ) -> Self::TextureViewId;
+
+    fn buffer_destroy(&self, buffer: &Self::BufferId);
+    fn buffer_drop(&self, buffer: &Self::BufferId);
+    fn texture_destroy(&self, buffer: &Self::TextureId);
     fn texture_drop(&self, texture: &Self::TextureId);
     fn texture_view_drop(&self, texture_view: &Self::TextureViewId);
     fn sampler_drop(&self, sampler: &Self::SamplerId);
-    fn buffer_drop(&self, buffer: &Self::BufferId);
     fn bind_group_drop(&self, bind_group: &Self::BindGroupId);
     fn bind_group_layout_drop(&self, bind_group_layout: &Self::BindGroupLayoutId);
     fn pipeline_layout_drop(&self, pipeline_layout: &Self::PipelineLayoutId);
@@ -1716,6 +1719,11 @@ impl Buffer {
         self.map_context.lock().reset();
         Context::buffer_unmap(&*self.context, &self.id);
     }
+
+    /// Destroy the associated native resources as soon as possible.
+    pub fn destroy(&self) {
+        Context::buffer_destroy(&*self.context, &self.id);
+    }
 }
 
 impl<'a> BufferSlice<'a> {
@@ -1801,6 +1809,11 @@ impl Texture {
             id: Context::texture_create_view(&*self.context, &self.id, desc),
             owned: true,
         }
+    }
+
+    /// Destroy the associated native resources as soon as possible.
+    pub fn destroy(&self) {
+        Context::texture_destroy(&*self.context, &self.id);
     }
 }
 
@@ -2316,7 +2329,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
     /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
-    pub fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u32]) {
+    pub fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]) {
         self.id.set_push_constants(stages, offset, data);
     }
 }
@@ -2392,7 +2405,7 @@ impl<'a> ComputePass<'a> {
     /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
     /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
     /// of 4..16.
-    pub fn set_push_constants(&mut self, offset: u32, data: &[u32]) {
+    pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
         self.id.set_push_constants(offset, data);
     }
 }
@@ -2561,7 +2574,7 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
     /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
-    pub fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u32]) {
+    pub fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]) {
         self.id.set_push_constants(stages, offset, data);
     }
 }
