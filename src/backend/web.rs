@@ -791,9 +791,7 @@ impl crate::Context for Context {
         let mut mapped_options = web_sys::GpuRequestAdapterOptions::new();
         let mapped_power_preference = match options.power_preference {
             wgt::PowerPreference::LowPower => web_sys::GpuPowerPreference::LowPower,
-            wgt::PowerPreference::HighPerformance | wgt::PowerPreference::Default => {
-                web_sys::GpuPowerPreference::HighPerformance
-            }
+            wgt::PowerPreference::HighPerformance => web_sys::GpuPowerPreference::HighPerformance,
         };
         mapped_options.power_preference(mapped_power_preference);
         let adapter_promise = self.0.request_adapter_with_options(&mapped_options);

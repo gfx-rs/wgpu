@@ -74,7 +74,7 @@ async fn run(
         .collect();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
+            power_preference: wgpu::PowerPreference::default(),
             // Request an adapter which can render to our surface
             compatible_surface: viewports.first().map(|desc| &desc.surface),
         })

@@ -129,7 +129,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
     };
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
+            power_preference: wgpu::PowerPreference::default(),
             compatible_surface: Some(&surface),
         })
         .await
