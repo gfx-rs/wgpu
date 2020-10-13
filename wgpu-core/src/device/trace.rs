@@ -3,9 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::id;
+use std::ops::Range;
 #[cfg(feature = "trace")]
-use std::io::Write as _;
-use std::{borrow::Cow, ops::Range};
+use std::{borrow::Cow, io::Write as _};
 
 //TODO: consider a readable Id that doesn't include the backend
 
