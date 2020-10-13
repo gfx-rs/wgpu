@@ -1525,6 +1525,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     unsafe {
                         raw.insert_debug_marker(label, color);
                     }
+                    base.string_data = &base.string_data[len..];
                 }
                 RenderCommand::ExecuteBundle(bundle_id) => {
                     let bundle = trackers
