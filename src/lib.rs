@@ -4,7 +4,11 @@
 //!
 //! To improve performance and reduce memory usage, most structures are stored
 //! in an [`Arena`], and can be retrieved using the corresponding [`Handle`].
-#![allow(clippy::new_without_default, clippy::unneeded_field_pattern)]
+#![allow(
+    clippy::new_without_default,
+    clippy::unneeded_field_pattern,
+    clippy::match_like_matches_macro
+)]
 #![deny(clippy::panic)]
 
 mod arena;

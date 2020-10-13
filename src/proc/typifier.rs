@@ -29,6 +29,7 @@ impl Clone for Resolution {
                     columns,
                     width,
                 },
+                #[allow(clippy::panic)]
                 _ => panic!("Unepxected clone type: {:?}", v),
             }),
         }
@@ -50,6 +51,14 @@ pub enum ResolveError {
     FunctionReturnsVoid,
     #[error("Type is not found in the given immutable arena")]
     TypeNotFound,
+    #[error("Incompatible operand: {op} {operand}")]
+    IncompatibleOperand { op: String, operand: String },
+    #[error("Incompatible operands: {left} {op} {right}")]
+    IncompatibleOperands {
+        op: String,
+        left: String,
+        right: String,
+    },
 }
 
 pub struct ResolveContext<'a> {
@@ -105,7 +114,12 @@ impl Typifier {
                     kind: crate::ScalarKind::Float,
                     width,
                 }),
-                ref other => panic!("Can't access into {:?}", other),
+                ref other => {
+                    return Err(ResolveError::IncompatibleOperand {
+                        op: "access".to_string(),
+                        operand: format!("{:?}", other),
+                    })
+                }
             },
             crate::Expression::AccessIndex { base, index } => match *self.get(base, types) {
                 crate::TypeInner::Vector { size, kind, width } => {
@@ -135,7 +149,12 @@ impl Typifier {
                         .ok_or(ResolveError::InvalidAccessIndex)?;
                     Resolution::Handle(member.ty)
                 }
-                ref other => panic!("Can't access into {:?}", other),
+                ref other => {
+                    return Err(ResolveError::IncompatibleOperand {
+                        op: "access index".to_string(),
+                        operand: format!("{:?}", other),
+                    })
+                }
             },
             crate::Expression::Constant(h) => Resolution::Handle(ctx.constants[h].ty),
             crate::Expression::Compose { ty, .. } => Resolution::Handle(ty),
@@ -192,7 +211,13 @@ impl Typifier {
                                 kind: crate::ScalarKind::Float,
                                 width,
                             }),
-                            _ => panic!("Incompatible arguments {:?} x {:?}", ty_left, ty_right),
+                            _ => {
+                                return Err(ResolveError::IncompatibleOperands {
+                                    op: "x".to_string(),
+                                    left: format!("{:?}", ty_left),
+                                    right: format!("{:?}", ty_right),
+                                })
+                            }
                         }
                     }
                 }
@@ -224,7 +249,12 @@ impl Typifier {
                     rows: columns,
                     width,
                 }),
-                ref other => panic!("incompatible transpose of {:?}", other),
+                ref other => {
+                    return Err(ResolveError::IncompatibleOperand {
+                        op: "transpose".to_string(),
+                        operand: format!("{:?}", other),
+                    })
+                }
             },
             crate::Expression::DotProduct(left_expr, _) => match *self.get(left_expr, types) {
                 crate::TypeInner::Vector {
@@ -232,7 +262,12 @@ impl Typifier {
                     size: _,
                     width,
                 } => Resolution::Value(crate::TypeInner::Scalar { kind, width }),
-                ref other => panic!("incompatible dot of {:?}", other),
+                ref other => {
+                    return Err(ResolveError::IncompatibleOperand {
+                        op: "dot product".to_string(),
+                        operand: format!("{:?}", other),
+                    })
+                }
             },
             crate::Expression::CrossProduct(_, _) => unimplemented!(),
             crate::Expression::As {
@@ -248,7 +283,12 @@ impl Typifier {
                     size,
                     width,
                 } => Resolution::Value(crate::TypeInner::Vector { kind, size, width }),
-                ref other => panic!("incompatible as of {:?}", other),
+                ref other => {
+                    return Err(ResolveError::IncompatibleOperand {
+                        op: "as".to_string(),
+                        operand: format!("{:?}", other),
+                    })
+                }
             },
             crate::Expression::Derivative { .. } => unimplemented!(),
             crate::Expression::Call {
@@ -260,13 +300,23 @@ impl Typifier {
                     | crate::TypeInner::Scalar { kind, width } => {
                         Resolution::Value(crate::TypeInner::Scalar { kind, width })
                     }
-                    ref other => panic!("Unexpected argument {:?} on {}", other, name),
+                    ref other => {
+                        return Err(ResolveError::IncompatibleOperand {
+                            op: name.clone(),
+                            operand: format!("{:?}", other),
+                        })
+                    }
                 },
                 "dot" => match *self.get(arguments[0], types) {
                     crate::TypeInner::Vector { kind, width, .. } => {
                         Resolution::Value(crate::TypeInner::Scalar { kind, width })
                     }
-                    ref other => panic!("Unexpected argument {:?} on {}", other, name),
+                    ref other => {
+                        return Err(ResolveError::IncompatibleOperand {
+                            op: name.clone(),
+                            operand: format!("{:?}", other),
+                        })
+                    }
                 },
                 //Note: `cross` is here too, we still need to figure out what to do with it
                 "abs" | "atan2" | "cos" | "sin" | "floor" | "inverse" | "normalize" | "min"

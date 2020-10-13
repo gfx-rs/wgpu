@@ -51,4 +51,5 @@ pub enum Error {
     BadString,
     IncompleteData,
     InvalidTerminator,
+    UnexpectedComparisonType(Handle<crate::Type>),
 }

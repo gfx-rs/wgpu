@@ -1477,7 +1477,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     };
                     *comparison = true;
                 }
-                _ => panic!("Unexpected comparison type {:?}", ty),
+                _ => {
+                    return Err(Error::UnexpectedComparisonType(handle));
+                }
             }
         }
 

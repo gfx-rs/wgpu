@@ -1787,7 +1787,13 @@ impl Parser {
                 }
                 Ok(true) => {}
                 Ok(false) => {
-                    assert_eq!(self.scopes, Vec::new());
+                    if !self.scopes.is_empty() {
+                        return Err(ParseError {
+                            error: Error::Other,
+                            scopes: std::mem::replace(&mut self.scopes, Vec::new()),
+                            pos: (0, 0),
+                        });
+                    };
                     return Ok(module);
                 }
             }

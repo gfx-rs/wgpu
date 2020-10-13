@@ -2,8 +2,15 @@
 use super::{Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
 use spirv::Word;
 use std::collections::hash_map::Entry;
+use thiserror::Error;
 
 const BITS_PER_BYTE: crate::Bytes = 8;
+
+#[derive(Clone, Debug, Error)]
+pub enum Error {
+    #[error("can't find local variable: {0:?}")]
+    UnknownLocalVariable(crate::LocalVariable),
+}
 
 struct Block {
     label: Option<Instruction>,
@@ -117,6 +124,9 @@ pub struct Writer {
     lookup_constant: crate::FastHashMap<crate::Handle<crate::Constant>, Word>,
     lookup_global_variable: crate::FastHashMap<crate::Handle<crate::GlobalVariable>, Word>,
 }
+
+// type alias, for success return of write_expression
+type WriteExpressionOutput = Option<(Word, Option<crate::Handle<crate::Type>>)>;
 
 impl Writer {
     pub fn new(header: &crate::Header, writer_flags: WriterFlags) -> Self {
@@ -799,7 +809,7 @@ impl Writer {
         expression: &crate::Expression,
         block: &mut Block,
         function: &mut Function,
-    ) -> Option<(Word, Option<crate::Handle<crate::Type>>)> {
+    ) -> Result<WriteExpressionOutput, Error> {
         match expression {
             crate::Expression::GlobalVariable(handle) => {
                 let var = &ir_module.global_variables[*handle];
@@ -808,12 +818,12 @@ impl Writer {
                     &ir_module.global_variables,
                     *handle,
                 );
-                Some((id, Some(var.ty)))
+                Ok(Some((id, Some(var.ty))))
             }
             crate::Expression::Constant(handle) => {
                 let var = &ir_module.constants[*handle];
                 let id = self.get_constant_id(*handle, ir_module);
-                Some((id, Some(var.ty)))
+                Ok(Some((id, Some(var.ty))))
             }
             crate::Expression::Compose { ty, components } => {
                 let base_type_id = self.get_type_id(&ir_module.types, LookupType::Handle(*ty));
@@ -822,7 +832,7 @@ impl Writer {
                 for component in components {
                     let expression = &ir_function.expressions[*component];
                     let (component_id, _) = self
-                        .write_expression(ir_module, &ir_function, expression, block, function)
+                        .write_expression(ir_module, &ir_function, expression, block, function)?
                         .unwrap();
                     constituent_ids.push(component_id);
                 }
@@ -868,7 +878,7 @@ impl Writer {
                     _ => unreachable!(),
                 };
 
-                Some((id, Some(*ty)))
+                Ok(Some((id, Some(*ty))))
             }
             crate::Expression::Binary { op, left, right } => {
                 match op {
@@ -883,7 +893,7 @@ impl Writer {
                                 left_expression,
                                 block,
                                 function,
-                            )
+                            )?
                             .unwrap();
                         let (right_id, right_ty) = self
                             .write_expression(
@@ -892,7 +902,7 @@ impl Writer {
                                 right_expression,
                                 block,
                                 function,
-                            )
+                            )?
                             .unwrap();
 
                         let left_ty = left_ty.unwrap();
@@ -1017,7 +1027,7 @@ impl Writer {
                         };
 
                         block.body.push(instruction);
-                        Some((id, Some(ty)))
+                        Ok(Some((id, Some(ty))))
                     }
 
                     _ => unimplemented!("{:?}", op),
@@ -1025,17 +1035,12 @@ impl Writer {
             }
             crate::Expression::LocalVariable(variable) => {
                 let var = &ir_function.local_variables[*variable];
-                let id = if let Some(local_var) = function
+                function
                     .variables
                     .iter()
                     .find(|&v| v.name.as_ref().unwrap() == var.name.as_ref().unwrap())
-                {
-                    local_var.id
-                } else {
-                    panic!("Could not find: {:?}", var)
-                };
-
-                Some((id, Some(var.ty)))
+                    .map(|local_var| Some((local_var.id, Some(var.ty))))
+                    .ok_or_else(|| Error::UnknownLocalVariable(var.clone()))
             }
             crate::Expression::FunctionParameter(index) => {
                 let handle = ir_function.parameter_types.get(*index as usize).unwrap();
@@ -1048,7 +1053,7 @@ impl Writer {
                     function.parameters[*index as usize].result_id.unwrap(),
                     None,
                 ));
-                Some((load_id, Some(*handle)))
+                Ok(Some((load_id, Some(*handle))))
             }
             crate::Expression::Call { origin, arguments } => match origin {
                 crate::FunctionOrigin::Local(local_function) => {
@@ -1059,7 +1064,7 @@ impl Writer {
                     for argument in arguments {
                         let expression = &ir_function.expressions[*argument];
                         let (id, ty) = self
-                            .write_expression(ir_module, ir_function, expression, block, function)
+                            .write_expression(ir_module, ir_function, expression, block, function)?
                             .unwrap();
 
                         // Create variable - OpVariable
@@ -1102,7 +1107,7 @@ impl Writer {
                             *self.lookup_function.get(local_function).unwrap(),
                             argument_ids.as_slice(),
                         ));
-                    Some((id, None))
+                    Ok(Some((id, None)))
                 }
                 _ => unimplemented!("{:?}", origin),
             },
@@ -1112,7 +1117,7 @@ impl Writer {
                 convert,
             } => {
                 if !convert {
-                    return None;
+                    return Ok(None);
                 }
 
                 let (expr_id, expr_type) = self
@@ -1122,7 +1127,7 @@ impl Writer {
                         &ir_function.expressions[*expr],
                         block,
                         function,
-                    )
+                    )?
                     .unwrap();
 
                 let id = self.generate_id();
@@ -1177,7 +1182,7 @@ impl Writer {
 
                 block.body.push(instruction);
 
-                Some((id, None))
+                Ok(Some((id, None)))
             }
             _ => unimplemented!("{:?}", expression),
         }
@@ -1214,6 +1219,7 @@ impl Writer {
                                     &mut block,
                                     function,
                                 )
+                                .unwrap()
                                 .unwrap();
 
                             let id = match *expression {
@@ -1251,6 +1257,7 @@ impl Writer {
                             &mut block,
                             function,
                         )
+                        .unwrap()
                         .unwrap();
                     let (value_id, value_ty) = self
                         .write_expression(
@@ -1260,6 +1267,7 @@ impl Writer {
                             &mut block,
                             function,
                         )
+                        .unwrap()
                         .unwrap();
 
                     let value_id = match value_expression {
