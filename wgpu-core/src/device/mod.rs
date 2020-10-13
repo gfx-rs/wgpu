@@ -336,6 +336,7 @@ impl<B: GfxBackend> Device<B> {
 
     pub(crate) fn lock_life<'this, 'token: 'this>(
         &'this self,
+        //TODO: fix this - the token has to be borrowed for the lock
         token: &mut Token<'token, Self>,
     ) -> MutexGuard<'this, life::LifetimeTracker<B>> {
         Self::lock_life_internal(&self.life_tracker, token)
@@ -1282,19 +1283,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        let mut life_lock = device_guard[device_id].lock_life(&mut token);
-
-        if device.pending_writes.dst_buffers.contains(&buffer_id) {
-            life_lock.future_suspected_buffers.push(Stored {
-                value: id::Valid(buffer_id),
-                ref_count,
-            });
-        } else {
-            drop(ref_count);
-            life_lock
-                .suspected_resources
-                .buffers
-                .push(id::Valid(buffer_id));
+        {
+            let mut life_lock = device.lock_life(&mut token);
+            if device.pending_writes.dst_buffers.contains(&buffer_id) {
+                life_lock.future_suspected_buffers.push(Stored {
+                    value: id::Valid(buffer_id),
+                    ref_count,
+                });
+            } else {
+                drop(ref_count);
+                life_lock
+                    .suspected_resources
+                    .buffers
+                    .push(id::Valid(buffer_id));
+            }
         }
 
         if wait {
@@ -1429,19 +1431,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        let mut life_lock = device_guard[device_id].lock_life(&mut token);
-
-        if device.pending_writes.dst_textures.contains(&texture_id) {
-            life_lock.future_suspected_textures.push(Stored {
-                value: id::Valid(texture_id),
-                ref_count,
-            });
-        } else {
-            drop(ref_count);
-            life_lock
-                .suspected_resources
-                .textures
-                .push(id::Valid(texture_id));
+        {
+            let mut life_lock = device.lock_life(&mut token);
+            if device.pending_writes.dst_textures.contains(&texture_id) {
+                life_lock.future_suspected_textures.push(Stored {
+                    value: id::Valid(texture_id),
+                    ref_count,
+                });
+            } else {
+                drop(ref_count);
+                life_lock
+                    .suspected_resources
+                    .textures
+                    .push(id::Valid(texture_id));
+            }
         }
 
         if wait {
