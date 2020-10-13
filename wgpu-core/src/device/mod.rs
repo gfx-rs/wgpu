@@ -701,13 +701,13 @@ impl<B: GfxBackend> Device<B> {
                     .map_or(1, |v| v.get() as hal::pso::DescriptorArrayIndex), //TODO: consolidate
                 stage_flags: conv::map_shader_stage_flags(entry.visibility),
                 immutable_samplers: false, // TODO
-            })
-            .collect::<Vec<_>>(); //TODO: avoid heap allocation
+            });
+        let desc_counts = raw_bindings.clone().collect();
 
         let raw = unsafe {
             let mut raw_layout = self
                 .raw
-                .create_descriptor_set_layout(&raw_bindings, &[])
+                .create_descriptor_set_layout(raw_bindings, &[])
                 .or(Err(DeviceError::OutOfMemory))?;
             if let Some(label) = label {
                 self.raw
@@ -733,7 +733,7 @@ impl<B: GfxBackend> Device<B> {
                 ref_count: self.life_guard.add_ref(),
             },
             multi_ref_count: MultiRefCount::new(),
-            desc_counts: raw_bindings.iter().cloned().collect(),
+            desc_counts,
             dynamic_count: entry_map
                 .values()
                 .filter(|b| b.ty.has_dynamic_offset())
@@ -2356,34 +2356,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             if !write_map.is_empty() {
-                #[derive(PartialEq)]
-                enum DescriptorType {
-                    Buffer,
-                    Sampler,
-                    TextureView,
-                }
                 let mut writes = Vec::<hal::pso::DescriptorSetWrite<_, SmallVec<[_; 1]>>>::new();
                 let mut prev_stages = wgt::ShaderStage::empty();
-                let mut prev_ty = DescriptorType::Buffer;
+                let mut prev_ty = wgt::BindingType::Sampler { comparison: false }; // doesn't matter
                 for (binding, list) in write_map {
                     let layout = &bind_group_layout.entries[&binding];
-                    let ty = match layout.ty {
-                        wgt::BindingType::UniformBuffer { .. }
-                        | wgt::BindingType::StorageBuffer { .. } => DescriptorType::Buffer,
-                        wgt::BindingType::Sampler { .. } => DescriptorType::Sampler,
-                        wgt::BindingType::SampledTexture { .. }
-                        | wgt::BindingType::StorageTexture { .. } => DescriptorType::TextureView,
-                    };
-                    if layout.visibility == prev_stages && ty == prev_ty {
+                    if layout.visibility == prev_stages && layout.ty == prev_ty {
                         writes.last_mut().unwrap().descriptors.extend(list);
                     } else {
                         prev_stages = layout.visibility;
-                        prev_ty = ty;
+                        prev_ty = layout.ty;
                         writes.push(hal::pso::DescriptorSetWrite {
                             set: desc_set.raw(),
                             binding,
                             array_offset: 0,
-                            descriptors: list.into_iter().collect(),
+                            descriptors: list,
                         });
                     }
                 }
