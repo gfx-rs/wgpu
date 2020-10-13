@@ -26,10 +26,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
-            compatible_surface: None,
-        })
+        .request_adapter(&wgpu::RequestAdapterOptions::default())
         .await
         .unwrap();
 

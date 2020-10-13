@@ -2,10 +2,7 @@
 async fn run() {
     #[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
     let adapter = wgpu::Instance::new(wgpu::BackendBit::PRIMARY)
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
-            compatible_surface: None,
-        })
+        .request_adapter(&wgpu::RequestAdapterOptions::default())
         .await
         .unwrap();
 
