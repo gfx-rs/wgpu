@@ -24,8 +24,6 @@ pub type BufferError = UseExtendError<BufferUse>;
 pub enum DrawError {
     #[error("blend color needs to be set")]
     MissingBlendColor,
-    #[error("stencil reference needs to be set")]
-    MissingStencilReference,
     #[error("render pipeline must be set")]
     MissingPipeline,
     #[error("current render pipeline has a layout which is incompatible with a currently set bind group, first differing at entry index {index}")]
