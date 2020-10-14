@@ -269,9 +269,10 @@ impl VertexState {
 
 #[derive(Debug)]
 struct State {
+    pipeline_flags: PipelineFlags,
     binder: Binder,
     blend_color: OptionalState,
-    stencil_reference: OptionalState,
+    stencil_reference: u32,
     pipeline: OptionalState,
     index: IndexState,
     vertex: VertexState,
@@ -293,9 +294,6 @@ impl State {
         }
         if self.blend_color == OptionalState::Required {
             return Err(DrawError::MissingBlendColor);
-        }
-        if self.stencil_reference == OptionalState::Required {
-            return Err(DrawError::MissingStencilReference);
         }
         Ok(())
     }
@@ -929,9 +927,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut state = State {
+            pipeline_flags: PipelineFlags::empty(),
             binder: Binder::new(cmd_buf.limits.max_bind_groups),
             blend_color: OptionalState::Unused,
-            stencil_reference: OptionalState::Unused,
+            stencil_reference: 0,
             pipeline: OptionalState::Required,
             index: IndexState::default(),
             vertex: VertexState::default(),
@@ -995,11 +994,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
-                    state.pipeline = OptionalState::Set;
                     let pipeline = trackers
                         .render_pipes
                         .use_extend(&*pipeline_guard, pipeline_id, (), ())
                         .unwrap();
+
+                    state.pipeline = OptionalState::Set;
+                    state.pipeline_flags = pipeline.flags;
 
                     if !context.compatible(&pipeline.pass_context) {
                         return Err(RenderCommandError::IncompatiblePipeline.into());
@@ -1013,12 +1014,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     state
                         .blend_color
                         .require(pipeline.flags.contains(PipelineFlags::BLEND_COLOR));
-                    state
-                        .stencil_reference
-                        .require(pipeline.flags.contains(PipelineFlags::STENCIL_REFERENCE));
 
                     unsafe {
                         raw.bind_graphics_pipeline(&pipeline.raw);
+                    }
+
+                    if pipeline.flags.contains(PipelineFlags::STENCIL_REFERENCE) {
+                        unsafe {
+                            raw.set_stencil_reference(
+                                hal::pso::Face::all(),
+                                state.stencil_reference,
+                            );
+                        }
                     }
 
                     // Rebind resource
@@ -1187,9 +1194,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 RenderCommand::SetStencilReference(value) => {
-                    state.stencil_reference = OptionalState::Set;
-                    unsafe {
-                        raw.set_stencil_reference(hal::pso::Face::all(), value);
+                    state.stencil_reference = value;
+                    if state
+                        .pipeline_flags
+                        .contains(PipelineFlags::STENCIL_REFERENCE)
+                    {
+                        unsafe {
+                            raw.set_stencil_reference(hal::pso::Face::all(), value);
+                        }
                     }
                 }
                 RenderCommand::SetViewport {
