@@ -1,5 +1,8 @@
 # Change Log
 
+## wgpu-core-0.6.5 (2020-10-14)
+  - fix setting the stencil reference on an incompatible pipeline
+
 ## wgpu-core-0.6.4 (2020-10-05)
   - don't request device features that aren't needed
   - fix texture depth == 0 checks
