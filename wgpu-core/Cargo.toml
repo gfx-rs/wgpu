@@ -50,15 +50,15 @@ version = "0.6"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 gfx-backend-metal = { version = "0.6" }
-gfx-backend-vulkan = { version = "0.6", optional = true }
+gfx-backend-vulkan = { version = "0.6.4", optional = true }
 
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-vulkan = { version = "0.6.1" }
+gfx-backend-vulkan = { version = "0.6.4" }
 
 [target.'cfg(windows)'.dependencies]
 gfx-backend-dx12 = { version = "0.6" }
 gfx-backend-dx11 = { version = "0.6" }
-gfx-backend-vulkan = { version = "0.6" }
+gfx-backend-vulkan = { version = "0.6.4" }
 
 [dev-dependencies]
 loom = "0.3"
