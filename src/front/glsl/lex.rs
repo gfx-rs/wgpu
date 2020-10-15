@@ -1,5 +1,5 @@
 use super::parser::Token;
-use super::{token::TokenMetadata, types::parse_type};
+use super::{preprocess::LinePreProcessor, token::TokenMetadata, types::parse_type};
 use std::{iter::Enumerate, str::Lines};
 
 fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
@@ -23,6 +23,7 @@ pub struct Lexer<'a> {
     line: usize,
     offset: usize,
     inside_comment: bool,
+    pub pp: LinePreProcessor,
 }
 
 impl<'a> Lexer<'a> {
@@ -289,6 +290,7 @@ impl<'a> Lexer<'a> {
             line: 0,
             offset: 0,
             inside_comment: false,
+            pp: LinePreProcessor::new(),
         };
         lexer.next_line();
         lexer
@@ -307,10 +309,15 @@ impl<'a> Lexer<'a> {
                 }
             }
 
-            self.input = input;
-            self.line = line;
-            self.offset = 0;
-            true
+            if let Ok(processed) = self.pp.process_line(&input) {
+                self.input = processed.unwrap_or_default();
+                self.line = line;
+                self.offset = 0;
+                true
+            } else {
+                //TODO: handle preprocessor error
+                false
+            }
         } else {
             false
         }

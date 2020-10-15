@@ -52,17 +52,35 @@ fn main() {
         #[cfg(feature = "glsl-in")]
         "vert" => {
             let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::glsl::parse_str(&input, "main", naga::ShaderStage::Vertex).unwrap()
+            naga::front::glsl::parse_str(
+                &input,
+                "main",
+                naga::ShaderStage::Vertex,
+                Default::default(),
+            )
+            .unwrap()
         }
         #[cfg(feature = "glsl-in")]
         "frag" => {
             let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::glsl::parse_str(&input, "main", naga::ShaderStage::Fragment).unwrap()
+            naga::front::glsl::parse_str(
+                &input,
+                "main",
+                naga::ShaderStage::Fragment,
+                Default::default(),
+            )
+            .unwrap()
         }
         #[cfg(feature = "glsl-in")]
         "comp" => {
             let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::glsl::parse_str(&input, "main", naga::ShaderStage::Compute).unwrap()
+            naga::front::glsl::parse_str(
+                &input,
+                "main",
+                naga::ShaderStage::Compute,
+                Default::default(),
+            )
+            .unwrap()
         }
         #[cfg(feature = "deserialize")]
         "ron" => {

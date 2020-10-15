@@ -21,6 +21,7 @@ pub enum ErrorKind {
     VariableNotAvailable(String),
     ExpectedConstant,
     SemanticError(&'static str),
+    PreprocessorError(String),
 }
 
 impl fmt::Display for ErrorKind {
@@ -53,6 +54,7 @@ impl fmt::Display for ErrorKind {
             }
             ErrorKind::ExpectedConstant => write!(f, "Expected constant"),
             ErrorKind::SemanticError(msg) => write!(f, "Semantic error: {}", msg),
+            ErrorKind::PreprocessorError(val) => write!(f, "Preprocessor error: {}", val),
         }
     }
 }
