@@ -2358,40 +2358,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            if !write_map.is_empty() {
-                #[derive(PartialEq)]
-                enum DescriptorType {
-                    Buffer,
-                    Sampler,
-                    TextureView,
-                }
-                let mut writes = Vec::<hal::pso::DescriptorSetWrite<_, SmallVec<[_; 1]>>>::new();
-                let mut prev_stages = wgt::ShaderStage::empty();
-                let mut prev_ty = DescriptorType::Buffer;
-                for (binding, list) in write_map {
-                    let layout = &bind_group_layout.entries[&binding];
-                    let ty = match layout.ty {
-                        wgt::BindingType::UniformBuffer { .. }
-                        | wgt::BindingType::StorageBuffer { .. } => DescriptorType::Buffer,
-                        wgt::BindingType::Sampler { .. } => DescriptorType::Sampler,
-                        wgt::BindingType::SampledTexture { .. }
-                        | wgt::BindingType::StorageTexture { .. } => DescriptorType::TextureView,
-                    };
-                    if layout.visibility == prev_stages && ty == prev_ty {
-                        writes.last_mut().unwrap().descriptors.extend(list);
-                    } else {
-                        prev_stages = layout.visibility;
-                        prev_ty = ty;
-                        writes.push(hal::pso::DescriptorSetWrite {
-                            set: desc_set.raw(),
-                            binding,
-                            array_offset: 0,
-                            descriptors: list.into_iter().collect(),
-                        });
-                    }
-                }
+            if let Some(start_binding) = write_map.keys().next().cloned() {
+                let descriptors = write_map
+                    .into_iter()
+                    .flat_map(|(_, list)| list)
+                    .collect::<Vec<_>>();
+                let write = hal::pso::DescriptorSetWrite {
+                    set: desc_set.raw(),
+                    binding: start_binding,
+                    array_offset: 0,
+                    descriptors,
+                };
                 unsafe {
-                    device.raw.write_descriptor_sets(writes);
+                    device.raw.write_descriptor_sets(iter::once(write));
                 }
             }
             desc_set
