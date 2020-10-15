@@ -702,13 +702,13 @@ impl<B: GfxBackend> Device<B> {
                     .map_or(1, |v| v.get() as hal::pso::DescriptorArrayIndex), //TODO: consolidate
                 stage_flags: conv::map_shader_stage_flags(entry.visibility),
                 immutable_samplers: false, // TODO
-            });
-        let desc_counts = raw_bindings.clone().collect();
+            })
+            .collect::<Vec<_>>(); //TODO: avoid heap allocation
 
         let raw = unsafe {
             let mut raw_layout = self
                 .raw
-                .create_descriptor_set_layout(raw_bindings, &[])
+                .create_descriptor_set_layout(&raw_bindings, &[])
                 .or(Err(DeviceError::OutOfMemory))?;
             if let Some(label) = label {
                 self.raw
@@ -734,7 +734,7 @@ impl<B: GfxBackend> Device<B> {
                 ref_count: self.life_guard.add_ref(),
             },
             multi_ref_count: MultiRefCount::new(),
-            desc_counts,
+            desc_counts: raw_bindings.iter().cloned().collect(),
             dynamic_count: entry_map
                 .values()
                 .filter(|b| b.ty.has_dynamic_offset())
@@ -2358,27 +2358,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            if !write_map.is_empty() {
-                let mut writes = Vec::<hal::pso::DescriptorSetWrite<_, SmallVec<[_; 1]>>>::new();
-                let mut prev_stages = wgt::ShaderStage::empty();
-                let mut prev_ty = wgt::BindingType::Sampler { comparison: false }; // doesn't matter
-                for (binding, list) in write_map {
-                    let layout = &bind_group_layout.entries[&binding];
-                    if layout.visibility == prev_stages && layout.ty == prev_ty {
-                        writes.last_mut().unwrap().descriptors.extend(list);
-                    } else {
-                        prev_stages = layout.visibility;
-                        prev_ty = layout.ty;
-                        writes.push(hal::pso::DescriptorSetWrite {
-                            set: desc_set.raw(),
-                            binding,
-                            array_offset: 0,
-                            descriptors: list,
-                        });
-                    }
-                }
+            if let Some(start_binding) = write_map.keys().next().cloned() {
+                let descriptors = write_map
+                    .into_iter()
+                    .flat_map(|(_, list)| list)
+                    .collect::<Vec<_>>();
+                let write = hal::pso::DescriptorSetWrite {
+                    set: desc_set.raw(),
+                    binding: start_binding,
+                    array_offset: 0,
+                    descriptors,
+                };
                 unsafe {
-                    device.raw.write_descriptor_sets(writes);
+                    device.raw.write_descriptor_sets(iter::once(write));
                 }
             }
             desc_set
