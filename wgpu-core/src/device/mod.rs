@@ -702,13 +702,13 @@ impl<B: GfxBackend> Device<B> {
                     .map_or(1, |v| v.get() as hal::pso::DescriptorArrayIndex), //TODO: consolidate
                 stage_flags: conv::map_shader_stage_flags(entry.visibility),
                 immutable_samplers: false, // TODO
-            })
-            .collect::<Vec<_>>(); //TODO: avoid heap allocation
+            });
+        let desc_counts = raw_bindings.clone().collect();
 
         let raw = unsafe {
             let mut raw_layout = self
                 .raw
-                .create_descriptor_set_layout(&raw_bindings, &[])
+                .create_descriptor_set_layout(raw_bindings, &[])
                 .or(Err(DeviceError::OutOfMemory))?;
             if let Some(label) = label {
                 self.raw
@@ -734,7 +734,7 @@ impl<B: GfxBackend> Device<B> {
                 ref_count: self.life_guard.add_ref(),
             },
             multi_ref_count: MultiRefCount::new(),
-            desc_counts: raw_bindings.iter().cloned().collect(),
+            desc_counts,
             dynamic_count: entry_map
                 .values()
                 .filter(|b| b.ty.has_dynamic_offset())
