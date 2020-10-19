@@ -54,10 +54,6 @@ impl<B: hal::Backend> PendingWrites<B> {
         }
     }
 
-    pub fn consume_temp(&mut self, buffer: B::Buffer, memory: MemoryBlock<B>) {
-        self.temp_buffers.push((buffer, memory));
-    }
-
     fn consume(&mut self, stage: StagingData<B>) {
         self.temp_buffers.push((stage.buffer, stage.memory));
         self.command_buffer = Some(stage.comb);
@@ -65,17 +61,6 @@ impl<B: hal::Backend> PendingWrites<B> {
 }
 
 impl<B: hal::Backend> super::Device<B> {
-    pub fn borrow_pending_writes(&mut self) -> &mut B::CommandBuffer {
-        if self.pending_writes.command_buffer.is_none() {
-            let mut comb = self.com_allocator.allocate_internal();
-            unsafe {
-                comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
-            }
-            self.pending_writes.command_buffer = Some(comb);
-        }
-        self.pending_writes.command_buffer.as_mut().unwrap()
-    }
-
     fn prepare_stage(&mut self, size: wgt::BufferAddress) -> StagingData<B> {
         let mut buffer = unsafe {
             self.raw
@@ -153,13 +138,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => {}
         }
 
-        let data_size = data.len() as wgt::BufferAddress;
-        if data_size == 0 {
-            log::trace!("Ignoring write_buffer of size 0");
-            return;
-        }
-
-        let mut stage = device.prepare_stage(data_size);
+        let mut stage = device.prepare_stage(data.len() as wgt::BufferAddress);
         {
             let mut mapped = stage
                 .memory
@@ -183,30 +162,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
         dst.life_guard.use_at(last_submit_index + 1);
-
-        assert_eq!(
-            data_size % wgt::COPY_BUFFER_ALIGNMENT,
-            0,
-            "Buffer write size {} must be a multiple of {}",
-            buffer_offset,
-            wgt::COPY_BUFFER_ALIGNMENT,
-        );
-        assert_eq!(
-            buffer_offset % wgt::COPY_BUFFER_ALIGNMENT,
-            0,
-            "Buffer offset {} must be a multiple of {}",
-            buffer_offset,
-            wgt::COPY_BUFFER_ALIGNMENT,
-        );
-        let destination_start_offset = buffer_offset;
-        let destination_end_offset = buffer_offset + data_size;
-        assert!(
-            destination_end_offset <= dst.size,
-            "Write buffer with indices {}..{} overruns destination buffer of size {}",
-            destination_start_offset,
-            destination_end_offset,
-            dst.size
-        );
 
         let region = hal::command::BufferCopy {
             src: 0,
@@ -263,22 +218,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => {}
         }
 
-        if size.width == 0 || size.height == 0 || size.width == 0 {
-            log::trace!("Ignoring write_texture of size 0");
-            return;
-        }
-
         let texture_format = texture_guard[destination.texture].format;
         let bytes_per_texel = conv::map_texture_format(texture_format, device.private_features)
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        crate::command::validate_linear_texture_data(
-            data_layout,
-            data.len() as wgt::BufferAddress,
-            bytes_per_texel as wgt::BufferAddress,
-            size,
-        );
 
         let bytes_per_row_alignment = get_lowest_common_denom(
             device.hal_limits.optimal_buffer_copy_pitch_alignment as u32,
@@ -327,7 +271,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             "Write texture usage {:?} must contain flag COPY_DST",
             dst.usage
         );
-        crate::command::validate_texture_copy_range(destination, dst.kind, size);
 
         let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
         dst.life_guard.use_at(last_submit_index + 1);

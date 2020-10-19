@@ -7,7 +7,7 @@ use crate::{
     device::Device,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId},
-    power, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
+    power, LifeGuard, Stored, MAX_BIND_GROUPS,
 };
 
 use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, BIND_BUFFER_ALIGNMENT};
@@ -118,42 +118,13 @@ pub struct Surface {
 #[derive(Debug)]
 pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
-    extensions: wgt::Extensions,
-    limits: wgt::Limits,
-    unsafe_extensions: wgt::UnsafeExtensions,
     life_guard: LifeGuard,
 }
 
 impl<B: hal::Backend> Adapter<B> {
-    fn new(raw: hal::adapter::Adapter<B>, unsafe_extensions: wgt::UnsafeExtensions) -> Self {
-        let adapter_features = raw.physical_device.features();
-
-        let mut extensions = wgt::Extensions::default() | wgt::Extensions::MAPPABLE_PRIMARY_BUFFERS;
-        extensions.set(
-            wgt::Extensions::ANISOTROPIC_FILTERING,
-            adapter_features.contains(hal::Features::SAMPLER_ANISOTROPY),
-        );
-        extensions.set(
-            wgt::Extensions::TEXTURE_BINDING_ARRAY,
-            adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
-        );
-        if unsafe_extensions.allowed() {
-            // Unsafe extensions go here
-        }
-
-        let adapter_limits = raw.physical_device.limits();
-
-        let limits = wgt::Limits {
-            max_bind_groups: (adapter_limits.max_bound_descriptor_sets as u32)
-                .min(MAX_BIND_GROUPS as u32),
-            _non_exhaustive: unsafe { wgt::NonExhaustive::new() },
-        };
-
+    fn new(raw: hal::adapter::Adapter<B>) -> Self {
         Adapter {
             raw,
-            extensions,
-            limits,
-            unsafe_extensions,
             life_guard: LifeGuard::new(),
         }
     }
@@ -280,11 +251,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         self.surfaces.register_identity(id_in, surface, &mut token)
     }
 
-    pub fn enumerate_adapters(
-        &self,
-        unsafe_extensions: wgt::UnsafeExtensions,
-        inputs: AdapterInputs<Input<G, AdapterId>>,
-    ) -> Vec<AdapterId> {
+    pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
         let instance = &self.instance;
         let mut token = Token::root();
         let mut adapters = Vec::new();
@@ -297,7 +264,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref inst) = instance.vulkan {
                 if let Some(id_vulkan) = inputs.find(Backend::Vulkan) {
                     for raw in inst.enumerate_adapters() {
-                        let adapter = Adapter::new(raw, unsafe_extensions);
+                        let adapter = Adapter::new(raw);
                         log::info!("Adapter Vulkan {:?}", adapter.raw.info);
                         adapters.push(backend::Vulkan::hub(self).adapters.register_identity(
                             id_vulkan.clone(),
@@ -312,7 +279,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         {
             if let Some(id_metal) = inputs.find(Backend::Metal) {
                 for raw in instance.metal.enumerate_adapters() {
-                    let adapter = Adapter::new(raw, unsafe_extensions);
+                    let adapter = Adapter::new(raw);
                     log::info!("Adapter Metal {:?}", adapter.raw.info);
                     adapters.push(backend::Metal::hub(self).adapters.register_identity(
                         id_metal.clone(),
@@ -327,7 +294,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref inst) = instance.dx12 {
                 if let Some(id_dx12) = inputs.find(Backend::Dx12) {
                     for raw in inst.enumerate_adapters() {
-                        let adapter = Adapter::new(raw, unsafe_extensions);
+                        let adapter = Adapter::new(raw);
                         log::info!("Adapter Dx12 {:?}", adapter.raw.info);
                         adapters.push(backend::Dx12::hub(self).adapters.register_identity(
                             id_dx12.clone(),
@@ -340,7 +307,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             if let Some(id_dx11) = inputs.find(Backend::Dx11) {
                 for raw in instance.dx11.enumerate_adapters() {
-                    let adapter = Adapter::new(raw, unsafe_extensions);
+                    let adapter = Adapter::new(raw);
                     log::info!("Adapter Dx11 {:?}", adapter.raw.info);
                     adapters.push(backend::Dx11::hub(self).adapters.register_identity(
                         id_dx11.clone(),
@@ -357,7 +324,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn pick_adapter(
         &self,
         desc: &RequestAdapterOptions,
-        unsafe_extensions: wgt::UnsafeExtensions,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Option<AdapterId> {
         let instance = &self.instance;
@@ -496,7 +462,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         ))]
         {
             if selected < adapters_vk.len() {
-                let adapter = Adapter::new(adapters_vk.swap_remove(selected), unsafe_extensions);
+                let adapter = Adapter::new(adapters_vk.swap_remove(selected));
                 log::info!("Adapter Vulkan {:?}", adapter.raw.info);
                 let id = backend::Vulkan::hub(self).adapters.register_identity(
                     id_vulkan.unwrap(),
@@ -510,7 +476,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         {
             if selected < adapters_mtl.len() {
-                let adapter = Adapter::new(adapters_mtl.swap_remove(selected), unsafe_extensions);
+                let adapter = Adapter::new(adapters_mtl.swap_remove(selected));
                 log::info!("Adapter Metal {:?}", adapter.raw.info);
                 let id = backend::Metal::hub(self).adapters.register_identity(
                     id_metal.unwrap(),
@@ -524,7 +490,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(windows)]
         {
             if selected < adapters_dx12.len() {
-                let adapter = Adapter::new(adapters_dx12.swap_remove(selected), unsafe_extensions);
+                let adapter = Adapter::new(adapters_dx12.swap_remove(selected));
                 log::info!("Adapter Dx12 {:?}", adapter.raw.info);
                 let id = backend::Dx12::hub(self).adapters.register_identity(
                     id_dx12.unwrap(),
@@ -535,7 +501,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             selected -= adapters_dx12.len();
             if selected < adapters_dx11.len() {
-                let adapter = Adapter::new(adapters_dx11.swap_remove(selected), unsafe_extensions);
+                let adapter = Adapter::new(adapters_dx11.swap_remove(selected));
                 log::info!("Adapter Dx11 {:?}", adapter.raw.info);
                 let id = backend::Dx11::hub(self).adapters.register_identity(
                     id_dx11.unwrap(),
@@ -566,7 +532,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         let adapter = &adapter_guard[adapter_id];
 
-        adapter.extensions
+        let features = adapter.raw.physical_device.features();
+
+        wgt::Extensions {
+            anisotropic_filtering: features.contains(hal::Features::SAMPLER_ANISOTROPY),
+        }
     }
 
     pub fn adapter_limits<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Limits {
@@ -575,7 +545,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         let adapter = &adapter_guard[adapter_id];
 
-        adapter.limits.clone()
+        let limits = adapter.raw.physical_device.limits();
+
+        wgt::Limits {
+            max_bind_groups: (limits.max_bound_descriptor_sets as u32).min(MAX_BIND_GROUPS as u32),
+        }
     }
 
     pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {
@@ -626,47 +600,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
 
-            // Verify all extensions were exposed by the adapter
-            if !adapter.unsafe_extensions.allowed() {
-                assert!(
-                    !desc.extensions.intersects(wgt::Extensions::ALL_UNSAFE),
-                    "Cannot enable unsafe extensions without passing UnsafeExtensions::allow() when getting an adapter. Enabled unsafe extensions: {:?}",
-                    desc.extensions & wgt::Extensions::ALL_UNSAFE
-                )
-            }
-            assert!(
-                adapter.extensions.contains(desc.extensions),
-                "Cannot enable extensions that adapter doesn't support. Unsupported extensions: {:?}",
-                desc.extensions - adapter.extensions
-            );
-
             // Check features needed by extensions
-            if desc
-                .extensions
-                .contains(wgt::Extensions::ANISOTROPIC_FILTERING)
-            {
+            if desc.extensions.anisotropic_filtering {
                 assert!(
                     available_features.contains(hal::Features::SAMPLER_ANISOTROPY),
                     "Missing feature SAMPLER_ANISOTROPY for anisotropic filtering extension"
                 );
                 enabled_features |= hal::Features::SAMPLER_ANISOTROPY;
-            }
-            if desc
-                .extensions
-                .contains(wgt::Extensions::MAPPABLE_PRIMARY_BUFFERS)
-                && adapter.raw.info.device_type == hal::adapter::DeviceType::DiscreteGpu
-            {
-                log::warn!("Extension MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
-            }
-            if desc
-                .extensions
-                .contains(wgt::Extensions::TEXTURE_BINDING_ARRAY)
-            {
-                assert!(
-                    available_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
-                    "Missing feature TEXTURE_DESCRIPTOR_ARRAY for texture binding array extension"
-                );
-                enabled_features |= hal::Features::TEXTURE_DESCRIPTOR_ARRAY;
             }
 
             let family = adapter
@@ -698,16 +638,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let mem_props = phd.memory_properties();
-            if !desc.shader_validation {
-                log::warn!("Shader validation is disabled");
-            }
-            let private_features = PrivateFeatures {
-                shader_validation: desc.shader_validation,
-                texture_d24_s8: phd
-                    .format_properties(Some(hal::format::Format::D24UnormS8Uint))
-                    .optimal_tiling
-                    .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
-            };
+            let supports_texture_d24_s8 = phd
+                .format_properties(Some(hal::format::Format::D24UnormS8Uint))
+                .optimal_tiling
+                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT);
 
             Device::new(
                 gpu.device,
@@ -718,7 +652,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 gpu.queue_groups.swap_remove(0),
                 mem_props,
                 limits,
-                private_features,
+                supports_texture_d24_s8,
                 desc,
                 trace_path,
             )

@@ -36,7 +36,6 @@ pub mod power;
 pub mod resource;
 pub mod swap_chain;
 mod track;
-mod validation;
 
 pub use hal::pso::read_spirv;
 
@@ -172,8 +171,7 @@ pub struct U32Array {
 
 #[derive(Clone, Copy, Debug)]
 struct PrivateFeatures {
-    shader_validation: bool,
-    texture_d24_s8: bool,
+    pub supports_texture_d24_s8: bool,
 }
 
 #[macro_export]

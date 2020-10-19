@@ -27,7 +27,7 @@ bitflags = "1.0"
 copyless = "0.1"
 fxhash = "0.2"
 log = "0.4"
-hal = { package = "gfx-hal", version = "0.5.1" }
+hal = { package = "gfx-hal", version = "0.5" }
 gfx-backend-empty = "0.5"
 gfx-descriptor = "0.1"
 gfx-memory = "0.1"
@@ -51,16 +51,16 @@ version = "0.5"
 features = ["peek-poke"]
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
-gfx-backend-metal = { version = "0.5.3" }
-gfx-backend-vulkan = { version = "0.5.7", optional = true }
+gfx-backend-metal = { version = "0.5.6" }
+gfx-backend-vulkan = { version = "0.5.11", optional = true }
 
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-vulkan = { version = "0.5.7" }
+gfx-backend-vulkan = { version = "0.5.11" }
 
 [target.'cfg(windows)'.dependencies]
-gfx-backend-dx12 = { version = "0.5.5" }
+gfx-backend-dx12 = { version = "0.5" }
 gfx-backend-dx11 = { version = "0.5" }
-gfx-backend-vulkan = { version = "0.5.7" }
+gfx-backend-vulkan = { version = "0.5.11" }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "dragonfly", target_os = "freebsd"))'.dependencies]
 battery = { version = "0.7", optional = true }

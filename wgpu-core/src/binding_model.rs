@@ -17,24 +17,50 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Borrow;
 
-#[derive(Clone, Debug)]
-pub enum BindGroupLayoutError {
-    ConflictBinding(u32),
-    MissingExtension(wgt::Extensions),
-    /// Arrays of bindings can't be 0 elements long
-    ZeroCount,
-    /// Arrays of bindings unsupported for this type of binding
-    ArrayUnsupported,
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub enum BindingType {
+    UniformBuffer = 0,
+    StorageBuffer = 1,
+    ReadonlyStorageBuffer = 2,
+    Sampler = 3,
+    ComparisonSampler = 4,
+    SampledTexture = 5,
+    ReadonlyStorageTexture = 6,
+    WriteonlyStorageTexture = 7,
 }
 
-pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
+#[repr(C)]
+#[derive(Clone, Debug, Hash, PartialEq)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct BindGroupLayoutEntry {
+    pub binding: u32,
+    pub visibility: wgt::ShaderStage,
+    pub ty: BindingType,
+    pub multisampled: bool,
+    pub has_dynamic_offset: bool,
+    pub view_dimension: wgt::TextureViewDimension,
+    pub texture_component_type: wgt::TextureComponentType,
+    pub storage_texture_format: wgt::TextureFormat,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct BindGroupLayoutDescriptor {
+    pub label: *const std::os::raw::c_char,
+    pub entries: *const BindGroupLayoutEntry,
+    pub entries_length: usize,
+}
 
 #[derive(Debug)]
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) entries: BindEntryMap,
+    pub(crate) entries: FastHashMap<u32, BindGroupLayoutEntry>,
     pub(crate) desc_counts: DescriptorCounts,
     pub(crate) dynamic_count: usize,
 }
@@ -44,11 +70,6 @@ pub struct BindGroupLayout<B: hal::Backend> {
 pub struct PipelineLayoutDescriptor {
     pub bind_group_layouts: *const BindGroupLayoutId,
     pub bind_group_layouts_length: usize,
-}
-
-#[derive(Clone, Debug)]
-pub enum PipelineLayoutError {
-    TooManyGroups(usize),
 }
 
 #[derive(Debug)]
@@ -69,28 +90,32 @@ pub struct BufferBinding {
     pub size: wgt::BufferSize,
 }
 
-// Note: Duplicated in wgpu-rs as BindingResource
+#[repr(C)]
 #[derive(Debug)]
-pub enum BindingResource<'a> {
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub enum BindingResource {
     Buffer(BufferBinding),
     Sampler(SamplerId),
     TextureView(TextureViewId),
-    TextureViewArray(&'a [TextureViewId]),
 }
 
-// Note: Duplicated in wgpu-rs as Binding
+#[repr(C)]
 #[derive(Debug)]
-pub struct BindGroupEntry<'a> {
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct BindGroupEntry {
     pub binding: u32,
-    pub resource: BindingResource<'a>,
+    pub resource: BindingResource,
 }
 
-// Note: Duplicated in wgpu-rs as BindGroupDescriptor
+#[repr(C)]
 #[derive(Debug)]
-pub struct BindGroupDescriptor<'a> {
-    pub label: Option<&'a str>,
+pub struct BindGroupDescriptor {
+    pub label: *const std::os::raw::c_char,
     pub layout: BindGroupLayoutId,
-    pub bindings: &'a [BindGroupEntry<'a>],
+    pub entries: *const BindGroupEntry,
+    pub entries_length: usize,
 }
 
 #[derive(Debug)]

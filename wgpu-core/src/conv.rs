@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{resource, PrivateFeatures};
+use crate::{binding_model, resource, PrivateFeatures};
 
 pub fn map_buffer_usage(usage: wgt::BufferUsage) -> (hal::buffer::Usage, hal::memory::Properties) {
     use hal::buffer::Usage as U;
@@ -75,36 +75,40 @@ pub fn map_texture_usage(
     value
 }
 
-pub fn map_binding_type(binding: &wgt::BindGroupLayoutEntry) -> hal::pso::DescriptorType {
+pub fn map_binding_type(binding: &binding_model::BindGroupLayoutEntry) -> hal::pso::DescriptorType {
+    use crate::binding_model::BindingType as Bt;
     use hal::pso;
-    use wgt::BindingType as Bt;
     match binding.ty {
-        Bt::UniformBuffer { dynamic } => pso::DescriptorType::Buffer {
+        Bt::UniformBuffer => pso::DescriptorType::Buffer {
             ty: pso::BufferDescriptorType::Uniform,
             format: pso::BufferDescriptorFormat::Structured {
-                dynamic_offset: dynamic,
+                dynamic_offset: binding.has_dynamic_offset,
             },
         },
-        Bt::StorageBuffer { readonly, dynamic } => pso::DescriptorType::Buffer {
-            ty: pso::BufferDescriptorType::Storage {
-                read_only: readonly,
-            },
+        Bt::StorageBuffer => pso::DescriptorType::Buffer {
+            ty: pso::BufferDescriptorType::Storage { read_only: false },
             format: pso::BufferDescriptorFormat::Structured {
-                dynamic_offset: dynamic,
+                dynamic_offset: binding.has_dynamic_offset,
             },
         },
-        Bt::Sampler { .. } => pso::DescriptorType::Sampler,
-        Bt::SampledTexture { .. } => pso::DescriptorType::Image {
+        Bt::ReadonlyStorageBuffer => pso::DescriptorType::Buffer {
+            ty: pso::BufferDescriptorType::Storage { read_only: true },
+            format: pso::BufferDescriptorFormat::Structured {
+                dynamic_offset: binding.has_dynamic_offset,
+            },
+        },
+        Bt::Sampler | Bt::ComparisonSampler => pso::DescriptorType::Sampler,
+        Bt::SampledTexture => pso::DescriptorType::Image {
             ty: pso::ImageDescriptorType::Sampled {
                 with_sampler: false,
             },
         },
-        Bt::StorageTexture { readonly, .. } => pso::DescriptorType::Image {
-            ty: pso::ImageDescriptorType::Storage {
-                read_only: readonly,
-            },
+        Bt::ReadonlyStorageTexture => pso::DescriptorType::Image {
+            ty: pso::ImageDescriptorType::Storage { read_only: true },
         },
-        _ => unreachable!(),
+        Bt::WriteonlyStorageTexture => pso::DescriptorType::Image {
+            ty: pso::ImageDescriptorType::Storage { read_only: false },
+        },
     }
 }
 
@@ -367,14 +371,14 @@ pub(crate) fn map_texture_format(
         // Depth and stencil formats
         Tf::Depth32Float => H::D32Sfloat,
         Tf::Depth24Plus => {
-            if private_features.texture_d24_s8 {
+            if private_features.supports_texture_d24_s8 {
                 H::D24UnormS8Uint
             } else {
                 H::D32Sfloat
             }
         }
         Tf::Depth24PlusStencil8 => {
-            if private_features.texture_d24_s8 {
+            if private_features.supports_texture_d24_s8 {
                 H::D24UnormS8Uint
             } else {
                 H::D32SfloatS8Uint
@@ -526,9 +530,8 @@ pub(crate) fn map_texture_state(
         W::COPY_SRC => L::TransferSrcOptimal,
         W::COPY_DST => L::TransferDstOptimal,
         W::SAMPLED => L::ShaderReadOnlyOptimal,
-        W::ATTACHMENT_READ | W::ATTACHMENT_WRITE if is_color => L::ColorAttachmentOptimal,
-        W::ATTACHMENT_READ => L::DepthStencilReadOnlyOptimal,
-        W::ATTACHMENT_WRITE => L::DepthStencilAttachmentOptimal,
+        W::OUTPUT_ATTACHMENT if is_color => L::ColorAttachmentOptimal,
+        W::OUTPUT_ATTACHMENT => L::DepthStencilAttachmentOptimal, //TODO: read-only depth/stencil
         _ => L::General,
     };
 
@@ -542,14 +545,8 @@ pub(crate) fn map_texture_state(
     if usage.contains(W::SAMPLED) {
         access |= A::SHADER_READ;
     }
-    if usage.contains(W::ATTACHMENT_READ) {
-        access |= if is_color {
-            A::COLOR_ATTACHMENT_READ
-        } else {
-            A::DEPTH_STENCIL_ATTACHMENT_READ
-        };
-    }
-    if usage.contains(W::ATTACHMENT_WRITE) {
+    if usage.contains(W::OUTPUT_ATTACHMENT) {
+        //TODO: read-only attachments
         access |= if is_color {
             A::COLOR_ATTACHMENT_WRITE
         } else {

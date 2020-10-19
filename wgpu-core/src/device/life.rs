@@ -657,22 +657,19 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     _ => panic!("No pending mapping."),
                 };
                 log::debug!("Buffer {:?} map state -> Active", buffer_id);
-                let host = mapping.op.host;
-                let status = match super::map_buffer(raw, buffer, mapping.sub_range.clone(), host) {
-                    Ok(ptr) => {
-                        buffer.map_state = resource::BufferMapState::Active {
-                            ptr,
-                            sub_range: mapping.sub_range,
-                            host,
-                        };
-                        resource::BufferMapAsyncStatus::Success
-                    }
-                    Err(e) => {
-                        log::error!("Mapping failed {:?}", e);
-                        resource::BufferMapAsyncStatus::Error
-                    }
+                let host = match mapping.op {
+                    resource::BufferMapOperation::Read { .. } => super::HostMap::Read,
+                    resource::BufferMapOperation::Write { .. } => super::HostMap::Write,
                 };
-                pending_callbacks.push((mapping.op, status));
+                let result = super::map_buffer(raw, buffer, mapping.sub_range.clone(), host);
+                if let Ok(ptr) = result {
+                    buffer.map_state = resource::BufferMapState::Active {
+                        ptr,
+                        sub_range: mapping.sub_range,
+                        host,
+                    };
+                }
+                pending_callbacks.push((mapping.op, result));
             }
         }
         pending_callbacks

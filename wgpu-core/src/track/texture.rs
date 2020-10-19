@@ -342,7 +342,7 @@ mod test {
                 2..3,
                 Unit {
                     first: Some(TextureUse::COPY_SRC),
-                    last: TextureUse::ATTACHMENT_WRITE,
+                    last: TextureUse::OUTPUT_ATTACHMENT,
                 },
             ),
         ]);
@@ -385,7 +385,7 @@ mod test {
             ts1.mips[0].query(&(2..3), |&v| v),
             Some(Ok(Unit {
                 first: Some(TextureUse::SAMPLED),
-                last: TextureUse::ATTACHMENT_WRITE,
+                last: TextureUse::OUTPUT_ATTACHMENT,
             })),
             "wrong final layer 2 state"
         );
@@ -394,7 +394,7 @@ mod test {
         ts2.mips[0] = PlaneStates::from_slice(&[(
             2..3,
             Unit {
-                first: Some(TextureUse::ATTACHMENT_WRITE),
+                first: Some(TextureUse::OUTPUT_ATTACHMENT),
                 last: TextureUse::COPY_SRC,
             },
         )]);
