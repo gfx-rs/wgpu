@@ -626,7 +626,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut stage = device.create_buffer(
                 device_id,
                 &wgt::BufferDescriptor {
-                    #[allow(trivial_casts)]
                     label: b"<init_buffer>\0".as_ptr() as *const _,
                     size: desc.size,
                     usage: wgt::BufferUsage::MAP_WRITE | wgt::BufferUsage::COPY_SRC,
