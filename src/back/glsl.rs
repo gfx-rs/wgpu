@@ -1245,17 +1245,22 @@ fn write_expression<'a, 'b>(
             origin: crate::FunctionOrigin::External(ref name),
             ref arguments,
         } => match name.as_str() {
-            "cos" | "normalize" | "sin" => {
+            "cos" | "normalize" | "sin" | "length" | "abs" | "floor" | "inverse" => {
                 let expr = write_expression(&builder.expressions[arguments[0]], module, builder)?;
 
                 Cow::Owned(format!("{}({})", name, expr))
             }
-            "fclamp" => {
-                let val = write_expression(&builder.expressions[arguments[0]], module, builder)?;
-                let min = write_expression(&builder.expressions[arguments[1]], module, builder)?;
-                let max = write_expression(&builder.expressions[arguments[2]], module, builder)?;
+            "fclamp" | "clamp" | "mix" | "smoothstep" => {
+                let x = write_expression(&builder.expressions[arguments[0]], module, builder)?;
+                let y = write_expression(&builder.expressions[arguments[1]], module, builder)?;
+                let a = write_expression(&builder.expressions[arguments[2]], module, builder)?;
 
-                Cow::Owned(format!("clamp({}, {}, {})", val, min, max))
+                let name = match name.as_str() {
+                    "fclamp" => "clamp",
+                    name => name,
+                };
+
+                Cow::Owned(format!("{}({}, {}, {})", name, x, y, a))
             }
             "atan2" => {
                 let x = write_expression(&builder.expressions[arguments[0]], module, builder)?;
@@ -1263,23 +1268,11 @@ fn write_expression<'a, 'b>(
 
                 Cow::Owned(format!("atan({}, {})", y, x))
             }
-            "distance" => {
-                let p0 = write_expression(&builder.expressions[arguments[0]], module, builder)?;
-                let p1 = write_expression(&builder.expressions[arguments[1]], module, builder)?;
-
-                Cow::Owned(format!("distance({}, {})", p0, p1))
-            }
-            "length" => {
+            "distance" | "dot" | "min" | "max" | "reflect" | "pow" | "step" | "cross" => {
                 let x = write_expression(&builder.expressions[arguments[0]], module, builder)?;
+                let y = write_expression(&builder.expressions[arguments[1]], module, builder)?;
 
-                Cow::Owned(format!("length({})", x))
-            }
-            "mix" => {
-                let x = write_expression(&builder.expressions[arguments[0]], module, builder)?;
-                let y = write_expression(&builder.expressions[arguments[0]], module, builder)?;
-                let a = write_expression(&builder.expressions[arguments[0]], module, builder)?;
-
-                Cow::Owned(format!("mix({}, {}, {})", x, y, a))
+                Cow::Owned(format!("{}({}, {})", name, x, y))
             }
             other => {
                 return Err(Error::Custom(format!(

@@ -22,7 +22,7 @@ SPIR-V (binary) | :construction:     |       |
 WGSL            |                    |       |
 Metal           | :construction:     |       |
 HLSL            |                    |       |
-GLSL            |                    |       |
+GLSL            | :construction:     |       |
 AIR             |                    |       |
 DXIR            |                    |       |
 DXIL            |                    |       |
