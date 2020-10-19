@@ -15,6 +15,7 @@ use crate::{
 use hal::command::CommandBuffer as _;
 use wgt::{BufferAddress, BufferUsage, Extent3d, Origin3d, TextureDataLayout, TextureUsage};
 
+use std::convert::TryInto as _;
 use std::iter;
 
 pub(crate) const BITS_PER_BYTE: u32 = 8;
@@ -82,6 +83,179 @@ impl TextureCopyView {
     }
 }
 
+/// Function copied with minor modifications from webgpu standard https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
+pub(crate) fn validate_linear_texture_data(
+    layout: &TextureDataLayout,
+    buffer_size: BufferAddress,
+    bytes_per_texel: BufferAddress,
+    copy_size: &Extent3d,
+) {
+    // Convert all inputs to BufferAddress (u64) to prevent overflow issues
+    let copy_width = copy_size.width as BufferAddress;
+    let copy_height = copy_size.height as BufferAddress;
+    let copy_depth = copy_size.depth as BufferAddress;
+
+    let offset = layout.offset;
+    let rows_per_image = layout.rows_per_image as BufferAddress;
+    let bytes_per_row = layout.bytes_per_row as BufferAddress;
+
+    // TODO: Once compressed textures are supported, these needs to be fixed
+    let block_width: BufferAddress = 1;
+    let block_height: BufferAddress = 1;
+    let block_size = bytes_per_texel;
+
+    assert_eq!(
+        copy_width % block_width,
+        0,
+        "Copy width {} must be a multiple of texture block width {}",
+        copy_size.width,
+        block_width,
+    );
+    assert_eq!(
+        copy_height % block_height,
+        0,
+        "Copy height {} must be a multiple of texture block height {}",
+        copy_size.height,
+        block_height,
+    );
+    assert_eq!(
+        rows_per_image % block_height,
+        0,
+        "Rows per image {} must be a multiple of image format block height {}",
+        rows_per_image,
+        block_height,
+    );
+
+    let bytes_in_a_complete_row = block_size * copy_width / block_width;
+    let required_bytes_in_copy = if copy_width == 0 || copy_height == 0 || copy_depth == 0 {
+        0
+    } else {
+        let actual_rows_per_image = if rows_per_image == 0 {
+            copy_height
+        } else {
+            rows_per_image
+        };
+        let texel_block_rows_per_image = actual_rows_per_image / block_height;
+        let bytes_per_image = bytes_per_row * texel_block_rows_per_image;
+        let bytes_in_last_slice =
+            bytes_per_row * (copy_height / block_height - 1) + bytes_in_a_complete_row;
+        bytes_per_image * (copy_depth - 1) + bytes_in_last_slice
+    };
+
+    if rows_per_image != 0 {
+        assert!(
+            rows_per_image >= copy_height,
+            "Rows per image {} must be greater or equal to copy_extent.height {}",
+            rows_per_image,
+            copy_height
+        )
+    }
+    assert!(
+        offset + required_bytes_in_copy <= buffer_size,
+        "Texture copy using buffer indices {}..{} would overrun buffer of size {}",
+        offset,
+        offset + required_bytes_in_copy,
+        buffer_size
+    );
+    assert_eq!(
+        offset % block_size,
+        0,
+        "Buffer offset {} must be a multiple of image format block size {}",
+        offset,
+        block_size,
+    );
+    if copy_height > 1 {
+        assert!(
+            bytes_per_row >= bytes_in_a_complete_row,
+            "Bytes per row {} must be at least the size of {} {}-byte texel blocks ({})",
+            bytes_per_row,
+            copy_width / block_width,
+            block_size,
+            bytes_in_a_complete_row,
+        )
+    }
+    if copy_depth > 1 {
+        assert_ne!(
+            rows_per_image, 0,
+            "Rows per image {} must be set to a non zero value when copy depth > 1 ({})",
+            rows_per_image, copy_depth,
+        )
+    }
+}
+
+/// Function copied with minor modifications from webgpu standard https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
+pub(crate) fn validate_texture_copy_range(
+    texture_copy_view: &TextureCopyView,
+    texture_dimension: hal::image::Kind,
+    copy_size: &Extent3d,
+) {
+    // TODO: Once compressed textures are supported, these needs to be fixed
+    let block_width: u32 = 1;
+    let block_height: u32 = 1;
+
+    let mut extent = texture_dimension.level_extent(
+        texture_copy_view
+            .mip_level
+            .try_into()
+            .expect("Mip level must be < 256"),
+    );
+    match texture_dimension {
+        hal::image::Kind::D1(..) => {
+            assert_eq!(
+                (copy_size.height, copy_size.depth),
+                (1, 1),
+                "Copies with 1D textures must have height and depth of 1. Currently: ({}, {})",
+                copy_size.height,
+                copy_size.depth,
+            );
+        }
+        hal::image::Kind::D2(_, _, array_layers, _) => {
+            extent.depth = array_layers as u32;
+        }
+        hal::image::Kind::D3(..) => {}
+    };
+
+    let x_copy_max = texture_copy_view.origin.x + copy_size.width;
+    assert!(
+        x_copy_max <= extent.width,
+        "Texture copy with X range {}..{} overruns texture width {}",
+        texture_copy_view.origin.x,
+        x_copy_max,
+        extent.width,
+    );
+    let y_copy_max = texture_copy_view.origin.y + copy_size.height;
+    assert!(
+        y_copy_max <= extent.height,
+        "Texture copy with Y range {}..{} overruns texture height {}",
+        texture_copy_view.origin.y,
+        y_copy_max,
+        extent.height,
+    );
+    let z_copy_max = texture_copy_view.origin.z + copy_size.depth;
+    assert!(
+        z_copy_max <= extent.depth,
+        "Texture copy with Z range {}..{} overruns texture depth {}",
+        texture_copy_view.origin.z,
+        z_copy_max,
+        extent.depth,
+    );
+
+    assert_eq!(
+        copy_size.width % block_width,
+        0,
+        "Copy width {} must be a multiple of texture block width {}",
+        copy_size.width,
+        block_width,
+    );
+    assert_eq!(
+        copy_size.height % block_height,
+        0,
+        "Copy height {} must be a multiple of texture block height {}",
+        copy_size.height,
+        block_height,
+    );
+}
+
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_copy_buffer_to_buffer<B: GfxBackend>(
         &self,
@@ -114,6 +288,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => (),
         }
 
+        if size == 0 {
+            log::trace!("Ignoring copy_buffer_to_buffer of size 0");
+            return;
+        }
+
         let (src_buffer, src_pending) =
             cmb.trackers
                 .buffers
@@ -135,6 +314,47 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dst_buffer.usage
         );
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_buffer)));
+
+        assert_eq!(
+            size % wgt::COPY_BUFFER_ALIGNMENT,
+            0,
+            "Buffer copy size {} must be a multiple of {}",
+            size,
+            wgt::COPY_BUFFER_ALIGNMENT,
+        );
+        assert_eq!(
+            source_offset % wgt::COPY_BUFFER_ALIGNMENT,
+            0,
+            "Buffer source offset {} must be a multiple of {}",
+            source_offset,
+            wgt::COPY_BUFFER_ALIGNMENT,
+        );
+        assert_eq!(
+            destination_offset % wgt::COPY_BUFFER_ALIGNMENT,
+            0,
+            "Buffer destination offset {} must be a multiple of {}",
+            destination_offset,
+            wgt::COPY_BUFFER_ALIGNMENT,
+        );
+
+        let source_start_offset = source_offset;
+        let source_end_offset = source_offset + size;
+        let destination_start_offset = destination_offset;
+        let destination_end_offset = destination_offset + size;
+        assert!(
+            source_end_offset <= src_buffer.size,
+            "Buffer to buffer copy with indices {}..{} overruns source buffer of size {}",
+            source_start_offset,
+            source_end_offset,
+            src_buffer.size
+        );
+        assert!(
+            destination_end_offset <= dst_buffer.size,
+            "Buffer to buffer copy with indices {}..{} overruns destination buffer of size {}",
+            destination_start_offset,
+            destination_end_offset,
+            dst_buffer.size
+        );
 
         let region = hal::command::BufferCopy {
             src: source_offset,
@@ -177,6 +397,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => (),
         }
 
+        if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
+            log::trace!("Ignoring copy_buffer_to_texture of size 0");
+            return;
+        }
+
         let (src_buffer, src_pending) = cmb.trackers.buffers.use_replace(
             &*buffer_guard,
             source.buffer,
@@ -207,6 +432,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             source.layout.bytes_per_row,
             wgt::COPY_BYTES_PER_ROW_ALIGNMENT
         );
+        validate_texture_copy_range(destination, dst_texture.kind, copy_size);
+        validate_linear_texture_data(
+            &source.layout,
+            src_buffer.size,
+            bytes_per_texel as BufferAddress,
+            copy_size,
+        );
+
         let buffer_width = source.layout.bytes_per_row / bytes_per_texel;
         let region = hal::command::BufferImageCopy {
             buffer_offset: source.layout.offset,
@@ -257,6 +490,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => (),
         }
 
+        if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
+            log::trace!("Ignoring copy_texture_to_buffer of size 0");
+            return;
+        }
+
         let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
             &*texture_guard,
             source.texture,
@@ -295,6 +533,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             destination.layout.bytes_per_row,
             wgt::COPY_BYTES_PER_ROW_ALIGNMENT
         );
+        validate_texture_copy_range(source, src_texture.kind, copy_size);
+        validate_linear_texture_data(
+            &destination.layout,
+            dst_buffer.size,
+            bytes_per_texel as BufferAddress,
+            copy_size,
+        );
+
         let buffer_width = destination.layout.bytes_per_row / bytes_per_texel;
         let region = hal::command::BufferImageCopy {
             buffer_offset: destination.layout.offset,
@@ -351,6 +597,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => (),
         }
 
+        if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
+            log::trace!("Ignoring copy_texture_to_texture of size 0");
+            return;
+        }
+
         let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
             &*texture_guard,
             source.texture,
@@ -378,6 +629,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
 
         assert_eq!(src_texture.dimension, dst_texture.dimension);
+        validate_texture_copy_range(source, src_texture.kind, copy_size);
+        validate_texture_copy_range(destination, dst_texture.kind, copy_size);
+
         let region = hal::command::ImageCopy {
             src_subresource: src_layers,
             src_offset,

@@ -5,6 +5,7 @@
 use crate::{
     device::RenderPassContext,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
+    validation::StageError,
     LifeGuard, RawString, RefCount, Stored, U32Array,
 };
 use std::borrow::Borrow;
@@ -57,6 +58,11 @@ pub struct ComputePipelineDescriptor {
     pub compute_stage: ProgrammableStageDescriptor,
 }
 
+#[derive(Clone, Debug)]
+pub enum ComputePipelineError {
+    Stage(StageError),
+}
+
 #[derive(Debug)]
 pub struct ComputePipeline<B: hal::Backend> {
     pub(crate) raw: B::ComputePipeline,
@@ -88,11 +94,28 @@ pub struct RenderPipelineDescriptor {
     pub alpha_to_coverage_enabled: bool,
 }
 
+#[derive(Clone, Debug)]
+pub enum RenderPipelineError {
+    InvalidVertexAttributeOffset {
+        location: wgt::ShaderLocation,
+        offset: BufferAddress,
+    },
+    Stage {
+        flag: wgt::ShaderStage,
+        error: StageError,
+    },
+    IncompatibleOutputFormat {
+        index: u8,
+    },
+    InvalidSampleCount(u32),
+}
+
 bitflags::bitflags! {
     #[repr(transparent)]
     pub struct PipelineFlags: u32 {
         const BLEND_COLOR = 1;
         const STENCIL_REFERENCE = 2;
+        const DEPTH_STENCIL_READ_ONLY = 4;
     }
 }
 

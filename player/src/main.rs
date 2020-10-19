@@ -254,16 +254,15 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 }
             }
             A::CreateBindGroupLayout { id, label, entries } => {
-                let label = Label::new(&label);
                 self.device_create_bind_group_layout::<B>(
                     device,
-                    &wgc::binding_model::BindGroupLayoutDescriptor {
-                        label: label.as_ptr(),
-                        entries: entries.as_ptr(),
-                        entries_length: entries.len(),
+                    &wgt::BindGroupLayoutDescriptor {
+                        label: Some(&label),
+                        bindings: &entries,
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyBindGroupLayout(id) => {
                 self.bind_group_layout_destroy::<B>(id);
@@ -280,7 +279,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         bind_group_layouts_length: bind_group_layouts.len(),
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyPipelineLayout(id) => {
                 self.pipeline_layout_destroy::<B>(id);
@@ -292,12 +292,11 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 entries,
             } => {
                 use wgc::binding_model as bm;
-                let label = Label::new(&label);
                 let entry_vec = entries
-                    .into_iter()
+                    .iter()
                     .map(|(binding, res)| wgc::binding_model::BindGroupEntry {
-                        binding,
-                        resource: match res {
+                        binding: *binding,
+                        resource: match *res {
                             trace::BindingResource::Buffer { id, offset, size } => {
                                 bm::BindingResource::Buffer(bm::BufferBinding {
                                     buffer: id,
@@ -309,6 +308,9 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                             trace::BindingResource::TextureView(id) => {
                                 bm::BindingResource::TextureView(id)
                             }
+                            trace::BindingResource::TextureViewArray(ref id_array) => {
+                                bm::BindingResource::TextureViewArray(id_array)
+                            }
                         },
                     })
                     .collect::<Vec<_>>();
@@ -316,10 +318,9 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.device_create_bind_group::<B>(
                     device,
                     &wgc::binding_model::BindGroupDescriptor {
-                        label: label.as_ptr(),
+                        label: Some(&label),
                         layout: layout_id,
-                        entries: entry_vec.as_ptr(),
-                        entries_length: entry_vec.len(),
+                        bindings: &entry_vec,
                     },
                     id,
                 );
@@ -353,7 +354,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         compute_stage: cs_stage.desc,
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyComputePipeline(id) => {
                 self.compute_pipeline_destroy::<B>(id);
@@ -400,7 +402,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyRenderPipeline(id) => {
                 self.render_pipeline_destroy::<B>(id);
@@ -497,6 +500,7 @@ fn main() {
                         #[cfg(not(feature = "winit"))]
                         compatible_surface: None,
                     },
+                    unsafe { wgt::UnsafeExtensions::allow() },
                     wgc::instance::AdapterInputs::IdSet(
                         &[wgc::id::TypedId::zip(0, 0, backend)],
                         |id| id.backend(),
