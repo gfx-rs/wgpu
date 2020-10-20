@@ -183,13 +183,19 @@ impl<T, I: TypedId> Storage<T, I> {
         }
     }
 
-    //Prevents panic on out of range access.
+    // Prevents panic on out of range access, allows Vacant elements.
     pub(crate) fn try_remove(&mut self, id: I) -> Option<T> {
-        let (index, epoch, backend) = id.unzip();
+        let (index, epoch, _) = id.unzip();
         if index as usize >= self.map.len() {
-            return None;
+            None
+        } else if let Element::Occupied(value, storage_epoch) =
+            std::mem::replace(&mut self.map[index as usize], Element::Vacant)
+        {
+            assert_eq!(epoch, storage_epoch);
+            Some(value)
+        } else {
+            None
         }
-        self.remove(I::zip(index, epoch, backend))
     }
 
     pub(crate) fn iter(&self, backend: Backend) -> impl Iterator<Item = (I, &T)> {
