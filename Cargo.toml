@@ -16,7 +16,7 @@ log = "0.4"
 num-traits = "0.2"
 spirv = { package = "spirv_headers", version = "1.4.2", optional = true }
 pomelo = { version = "0.1.4", optional = true }
-thiserror = "1.0"
+thiserror = "1.0.21"
 serde = { version = "1.0", features = ["derive"], optional = true }
 petgraph = { version ="0.5", optional = true }
 
