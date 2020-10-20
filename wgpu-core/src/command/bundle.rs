@@ -38,7 +38,7 @@
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
-    command::{BasePass, DrawError, RenderCommand, RenderCommandError},
+    command::{BasePass, DrawError, RenderCommand, RenderCommandError, StateChange},
     conv,
     device::{
         AttachmentData, DeviceError, RenderPassContext, MAX_VERTEX_BUFFERS, SHADER_STAGE_COUNT,
@@ -515,6 +515,7 @@ struct State {
     raw_dynamic_offsets: Vec<wgt::DynamicOffset>,
     flat_dynamic_offsets: Vec<wgt::DynamicOffset>,
     used_bind_groups: usize,
+    pipeline: StateChange<id::RenderPipelineId>,
 }
 
 impl State {
@@ -698,6 +699,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 raw_dynamic_offsets: Vec::new(),
                 flat_dynamic_offsets: Vec::new(),
                 used_bind_groups: 0,
+                pipeline: StateChange::new(),
             };
             let mut commands = Vec::new();
             let mut base = bundle_encoder.base.as_ref();
@@ -746,6 +748,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         state.trackers.merge_extend(&bind_group.used)?;
                     }
                     RenderCommand::SetPipeline(pipeline_id) => {
+                        if state.pipeline.set_and_check_redundant(pipeline_id) {
+                            continue;
+                        }
+
                         let pipeline = state
                             .trackers
                             .render_pipes
