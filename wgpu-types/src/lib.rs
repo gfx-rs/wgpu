@@ -1854,6 +1854,7 @@ pub struct BindGroupLayoutEntry {
 }
 
 /// View of a buffer which can be used to copy to/from a texture.
+#[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
@@ -1865,6 +1866,7 @@ pub struct BufferCopyView<B> {
 }
 
 /// View of a texture which can be used to copy to/from a buffer/texture.
+#[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
