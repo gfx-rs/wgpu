@@ -2581,11 +2581,19 @@ impl<'a> RenderBundleEncoder<'a> {
 
 impl Queue {
     /// Schedule a data write into `buffer` starting at `offset`.
+    ///
+    /// This method is intended to have low performance costs.
+    /// As such, the write is not immediately submitted, and instead enqueued
+    /// internally to happen at the start of the next `submit()` call.
     pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) {
         Context::queue_write_buffer(&*self.context, &self.id, &buffer.id, offset, data)
     }
 
     /// Schedule a data write into `texture`.
+    ///
+    /// This method is intended to have low performance costs.
+    /// As such, the write is not immediately submitted, and instead enqueued
+    /// internally to happen at the start of the next `submit()` call.
     pub fn write_texture(
         &self,
         texture: TextureCopyView,
