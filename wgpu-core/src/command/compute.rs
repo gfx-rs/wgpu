@@ -6,7 +6,7 @@ use crate::{
     binding_model::{BindError, BindGroup, PushConstantUploadError},
     command::{
         bind::{Binder, LayoutChange},
-        BasePass, BasePassRef, CommandBuffer, CommandEncoderError,
+        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, StateChange,
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
@@ -137,16 +137,10 @@ pub enum ComputePassError {
     PushConstants(#[from] PushConstantUploadError),
 }
 
-#[derive(Debug, PartialEq)]
-enum PipelineState {
-    Required,
-    Set,
-}
-
 #[derive(Debug)]
 struct State {
     binder: Binder,
-    pipeline: PipelineState,
+    pipeline: StateChange<id::ComputePipelineId>,
     trackers: TrackerSet,
     debug_scope_depth: u32,
 }
@@ -161,7 +155,7 @@ impl State {
                 index: bind_mask.trailing_zeros(),
             });
         }
-        if self.pipeline == PipelineState::Required {
+        if self.pipeline.is_unset() {
             return Err(DispatchError::MissingPipeline);
         }
         Ok(())
@@ -235,7 +229,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let mut state = State {
             binder: Binder::new(cmd_buf.limits.max_bind_groups),
-            pipeline: PipelineState::Required,
+            pipeline: StateChange::new(),
             trackers: TrackerSet::new(B::VARIANT),
             debug_scope_depth: 0,
         };
@@ -293,7 +287,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::SetPipeline(pipeline_id) => {
-                    state.pipeline = PipelineState::Set;
+                    if state.pipeline.set_and_check_redundant(pipeline_id) {
+                        continue;
+                    }
+
                     let pipeline = cmd_buf
                         .trackers
                         .compute_pipes

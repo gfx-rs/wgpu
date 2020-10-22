@@ -7,7 +7,7 @@ use crate::{
     command::{
         bind::{Binder, LayoutChange},
         BasePass, BasePassRef, CommandBuffer, CommandEncoderError, DrawError, ExecutionError,
-        RenderCommand, RenderCommandError,
+        RenderCommand, RenderCommandError, StateChange,
     },
     conv,
     device::{
@@ -273,7 +273,7 @@ struct State {
     binder: Binder,
     blend_color: OptionalState,
     stencil_reference: u32,
-    pipeline: OptionalState,
+    pipeline: StateChange<id::RenderPipelineId>,
     index: IndexState,
     vertex: VertexState,
     debug_scope_depth: u32,
@@ -289,7 +289,7 @@ impl State {
                 index: bind_mask.trailing_zeros(),
             });
         }
-        if self.pipeline == OptionalState::Required {
+        if self.pipeline.is_unset() {
             return Err(DrawError::MissingPipeline);
         }
         if self.blend_color == OptionalState::Required {
@@ -301,7 +301,7 @@ impl State {
     /// Reset the `RenderBundle`-related states.
     fn reset_bundle(&mut self) {
         self.binder.reset();
-        self.pipeline = OptionalState::Required;
+        self.pipeline.reset();
         self.index.reset();
         self.vertex.reset();
     }
@@ -945,7 +945,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             binder: Binder::new(cmd_buf.limits.max_bind_groups),
             blend_color: OptionalState::Unused,
             stencil_reference: 0,
-            pipeline: OptionalState::Required,
+            pipeline: StateChange::new(),
             index: IndexState::default(),
             vertex: VertexState::default(),
             debug_scope_depth: 0,
@@ -1008,6 +1008,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
+                    if state.pipeline.set_and_check_redundant(pipeline_id) {
+                        continue;
+                    }
+
                     let pipeline = trackers
                         .render_pipes
                         .use_extend(&*pipeline_guard, pipeline_id, (), ())
@@ -1017,7 +1021,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .check_compatible(&pipeline.pass_context)
                         .map_err(RenderCommandError::IncompatiblePipeline)?;
 
-                    state.pipeline = OptionalState::Set;
                     state.pipeline_flags = pipeline.flags;
 
                     if pipeline.flags.contains(PipelineFlags::WRITES_DEPTH_STENCIL)

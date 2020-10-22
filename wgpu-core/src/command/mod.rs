@@ -270,3 +270,25 @@ where
         count_words += size_to_write_words;
     }
 }
+
+#[derive(Debug)]
+struct StateChange<T> {
+    last_state: Option<T>,
+}
+
+impl<T: Copy + PartialEq> StateChange<T> {
+    fn new() -> Self {
+        Self { last_state: None }
+    }
+    fn set_and_check_redundant(&mut self, new_state: T) -> bool {
+        let already_set = self.last_state == Some(new_state);
+        self.last_state = Some(new_state);
+        already_set
+    }
+    fn is_unset(&self) -> bool {
+        self.last_state.is_none()
+    }
+    fn reset(&mut self) {
+        self.last_state = None;
+    }
+}
