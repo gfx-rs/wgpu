@@ -317,6 +317,15 @@ pub enum CreateTextureViewError {
     InvalidTexture,
     #[error("not enough memory left")]
     OutOfMemory,
+    #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{image:?}`")]
+    InvalidTextureViewDimension {
+        view: wgt::TextureViewDimension,
+        image: wgt::TextureDimension,
+    },
+    #[error("Invalid texture depth `{depth}` for texture view of dimension `Cubemap`. Cubemap views must use images of size 6.")]
+    InvalidCubemapTextureDepth { depth: u16 },
+    #[error("Invalid texture depth `{depth}` for texture view of dimension `CubemapArray`. Cubemap views must use images with sizes which are a multiple of 6.")]
+    InvalidCubemapArrayTextureDepth { depth: u16 },
     #[error(
         "TextureView mip level count + base mip level {requested} must be <= Texture mip level count {total}"
     )]

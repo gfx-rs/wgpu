@@ -434,6 +434,17 @@ pub enum TextureViewDimension {
     D3,
 }
 
+impl TextureViewDimension {
+    /// Get the texture dimension required fo this texture view dimension.
+    pub fn compatible_texture_dimension(self) -> TextureDimension {
+        match self {
+            Self::D1 => TextureDimension::D1,
+            Self::D2 | Self::D2Array | Self::Cube | Self::CubeArray => TextureDimension::D2,
+            Self::D3 => TextureDimension::D3,
+        }
+    }
+}
+
 /// Alpha blend factor.
 ///
 /// Alpha blending is very complicated: see the OpenGL or Vulkan spec for more information.

@@ -27,7 +27,9 @@ use hal::{
 };
 use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
-use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat};
+use wgt::{
+    BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat, TextureViewDimension,
+};
 
 use std::{
     borrow::Cow,
@@ -1477,16 +1479,50 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
         let device = &device_guard[texture.device_id.value];
 
-        let view_kind = match desc.dimension {
-            Some(dim) => conv::map_texture_view_dimension(dim),
-            None => match texture.kind {
-                hal::image::Kind::D1(_, 1) => hal::image::ViewKind::D1,
-                hal::image::Kind::D1(..) => hal::image::ViewKind::D1Array,
-                hal::image::Kind::D2(_, _, 1, _) => hal::image::ViewKind::D2,
-                hal::image::Kind::D2(..) => hal::image::ViewKind::D2Array,
-                hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
-            },
-        };
+        let view_kind =
+            match desc.dimension {
+                Some(dim) => {
+                    use hal::image::Kind;
+
+                    let required_tex_dim = dim.compatible_texture_dimension();
+
+                    if required_tex_dim != texture.dimension {
+                        return Err(
+                            resource::CreateTextureViewError::InvalidTextureViewDimension {
+                                view: dim,
+                                image: texture.dimension,
+                            },
+                        );
+                    }
+
+                    if let Kind::D2(_, _, depth, _) = texture.kind {
+                        match dim {
+                            TextureViewDimension::Cube if depth != 6 => {
+                                return Err(
+                                    resource::CreateTextureViewError::InvalidCubemapTextureDepth {
+                                        depth,
+                                    },
+                                )
+                            }
+                            TextureViewDimension::CubeArray if depth % 6 != 0 => return Err(
+                                resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {
+                                    depth,
+                                },
+                            ),
+                            _ => {}
+                        }
+                    }
+
+                    conv::map_texture_view_dimension(dim)
+                }
+                None => match texture.kind {
+                    hal::image::Kind::D1(_, 1) => hal::image::ViewKind::D1,
+                    hal::image::Kind::D1(..) => hal::image::ViewKind::D1Array,
+                    hal::image::Kind::D2(_, _, 1, _) => hal::image::ViewKind::D2,
+                    hal::image::Kind::D2(..) => hal::image::ViewKind::D2Array,
+                    hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
+                },
+            };
         let required_level_count =
             desc.base_mip_level + desc.level_count.map_or(1, |count| count.get());
         let required_layer_count =
