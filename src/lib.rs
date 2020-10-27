@@ -498,9 +498,9 @@ pub enum BinaryOperator {
     InclusiveOr,
     LogicalAnd,
     LogicalOr,
-    ShiftLeftLogical,
-    ShiftRightLogical,
-    ShiftRightArithmetic,
+    ShiftLeft,
+    /// Right shift carries the sign of signed integers only.
+    ShiftRight,
 }
 
 /// Built-in shader function.

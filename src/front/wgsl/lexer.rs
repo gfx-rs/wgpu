@@ -69,12 +69,7 @@ fn consume_token(mut input: &str) -> (Token<'_>, &str) {
             if next == Some('=') {
                 (Token::LogicalOperation(cur), chars.as_str())
             } else if next == Some(cur) {
-                input = chars.as_str();
-                if chars.next() == Some(cur) {
-                    (Token::ArithmeticShiftOperation(cur), chars.as_str())
-                } else {
-                    (Token::ShiftOperation(cur), input)
-                }
+                (Token::ShiftOperation(cur), chars.as_str())
             } else {
                 (Token::Paren(cur), input)
             }

@@ -26,7 +26,6 @@ pub enum Token<'a> {
     Operation(char),
     LogicalOperation(char),
     ShiftOperation(char),
-    ArithmeticShiftOperation(char),
     Arrow,
     Unknown(char),
     UnterminatedString,
@@ -790,13 +789,10 @@ impl Parser {
                             lexer,
                             |token| match token {
                                 Token::ShiftOperation('<') => {
-                                    Some(crate::BinaryOperator::ShiftLeftLogical)
+                                    Some(crate::BinaryOperator::ShiftLeft)
                                 }
                                 Token::ShiftOperation('>') => {
-                                    Some(crate::BinaryOperator::ShiftRightLogical)
-                                }
-                                Token::ArithmeticShiftOperation('>') => {
-                                    Some(crate::BinaryOperator::ShiftRightArithmetic)
+                                    Some(crate::BinaryOperator::ShiftRight)
                                 }
                                 _ => None,
                             },

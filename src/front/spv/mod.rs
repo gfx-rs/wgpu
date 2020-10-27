@@ -852,6 +852,38 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
+                // Bitwise instructions
+                Op::Not => {
+                    inst.expect(4)?;
+                    self.parse_expr_unary_op(expressions, crate::UnaryOperator::Not)?;
+                }
+                Op::BitwiseOr => {
+                    inst.expect(5)?;
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::InclusiveOr)?;
+                }
+                Op::BitwiseXor => {
+                    inst.expect(5)?;
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::ExclusiveOr)?;
+                }
+                Op::BitwiseAnd => {
+                    inst.expect(5)?;
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::And)?;
+                }
+                Op::ShiftRightLogical => {
+                    inst.expect(5)?;
+                    //TODO: convert input and result to usigned
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::ShiftRight)?;
+                }
+                Op::ShiftRightArithmetic => {
+                    inst.expect(5)?;
+                    //TODO: convert input and result to signed
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::ShiftRight)?;
+                }
+                Op::ShiftLeftLogical => {
+                    inst.expect(5)?;
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::ShiftLeft)?;
+                }
+                // Sampling
                 Op::SampledImage => {
                     inst.expect(5)?;
                     let _result_type_id = self.next()?;

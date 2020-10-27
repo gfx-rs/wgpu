@@ -232,11 +232,8 @@ impl Typifier {
                 crate::BinaryOperator::And
                 | crate::BinaryOperator::ExclusiveOr
                 | crate::BinaryOperator::InclusiveOr
-                | crate::BinaryOperator::ShiftLeftLogical
-                | crate::BinaryOperator::ShiftRightLogical
-                | crate::BinaryOperator::ShiftRightArithmetic => {
-                    self.resolutions[left.index()].clone()
-                }
+                | crate::BinaryOperator::ShiftLeft
+                | crate::BinaryOperator::ShiftRight => self.resolutions[left.index()].clone(),
             },
             crate::Expression::Intrinsic { .. } => unimplemented!(),
             crate::Expression::Transpose(expr) => match *self.get(expr, types) {

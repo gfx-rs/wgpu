@@ -1126,9 +1126,8 @@ fn write_expression<'a, 'b>(
                 BinaryOperator::InclusiveOr => "|",
                 BinaryOperator::LogicalAnd => "&&",
                 BinaryOperator::LogicalOr => "||",
-                BinaryOperator::ShiftLeftLogical => "<<",
-                BinaryOperator::ShiftRightLogical => todo!(),
-                BinaryOperator::ShiftRightArithmetic => ">>",
+                BinaryOperator::ShiftLeft => "<<",
+                BinaryOperator::ShiftRight => ">>",
             };
 
             Cow::Owned(format!("({} {} {})", left_expr, op_str, right_expr))

@@ -328,11 +328,10 @@ pomelo! {
     }
     shift_expression ::= additive_expression;
     shift_expression ::= shift_expression(left) LeftOp additive_expression(right) {
-        extra.binary_expr(BinaryOperator::ShiftLeftLogical, left, right)
+        extra.binary_expr(BinaryOperator::ShiftLeft, left, right)
     }
     shift_expression ::= shift_expression(left) RightOp additive_expression(right) {
-        //TODO: when to use ShiftRightArithmetic
-        extra.binary_expr(BinaryOperator::ShiftRightLogical, left, right)
+        extra.binary_expr(BinaryOperator::ShiftRight, left, right)
     }
     relational_expression ::= shift_expression;
     relational_expression ::= relational_expression(left) LeftAngle shift_expression(right) {
@@ -422,10 +421,10 @@ pomelo! {
         BinaryOperator::Subtract
     }
     assignment_operator ::= LeftAssign {
-        BinaryOperator::ShiftLeftLogical
+        BinaryOperator::ShiftLeft
     }
     assignment_operator ::= RightAssign {
-        BinaryOperator::ShiftRightLogical
+        BinaryOperator::ShiftRight
     }
     assignment_operator ::= AndAssign {
         BinaryOperator::And
