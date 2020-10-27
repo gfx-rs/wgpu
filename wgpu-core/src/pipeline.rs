@@ -13,7 +13,8 @@ use std::borrow::{Borrow, Cow};
 use thiserror::Error;
 use wgt::{BufferAddress, IndexFormat, InputStepMode};
 
-#[repr(C)]
+// Unable to serialize with `naga::Module` in here:
+// requires naga serialization feature.
 #[derive(Debug)]
 pub enum ShaderModuleSource<'a> {
     SpirV(Cow<'a, [u32]>),
