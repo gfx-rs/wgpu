@@ -43,21 +43,6 @@ pub fn map_vector_size(word: spirv::Word) -> Result<crate::VectorSize, Error> {
     }
 }
 
-pub fn map_storage_class(word: spirv::Word) -> Result<crate::StorageClass, Error> {
-    use spirv::StorageClass as Sc;
-    match Sc::from_u32(word) {
-        Some(Sc::UniformConstant) => Ok(crate::StorageClass::Constant),
-        Some(Sc::Function) => Ok(crate::StorageClass::Function),
-        Some(Sc::Input) => Ok(crate::StorageClass::Input),
-        Some(Sc::Output) => Ok(crate::StorageClass::Output),
-        Some(Sc::Private) => Ok(crate::StorageClass::Private),
-        Some(Sc::StorageBuffer) => Ok(crate::StorageClass::StorageBuffer),
-        Some(Sc::Uniform) => Ok(crate::StorageClass::Uniform),
-        Some(Sc::Workgroup) => Ok(crate::StorageClass::WorkGroup),
-        _ => Err(Error::UnsupportedStorageClass(word)),
-    }
-}
-
 pub fn map_image_dim(word: spirv::Word) -> Result<crate::ImageDimension, Error> {
     use spirv::Dim as D;
     match D::from_u32(word) {

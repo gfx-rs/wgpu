@@ -21,8 +21,11 @@ pub enum GlobalVariableError {
     InvalidType,
     #[error("Interpolation is not valid")]
     InvalidInterpolation,
-    #[error("Storage access flags are invalid")]
-    InvalidStorageAccess,
+    #[error("Storage access {seen:?} exceed the allowed {allowed:?}")]
+    InvalidStorageAccess {
+        allowed: crate::StorageAccess,
+        seen: crate::StorageAccess,
+    },
     #[error("Binding decoration is missing or not applicable")]
     InvalidBinding,
     #[error("Binding is out of range")]
@@ -63,8 +66,12 @@ pub enum ValidationError {
     InvalidTypeWidth(crate::ScalarKind, crate::Bytes),
     #[error("The type handle {0:?} can not be resolved")]
     UnresolvedType(Handle<crate::Type>),
-    #[error("Global variable {0:?} is invalid: {1:?}")]
-    GlobalVariable(Handle<crate::GlobalVariable>, GlobalVariableError),
+    #[error("Global variable {handle:?} '{name}' is invalid: {error:?}")]
+    GlobalVariable {
+        handle: Handle<crate::GlobalVariable>,
+        name: String,
+        error: GlobalVariableError,
+    },
     #[error("Function {0:?} is invalid: {1:?}")]
     Function(Handle<crate::Function>, FunctionError),
     #[error("Entry point {name} at {stage:?} is invalid: {error:?}")]
@@ -73,6 +80,41 @@ pub enum ValidationError {
         name: String,
         error: EntryPointError,
     },
+}
+
+impl crate::GlobalVariable {
+    fn forbid_interpolation(&self) -> Result<(), GlobalVariableError> {
+        match self.interpolation {
+            Some(_) => Err(GlobalVariableError::InvalidInterpolation),
+            None => Ok(()),
+        }
+    }
+
+    fn check_resource(&self) -> Result<(), GlobalVariableError> {
+        match self.binding {
+            Some(crate::Binding::BuiltIn(_)) => {} // validated per entry point
+            Some(crate::Binding::Resource { group, binding }) => {
+                if group > MAX_BIND_GROUPS || binding > MAX_BIND_INDICES {
+                    return Err(GlobalVariableError::OutOfRangeBinding);
+                }
+            }
+            Some(crate::Binding::Location(_)) | None => {
+                return Err(GlobalVariableError::InvalidBinding)
+            }
+        }
+        self.forbid_interpolation()
+    }
+}
+
+fn storage_usage(access: crate::StorageAccess) -> crate::GlobalUse {
+    let mut storage_usage = crate::GlobalUse::empty();
+    if access.contains(crate::StorageAccess::LOAD) {
+        storage_usage |= crate::GlobalUse::LOAD;
+    }
+    if access.contains(crate::StorageAccess::STORE) {
+        storage_usage |= crate::GlobalUse::STORE;
+    }
+    storage_usage
 }
 
 impl Validator {
@@ -89,15 +131,13 @@ impl Validator {
         types: &Arena<crate::Type>,
     ) -> Result<(), GlobalVariableError> {
         log::debug!("var {:?}", var);
-        let is_storage = match var.class {
+        let allowed_storage_access = match var.class {
             crate::StorageClass::Function => return Err(GlobalVariableError::InvalidUsage),
             crate::StorageClass::Input | crate::StorageClass::Output => {
                 match var.binding {
                     Some(crate::Binding::BuiltIn(_)) => {
                         // validated per entry point
-                        if var.interpolation.is_some() {
-                            return Err(GlobalVariableError::InvalidInterpolation);
-                        }
+                        var.forbid_interpolation()?
                     }
                     Some(crate::Binding::Location(loc)) => {
                         if loc > MAX_LOCATIONS {
@@ -117,56 +157,53 @@ impl Validator {
                         match types[var.ty].inner {
                             //TODO: check the member types
                             crate::TypeInner::Struct { members: _ } => {
-                                if var.interpolation.is_some() {
-                                    return Err(GlobalVariableError::InvalidInterpolation);
-                                }
+                                var.forbid_interpolation()?
                             }
                             _ => return Err(GlobalVariableError::InvalidType),
                         }
                     }
                 }
-                false
+                crate::StorageAccess::empty()
             }
-            crate::StorageClass::Constant
-            | crate::StorageClass::StorageBuffer
-            | crate::StorageClass::Uniform => {
-                match var.binding {
-                    Some(crate::Binding::BuiltIn(_)) => {} // validated per entry point
-                    Some(crate::Binding::Resource { group, binding }) => {
-                        if group > MAX_BIND_GROUPS || binding > MAX_BIND_INDICES {
-                            return Err(GlobalVariableError::OutOfRangeBinding);
-                        }
-                    }
-                    Some(crate::Binding::Location(_)) | None => {
-                        return Err(GlobalVariableError::InvalidBinding)
-                    }
-                }
-                if var.interpolation.is_some() {
-                    return Err(GlobalVariableError::InvalidInterpolation);
-                }
-                //TODO: prevent `Uniform` storage class with `STORE` access
+            crate::StorageClass::Storage => {
+                var.check_resource()?;
+                crate::StorageAccess::all()
+            }
+            crate::StorageClass::Uniform => {
+                var.check_resource()?;
+                crate::StorageAccess::empty()
+            }
+            crate::StorageClass::Handle => {
+                var.check_resource()?;
                 match types[var.ty].inner {
-                    crate::TypeInner::Struct { .. }
-                    | crate::TypeInner::Image {
+                    crate::TypeInner::Image {
                         class: crate::ImageClass::Storage(_),
                         ..
-                    } => true,
-                    _ => false,
+                    } => crate::StorageAccess::all(),
+                    _ => crate::StorageAccess::empty(),
                 }
             }
             crate::StorageClass::Private | crate::StorageClass::WorkGroup => {
                 if var.binding.is_some() {
                     return Err(GlobalVariableError::InvalidBinding);
                 }
-                if var.interpolation.is_some() {
-                    return Err(GlobalVariableError::InvalidInterpolation);
-                }
-                false
+                var.forbid_interpolation()?;
+                crate::StorageAccess::empty()
+            }
+            crate::StorageClass::PushConstant => {
+                //TODO
+                return Err(GlobalVariableError::InvalidStorageAccess {
+                    allowed: crate::StorageAccess::empty(),
+                    seen: crate::StorageAccess::empty(),
+                });
             }
         };
 
-        if !is_storage && !var.storage_access.is_empty() {
-            return Err(GlobalVariableError::InvalidStorageAccess);
+        if !allowed_storage_access.contains(var.storage_access) {
+            return Err(GlobalVariableError::InvalidStorageAccess {
+                allowed: allowed_storage_access,
+                seen: var.storage_access,
+            });
         }
 
         Ok(())
@@ -291,26 +328,19 @@ impl Validator {
                     location_out_mask |= mask;
                     crate::GlobalUse::LOAD | crate::GlobalUse::STORE
                 }
-                crate::StorageClass::Constant => crate::GlobalUse::LOAD,
-                crate::StorageClass::Uniform | crate::StorageClass::StorageBuffer => {
-                    //TODO: built-in checks?
-                    let mut storage_usage = crate::GlobalUse::empty();
-                    if var.storage_access.contains(crate::StorageAccess::LOAD) {
-                        storage_usage |= crate::GlobalUse::LOAD;
-                    }
-                    if var.storage_access.contains(crate::StorageAccess::STORE) {
-                        storage_usage |= crate::GlobalUse::STORE;
-                    }
-                    if storage_usage.is_empty() {
-                        // its a uniform buffer
-                        crate::GlobalUse::LOAD
-                    } else {
-                        storage_usage
-                    }
-                }
+                crate::StorageClass::Uniform => crate::GlobalUse::LOAD,
+                crate::StorageClass::Storage => storage_usage(var.storage_access),
+                crate::StorageClass::Handle => match module.types[var.ty].inner {
+                    crate::TypeInner::Image {
+                        class: crate::ImageClass::Storage(_),
+                        ..
+                    } => storage_usage(var.storage_access),
+                    _ => crate::GlobalUse::LOAD,
+                },
                 crate::StorageClass::Private | crate::StorageClass::WorkGroup => {
                     crate::GlobalUse::all()
                 }
+                crate::StorageClass::PushConstant => crate::GlobalUse::LOAD,
             };
             if !allowed_usage.contains(usage) {
                 log::warn!("\tUsage error for: {:?}", var);
@@ -384,7 +414,11 @@ impl Validator {
 
         for (var_handle, var) in module.global_variables.iter() {
             self.validate_global_var(var, &module.types)
-                .map_err(|e| ValidationError::GlobalVariable(var_handle, e))?;
+                .map_err(|error| ValidationError::GlobalVariable {
+                    handle: var_handle,
+                    name: var.name.clone().unwrap_or_default(),
+                    error,
+                })?;
         }
 
         for (fun_handle, fun) in module.functions.iter() {

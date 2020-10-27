@@ -2274,19 +2274,39 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             .future_decor
             .remove(&id)
             .ok_or(Error::InvalidBinding(id))?;
-        let class = map_storage_class(storage_class)?;
+
+        let class = {
+            use spirv::StorageClass as Sc;
+            match Sc::from_u32(storage_class) {
+                Some(Sc::Function) => crate::StorageClass::Function,
+                Some(Sc::Input) => crate::StorageClass::Input,
+                Some(Sc::Output) => crate::StorageClass::Output,
+                Some(Sc::Private) => crate::StorageClass::Private,
+                Some(Sc::UniformConstant) => crate::StorageClass::Handle,
+                Some(Sc::StorageBuffer) => crate::StorageClass::Storage,
+                Some(Sc::Uniform) => {
+                    if self
+                        .lookup_storage_buffer_types
+                        .contains(&lookup_type.handle)
+                    {
+                        crate::StorageClass::Storage
+                    } else {
+                        crate::StorageClass::Uniform
+                    }
+                }
+                Some(Sc::Workgroup) => crate::StorageClass::WorkGroup,
+                Some(Sc::PushConstant) => crate::StorageClass::PushConstant,
+                _ => return Err(Error::UnsupportedStorageClass(storage_class)),
+            }
+        };
+
         let binding = match (class, &module.types[lookup_type.handle].inner) {
             (crate::StorageClass::Input, &crate::TypeInner::Struct { .. })
             | (crate::StorageClass::Output, &crate::TypeInner::Struct { .. }) => None,
             _ => Some(dec.get_binding().ok_or(Error::InvalidBinding(id))?),
         };
         let is_storage = match module.types[lookup_type.handle].inner {
-            crate::TypeInner::Struct { .. } => match class {
-                crate::StorageClass::StorageBuffer => true,
-                _ => self
-                    .lookup_storage_buffer_types
-                    .contains(&lookup_type.handle),
-            },
+            crate::TypeInner::Struct { .. } => class == crate::StorageClass::Storage,
             crate::TypeInner::Image {
                 class: crate::ImageClass::Storage(_),
                 ..

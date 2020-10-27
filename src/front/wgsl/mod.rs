@@ -930,8 +930,17 @@ impl Parser {
         lexer.expect(Token::Separator(':'))?;
         let ty = self.parse_type_decl(lexer, None, type_arena)?;
         let access = match class {
-            Some(crate::StorageClass::StorageBuffer) => crate::StorageAccess::all(),
-            Some(crate::StorageClass::Constant) => crate::StorageAccess::LOAD,
+            Some(crate::StorageClass::Storage) => crate::StorageAccess::all(),
+            Some(crate::StorageClass::Handle) => {
+                match type_arena[ty].inner {
+                    //TODO: RW textures
+                    crate::TypeInner::Image {
+                        class: crate::ImageClass::Storage(_),
+                        ..
+                    } => crate::StorageAccess::LOAD,
+                    _ => crate::StorageAccess::empty(),
+                }
+            }
             _ => crate::StorageAccess::empty(),
         };
         if lexer.skip(Token::Operation('=')) {
@@ -1708,7 +1717,7 @@ impl Parser {
                             crate::BuiltIn::Position => crate::StorageClass::Output,
                             _ => unimplemented!(),
                         },
-                        _ => crate::StorageClass::Private,
+                        _ => crate::StorageClass::Handle,
                     },
                 };
                 let var_handle = module.global_variables.append(crate::GlobalVariable {

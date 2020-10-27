@@ -108,14 +108,24 @@ pub enum ShaderStage {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[allow(missing_docs)] // The names are self evident
 pub enum StorageClass {
-    Constant,
+    /// Function locals.
     Function,
+    /// Pipeline input, per invocation.
     Input,
+    /// Pipeline output, per invocation, mutable.
     Output,
+    /// Private data, per invocation, mutable.
     Private,
-    StorageBuffer,
-    Uniform,
+    /// Workgroup shared data, mutable.
     WorkGroup,
+    /// Uniform buffer data.
+    Uniform,
+    /// Storage buffer data, potentially mutable.
+    Storage,
+    /// Opaque handles, such as samplers and images.
+    Handle,
+    /// Push constants.
+    PushConstant,
 }
 
 /// Built-in inputs and outputs.

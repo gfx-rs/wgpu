@@ -4,8 +4,9 @@ pub fn map_storage_class(word: &str) -> Result<crate::StorageClass, Error<'_>> {
     match word {
         "in" => Ok(crate::StorageClass::Input),
         "out" => Ok(crate::StorageClass::Output),
+        "private" => Ok(crate::StorageClass::Private),
         "uniform" => Ok(crate::StorageClass::Uniform),
-        "storage_buffer" => Ok(crate::StorageClass::StorageBuffer),
+        "storage" => Ok(crate::StorageClass::Storage),
         _ => Err(Error::UnknownStorageClass(word)),
     }
 }

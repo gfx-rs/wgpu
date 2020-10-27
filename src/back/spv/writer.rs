@@ -417,14 +417,19 @@ impl Writer {
 
     fn parse_to_spirv_storage_class(&self, class: crate::StorageClass) -> spirv::StorageClass {
         match class {
-            crate::StorageClass::Constant => spirv::StorageClass::UniformConstant,
+            crate::StorageClass::Handle => spirv::StorageClass::UniformConstant,
             crate::StorageClass::Function => spirv::StorageClass::Function,
             crate::StorageClass::Input => spirv::StorageClass::Input,
             crate::StorageClass::Output => spirv::StorageClass::Output,
             crate::StorageClass::Private => spirv::StorageClass::Private,
-            crate::StorageClass::StorageBuffer => spirv::StorageClass::StorageBuffer,
-            crate::StorageClass::Uniform => spirv::StorageClass::Uniform,
+            crate::StorageClass::Storage if self.physical_layout.supports_storage_buffers() => {
+                spirv::StorageClass::StorageBuffer
+            }
+            crate::StorageClass::Storage | crate::StorageClass::Uniform => {
+                spirv::StorageClass::Uniform
+            }
             crate::StorageClass::WorkGroup => spirv::StorageClass::Workgroup,
+            crate::StorageClass::PushConstant => spirv::StorageClass::PushConstant,
         }
     }
 

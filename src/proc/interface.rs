@@ -218,7 +218,7 @@ mod tests {
     fn global_use_scan() {
         let test_global = GlobalVariable {
             name: None,
-            class: StorageClass::Constant,
+            class: StorageClass::Uniform,
             binding: None,
             ty: Handle::new(std::num::NonZeroU32::new(1).unwrap()),
             interpolation: None,

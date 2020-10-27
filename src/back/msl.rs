@@ -254,9 +254,7 @@ impl<'a> TypedGlobalVariable<'a> {
 
         let (space_qualifier, reference) = match ty.inner {
             crate::TypeInner::Struct { .. } => match var.class {
-                crate::StorageClass::Constant
-                | crate::StorageClass::Uniform
-                | crate::StorageClass::StorageBuffer => {
+                crate::StorageClass::Uniform | crate::StorageClass::Storage => {
                     let space = if self.usage.contains(crate::GlobalUse::STORE) {
                         "device "
                     } else {
@@ -837,9 +835,13 @@ impl<W: Write> Writer<W> {
                     let base_name = module.types[base].name.or_index(base);
                     let class_name = match class {
                         Sc::Input | Sc::Output => continue,
-                        Sc::Constant | Sc::Uniform => "constant",
-                        Sc::StorageBuffer => "device",
-                        Sc::Private | Sc::Function | Sc::WorkGroup => "",
+                        Sc::Uniform => "constant",
+                        Sc::Storage => "device",
+                        Sc::Handle
+                        | Sc::Private
+                        | Sc::Function
+                        | Sc::WorkGroup
+                        | Sc::PushConstant => "",
                     };
                     write!(self.out, "typedef {} {} *{}", class_name, base_name, name)?;
                 }

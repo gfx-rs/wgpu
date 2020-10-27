@@ -112,6 +112,7 @@ bitflags::bitflags! {
         const IMAGE_LOAD_STORE = 1 << 8;
         const CONSERVATIVE_DEPTH = 1 << 9;
         const TEXTURE_1D = 1 << 10;
+        const PUSH_CONSTANT = 1 << 11;
     }
 }
 
@@ -364,7 +365,7 @@ pub fn write<'a>(
         }
 
         let block = match global.class {
-            StorageClass::StorageBuffer | StorageClass::Uniform => true,
+            StorageClass::Storage | StorageClass::Uniform => true,
             _ => false,
         };
 
@@ -557,14 +558,15 @@ pub fn write<'a>(
 
         let name = if let Some(ref binding) = global.binding {
             let prefix = match global.class {
-                StorageClass::Constant => "const",
                 StorageClass::Function => "fn",
                 StorageClass::Input => "in",
                 StorageClass::Output => "out",
                 StorageClass::Private => "priv",
-                StorageClass::StorageBuffer => "buffer",
+                StorageClass::Storage => "buffer",
                 StorageClass::Uniform => "uniform",
+                StorageClass::Handle => "handle",
                 StorageClass::WorkGroup => "wg",
+                StorageClass::PushConstant => "pc",
             };
 
             match binding {
@@ -606,7 +608,7 @@ pub fn write<'a>(
         }
 
         let block = match global.class {
-            StorageClass::StorageBuffer | StorageClass::Uniform => {
+            StorageClass::Storage | StorageClass::Uniform => {
                 Some(format!("global_block_{}", handle.index()))
             }
             _ => None,
@@ -1492,21 +1494,23 @@ fn write_storage_class(
     manager: &mut FeaturesManager,
 ) -> Result<&'static str, Error> {
     Ok(match class {
-        StorageClass::Constant => "",
         StorageClass::Function => "",
         StorageClass::Input => "in ",
         StorageClass::Output => "out ",
         StorageClass::Private => "",
-        StorageClass::StorageBuffer => {
+        StorageClass::Storage => {
             manager.request(Features::BUFFER_STORAGE);
-
             "buffer "
         }
         StorageClass::Uniform => "uniform ",
+        StorageClass::Handle => "uniform ",
         StorageClass::WorkGroup => {
             manager.request(Features::COMPUTE_SHADER);
-
             "shared "
+        }
+        StorageClass::PushConstant => {
+            manager.request(Features::PUSH_CONSTANT);
+            ""
         }
     })
 }

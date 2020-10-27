@@ -61,8 +61,8 @@ type Particles = struct {
 };
 
 [[group(0), binding(0)]] var<uniform> params : SimParams;
-[[group(0), binding(1)]] var<storage_buffer> particlesA : Particles;
-[[group(0), binding(2)]] var<storage_buffer> particlesB : Particles;
+[[group(0), binding(1)]] var<storage> particlesA : Particles;
+[[group(0), binding(2)]] var<storage> particlesB : Particles;
 
 [[builtin(global_invocation_id)]] var gl_GlobalInvocationID : vec3<u32>;
 

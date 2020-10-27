@@ -596,9 +596,7 @@ pomelo! {
     // single_type_qualifier ::= invariant_qualifier;
     // single_type_qualifier ::= precise_qualifier;
 
-    storage_qualifier ::= Const {
-        StorageClass::Constant
-    }
+    // storage_qualifier ::= Const
     // storage_qualifier ::= InOut;
     storage_qualifier ::= In {
         StorageClass::Input

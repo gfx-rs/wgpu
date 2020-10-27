@@ -14,8 +14,8 @@ fn main() -> void {
 
 # fragment
 [[location(0)]] var<in> v_uv : vec2<f32>;
-[[group(0), binding(0)]] var<uniform> u_texture : texture_sampled_2d<f32>;
-[[group(0), binding(1)]] var<uniform> u_sampler : sampler;
+[[group(0), binding(0)]] var u_texture : texture_sampled_2d<f32>;
+[[group(0), binding(1)]] var u_sampler : sampler;
 [[location(0)]] var<out> o_color : vec4<f32>;
 
 [[stage(fragment)]]

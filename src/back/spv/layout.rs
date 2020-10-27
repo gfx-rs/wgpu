@@ -24,6 +24,10 @@ impl PhysicalLayout {
         sink.extend(iter::once(self.bound));
         sink.extend(iter::once(self.instruction_schema));
     }
+
+    pub(super) fn supports_storage_buffers(&self) -> bool {
+        self.version >= 0x10300
+    }
 }
 
 impl LogicalLayout {
