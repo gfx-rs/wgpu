@@ -2,7 +2,15 @@ use serde::{Deserialize, Serialize};
 use std::{env, fs, path::Path};
 
 #[derive(Hash, PartialEq, Eq, Serialize, Deserialize)]
+enum Stage {
+    Vertex,
+    Fragment,
+    Compute,
+}
+
+#[derive(Hash, PartialEq, Eq, Serialize, Deserialize)]
 struct BindSource {
+    stage: Stage,
     group: u32,
     binding: u32,
 }
@@ -120,6 +128,11 @@ fn main() {
             for (key, value) in params.metal_bindings {
                 binding_map.insert(
                     msl::BindSource {
+                        stage: match key.stage {
+                            Stage::Vertex => naga::ShaderStage::Vertex,
+                            Stage::Fragment => naga::ShaderStage::Fragment,
+                            Stage::Compute => naga::ShaderStage::Compute,
+                        },
                         group: key.group,
                         binding: key.binding,
                     },
@@ -132,9 +145,11 @@ fn main() {
                 );
             }
             let options = msl::Options {
-                binding_map: &binding_map,
+                lang_version: (1, 0),
+                spirv_cross_compatibility: false,
+                binding_map,
             };
-            let msl = msl::write_string(&module, options).unwrap();
+            let msl = msl::write_string(&module, &options).unwrap();
             fs::write(&args[2], msl).unwrap();
         }
         #[cfg(feature = "spv-out")]

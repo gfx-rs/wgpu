@@ -31,6 +31,7 @@ pub struct BindTarget {
 
 #[derive(Clone, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BindSource {
+    pub stage: crate::ShaderStage,
     pub group: u32,
     pub binding: u32,
 }
@@ -102,14 +103,20 @@ enum LocationMode {
     Uniform,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Options<'a> {
-    pub binding_map: &'a BindingMap,
+#[derive(Debug, Default, Clone)]
+pub struct Options {
+    /// (Major, Minor) target version of the Metal Shading Language.
+    pub lang_version: (u8, u8),
+    /// Make it possible to link different stages via SPIRV-Cross.
+    pub spirv_cross_compatibility: bool,
+    /// Binding model mapping to Metal.
+    pub binding_map: BindingMap,
 }
 
-impl Options<'_> {
+impl Options {
     fn resolve_binding(
-        self,
+        &self,
+        stage: crate::ShaderStage,
         binding: &crate::Binding,
         mode: LocationMode,
     ) -> Result<ResolvedBinding, Error> {
@@ -119,13 +126,21 @@ impl Options<'_> {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(index)),
                 LocationMode::FragmentOutput => Ok(ResolvedBinding::Color(index)),
                 LocationMode::Intermediate => Ok(ResolvedBinding::User {
-                    prefix: "loc",
+                    prefix: if self.spirv_cross_compatibility {
+                        "locn"
+                    } else {
+                        "loc"
+                    },
                     index,
                 }),
                 LocationMode::Uniform => Err(Error::UnexpectedLocation),
             },
             crate::Binding::Resource { group, binding } => {
-                let source = BindSource { group, binding };
+                let source = BindSource {
+                    stage,
+                    group,
+                    binding,
+                };
                 self.binding_map
                     .get(&source)
                     .cloned()
@@ -790,7 +805,7 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    pub fn write(&mut self, module: &crate::Module, options: Options) -> Result<(), Error> {
+    pub fn write(&mut self, module: &crate::Module, options: &Options) -> Result<(), Error> {
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out, "using namespace metal;")?;
@@ -937,7 +952,7 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_functions(&mut self, module: &crate::Module, options: Options) -> Result<(), Error> {
+    fn write_functions(&mut self, module: &crate::Module, options: &Options) -> Result<(), Error> {
         for (fun_handle, fun) in module.functions.iter() {
             self.typifier.resolve_all(
                 &fun.expressions,
@@ -1081,7 +1096,7 @@ impl<W: Write> Writer<W> {
                                 handle,
                                 usage: crate::GlobalUse::empty(),
                             };
-                            let resolved = options.resolve_binding(binding, in_mode)?;
+                            let resolved = options.resolve_binding(stage, binding, in_mode)?;
 
                             write!(self.out, "\t")?;
                             tyvar.try_fmt(&mut self.out)?;
@@ -1128,7 +1143,7 @@ impl<W: Write> Writer<W> {
                             write!(self.out, "\t")?;
                             tyvar.try_fmt(&mut self.out)?;
                             if let Some(ref binding) = var.binding {
-                                let resolved = options.resolve_binding(binding, out_mode)?;
+                                let resolved = options.resolve_binding(stage, binding, out_mode)?;
                                 resolved.try_fmt_decorated(&mut self.out, "")?;
                             }
                             writeln!(self.out, ";")?;
@@ -1172,7 +1187,8 @@ impl<W: Write> Writer<W> {
                     }
                     _ => LocationMode::Uniform,
                 };
-                let resolved = options.resolve_binding(var.binding.as_ref().unwrap(), loc_mode)?;
+                let resolved =
+                    options.resolve_binding(stage, var.binding.as_ref().unwrap(), loc_mode)?;
                 let tyvar = TypedGlobalVariable {
                     module,
                     handle,
@@ -1214,7 +1230,7 @@ impl<W: Write> Writer<W> {
     }
 }
 
-pub fn write_string(module: &crate::Module, options: Options) -> Result<String, Error> {
+pub fn write_string(module: &crate::Module, options: &Options) -> Result<String, Error> {
     let mut w = Writer {
         out: String::new(),
         typifier: Typifier::new(),

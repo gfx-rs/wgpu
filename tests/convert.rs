@@ -34,6 +34,7 @@ fn convert_quad() {
         let mut binding_map = msl::BindingMap::default();
         binding_map.insert(
             msl::BindSource {
+                stage: naga::ShaderStage::Fragment,
                 group: 0,
                 binding: 0,
             },
@@ -46,6 +47,7 @@ fn convert_quad() {
         );
         binding_map.insert(
             msl::BindSource {
+                stage: naga::ShaderStage::Fragment,
                 group: 0,
                 binding: 1,
             },
@@ -57,9 +59,11 @@ fn convert_quad() {
             },
         );
         let options = msl::Options {
-            binding_map: &binding_map,
+            lang_version: (1, 0),
+            spirv_cross_compatibility: false,
+            binding_map,
         };
-        msl::write_string(&module, options).unwrap();
+        msl::write_string(&module, &options).unwrap();
     }
 }
 
@@ -74,6 +78,7 @@ fn convert_boids() {
         let mut binding_map = msl::BindingMap::default();
         binding_map.insert(
             msl::BindSource {
+                stage: naga::ShaderStage::Compute,
                 group: 0,
                 binding: 0,
             },
@@ -86,6 +91,7 @@ fn convert_boids() {
         );
         binding_map.insert(
             msl::BindSource {
+                stage: naga::ShaderStage::Compute,
                 group: 0,
                 binding: 1,
             },
@@ -98,6 +104,7 @@ fn convert_boids() {
         );
         binding_map.insert(
             msl::BindSource {
+                stage: naga::ShaderStage::Compute,
                 group: 0,
                 binding: 2,
             },
@@ -109,9 +116,11 @@ fn convert_boids() {
             },
         );
         let options = msl::Options {
-            binding_map: &binding_map,
+            lang_version: (1, 0),
+            spirv_cross_compatibility: false,
+            binding_map,
         };
-        msl::write_string(&module, options).unwrap();
+        msl::write_string(&module, &options).unwrap();
     }
 }
 
@@ -129,6 +138,7 @@ fn convert_cube() {
         let mut binding_map = msl::BindingMap::default();
         binding_map.insert(
             msl::BindSource {
+                stage: naga::ShaderStage::Vertex,
                 group: 0,
                 binding: 0,
             },
@@ -141,6 +151,7 @@ fn convert_cube() {
         );
         binding_map.insert(
             msl::BindSource {
+                stage: naga::ShaderStage::Fragment,
                 group: 0,
                 binding: 1,
             },
@@ -153,6 +164,7 @@ fn convert_cube() {
         );
         binding_map.insert(
             msl::BindSource {
+                stage: naga::ShaderStage::Fragment,
                 group: 0,
                 binding: 2,
             },
@@ -164,10 +176,12 @@ fn convert_cube() {
             },
         );
         let options = msl::Options {
-            binding_map: &binding_map,
+            lang_version: (1, 0),
+            spirv_cross_compatibility: false,
+            binding_map,
         };
-        msl::write_string(&vs, options).unwrap();
-        msl::write_string(&fs, options).unwrap();
+        msl::write_string(&vs, &options).unwrap();
+        msl::write_string(&fs, &options).unwrap();
     }
 }
 
