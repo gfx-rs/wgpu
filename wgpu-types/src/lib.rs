@@ -1252,6 +1252,8 @@ impl<L> BufferDescriptor<L> {
 
 /// Describes a [`CommandEncoder`].
 #[repr(C)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CommandEncoderDescriptor<L> {
     /// Debug label for the command encoder. This will show up in graphics debuggers for easy identification.
