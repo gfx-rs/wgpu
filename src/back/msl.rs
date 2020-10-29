@@ -247,6 +247,15 @@ impl<I: Indexed> From<I> for Name<'_> {
     }
 }
 
+fn is_valid_identifier_name(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => (),
+        _ => return false,
+    };
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
 trait AsName {
     fn or_index<I: Indexed>(&self, index: I) -> Name;
 }
@@ -255,7 +264,9 @@ impl AsName for Option<String> {
         Name {
             class: I::CLASS,
             source: match *self {
-                Some(ref name) if !name.is_empty() => NameSource::Custom {
+                //TODO: handle name collisions
+                //TODO: try to use parts of the name if it contains invalid characters
+                Some(ref name) if is_valid_identifier_name(name) => NameSource::Custom {
                     name,
                     prefix: I::PREFIX,
                 },
