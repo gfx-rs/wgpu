@@ -152,6 +152,12 @@ impl FlowGraph {
             let (node_source_index, node_target_index) =
                 self.flow.edge_endpoints(edge_index).unwrap();
 
+            if self.flow[node_source_index].ty == Some(ControlFlowNodeType::Header)
+                || self.flow[node_source_index].ty == Some(ControlFlowNodeType::Loop)
+            {
+                continue;
+            }
+
             // Back
             if self.flow[node_target_index].ty == Some(ControlFlowNodeType::Loop)
                 && self.flow[node_source_index].id > self.flow[node_target_index].id
