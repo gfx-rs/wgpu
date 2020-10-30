@@ -19,7 +19,11 @@ use crate::{
     proc::{ResolveContext, ResolveError, Typifier},
     FastHashMap,
 };
-use std::fmt::{Display, Error as FmtError, Formatter, Write};
+use std::{
+    fmt::{Display, Error as FmtError, Formatter},
+    io::{Error as IoError, Write},
+    string::FromUtf8Error,
+};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BindTarget {
@@ -62,7 +66,8 @@ impl Display for Level {
 
 #[derive(Debug)]
 pub enum Error {
-    Format(FmtError),
+    IO(IoError),
+    Utf8(FromUtf8Error),
     Type(ResolveError),
     UnexpectedLocation,
     MissingBinding(Handle<crate::GlobalVariable>),
@@ -83,9 +88,15 @@ pub enum Error {
     Validation,
 }
 
-impl From<FmtError> for Error {
-    fn from(e: FmtError) -> Self {
-        Error::Format(e)
+impl From<IoError> for Error {
+    fn from(e: IoError) -> Self {
+        Error::IO(e)
+    }
+}
+
+impl From<FromUtf8Error> for Error {
+    fn from(e: FromUtf8Error) -> Self {
+        Error::Utf8(e)
     }
 }
 
@@ -261,7 +272,7 @@ struct TypedGlobalVariable<'a> {
 }
 
 impl<'a> TypedGlobalVariable<'a> {
-    fn try_fmt<W: Write>(&self, formatter: &mut W) -> Result<(), Error> {
+    fn try_fmt<W: Write>(&self, out: &mut W) -> Result<(), Error> {
         let var = &self.module.global_variables[self.handle];
         let name = var.name.or_index(self.handle);
         let ty = &self.module.types[var.ty];
@@ -282,7 +293,7 @@ impl<'a> TypedGlobalVariable<'a> {
             _ => ("", ""),
         };
         Ok(write!(
-            formatter,
+            out,
             "{}{}{} {}",
             space_qualifier, ty_name, reference, name
         )?)
@@ -290,7 +301,7 @@ impl<'a> TypedGlobalVariable<'a> {
 }
 
 impl ResolvedBinding {
-    fn try_fmt<W: Write>(&self, formatter: &mut W) -> Result<(), Error> {
+    fn try_fmt<W: Write>(&self, out: &mut W) -> Result<(), Error> {
         match *self {
             ResolvedBinding::BuiltIn(built_in) => {
                 use crate::BuiltIn as Bi;
@@ -314,20 +325,20 @@ impl ResolvedBinding {
                     Bi::LocalInvocationIndex => "thread_index_in_threadgroup",
                     Bi::WorkGroupId => "threadgroup_position_in_grid",
                 };
-                Ok(formatter.write_str(name)?)
+                Ok(write!(out, "{}", name)?)
             }
-            ResolvedBinding::Attribute(index) => Ok(write!(formatter, "attribute({})", index)?),
-            ResolvedBinding::Color(index) => Ok(write!(formatter, "color({})", index)?),
+            ResolvedBinding::Attribute(index) => Ok(write!(out, "attribute({})", index)?),
+            ResolvedBinding::Color(index) => Ok(write!(out, "color({})", index)?),
             ResolvedBinding::User { prefix, index } => {
-                Ok(write!(formatter, "user({}{})", prefix, index)?)
+                Ok(write!(out, "user({}{})", prefix, index)?)
             }
             ResolvedBinding::Resource(ref target) => {
                 if let Some(id) = target.buffer {
-                    Ok(write!(formatter, "buffer({})", id)?)
+                    Ok(write!(out, "buffer({})", id)?)
                 } else if let Some(id) = target.texture {
-                    Ok(write!(formatter, "texture({})", id)?)
+                    Ok(write!(out, "texture({})", id)?)
                 } else if let Some(id) = target.sampler {
-                    Ok(write!(formatter, "sampler({})", id)?)
+                    Ok(write!(out, "sampler({})", id)?)
                 } else {
                     Err(Error::UnimplementedBindTarget(target.clone()))
                 }
@@ -335,15 +346,11 @@ impl ResolvedBinding {
         }
     }
 
-    fn try_fmt_decorated<W: Write>(
-        &self,
-        formatter: &mut W,
-        terminator: &str,
-    ) -> Result<(), Error> {
-        formatter.write_str(" [[")?;
-        self.try_fmt(formatter)?;
-        formatter.write_str("]]")?;
-        formatter.write_str(terminator)?;
+    fn try_fmt_decorated<W: Write>(&self, out: &mut W, terminator: &str) -> Result<(), Error> {
+        write!(out, " [[")?;
+        self.try_fmt(out)?;
+        write!(out, "]]")?;
+        write!(out, "{}", terminator)?;
         Ok(())
     }
 }
@@ -420,9 +427,9 @@ impl<W: Write> Writer<W> {
         match *expression {
             crate::Expression::Access { base, index } => {
                 self.put_expression(base, function, module)?;
-                self.out.write_str("[")?;
+                write!(self.out, "[")?;
                 self.put_expression(index, function, module)?;
-                self.out.write_str("]")?;
+                write!(self.out, "]")?;
             }
             crate::Expression::AccessIndex { base, index } => {
                 self.put_expression(base, function, module)?;
@@ -686,7 +693,7 @@ impl<W: Write> Writer<W> {
             crate::ConstantInner::Float(value) => {
                 write!(self.out, "{}", value)?;
                 if value.fract() == 0.0 {
-                    self.out.write_str(".0")?;
+                    write!(self.out, ".0")?;
                 }
             }
             crate::ConstantInner::Bool(value) => {
@@ -782,7 +789,7 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Return { value } => {
                     write!(self.out, "{}return ", level)?;
                     match value {
-                        None => self.out.write_str(OUTPUT_STRUCT_NAME)?,
+                        None => write!(self.out, "{}", OUTPUT_STRUCT_NAME)?,
                         Some(expr_handle) => {
                             self.put_expression(expr_handle, function, module)?;
                         }
@@ -819,7 +826,7 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_type_defs<'a>(&mut self, module: &'a crate::Module) -> Result<(), Error> {
+    fn write_type_defs(&mut self, module: &crate::Module) -> Result<(), Error> {
         for (handle, ty) in module.types.iter() {
             let name = ty.name.or_index(handle);
             match ty.inner {
@@ -1232,9 +1239,9 @@ impl<W: Write> Writer<W> {
 
 pub fn write_string(module: &crate::Module, options: &Options) -> Result<String, Error> {
     let mut w = Writer {
-        out: String::new(),
+        out: Vec::new(),
         typifier: Typifier::new(),
     };
     w.write(module, options)?;
-    Ok(w.out)
+    Ok(String::from_utf8(w.out)?)
 }
