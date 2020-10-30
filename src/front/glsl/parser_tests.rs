@@ -78,3 +78,70 @@ fn version() {
         "(450, Core)"
     );
 }
+
+#[test]
+fn control_flow() {
+    let program = parse_program(
+        r#"
+        #  version 450
+        void main() {
+            if (true) {
+                return 1;
+            } else {
+                return 2;
+            }
+        }
+        "#,
+        ShaderStage::Vertex,
+    )
+    .unwrap();
+    assert_eq!(
+        format!("{:?}", (program.version, program.profile)),
+        "(450, Core)"
+    );
+
+    let program = parse_program(
+        r#"
+        #  version 450
+        void main() {
+            if (true) {
+                return 1;
+            }
+        }
+        "#,
+        ShaderStage::Vertex,
+    )
+    .unwrap();
+    assert_eq!(
+        format!("{:?}", (program.version, program.profile)),
+        "(450, Core)"
+    );
+
+    let program = parse_program(
+        r#"
+        #  version 450
+        void main() {
+            int x;
+            int y = 3;
+            switch (5) {
+                case 2:
+                    x = 2;
+                case 5:
+                    x = 5;
+                    y = 2;
+                    break;
+                default:
+                    x = 0;
+            }
+        }
+        "#,
+        ShaderStage::Vertex,
+    )
+    .unwrap();
+    // println!("{:#?}", program);
+    // assert!(false);
+    assert_eq!(
+        format!("{:?}", (program.version, program.profile)),
+        "(450, Core)"
+    );
+}

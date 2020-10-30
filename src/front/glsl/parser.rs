@@ -6,7 +6,7 @@ pomelo! {
     %include {
         use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{proc::Typifier, Arena, BinaryOperator, Binding, Block, Constant,
-            ConstantInner, EntryPoint, Expression, Function, GlobalVariable, Handle, Interpolation,
+            ConstantInner, EntryPoint, Expression, FallThrough, FastHashMap, Function, GlobalVariable, Handle, Interpolation,
             LocalVariable, MemberOrigin, ScalarKind, Statement, StorageAccess,
             StorageClass, StructMember, Type, TypeInner};
     }
@@ -55,6 +55,9 @@ pomelo! {
     %type expression_statement Statement;
     %type declaration_statement Statement;
     %type jump_statement Statement;
+    %type selection_statement Statement;
+    %type switch_statement_list Vec<(Option<i32>, Block, Option<FallThrough>)>;
+    %type switch_statement (Option<i32>, Block, Option<FallThrough>);
 
     // expressions
     %type unary_expression ExpressionRule;
@@ -90,7 +93,7 @@ pomelo! {
 
     %type initializer ExpressionRule;
 
-    // decalartions
+    // declarations
     %type declaration VarDeclaration;
     %type init_declarator_list VarDeclaration;
     %type single_declaration VarDeclaration;
@@ -114,6 +117,9 @@ pomelo! {
     %type struct_declarator String;
 
     %type TypeName Type;
+
+    // precedence
+    %right Else;
 
     root ::= version_pragma translation_unit;
     version_pragma ::= Version IntConstant(V) Identifier?(P) {
@@ -724,14 +730,66 @@ pomelo! {
     }
     statement ::= simple_statement;
 
-    // Grammar Note: labeled statements for SWITCH only; 'goto' is not supported.
     simple_statement ::= declaration_statement;
     simple_statement ::= expression_statement;
-    //simple_statement ::= selection_statement;
-    //simple_statement ::= switch_statement;
-    //simple_statement ::= case_label;
-    //simple_statement ::= iteration_statement;
+    simple_statement ::= selection_statement;
     simple_statement ::= jump_statement;
+
+
+    selection_statement ::= If LeftParen expression(e) RightParen statement(s1) Else statement(s2) {
+        Statement::If {
+            condition: e.expression,
+            accept: vec![s1],
+            reject: vec![s2],
+        }
+    }
+
+    selection_statement ::= If LeftParen expression(e) RightParen statement(s) [Else] {
+        Statement::If {
+            condition: e.expression,
+            accept: vec![s],
+            reject: vec![],
+        }
+    }
+
+    selection_statement ::= Switch LeftParen expression(e) RightParen LeftBrace switch_statement_list(ls) RightBrace {
+        let mut default = Vec::new();
+        let mut cases = FastHashMap::default();
+        for (v, s, ft) in ls {
+            if let Some(v) = v {
+                cases.insert(v, (s, ft));
+            } else {
+                default.extend_from_slice(&s);
+            }
+        }
+        Statement::Switch {
+            selector: e.expression,
+            cases,
+            default,
+        }
+    }
+
+    switch_statement_list ::= {
+        vec![]
+    }
+    switch_statement_list ::= switch_statement_list(mut ssl) switch_statement((v, sl, ft)) {
+        ssl.push((v, sl, ft));
+        ssl
+    }
+    switch_statement ::= Case IntConstant(v) Colon statement_list(sl) {
+        let fallthrough = match sl.last() {
+            Some(Statement::Break) => None,
+            _ => Some(FallThrough),
+        };
+        (Some(v.1 as i32), sl, fallthrough)
+    }
+    switch_statement ::= Default Colon statement_list(sl) {
+        let fallthrough = match sl.last() {
+            Some(Statement::Break) => Some(FallThrough),
+            _ => None,
+        };
+        (None, sl, fallthrough)
+    }
 
     compound_statement ::= LeftBrace RightBrace {
         vec![]

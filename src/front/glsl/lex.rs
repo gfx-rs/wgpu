@@ -140,6 +140,12 @@ impl<'a> Lexer<'a> {
                     "break" => Some(Token::Break(meta)),
                     "return" => Some(Token::Return(meta)),
                     "discard" => Some(Token::Discard(meta)),
+                    // selection statements
+                    "if" => Some(Token::If(meta)),
+                    "else" => Some(Token::Else(meta)),
+                    "switch" => Some(Token::Switch(meta)),
+                    "case" => Some(Token::Case(meta)),
+                    "default" => Some(Token::Default(meta)),
                     // types
                     "void" => Some(Token::Void(meta)),
                     word => {
