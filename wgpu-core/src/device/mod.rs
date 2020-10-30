@@ -1479,7 +1479,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
         let device = &device_guard[texture.device_id.value];
 
-        let view_kind =
+        let view_dim =
             match desc.dimension {
                 Some(dim) => {
                     use hal::image::Kind;
@@ -1513,14 +1513,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
 
-                    conv::map_texture_view_dimension(dim)
+                    dim
                 }
                 None => match texture.kind {
-                    hal::image::Kind::D1(_, 1) => hal::image::ViewKind::D1,
-                    hal::image::Kind::D1(..) => hal::image::ViewKind::D1Array,
-                    hal::image::Kind::D2(_, _, 1, _) => hal::image::ViewKind::D2,
-                    hal::image::Kind::D2(..) => hal::image::ViewKind::D2Array,
-                    hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
+                    hal::image::Kind::D1(..) => wgt::TextureViewDimension::D1,
+                    hal::image::Kind::D2(_, _, depth, _)
+                        if depth > 1 && desc.array_layer_count.is_none() =>
+                    {
+                        wgt::TextureViewDimension::D2Array
+                    }
+                    hal::image::Kind::D2(..) => wgt::TextureViewDimension::D2,
+                    hal::image::Kind::D3(..) => wgt::TextureViewDimension::D3,
                 },
             };
         let required_level_count =
@@ -1530,13 +1533,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let level_end = texture.full_range.levels.end;
         let layer_end = texture.full_range.layers.end;
         if required_level_count > level_end as u32 {
-            return Err(resource::CreateTextureViewError::InvalidMipLevelCount {
+            return Err(resource::CreateTextureViewError::TooManyMipLevels {
                 requested: required_level_count,
                 total: level_end,
             });
         }
         if required_layer_count > layer_end as u32 {
-            return Err(resource::CreateTextureViewError::InvalidArrayLayerCount {
+            return Err(resource::CreateTextureViewError::TooManyArrayLayers {
                 requested: required_layer_count,
                 total: layer_end,
             });
@@ -1554,6 +1557,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
+        let end_level = desc
+            .level_count
+            .map_or(level_end, |_| required_level_count as u8);
+        let end_layer = desc
+            .array_layer_count
+            .map_or(layer_end, |_| required_layer_count as u16);
+        let selector = TextureSelector {
+            levels: desc.base_mip_level as u8..end_level,
+            layers: desc.base_array_layer as u16..end_layer,
+        };
+
+        let view_layer_count = (selector.layers.end - selector.layers.start) as u32;
+        let layer_check_ok = match view_dim {
+            wgt::TextureViewDimension::D1
+            | wgt::TextureViewDimension::D2
+            | wgt::TextureViewDimension::D3 => view_layer_count == 1,
+            wgt::TextureViewDimension::D2Array => true,
+            wgt::TextureViewDimension::Cube => view_layer_count == 6,
+            wgt::TextureViewDimension::CubeArray => view_layer_count % 6 == 0,
+        };
+        if !layer_check_ok {
+            return Err(resource::CreateTextureViewError::InvalidArrayLayerCount {
+                requested: view_layer_count,
+                dim: view_dim,
+            });
+        }
+
         let format = desc.format.unwrap_or(texture.format);
         let range = hal::image::SubresourceRange {
             aspects,
@@ -1568,23 +1598,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .raw
                 .create_image_view(
                     texture_raw,
-                    view_kind,
+                    conv::map_texture_view_dimension(view_dim),
                     conv::map_texture_format(format, device.private_features),
                     hal::format::Swizzle::NO,
                     range.clone(),
                 )
                 .or(Err(resource::CreateTextureViewError::OutOfMemory))?
-        };
-
-        let end_level = desc
-            .level_count
-            .map_or(level_end, |_| required_level_count as u8);
-        let end_layer = desc
-            .array_layer_count
-            .map_or(layer_end, |_| required_layer_count as u16);
-        let selector = TextureSelector {
-            levels: desc.base_mip_level as u8..end_level,
-            layers: desc.base_array_layer as u16..end_layer,
         };
 
         let view = resource::TextureView {
