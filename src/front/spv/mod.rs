@@ -29,7 +29,7 @@ use crate::{
 };
 
 use num_traits::cast::FromPrimitive;
-use std::{convert::TryInto, num::NonZeroU32};
+use std::{convert::TryInto, num::NonZeroU32, path::PathBuf};
 
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Shader,
@@ -304,6 +304,11 @@ pub struct Assignment {
     value: Handle<crate::Expression>,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct Options {
+    pub flow_graph_dump_prefix: Option<PathBuf>,
+}
+
 pub struct Parser<I> {
     data: I,
     state: ModuleState,
@@ -325,10 +330,11 @@ pub struct Parser<I> {
     lookup_function: FastHashMap<spirv::Word, Handle<crate::Function>>,
     lookup_entry_point: FastHashMap<spirv::Word, EntryPoint>,
     deferred_function_calls: Vec<DeferredFunctionCall>,
+    options: Options,
 }
 
 impl<I: Iterator<Item = u32>> Parser<I> {
-    pub fn new(data: I) -> Self {
+    pub fn new(data: I, options: &Options) -> Self {
         Parser {
             data,
             state: ModuleState::Empty,
@@ -349,6 +355,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             lookup_function: FastHashMap::default(),
             lookup_entry_point: FastHashMap::default(),
             deferred_function_calls: Vec::new(),
+            options: options.clone(),
         }
     }
 
@@ -2346,7 +2353,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     }
 }
 
-pub fn parse_u8_slice(data: &[u8]) -> Result<crate::Module, Error> {
+pub fn parse_u8_slice(data: &[u8], options: &Options) -> Result<crate::Module, Error> {
     if data.len() % 4 != 0 {
         return Err(Error::IncompleteData);
     }
@@ -2354,7 +2361,7 @@ pub fn parse_u8_slice(data: &[u8]) -> Result<crate::Module, Error> {
     let words = data
         .chunks(4)
         .map(|c| u32::from_le_bytes(c.try_into().unwrap()));
-    Parser::new(words).parse()
+    Parser::new(words, options).parse()
 }
 
 #[cfg(test)]
@@ -2370,6 +2377,6 @@ mod test {
             0x0e, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, // GLSL450.
             0x01, 0x00, 0x00, 0x00,
         ];
-        let _ = super::parse_u8_slice(&bin).unwrap();
+        let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
     }
 }

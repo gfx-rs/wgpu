@@ -1,4 +1,5 @@
 (
+	spv_flow_dump_prefix: "",
 	metal_bindings: {
 		(stage: Compute, group: 0, binding: 0): (buffer: Some(0), mutable: false),
 		(stage: Compute, group: 0, binding: 1): (buffer: Some(1), mutable: true),

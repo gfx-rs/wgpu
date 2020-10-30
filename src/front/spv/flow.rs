@@ -225,10 +225,8 @@ impl FlowGraph {
         node_index: BlockNodeIndex,
         stop_node_index: Option<BlockNodeIndex>,
     ) -> Result<crate::Block, Error> {
-        if let Some(stop_node_index) = stop_node_index {
-            if stop_node_index == node_index {
-                return Ok(vec![]);
-            }
+        if stop_node_index == Some(node_index) {
+            return Ok(vec![]);
         }
 
         let node = &self.flow[node_index];
@@ -329,7 +327,7 @@ impl FlowGraph {
                     self.flow[continue_edge.target()].block.clone()
                 };
 
-                let mut body: crate::Block = node.block.clone();
+                let mut body = node.block.clone();
                 match node.terminator {
                     Terminator::BranchConditional {
                         condition,
@@ -407,7 +405,7 @@ impl FlowGraph {
     pub(super) fn to_graphviz(&self) -> Result<String, std::fmt::Error> {
         let mut output = String::new();
 
-        output += "digraph ControlFlowGraph {";
+        output += "digraph ControlFlowGraph {\n";
 
         for node_index in self.flow.node_indices() {
             let node = &self.flow[node_index];
@@ -425,10 +423,16 @@ impl FlowGraph {
             let target = edge.target();
 
             let style = match edge.weight {
+                ControlFlowEdgeType::Forward => "",
+                ControlFlowEdgeType::ForwardMerge => "style=dotted",
+                ControlFlowEdgeType::ForwardContinue => "color=green",
+                ControlFlowEdgeType::Back => "style=dashed",
+                ControlFlowEdgeType::LoopBreak => "color=yellow",
+                ControlFlowEdgeType::LoopContinue => "color=green",
                 ControlFlowEdgeType::IfTrue => "color=blue",
                 ControlFlowEdgeType::IfFalse => "color=red",
-                ControlFlowEdgeType::ForwardMerge => "style=dotted",
-                _ => "",
+                ControlFlowEdgeType::SwitchBreak => "color=yellow",
+                ControlFlowEdgeType::CaseFallThrough => "style=dotted",
             };
 
             writeln!(

@@ -175,6 +175,17 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             }
         };
 
+        if let Some(ref prefix) = self.options.flow_graph_dump_prefix {
+            let dump = flow_graph.to_graphviz().unwrap_or_default();
+            let suffix = match source {
+                DeferredSource::EntryPoint(stage, ref name) => {
+                    format!("flow.{:?}-{}.dot", stage, name)
+                }
+                DeferredSource::Function(handle) => format!("flow.Fun-{}.dot", handle.index()),
+            };
+            let _ = std::fs::write(prefix.join(suffix), dump);
+        }
+
         for (expr_handle, dst_id) in local_function_calls {
             self.deferred_function_calls.push(DeferredFunctionCall {
                 source: source.clone(),

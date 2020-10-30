@@ -9,7 +9,7 @@ fn rosetta_test(file_name: &str) {
     let file_path = Path::new(TEST_PATH).join(file_name);
     let input = fs::read(&file_path).unwrap();
 
-    let module = super::parse_u8_slice(&input).unwrap();
+    let module = super::parse_u8_slice(&input, &Default::default()).unwrap();
     let output = ron::ser::to_string_pretty(&module, Default::default()).unwrap();
 
     let expected = fs::read_to_string(file_path.with_extension("expected.ron")).unwrap();

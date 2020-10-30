@@ -3,3 +3,7 @@
 Cargo.lock
 .DS_Store
 .idea
+/*.dot
+/*.metal
+/*.metallib
+/*.ron

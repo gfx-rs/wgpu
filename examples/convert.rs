@@ -29,6 +29,8 @@ struct BindTarget {
 
 #[derive(Default, Serialize, Deserialize)]
 struct Parameters {
+    #[serde(default)]
+    spv_flow_dump_prefix: String,
     metal_bindings: naga::FastHashMap<BindSource, BindTarget>,
 }
 
@@ -41,6 +43,13 @@ fn main() {
         println!("Call with <input> <output>");
         return;
     }
+
+    let param_path = std::path::PathBuf::from(&args[1]).with_extension("param.ron");
+    let params = match fs::read_to_string(param_path) {
+        Ok(string) => ron::de::from_str(&string).unwrap(),
+        Err(_) => Parameters::default(),
+    };
+
     let module = match Path::new(&args[1])
         .extension()
         .expect("Input has no extension?")
@@ -49,8 +58,15 @@ fn main() {
     {
         #[cfg(feature = "spv-in")]
         "spv" => {
+            let options = naga::front::spv::Options {
+                flow_graph_dump_prefix: if params.spv_flow_dump_prefix.is_empty() {
+                    None
+                } else {
+                    Some(params.spv_flow_dump_prefix.into())
+                },
+            };
             let input = fs::read(&args[1]).unwrap();
-            naga::front::spv::parse_u8_slice(&input).unwrap()
+            naga::front::spv::parse_u8_slice(&input, &options).unwrap()
         }
         #[cfg(feature = "wgsl-in")]
         "wgsl" => {
@@ -108,12 +124,6 @@ fn main() {
         println!("{:#?}", module);
         return;
     }
-
-    let param_path = std::path::PathBuf::from(&args[1]).with_extension("param.ron");
-    let params = match fs::read_to_string(param_path) {
-        Ok(string) => ron::de::from_str(&string).unwrap(),
-        Err(_) => Parameters::default(),
-    };
 
     match Path::new(&args[2])
         .extension()
@@ -231,7 +241,10 @@ fn main() {
         }
         other => {
             let _ = params;
-            panic!("Unknown output extension: {}", other);
+            panic!(
+                "Unknown output extension: {}, forgot to enable a feature?",
+                other
+            );
         }
     }
 }

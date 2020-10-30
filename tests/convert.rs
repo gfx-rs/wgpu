@@ -14,7 +14,7 @@ fn load_wgsl(name: &str) -> naga::Module {
 fn load_spv(name: &str) -> naga::Module {
     let path = format!("{}/test-data/spv/{}", env!("CARGO_MANIFEST_DIR"), name);
     let input = std::fs::read(path).unwrap();
-    naga::front::spv::parse_u8_slice(&input).unwrap()
+    naga::front::spv::parse_u8_slice(&input, &Default::default()).unwrap()
 }
 
 #[cfg(feature = "glsl-in")]
