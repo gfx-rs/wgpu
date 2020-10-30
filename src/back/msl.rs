@@ -597,13 +597,26 @@ impl<W: Write> Writer<W> {
                     crate::BinaryOperator::Greater => "==",
                     crate::BinaryOperator::GreaterEqual => ">=",
                     crate::BinaryOperator::And => "&",
-                    other => return Err(Error::UnsupportedBinaryOp(other)),
+                    _ => return Err(Error::UnsupportedBinaryOp(op)),
                 };
-                //write!(self.out, "(")?;
-                self.put_expression(left, function, module)?;
-                write!(self.out, " {} ", op_str)?;
-                self.put_expression(right, function, module)?;
-                //write!(self.out, ")")?;
+                let kind = self
+                    .typifier
+                    .get(left, &module.types)
+                    .scalar_kind()
+                    .ok_or(Error::UnsupportedBinaryOp(op))?;
+                if op == crate::BinaryOperator::Modulo && kind == crate::ScalarKind::Float {
+                    write!(self.out, "fmod(")?;
+                    self.put_expression(left, function, module)?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(right, function, module)?;
+                    write!(self.out, ")")?;
+                } else {
+                    //write!(self.out, "(")?;
+                    self.put_expression(left, function, module)?;
+                    write!(self.out, " {} ", op_str)?;
+                    self.put_expression(right, function, module)?;
+                    //write!(self.out, ")")?;
+                }
             }
             crate::Expression::Intrinsic { fun, argument } => {
                 let op = match fun {
@@ -732,6 +745,7 @@ impl<W: Write> Writer<W> {
         statements: &[crate::Statement],
         function: &crate::Function,
         module: &crate::Module,
+        return_value: Option<&str>,
     ) -> Result<(), Error> {
         for statement in statements {
             log::trace!("statement[{}] {:?}", level.0, statement);
@@ -739,7 +753,7 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Block(ref block) => {
                     if !block.is_empty() {
                         writeln!(self.out, "{}{{", level)?;
-                        self.put_block(level.next(), block, function, module)?;
+                        self.put_block(level.next(), block, function, module, return_value)?;
                         writeln!(self.out, "{}}}", level)?;
                     }
                 }
@@ -751,10 +765,10 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "{}if (", level)?;
                     self.put_expression(condition, function, module)?;
                     writeln!(self.out, ") {{")?;
-                    self.put_block(level.next(), accept, function, module)?;
+                    self.put_block(level.next(), accept, function, module, return_value)?;
                     if !reject.is_empty() {
                         writeln!(self.out, "{}}} else {{", level)?;
-                        self.put_block(level.next(), reject, function, module)?;
+                        self.put_block(level.next(), reject, function, module, return_value)?;
                     }
                     writeln!(self.out, "{}}}", level)?;
                 }
@@ -769,14 +783,14 @@ impl<W: Write> Writer<W> {
                     let lcase = level.next();
                     for (&value, &(ref block, ref fall_through)) in cases.iter() {
                         writeln!(self.out, "{}case {}: {{", lcase, value)?;
-                        self.put_block(lcase.next(), block, function, module)?;
+                        self.put_block(lcase.next(), block, function, module, return_value)?;
                         if fall_through.is_none() {
                             writeln!(self.out, "{}break;", lcase.next())?;
                         }
                         writeln!(self.out, "{}}}", lcase)?;
                     }
                     writeln!(self.out, "{}default: {{", lcase)?;
-                    self.put_block(lcase.next(), default, function, module)?;
+                    self.put_block(lcase.next(), default, function, module, return_value)?;
                     writeln!(self.out, "{}}}", lcase)?;
                     writeln!(self.out, "{}}}", level)?;
                 }
@@ -785,7 +799,7 @@ impl<W: Write> Writer<W> {
                     ref continuing,
                 } => {
                     writeln!(self.out, "{}while(true) {{", level)?;
-                    self.put_block(level.next(), body, function, module)?;
+                    self.put_block(level.next(), body, function, module, return_value)?;
                     if !continuing.is_empty() {
                         //TODO
                     }
@@ -797,15 +811,17 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Continue => {
                     writeln!(self.out, "{}continue;", level)?;
                 }
-                crate::Statement::Return { value } => {
+                crate::Statement::Return {
+                    value: Some(expr_handle),
+                } => {
                     write!(self.out, "{}return ", level)?;
-                    match value {
-                        None => write!(self.out, "{}", OUTPUT_STRUCT_NAME)?,
-                        Some(expr_handle) => {
-                            self.put_expression(expr_handle, function, module)?;
-                        }
-                    }
+                    self.put_expression(expr_handle, function, module)?;
                     writeln!(self.out, ";")?;
+                }
+                crate::Statement::Return { value: None } => {
+                    if let Some(string) = return_value {
+                        writeln!(self.out, "{}return {};", level, string)?;
+                    }
                 }
                 crate::Statement::Kill => {
                     writeln!(self.out, "{}discard_fragment();", level)?;
@@ -1013,7 +1029,7 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ";")?;
             }
-            self.put_block(Level(1), &fun.body, fun, module)?;
+            self.put_block(Level(1), &fun.body, fun, module, None)?;
             writeln!(self.out, "}}")?;
         }
 
@@ -1080,7 +1096,7 @@ impl<W: Write> Writer<W> {
                 },
             };
 
-            match stage {
+            let return_value = match stage {
                 crate::ShaderStage::Vertex | crate::ShaderStage::Fragment => {
                     // make dedicated input/output structs
                     writeln!(self.out, "struct {} {{", location_input_name)?;
@@ -1176,9 +1192,12 @@ impl<W: Write> Writer<W> {
                         "\t{} {} [[stage_in]]{}",
                         location_input_name, LOCATION_INPUT_STRUCT_NAME, separator
                     )?;
+
+                    Some(OUTPUT_STRUCT_NAME)
                 }
                 crate::ShaderStage::Compute => {
                     writeln!(self.out, "{} void {}(", em_str, fun_name)?;
+                    None
                 }
             };
 
@@ -1240,7 +1259,7 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ";")?;
             }
-            self.put_block(Level(1), &fun.body, fun, module)?;
+            self.put_block(Level(1), &fun.body, fun, module, return_value)?;
             writeln!(self.out, "}}")?;
         }
 
