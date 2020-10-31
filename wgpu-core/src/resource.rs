@@ -329,9 +329,14 @@ pub enum CreateTextureViewError {
     #[error(
         "TextureView mip level count + base mip level {requested} must be <= Texture mip level count {total}"
     )]
-    InvalidMipLevelCount { requested: u32, total: u8 },
+    TooManyMipLevels { requested: u32, total: u8 },
     #[error("TextureView array layer count + base array layer {requested} must be <= Texture depth/array layer count {total}")]
-    InvalidArrayLayerCount { requested: u32, total: u16 },
+    TooManyArrayLayers { requested: u32, total: u16 },
+    #[error("Requested array layer count {requested} is not valid for the target view dimension {dim:?}")]
+    InvalidArrayLayerCount {
+        requested: u32,
+        dim: wgt::TextureViewDimension,
+    },
     #[error("Aspect {requested:?} is not in the source texture ({total:?})")]
     InvalidAspect {
         requested: hal::format::Aspects,
