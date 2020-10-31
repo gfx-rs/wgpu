@@ -47,3 +47,15 @@ impl From<super::StorageFormat> for super::ScalarKind {
         }
     }
 }
+
+impl crate::TypeInner {
+    pub fn scalar_kind(&self) -> Option<super::ScalarKind> {
+        match *self {
+            super::TypeInner::Scalar { kind, .. } | super::TypeInner::Vector { kind, .. } => {
+                Some(kind)
+            }
+            super::TypeInner::Matrix { .. } => Some(super::ScalarKind::Float),
+            _ => None,
+        }
+    }
+}

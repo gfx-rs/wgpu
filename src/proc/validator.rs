@@ -263,17 +263,12 @@ impl Validator {
                 match (stage, var.class) {
                     (crate::ShaderStage::Vertex, crate::StorageClass::Output)
                     | (crate::ShaderStage::Fragment, crate::StorageClass::Input) => {
-                        match module.types[var.ty].inner {
-                            crate::TypeInner::Scalar { kind, .. }
-                            | crate::TypeInner::Vector { kind, .. } => {
-                                if kind != crate::ScalarKind::Float
-                                    && var.interpolation != Some(crate::Interpolation::Flat)
-                                {
-                                    return Err(EntryPointError::InvalidIntegerInterpolation);
-                                }
+                        match module.types[var.ty].inner.scalar_kind() {
+                            Some(crate::ScalarKind::Float) => {}
+                            Some(_) if var.interpolation != Some(crate::Interpolation::Flat) => {
+                                return Err(EntryPointError::InvalidIntegerInterpolation);
                             }
-                            crate::TypeInner::Matrix { .. } => {}
-                            _ => unreachable!(),
+                            _ => {}
                         }
                     }
                     _ => {}

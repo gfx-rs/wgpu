@@ -1131,11 +1131,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     let value_lexp = self.lookup_expression.lookup(value_id)?;
                     let ty_lookup = self.lookup_type.lookup(result_type_id)?;
-                    let kind = match type_arena[ty_lookup.handle].inner {
-                        crate::TypeInner::Scalar { kind, .. }
-                        | crate::TypeInner::Vector { kind, .. } => kind,
-                        _ => return Err(Error::InvalidAsType(ty_lookup.handle)),
-                    };
+                    let kind = type_arena[ty_lookup.handle]
+                        .inner
+                        .scalar_kind()
+                        .ok_or(Error::InvalidAsType(ty_lookup.handle))?;
 
                     let expr = crate::Expression::As {
                         expr: value_lexp.handle,
@@ -2071,10 +2070,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let format = self.next()?;
 
         let base_handle = self.lookup_type.lookup(sample_type_id)?.handle;
-        let kind = match module.types[base_handle].inner {
-            crate::TypeInner::Scalar { kind, .. } | crate::TypeInner::Vector { kind, .. } => kind,
-            _ => return Err(Error::InvalidImageBaseType(base_handle)),
-        };
+        let kind = module.types[base_handle]
+            .inner
+            .scalar_kind()
+            .ok_or(Error::InvalidImageBaseType(base_handle))?;
 
         let class = if format != 0 {
             crate::ImageClass::Storage(map_image_format(format)?)
