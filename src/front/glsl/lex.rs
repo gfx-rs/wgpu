@@ -146,6 +146,10 @@ impl<'a> Lexer<'a> {
                     "switch" => Some(Token::Switch(meta)),
                     "case" => Some(Token::Case(meta)),
                     "default" => Some(Token::Default(meta)),
+                    // iteration statements
+                    "while" => Some(Token::While(meta)),
+                    "do" => Some(Token::Do(meta)),
+                    "for" => Some(Token::For(meta)),
                     // types
                     "void" => Some(Token::Void(meta)),
                     word => {

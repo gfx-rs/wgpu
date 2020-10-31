@@ -55,9 +55,13 @@ pomelo! {
     %type expression_statement Statement;
     %type declaration_statement Statement;
     %type jump_statement Statement;
+    %type iteration_statement Statement;
     %type selection_statement Statement;
     %type switch_statement_list Vec<(Option<i32>, Block, Option<FallThrough>)>;
     %type switch_statement (Option<i32>, Block, Option<FallThrough>);
+    %type for_init_statement Statement;
+    %type for_rest_statement (Option<ExpressionRule>, Option<ExpressionRule>);
+    %type condition_opt Option<ExpressionRule>;
 
     // expressions
     %type unary_expression ExpressionRule;
@@ -734,6 +738,7 @@ pomelo! {
     simple_statement ::= expression_statement;
     simple_statement ::= selection_statement;
     simple_statement ::= jump_statement;
+    simple_statement ::= iteration_statement;
 
 
     selection_statement ::= If LeftParen expression(e) RightParen statement(s1) Else statement(s2) {
@@ -789,6 +794,77 @@ pomelo! {
             _ => None,
         };
         (None, sl, fallthrough)
+    }
+
+    iteration_statement ::= While LeftParen expression(e) RightParen compound_statement_no_new_scope(sl) {
+        let mut body = Vec::with_capacity(sl.len() + 1);
+        body.push(
+            Statement::If {
+                condition: e.expression,
+                accept: vec![Statement::Break],
+                reject: vec![],
+            }
+        );
+        body.extend_from_slice(&sl);
+        Statement::Loop {
+            body,
+            continuing: vec![],
+        }
+    }
+
+    iteration_statement ::= Do compound_statement(sl) While LeftParen expression(e) RightParen  {
+        let mut body = sl;
+        body.push(
+            Statement::If {
+                condition: e.expression,
+                accept: vec![Statement::Break],
+                reject: vec![],
+            }
+        );
+        Statement::Loop {
+            body,
+            continuing: vec![],
+        }
+    }
+
+    iteration_statement ::= For LeftParen for_init_statement(s_init) for_rest_statement((cond_e, loop_e)) RightParen compound_statement_no_new_scope(sl) {
+        let mut body = Vec::with_capacity(sl.len() + 2);
+        if let Some(cond_e) = cond_e {
+            body.push(
+                Statement::If {
+                    condition: cond_e.expression,
+                    accept: vec![Statement::Break],
+                    reject: vec![],
+                }
+            );
+        }
+        body.extend_from_slice(&sl);
+        if let Some(loop_e) = loop_e {
+            body.extend_from_slice(&loop_e.statements);
+        }
+        Statement::Block(vec![
+            s_init,
+            Statement::Loop {
+                body,
+                continuing: vec![],
+            }
+        ])
+    }
+
+    for_init_statement ::= expression_statement;
+    for_init_statement ::= declaration_statement;
+    for_rest_statement ::= condition_opt(c) Semicolon {
+        (c, None)
+    }
+    for_rest_statement ::= condition_opt(c) Semicolon expression(e) {
+        (c, Some(e))
+    }
+
+    condition_opt ::= {
+        None
+    }
+    condition_opt ::= conditional_expression(c) {
+        Some(c)
     }
 
     compound_statement ::= LeftBrace RightBrace {

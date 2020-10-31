@@ -81,7 +81,7 @@ fn version() {
 
 #[test]
 fn control_flow() {
-    let program = parse_program(
+    let _program = parse_program(
         r#"
         #  version 450
         void main() {
@@ -95,12 +95,8 @@ fn control_flow() {
         ShaderStage::Vertex,
     )
     .unwrap();
-    assert_eq!(
-        format!("{:?}", (program.version, program.profile)),
-        "(450, Core)"
-    );
 
-    let program = parse_program(
+    let _program = parse_program(
         r#"
         #  version 450
         void main() {
@@ -112,12 +108,8 @@ fn control_flow() {
         ShaderStage::Vertex,
     )
     .unwrap();
-    assert_eq!(
-        format!("{:?}", (program.version, program.profile)),
-        "(450, Core)"
-    );
 
-    let program = parse_program(
+    let _program = parse_program(
         r#"
         #  version 450
         void main() {
@@ -138,10 +130,35 @@ fn control_flow() {
         ShaderStage::Vertex,
     )
     .unwrap();
-    // println!("{:#?}", program);
-    // assert!(false);
-    assert_eq!(
-        format!("{:?}", (program.version, program.profile)),
-        "(450, Core)"
-    );
+    let _program = parse_program(
+        r#"
+        #  version 450
+        void main() {
+            int x = 0;
+            while(x < 5) {
+                x = x + 1;
+            }
+            do {
+                x = x - 1;
+            } while(x >= 4)
+        }
+        "#,
+        ShaderStage::Vertex,
+    )
+    .unwrap();
+
+    let _program = parse_program(
+        r#"
+        #  version 450
+        void main() {
+            int x = 0;
+            for(int i = 0; i < 10;) {
+                x = x + 2;
+            }
+            return x;
+        }
+        "#,
+        ShaderStage::Vertex,
+    )
+    .unwrap();
 }
