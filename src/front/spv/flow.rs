@@ -346,7 +346,10 @@ impl FlowGraph {
                     _ => return Err(Error::InvalidTerminator),
                 };
 
-                Ok(vec![crate::Statement::Loop { body, continuing }])
+                let mut result = vec![crate::Statement::Loop { body, continuing }];
+                result.extend(self.naga_traverse(merge_node_index, None)?);
+
+                Ok(result)
             }
             Some(ControlFlowNodeType::Break) => {
                 let mut result = node.block.clone();
@@ -355,13 +358,34 @@ impl FlowGraph {
                         condition,
                         true_id,
                         false_id,
-                    } => result.push(crate::Statement::If {
-                        condition,
-                        accept: self
-                            .naga_traverse(self.block_to_node[&true_id], stop_node_index)?,
-                        reject: self
-                            .naga_traverse(self.block_to_node[&false_id], stop_node_index)?,
-                    }),
+                    } => {
+                        let true_node_id = self.block_to_node[&true_id];
+                        let false_node_id = self.block_to_node[&false_id];
+
+                        let true_edge =
+                            self.flow[self.flow.find_edge(node_index, true_node_id).unwrap()];
+                        let false_edge =
+                            self.flow[self.flow.find_edge(node_index, false_node_id).unwrap()];
+
+                        if true_edge == ControlFlowEdgeType::LoopBreak {
+                            result.push(crate::Statement::If {
+                                condition,
+                                accept: vec![crate::Statement::Break],
+                                reject: self.naga_traverse(false_node_id, stop_node_index)?,
+                            });
+                        } else if false_edge == ControlFlowEdgeType::LoopBreak {
+                            result.push(crate::Statement::If {
+                                condition,
+                                accept: self.naga_traverse(true_node_id, stop_node_index)?,
+                                reject: vec![crate::Statement::Break],
+                            });
+                        } else {
+                            return Err(Error::InvalidEdgeClassification);
+                        }
+                    }
+                    Terminator::Branch { .. } => {
+                        result.push(crate::Statement::Break);
+                    }
                     _ => return Err(Error::InvalidTerminator),
                 };
                 Ok(result)
