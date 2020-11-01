@@ -37,6 +37,21 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
                 width: 4,
             },
         }),
+        "texture2D" => Some(Type {
+            name: None,
+            inner: TypeInner::Image {
+                dim: crate::ImageDimension::D2,
+                arrayed: false,
+                class: crate::ImageClass::Sampled {
+                    kind: ScalarKind::Float,
+                    multi: false,
+                },
+            },
+        }),
+        "sampler" => Some(Type {
+            name: None,
+            inner: TypeInner::Sampler { comparison: false },
+        }),
         word => {
             fn kind_width_parse(ty: &str) -> Option<(ScalarKind, u8)> {
                 Some(match ty {

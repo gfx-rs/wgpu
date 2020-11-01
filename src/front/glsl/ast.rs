@@ -138,6 +138,7 @@ impl Context {
 pub struct ExpressionRule {
     pub expression: Handle<Expression>,
     pub statements: Vec<Statement>,
+    pub sampler: Option<Handle<Expression>>,
 }
 
 impl ExpressionRule {
@@ -145,6 +146,7 @@ impl ExpressionRule {
         ExpressionRule {
             expression,
             statements: vec![],
+            sampler: None,
         }
     }
 }
@@ -166,12 +168,11 @@ pub struct VarDeclaration {
 #[derive(Debug)]
 pub enum FunctionCallKind {
     TypeConstructor(Handle<Type>),
-    Function(Handle<Expression>),
+    Function(String),
 }
 
 #[derive(Debug)]
 pub struct FunctionCall {
     pub kind: FunctionCallKind,
-    pub args: Vec<Handle<Expression>>,
-    pub statements: Vec<Statement>,
+    pub args: Vec<ExpressionRule>,
 }

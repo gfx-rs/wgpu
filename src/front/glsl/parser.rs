@@ -7,7 +7,7 @@ pomelo! {
         use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{proc::Typifier, Arena, BinaryOperator, Binding, Block, Constant,
             ConstantInner, EntryPoint, Expression, FallThrough, FastHashMap, Function, GlobalVariable, Handle, Interpolation,
-            LocalVariable, MemberOrigin, ScalarKind, Statement, StorageAccess,
+            LocalVariable, MemberOrigin, SampleLevel, ScalarKind, Statement, StorageAccess,
             StorageClass, StructMember, Type, TypeInner};
     }
     %token #[derive(Debug)] #[cfg_attr(test, derive(PartialEq))] pub enum Token {};
@@ -230,7 +230,7 @@ pomelo! {
     postfix_expression ::= postfix_expression(e) Dot Identifier(i) /* FieldSelection in spec */ {
         //TODO: how will this work as l-value?
         let expression = extra.field_selection(e.expression, &*i.1, i.0)?;
-        ExpressionRule { expression, statements: e.statements }
+        ExpressionRule { expression, statements: e.statements, sampler: None }
     }
     postfix_expression ::= postfix_expression(pe) IncOp {
         //TODO
@@ -244,17 +244,49 @@ pomelo! {
     integer_expression ::= expression;
 
     function_call ::= function_call_or_method(fc) {
-        if let FunctionCallKind::TypeConstructor(ty) = fc.kind {
-            let h = extra.context.expressions.append(Expression::Compose{
-                ty,
-                components: fc.args,
-            });
-            ExpressionRule{
-                expression: h,
-                statements: fc.statements,
+        match fc.kind {
+            FunctionCallKind::TypeConstructor(ty) => {
+                let h = extra.context.expressions.append(Expression::Compose{
+                    ty,
+                    components: fc.args.iter().map(|a| a.expression).collect(),
+                });
+                ExpressionRule{
+                    expression: h,
+                    statements: fc.args.into_iter().map(|a| a.statements).flatten().collect(),
+                    sampler: None
+                }
             }
-        } else {
-            return Err(ErrorKind::NotImplemented("Function call"));
+            FunctionCallKind::Function(name) => {
+                match name.as_str() {
+                    "sampler2D" => {
+                        //TODO: check args len
+                        ExpressionRule{
+                            expression: fc.args[0].expression,
+                            sampler: Some(fc.args[1].expression),
+                            statements: fc.args.into_iter().map(|a| a.statements).flatten().collect(),
+                        }
+                    }
+                    "texture" => {
+                        //TODO: check args len
+                        if let Some(sampler) = fc.args[0].sampler {
+                            ExpressionRule{
+                                expression: extra.context.expressions.append(Expression::ImageSample{
+                                    image: fc.args[0].expression,
+                                    sampler,
+                                    coordinate: fc.args[1].expression,
+                                    level: SampleLevel::Auto,
+                                    depth_ref: None,
+                                }),
+                                sampler: None,
+                                statements: fc.args.into_iter().map(|a| a.statements).flatten().collect(),
+                            }
+                        } else {
+                            return Err(ErrorKind::SemanticError("Bad call to texture"));
+                        }
+                    }
+                    _ => { return Err(ErrorKind::NotImplemented("Function call")); }
+                }
+            }
         }
     }
     function_call_or_method ::= function_call_generic;
@@ -269,26 +301,22 @@ pomelo! {
     }
     function_call_header_no_parameters ::= function_call_header;
     function_call_header_with_parameters ::= function_call_header(mut h) assignment_expression(ae) {
-        h.args.push(ae.expression);
-        h.statements.extend(ae.statements);
+        h.args.push(ae);
         h
     }
     function_call_header_with_parameters ::= function_call_header_with_parameters(mut h) Comma assignment_expression(ae) {
-        h.args.push(ae.expression);
-        h.statements.extend(ae.statements);
+        h.args.push(ae);
         h
     }
     function_call_header ::= function_identifier(i) LeftParen {
         FunctionCall {
             kind: i,
             args: vec![],
-            statements: vec![],
         }
     }
 
     // Grammar Note: Constructors look like functions, but lexical analysis recognized most of them as
     // keywords. They are now recognized through “type_specifier”.
-    // Methods (.length), subroutine array calls, and identifiers are recognized through postfix_expression.
     function_identifier ::= type_specifier(t) {
         if let Some(ty) = t {
             FunctionCallKind::TypeConstructor(ty)
@@ -296,9 +324,18 @@ pomelo! {
             return Err(ErrorKind::NotImplemented("bad type ctor"))
         }
     }
-    function_identifier ::= postfix_expression(e) {
-        FunctionCallKind::Function(e.expression)
+
+    //TODO
+    // Methods (.length), subroutine array calls, and identifiers are recognized through postfix_expression.
+    // function_identifier ::= postfix_expression(e) {
+    //     FunctionCallKind::Function(e.expression)
+    // }
+
+    // Simplification of above
+    function_identifier ::= Identifier(i) {
+        FunctionCallKind::Function(i.1)
     }
+
 
     unary_expression ::= postfix_expression;
 
@@ -452,6 +489,7 @@ pomelo! {
         ExpressionRule{
             expression: e.expression,
             statements: ae.statements,
+            sampler: None,
         }
     }
 
