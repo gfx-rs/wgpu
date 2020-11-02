@@ -435,17 +435,29 @@ pomelo! {
 
     assignment_expression ::= conditional_expression;
     assignment_expression ::= unary_expression(mut pointer) assignment_operator(op) assignment_expression(value) {
+        pointer.statements.extend(value.statements);
         match op {
             BinaryOperator::Equal => {
-                pointer.statements.extend(value.statements);
                 pointer.statements.push(Statement::Store{
                     pointer: pointer.expression,
                     value: value.expression
                 });
                 pointer
             },
-            //TODO: op != Equal
-            _ => {return Err(ErrorKind::NotImplemented("assign op"))}
+            _ => {
+                let h = extra.context.expressions.append(
+                    Expression::Binary{
+                        op,
+                        left: pointer.expression,
+                        right: value.expression,
+                    }
+                );
+                pointer.statements.push(Statement::Store{
+                    pointer: pointer.expression,
+                    value: h,
+                });
+                pointer
+            }
         }
     }
 
