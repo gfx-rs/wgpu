@@ -684,23 +684,6 @@ pub fn write<'a>(
             })
             .collect();
 
-        for (handle, name) in locals.iter() {
-            writeln!(
-                &mut buf,
-                "\t{} {};",
-                write_type(
-                    func.local_variables[*handle].ty,
-                    &module.types,
-                    &structs,
-                    None,
-                    &mut manager
-                )?,
-                name
-            )?;
-        }
-
-        writeln!(&mut buf)?;
-
         let mut builder = StatementBuilder {
             functions: &functions,
             globals: &globals_lookup,
@@ -709,14 +692,33 @@ pub fn write<'a>(
             args: &args,
             expressions: &func.expressions,
             typifier: &typifier,
-            manager: &mut manager,
         };
+
+        for (handle, name) in locals.iter() {
+            let var = &func.local_variables[*handle];
+            write!(
+                &mut buf,
+                "\t{} {}",
+                write_type(var.ty, &module.types, &structs, None, &mut manager)?,
+                name
+            )?;
+            if let Some(init) = var.init {
+                write!(
+                    &mut buf,
+                    " = {}",
+                    write_expression(&func.expressions[init], module, &mut builder, &mut manager)?
+                )?;
+            }
+            writeln!(&mut buf, ";")?;
+        }
+
+        writeln!(&mut buf)?;
 
         for sta in func.body.iter() {
             writeln!(
                 &mut buf,
                 "{}",
-                write_statement(sta, module, &mut builder, 1)?
+                write_statement(sta, module, &mut builder, &mut manager, 1)?
             )?;
         }
 
@@ -748,19 +750,19 @@ struct StatementBuilder<'a> {
     args: &'a FastHashMap<u32, String>,
     expressions: &'a Arena<Expression>,
     typifier: &'a Typifier,
-    pub manager: &'a mut FeaturesManager,
 }
 
 fn write_statement<'a, 'b>(
     sta: &Statement,
     module: &'a Module,
     builder: &'b mut StatementBuilder<'a>,
+    manager: &mut FeaturesManager,
     indent: usize,
 ) -> Result<String, Error> {
     Ok(match sta {
         Statement::Block(block) => block
             .iter()
-            .map(|sta| write_statement(sta, module, builder, indent))
+            .map(|sta| write_statement(sta, module, builder, manager, indent))
             .collect::<Result<Vec<_>, _>>()?
             .join("\n"),
         Statement::If {
@@ -774,14 +776,14 @@ fn write_statement<'a, 'b>(
                 &mut out,
                 "{}if({}) {{",
                 "\t".repeat(indent),
-                write_expression(&builder.expressions[*condition], module, builder)?
+                write_expression(&builder.expressions[*condition], module, builder, manager)?
             )?;
 
             for sta in accept {
                 writeln!(
                     &mut out,
                     "{}",
-                    write_statement(sta, module, builder, indent + 1)?
+                    write_statement(sta, module, builder, manager, indent + 1)?
                 )?;
             }
 
@@ -791,7 +793,7 @@ fn write_statement<'a, 'b>(
                     writeln!(
                         &mut out,
                         "{}",
-                        write_statement(sta, module, builder, indent + 1)?
+                        write_statement(sta, module, builder, manager, indent + 1)?
                     )?;
                 }
             }
@@ -811,7 +813,7 @@ fn write_statement<'a, 'b>(
                 &mut out,
                 "{}switch({}) {{",
                 "\t".repeat(indent),
-                write_expression(&builder.expressions[*selector], module, builder)?
+                write_expression(&builder.expressions[*selector], module, builder, manager)?
             )?;
 
             for (label, (block, fallthrough)) in cases {
@@ -821,7 +823,7 @@ fn write_statement<'a, 'b>(
                     writeln!(
                         &mut out,
                         "{}",
-                        write_statement(sta, module, builder, indent + 2)?
+                        write_statement(sta, module, builder, manager, indent + 2)?
                     )?;
                 }
 
@@ -837,7 +839,7 @@ fn write_statement<'a, 'b>(
                     writeln!(
                         &mut out,
                         "{}",
-                        write_statement(sta, module, builder, indent + 2)?
+                        write_statement(sta, module, builder, manager, indent + 2)?
                     )?;
                 }
             }
@@ -855,7 +857,7 @@ fn write_statement<'a, 'b>(
                 writeln!(
                     &mut out,
                     "{}",
-                    write_statement(sta, module, builder, indent + 1)?
+                    write_statement(sta, module, builder, manager, indent + 1)?
                 )?;
             }
 
@@ -871,7 +873,7 @@ fn write_statement<'a, 'b>(
             if let Some(expr) = value {
                 format!(
                     "return {};",
-                    write_expression(&builder.expressions[*expr], module, builder)?
+                    write_expression(&builder.expressions[*expr], module, builder, manager)?
                 )
             } else {
                 String::from("return;")
@@ -881,8 +883,8 @@ fn write_statement<'a, 'b>(
         Statement::Store { pointer, value } => format!(
             "{}{} = {};",
             "\t".repeat(indent),
-            write_expression(&builder.expressions[*pointer], module, builder)?,
-            write_expression(&builder.expressions[*value], module, builder)?
+            write_expression(&builder.expressions[*pointer], module, builder, manager)?,
+            write_expression(&builder.expressions[*value], module, builder, manager)?
         ),
     })
 }
@@ -891,18 +893,19 @@ fn write_expression<'a, 'b>(
     expr: &Expression,
     module: &'a Module,
     builder: &'b mut StatementBuilder<'a>,
+    manager: &mut FeaturesManager,
 ) -> Result<Cow<'a, str>, Error> {
     Ok(match *expr {
         Expression::Access { base, index } => {
-            let base_expr = write_expression(&builder.expressions[base], module, builder)?;
+            let base_expr = write_expression(&builder.expressions[base], module, builder, manager)?;
             Cow::Owned(format!(
                 "{}[{}]",
                 base_expr,
-                write_expression(&builder.expressions[index], module, builder)?
+                write_expression(&builder.expressions[index], module, builder, manager)?
             ))
         }
         Expression::AccessIndex { base, index } => {
-            let base_expr = write_expression(&builder.expressions[base], module, builder)?;
+            let base_expr = write_expression(&builder.expressions[base], module, builder, manager)?;
 
             match *builder.typifier.get(base, &module.types) {
                 TypeInner::Vector { .. } => Cow::Owned(format!("{}[{}]", base_expr, index)),
@@ -931,12 +934,13 @@ fn write_expression<'a, 'b>(
             &module.constants[constant],
             module,
             builder,
+            manager,
         )?),
         Expression::Compose { ty, ref components } => {
             let constructor = match module.types[ty].inner {
                 TypeInner::Vector { size, kind, width } => format!(
                     "{}vec{}",
-                    map_scalar(kind, width, builder.manager)?.prefix,
+                    map_scalar(kind, width, manager)?.prefix,
                     size as u8,
                 ),
                 TypeInner::Matrix {
@@ -945,19 +949,18 @@ fn write_expression<'a, 'b>(
                     width,
                 } => format!(
                     "{}mat{}x{}",
-                    map_scalar(crate::ScalarKind::Float, width, builder.manager)?.prefix,
+                    map_scalar(crate::ScalarKind::Float, width, manager)?.prefix,
                     columns as u8,
                     rows as u8,
                 ),
                 TypeInner::Array { .. } => {
-                    write_type(ty, &module.types, builder.structs, None, builder.manager)?
-                        .into_owned()
+                    write_type(ty, &module.types, builder.structs, None, manager)?.into_owned()
                 }
                 TypeInner::Struct { .. } => builder.structs.get(&ty).unwrap().clone(),
                 _ => {
                     return Err(Error::Custom(format!(
                         "Cannot compose type {}",
-                        write_type(ty, &module.types, builder.structs, None, builder.manager)?
+                        write_type(ty, &module.types, builder.structs, None, manager)?
                     )))
                 }
             };
@@ -970,7 +973,8 @@ fn write_expression<'a, 'b>(
                     .map::<Result<_, Error>, _>(|arg| Ok(write_expression(
                         &builder.expressions[*arg],
                         module,
-                        builder
+                        builder,
+                        manager,
                     )?))
                     .collect::<Result<Vec<_>, _>>()?
                     .join(","),
@@ -982,7 +986,7 @@ fn write_expression<'a, 'b>(
             Cow::Borrowed(builder.locals_lookup.get(&handle).unwrap())
         }
         Expression::Load { pointer } => {
-            write_expression(&builder.expressions[pointer], module, builder)?
+            write_expression(&builder.expressions[pointer], module, builder, manager)?
         }
         Expression::ImageSample {
             image,
@@ -991,10 +995,11 @@ fn write_expression<'a, 'b>(
             level,
             depth_ref,
         } => {
-            let image_expr = write_expression(&builder.expressions[image], module, builder)?;
-            write_expression(&builder.expressions[sampler], module, builder)?;
+            let image_expr =
+                write_expression(&builder.expressions[image], module, builder, manager)?;
+            write_expression(&builder.expressions[sampler], module, builder, manager)?;
             let coordinate_expr =
-                write_expression(&builder.expressions[coordinate], module, builder)?;
+                write_expression(&builder.expressions[coordinate], module, builder, manager)?;
 
             let size = match *builder.typifier.get(coordinate, &module.types) {
                 TypeInner::Vector { size, .. } => size,
@@ -1011,7 +1016,7 @@ fn write_expression<'a, 'b>(
                     "vec{}({},{})",
                     size as u8 + 1,
                     coordinate_expr,
-                    write_expression(&builder.expressions[depth_ref], module, builder)?
+                    write_expression(&builder.expressions[depth_ref], module, builder, manager)?
                 ))
             } else {
                 coordinate_expr
@@ -1024,14 +1029,16 @@ fn write_expression<'a, 'b>(
                     format!("textureLod({},{},0)", image_expr, coordinate_expr)
                 }
                 crate::SampleLevel::Exact(expr) => {
-                    let level_expr = write_expression(&builder.expressions[expr], module, builder)?;
+                    let level_expr =
+                        write_expression(&builder.expressions[expr], module, builder, manager)?;
                     format!(
                         "textureLod({}, {}, {})",
                         image_expr, coordinate_expr, level_expr
                     )
                 }
                 crate::SampleLevel::Bias(bias) => {
-                    let bias_expr = write_expression(&builder.expressions[bias], module, builder)?;
+                    let bias_expr =
+                        write_expression(&builder.expressions[bias], module, builder, manager)?;
                     format!("texture({},{},{})", image_expr, coordinate_expr, bias_expr)
                 }
             })
@@ -1041,9 +1048,10 @@ fn write_expression<'a, 'b>(
             coordinate,
             index,
         } => {
-            let image_expr = write_expression(&builder.expressions[image], module, builder)?;
+            let image_expr =
+                write_expression(&builder.expressions[image], module, builder, manager)?;
             let coordinate_expr =
-                write_expression(&builder.expressions[coordinate], module, builder)?;
+                write_expression(&builder.expressions[coordinate], module, builder, manager)?;
 
             let (dim, arrayed, class) = match *builder.typifier.get(image, &module.types) {
                 TypeInner::Image {
@@ -1059,15 +1067,19 @@ fn write_expression<'a, 'b>(
                     //TODO: fix this
                     let sampler_constructor = format!(
                         "{}sampler{}{}{}({})",
-                        map_scalar(kind, 4, builder.manager)?.prefix,
+                        map_scalar(kind, 4, manager)?.prefix,
                         ImageDimension(dim),
                         if multi { "MS" } else { "" },
                         if arrayed { "Array" } else { "" },
                         image_expr,
                     );
 
-                    let index_expr =
-                        write_expression(&builder.expressions[index.unwrap()], module, builder)?;
+                    let index_expr = write_expression(
+                        &builder.expressions[index.unwrap()],
+                        module,
+                        builder,
+                        manager,
+                    )?;
                     format!(
                         "texelFetch({},{},{})",
                         sampler_constructor, coordinate_expr, index_expr
@@ -1078,7 +1090,7 @@ fn write_expression<'a, 'b>(
             })
         }
         Expression::Unary { op, expr } => {
-            let base_expr = write_expression(&builder.expressions[expr], module, builder)?;
+            let base_expr = write_expression(&builder.expressions[expr], module, builder, manager)?;
 
             Cow::Owned(format!(
                 "({} {})",
@@ -1108,8 +1120,9 @@ fn write_expression<'a, 'b>(
             ))
         }
         Expression::Binary { op, left, right } => {
-            let left_expr = write_expression(&builder.expressions[left], module, builder)?;
-            let right_expr = write_expression(&builder.expressions[right], module, builder)?;
+            let left_expr = write_expression(&builder.expressions[left], module, builder, manager)?;
+            let right_expr =
+                write_expression(&builder.expressions[right], module, builder, manager)?;
 
             let op_str = match op {
                 BinaryOperator::Add => "+",
@@ -1135,7 +1148,7 @@ fn write_expression<'a, 'b>(
             Cow::Owned(format!("({} {} {})", left_expr, op_str, right_expr))
         }
         Expression::Intrinsic { fun, argument } => {
-            let expr = write_expression(&builder.expressions[argument], module, builder)?;
+            let expr = write_expression(&builder.expressions[argument], module, builder, manager)?;
 
             Cow::Owned(format!(
                 "{:?}({})",
@@ -1151,17 +1164,20 @@ fn write_expression<'a, 'b>(
             ))
         }
         Expression::Transpose(matrix) => {
-            let matrix_expr = write_expression(&builder.expressions[matrix], module, builder)?;
+            let matrix_expr =
+                write_expression(&builder.expressions[matrix], module, builder, manager)?;
             Cow::Owned(format!("transpose({})", matrix_expr))
         }
         Expression::DotProduct(left, right) => {
-            let left_expr = write_expression(&builder.expressions[left], module, builder)?;
-            let right_expr = write_expression(&builder.expressions[right], module, builder)?;
+            let left_expr = write_expression(&builder.expressions[left], module, builder, manager)?;
+            let right_expr =
+                write_expression(&builder.expressions[right], module, builder, manager)?;
             Cow::Owned(format!("dot({},{})", left_expr, right_expr))
         }
         Expression::CrossProduct(left, right) => {
-            let left_expr = write_expression(&builder.expressions[left], module, builder)?;
-            let right_expr = write_expression(&builder.expressions[right], module, builder)?;
+            let left_expr = write_expression(&builder.expressions[left], module, builder, manager)?;
+            let right_expr =
+                write_expression(&builder.expressions[right], module, builder, manager)?;
             Cow::Owned(format!("cross({},{})", left_expr, right_expr))
         }
         Expression::As {
@@ -1169,7 +1185,8 @@ fn write_expression<'a, 'b>(
             kind,
             convert,
         } => {
-            let value_expr = write_expression(&builder.expressions[expr], module, builder)?;
+            let value_expr =
+                write_expression(&builder.expressions[expr], module, builder, manager)?;
 
             let (source_kind, ty_expr) = match *builder.typifier.get(expr, &module.types) {
                 TypeInner::Scalar {
@@ -1177,7 +1194,7 @@ fn write_expression<'a, 'b>(
                     kind: source_kind,
                 } => (
                     source_kind,
-                    Cow::Borrowed(map_scalar(kind, width, builder.manager)?.full),
+                    Cow::Borrowed(map_scalar(kind, width, manager)?.full),
                 ),
                 TypeInner::Vector {
                     width,
@@ -1187,7 +1204,7 @@ fn write_expression<'a, 'b>(
                     source_kind,
                     Cow::Owned(format!(
                         "{}vec{}",
-                        map_scalar(kind, width, builder.manager)?.prefix,
+                        map_scalar(kind, width, manager)?.prefix,
                         size as u32,
                     )),
                 ),
@@ -1214,7 +1231,7 @@ fn write_expression<'a, 'b>(
             Cow::Owned(format!("{}({})", op, value_expr))
         }
         Expression::Derivative { axis, expr } => {
-            let expr = write_expression(&builder.expressions[expr], module, builder)?;
+            let expr = write_expression(&builder.expressions[expr], module, builder, manager)?;
 
             Cow::Owned(format!(
                 "{}({})",
@@ -1237,7 +1254,8 @@ fn write_expression<'a, 'b>(
                 .map::<Result<_, Error>, _>(|arg| write_expression(
                     &builder.expressions[*arg],
                     module,
-                    builder
+                    builder,
+                    manager,
                 ))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
@@ -1247,14 +1265,18 @@ fn write_expression<'a, 'b>(
             ref arguments,
         } => match name.as_str() {
             "cos" | "normalize" | "sin" | "length" | "abs" | "floor" | "inverse" => {
-                let expr = write_expression(&builder.expressions[arguments[0]], module, builder)?;
+                let expr =
+                    write_expression(&builder.expressions[arguments[0]], module, builder, manager)?;
 
                 Cow::Owned(format!("{}({})", name, expr))
             }
             "fclamp" | "clamp" | "mix" | "smoothstep" => {
-                let x = write_expression(&builder.expressions[arguments[0]], module, builder)?;
-                let y = write_expression(&builder.expressions[arguments[1]], module, builder)?;
-                let a = write_expression(&builder.expressions[arguments[2]], module, builder)?;
+                let x =
+                    write_expression(&builder.expressions[arguments[0]], module, builder, manager)?;
+                let y =
+                    write_expression(&builder.expressions[arguments[1]], module, builder, manager)?;
+                let a =
+                    write_expression(&builder.expressions[arguments[2]], module, builder, manager)?;
 
                 let name = match name.as_str() {
                     "fclamp" => "clamp",
@@ -1264,14 +1286,18 @@ fn write_expression<'a, 'b>(
                 Cow::Owned(format!("{}({}, {}, {})", name, x, y, a))
             }
             "atan2" => {
-                let x = write_expression(&builder.expressions[arguments[0]], module, builder)?;
-                let y = write_expression(&builder.expressions[arguments[1]], module, builder)?;
+                let x =
+                    write_expression(&builder.expressions[arguments[0]], module, builder, manager)?;
+                let y =
+                    write_expression(&builder.expressions[arguments[1]], module, builder, manager)?;
 
                 Cow::Owned(format!("atan({}, {})", y, x))
             }
             "distance" | "dot" | "min" | "max" | "reflect" | "pow" | "step" | "cross" => {
-                let x = write_expression(&builder.expressions[arguments[0]], module, builder)?;
-                let y = write_expression(&builder.expressions[arguments[1]], module, builder)?;
+                let x =
+                    write_expression(&builder.expressions[arguments[0]], module, builder, manager)?;
+                let y =
+                    write_expression(&builder.expressions[arguments[1]], module, builder, manager)?;
 
                 Cow::Owned(format!("{}({}, {})", name, x, y))
             }
@@ -1283,7 +1309,7 @@ fn write_expression<'a, 'b>(
             }
         },
         Expression::ArrayLength(expr) => {
-            let base = write_expression(&builder.expressions[expr], module, builder)?;
+            let base = write_expression(&builder.expressions[expr], module, builder, manager)?;
             Cow::Owned(format!("uint({}.length())", base))
         }
     })
@@ -1293,6 +1319,7 @@ fn write_constant(
     constant: &Constant,
     module: &Module,
     builder: &mut StatementBuilder<'_>,
+    manager: &mut FeaturesManager,
 ) -> Result<String, Error> {
     Ok(match constant.inner {
         ConstantInner::Sint(int) => int.to_string(),
@@ -1307,28 +1334,22 @@ fn write_constant(
                     Cow::Owned(format!("mat{}x{}", columns as u8, rows as u8,)),
                 TypeInner::Struct { .. } =>
                     Cow::<str>::Borrowed(builder.structs.get(&constant.ty).unwrap()),
-                TypeInner::Array { .. } => write_type(
-                    constant.ty,
-                    &module.types,
-                    builder.structs,
-                    None,
-                    builder.manager
-                )?,
+                TypeInner::Array { .. } =>
+                    write_type(constant.ty, &module.types, builder.structs, None, manager)?,
                 _ =>
                     return Err(Error::Custom(format!(
                         "Cannot build constant of type {}",
-                        write_type(
-                            constant.ty,
-                            &module.types,
-                            builder.structs,
-                            None,
-                            builder.manager
-                        )?
+                        write_type(constant.ty, &module.types, builder.structs, None, manager)?
                     ))),
             },
             components
                 .iter()
-                .map(|component| write_constant(&module.constants[*component], module, builder,))
+                .map(|component| write_constant(
+                    &module.constants[*component],
+                    module,
+                    builder,
+                    manager
+                ))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
         ),
