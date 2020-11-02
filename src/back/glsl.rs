@@ -1811,6 +1811,7 @@ fn collect_texture_mapping<'a>(
     for func in functions {
         let mut interface = Interface {
             expressions: &func.expressions,
+            local_variables: &func.local_variables,
             visitor: TextureMappingVisitor {
                 expressions: &func.expressions,
                 map: &mut mappings,

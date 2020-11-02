@@ -2,6 +2,7 @@ use crate::arena::{Arena, Handle};
 
 pub struct Interface<'a, T> {
     pub expressions: &'a Arena<crate::Expression>,
+    pub local_variables: &'a Arena<crate::LocalVariable>,
     pub visitor: T,
 }
 
@@ -36,7 +37,13 @@ where
                     self.traverse_expr(comp);
                 }
             }
-            E::FunctionParameter(_) | E::GlobalVariable(_) | E::LocalVariable(_) => {}
+            E::FunctionParameter(_) | E::GlobalVariable(_) => {}
+            E::LocalVariable(var) => {
+                let var = &self.local_variables[var];
+                if let Some(init) = var.init {
+                    self.traverse_expr(init);
+                }
+            }
             E::Load { pointer } => {
                 self.traverse_expr(pointer);
             }
@@ -201,6 +208,7 @@ impl crate::Function {
 
         let mut io = Interface {
             expressions: &self.expressions,
+            local_variables: &self.local_variables,
             visitor: GlobalUseVisitor(&mut self.global_usage),
         };
         io.traverse(&self.body);
