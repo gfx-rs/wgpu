@@ -1071,7 +1071,29 @@ pomelo! {
             );
             if let Some(id) = id {
                 extra.lookup_global_variables.insert(id, h);
+            } else {
+                // variables in interface blocks without an instance name are in the global namespace
+                // https://www.khronos.org/opengl/wiki/Interface_Block_(GLSL)
+                if let TypeInner::Struct { members } = &extra.module.types[d.ty].inner {
+                    for m in members {
+                        if let Some(name) = &m.name {
+                            let h = extra
+                                .module
+                                .global_variables
+                                .fetch_or_append(GlobalVariable {
+                                    name: Some(name.into()),
+                                    class,
+                                    binding: binding.clone(),
+                                    ty: m.ty,
+                                    interpolation,
+                                    storage_access: StorageAccess::empty(), // TODO
+                                });
+                            extra.lookup_global_variables.insert(name.into(), h);
+                        }
+                    }
+                }
             }
+
         }
     }
 
