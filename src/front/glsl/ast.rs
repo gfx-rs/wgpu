@@ -42,8 +42,8 @@ impl Program {
     pub fn binary_expr(
         &mut self,
         op: BinaryOperator,
-        left: ExpressionRule,
-        right: ExpressionRule,
+        left: &ExpressionRule,
+        right: &ExpressionRule,
     ) -> ExpressionRule {
         ExpressionRule::from_expression(self.context.expressions.append(Expression::Binary {
             op,
