@@ -6,7 +6,7 @@
 // However when building from both the wgpu crate or this crate cargo doc will claim all the links cannot be resolved
 // despite the fact that it works fine when it needs to.
 // So we just disable those warnings.
-#![allow(intra_doc_link_resolution_failure)]
+#![allow(broken_intra_doc_links)]
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
