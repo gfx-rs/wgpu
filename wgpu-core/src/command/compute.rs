@@ -79,6 +79,11 @@ impl ComputePass {
     pub fn parent_id(&self) -> id::CommandEncoderId {
         self.parent_id
     }
+
+    #[cfg(feature = "trace")]
+    pub fn into_command(self) -> crate::device::trace::Command {
+        crate::device::trace::Command::RunComputePass { base: self.base }
+    }
 }
 
 impl fmt::Debug for ComputePass {

@@ -6,7 +6,7 @@
 // However when building from both the wgpu crate or this crate cargo doc will claim all the links cannot be resolved
 // despite the fact that it works fine when it needs to.
 // So we just disable those warnings.
-#![allow(intra_doc_link_resolution_failure)]
+#![allow(broken_intra_doc_links)]
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -1252,6 +1252,8 @@ impl<L> BufferDescriptor<L> {
 
 /// Describes a [`CommandEncoder`].
 #[repr(C)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CommandEncoderDescriptor<L> {
     /// Debug label for the command encoder. This will show up in graphics debuggers for easy identification.

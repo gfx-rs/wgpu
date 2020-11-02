@@ -163,6 +163,15 @@ impl RenderPass {
     pub fn parent_id(&self) -> id::CommandEncoderId {
         self.parent_id
     }
+
+    #[cfg(feature = "trace")]
+    pub fn into_command(self) -> crate::device::trace::Command {
+        crate::device::trace::Command::RunRenderPass {
+            base: self.base,
+            target_colors: self.color_targets.into_iter().collect(),
+            target_depth_stencil: self.depth_stencil_target,
+        }
+    }
 }
 
 impl fmt::Debug for RenderPass {
