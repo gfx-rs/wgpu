@@ -5,20 +5,19 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 EXPORTS.mozilla.webgpu.ffi += [
-    'wgpu.h',
+    "wgpu.h",
 ]
 
-UNIFIED_SOURCES += [
-]
+UNIFIED_SOURCES += []
 
-if CONFIG['COMPILE_ENVIRONMENT']:
-    CbindgenHeader('wgpu_ffi_generated.h', inputs=['/gfx/wgpu_bindings', '/gfx/wgpu'])
+if CONFIG["COMPILE_ENVIRONMENT"]:
+    CbindgenHeader("wgpu_ffi_generated.h", inputs=["/gfx/wgpu_bindings", "/gfx/wgpu"])
 
     EXPORTS.mozilla.webgpu.ffi += [
-        '!wgpu_ffi_generated.h',
+        "!wgpu_ffi_generated.h",
     ]
 
 
-include('/ipc/chromium/chromium-config.mozbuild')
+include("/ipc/chromium/chromium-config.mozbuild")
 
-FINAL_LIBRARY = 'xul'
+FINAL_LIBRARY = "xul"

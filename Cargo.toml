@@ -28,4 +28,4 @@ features = ["trace"]
 
 [dependencies]
 log = "0.4"
-parking_lot = { version = "0.10" }
+parking_lot = { version = "0.11" }

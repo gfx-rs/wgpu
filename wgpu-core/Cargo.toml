@@ -31,7 +31,7 @@ hal = { package = "gfx-hal", version = "0.5.1" }
 gfx-backend-empty = "0.5"
 gfx-descriptor = "0.1"
 gfx-memory = "0.1"
-parking_lot = "0.10"
+parking_lot = "0.11"
 peek-poke = "0.2"
 raw-window-handle = { version = "0.3", optional = true }
 ron = { version = "0.6.2", optional = true }
@@ -51,7 +51,7 @@ version = "0.5"
 features = ["peek-poke"]
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
-gfx-backend-metal = { version = "0.5.3" }
+gfx-backend-metal = { version = "0.5.7" }
 gfx-backend-vulkan = { version = "0.5.7", optional = true }
 
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
