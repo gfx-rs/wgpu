@@ -10,6 +10,12 @@ const BITS_PER_BYTE: crate::Bytes = 8;
 pub enum Error {
     #[error("can't find local variable: {0:?}")]
     UnknownLocalVariable(crate::LocalVariable),
+    #[error("bad image class for op: {0:?}")]
+    BadImageClass(crate::ImageClass),
+    #[error("not an image")]
+    NotImage,
+    #[error("empty value")]
+    EmptyValue,
 }
 
 struct Block {
@@ -85,6 +91,9 @@ enum LocalType {
     Pointer {
         base: crate::Handle<crate::Type>,
         class: spirv::StorageClass,
+    },
+    SampledImage {
+        image_type: crate::Handle<crate::Type>,
     },
 }
 
@@ -447,6 +456,10 @@ impl Writer {
                 super::instructions::instruction_type_vector(id, scalar_id, size)
             }
             LocalType::Pointer { .. } => unimplemented!(),
+            LocalType::SampledImage { image_type } => {
+                let image_type_id = self.get_type_id(arena, LookupType::Handle(image_type));
+                super::instructions::instruction_type_sampled_image(id, image_type_id)
+            }
         };
 
         self.lookup_type.insert(LookupType::Local(local_ty), id);
@@ -499,17 +512,14 @@ impl Writer {
             } => {
                 let width = 4;
                 let local_type = match class {
-                    crate::ImageClass::Sampled { kind, multi: _ } => LocalType::Vector {
-                        size: crate::VectorSize::Quad,
-                        kind,
-                        width,
-                    },
+                    crate::ImageClass::Sampled { kind, multi: _ } => {
+                        LocalType::Scalar { kind, width }
+                    }
                     crate::ImageClass::Depth => LocalType::Scalar {
                         kind: crate::ScalarKind::Float,
                         width,
                     },
-                    crate::ImageClass::Storage(format) => LocalType::Vector {
-                        size: crate::VectorSize::Quad,
+                    crate::ImageClass::Storage(format) => LocalType::Scalar {
                         kind: format.into(),
                         width,
                     },
@@ -1187,6 +1197,135 @@ impl Writer {
 
                 block.body.push(instruction);
 
+                Ok(Some((id, None)))
+            }
+            crate::Expression::ImageSample {
+                image,
+                sampler,
+                coordinate,
+                level: _,
+                depth_ref: _,
+            } => {
+                // image
+                let image_expression = &ir_function.expressions[*image];
+                let (image_id, image_ty) = self
+                    .write_expression(ir_module, ir_function, image_expression, block, function)?
+                    .ok_or(Error::EmptyValue)?;
+                let image_ty = image_ty.ok_or(Error::EmptyValue)?;
+                let image_result_type_id =
+                    self.get_type_id(&ir_module.types, LookupType::Handle(image_ty));
+                let image_id = match *image_expression {
+                    crate::Expression::LocalVariable(_) | crate::Expression::GlobalVariable(_) => {
+                        let load_id = self.generate_id();
+                        block.body.push(super::instructions::instruction_load(
+                            image_result_type_id,
+                            load_id,
+                            image_id,
+                            None,
+                        ));
+                        load_id
+                    }
+                    _ => image_id,
+                };
+
+                // OpTypeSampledImage
+                let sampled_image_type_id = self.get_type_id(
+                    &ir_module.types,
+                    LookupType::Local(LocalType::SampledImage {
+                        image_type: image_ty,
+                    }),
+                );
+
+                // sampler
+                let sampler_expression = &ir_function.expressions[*sampler];
+                let (sampler_id, sampler_ty) = self
+                    .write_expression(ir_module, ir_function, sampler_expression, block, function)?
+                    .ok_or(Error::EmptyValue)?;
+                let sampler_ty = sampler_ty.ok_or(Error::EmptyValue)?;
+                let sampler_result_type_id =
+                    self.get_type_id(&ir_module.types, LookupType::Handle(sampler_ty));
+                let sampler_id = match *sampler_expression {
+                    crate::Expression::LocalVariable(_) | crate::Expression::GlobalVariable(_) => {
+                        let load_id = self.generate_id();
+                        block.body.push(super::instructions::instruction_load(
+                            sampler_result_type_id,
+                            load_id,
+                            sampler_id,
+                            None,
+                        ));
+                        load_id
+                    }
+                    _ => sampler_id,
+                };
+
+                // coordinate
+                let coordinate_expression = &ir_function.expressions[*coordinate];
+                let (coordinate_id, coordinate_ty) = self
+                    .write_expression(
+                        ir_module,
+                        ir_function,
+                        coordinate_expression,
+                        block,
+                        function,
+                    )?
+                    .ok_or(Error::EmptyValue)?;
+                let coordinate_ty = coordinate_ty.ok_or(Error::EmptyValue)?;
+                let coordinate_result_type_id =
+                    self.get_type_id(&ir_module.types, LookupType::Handle(coordinate_ty));
+                let coordinate_id = match *coordinate_expression {
+                    crate::Expression::LocalVariable(_) | crate::Expression::GlobalVariable(_) => {
+                        let load_id = self.generate_id();
+                        block.body.push(super::instructions::instruction_load(
+                            coordinate_result_type_id,
+                            load_id,
+                            coordinate_id,
+                            None,
+                        ));
+                        load_id
+                    }
+                    _ => coordinate_id,
+                };
+
+                // component kind
+                let image_type = &ir_module.types[image_ty];
+                let image_sample_result_type =
+                    if let crate::TypeInner::Image { class, .. } = image_type.inner {
+                        let width = 4;
+                        let local_type = match class {
+                            crate::ImageClass::Sampled { kind, multi: _ } => LocalType::Vector {
+                                kind,
+                                width,
+                                size: crate::VectorSize::Quad,
+                            },
+                            crate::ImageClass::Depth => LocalType::Scalar {
+                                kind: crate::ScalarKind::Float,
+                                width,
+                            },
+                            _ => return Err(Error::BadImageClass(class)),
+                        };
+                        self.get_type_id(&ir_module.types, LookupType::Local(local_type))
+                    } else {
+                        return Err(Error::NotImage);
+                    };
+
+                let sampled_image_id = self.generate_id();
+                block
+                    .body
+                    .push(super::instructions::instruction_sampled_image(
+                        sampled_image_type_id,
+                        sampled_image_id,
+                        image_id,
+                        sampler_id,
+                    ));
+                let id = self.generate_id();
+                block
+                    .body
+                    .push(super::instructions::instruction_image_sample_implicit_lod(
+                        image_sample_result_type,
+                        id,
+                        sampled_image_id,
+                        coordinate_id,
+                    ));
                 Ok(Some((id, None)))
             }
             _ => unimplemented!("{:?}", expression),
