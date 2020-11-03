@@ -33,11 +33,25 @@ pub enum GlobalVariableError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+pub enum LocalVariableError {
+    #[error("Initializer is not a constant expression")]
+    InitializerConst,
+    #[error("Initializer doesn't match the variable type")]
+    InitializerType,
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum FunctionError {
     #[error(transparent)]
     Resolve(#[from] ResolveError),
     #[error("There are instructions after `return`/`break`/`continue`")]
     InvalidControlFlowExitTail,
+    #[error("Local variable {handle:?} '{name}' is invalid: {error:?}")]
+    LocalVariable {
+        handle: Handle<crate::LocalVariable>,
+        name: String,
+        error: LocalVariableError,
+    },
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -209,6 +223,21 @@ impl Validator {
         Ok(())
     }
 
+    fn validate_local_var(
+        &self,
+        var: &crate::LocalVariable,
+        _fun: &crate::Function,
+        _types: &Arena<crate::Type>,
+    ) -> Result<(), LocalVariableError> {
+        log::debug!("var {:?}", var);
+        if let Some(_expr_handle) = var.init {
+            if false {
+                return Err(LocalVariableError::InitializerConst);
+            }
+        }
+        Ok(())
+    }
+
     fn validate_function(
         &mut self,
         fun: &crate::Function,
@@ -223,6 +252,15 @@ impl Validator {
         };
         self.typifier
             .resolve_all(&fun.expressions, &module.types, &resolve_ctx)?;
+
+        for (var_handle, var) in fun.local_variables.iter() {
+            self.validate_local_var(var, fun, &module.types)
+                .map_err(|error| FunctionError::LocalVariable {
+                    handle: var_handle,
+                    name: var.name.clone().unwrap_or_default(),
+                    error,
+                })?;
+        }
         Ok(())
     }
 
