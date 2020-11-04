@@ -48,6 +48,7 @@
             class: Input,
             binding: Some(Location(0)),
             ty: 1,
+            init: None,
             interpolation: None,
             storage_access: (
                 bits: 0,
@@ -58,6 +59,7 @@
             class: Output,
             binding: Some(Location(0)),
             ty: 2,
+            init: None,
             interpolation: None,
             storage_access: (
                 bits: 0,
@@ -85,7 +87,7 @@
                     (
                         name: Some("w"),
                         ty: 3,
-                        init: Some(3),
+                        init: Some(1),
                     ),
                 ],
                 expressions: [

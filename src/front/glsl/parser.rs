@@ -760,18 +760,33 @@ pomelo! {
                     return Err(ErrorKind::VariableAlreadyDeclared(id))
                 }
             }
+            let mut init_exp: Option<Handle<Expression>> = None;
             let localVar = extra.context.local_variables.append(
                 LocalVariable {
                     name: Some(id.clone()),
                     ty: d.ty,
                     init: initializer.map(|i| {
                         statements.extend(i.statements);
-                        i.expression
-                    }),
+                        if let Expression::Constant(constant) = extra.context.expressions[i.expression] {
+                            Some(constant)
+                        } else {
+                            init_exp = Some(i.expression);
+                            None
+                        }
+                    }).flatten(),
                 }
             );
             let exp = extra.context.expressions.append(Expression::LocalVariable(localVar));
             extra.context.add_local_var(id, exp);
+
+            if let Some(value) = init_exp {
+                statements.push(
+                    Statement::Store {
+                        pointer: exp,
+                        value,
+                    }
+                );
+            }
         }
         match statements.len() {
             1 => statements.remove(0),
@@ -1066,33 +1081,13 @@ pomelo! {
                     class,
                     binding: binding.clone(),
                     ty: d.ty,
+                    init: None,
                     interpolation,
                     storage_access: StorageAccess::empty(), //TODO
                 },
             );
             if let Some(id) = id {
                 extra.lookup_global_variables.insert(id, h);
-            } else {
-                // variables in interface blocks without an instance name are in the global namespace
-                // https://www.khronos.org/opengl/wiki/Interface_Block_(GLSL)
-                if let TypeInner::Struct { members } = &extra.module.types[d.ty].inner {
-                    for m in members {
-                        if let Some(name) = &m.name {
-                            let h = extra
-                                .module
-                                .global_variables
-                                .fetch_or_append(GlobalVariable {
-                                    name: Some(name.into()),
-                                    class,
-                                    binding: binding.clone(),
-                                    ty: m.ty,
-                                    interpolation,
-                                    storage_access: StorageAccess::empty(), // TODO
-                                });
-                            extra.lookup_global_variables.insert(name.into(), h);
-                        }
-                    }
-                }
             }
         }
     }

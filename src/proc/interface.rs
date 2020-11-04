@@ -37,13 +37,7 @@ where
                     self.traverse_expr(comp);
                 }
             }
-            E::FunctionParameter(_) | E::GlobalVariable(_) => {}
-            E::LocalVariable(var) => {
-                let var = &self.local_variables[var];
-                if let Some(init) = var.init {
-                    self.traverse_expr(init);
-                }
-            }
+            E::FunctionParameter(_) | E::GlobalVariable(_) | E::LocalVariable(_) => {}
             E::Load { pointer } => {
                 self.traverse_expr(pointer);
             }
@@ -229,6 +223,7 @@ mod tests {
             class: StorageClass::Uniform,
             binding: None,
             ty: Handle::new(std::num::NonZeroU32::new(1).unwrap()),
+            init: None,
             interpolation: None,
             storage_access: StorageAccess::empty(),
         };

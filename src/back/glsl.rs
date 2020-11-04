@@ -706,7 +706,7 @@ pub fn write<'a>(
                 write!(
                     &mut buf,
                     " = {}",
-                    write_expression(&func.expressions[init], module, &mut builder, &mut manager)?
+                    write_constant(&module.constants[init], module, &mut builder, &mut manager)?
                 )?;
             }
             writeln!(&mut buf, ";")?;

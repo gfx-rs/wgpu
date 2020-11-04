@@ -38,6 +38,7 @@ impl Program {
                                 width: 4,
                             },
                         }),
+                        init: None,
                         interpolation: None,
                         storage_access: StorageAccess::empty(),
                     });
@@ -72,6 +73,7 @@ impl Program {
                                 width: 4,
                             },
                         }),
+                        init: None,
                         interpolation: None,
                         storage_access: StorageAccess::empty(),
                     });

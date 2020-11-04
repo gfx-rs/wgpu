@@ -554,8 +554,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let init = if inst.wc > 4 {
                         inst.expect(5)?;
                         let init_id = self.next()?;
-                        let lexp = self.lookup_expression.lookup(init_id)?;
-                        Some(lexp.handle)
+                        let lconst = self.lookup_constant.lookup(init_id)?;
+                        Some(lconst.handle)
                     } else {
                         None
                     };
@@ -2271,10 +2271,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let type_id = self.next()?;
         let id = self.next()?;
         let storage_class = self.next()?;
-        if inst.wc != 4 {
+        let init = if inst.wc > 4 {
             inst.expect(5)?;
-            let _init = self.next()?; //TODO
-        }
+            let init_id = self.next()?;
+            let lconst = self.lookup_constant.lookup(init_id)?;
+            Some(lconst.handle)
+        } else {
+            None
+        };
         let lookup_type = self.lookup_type.lookup(type_id)?;
         let dec = self
             .future_decor
@@ -2338,6 +2342,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             class,
             binding,
             ty: lookup_type.handle,
+            init,
             interpolation: dec.interpolation,
             storage_access,
         };

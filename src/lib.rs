@@ -406,8 +406,7 @@ pub struct Constant {
 }
 
 /// Additional information, dependendent on the kind of constant.
-// Clone is used only for error reporting and is not intended for end users
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ConstantInner {
@@ -456,6 +455,8 @@ pub struct GlobalVariable {
     pub binding: Option<Binding>,
     /// The type of this variable.
     pub ty: Handle<Type>,
+    /// Initial value for this variable.
+    pub init: Option<Handle<Constant>>,
     /// The interpolation qualifier, if any.
     /// If the this `GlobalVariable` is a vertex output
     /// or fragment input, `None` corresponds to the
@@ -475,7 +476,7 @@ pub struct LocalVariable {
     /// The type of this variable.
     pub ty: Handle<Type>,
     /// Initial value for this variable.
-    pub init: Option<Handle<Expression>>,
+    pub init: Option<Handle<Constant>>,
 }
 
 /// Operation that can be applied on a single value.

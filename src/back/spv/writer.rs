@@ -195,15 +195,13 @@ impl Writer {
 
     fn get_global_variable_id(
         &mut self,
-        arena: &crate::Arena<crate::Type>,
-        global_arena: &crate::Arena<crate::GlobalVariable>,
+        ir_module: &crate::Module,
         handle: crate::Handle<crate::GlobalVariable>,
     ) -> Word {
         match self.lookup_global_variable.entry(handle) {
             Entry::Occupied(e) => *e.get(),
             _ => {
-                let global_variable = &global_arena[handle];
-                let (instruction, id) = self.write_global_variable(arena, global_variable, handle);
+                let (instruction, id) = self.write_global_variable(ir_module, handle);
                 instruction.to_words(&mut self.logical_layout.declarations);
                 id
             }
@@ -277,15 +275,9 @@ impl Writer {
         for (_, variable) in ir_function.local_variables.iter() {
             let id = self.generate_id();
 
-            let init_word = match variable.init {
-                Some(exp) => match &ir_function.expressions[exp] {
-                    crate::Expression::Constant(handle) => {
-                        Some(self.get_constant_id(*handle, ir_module))
-                    }
-                    _ => unreachable!(),
-                },
-                None => None,
-            };
+            let init_word = variable
+                .init
+                .map(|constant| self.get_constant_id(constant, ir_module));
 
             let pointer_id =
                 self.get_pointer_id(&ir_module.types, variable.ty, spirv::StorageClass::Function);
@@ -372,11 +364,7 @@ impl Writer {
             .zip(&entry_point.function.global_usage)
         {
             if usage.contains(crate::GlobalUse::STORE) || usage.contains(crate::GlobalUse::LOAD) {
-                let id = self.get_global_variable_id(
-                    &ir_module.types,
-                    &ir_module.global_variables,
-                    handle,
-                );
+                let id = self.get_global_variable_id(ir_module, handle);
                 interface_ids.push(id);
             }
         }
@@ -681,17 +669,21 @@ impl Writer {
 
     fn write_global_variable(
         &mut self,
-        arena: &crate::Arena<crate::Type>,
-        global_variable: &crate::GlobalVariable,
+        ir_module: &crate::Module,
         handle: crate::Handle<crate::GlobalVariable>,
     ) -> (Instruction, Word) {
+        let global_variable = &ir_module.global_variables[handle];
         let id = self.generate_id();
 
         let class = self.parse_to_spirv_storage_class(global_variable.class);
         self.try_add_capabilities(class.required_capabilities());
 
-        let pointer_id = self.get_pointer_id(arena, global_variable.ty, class);
-        let instruction = super::instructions::instruction_variable(pointer_id, id, class, None);
+        let init_word = global_variable
+            .init
+            .map(|constant| self.get_constant_id(constant, ir_module));
+        let pointer_id = self.get_pointer_id(&ir_module.types, global_variable.ty, class);
+        let instruction =
+            super::instructions::instruction_variable(pointer_id, id, class, init_word);
 
         if self.writer_flags.contains(WriterFlags::DEBUG) {
             if let Some(ref name) = global_variable.name {
@@ -825,23 +817,19 @@ impl Writer {
         block: &mut Block,
         function: &mut Function,
     ) -> Result<WriteExpressionOutput, Error> {
-        match expression {
+        match *expression {
             crate::Expression::GlobalVariable(handle) => {
-                let var = &ir_module.global_variables[*handle];
-                let id = self.get_global_variable_id(
-                    &ir_module.types,
-                    &ir_module.global_variables,
-                    *handle,
-                );
+                let var = &ir_module.global_variables[handle];
+                let id = self.get_global_variable_id(ir_module, handle);
                 Ok(Some((id, Some(var.ty))))
             }
             crate::Expression::Constant(handle) => {
-                let var = &ir_module.constants[*handle];
-                let id = self.get_constant_id(*handle, ir_module);
+                let var = &ir_module.constants[handle];
+                let id = self.get_constant_id(handle, ir_module);
                 Ok(Some((id, Some(var.ty))))
             }
-            crate::Expression::Compose { ty, components } => {
-                let base_type_id = self.get_type_id(&ir_module.types, LookupType::Handle(*ty));
+            crate::Expression::Compose { ty, ref components } => {
+                let base_type_id = self.get_type_id(&ir_module.types, LookupType::Handle(ty));
 
                 let mut constituent_ids = Vec::with_capacity(components.len());
                 for component in components {
@@ -853,7 +841,7 @@ impl Writer {
                 }
                 let constituent_ids_slice = constituent_ids.as_slice();
 
-                let id = match ir_module.types[*ty].inner {
+                let id = match ir_module.types[ty].inner {
                     crate::TypeInner::Vector { .. } => {
                         self.write_composite_construct(base_type_id, constituent_ids_slice, block)
                     }
@@ -893,14 +881,14 @@ impl Writer {
                     _ => unreachable!(),
                 };
 
-                Ok(Some((id, Some(*ty))))
+                Ok(Some((id, Some(ty))))
             }
             crate::Expression::Binary { op, left, right } => {
                 match op {
                     crate::BinaryOperator::Multiply => {
                         let id = self.generate_id();
-                        let left_expression = &ir_function.expressions[*left];
-                        let right_expression = &ir_function.expressions[*right];
+                        let left_expression = &ir_function.expressions[left];
+                        let right_expression = &ir_function.expressions[right];
                         let (left_id, left_ty) = self
                             .write_expression(
                                 ir_module,
@@ -1049,7 +1037,7 @@ impl Writer {
                 }
             }
             crate::Expression::LocalVariable(variable) => {
-                let var = &ir_function.local_variables[*variable];
+                let var = &ir_function.local_variables[variable];
                 function
                     .variables
                     .iter()
@@ -1058,19 +1046,22 @@ impl Writer {
                     .ok_or_else(|| Error::UnknownLocalVariable(var.clone()))
             }
             crate::Expression::FunctionParameter(index) => {
-                let handle = ir_function.parameter_types.get(*index as usize).unwrap();
+                let handle = ir_function.parameter_types.get(index as usize).unwrap();
                 let type_id = self.get_type_id(&ir_module.types, LookupType::Handle(*handle));
                 let load_id = self.generate_id();
 
                 block.body.push(super::instructions::instruction_load(
                     type_id,
                     load_id,
-                    function.parameters[*index as usize].result_id.unwrap(),
+                    function.parameters[index as usize].result_id.unwrap(),
                     None,
                 ));
                 Ok(Some((load_id, Some(*handle))))
             }
-            crate::Expression::Call { origin, arguments } => match origin {
+            crate::Expression::Call {
+                ref origin,
+                ref arguments,
+            } => match origin {
                 crate::FunctionOrigin::Local(local_function) => {
                     let origin_function = &ir_module.functions[*local_function];
                     let id = self.generate_id();
@@ -1119,7 +1110,7 @@ impl Writer {
                         .push(super::instructions::instruction_function_call(
                             return_type_id,
                             id,
-                            *self.lookup_function.get(local_function).unwrap(),
+                            *self.lookup_function.get(&local_function).unwrap(),
                             argument_ids.as_slice(),
                         ));
                     Ok(Some((id, None)))
@@ -1139,7 +1130,7 @@ impl Writer {
                     .write_expression(
                         ir_module,
                         ir_function,
-                        &ir_function.expressions[*expr],
+                        &ir_function.expressions[expr],
                         block,
                         function,
                     )?
@@ -1153,10 +1144,10 @@ impl Writer {
                     } => {
                         let kind_type_id = self.get_type_id(
                             &ir_module.types,
-                            LookupType::Local(LocalType::Scalar { kind: *kind, width }),
+                            LookupType::Local(LocalType::Scalar { kind, width }),
                         );
 
-                        if *convert {
+                        if convert {
                             super::instructions::instruction_bit_cast(kind_type_id, id, expr_id)
                         } else {
                             match (expr_kind, kind) {
@@ -1207,7 +1198,7 @@ impl Writer {
                 depth_ref: _,
             } => {
                 // image
-                let image_expression = &ir_function.expressions[*image];
+                let image_expression = &ir_function.expressions[image];
                 let (image_id, image_ty) = self
                     .write_expression(ir_module, ir_function, image_expression, block, function)?
                     .ok_or(Error::EmptyValue)?;
@@ -1237,7 +1228,7 @@ impl Writer {
                 );
 
                 // sampler
-                let sampler_expression = &ir_function.expressions[*sampler];
+                let sampler_expression = &ir_function.expressions[sampler];
                 let (sampler_id, sampler_ty) = self
                     .write_expression(ir_module, ir_function, sampler_expression, block, function)?
                     .ok_or(Error::EmptyValue)?;
@@ -1259,7 +1250,7 @@ impl Writer {
                 };
 
                 // coordinate
-                let coordinate_expression = &ir_function.expressions[*coordinate];
+                let coordinate_expression = &ir_function.expressions[coordinate];
                 let (coordinate_id, coordinate_ty) = self
                     .write_expression(
                         ir_module,
@@ -1469,7 +1460,7 @@ impl Writer {
         }
 
         for (handle, _) in ir_module.global_variables.iter() {
-            self.get_global_variable_id(&ir_module.types, &ir_module.global_variables, handle);
+            self.get_global_variable_id(ir_module, handle);
         }
 
         for (handle, _) in ir_module.constants.iter() {

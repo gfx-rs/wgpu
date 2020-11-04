@@ -1025,7 +1025,7 @@ impl<W: Write> Writer<W> {
                 )?;
                 if let Some(value) = local.init {
                     write!(self.out, " = ")?;
-                    self.put_expression(value, fun, module)?;
+                    self.put_constant(value, module)?;
                 }
                 writeln!(self.out, ";")?;
             }
@@ -1235,6 +1235,10 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "\t")?;
                 tyvar.try_fmt(&mut self.out)?;
                 resolved.try_fmt_decorated(&mut self.out, separator)?;
+                if let Some(value) = var.init {
+                    write!(self.out, " = ")?;
+                    self.put_constant(value, module)?;
+                }
                 writeln!(self.out)?;
             }
             writeln!(self.out, ") {{")?;
@@ -1255,7 +1259,7 @@ impl<W: Write> Writer<W> {
                 )?;
                 if let Some(value) = local.init {
                     write!(self.out, " = ")?;
-                    self.put_expression(value, fun, module)?;
+                    self.put_constant(value, module)?;
                 }
                 writeln!(self.out, ";")?;
             }

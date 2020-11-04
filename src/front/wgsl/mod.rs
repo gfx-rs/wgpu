@@ -36,8 +36,6 @@ pub enum Token<'a> {
 pub enum Error<'a> {
     #[error("unexpected token: {0:?}")]
     Unexpected(Token<'a>),
-    #[error("constant {0:?} doesn't match its type {1:?}")]
-    UnexpectedConstantType(crate::ConstantInner, Handle<crate::Type>),
     #[error("unable to parse `{0}` as integer: {1}")]
     BadInteger(&'a str, std::num::ParseIntError),
     #[error("unable to parse `{1}` as float: {1}")]
@@ -264,6 +262,7 @@ struct ParsedVariable<'a> {
     class: Option<crate::StorageClass>,
     ty: Handle<crate::Type>,
     access: crate::StorageAccess,
+    init: Option<Handle<crate::Constant>>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -374,9 +373,10 @@ impl Parser {
     fn parse_const_expression<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
+        self_ty: Handle<crate::Type>,
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
-    ) -> Result<crate::ConstantInner, Error<'a>> {
+    ) -> Result<Handle<crate::Constant>, Error<'a>> {
         self.scopes.push(Scope::ConstantExpr);
         let inner = match lexer.peek() {
             Token::Word("true") => {
@@ -405,19 +405,21 @@ impl Parser {
                         composite_ty,
                         components.len(),
                     )?;
-                    let inner = self.parse_const_expression(lexer, type_arena, const_arena)?;
-                    components.push(const_arena.fetch_or_append(crate::Constant {
-                        name: None,
-                        specialization: None,
-                        inner,
-                        ty,
-                    }));
+                    let component =
+                        self.parse_const_expression(lexer, ty, type_arena, const_arena)?;
+                    components.push(component);
                 }
                 crate::ConstantInner::Composite(components)
             }
         };
+        let handle = const_arena.fetch_or_append(crate::Constant {
+            name: None,
+            specialization: None,
+            inner,
+            ty: self_ty,
+        });
         self.scopes.pop();
-        Ok(inner)
+        Ok(handle)
     }
 
     fn parse_primary_expression<'a>(
@@ -943,10 +945,12 @@ impl Parser {
             }
             _ => crate::StorageAccess::empty(),
         };
-        if lexer.skip(Token::Operation('=')) {
-            let _inner = self.parse_const_expression(lexer, type_arena, const_arena)?;
-            //TODO
-        }
+        let init = if lexer.skip(Token::Operation('=')) {
+            let handle = self.parse_const_expression(lexer, ty, type_arena, const_arena)?;
+            Some(handle)
+        } else {
+            None
+        };
         lexer.expect(Token::Separator(';'))?;
         self.scopes.pop();
         Ok(ParsedVariable {
@@ -954,6 +958,7 @@ impl Parser {
             class,
             ty,
             access,
+            init,
         })
     }
 
@@ -1373,15 +1378,16 @@ impl Parser {
                     "var" => {
                         enum Init {
                             Empty,
-                            Uniform(Handle<crate::Expression>),
+                            Constant(Handle<crate::Constant>),
                             Variable(Handle<crate::Expression>),
                         }
                         let (name, ty) = self.parse_variable_ident_decl(lexer, context.types)?;
                         let init = if lexer.skip(Token::Operation('=')) {
                             let value =
                                 self.parse_general_expression(lexer, context.as_expression())?;
-                            if let crate::Expression::Constant(_) = context.expressions[value] {
-                                Init::Uniform(value)
+                            if let crate::Expression::Constant(handle) = context.expressions[value]
+                            {
+                                Init::Constant(handle)
                             } else {
                                 Init::Variable(value)
                             }
@@ -1393,7 +1399,7 @@ impl Parser {
                             name: Some(name.to_owned()),
                             ty,
                             init: match init {
-                                Init::Uniform(value) => Some(value),
+                                Init::Constant(value) => Some(value),
                                 _ => None,
                             },
                         });
@@ -1692,18 +1698,13 @@ impl Parser {
             Token::Word("const") => {
                 let (name, ty) = self.parse_variable_ident_decl(lexer, &mut module.types)?;
                 lexer.expect(Token::Operation('='))?;
-                let inner =
-                    self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
-                lexer.expect(Token::Separator(';'))?;
-                if !crate::proc::check_constant_type(&inner, &module.types[ty].inner) {
-                    return Err(Error::UnexpectedConstantType(inner, ty));
-                }
-                let const_handle = module.constants.append(crate::Constant {
-                    name: Some(name.to_owned()),
-                    specialization: None,
-                    inner,
+                let const_handle = self.parse_const_expression(
+                    lexer,
                     ty,
-                });
+                    &mut module.types,
+                    &mut module.constants,
+                )?;
+                lexer.expect(Token::Separator(';'))?;
                 lookup_global_expression.insert(name, crate::Expression::Constant(const_handle));
             }
             Token::Word("var") => {
@@ -1725,6 +1726,7 @@ impl Parser {
                     class,
                     binding: binding.take(),
                     ty: pvar.ty,
+                    init: pvar.init,
                     interpolation,
                     storage_access: pvar.access,
                 });
@@ -1813,5 +1815,5 @@ pub fn parse_str(source: &str) -> Result<crate::Module, ParseError> {
 #[test]
 fn parse_types() {
     assert!(parse_str("const a : i32 = 2;").is_ok());
-    assert!(parse_str("const a : i32 = 2.0;").is_err());
+    assert!(parse_str("const a : x32 = 2;").is_err());
 }
