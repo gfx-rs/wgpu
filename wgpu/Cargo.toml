@@ -26,14 +26,14 @@ vulkan-portability = ["wgc/gfx-backend-vulkan", "gfx-backend-vulkan"]
 package = "wgpu-core"
 #version = "0.6"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "7ac706f0a9d90ebdcffeae48e3c530b9921bff2c"
+rev = "99ff41bb998d017ca5afdf9a8657cc744dc225d3"
 features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 #version = "0.6"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "7ac706f0a9d90ebdcffeae48e3c530b9921bff2c"
+rev = "99ff41bb998d017ca5afdf9a8657cc744dc225d3"
 
 [dependencies]
 arrayvec = "0.5"
@@ -88,6 +88,7 @@ test = true
 #gfx-hal = { version = "0.6", path = "../gfx/src/hal" }
 #gfx-backend-empty = { version = "0.6", path = "../gfx/src/backend/empty" }
 #gfx-backend-vulkan = { version = "0.6", path = "../gfx/src/backend/vulkan" }
+#gfx-backend-gl = { version = "0.6", path = "../gfx/src/backend/gl" }
 #gfx-backend-dx12 = { version = "0.6", path = "../gfx/src/backend/dx12" }
 #gfx-backend-dx11 = { version = "0.6", path = "../gfx/src/backend/dx11" }
 #gfx-backend-metal = { version = "0.6", path = "../gfx/src/backend/metal" }
