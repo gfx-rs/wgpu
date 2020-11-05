@@ -48,6 +48,9 @@ path = "../wgpu-types"
 package = "wgpu-types"
 version = "0.6"
 
+[target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
+gfx-backend-gl = { version = "0.6" }
+
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 gfx-backend-metal = { version = "0.6" }
 gfx-backend-vulkan = { version = "0.6.4", optional = true }

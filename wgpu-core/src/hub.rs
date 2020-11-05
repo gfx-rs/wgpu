@@ -670,6 +670,8 @@ pub struct Hubs<F: GlobalIdentityHandlerFactory> {
     dx12: Hub<backend::Dx12, F>,
     #[cfg(dx11)]
     dx11: Hub<backend::Dx11, F>,
+    #[cfg(gl)]
+    gl: Hub<backend::Gl, F>,
 }
 
 impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
@@ -683,6 +685,8 @@ impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
             dx12: Hub::new(factory),
             #[cfg(dx11)]
             dx11: Hub::new(factory),
+            #[cfg(gl)]
+            gl: Hub::new(factory),
         }
     }
 }
@@ -733,6 +737,10 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
             #[cfg(dx11)]
             {
                 self.hubs.dx11.clear(&mut *surface_guard);
+            }
+            #[cfg(gl)]
+            {
+                self.hubs.gl.clear(&mut *surface_guard);
             }
 
             // destroy surfaces
@@ -792,6 +800,17 @@ impl GfxBackend for backend::Dx11 {
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         surface.dx11.as_mut().unwrap()
+    }
+}
+
+#[cfg(gl)]
+impl GfxBackend for backend::Gl {
+    const VARIANT: Backend = Backend::Gl;
+    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
+        &global.hubs.gl
+    }
+    fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
+        surface.gl.as_mut().unwrap()
     }
 }
 
