@@ -21,8 +21,7 @@ async fn run() {
 
 async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     // Instantiates instance of WebGPU
-    // 'wgpu::BackendBit::PRIMARY' selects one of 'Vulkan + Metal + DX12 + Browser WebGPU' as the backend
-    let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+    let instance = wgpu::Instance::new(wgpu::BackendBit::all());
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance
