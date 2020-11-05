@@ -45,10 +45,13 @@ tracing = { version = "0.1", default-features = false, features = ["std"] }
 typed-arena = "2.0.1"
 serde = { version = "1", features = ["derive"], optional = true }
 
-#Note: we may consider switching this to "dev-dependencies" if users
+# Enable X11 support
+# Note: we may consider switching this to "dev-dependencies" if users
 # want to opt into X11 explicitly.
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
 gfx-backend-vulkan = { version = "0.6", features = ["x11"] }
+[target.'cfg(unix)'.dependencies]
+gfx-backend-gl = { version = "0.6", features = ["x11"] }
 
 [dev-dependencies]
 cgmath = "0.17"
