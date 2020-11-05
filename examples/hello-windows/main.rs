@@ -67,7 +67,7 @@ async fn run(
     viewports: Vec<(Window, wgpu::Color)>,
     swapchain_format: wgpu::TextureFormat,
 ) {
-    let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+    let instance = wgpu::Instance::new(wgpu::BackendBit::all());
     let viewports: Vec<_> = viewports
         .into_iter()
         .map(|(window, color)| ViewportDesc::new(window, color, &instance))

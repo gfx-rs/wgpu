@@ -1,7 +1,7 @@
 /// This example shows how to describe the adapter in use.
 async fn run() {
     #[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
-    let adapter = wgpu::Instance::new(wgpu::BackendBit::PRIMARY)
+    let adapter = wgpu::Instance::new(wgpu::BackendBit::all())
         .request_adapter(&wgpu::RequestAdapterOptions::default())
         .await
         .unwrap();
