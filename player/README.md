@@ -1,6 +1,6 @@
 # wgpu player
 
-This is application that allows replaying the `wgpu` workloads recorded elsewhere. You must use the player built from
+This is an application that allows replaying the `wgpu` workloads recorded elsewhere. It requires the player to be built from
 the same revision as an application was linking to, or otherwise the data may fail to load.
 
 Launch as:
