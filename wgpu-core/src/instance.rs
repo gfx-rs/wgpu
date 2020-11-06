@@ -716,6 +716,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 desc.features
                     .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT),
             );
+            enabled_features.set(
+                hal::Features::NON_FILL_POLYGON_MODE,
+                desc.features
+                    .contains(wgt::Features::NON_FILL_POLYGON_MODE),
+            );
 
             let family = adapter
                 .raw
