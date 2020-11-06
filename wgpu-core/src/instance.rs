@@ -718,8 +718,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
             enabled_features.set(
                 hal::Features::NON_FILL_POLYGON_MODE,
-                desc.features
-                    .contains(wgt::Features::NON_FILL_POLYGON_MODE),
+                desc.features.contains(wgt::Features::NON_FILL_POLYGON_MODE),
             );
 
             let family = adapter
