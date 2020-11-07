@@ -2,13 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{
-    command::{BufferCopyView, TextureCopyView},
-    id,
-};
-#[cfg(feature = "trace")]
-use std::io::Write as _;
+use crate::id;
 use std::ops::Range;
+#[cfg(feature = "trace")]
+use std::{borrow::Cow, io::Write as _};
 
 //TODO: consider a readable Id that doesn't include the backend
 
@@ -16,153 +13,83 @@ type FileName = String;
 
 pub const FILE_NAME: &str = "trace.ron";
 
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub enum BindingResource {
-    Buffer {
-        id: id::BufferId,
-        offset: wgt::BufferAddress,
-        size: wgt::BufferSize,
-    },
-    Sampler(id::SamplerId),
-    TextureView(id::TextureViewId),
-    TextureViewArray(Vec<id::TextureViewId>),
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct ProgrammableStageDescriptor {
-    pub module: id::ShaderModuleId,
-    pub entry_point: String,
-}
-
 #[cfg(feature = "trace")]
-impl ProgrammableStageDescriptor {
-    pub fn new(desc: &crate::pipeline::ProgrammableStageDescriptor) -> Self {
-        ProgrammableStageDescriptor {
-            module: desc.module,
-            entry_point: unsafe { std::ffi::CStr::from_ptr(desc.entry_point) }
-                .to_string_lossy()
-                .to_string(),
-        }
+pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
+    label: Option<&'a str>,
+    context: &'a super::RenderPassContext,
+) -> crate::command::RenderBundleEncoderDescriptor<'a> {
+    crate::command::RenderBundleEncoderDescriptor {
+        label: label.map(Cow::Borrowed),
+        color_formats: Cow::Borrowed(&context.attachments.colors),
+        depth_stencil_format: context.attachments.depth_stencil,
+        sample_count: context.sample_count as u32,
     }
 }
 
 #[derive(Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct ComputePipelineDescriptor {
-    pub layout: id::PipelineLayoutId,
-    pub compute_stage: ProgrammableStageDescriptor,
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexBufferLayoutDescriptor {
-    pub array_stride: wgt::BufferAddress,
-    pub step_mode: wgt::InputStepMode,
-    pub attributes: Vec<wgt::VertexAttributeDescriptor>,
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexStateDescriptor {
-    pub index_format: wgt::IndexFormat,
-    pub vertex_buffers: Vec<VertexBufferLayoutDescriptor>,
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct RenderPipelineDescriptor {
-    pub layout: id::PipelineLayoutId,
-    pub vertex_stage: ProgrammableStageDescriptor,
-    pub fragment_stage: Option<ProgrammableStageDescriptor>,
-    pub primitive_topology: wgt::PrimitiveTopology,
-    pub rasterization_state: Option<wgt::RasterizationStateDescriptor>,
-    pub color_states: Vec<wgt::ColorStateDescriptor>,
-    pub depth_stencil_state: Option<wgt::DepthStencilStateDescriptor>,
-    pub vertex_state: VertexStateDescriptor,
-    pub sample_count: u32,
-    pub sample_mask: u32,
-    pub alpha_to_coverage_enabled: bool,
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub enum Action {
+pub enum Action<'a> {
     Init {
         desc: wgt::DeviceDescriptor,
         backend: wgt::Backend,
     },
-    CreateBuffer {
-        id: id::BufferId,
-        desc: wgt::BufferDescriptor<String>,
-    },
+    CreateBuffer(id::BufferId, crate::resource::BufferDescriptor<'a>),
+    FreeBuffer(id::BufferId),
     DestroyBuffer(id::BufferId),
-    CreateTexture {
-        id: id::TextureId,
-        desc: wgt::TextureDescriptor<String>,
-    },
+    CreateTexture(id::TextureId, crate::resource::TextureDescriptor<'a>),
+    FreeTexture(id::TextureId),
     DestroyTexture(id::TextureId),
     CreateTextureView {
         id: id::TextureViewId,
         parent_id: id::TextureId,
-        desc: Option<wgt::TextureViewDescriptor<String>>,
+        desc: crate::resource::TextureViewDescriptor<'a>,
     },
     DestroyTextureView(id::TextureViewId),
-    CreateSampler {
-        id: id::SamplerId,
-        desc: wgt::SamplerDescriptor<String>,
-    },
+    CreateSampler(id::SamplerId, crate::resource::SamplerDescriptor<'a>),
     DestroySampler(id::SamplerId),
-    CreateSwapChain {
-        id: id::SwapChainId,
-        desc: wgt::SwapChainDescriptor,
-    },
+    CreateSwapChain(id::SwapChainId, wgt::SwapChainDescriptor),
     GetSwapChainTexture {
         id: Option<id::TextureViewId>,
         parent_id: id::SwapChainId,
     },
     PresentSwapChain(id::SwapChainId),
-    CreateBindGroupLayout {
-        id: id::BindGroupLayoutId,
-        label: String,
-        entries: Vec<wgt::BindGroupLayoutEntry>,
-    },
+    CreateBindGroupLayout(
+        id::BindGroupLayoutId,
+        crate::binding_model::BindGroupLayoutDescriptor<'a>,
+    ),
     DestroyBindGroupLayout(id::BindGroupLayoutId),
-    CreatePipelineLayout {
-        id: id::PipelineLayoutId,
-        bind_group_layouts: Vec<id::BindGroupLayoutId>,
-    },
+    CreatePipelineLayout(
+        id::PipelineLayoutId,
+        crate::binding_model::PipelineLayoutDescriptor<'a>,
+    ),
     DestroyPipelineLayout(id::PipelineLayoutId),
-    CreateBindGroup {
-        id: id::BindGroupId,
-        label: String,
-        layout_id: id::BindGroupLayoutId,
-        entries: std::collections::BTreeMap<u32, BindingResource>,
-    },
+    CreateBindGroup(
+        id::BindGroupId,
+        crate::binding_model::BindGroupDescriptor<'a>,
+    ),
     DestroyBindGroup(id::BindGroupId),
     CreateShaderModule {
         id: id::ShaderModuleId,
         data: FileName,
     },
     DestroyShaderModule(id::ShaderModuleId),
-    CreateComputePipeline {
-        id: id::ComputePipelineId,
-        desc: ComputePipelineDescriptor,
-    },
+    CreateComputePipeline(
+        id::ComputePipelineId,
+        crate::pipeline::ComputePipelineDescriptor<'a>,
+    ),
     DestroyComputePipeline(id::ComputePipelineId),
-    CreateRenderPipeline {
-        id: id::RenderPipelineId,
-        desc: RenderPipelineDescriptor,
-    },
+    CreateRenderPipeline(
+        id::RenderPipelineId,
+        crate::pipeline::RenderPipelineDescriptor<'a>,
+    ),
     DestroyRenderPipeline(id::RenderPipelineId),
+    CreateRenderBundle {
+        id: id::RenderBundleId,
+        desc: crate::command::RenderBundleEncoderDescriptor<'a>,
+        base: crate::command::BasePass<crate::command::RenderCommand>,
+    },
+    DestroyRenderBundle(id::RenderBundleId),
     WriteBuffer {
         id: id::BufferId,
         data: FileName,
@@ -170,7 +97,7 @@ pub enum Action {
         queued: bool,
     },
     WriteTexture {
-        to: TextureCopyView,
+        to: crate::command::TextureCopyView,
         data: FileName,
         layout: wgt::TextureDataLayout,
         size: wgt::Extent3d,
@@ -190,29 +117,27 @@ pub enum Command {
         size: wgt::BufferAddress,
     },
     CopyBufferToTexture {
-        src: BufferCopyView,
-        dst: TextureCopyView,
+        src: crate::command::BufferCopyView,
+        dst: crate::command::TextureCopyView,
         size: wgt::Extent3d,
     },
     CopyTextureToBuffer {
-        src: TextureCopyView,
-        dst: BufferCopyView,
+        src: crate::command::TextureCopyView,
+        dst: crate::command::BufferCopyView,
         size: wgt::Extent3d,
     },
     CopyTextureToTexture {
-        src: TextureCopyView,
-        dst: TextureCopyView,
+        src: crate::command::TextureCopyView,
+        dst: crate::command::TextureCopyView,
         size: wgt::Extent3d,
     },
     RunComputePass {
-        commands: Vec<crate::command::ComputeCommand>,
-        dynamic_offsets: Vec<wgt::DynamicOffset>,
+        base: crate::command::BasePass<crate::command::ComputeCommand>,
     },
     RunRenderPass {
-        target_colors: Vec<crate::command::RenderPassColorAttachmentDescriptor>,
-        target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachmentDescriptor>,
-        commands: Vec<crate::command::RenderCommand>,
-        dynamic_offsets: Vec<wgt::DynamicOffset>,
+        base: crate::command::BasePass<crate::command::RenderCommand>,
+        target_colors: Vec<crate::command::ColorAttachmentDescriptor>,
+        target_depth_stencil: Option<crate::command::DepthStencilAttachmentDescriptor>,
     },
 }
 
@@ -228,10 +153,10 @@ pub struct Trace {
 #[cfg(feature = "trace")]
 impl Trace {
     pub fn new(path: &std::path::Path) -> Result<Self, std::io::Error> {
-        log::info!("Tracing into '{:?}'", path);
+        tracing::info!("Tracing into '{:?}'", path);
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
-        file.write(b"[\n")?;
-        Ok(Trace {
+        file.write_all(b"[\n")?;
+        Ok(Self {
             path: path.to_path_buf(),
             file,
             config: ron::ser::PrettyConfig::default(),
@@ -252,7 +177,7 @@ impl Trace {
                 let _ = writeln!(self.file, "{},", string);
             }
             Err(e) => {
-                log::warn!("RON serialization failure: {:?}", e);
+                tracing::warn!("RON serialization failure: {:?}", e);
             }
         }
     }
@@ -261,6 +186,6 @@ impl Trace {
 #[cfg(feature = "trace")]
 impl Drop for Trace {
     fn drop(&mut self) {
-        let _ = self.file.write(b"]");
+        let _ = self.file.write_all(b"]");
     }
 }

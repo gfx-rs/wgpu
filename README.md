@@ -27,6 +27,6 @@ If you are looking for the native implementation or bindings to the API in other
   DX12   | :heavy_check_mark: |                    |                    |
   Vulkan | :heavy_check_mark: | :heavy_check_mark: |                    |
   Metal  |                    |                    | :heavy_check_mark: |
-  OpenGL | :construction:     | :construction:     | :construction:     |
+  OpenGL |                    | :construction:     | :construction:     |
 
 :heavy_check_mark: = Primary support — :white_check_mark: = Secondary support — :construction: = Unsupported, but support in progress

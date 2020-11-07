@@ -1,0 +1,16 @@
+[package]
+name = "dummy"
+version = "0.1.0"
+authors = [
+    "Dzmitry Malyshau <kvark@mozilla.com>",
+]
+edition = "2018"
+publish = false
+
+[features]
+
+[dependencies.wgc]
+path = "../wgpu-core"
+package = "wgpu-core"
+version = "0.6"
+features = ["serial-pass", "trace"]

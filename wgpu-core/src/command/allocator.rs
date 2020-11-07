@@ -4,12 +4,13 @@
 
 use super::CommandBuffer;
 use crate::{
-    hub::GfxBackend, id::DeviceId, track::TrackerSet, FastHashMap, PrivateFeatures, Stored,
-    SubmissionIndex,
+    device::DeviceError, hub::GfxBackend, id::DeviceId, track::TrackerSet, FastHashMap,
+    PrivateFeatures, Stored, SubmissionIndex,
 };
 
 use hal::{command::CommandBuffer as _, device::Device as _, pool::CommandPool as _};
 use parking_lot::Mutex;
+use thiserror::Error;
 
 use std::thread;
 
@@ -28,8 +29,8 @@ impl<B: hal::Backend> CommandPool<B> {
         for i in (0..self.pending.len()).rev() {
             if self.pending[i].1 <= last_done_index {
                 let (cmd_buf, index) = self.pending.swap_remove(i);
-                log::trace!(
-                    "recycling comb submitted in {} when {} is last done",
+                tracing::trace!(
+                    "recycling cmdbuf submitted in {} when {} is last done",
                     index,
                     last_done_index,
                 );
@@ -80,30 +81,37 @@ impl<B: GfxBackend> CommandAllocator<B> {
         limits: wgt::Limits,
         private_features: PrivateFeatures,
         #[cfg(feature = "trace")] enable_tracing: bool,
-    ) -> CommandBuffer<B> {
+    ) -> Result<CommandBuffer<B>, CommandAllocatorError> {
         //debug_assert_eq!(device_id.backend(), B::VARIANT);
         let thread_id = thread::current().id();
         let mut inner = self.inner.lock();
 
-        let init = inner
-            .pools
-            .entry(thread_id)
-            .or_insert_with(|| CommandPool {
-                raw: unsafe {
-                    log::info!("Starting on thread {:?}", thread_id);
-                    device.create_command_pool(
-                        self.queue_family,
-                        hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
-                    )
-                }
-                .unwrap(),
-                total: 0,
-                available: Vec::new(),
-                pending: Vec::new(),
-            })
-            .allocate();
+        use std::collections::hash_map::Entry;
+        let pool = match inner.pools.entry(thread_id) {
+            Entry::Occupied(e) => e.into_mut(),
+            Entry::Vacant(e) => {
+                tracing::info!("Starting on thread {:?}", thread_id);
+                let raw = unsafe {
+                    device
+                        .create_command_pool(
+                            self.queue_family,
+                            hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
+                        )
+                        .or(Err(DeviceError::OutOfMemory))?
+                };
+                let pool = CommandPool {
+                    raw,
+                    total: 0,
+                    available: Vec::new(),
+                    pending: Vec::new(),
+                };
+                e.insert(pool)
+            }
+        };
 
-        CommandBuffer {
+        let init = pool.allocate();
+
+        Ok(CommandBuffer {
             raw: vec![init],
             is_recording: true,
             recorded_thread_id: thread_id,
@@ -118,14 +126,17 @@ impl<B: GfxBackend> CommandAllocator<B> {
             } else {
                 None
             },
-        }
+        })
     }
 }
 
 impl<B: hal::Backend> CommandAllocator<B> {
-    pub fn new(queue_family: hal::queue::QueueFamilyId, device: &B::Device) -> Self {
+    pub fn new(
+        queue_family: hal::queue::QueueFamilyId,
+        device: &B::Device,
+    ) -> Result<Self, CommandAllocatorError> {
         let internal_thread_id = thread::current().id();
-        log::info!("Starting on (internal) thread {:?}", internal_thread_id);
+        tracing::info!("Starting on (internal) thread {:?}", internal_thread_id);
         let mut pools = FastHashMap::default();
         pools.insert(
             internal_thread_id,
@@ -136,18 +147,18 @@ impl<B: hal::Backend> CommandAllocator<B> {
                             queue_family,
                             hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
                         )
-                        .unwrap()
+                        .or(Err(DeviceError::OutOfMemory))?
                 },
                 total: 0,
                 available: Vec::new(),
                 pending: Vec::new(),
             },
         );
-        CommandAllocator {
+        Ok(Self {
             queue_family,
             internal_thread_id,
             inner: Mutex::new(Inner { pools }),
-        }
+        })
     }
 
     fn allocate_for_thread_id(&self, thread_id: thread::ThreadId) -> B::CommandBuffer {
@@ -213,7 +224,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
             }
         }
         for thread_id in remove_threads {
-            log::info!("Removing from thread {:?}", thread_id);
+            tracing::info!("Removing from thread {:?}", thread_id);
             let mut pool = inner.pools.remove(&thread_id).unwrap();
             unsafe {
                 pool.raw.free(pool.available);
@@ -229,7 +240,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
                 pool.recycle(raw);
             }
             if pool.total != pool.available.len() {
-                log::error!(
+                tracing::error!(
                     "Some command buffers are still recorded, only tracking {} / {}",
                     pool.available.len(),
                     pool.total
@@ -241,4 +252,10 @@ impl<B: hal::Backend> CommandAllocator<B> {
             }
         }
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CommandAllocatorError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
 }

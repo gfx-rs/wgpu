@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{Epoch, Index};
-use std::{fmt, marker::PhantomData, mem, num::NonZeroU64};
+use std::{cmp::Ordering, fmt, marker::PhantomData, num::NonZeroU64};
 use wgt::Backend;
 
 const BACKEND_BITS: usize = 3;
@@ -16,6 +16,14 @@ type Dummy = crate::backend::Empty;
     feature = "replay",
     derive(serde::Deserialize),
     serde(from = "SerialId")
+)]
+#[cfg_attr(
+    all(feature = "serde", not(feature = "trace")),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    all(feature = "serde", not(feature = "replay")),
+    derive(serde::Deserialize)
 )]
 pub struct Id<T>(NonZeroU64, PhantomData<T>);
 
@@ -31,7 +39,7 @@ enum SerialId {
 impl<T> From<Id<T>> for SerialId {
     fn from(id: Id<T>) -> Self {
         let (index, epoch, backend) = id.unzip();
-        SerialId::Id(index, epoch, backend)
+        Self::Id(index, epoch, backend)
     }
 }
 #[cfg(feature = "replay")]
@@ -43,20 +51,12 @@ impl<T> From<SerialId> for Id<T> {
     }
 }
 
-// required for PeekPoke
-impl<T> Default for Id<T> {
-    fn default() -> Self {
-        Id(
-            // Create an ID that doesn't make sense:
-            // the high `BACKEND_BITS` are to be set to 0, which matches `Backend::Empty`,
-            // the other bits are all 1s
-            unsafe { NonZeroU64::new_unchecked(!0 >> BACKEND_BITS) },
-            PhantomData,
-        )
-    }
-}
-
 impl<T> Id<T> {
+    #[cfg(test)]
+    pub(crate) fn dummy() -> Valid<Self> {
+        Valid(Id(NonZeroU64::new(1).unwrap(), PhantomData))
+    }
+
     pub fn backend(self) -> Backend {
         match self.0.get() >> (64 - BACKEND_BITS) as u8 {
             0 => Backend::Empty,
@@ -67,14 +67,6 @@ impl<T> Id<T> {
             5 => Backend::Gl,
             _ => unreachable!(),
         }
-    }
-
-    pub(crate) fn into_raw(self) -> u64 {
-        self.0.get()
-    }
-
-    pub(crate) fn from_raw(value: u64) -> Option<Self> {
-        NonZeroU64::new(value).map(|nz| Id(nz, PhantomData))
     }
 }
 
@@ -106,23 +98,25 @@ impl<T> PartialEq for Id<T> {
 
 impl<T> Eq for Id<T> {}
 
-unsafe impl<T> peek_poke::Poke for Id<T> {
-    fn max_size() -> usize {
-        mem::size_of::<u64>()
-    }
-    unsafe fn poke_into(&self, data: *mut u8) -> *mut u8 {
-        self.0.get().poke_into(data)
+impl<T> PartialOrd for Id<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
     }
 }
 
-impl<T> peek_poke::Peek for Id<T> {
-    unsafe fn peek_from(mut data: *const u8, this: *mut Self) -> *const u8 {
-        let mut v = 0u64;
-        data = u64::peek_from(data, &mut v);
-        (*this).0 = NonZeroU64::new(v).unwrap();
-        data
+impl<T> Ord for Id<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
     }
 }
+
+/// An internal ID that has been checked to point to
+/// a valid object in the storages.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub(crate) struct Valid<I>(pub I);
 
 pub trait TypedId {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;
@@ -164,11 +158,12 @@ pub type ShaderModuleId = Id<crate::pipeline::ShaderModule<Dummy>>;
 pub type RenderPipelineId = Id<crate::pipeline::RenderPipeline<Dummy>>;
 pub type ComputePipelineId = Id<crate::pipeline::ComputePipeline<Dummy>>;
 // Command
-pub type CommandBufferId = Id<crate::command::CommandBuffer<Dummy>>;
 pub type CommandEncoderId = CommandBufferId;
-pub type RenderPassId = *mut crate::command::RawPass;
-pub type ComputePassId = *mut crate::command::RawPass;
-pub type RenderBundleId = Id<crate::command::RenderBundle<Dummy>>;
+pub type CommandBufferId = Id<crate::command::CommandBuffer<Dummy>>;
+pub type RenderPassEncoderId = *mut crate::command::RenderPass;
+pub type ComputePassEncoderId = *mut crate::command::ComputePass;
+pub type RenderBundleEncoderId = *mut crate::command::RenderBundleEncoder;
+pub type RenderBundleId = Id<crate::command::RenderBundle>;
 // Swap chain
 pub type SwapChainId = Id<crate::swap_chain::SwapChain<Dummy>>;
 

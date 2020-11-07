@@ -17,15 +17,14 @@ default = []
 [dependencies.wgc]
 path = "../wgpu/wgpu-core"
 package = "wgpu-core"
-version = "0.5"
-features = ["trace"]
+features = ["replay", "trace", "serial-pass"]
 
 [dependencies.wgt]
 path = "../wgpu/wgpu-types"
 package = "wgpu-types"
-version = "0.5"
-features = ["trace"]
 
 [dependencies]
+bincode = "1"
 log = "0.4"
-parking_lot = { version = "0.11" }
+parking_lot = "0.11"
+serde = "1"

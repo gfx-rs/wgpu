@@ -1,0 +1,8 @@
+(
+	backends: (bits: 0xF),
+	tests: [
+		"buffer-copy.ron",
+		"bind-group.ron",
+		"quad.ron",
+	],
+)

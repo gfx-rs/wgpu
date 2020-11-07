@@ -5,7 +5,8 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
+    device::{queue::TempResource, DeviceError},
+    hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Token},
     id, resource,
     track::TrackerSet,
     FastHashMap, RefCount, Stored, SubmissionIndex,
@@ -16,6 +17,7 @@ use gfx_descriptor::{DescriptorAllocator, DescriptorSet};
 use gfx_memory::{Heaps, MemoryBlock};
 use hal::device::Device as _;
 use parking_lot::Mutex;
+use thiserror::Error;
 
 use std::sync::atomic::Ordering;
 
@@ -24,19 +26,20 @@ const CLEANUP_WAIT_MS: u64 = 5000;
 /// A struct that keeps lists of resources that are no longer needed by the user.
 #[derive(Debug, Default)]
 pub struct SuspectedResources {
-    pub(crate) buffers: Vec<id::BufferId>,
-    pub(crate) textures: Vec<id::TextureId>,
-    pub(crate) texture_views: Vec<id::TextureViewId>,
-    pub(crate) samplers: Vec<id::SamplerId>,
-    pub(crate) bind_groups: Vec<id::BindGroupId>,
-    pub(crate) compute_pipelines: Vec<id::ComputePipelineId>,
-    pub(crate) render_pipelines: Vec<id::RenderPipelineId>,
-    pub(crate) bind_group_layouts: Vec<Stored<id::BindGroupLayoutId>>,
+    pub(crate) buffers: Vec<id::Valid<id::BufferId>>,
+    pub(crate) textures: Vec<id::Valid<id::TextureId>>,
+    pub(crate) texture_views: Vec<id::Valid<id::TextureViewId>>,
+    pub(crate) samplers: Vec<id::Valid<id::SamplerId>>,
+    pub(crate) bind_groups: Vec<id::Valid<id::BindGroupId>>,
+    pub(crate) compute_pipelines: Vec<id::Valid<id::ComputePipelineId>>,
+    pub(crate) render_pipelines: Vec<id::Valid<id::RenderPipelineId>>,
+    pub(crate) bind_group_layouts: Vec<id::Valid<id::BindGroupLayoutId>>,
     pub(crate) pipeline_layouts: Vec<Stored<id::PipelineLayoutId>>,
+    pub(crate) render_bundles: Vec<id::Valid<id::RenderBundleId>>,
 }
 
 impl SuspectedResources {
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.buffers.clear();
         self.textures.clear();
         self.texture_views.clear();
@@ -46,9 +49,10 @@ impl SuspectedResources {
         self.render_pipelines.clear();
         self.bind_group_layouts.clear();
         self.pipeline_layouts.clear();
+        self.render_bundles.clear();
     }
 
-    pub fn extend(&mut self, other: &Self) {
+    pub(crate) fn extend(&mut self, other: &Self) {
         self.buffers.extend_from_slice(&other.buffers);
         self.textures.extend_from_slice(&other.textures);
         self.texture_views.extend_from_slice(&other.texture_views);
@@ -62,6 +66,18 @@ impl SuspectedResources {
             .extend_from_slice(&other.bind_group_layouts);
         self.pipeline_layouts
             .extend_from_slice(&other.pipeline_layouts);
+        self.render_bundles.extend_from_slice(&other.render_bundles);
+    }
+
+    pub(crate) fn add_trackers(&mut self, trackers: &TrackerSet) {
+        self.buffers.extend(trackers.buffers.used());
+        self.textures.extend(trackers.textures.used());
+        self.texture_views.extend(trackers.views.used());
+        self.samplers.extend(trackers.samplers.used());
+        self.bind_groups.extend(trackers.bind_groups.used());
+        self.compute_pipelines.extend(trackers.compute_pipes.used());
+        self.render_pipelines.extend(trackers.render_pipes.used());
+        self.render_bundles.extend(trackers.bundles.used());
     }
 }
 
@@ -72,7 +88,7 @@ struct NonReferencedResources<B: hal::Backend> {
     images: Vec<(B::Image, MemoryBlock<B>)>,
     // Note: we keep the associated ID here in order to be able to check
     // at any point what resources are used in a submission.
-    image_views: Vec<(id::TextureViewId, B::ImageView)>,
+    image_views: Vec<(id::Valid<id::TextureViewId>, B::ImageView)>,
     samplers: Vec<B::Sampler>,
     framebuffers: Vec<B::Framebuffer>,
     desc_sets: Vec<DescriptorSet<B>>,
@@ -84,7 +100,7 @@ struct NonReferencedResources<B: hal::Backend> {
 
 impl<B: hal::Backend> NonReferencedResources<B> {
     fn new() -> Self {
-        NonReferencedResources {
+        Self {
             buffers: Vec::new(),
             images: Vec::new(),
             image_views: Vec::new(),
@@ -117,17 +133,15 @@ impl<B: hal::Backend> NonReferencedResources<B> {
         heaps_mutex: &Mutex<Heaps<B>>,
         descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
     ) {
-        if !self.buffers.is_empty() {
+        if !self.buffers.is_empty() || !self.images.is_empty() {
             let mut heaps = heaps_mutex.lock();
             for (raw, memory) in self.buffers.drain(..) {
-                log::trace!("Buffer {:?} is destroyed with memory {:?}", raw, memory);
+                tracing::trace!("Buffer {:?} is destroyed with memory {:?}", raw, memory);
                 device.destroy_buffer(raw);
                 heaps.free(device, memory);
             }
-        }
-        if !self.images.is_empty() {
-            let mut heaps = heaps_mutex.lock();
             for (raw, memory) in self.images.drain(..) {
+                tracing::trace!("Image {:?} is destroyed with memory {:?}", raw, memory);
                 device.destroy_image(raw);
                 heaps.free(device, memory);
             }
@@ -169,7 +183,15 @@ struct ActiveSubmission<B: hal::Backend> {
     index: SubmissionIndex,
     fence: B::Fence,
     last_resources: NonReferencedResources<B>,
-    mapped: Vec<id::BufferId>,
+    mapped: Vec<id::Valid<id::BufferId>>,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum WaitIdleError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("GPU got stuck :(")]
+    StuckGpu,
 }
 
 /// A struct responsible for tracking resource lifetimes.
@@ -181,9 +203,14 @@ struct ActiveSubmission<B: hal::Backend> {
 ///   3. When `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
 ///   4. Finally, `handle_mapping` issues all the callbacks.
 #[derive(Debug)]
-pub struct LifetimeTracker<B: hal::Backend> {
+pub(crate) struct LifetimeTracker<B: hal::Backend> {
     /// Resources that the user has requested be mapped, but are still in use.
     mapped: Vec<Stored<id::BufferId>>,
+    /// Buffers can be used in a submission that is yet to be made, by the
+    /// means of `write_buffer()`, so we have a special place for them.
+    pub future_suspected_buffers: Vec<Stored<id::BufferId>>,
+    /// Textures can be used in the upcoming submission by `write_texture`.
+    pub future_suspected_textures: Vec<Stored<id::TextureId>>,
     /// Resources that are suspected for destruction.
     pub suspected_resources: SuspectedResources,
     /// Resources that are not referenced any more but still used by GPU.
@@ -193,13 +220,15 @@ pub struct LifetimeTracker<B: hal::Backend> {
     /// Resources that are neither referenced or used, just life_tracker
     /// actual deletion.
     free_resources: NonReferencedResources<B>,
-    ready_to_map: Vec<id::BufferId>,
+    ready_to_map: Vec<id::Valid<id::BufferId>>,
 }
 
 impl<B: hal::Backend> LifetimeTracker<B> {
     pub fn new() -> Self {
-        LifetimeTracker {
+        Self {
             mapped: Vec::new(),
+            future_suspected_buffers: Vec::new(),
+            future_suspected_textures: Vec::new(),
             suspected_resources: SuspectedResources::default(),
             active: Vec::new(),
             free_resources: NonReferencedResources::new(),
@@ -212,11 +241,28 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         index: SubmissionIndex,
         fence: B::Fence,
         new_suspects: &SuspectedResources,
-        temp_buffers: impl Iterator<Item = (B::Buffer, MemoryBlock<B>)>,
+        temp_resources: impl Iterator<Item = (TempResource<B>, MemoryBlock<B>)>,
     ) {
         let mut last_resources = NonReferencedResources::new();
-        last_resources.buffers.extend(temp_buffers);
+        for (res, memory) in temp_resources {
+            match res {
+                TempResource::Buffer(raw) => last_resources.buffers.push((raw, memory)),
+                TempResource::Image(raw) => last_resources.images.push((raw, memory)),
+            }
+        }
+
+        self.suspected_resources.buffers.extend(
+            self.future_suspected_buffers
+                .drain(..)
+                .map(|stored| stored.value),
+        );
+        self.suspected_resources.textures.extend(
+            self.future_suspected_textures
+                .drain(..)
+                .map(|stored| stored.value),
+        );
         self.suspected_resources.extend(new_suspects);
+
         self.active.alloc().init(ActiveSubmission {
             index,
             fence,
@@ -225,57 +271,56 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         });
     }
 
-    pub fn map(&mut self, buffer: id::BufferId, ref_count: RefCount) {
-        self.mapped.push(Stored {
-            value: buffer,
-            ref_count,
-        });
+    pub(crate) fn map(&mut self, value: id::Valid<id::BufferId>, ref_count: RefCount) {
+        self.mapped.push(Stored { value, ref_count });
     }
 
-    /// Find the pending entry with the lowest active index. If none can be found that means
-    /// everything in the allocator can be cleaned up, so std::usize::MAX is correct.
-    #[cfg(feature = "replay")]
-    pub fn lowest_active_submission(&self) -> SubmissionIndex {
-        self.active
-            .iter()
-            .fold(std::usize::MAX, |v, active| active.index.min(v))
-    }
-
-    fn wait_idle(&self, device: &B::Device) {
+    fn wait_idle(&self, device: &B::Device) -> Result<(), WaitIdleError> {
         if !self.active.is_empty() {
-            log::debug!("Waiting for IDLE...");
+            tracing::debug!("Waiting for IDLE...");
             let status = unsafe {
-                device.wait_for_fences(
-                    self.active.iter().map(|a| &a.fence),
-                    hal::device::WaitFor::All,
-                    CLEANUP_WAIT_MS * 1_000_000,
-                )
+                device
+                    .wait_for_fences(
+                        self.active.iter().map(|a| &a.fence),
+                        hal::device::WaitFor::All,
+                        CLEANUP_WAIT_MS * 1_000_000,
+                    )
+                    .map_err(DeviceError::from)?
             };
-            log::debug!("...Done");
-            assert_eq!(status, Ok(true), "GPU got stuck :(");
+            tracing::debug!("...Done");
+
+            if status == false {
+                // We timed out while waiting for the fences
+                return Err(WaitIdleError::StuckGpu);
+            }
         }
+        Ok(())
     }
 
     /// Returns the last submission index that is done.
-    pub fn triage_submissions(&mut self, device: &B::Device, force_wait: bool) -> SubmissionIndex {
+    pub fn triage_submissions(
+        &mut self,
+        device: &B::Device,
+        force_wait: bool,
+    ) -> Result<SubmissionIndex, WaitIdleError> {
         if force_wait {
-            self.wait_idle(device);
+            self.wait_idle(device)?;
         }
         //TODO: enable when `is_sorted_by_key` is stable
         //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
         let done_count = self
             .active
             .iter()
-            .position(|a| unsafe { !device.get_fence_status(&a.fence).unwrap() })
+            .position(|a| unsafe { !device.get_fence_status(&a.fence).unwrap_or(false) })
             .unwrap_or_else(|| self.active.len());
         let last_done = if done_count != 0 {
             self.active[done_count - 1].index
         } else {
-            return 0;
+            return Ok(0);
         };
 
         for a in self.active.drain(..done_count) {
-            log::trace!("Active submission {} is done", a.index);
+            tracing::trace!("Active submission {} is done", a.index);
             self.free_resources.extend(a.last_resources);
             self.ready_to_map.extend(a.mapped);
             unsafe {
@@ -283,7 +328,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
             }
         }
 
-        last_done
+        Ok(last_done)
     }
 
     pub fn cleanup(
@@ -298,50 +343,69 @@ impl<B: hal::Backend> LifetimeTracker<B> {
             descriptor_allocator_mutex.lock().cleanup(device);
         }
     }
+
+    pub fn schedule_resource_destruction(
+        &mut self,
+        temp_resource: TempResource<B>,
+        memory: MemoryBlock<B>,
+        last_submit_index: SubmissionIndex,
+    ) {
+        let resources = self
+            .active
+            .iter_mut()
+            .find(|a| a.index == last_submit_index)
+            .map_or(&mut self.free_resources, |a| &mut a.last_resources);
+        match temp_resource {
+            TempResource::Buffer(raw) => resources.buffers.push((raw, memory)),
+            TempResource::Image(raw) => resources.images.push((raw, memory)),
+        }
+    }
 }
 
 impl<B: GfxBackend> LifetimeTracker<B> {
     pub(crate) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        global: &Global<G>,
+        hub: &Hub<B, G>,
         trackers: &Mutex<TrackerSet>,
         #[cfg(feature = "trace")] trace: Option<&Mutex<trace::Trace>>,
         token: &mut Token<super::Device<B>>,
     ) {
-        let hub = B::hub(global);
+        if !self.suspected_resources.render_bundles.is_empty() {
+            let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.render_bundles.write(token);
+
+            while let Some(id) = self.suspected_resources.render_bundles.pop() {
+                if trackers.bundles.remove_abandoned(id) {
+                    #[cfg(feature = "trace")]
+                    trace.map(|t| t.lock().add(trace::Action::DestroyRenderBundle(id.0)));
+
+                    if let Some(res) = hub.render_bundles.unregister_locked(id.0, &mut *guard) {
+                        self.suspected_resources.add_trackers(&res.used);
+                    }
+                }
+            }
+        }
 
         if !self.suspected_resources.bind_groups.is_empty() {
             let mut trackers = trackers.lock();
             let (mut guard, _) = hub.bind_groups.write(token);
 
-            for id in self.suspected_resources.bind_groups.drain(..) {
+            while let Some(id) = self.suspected_resources.bind_groups.pop() {
                 if trackers.bind_groups.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyBindGroup(id)));
-                    hub.bind_groups.free_id(id);
-                    let res = guard.remove(id).unwrap();
+                    trace.map(|t| t.lock().add(trace::Action::DestroyBindGroup(id.0)));
 
-                    assert!(res.used.bind_groups.is_empty());
-                    self.suspected_resources
-                        .buffers
-                        .extend(res.used.buffers.used());
-                    self.suspected_resources
-                        .textures
-                        .extend(res.used.textures.used());
-                    self.suspected_resources
-                        .texture_views
-                        .extend(res.used.views.used());
-                    self.suspected_resources
-                        .samplers
-                        .extend(res.used.samplers.used());
+                    if let Some(res) = hub.bind_groups.unregister_locked(id.0, &mut *guard) {
+                        self.suspected_resources.add_trackers(&res.used);
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .desc_sets
-                        .push(res.raw);
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .desc_sets
+                            .push(res.raw);
+                    }
                 }
             }
         }
@@ -353,25 +417,25 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             for id in self.suspected_resources.texture_views.drain(..) {
                 if trackers.views.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyTextureView(id)));
-                    hub.texture_views.free_id(id);
-                    let res = guard.remove(id).unwrap();
+                    trace.map(|t| t.lock().add(trace::Action::DestroyTextureView(id.0)));
 
-                    let raw = match res.inner {
-                        resource::TextureViewInner::Native { raw, source_id } => {
-                            self.suspected_resources.textures.push(source_id.value);
-                            raw
-                        }
-                        resource::TextureViewInner::SwapChain { .. } => unreachable!(),
-                    };
+                    if let Some(res) = hub.texture_views.unregister_locked(id.0, &mut *guard) {
+                        let raw = match res.inner {
+                            resource::TextureViewInner::Native { raw, source_id } => {
+                                self.suspected_resources.textures.push(source_id.value);
+                                raw
+                            }
+                            resource::TextureViewInner::SwapChain { .. } => unreachable!(),
+                        };
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .image_views
-                        .push((id, raw));
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .image_views
+                            .push((id, raw));
+                    }
                 }
             }
         }
@@ -383,17 +447,17 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             for id in self.suspected_resources.textures.drain(..) {
                 if trackers.textures.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyTexture(id)));
-                    hub.textures.free_id(id);
-                    let res = guard.remove(id).unwrap();
+                    trace.map(|t| t.lock().add(trace::Action::DestroyTexture(id.0)));
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .images
-                        .push((res.raw, res.memory));
+                    if let Some(res) = hub.textures.unregister_locked(id.0, &mut *guard) {
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .images
+                            .extend(res.raw);
+                    }
                 }
             }
         }
@@ -405,17 +469,17 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             for id in self.suspected_resources.samplers.drain(..) {
                 if trackers.samplers.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroySampler(id)));
-                    hub.samplers.free_id(id);
-                    let res = guard.remove(id).unwrap();
+                    trace.map(|t| t.lock().add(trace::Action::DestroySampler(id.0)));
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .samplers
-                        .push(res.raw);
+                    if let Some(res) = hub.samplers.unregister_locked(id.0, &mut *guard) {
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .samplers
+                            .push(res.raw);
+                    }
                 }
             }
         }
@@ -427,18 +491,18 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             for id in self.suspected_resources.buffers.drain(..) {
                 if trackers.buffers.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyBuffer(id)));
-                    hub.buffers.free_id(id);
-                    let res = guard.remove(id).unwrap();
-                    log::debug!("Buffer {:?} is detached", id);
+                    trace.map(|t| t.lock().add(trace::Action::DestroyBuffer(id.0)));
+                    tracing::debug!("Buffer {:?} is detached", id);
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .buffers
-                        .push((res.raw, res.memory));
+                    if let Some(res) = hub.buffers.unregister_locked(id.0, &mut *guard) {
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .buffers
+                            .extend(res.raw);
+                    }
                 }
             }
         }
@@ -450,17 +514,17 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             for id in self.suspected_resources.compute_pipelines.drain(..) {
                 if trackers.compute_pipes.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyComputePipeline(id)));
-                    hub.compute_pipelines.free_id(id);
-                    let res = guard.remove(id).unwrap();
+                    trace.map(|t| t.lock().add(trace::Action::DestroyComputePipeline(id.0)));
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .compute_pipes
-                        .push(res.raw);
+                    if let Some(res) = hub.compute_pipelines.unregister_locked(id.0, &mut *guard) {
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .compute_pipes
+                            .push(res.raw);
+                    }
                 }
             }
         }
@@ -472,36 +536,17 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             for id in self.suspected_resources.render_pipelines.drain(..) {
                 if trackers.render_pipes.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyRenderPipeline(id)));
-                    hub.render_pipelines.free_id(id);
-                    let res = guard.remove(id).unwrap();
+                    trace.map(|t| t.lock().add(trace::Action::DestroyRenderPipeline(id.0)));
 
-                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .graphics_pipes
-                        .push(res.raw);
-                }
-            }
-        }
-
-        if !self.suspected_resources.bind_group_layouts.is_empty() {
-            let (mut guard, _) = hub.bind_group_layouts.write(token);
-
-            for Stored {
-                value: id,
-                ref_count,
-            } in self.suspected_resources.bind_group_layouts.drain(..)
-            {
-                //Note: this has to happen after all the suspected pipelines are destroyed
-                if ref_count.load() == 1 {
-                    #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyBindGroupLayout(id)));
-                    hub.bind_group_layouts.free_id(id);
-                    let layout = guard.remove(id).unwrap();
-                    self.free_resources.descriptor_set_layouts.push(layout.raw);
+                    if let Some(res) = hub.render_pipelines.unregister_locked(id.0, &mut *guard) {
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .graphics_pipes
+                            .push(res.raw);
+                    }
                 }
             }
         }
@@ -517,10 +562,32 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                 //Note: this has to happen after all the suspected pipelines are destroyed
                 if ref_count.load() == 1 {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyPipelineLayout(id)));
-                    hub.pipeline_layouts.free_id(id);
-                    let layout = guard.remove(id).unwrap();
-                    self.free_resources.pipeline_layouts.push(layout.raw);
+                    trace.map(|t| t.lock().add(trace::Action::DestroyPipelineLayout(id.0)));
+
+                    if let Some(lay) = hub.pipeline_layouts.unregister_locked(id.0, &mut *guard) {
+                        self.suspected_resources
+                            .bind_group_layouts
+                            .extend_from_slice(&lay.bind_group_layout_ids);
+                        self.free_resources.pipeline_layouts.push(lay.raw);
+                    }
+                }
+            }
+        }
+
+        if !self.suspected_resources.bind_group_layouts.is_empty() {
+            let (mut guard, _) = hub.bind_group_layouts.write(token);
+
+            for id in self.suspected_resources.bind_group_layouts.drain(..) {
+                //Note: this has to happen after all the suspected pipelines are destroyed
+                //Note: nothing else can bump the refcount since the guard is locked exclusively
+                //Note: same BGL can appear multiple times in the list, but only the last
+                // encounter could drop the refcount to 0.
+                if guard[id].multi_ref_count.dec_and_check_empty() {
+                    #[cfg(feature = "trace")]
+                    trace.map(|t| t.lock().add(trace::Action::DestroyBindGroupLayout(id.0)));
+                    if let Some(lay) = hub.bind_group_layouts.unregister_locked(id.0, &mut *guard) {
+                        self.free_resources.descriptor_set_layouts.push(lay.raw);
+                    }
                 }
             }
         }
@@ -528,20 +595,20 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
     pub(crate) fn triage_mapped<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        global: &Global<G>,
+        hub: &Hub<B, G>,
         token: &mut Token<super::Device<B>>,
     ) {
         if self.mapped.is_empty() {
             return;
         }
-        let (buffer_guard, _) = B::hub(global).buffers.read(token);
+        let (buffer_guard, _) = hub.buffers.read(token);
 
         for stored in self.mapped.drain(..) {
             let resource_id = stored.value;
             let buf = &buffer_guard[resource_id];
 
             let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
-            log::trace!(
+            tracing::trace!(
                 "Mapping of {:?} at submission {:?} gets assigned to active {:?}",
                 resource_id,
                 submit_index,
@@ -558,11 +625,11 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
     pub(crate) fn triage_framebuffers<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        global: &Global<G>,
+        hub: &Hub<B, G>,
         framebuffers: &mut FastHashMap<super::FramebufferKey, B::Framebuffer>,
         token: &mut Token<super::Device<B>>,
     ) {
-        let (texture_view_guard, _) = B::hub(global).texture_views.read(token);
+        let (texture_view_guard, _) = hub.texture_views.read(token);
         let remove_list = framebuffers
             .keys()
             .filter_map(|key| {
@@ -574,7 +641,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
                 for &at in key.all() {
                     // If this attachment is still registered, it's still valid
-                    if texture_view_guard.contains(at) {
+                    if texture_view_guard.contains(at.0) {
                         continue;
                     }
 
@@ -610,21 +677,23 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             })
             .collect::<FastHashMap<_, _>>();
 
-        log::debug!("Free framebuffers {:?}", remove_list);
-        for (ref key, submit_index) in remove_list {
-            let framebuffer = framebuffers.remove(key).unwrap();
-            self.active
-                .iter_mut()
-                .find(|a| a.index == submit_index)
-                .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                .framebuffers
-                .push(framebuffer);
+        if !remove_list.is_empty() {
+            tracing::debug!("Free framebuffers {:?}", remove_list);
+            for (ref key, submit_index) in remove_list {
+                let framebuffer = framebuffers.remove(key).unwrap();
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .framebuffers
+                    .push(framebuffer);
+            }
         }
     }
 
     pub(crate) fn handle_mapping<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        global: &Global<G>,
+        hub: &Hub<B, G>,
         raw: &B::Device,
         trackers: &Mutex<TrackerSet>,
         token: &mut Token<super::Device<B>>,
@@ -632,8 +701,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         if self.ready_to_map.is_empty() {
             return Vec::new();
         }
-        let hub = B::hub(global);
-        let (mut buffer_guard, _) = B::hub(global).buffers.write(token);
+        let (mut buffer_guard, _) = hub.buffers.write(token);
         let mut pending_callbacks: Vec<super::BufferMapPendingCallback> =
             Vec::with_capacity(self.ready_to_map.len());
         let mut trackers = trackers.lock();
@@ -642,12 +710,13 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             if buffer.life_guard.ref_count.is_none() && trackers.buffers.remove_abandoned(buffer_id)
             {
                 buffer.map_state = resource::BufferMapState::Idle;
-                log::debug!("Mapping request is dropped because the buffer is destroyed.");
-                hub.buffers.free_id(buffer_id);
-                let buffer = buffer_guard.remove(buffer_id).unwrap();
-                self.free_resources
+                tracing::debug!("Mapping request is dropped because the buffer is destroyed.");
+                if let Some(buf) = hub
                     .buffers
-                    .push((buffer.raw, buffer.memory));
+                    .unregister_locked(buffer_id.0, &mut *buffer_guard)
+                {
+                    self.free_resources.buffers.extend(buf.raw);
+                }
             } else {
                 let mapping = match std::mem::replace(
                     &mut buffer.map_state,
@@ -656,21 +725,25 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
                     _ => panic!("No pending mapping."),
                 };
-                log::debug!("Buffer {:?} map state -> Active", buffer_id);
-                let host = mapping.op.host;
-                let status = match super::map_buffer(raw, buffer, mapping.sub_range.clone(), host) {
-                    Ok(ptr) => {
-                        buffer.map_state = resource::BufferMapState::Active {
-                            ptr,
-                            sub_range: mapping.sub_range,
-                            host,
-                        };
-                        resource::BufferMapAsyncStatus::Success
+                let status = if mapping.sub_range.size.map_or(true, |x| x != 0) {
+                    tracing::debug!("Buffer {:?} map state -> Active", buffer_id);
+                    let host = mapping.op.host;
+                    match super::map_buffer(raw, buffer, mapping.sub_range.clone(), host) {
+                        Ok(ptr) => {
+                            buffer.map_state = resource::BufferMapState::Active {
+                                ptr,
+                                sub_range: mapping.sub_range,
+                                host,
+                            };
+                            resource::BufferMapAsyncStatus::Success
+                        }
+                        Err(e) => {
+                            tracing::error!("Mapping failed {:?}", e);
+                            resource::BufferMapAsyncStatus::Error
+                        }
                     }
-                    Err(e) => {
-                        log::error!("Mapping failed {:?}", e);
-                        resource::BufferMapAsyncStatus::Error
-                    }
+                } else {
+                    resource::BufferMapAsyncStatus::Success
                 };
                 pending_callbacks.push((mapping.op, status));
             }

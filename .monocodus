@@ -1,0 +1,7 @@
+version: 1.1.0
+
+rust:
+  formatter:
+    name: rustfmt
+  repo_checkers:
+    - name: rust-clippy

@@ -5,82 +5,117 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
 use crate::{
-    command::{CommandAllocator, CommandBuffer, TextureCopyView, BITS_PER_BYTE},
+    command::{
+        texture_copy_view_to_hal, validate_linear_texture_data, validate_texture_copy_range,
+        CommandAllocator, CommandBuffer, CopySide, TextureCopyView, TransferError, BITS_PER_BYTE,
+    },
     conv,
+    device::{DeviceError, WaitIdleError},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
-    resource::{BufferMapState, BufferUse, TextureUse},
+    resource::{BufferAccessError, BufferMapState, BufferUse, TextureUse},
+    span, FastHashSet,
 };
 
 use gfx_memory::{Block, Heaps, MemoryBlock};
 use hal::{command::CommandBuffer as _, device::Device as _, queue::CommandQueue as _};
 use smallvec::SmallVec;
-use std::{iter, sync::atomic::Ordering};
+use std::iter;
+use thiserror::Error;
 
 struct StagingData<B: hal::Backend> {
     buffer: B::Buffer,
     memory: MemoryBlock<B>,
-    comb: B::CommandBuffer,
+    cmdbuf: B::CommandBuffer,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
+pub enum TempResource<B: hal::Backend> {
+    Buffer(B::Buffer),
+    Image(B::Image),
+}
+
+#[derive(Debug)]
 pub(crate) struct PendingWrites<B: hal::Backend> {
     pub command_buffer: Option<B::CommandBuffer>,
-    pub temp_buffers: Vec<(B::Buffer, MemoryBlock<B>)>,
+    pub temp_resources: Vec<(TempResource<B>, MemoryBlock<B>)>,
+    pub dst_buffers: FastHashSet<id::BufferId>,
+    pub dst_textures: FastHashSet<id::TextureId>,
 }
 
 impl<B: hal::Backend> PendingWrites<B> {
     pub fn new() -> Self {
-        PendingWrites {
+        Self {
             command_buffer: None,
-            temp_buffers: Vec::new(),
+            temp_resources: Vec::new(),
+            dst_buffers: FastHashSet::default(),
+            dst_textures: FastHashSet::default(),
         }
     }
 
     pub fn dispose(
         self,
         device: &B::Device,
-        com_allocator: &CommandAllocator<B>,
+        cmd_allocator: &CommandAllocator<B>,
         mem_allocator: &mut Heaps<B>,
     ) {
         if let Some(raw) = self.command_buffer {
-            com_allocator.discard_internal(raw);
+            cmd_allocator.discard_internal(raw);
         }
-        for (buffer, memory) in self.temp_buffers {
+        for (resource, memory) in self.temp_resources {
             mem_allocator.free(device, memory);
-            unsafe {
-                device.destroy_buffer(buffer);
+            match resource {
+                TempResource::Buffer(buffer) => unsafe {
+                    device.destroy_buffer(buffer);
+                },
+                TempResource::Image(image) => unsafe {
+                    device.destroy_image(image);
+                },
             }
         }
     }
 
-    pub fn consume_temp(&mut self, buffer: B::Buffer, memory: MemoryBlock<B>) {
-        self.temp_buffers.push((buffer, memory));
+    pub fn consume_temp(&mut self, resource: TempResource<B>, memory: MemoryBlock<B>) {
+        self.temp_resources.push((resource, memory));
     }
 
     fn consume(&mut self, stage: StagingData<B>) {
-        self.temp_buffers.push((stage.buffer, stage.memory));
-        self.command_buffer = Some(stage.comb);
+        self.temp_resources
+            .push((TempResource::Buffer(stage.buffer), stage.memory));
+        self.command_buffer = Some(stage.cmdbuf);
+    }
+
+    #[must_use]
+    fn finish(&mut self) -> Option<B::CommandBuffer> {
+        self.dst_buffers.clear();
+        self.dst_textures.clear();
+        self.command_buffer.take().map(|mut cmd_buf| unsafe {
+            cmd_buf.finish();
+            cmd_buf
+        })
     }
 }
 
 impl<B: hal::Backend> super::Device<B> {
     pub fn borrow_pending_writes(&mut self) -> &mut B::CommandBuffer {
         if self.pending_writes.command_buffer.is_none() {
-            let mut comb = self.com_allocator.allocate_internal();
+            let mut cmdbuf = self.cmd_allocator.allocate_internal();
             unsafe {
-                comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+                cmdbuf.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
             }
-            self.pending_writes.command_buffer = Some(comb);
+            self.pending_writes.command_buffer = Some(cmdbuf);
         }
         self.pending_writes.command_buffer.as_mut().unwrap()
     }
 
-    fn prepare_stage(&mut self, size: wgt::BufferAddress) -> StagingData<B> {
+    fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<B>, DeviceError> {
         let mut buffer = unsafe {
             self.raw
                 .create_buffer(size, hal::buffer::Usage::TRANSFER_SRC)
-                .unwrap()
+                .map_err(|err| match err {
+                    hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    _ => panic!("failed to create staging buffer: {}", err),
+                })?
         };
         //TODO: do we need to transition into HOST_WRITE access first?
         let requirements = unsafe { self.raw.get_buffer_requirements(&buffer) };
@@ -90,36 +125,60 @@ impl<B: hal::Backend> super::Device<B> {
             .lock()
             .allocate(
                 &self.raw,
-                requirements.type_mask as u32,
+                &requirements,
                 gfx_memory::MemoryUsage::Staging { read_back: false },
                 gfx_memory::Kind::Linear,
-                requirements.size,
-                requirements.alignment,
             )
-            .unwrap();
+            .map_err(DeviceError::from_heaps)?;
         unsafe {
             self.raw.set_buffer_name(&mut buffer, "<write_buffer_temp>");
             self.raw
                 .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut buffer)
-                .unwrap();
+                .map_err(DeviceError::from_bind)?;
         }
 
-        let comb = match self.pending_writes.command_buffer.take() {
-            Some(comb) => comb,
+        let cmdbuf = match self.pending_writes.command_buffer.take() {
+            Some(cmdbuf) => cmdbuf,
             None => {
-                let mut comb = self.com_allocator.allocate_internal();
+                let mut cmdbuf = self.cmd_allocator.allocate_internal();
                 unsafe {
-                    comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+                    cmdbuf.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
                 }
-                comb
+                cmdbuf
             }
         };
-        StagingData {
+        Ok(StagingData {
             buffer,
             memory,
-            comb,
-        }
+            cmdbuf,
+        })
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum QueueWriteError {
+    #[error(transparent)]
+    Queue(#[from] DeviceError),
+    #[error(transparent)]
+    Transfer(#[from] TransferError),
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum QueueSubmitError {
+    #[error(transparent)]
+    Queue(#[from] DeviceError),
+    #[error("command buffer {0:?} is invalid")]
+    InvalidCommandBuffer(id::CommandBufferId),
+    #[error("buffer {0:?} is destroyed")]
+    DestroyedBuffer(id::BufferId),
+    #[error("texture {0:?} is destroyed")]
+    DestroyedTexture(id::TextureId),
+    #[error(transparent)]
+    Unmap(#[from] BufferAccessError),
+    #[error("swap chain output was dropped before the command buffer got submitted")]
+    SwapChainOutputDropped,
+    #[error("GPU got stuck :(")]
+    StuckGpu,
 }
 
 //TODO: move out common parts of write_xxx.
@@ -131,82 +190,78 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         buffer_offset: wgt::BufferAddress,
         data: &[u8],
-    ) {
+    ) -> Result<(), QueueWriteError> {
+        span!(_guard, INFO, "Queue::write_buffer");
+
         let hub = B::hub(self);
         let mut token = Token::root();
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let device = &mut device_guard[queue_id];
+        let device = device_guard
+            .get_mut(queue_id)
+            .map_err(|_| DeviceError::Invalid)?;
         let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => {
-                let mut trace = trace.lock();
-                let data_path = trace.make_binary("bin", data);
-                trace.add(Action::WriteBuffer {
-                    id: buffer_id,
-                    data: data_path,
-                    range: buffer_offset..buffer_offset + data.len() as wgt::BufferAddress,
-                    queued: true,
-                });
-            }
-            None => {}
+        if let Some(ref trace) = device.trace {
+            let mut trace = trace.lock();
+            let data_path = trace.make_binary("bin", data);
+            trace.add(Action::WriteBuffer {
+                id: buffer_id,
+                data: data_path,
+                range: buffer_offset..buffer_offset + data.len() as wgt::BufferAddress,
+                queued: true,
+            });
         }
 
         let data_size = data.len() as wgt::BufferAddress;
         if data_size == 0 {
-            log::trace!("Ignoring write_buffer of size 0");
-            return;
+            tracing::trace!("Ignoring write_buffer of size 0");
+            return Ok(());
         }
 
-        let mut stage = device.prepare_stage(data_size);
+        let mut stage = device.prepare_stage(data_size)?;
         {
             let mut mapped = stage
                 .memory
                 .map(&device.raw, hal::memory::Segment::ALL)
-                .unwrap();
+                .map_err(|err| match err {
+                    hal::device::MapError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    _ => panic!("failed to map buffer: {}", err),
+                })?;
             unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
-                .unwrap()
+                .expect("failed to get writer to mapped staging buffer")
                 .slice[..data.len()]
                 .copy_from_slice(data);
         }
 
         let mut trackers = device.trackers.lock();
-        let (dst, transition) =
-            trackers
-                .buffers
-                .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST);
-        assert!(
-            dst.usage.contains(wgt::BufferUsage::COPY_DST),
-            "Write buffer usage {:?} must contain flag COPY_DST",
-            dst.usage
-        );
-        let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
-        dst.life_guard.use_at(last_submit_index + 1);
+        let (dst, transition) = trackers
+            .buffers
+            .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST)
+            .map_err(TransferError::InvalidBuffer)?;
+        let &(ref dst_raw, _) = dst
+            .raw
+            .as_ref()
+            .ok_or(TransferError::InvalidBuffer(buffer_id))?;
+        if !dst.usage.contains(wgt::BufferUsage::COPY_DST) {
+            Err(TransferError::MissingCopyDstUsageFlag)?;
+        }
+        dst.life_guard.use_at(device.active_submission_index + 1);
 
-        assert_eq!(
-            data_size % wgt::COPY_BUFFER_ALIGNMENT,
-            0,
-            "Buffer write size {} must be a multiple of {}",
-            buffer_offset,
-            wgt::COPY_BUFFER_ALIGNMENT,
-        );
-        assert_eq!(
-            buffer_offset % wgt::COPY_BUFFER_ALIGNMENT,
-            0,
-            "Buffer offset {} must be a multiple of {}",
-            buffer_offset,
-            wgt::COPY_BUFFER_ALIGNMENT,
-        );
-        let destination_start_offset = buffer_offset;
-        let destination_end_offset = buffer_offset + data_size;
-        assert!(
-            destination_end_offset <= dst.size,
-            "Write buffer with indices {}..{} overruns destination buffer of size {}",
-            destination_start_offset,
-            destination_end_offset,
-            dst.size
-        );
+        if data_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            Err(TransferError::UnalignedCopySize(data_size))?
+        }
+        if buffer_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            Err(TransferError::UnalignedBufferOffset(buffer_offset))?
+        }
+        if buffer_offset + data_size > dst.size {
+            Err(TransferError::BufferOverrun {
+                start_offset: buffer_offset,
+                end_offset: buffer_offset + data_size,
+                buffer_size: dst.size,
+                side: CopySide::Destination,
+            })?
+        }
 
         let region = hal::command::BufferCopy {
             src: 0,
@@ -214,7 +269,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             size: data.len() as _,
         };
         unsafe {
-            stage.comb.pipeline_barrier(
+            stage.cmdbuf.pipeline_barrier(
                 super::all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 iter::once(hal::memory::Barrier::Buffer {
@@ -226,11 +281,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .chain(transition.map(|pending| pending.into_hal(dst))),
             );
             stage
-                .comb
-                .copy_buffer(&stage.buffer, &dst.raw, iter::once(region));
+                .cmdbuf
+                .copy_buffer(&stage.buffer, dst_raw, iter::once(region));
         }
 
         device.pending_writes.consume(stage);
+        device.pending_writes.dst_buffers.insert(buffer_id);
+
+        Ok(())
     }
 
     pub fn queue_write_texture<B: GfxBackend>(
@@ -240,70 +298,116 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         data: &[u8],
         data_layout: &wgt::TextureDataLayout,
         size: &wgt::Extent3d,
-    ) {
+    ) -> Result<(), QueueWriteError> {
+        span!(_guard, INFO, "Queue::write_texture");
+
         let hub = B::hub(self);
         let mut token = Token::root();
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let device = &mut device_guard[queue_id];
+        let device = device_guard
+            .get_mut(queue_id)
+            .map_err(|_| DeviceError::Invalid)?;
         let (texture_guard, _) = hub.textures.read(&mut token);
-        let (image_layers, image_range, image_offset) = destination.to_hal(&*texture_guard);
+        let (image_layers, image_range, image_offset) =
+            texture_copy_view_to_hal(destination, size, &*texture_guard)?;
 
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => {
-                let mut trace = trace.lock();
-                let data_path = trace.make_binary("bin", data);
-                trace.add(Action::WriteTexture {
-                    to: destination.clone(),
-                    data: data_path,
-                    layout: data_layout.clone(),
-                    size: *size,
-                });
-            }
-            None => {}
+        if let Some(ref trace) = device.trace {
+            let mut trace = trace.lock();
+            let data_path = trace.make_binary("bin", data);
+            trace.add(Action::WriteTexture {
+                to: destination.clone(),
+                data: data_path,
+                layout: data_layout.clone(),
+                size: *size,
+            });
         }
 
-        if size.width == 0 || size.height == 0 || size.width == 0 {
-            log::trace!("Ignoring write_texture of size 0");
-            return;
+        if size.width == 0 || size.height == 0 || size.depth == 0 {
+            tracing::trace!("Ignoring write_texture of size 0");
+            return Ok(());
         }
 
-        let texture_format = texture_guard[destination.texture].format;
-        let bytes_per_texel = conv::map_texture_format(texture_format, device.private_features)
+        let texture_format = texture_guard.get(destination.texture).unwrap().format;
+        let bytes_per_block = conv::map_texture_format(texture_format, device.private_features)
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        crate::command::validate_linear_texture_data(
+        validate_linear_texture_data(
             data_layout,
+            texture_format,
             data.len() as wgt::BufferAddress,
-            bytes_per_texel as wgt::BufferAddress,
+            CopySide::Source,
+            bytes_per_block as wgt::BufferAddress,
             size,
-        );
+        )?;
+        let (block_width, block_height) = conv::texture_block_size(texture_format);
+        if !conv::is_valid_copy_dst_texture_format(texture_format) {
+            Err(TransferError::CopyToForbiddenTextureFormat(texture_format))?
+        }
+        let width_blocks = size.width / block_width;
+        let height_blocks = size.height / block_width;
+
+        let texel_rows_per_image = data_layout.rows_per_image;
+        let block_rows_per_image = data_layout.rows_per_image / block_height;
 
         let bytes_per_row_alignment = get_lowest_common_denom(
             device.hal_limits.optimal_buffer_copy_pitch_alignment as u32,
-            bytes_per_texel,
+            bytes_per_block,
         );
-        let stage_bytes_per_row = align_to(bytes_per_texel * size.width, bytes_per_row_alignment);
-        let stage_size = stage_bytes_per_row as u64
-            * ((size.depth - 1) * data_layout.rows_per_image + size.height) as u64;
-        let mut stage = device.prepare_stage(stage_size);
+        let stage_bytes_per_row = align_to(bytes_per_block * width_blocks, bytes_per_row_alignment);
+
+        let block_rows_in_copy = (size.depth - 1) * block_rows_per_image + height_blocks;
+        let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
+        let mut stage = device.prepare_stage(stage_size)?;
+
+        let mut trackers = device.trackers.lock();
+        let (dst, transition) = trackers
+            .textures
+            .use_replace(
+                &*texture_guard,
+                destination.texture,
+                image_range,
+                TextureUse::COPY_DST,
+            )
+            .unwrap();
+        let &(ref dst_raw, _) = dst
+            .raw
+            .as_ref()
+            .ok_or(TransferError::InvalidTexture(destination.texture))?;
+
+        if !dst.usage.contains(wgt::TextureUsage::COPY_DST) {
+            Err(TransferError::MissingCopyDstUsageFlag)?
+        }
+        validate_texture_copy_range(
+            destination,
+            dst.format,
+            dst.kind,
+            CopySide::Destination,
+            size,
+        )?;
+        dst.life_guard.use_at(device.active_submission_index + 1);
+
         {
             let mut mapped = stage
                 .memory
                 .map(&device.raw, hal::memory::Segment::ALL)
-                .unwrap();
-            let mapping = unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }.unwrap();
+                .map_err(|err| match err {
+                    hal::device::MapError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    _ => panic!("failed to map staging buffer: {}", err),
+                })?;
+            let mapping = unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
+                .expect("failed to get writer to mapped staging buffer");
             if stage_bytes_per_row == data_layout.bytes_per_row {
-                // Unlikely case of the data already being aligned optimally.
+                // Fast path if the data isalready being aligned optimally.
                 mapping.slice[..stage_size as usize].copy_from_slice(data);
             } else {
                 // Copy row by row into the optimal alignment.
                 let copy_bytes_per_row =
                     stage_bytes_per_row.min(data_layout.bytes_per_row) as usize;
                 for layer in 0..size.depth {
-                    let rows_offset = layer * data_layout.rows_per_image;
-                    for row in 0..size.height {
+                    let rows_offset = layer * block_rows_per_image;
+                    for row in 0..height_blocks {
                         let data_offset =
                             (rows_offset + row) as usize * data_layout.bytes_per_row as usize;
                         let stage_offset =
@@ -315,33 +419,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        let mut trackers = device.trackers.lock();
-        let (dst, transition) = trackers.textures.use_replace(
-            &*texture_guard,
-            destination.texture,
-            image_range,
-            TextureUse::COPY_DST,
-        );
-        assert!(
-            dst.usage.contains(wgt::TextureUsage::COPY_DST),
-            "Write texture usage {:?} must contain flag COPY_DST",
-            dst.usage
-        );
-        crate::command::validate_texture_copy_range(destination, dst.kind, size);
-
-        let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
-        dst.life_guard.use_at(last_submit_index + 1);
-
         let region = hal::command::BufferImageCopy {
             buffer_offset: 0,
-            buffer_width: stage_bytes_per_row / bytes_per_texel,
-            buffer_height: data_layout.rows_per_image,
+            buffer_width: (stage_bytes_per_row / bytes_per_block) * block_width,
+            buffer_height: texel_rows_per_image,
             image_layers,
             image_offset,
             image_extent: conv::map_extent(size, dst.dimension),
         };
         unsafe {
-            stage.comb.pipeline_barrier(
+            stage.cmdbuf.pipeline_barrier(
                 super::all_image_stages() | hal::pso::PipelineStage::HOST
                     ..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
@@ -353,43 +440,42 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 })
                 .chain(transition.map(|pending| pending.into_hal(dst))),
             );
-            stage.comb.copy_buffer_to_image(
+            stage.cmdbuf.copy_buffer_to_image(
                 &stage.buffer,
-                &dst.raw,
+                dst_raw,
                 hal::image::Layout::TransferDstOptimal,
                 iter::once(region),
             );
         }
 
         device.pending_writes.consume(stage);
+        device
+            .pending_writes
+            .dst_textures
+            .insert(destination.texture);
+
+        Ok(())
     }
 
     pub fn queue_submit<B: GfxBackend>(
         &self,
         queue_id: id::QueueId,
         command_buffer_ids: &[id::CommandBufferId],
-    ) {
+    ) -> Result<(), QueueSubmitError> {
+        span!(_guard, INFO, "Queue::submit");
+
         let hub = B::hub(self);
 
         let callbacks = {
             let mut token = Token::root();
             let (mut device_guard, mut token) = hub.devices.write(&mut token);
-            let device = &mut device_guard[queue_id];
-            let pending_write_command_buffer =
-                device
-                    .pending_writes
-                    .command_buffer
-                    .take()
-                    .map(|mut comb_raw| unsafe {
-                        comb_raw.finish();
-                        comb_raw
-                    });
+            let device = device_guard
+                .get_mut(queue_id)
+                .map_err(|_| DeviceError::Invalid)?;
+            let pending_write_command_buffer = device.pending_writes.finish();
             device.temp_suspected.clear();
-
-            let submit_index = 1 + device
-                .life_guard
-                .submission_index
-                .fetch_add(1, Ordering::Relaxed);
+            device.active_submission_index += 1;
+            let submit_index = device.active_submission_index;
 
             let fence = {
                 let mut signal_swapchain_semaphores = SmallVec::<[_; 1]>::new();
@@ -414,105 +500,124 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
-                        let comb = &mut command_buffer_guard[cmb_id];
+                        let cmdbuf = command_buffer_guard
+                            .get_mut(cmb_id)
+                            .map_err(|_| QueueSubmitError::InvalidCommandBuffer(cmb_id))?;
                         #[cfg(feature = "trace")]
-                        match device.trace {
-                            Some(ref trace) => trace
-                                .lock()
-                                .add(Action::Submit(submit_index, comb.commands.take().unwrap())),
-                            None => (),
-                        };
+                        if let Some(ref trace) = device.trace {
+                            trace.lock().add(Action::Submit(
+                                submit_index,
+                                cmdbuf.commands.take().unwrap(),
+                            ));
+                        }
 
-                        if let Some((sc_id, fbo)) = comb.used_swap_chain.take() {
+                        if let Some((sc_id, fbo)) = cmdbuf.used_swap_chain.take() {
                             let sc = &mut swap_chain_guard[sc_id.value];
-                            assert!(sc.acquired_view_id.is_some(),
-                                "SwapChainOutput for {:?} was dropped before the respective command buffer {:?} got submitted!",
-                                sc_id.value, cmb_id);
+                            sc.active_submission_index = submit_index;
+                            if sc.acquired_view_id.is_none() {
+                                return Err(QueueSubmitError::SwapChainOutputDropped);
+                            }
+                            // For each swapchain, we only want to have at most 1 signaled semaphore.
                             if sc.acquired_framebuffers.is_empty() {
+                                // Only add a signal if this is the first time for this swapchain
+                                // to be used in the submission.
                                 signal_swapchain_semaphores.push(sc_id.value);
                             }
                             sc.acquired_framebuffers.push(fbo);
                         }
 
                         // optimize the tracked states
-                        comb.trackers.optimize();
+                        cmdbuf.trackers.optimize();
 
                         // update submission IDs
-                        for id in comb.trackers.buffers.used() {
-                            if let BufferMapState::Waiting(_) = buffer_guard[id].map_state {
-                                panic!("Buffer has a pending mapping.");
+                        for id in cmdbuf.trackers.buffers.used() {
+                            let buffer = &mut buffer_guard[id];
+                            if buffer.raw.is_none() {
+                                return Err(QueueSubmitError::DestroyedBuffer(id.0))?;
                             }
-                            if !buffer_guard[id].life_guard.use_at(submit_index) {
-                                if let BufferMapState::Active { .. } = buffer_guard[id].map_state {
-                                    log::warn!("Dropped buffer has a pending mapping.");
-                                    super::unmap_buffer(&device.raw, &mut buffer_guard[id]);
+                            if !buffer.life_guard.use_at(submit_index) {
+                                if let BufferMapState::Active { .. } = buffer.map_state {
+                                    tracing::warn!("Dropped buffer has a pending mapping.");
+                                    super::unmap_buffer(&device.raw, buffer)?;
                                 }
                                 device.temp_suspected.buffers.push(id);
+                            } else {
+                                match buffer.map_state {
+                                    BufferMapState::Idle => (),
+                                    _ => panic!("Buffer {:?} is still mapped", id),
+                                }
                             }
                         }
-                        for id in comb.trackers.textures.used() {
-                            if !texture_guard[id].life_guard.use_at(submit_index) {
+                        for id in cmdbuf.trackers.textures.used() {
+                            let texture = &texture_guard[id];
+                            if texture.raw.is_none() {
+                                return Err(QueueSubmitError::DestroyedTexture(id.0))?;
+                            }
+                            if !texture.life_guard.use_at(submit_index) {
                                 device.temp_suspected.textures.push(id);
                             }
                         }
-                        for id in comb.trackers.views.used() {
+                        for id in cmdbuf.trackers.views.used() {
                             if !texture_view_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.texture_views.push(id);
                             }
                         }
-                        for id in comb.trackers.bind_groups.used() {
+                        for id in cmdbuf.trackers.bind_groups.used() {
                             if !bind_group_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.bind_groups.push(id);
                             }
                         }
-                        for id in comb.trackers.samplers.used() {
+                        for id in cmdbuf.trackers.samplers.used() {
                             if !sampler_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.samplers.push(id);
                             }
                         }
-                        for id in comb.trackers.compute_pipes.used() {
+                        for id in cmdbuf.trackers.compute_pipes.used() {
                             if !compute_pipe_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.compute_pipelines.push(id);
                             }
                         }
-                        for id in comb.trackers.render_pipes.used() {
+                        for id in cmdbuf.trackers.render_pipes.used() {
                             if !render_pipe_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.render_pipelines.push(id);
                             }
                         }
 
                         // execute resource transitions
-                        let mut transit = device.com_allocator.extend(comb);
+                        let mut transit = device.cmd_allocator.extend(cmdbuf);
                         unsafe {
                             // the last buffer was open, closing now
-                            comb.raw.last_mut().unwrap().finish();
+                            cmdbuf.raw.last_mut().unwrap().finish();
                             transit
                                 .begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
                         }
-                        log::trace!("Stitching command buffer {:?} before submission", cmb_id);
+                        tracing::trace!("Stitching command buffer {:?} before submission", cmb_id);
                         CommandBuffer::insert_barriers(
                             &mut transit,
                             &mut *trackers,
-                            &comb.trackers,
+                            &cmdbuf.trackers,
                             &*buffer_guard,
                             &*texture_guard,
                         );
                         unsafe {
                             transit.finish();
                         }
-                        comb.raw.insert(0, transit);
+                        cmdbuf.raw.insert(0, transit);
                     }
 
-                    log::debug!("Device after submission {}: {:#?}", submit_index, trackers);
+                    tracing::trace!("Device after submission {}: {:#?}", submit_index, trackers);
                 }
 
                 // now prepare the GPU submission
-                let fence = device.raw.create_fence(false).unwrap();
+                let fence = device
+                    .raw
+                    .create_fence(false)
+                    .or(Err(DeviceError::OutOfMemory))?;
                 let submission = hal::queue::Submission {
                     command_buffers: pending_write_command_buffer.as_ref().into_iter().chain(
                         command_buffer_ids
                             .iter()
-                            .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
+                            .flat_map(|&cmb_id| &command_buffer_guard.get(cmb_id).unwrap().raw),
                     ),
                     wait_semaphores: Vec::new(),
                     signal_semaphores: signal_swapchain_semaphores
@@ -528,28 +633,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             if let Some(comb_raw) = pending_write_command_buffer {
                 device
-                    .com_allocator
+                    .cmd_allocator
                     .after_submit_internal(comb_raw, submit_index);
             }
 
-            let callbacks = device.maintain(self, false, &mut token);
+            let callbacks = match device.maintain(&hub, false, &mut token) {
+                Ok(callbacks) => callbacks,
+                Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
+                Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
+            };
             super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
                 submit_index,
                 fence,
                 &device.temp_suspected,
-                device.pending_writes.temp_buffers.drain(..),
+                device.pending_writes.temp_resources.drain(..),
             );
 
             // finally, return the command buffers to the allocator
             for &cmb_id in command_buffer_ids {
-                let (cmd_buf, _) = hub.command_buffers.unregister(cmb_id, &mut token);
-                device.com_allocator.after_submit(cmd_buf, submit_index);
+                if let (Some(cmd_buf), _) = hub.command_buffers.unregister(cmb_id, &mut token) {
+                    device.cmd_allocator.after_submit(cmd_buf, submit_index);
+                }
             }
 
             callbacks
         };
 
         super::fire_map_callbacks(callbacks);
+
+        Ok(())
     }
 }
 

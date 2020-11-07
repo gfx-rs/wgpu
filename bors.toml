@@ -8,5 +8,3 @@ status = [
   "Windows Stable",
   "Windows Nightly",
 ]
-
-timeout_sec = 18000 # 5 hours
