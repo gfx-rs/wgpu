@@ -19,20 +19,28 @@ env_logger = "0.7"
 log = "0.4"
 raw-window-handle = "0.3"
 renderdoc = { version = "0.8", optional = true, default_features = false }
-ron = "0.6.2"
+ron = "0.6"
 winit = { version = "0.22", optional = true }
 
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.5"
+version = "0.6"
 features = ["replay"]
 
 [dependencies.wgc]
 path = "../wgpu-core"
 package = "wgpu-core"
-version = "0.5"
+version = "0.6"
 features = ["replay", "raw-window-handle"]
 
+[dependencies.wgpu-subscriber]
+git = "https://github.com/gfx-rs/subscriber.git"
+rev = "cdc9feb53f152f9c41905ed9efeff2c1ed214361"
+version = "0.1"
+
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-vulkan = { version = "0.5", features = ["x11"] }
+gfx-backend-vulkan = { version = "0.6", features = ["x11"] }
+
+[dev-dependencies]
+serde = "1"

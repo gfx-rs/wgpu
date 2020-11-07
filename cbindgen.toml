@@ -8,13 +8,17 @@ autogen_warning = """/* DO NOT MODIFY THIS MANUALLY! This file was generated usi
  *   2. Run `rustup run nightly cbindgen toolkit/library/rust/ --lockfile Cargo.lock --crate wgpu_bindings -o dom/webgpu/ffi/wgpu_ffi_generated.h`
  */
 
+struct WGPUByteBuf;
 typedef uint64_t WGPUNonZeroU64;
+typedef uint64_t WGPUOption_BufferSize;
+typedef uint32_t WGPUOption_NonZeroU32;
+typedef uint8_t WGPUOption_NonZeroU8;
 typedef uint64_t WGPUOption_AdapterId;
 typedef uint64_t WGPUOption_BufferId;
+typedef uint64_t WGPUOption_PipelineLayoutId;
 typedef uint64_t WGPUOption_SamplerId;
 typedef uint64_t WGPUOption_SurfaceId;
 typedef uint64_t WGPUOption_TextureViewId;
-typedef char WGPUNonExhaustive[0];
 """
 include_version = true
 braces = "SameLine"
@@ -25,13 +29,16 @@ style = "tag"
 
 [export]
 prefix = "WGPU"
-include = ["TextureComponentType", "TextureViewDimension"]
-exclude = ["NonExhaustive", "Option_AdapterId", "Option_BufferId", "Option_SamplerId", "Option_SurfaceId", "Option_TextureViewId"]
+exclude = [
+	"Option_AdapterId", "Option_BufferId", "Option_PipelineLayoutId", "Option_SamplerId", "Option_SurfaceId", "Option_TextureViewId",
+	"Option_BufferSize", "Option_NonZeroU32", "Option_NonZeroU8",
+]
 
 [export.rename]
 "BufferDescriptor_RawString" = "BufferDescriptor"
+"CommandBufferDescriptor_RawString" = "CommandBufferDescriptor"
+"CommandEncoderDescriptor_RawString" = "CommandEncoderDescriptor"
 "TextureDescriptor_RawString" = "TextureDescriptor"
-"TextureViewDescriptor_RawString" = "TextureViewDescriptor"
 "SamplerDescriptor_RawString" = "SamplerDescriptor"
 
 [parse]

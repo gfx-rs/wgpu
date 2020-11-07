@@ -4,152 +4,36 @@
 
 mod allocator;
 mod bind;
+mod bundle;
 mod compute;
+mod draw;
 mod render;
 mod transfer;
 
 pub(crate) use self::allocator::CommandAllocator;
+pub use self::allocator::CommandAllocatorError;
+pub use self::bundle::*;
 pub use self::compute::*;
+pub use self::draw::*;
 pub use self::render::*;
 pub use self::transfer::*;
 
 use crate::{
-    device::{all_buffer_stages, all_image_stages, MAX_COLOR_TARGETS},
+    device::{all_buffer_stages, all_image_stages},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
     resource::{Buffer, Texture},
+    span,
     track::TrackerSet,
-    PrivateFeatures, Stored,
+    Label, PrivateFeatures, Stored,
 };
 
-use peek_poke::PeekPoke;
+use hal::command::CommandBuffer as _;
+use thiserror::Error;
 
-use std::{marker::PhantomData, mem, ptr, slice, thread::ThreadId};
+use std::thread::ThreadId;
 
-#[derive(Clone, Copy, Debug, PeekPoke)]
-pub struct PhantomSlice<T>(PhantomData<T>);
-
-impl<T> Default for PhantomSlice<T> {
-    fn default() -> Self {
-        PhantomSlice(PhantomData)
-    }
-}
-
-impl<T> PhantomSlice<T> {
-    unsafe fn decode_unaligned<'a>(
-        self,
-        pointer: *const u8,
-        count: usize,
-        bound: *const u8,
-    ) -> (*const u8, &'a [T]) {
-        let align_offset = pointer.align_offset(mem::align_of::<T>());
-        let aligned = pointer.add(align_offset);
-        let size = count * mem::size_of::<T>();
-        let end = aligned.add(size);
-        assert!(
-            end <= bound,
-            "End of phantom slice ({:?}) exceeds bound ({:?})",
-            end,
-            bound
-        );
-        (end, slice::from_raw_parts(aligned as *const T, count))
-    }
-}
-
-#[repr(C)]
-pub struct RawPass {
-    data: *mut u8,
-    base: *mut u8,
-    capacity: usize,
-    parent: id::CommandEncoderId,
-}
-
-impl RawPass {
-    fn from_vec<T>(mut vec: Vec<T>, encoder_id: id::CommandEncoderId) -> Self {
-        let ptr = vec.as_mut_ptr() as *mut u8;
-        let capacity = vec.capacity() * mem::size_of::<T>();
-        mem::forget(vec);
-        RawPass {
-            data: ptr,
-            base: ptr,
-            capacity,
-            parent: encoder_id,
-        }
-    }
-
-    /// Finish encoding a raw pass.
-    ///
-    /// The last command is provided, yet the encoder
-    /// is guaranteed to have exactly `C::max_size()` space for it.
-    unsafe fn finish<C: peek_poke::Poke>(&mut self, command: C) {
-        self.ensure_extra_size(C::max_size());
-        let extended_end = self.data.add(C::max_size());
-        let end = command.poke_into(self.data);
-        ptr::write_bytes(end, 0, extended_end as usize - end as usize);
-        self.data = extended_end;
-    }
-
-    fn size(&self) -> usize {
-        self.data as usize - self.base as usize
-    }
-
-    /// Recover the data vector of the pass, consuming `self`.
-    unsafe fn into_vec(mut self) -> (Vec<u8>, id::CommandEncoderId) {
-        (self.invalidate(), self.parent)
-    }
-
-    /// Make pass contents invalid, return the contained data.
-    ///
-    /// Any following access to the pass will result in a crash
-    /// for accessing address 0.
-    pub unsafe fn invalidate(&mut self) -> Vec<u8> {
-        let size = self.size();
-        assert!(
-            size <= self.capacity,
-            "Size of RawPass ({}) exceeds capacity ({})",
-            size,
-            self.capacity
-        );
-        let vec = Vec::from_raw_parts(self.base, size, self.capacity);
-        self.data = ptr::null_mut();
-        self.base = ptr::null_mut();
-        self.capacity = 0;
-        vec
-    }
-
-    unsafe fn ensure_extra_size(&mut self, extra_size: usize) {
-        let size = self.size();
-        if size + extra_size > self.capacity {
-            let mut vec = Vec::from_raw_parts(self.base, size, self.capacity);
-            vec.reserve(extra_size);
-            //let (data, size, capacity) = vec.into_raw_parts(); //TODO: when stable
-            self.data = vec.as_mut_ptr().add(vec.len());
-            self.base = vec.as_mut_ptr();
-            self.capacity = vec.capacity();
-            mem::forget(vec);
-        }
-    }
-
-    #[inline]
-    pub unsafe fn encode<C: peek_poke::Poke>(&mut self, command: &C) {
-        self.ensure_extra_size(C::max_size());
-        self.data = command.poke_into(self.data);
-    }
-
-    #[inline]
-    pub unsafe fn encode_slice<T: Copy>(&mut self, data: &[T]) {
-        let align_offset = self.data.align_offset(mem::align_of::<T>());
-        let extra = align_offset + mem::size_of::<T>() * data.len();
-        self.ensure_extra_size(extra);
-        slice::from_raw_parts_mut(self.data.add(align_offset) as *mut T, data.len())
-            .copy_from_slice(data);
-        self.data = self.data.add(extra);
-    }
-}
-
-pub struct RenderBundle<B: hal::Backend> {
-    _raw: B::CommandBuffer,
-}
+const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
 
 #[derive(Debug)]
 pub struct CommandBuffer<B: hal::Backend> {
@@ -166,6 +50,17 @@ pub struct CommandBuffer<B: hal::Backend> {
 }
 
 impl<B: GfxBackend> CommandBuffer<B> {
+    fn get_encoder(
+        storage: &mut Storage<Self, id::CommandEncoderId>,
+        id: id::CommandEncoderId,
+    ) -> Result<&mut Self, CommandEncoderError> {
+        match storage.get_mut(id) {
+            Ok(cmd_buf) if cmd_buf.is_recording => Ok(cmd_buf),
+            Ok(_) => Err(CommandEncoderError::NotRecording),
+            Err(_) => Err(CommandEncoderError::Invalid),
+        }
+    }
+
     pub(crate) fn insert_barriers(
         raw: &mut B::CommandBuffer,
         base: &mut TrackerSet,
@@ -193,6 +88,7 @@ impl<B: GfxBackend> CommandBuffer<B> {
             .merge_extend(&head.compute_pipes)
             .unwrap();
         base.render_pipes.merge_extend(&head.render_pipes).unwrap();
+        base.bundles.merge_extend(&head.bundles).unwrap();
 
         let stages = all_buffer_stages() | all_image_stages();
         unsafe {
@@ -205,73 +101,194 @@ impl<B: GfxBackend> CommandBuffer<B> {
     }
 }
 
-#[repr(C)]
-#[derive(PeekPoke)]
-struct PassComponent<T> {
-    load_op: wgt::LoadOp,
-    store_op: wgt::StoreOp,
-    clear_value: T,
-    read_only: bool,
+#[derive(Copy, Clone, Debug)]
+pub struct BasePassRef<'a, C> {
+    pub commands: &'a [C],
+    pub dynamic_offsets: &'a [wgt::DynamicOffset],
+    pub string_data: &'a [u8],
+    pub push_constant_data: &'a [u32],
 }
 
-// required for PeekPoke
-impl<T: Default> Default for PassComponent<T> {
-    fn default() -> Self {
-        PassComponent {
-            load_op: wgt::LoadOp::Clear,
-            store_op: wgt::StoreOp::Clear,
-            clear_value: T::default(),
-            read_only: false,
+#[doc(hidden)]
+#[derive(Debug)]
+#[cfg_attr(
+    any(feature = "serial-pass", feature = "trace"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    any(feature = "serial-pass", feature = "replay"),
+    derive(serde::Deserialize)
+)]
+pub struct BasePass<C> {
+    pub commands: Vec<C>,
+    pub dynamic_offsets: Vec<wgt::DynamicOffset>,
+    pub string_data: Vec<u8>,
+    pub push_constant_data: Vec<u32>,
+}
+
+impl<C: Clone> BasePass<C> {
+    fn new() -> Self {
+        Self {
+            commands: Vec::new(),
+            dynamic_offsets: Vec::new(),
+            string_data: Vec::new(),
+            push_constant_data: Vec::new(),
+        }
+    }
+
+    #[cfg(feature = "trace")]
+    fn from_ref(base: BasePassRef<C>) -> Self {
+        Self {
+            commands: base.commands.to_vec(),
+            dynamic_offsets: base.dynamic_offsets.to_vec(),
+            string_data: base.string_data.to_vec(),
+            push_constant_data: base.push_constant_data.to_vec(),
+        }
+    }
+
+    pub fn as_ref(&self) -> BasePassRef<C> {
+        BasePassRef {
+            commands: &self.commands,
+            dynamic_offsets: &self.dynamic_offsets,
+            string_data: &self.string_data,
+            push_constant_data: &self.push_constant_data,
         }
     }
 }
 
-#[repr(C)]
-#[derive(Default, PeekPoke)]
-struct RawRenderPassColorAttachmentDescriptor {
-    attachment: u64,
-    resolve_target: u64,
-    component: PassComponent<wgt::Color>,
-}
-
-#[repr(C)]
-#[derive(Default, PeekPoke)]
-struct RawRenderPassDepthStencilAttachmentDescriptor {
-    attachment: u64,
-    depth: PassComponent<f32>,
-    stencil: PassComponent<u32>,
-}
-
-#[repr(C)]
-#[derive(Default, PeekPoke)]
-struct RawRenderTargets {
-    colors: [RawRenderPassColorAttachmentDescriptor; MAX_COLOR_TARGETS],
-    depth_stencil: RawRenderPassDepthStencilAttachmentDescriptor,
+#[derive(Clone, Debug, Error)]
+pub enum CommandEncoderError {
+    #[error("command encoder is invalid")]
+    Invalid,
+    #[error("command encoder must be active")]
+    NotRecording,
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_finish<B: GfxBackend>(
         &self,
         encoder_id: id::CommandEncoderId,
-        _desc: &wgt::CommandBufferDescriptor,
-    ) -> id::CommandBufferId {
+        _desc: &wgt::CommandBufferDescriptor<Label>,
+    ) -> Result<id::CommandBufferId, CommandEncoderError> {
+        span!(_guard, INFO, "CommandEncoder::finish");
+
         let hub = B::hub(self);
         let mut token = Token::root();
         let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
         //TODO: actually close the last recorded command buffer
-        let (mut comb_guard, _) = hub.command_buffers.write(&mut token);
-        let comb = &mut comb_guard[encoder_id];
-        assert!(comb.is_recording, "Command buffer must be recording");
-        comb.is_recording = false;
+        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
+        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
+        cmd_buf.is_recording = false;
         // stop tracking the swapchain image, if used
-        if let Some((ref sc_id, _)) = comb.used_swap_chain {
+        if let Some((ref sc_id, _)) = cmd_buf.used_swap_chain {
             let view_id = swap_chain_guard[sc_id.value]
                 .acquired_view_id
                 .as_ref()
                 .expect("Used swap chain frame has already presented");
-            comb.trackers.views.remove(view_id.value);
+            cmd_buf.trackers.views.remove(view_id.value);
         }
-        log::debug!("Command buffer {:?} {:#?}", encoder_id, comb.trackers);
-        encoder_id
+        tracing::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
+        Ok(encoder_id)
+    }
+
+    pub fn command_encoder_push_debug_group<B: GfxBackend>(
+        &self,
+        encoder_id: id::CommandEncoderId,
+        label: &str,
+    ) -> Result<(), CommandEncoderError> {
+        span!(_guard, DEBUG, "CommandEncoder::push_debug_group");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
+        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
+        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+
+        unsafe {
+            cmb_raw.begin_debug_marker(label, 0);
+        }
+        Ok(())
+    }
+
+    pub fn command_encoder_insert_debug_marker<B: GfxBackend>(
+        &self,
+        encoder_id: id::CommandEncoderId,
+        label: &str,
+    ) -> Result<(), CommandEncoderError> {
+        span!(_guard, DEBUG, "CommandEncoder::insert_debug_marker");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
+        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
+        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+
+        unsafe {
+            cmb_raw.insert_debug_marker(label, 0);
+        }
+        Ok(())
+    }
+
+    pub fn command_encoder_pop_debug_group<B: GfxBackend>(
+        &self,
+        encoder_id: id::CommandEncoderId,
+    ) -> Result<(), CommandEncoderError> {
+        span!(_guard, DEBUG, "CommandEncoder::pop_debug_marker");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
+        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
+        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+
+        unsafe {
+            cmb_raw.end_debug_marker();
+        }
+        Ok(())
+    }
+}
+
+fn push_constant_clear<PushFn>(offset: u32, size_bytes: u32, mut push_fn: PushFn)
+where
+    PushFn: FnMut(u32, &[u32]),
+{
+    let mut count_words = 0_u32;
+    let size_words = size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT;
+    while count_words < size_words {
+        let count_bytes = count_words * wgt::PUSH_CONSTANT_ALIGNMENT;
+        let size_to_write_words =
+            (size_words - count_words).min(PUSH_CONSTANT_CLEAR_ARRAY.len() as u32);
+
+        push_fn(
+            offset + count_bytes,
+            &PUSH_CONSTANT_CLEAR_ARRAY[0..size_to_write_words as usize],
+        );
+
+        count_words += size_to_write_words;
+    }
+}
+
+#[derive(Debug)]
+struct StateChange<T> {
+    last_state: Option<T>,
+}
+
+impl<T: Copy + PartialEq> StateChange<T> {
+    fn new() -> Self {
+        Self { last_state: None }
+    }
+    fn set_and_check_redundant(&mut self, new_state: T) -> bool {
+        let already_set = self.last_state == Some(new_state);
+        self.last_state = Some(new_state);
+        already_set
+    }
+    fn is_unset(&self) -> bool {
+        self.last_state.is_none()
+    }
+    fn reset(&mut self) {
+        self.last_state = None;
     }
 }

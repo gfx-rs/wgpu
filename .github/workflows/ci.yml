@@ -44,50 +44,46 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        name:
-          [
-            MacOS Stable,
-            MacOS Nightly,
-            Ubuntu Stable,
-            Ubuntu Nightly,
-            Windows Stable,
-            Windows Nightly,
-          ]
+        os: [macos-10.15, ubuntu-18.04, windows-2019]
+        channel: [stable, nightly]
         include:
-          - os: macos-10.15
-            name: MacOS Stable
+          - name: MacOS Stable
             channel: stable
+            os: macos-10.15
             build_command: cargo clippy
             additional_core_features: trace
             additional_player_features: winit
-          - os: macos-10.15
-            name: MacOS Nightly
+          - name: MacOS Nightly
+            os: macos-10.15
             channel: nightly
-            build_command: cargo test
+            build_command: cargo test -- --nocapture
             additional_core_features:
             additional_player_features:
-          - os: ubuntu-18.04
-            name: Ubuntu Stable
+          - name: Ubuntu Stable
+            os: ubuntu-18.04
             channel: stable
             build_command: cargo clippy
             additional_core_features: trace,replay
             additional_player_features:
-          - os: ubuntu-18.04
-            name: Ubuntu Nightly
+          - name: Ubuntu Nightly
+            os: ubuntu-18.04
             channel: nightly
-            build_command: cargo test
-            additional_core_features:
+            build_command: | 
+              sudo add-apt-repository ppa:oibaf/graphics-drivers;
+              sudo apt-get install mesa-vulkan-drivers;
+              cargo test -- --nocapture; 
+            additional_core_features: serial-pass
             additional_player_features: winit
-          - os: windows-2019
-            name: Windows Stable
+          - name: Windows Stable
+            os: windows-2019
             channel: stable
             build_command: rustup default stable-msvc; cargo clippy
-            additional_core_features: trace
+            additional_core_features: trace,serial-pass
             additional_player_features: renderdoc
-          - os: windows-2019
-            name: Windows Nightly
+          - name: Windows Nightly
+            os: windows-2019
             channel: nightly
-            build_command: rustup default nightly-msvc; cargo test
+            build_command: rustup default nightly-msvc; cargo test -- --nocapture
             additional_core_features:
             additional_player_features:
     steps:
@@ -96,14 +92,15 @@ jobs:
         name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-          # temporary due to https://github.com/rust-lang/rust/issues/72467
-          toolchain: nightly-2020-05-01
+          toolchain: nightly
           override: true
       - if: matrix.channel == 'stable'
         run: rustup component add clippy
-      - name: cargo clippy/test
-        run: ${{ matrix.build_command }}
+        # build with no features first
+      - if: matrix.additional_core_features == ''
+        run: cargo check --manifest-path wgpu-core/Cargo.toml --no-default-features
       - if: matrix.additional_core_features != ''
         run: cargo check --manifest-path wgpu-core/Cargo.toml --features ${{ matrix.additional_core_features }}
       - if: matrix.additional_player_features != ''
         run: cargo check --manifest-path player/Cargo.toml --features ${{ matrix.additional_player_features }}
+      - run: ${{ matrix.build_command }}

@@ -3,7 +3,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::{range::RangedStates, PendingTransition, ResourceState, Unit};
-use crate::{device::MAX_MIP_LEVELS, id::TextureId, resource::TextureUse};
+use crate::{
+    device::MAX_MIP_LEVELS,
+    id::{TextureId, Valid},
+    resource::TextureUse,
+};
 
 use arrayvec::ArrayVec;
 
@@ -12,9 +16,16 @@ use std::{iter, ops::Range};
 //TODO: store `hal::image::State` here to avoid extra conversions
 type PlaneStates = RangedStates<hal::image::Layer, Unit<TextureUse>>;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TextureSelector {
+    //pub aspects: hal::format::Aspects,
+    pub levels: Range<hal::image::Level>,
+    pub layers: Range<hal::image::Layer>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct TextureState {
-    mips: ArrayVec<[PlaneStates; MAX_MIP_LEVELS]>,
+    mips: ArrayVec<[PlaneStates; MAX_MIP_LEVELS as usize]>,
     /// True if we have the information about all the subresources here
     full: bool,
 }
@@ -33,14 +44,12 @@ impl PendingTransition<TextureState> {
 }
 
 impl TextureState {
-    pub fn with_range(range: &hal::image::SubresourceRange) -> Self {
-        debug_assert_eq!(range.layers.start, 0);
-        debug_assert_eq!(range.levels.start, 0);
-        TextureState {
+    pub fn new(mip_level_count: hal::image::Level, array_layer_count: hal::image::Layer) -> Self {
+        Self {
             mips: iter::repeat_with(|| {
-                PlaneStates::from_range(0..range.layers.end, Unit::new(TextureUse::UNINITIALIZED))
+                PlaneStates::from_range(0..array_layer_count, Unit::new(TextureUse::UNINITIALIZED))
             })
-            .take(range.levels.end as usize)
+            .take(mip_level_count as usize)
             .collect(),
             full: true,
         }
@@ -49,7 +58,7 @@ impl TextureState {
 
 impl ResourceState for TextureState {
     type Id = TextureId;
-    type Selector = hal::image::SubresourceRange;
+    type Selector = TextureSelector;
     type Usage = TextureUse;
 
     fn query(&self, selector: Self::Selector) -> Option<Self::Usage> {
@@ -79,7 +88,7 @@ impl ResourceState for TextureState {
 
     fn change(
         &mut self,
-        id: Self::Id,
+        id: Valid<Self::Id>,
         selector: Self::Selector,
         usage: Self::Usage,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
@@ -102,13 +111,11 @@ impl ResourceState for TextureState {
                     continue;
                 }
                 // TODO: Can't satisfy clippy here unless we modify
-                // `hal::image::SubresourceRange` in gfx to use
-                // `std::ops::RangeBounds`.
+                // `TextureSelector` to use `std::ops::RangeBounds`.
                 #[allow(clippy::range_plus_one)]
                 let pending = PendingTransition {
                     id,
-                    selector: hal::image::SubresourceRange {
-                        aspects: hal::format::Aspects::empty(),
+                    selector: TextureSelector {
                         levels: level..level + 1,
                         layers: range.clone(),
                     },
@@ -136,9 +143,43 @@ impl ResourceState for TextureState {
         Ok(())
     }
 
+    fn prepend(
+        &mut self,
+        id: Valid<Self::Id>,
+        selector: Self::Selector,
+        usage: Self::Usage,
+    ) -> Result<(), PendingTransition<Self>> {
+        assert!(self.mips.len() >= selector.levels.end as usize);
+        for (mip_id, mip) in self.mips[selector.levels.start as usize..selector.levels.end as usize]
+            .iter_mut()
+            .enumerate()
+        {
+            let level = selector.levels.start + mip_id as hal::image::Level;
+            let layers = mip.isolate(&selector.layers, Unit::new(usage));
+            for &mut (ref range, ref mut unit) in layers {
+                match unit.first {
+                    Some(old) if old != usage => {
+                        return Err(PendingTransition {
+                            id,
+                            selector: TextureSelector {
+                                levels: level..level + 1,
+                                layers: range.clone(),
+                            },
+                            usage: old..usage,
+                        });
+                    }
+                    _ => {
+                        unit.first = Some(usage);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn merge(
         &mut self,
-        id: Self::Id,
+        id: Valid<Self::Id>,
         other: &Self,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
@@ -185,13 +226,11 @@ impl ResourceState for TextureState {
                             }
                         } else {
                             // TODO: Can't satisfy clippy here unless we modify
-                            // `hal::image::SubresourceRange` in gfx to use
-                            // `std::ops::RangeBounds`.
+                            // `TextureSelector` to use `std::ops::RangeBounds`.
                             #[allow(clippy::range_plus_one)]
                             let pending = PendingTransition {
                                 id,
-                                selector: hal::image::SubresourceRange {
-                                    aspects: hal::format::Aspects::empty(),
+                                selector: TextureSelector {
                                     levels: level..level + 1,
                                     layers: layers.clone(),
                                 },
@@ -237,7 +276,6 @@ mod test {
     //TODO: change() tests
     use super::*;
     use crate::id::Id;
-    use hal::{format::Aspects, image::SubresourceRange};
 
     #[test]
     fn query() {
@@ -250,8 +288,7 @@ mod test {
         ]));
 
         assert_eq!(
-            ts.query(SubresourceRange {
-                aspects: Aspects::COLOR,
+            ts.query(TextureSelector {
                 levels: 1..2,
                 layers: 2..5,
             }),
@@ -259,8 +296,7 @@ mod test {
             Some(TextureUse::SAMPLED),
         );
         assert_eq!(
-            ts.query(SubresourceRange {
-                aspects: Aspects::COLOR,
+            ts.query(TextureSelector {
                 levels: 0..2,
                 layers: 2..5,
             }),
@@ -268,8 +304,7 @@ mod test {
             Some(TextureUse::SAMPLED),
         );
         assert_eq!(
-            ts.query(SubresourceRange {
-                aspects: Aspects::COLOR,
+            ts.query(TextureSelector {
                 levels: 1..2,
                 layers: 1..5,
             }),
@@ -277,8 +312,7 @@ mod test {
             Some(TextureUse::SAMPLED),
         );
         assert_eq!(
-            ts.query(SubresourceRange {
-                aspects: Aspects::COLOR,
+            ts.query(TextureSelector {
                 levels: 1..2,
                 layers: 4..6,
             }),
@@ -289,7 +323,7 @@ mod test {
 
     #[test]
     fn merge() {
-        let id = Id::default();
+        let id = Id::dummy();
         let mut ts1 = TextureState::default();
         ts1.mips.push(PlaneStates::from_slice(&[(
             1..3,
@@ -307,7 +341,7 @@ mod test {
             Unit::new(TextureUse::COPY_SRC),
         )]));
         assert_eq!(
-            ts1.merge(Id::default(), &ts2, None),
+            ts1.merge(Id::dummy(), &ts2, None),
             Ok(()),
             "failed to extend a compatible state"
         );
@@ -322,11 +356,10 @@ mod test {
 
         ts2.mips[0] = PlaneStates::from_slice(&[(1..2, Unit::new(TextureUse::COPY_DST))]);
         assert_eq!(
-            ts1.clone().merge(Id::default(), &ts2, None),
+            ts1.clone().merge(Id::dummy(), &ts2, None),
             Err(PendingTransition {
                 id,
-                selector: SubresourceRange {
-                    aspects: Aspects::empty(),
+                selector: TextureSelector {
                     levels: 0..1,
                     layers: 1..2,
                 },
@@ -346,14 +379,13 @@ mod test {
                 },
             ),
         ]);
-        ts1.merge(Id::default(), &ts2, Some(&mut list)).unwrap();
+        ts1.merge(Id::dummy(), &ts2, Some(&mut list)).unwrap();
         assert_eq!(
             &list,
             &[
                 PendingTransition {
                     id,
-                    selector: SubresourceRange {
-                        aspects: Aspects::empty(),
+                    selector: TextureSelector {
                         levels: 0..1,
                         layers: 1..2,
                     },
@@ -361,8 +393,7 @@ mod test {
                 },
                 PendingTransition {
                     id,
-                    selector: SubresourceRange {
-                        aspects: Aspects::empty(),
+                    selector: TextureSelector {
                         levels: 0..1,
                         layers: 2..3,
                     },
@@ -398,7 +429,7 @@ mod test {
                 last: TextureUse::COPY_SRC,
             },
         )]);
-        ts1.merge(Id::default(), &ts2, Some(&mut list)).unwrap();
+        ts1.merge(Id::dummy(), &ts2, Some(&mut list)).unwrap();
         assert_eq!(&list, &[], "unexpected replacing transition");
 
         list.clear();
@@ -409,13 +440,12 @@ mod test {
                 last: TextureUse::COPY_DST,
             },
         )]);
-        ts1.merge(Id::default(), &ts2, Some(&mut list)).unwrap();
+        ts1.merge(Id::dummy(), &ts2, Some(&mut list)).unwrap();
         assert_eq!(
             &list,
             &[PendingTransition {
                 id,
-                selector: SubresourceRange {
-                    aspects: Aspects::empty(),
+                selector: TextureSelector {
                     levels: 0..1,
                     layers: 2..3,
                 },

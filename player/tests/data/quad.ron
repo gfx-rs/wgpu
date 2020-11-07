@@ -1,0 +1,153 @@
+(
+    features: (bits: 0x0),
+    expectations: [
+        (
+            name: "Quad",
+            buffer: (index: 0, epoch: 1),
+            offset: 0,
+            data: File("quad.bin", 16384),
+        )
+    ],
+    actions: [
+        CreateShaderModule(
+            id: Id(0, 1, Empty),
+            data: "quad.vert.spv",
+        ),
+        CreateShaderModule(
+            id: Id(1, 1, Empty),
+            data: "quad.frag.spv",
+        ),
+        CreateTexture(Id(0, 1, Empty), (
+            label: Some("Output Texture"),
+            size: (
+                width: 64,
+                height: 64,
+                depth: 1,
+            ),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: D2,
+            format: Rgba8Unorm,
+            usage: (
+                bits: 27,
+            ),
+        )),
+        CreateTextureView(
+            id: Id(0, 1, Empty),
+            parent_id: Id(0, 1, Empty),
+            desc: (),
+        ),
+        CreateBuffer(
+            Id(0, 1, Empty),
+            (
+                label: Some("Output Buffer"),
+                size: 16384,
+                usage: (
+                    bits: 9,
+                ),
+                mapped_at_creation: false,
+            ),
+        ),
+        CreatePipelineLayout(Id(0, 1, Empty), (
+            label: None,
+            bind_group_layouts: [],
+            push_constant_ranges: [],
+        )),
+        CreateRenderPipeline(Id(0, 1, Empty), (
+            label: None,
+            layout: Some(Id(0, 1, Empty)),
+            vertex_stage: (
+                module: Id(0, 1, Empty),
+                entry_point: "main",
+            ),
+            fragment_stage: Some((
+                module: Id(1, 1, Empty),
+                entry_point: "main",
+            )),
+            rasterization_state: None,
+            primitive_topology: TriangleList,
+            color_states: [
+                (
+                    format: Rgba8Unorm,
+                    alpha_blend: (
+                        src_factor: One,
+                        dst_factor: Zero,
+                        operation: Add,
+                    ),
+                    color_blend: (
+                        src_factor: One,
+                        dst_factor: Zero,
+                        operation: Add,
+                    ),
+                    write_mask: (
+                        bits: 15,
+                    ),
+                ),
+            ],
+            depth_stencil_state: None,
+            vertex_state: (
+                index_format: Uint16,
+                vertex_buffers: [],
+            ),
+            sample_count: 1,
+            sample_mask: 4294967295,
+            alpha_to_coverage_enabled: false,
+        )),
+        Submit(1, [
+            RunRenderPass(
+                base: (
+                    commands: [
+                        SetPipeline(Id(0, 1, Empty)),
+                        Draw(
+                            vertex_count: 3,
+                            instance_count: 1,
+                            first_vertex: 0,
+                            first_instance: 0,
+                        ),
+                    ],
+                    dynamic_offsets: [],
+                    string_data: [],
+                    push_constant_data: [],
+                ),
+                target_colors: [
+                    (
+                        attachment: Id(0, 1, Empty),
+                        resolve_target: None,
+                        channel: (
+                            load_op: Clear,
+                            store_op: Store,
+                            clear_value: (
+                                r: 0,
+                                g: 0,
+                                b: 0,
+                                a: 1,
+                            ),
+                            read_only: false,
+                        ),
+                    ),
+                ],
+                target_depth_stencil: None,
+            ),
+            CopyTextureToBuffer(
+                src: (
+                    texture: Id(0, 1, Empty),
+                    mip_level: 0,
+                    array_layer: 0,
+                ),
+                dst:  (
+                    buffer: Id(0, 1, Empty),
+                    layout: (
+                        offset: 0,
+                        bytes_per_row: 256,
+                        rows_per_image: 64,
+                    ),
+                ),
+                size: (
+                    width: 64,
+                    height: 64,
+                    depth: 1,
+                ),
+            ),
+        ]),
+    ],
+)

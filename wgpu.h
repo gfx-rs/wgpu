@@ -14,7 +14,6 @@ namespace ffi {
 
 #define WGPU_INLINE
 #define WGPU_FUNC
-#define WGPU_DESTRUCTOR_SAFE_FUNC
 
 extern "C" {
 #include "wgpu_ffi_generated.h"
@@ -22,7 +21,6 @@ extern "C" {
 
 #undef WGPU_INLINE
 #undef WGPU_FUNC
-#undef WGPU_DESTRUCTOR_SAFE_FUNC
 
 }  // namespace ffi
 }  // namespace webgpu

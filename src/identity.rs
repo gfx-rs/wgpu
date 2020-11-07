@@ -39,6 +39,7 @@ pub struct IdentityRecyclerFactory {
     free_bind_group_layout: extern "C" fn(id::BindGroupLayoutId, FactoryParam),
     free_bind_group: extern "C" fn(id::BindGroupId, FactoryParam),
     free_command_buffer: extern "C" fn(id::CommandBufferId, FactoryParam),
+    free_render_bundle: extern "C" fn(id::RenderBundleId, FactoryParam),
     free_render_pipeline: extern "C" fn(id::RenderPipelineId, FactoryParam),
     free_compute_pipeline: extern "C" fn(id::ComputePipelineId, FactoryParam),
     free_buffer: extern "C" fn(id::BufferId, FactoryParam),
@@ -125,6 +126,16 @@ impl wgc::hub::IdentityHandlerFactory<id::CommandBufferId> for IdentityRecyclerF
             fun: self.free_command_buffer,
             param: self.param,
             kind: "command_buffer",
+        }
+    }
+}
+impl wgc::hub::IdentityHandlerFactory<id::RenderBundleId> for IdentityRecyclerFactory {
+    type Filter = IdentityRecycler<id::RenderBundleId>;
+    fn spawn(&self, _min_index: u32) -> Self::Filter {
+        IdentityRecycler {
+            fun: self.free_render_bundle,
+            param: self.param,
+            kind: "render_bundle",
         }
     }
 }

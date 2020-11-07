@@ -1,10 +1,7 @@
 [package]
 name = "wgpu-core"
-version = "0.5.0"
-authors = [
-	"Dzmitry Malyshau <kvark@mozilla.com>",
-	"Joshua Groves <josh@joshgroves.com>",
-]
+version = "0.6.0"
+authors = ["wgpu developers"]
 edition = "2018"
 description = "WebGPU core logic on gfx-hal"
 homepage = "https://github.com/gfx-rs/wgpu"
@@ -16,54 +13,55 @@ license = "MPL-2.0"
 
 [features]
 default = []
+# Enable API tracing
 trace = ["ron", "serde", "wgt/trace"]
+# Enable API replaying
 replay = ["serde", "wgt/replay"]
-#NOTE: glutin feature is not stable, use at your own risk
-#glutin = ["gfx-backend-gl/glutin"]
+# Enable serializable compute/render passes, and bundle encoders.
+serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 
 [dependencies]
 arrayvec = "0.5"
 bitflags = "1.0"
 copyless = "0.1"
 fxhash = "0.2"
-log = "0.4"
-hal = { package = "gfx-hal", version = "0.5.1" }
-gfx-backend-empty = "0.5"
-gfx-descriptor = "0.1"
-gfx-memory = "0.1"
+hal = { package = "gfx-hal", version = "0.6" }
+gfx-backend-empty = "0.6"
 parking_lot = "0.11"
-peek-poke = "0.2"
 raw-window-handle = { version = "0.3", optional = true }
-ron = { version = "0.6.2", optional = true }
+ron = { version = "0.6", optional = true }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
-spirv_headers = { version = "1.4.2" }
-vec_map = "0.8.1"
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+thiserror = "1"
+gfx-descriptor = "0.2"
+gfx-memory = "0.2"
 
 [dependencies.naga]
+version = "0.2"
 git = "https://github.com/gfx-rs/naga"
-rev = "bce6358eb1026c13d2f1c6d365af37afe8869a86"
+rev = "aa35110471ee7915e1f4e1de61ea41f2f32f92c4"
+features = ["spv-in", "spv-out", "wgsl-in"]
 
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.5"
-features = ["peek-poke"]
+version = "0.6"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
-gfx-backend-metal = { version = "0.5.7" }
-gfx-backend-vulkan = { version = "0.5.7", optional = true }
+gfx-backend-metal = { version = "0.6" }
+gfx-backend-vulkan = { version = "0.6.4", optional = true }
 
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-vulkan = { version = "0.5.7" }
+gfx-backend-vulkan = { version = "0.6.4" }
 
 [target.'cfg(windows)'.dependencies]
-gfx-backend-dx12 = { version = "0.5.5" }
-gfx-backend-dx11 = { version = "0.5" }
-gfx-backend-vulkan = { version = "0.5.7" }
-
-[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "dragonfly", target_os = "freebsd"))'.dependencies]
-battery = { version = "0.7", optional = true }
+gfx-backend-dx12 = { version = "0.6" }
+gfx-backend-dx11 = { version = "0.6" }
+gfx-backend-vulkan = { version = "0.6.4" }
 
 [dev-dependencies]
 loom = "0.3"
+
+[build-dependencies]
+cfg_aliases = "0.1"

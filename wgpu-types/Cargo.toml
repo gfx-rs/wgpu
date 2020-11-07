@@ -1,10 +1,7 @@
 [package]
 name = "wgpu-types"
-version = "0.5.0"
-authors = [
-	"Dzmitry Malyshau <kvark@mozilla.com>",
-	"Joshua Groves <josh@joshgroves.com>",
-]
+version = "0.6.0"
+authors = ["wgpu developers"]
 edition = "2018"
 description = "WebGPU types"
 homepage = "https://github.com/gfx-rs/wgpu"
@@ -21,4 +18,3 @@ replay = ["serde"]
 [dependencies]
 bitflags = "1.0"
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
-peek-poke = { version = "0.2", optional = true }
