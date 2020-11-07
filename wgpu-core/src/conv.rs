@@ -2,12 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{
-    command::{LoadOp, PassChannel, StoreOp},
-    resource, PrivateFeatures,
-};
-
-use std::convert::TryInto;
+use crate::{resource, PrivateFeatures};
 
 pub fn map_buffer_usage(usage: wgt::BufferUsage) -> (hal::buffer::Usage, hal::memory::Properties) {
     use hal::buffer::Usage as U;
@@ -84,20 +79,13 @@ pub fn map_binding_type(binding: &wgt::BindGroupLayoutEntry) -> hal::pso::Descri
     use hal::pso;
     use wgt::BindingType as Bt;
     match binding.ty {
-        Bt::UniformBuffer {
-            dynamic,
-            min_binding_size: _,
-        } => pso::DescriptorType::Buffer {
+        Bt::UniformBuffer { dynamic } => pso::DescriptorType::Buffer {
             ty: pso::BufferDescriptorType::Uniform,
             format: pso::BufferDescriptorFormat::Structured {
                 dynamic_offset: dynamic,
             },
         },
-        Bt::StorageBuffer {
-            readonly,
-            dynamic,
-            min_binding_size: _,
-        } => pso::DescriptorType::Buffer {
+        Bt::StorageBuffer { readonly, dynamic } => pso::DescriptorType::Buffer {
             ty: pso::BufferDescriptorType::Storage {
                 read_only: readonly,
             },
@@ -105,7 +93,7 @@ pub fn map_binding_type(binding: &wgt::BindGroupLayoutEntry) -> hal::pso::Descri
                 dynamic_offset: dynamic,
             },
         },
-        Bt::Sampler { comparison: _ } => pso::DescriptorType::Sampler,
+        Bt::Sampler { .. } => pso::DescriptorType::Sampler,
         Bt::SampledTexture { .. } => pso::DescriptorType::Image {
             ty: pso::ImageDescriptorType::Sampled {
                 with_sampler: false,
@@ -116,6 +104,7 @@ pub fn map_binding_type(binding: &wgt::BindGroupLayoutEntry) -> hal::pso::Descri
                 read_only: readonly,
             },
         },
+        _ => unreachable!(),
     }
 }
 
@@ -242,25 +231,29 @@ pub fn map_depth_stencil_state_descriptor(
     desc: &wgt::DepthStencilStateDescriptor,
 ) -> hal::pso::DepthStencilDesc {
     hal::pso::DepthStencilDesc {
-        depth: if desc.is_depth_enabled() {
+        depth: if desc.depth_write_enabled || desc.depth_compare != wgt::CompareFunction::Always {
             Some(hal::pso::DepthTest {
-                fun: map_compare_function(desc.depth_compare),
+                fun: map_compare_function(desc.depth_compare)
+                    .expect("DepthStencilStateDescriptor has undefined compare function"),
                 write: desc.depth_write_enabled,
             })
         } else {
             None
         },
         depth_bounds: false, // TODO
-        stencil: if desc.stencil.is_enabled() {
-            let s = &desc.stencil;
+        stencil: if desc.stencil_read_mask != !0
+            || desc.stencil_write_mask != !0
+            || desc.stencil_front != wgt::StencilStateFaceDescriptor::IGNORE
+            || desc.stencil_back != wgt::StencilStateFaceDescriptor::IGNORE
+        {
             Some(hal::pso::StencilTest {
                 faces: hal::pso::Sided {
-                    front: map_stencil_face(&s.front),
-                    back: map_stencil_face(&s.back),
+                    front: map_stencil_face(&desc.stencil_front),
+                    back: map_stencil_face(&desc.stencil_back),
                 },
-                read_masks: hal::pso::State::Static(hal::pso::Sided::new(s.read_mask)),
-                write_masks: hal::pso::State::Static(hal::pso::Sided::new(s.write_mask)),
-                reference_values: if s.needs_ref_value() {
+                read_masks: hal::pso::State::Static(hal::pso::Sided::new(desc.stencil_read_mask)),
+                write_masks: hal::pso::State::Static(hal::pso::Sided::new(desc.stencil_write_mask)),
+                reference_values: if desc.needs_stencil_reference() {
                     hal::pso::State::Dynamic
                 } else {
                     hal::pso::State::Static(hal::pso::Sided::new(0))
@@ -276,25 +269,29 @@ fn map_stencil_face(
     stencil_state_face_desc: &wgt::StencilStateFaceDescriptor,
 ) -> hal::pso::StencilFace {
     hal::pso::StencilFace {
-        fun: map_compare_function(stencil_state_face_desc.compare),
+        fun: map_compare_function(stencil_state_face_desc.compare)
+            .expect("StencilStateFaceDescriptor has undefined compare function"),
         op_fail: map_stencil_operation(stencil_state_face_desc.fail_op),
         op_depth_fail: map_stencil_operation(stencil_state_face_desc.depth_fail_op),
         op_pass: map_stencil_operation(stencil_state_face_desc.pass_op),
     }
 }
 
-pub fn map_compare_function(compare_function: wgt::CompareFunction) -> hal::pso::Comparison {
+pub fn map_compare_function(
+    compare_function: wgt::CompareFunction,
+) -> Option<hal::pso::Comparison> {
     use hal::pso::Comparison as H;
     use wgt::CompareFunction as Cf;
     match compare_function {
-        Cf::Never => H::Never,
-        Cf::Less => H::Less,
-        Cf::Equal => H::Equal,
-        Cf::LessEqual => H::LessEqual,
-        Cf::Greater => H::Greater,
-        Cf::NotEqual => H::NotEqual,
-        Cf::GreaterEqual => H::GreaterEqual,
-        Cf::Always => H::Always,
+        Cf::Undefined => None,
+        Cf::Never => Some(H::Never),
+        Cf::Less => Some(H::Less),
+        Cf::Equal => Some(H::Equal),
+        Cf::LessEqual => Some(H::LessEqual),
+        Cf::Greater => Some(H::Greater),
+        Cf::NotEqual => Some(H::NotEqual),
+        Cf::GreaterEqual => Some(H::GreaterEqual),
+        Cf::Always => Some(H::Always),
     }
 }
 
@@ -370,8 +367,8 @@ pub(crate) fn map_texture_format(
         // Depth and stencil formats
         Tf::Depth32Float => H::D32Sfloat,
         Tf::Depth24Plus => {
-            if private_features.texture_d24 {
-                H::X8D24Unorm
+            if private_features.texture_d24_s8 {
+                H::D24UnormS8Uint
             } else {
                 H::D32Sfloat
             }
@@ -383,140 +380,6 @@ pub(crate) fn map_texture_format(
                 H::D32SfloatS8Uint
             }
         }
-
-        // BCn compressed formats
-        Tf::Bc1RgbaUnorm => H::Bc1RgbaUnorm,
-        Tf::Bc1RgbaUnormSrgb => H::Bc1RgbaSrgb,
-        Tf::Bc2RgbaUnorm => H::Bc2Unorm,
-        Tf::Bc2RgbaUnormSrgb => H::Bc2Srgb,
-        Tf::Bc3RgbaUnorm => H::Bc3Unorm,
-        Tf::Bc3RgbaUnormSrgb => H::Bc3Srgb,
-        Tf::Bc4RUnorm => H::Bc4Unorm,
-        Tf::Bc4RSnorm => H::Bc4Snorm,
-        Tf::Bc5RgUnorm => H::Bc5Unorm,
-        Tf::Bc5RgSnorm => H::Bc5Snorm,
-        Tf::Bc6hRgbSfloat => H::Bc6hSfloat,
-        Tf::Bc6hRgbUfloat => H::Bc6hUfloat,
-        Tf::Bc7RgbaUnorm => H::Bc7Unorm,
-        Tf::Bc7RgbaUnormSrgb => H::Bc7Srgb,
-    }
-}
-
-pub fn texture_block_size(format: wgt::TextureFormat) -> (u32, u32) {
-    use wgt::TextureFormat as Tf;
-    match format {
-        Tf::R8Unorm
-        | Tf::R8Snorm
-        | Tf::R8Uint
-        | Tf::R8Sint
-        | Tf::R16Uint
-        | Tf::R16Sint
-        | Tf::R16Float
-        | Tf::Rg8Unorm
-        | Tf::Rg8Snorm
-        | Tf::Rg8Uint
-        | Tf::Rg8Sint
-        | Tf::R32Uint
-        | Tf::R32Sint
-        | Tf::R32Float
-        | Tf::Rg16Uint
-        | Tf::Rg16Sint
-        | Tf::Rg16Float
-        | Tf::Rgba8Unorm
-        | Tf::Rgba8UnormSrgb
-        | Tf::Rgba8Snorm
-        | Tf::Rgba8Uint
-        | Tf::Rgba8Sint
-        | Tf::Bgra8Unorm
-        | Tf::Bgra8UnormSrgb
-        | Tf::Rgb10a2Unorm
-        | Tf::Rg11b10Float
-        | Tf::Rg32Uint
-        | Tf::Rg32Sint
-        | Tf::Rg32Float
-        | Tf::Rgba16Uint
-        | Tf::Rgba16Sint
-        | Tf::Rgba16Float
-        | Tf::Rgba32Uint
-        | Tf::Rgba32Sint
-        | Tf::Rgba32Float
-        | Tf::Depth32Float
-        | Tf::Depth24Plus
-        | Tf::Depth24PlusStencil8 => (1, 1),
-
-        Tf::Bc1RgbaUnorm
-        | Tf::Bc1RgbaUnormSrgb
-        | Tf::Bc2RgbaUnorm
-        | Tf::Bc2RgbaUnormSrgb
-        | Tf::Bc3RgbaUnorm
-        | Tf::Bc3RgbaUnormSrgb
-        | Tf::Bc4RUnorm
-        | Tf::Bc4RSnorm
-        | Tf::Bc5RgUnorm
-        | Tf::Bc5RgSnorm
-        | Tf::Bc6hRgbUfloat
-        | Tf::Bc6hRgbSfloat
-        | Tf::Bc7RgbaUnorm
-        | Tf::Bc7RgbaUnormSrgb => (4, 4),
-    }
-}
-
-pub fn texture_features(format: wgt::TextureFormat) -> wgt::Features {
-    use wgt::TextureFormat as Tf;
-    match format {
-        Tf::R8Unorm
-        | Tf::R8Snorm
-        | Tf::R8Uint
-        | Tf::R8Sint
-        | Tf::R16Uint
-        | Tf::R16Sint
-        | Tf::R16Float
-        | Tf::Rg8Unorm
-        | Tf::Rg8Snorm
-        | Tf::Rg8Uint
-        | Tf::Rg8Sint
-        | Tf::R32Uint
-        | Tf::R32Sint
-        | Tf::R32Float
-        | Tf::Rg16Uint
-        | Tf::Rg16Sint
-        | Tf::Rg16Float
-        | Tf::Rgba8Unorm
-        | Tf::Rgba8UnormSrgb
-        | Tf::Rgba8Snorm
-        | Tf::Rgba8Uint
-        | Tf::Rgba8Sint
-        | Tf::Bgra8Unorm
-        | Tf::Bgra8UnormSrgb
-        | Tf::Rgb10a2Unorm
-        | Tf::Rg11b10Float
-        | Tf::Rg32Uint
-        | Tf::Rg32Sint
-        | Tf::Rg32Float
-        | Tf::Rgba16Uint
-        | Tf::Rgba16Sint
-        | Tf::Rgba16Float
-        | Tf::Rgba32Uint
-        | Tf::Rgba32Sint
-        | Tf::Rgba32Float
-        | Tf::Depth32Float
-        | Tf::Depth24Plus
-        | Tf::Depth24PlusStencil8 => wgt::Features::empty(),
-
-        Tf::Bc1RgbaUnorm
-        | Tf::Bc1RgbaUnormSrgb
-        | Tf::Bc2RgbaUnorm
-        | Tf::Bc2RgbaUnormSrgb
-        | Tf::Bc3RgbaUnorm
-        | Tf::Bc3RgbaUnormSrgb
-        | Tf::Bc4RUnorm
-        | Tf::Bc4RSnorm
-        | Tf::Bc5RgUnorm
-        | Tf::Bc5RgSnorm
-        | Tf::Bc6hRgbUfloat
-        | Tf::Bc6hRgbSfloat
-        | Tf::Bc7RgbaUnorm
-        | Tf::Bc7RgbaUnormSrgb => wgt::Features::TEXTURE_COMPRESSION_BC,
     }
 }
 
@@ -557,24 +420,13 @@ pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> hal::format::Forma
     }
 }
 
+fn checked_u32_as_u16(value: u32) -> u16 {
+    assert!(value <= ::std::u16::MAX as u32);
+    value as u16
+}
+
 pub fn is_power_of_two(val: u32) -> bool {
     val != 0 && (val & (val - 1)) == 0
-}
-
-pub fn is_valid_copy_src_texture_format(format: wgt::TextureFormat) -> bool {
-    use wgt::TextureFormat as Tf;
-    match format {
-        Tf::Depth24Plus | Tf::Depth24PlusStencil8 => false,
-        _ => true,
-    }
-}
-
-pub fn is_valid_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
-    use wgt::TextureFormat as Tf;
-    match format {
-        Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => false,
-        _ => true,
-    }
 }
 
 pub fn map_texture_dimension_size(
@@ -585,49 +437,28 @@ pub fn map_texture_dimension_size(
         depth,
     }: wgt::Extent3d,
     sample_size: u32,
-) -> Result<hal::image::Kind, resource::TextureDimensionError> {
+) -> hal::image::Kind {
     use hal::image::Kind as H;
-    use resource::TextureDimensionError as Tde;
     use wgt::TextureDimension::*;
-
-    let zero_dim = if width == 0 {
-        Some(resource::TextureErrorDimension::X)
-    } else if height == 0 {
-        Some(resource::TextureErrorDimension::Y)
-    } else if depth == 0 {
-        Some(resource::TextureErrorDimension::Z)
-    } else {
-        None
-    };
-    if let Some(dim) = zero_dim {
-        return Err(resource::TextureDimensionError::Zero(dim));
-    }
-
-    Ok(match dimension {
+    match dimension {
         D1 => {
-            if height != 1 {
-                return Err(Tde::InvalidHeight);
-            }
-            if sample_size != 1 {
-                return Err(Tde::InvalidSampleCount(sample_size));
-            }
-            let layers = depth.try_into().unwrap_or(!0);
-            H::D1(width, layers)
+            assert_eq!(height, 1);
+            assert_eq!(sample_size, 1);
+            H::D1(width, checked_u32_as_u16(depth))
         }
         D2 => {
-            if sample_size > 32 || !is_power_of_two(sample_size) {
-                return Err(Tde::InvalidSampleCount(sample_size));
-            }
-            let layers = depth.try_into().unwrap_or(!0);
-            H::D2(width, height, layers, sample_size as u8)
+            assert!(
+                sample_size <= 32 && is_power_of_two(sample_size),
+                "Invalid sample_count of {}",
+                sample_size
+            );
+            H::D2(width, height, checked_u32_as_u16(depth), sample_size as u8)
         }
         D3 => {
-            if sample_size != 1 {
-                return Err(Tde::InvalidSampleCount(sample_size));
-            }
+            assert_eq!(sample_size, 1);
             H::D3(width, height, depth)
         }
-    })
+    }
 }
 
 pub fn map_texture_view_dimension(dimension: wgt::TextureViewDimension) -> hal::image::ViewKind {
@@ -694,11 +525,11 @@ pub(crate) fn map_texture_state(
         W::UNINITIALIZED => return (A::empty(), L::Undefined),
         W::COPY_SRC => L::TransferSrcOptimal,
         W::COPY_DST => L::TransferDstOptimal,
-        W::SAMPLED if is_color => L::ShaderReadOnlyOptimal,
+        W::SAMPLED => L::ShaderReadOnlyOptimal,
         W::ATTACHMENT_READ | W::ATTACHMENT_WRITE if is_color => L::ColorAttachmentOptimal,
-        _ if is_color => L::General,
+        W::ATTACHMENT_READ => L::DepthStencilReadOnlyOptimal,
         W::ATTACHMENT_WRITE => L::DepthStencilAttachmentOptimal,
-        _ => L::DepthStencilReadOnlyOptimal,
+        _ => L::General,
     };
 
     let mut access = A::empty();
@@ -735,15 +566,15 @@ pub(crate) fn map_texture_state(
     (access, layout)
 }
 
-pub fn map_load_store_ops<V>(channel: &PassChannel<V>) -> hal::pass::AttachmentOps {
+pub fn map_load_store_ops(load: wgt::LoadOp, store: wgt::StoreOp) -> hal::pass::AttachmentOps {
     hal::pass::AttachmentOps {
-        load: match channel.load_op {
-            LoadOp::Clear => hal::pass::AttachmentLoadOp::Clear,
-            LoadOp::Load => hal::pass::AttachmentLoadOp::Load,
+        load: match load {
+            wgt::LoadOp::Clear => hal::pass::AttachmentLoadOp::Clear,
+            wgt::LoadOp::Load => hal::pass::AttachmentLoadOp::Load,
         },
-        store: match channel.store_op {
-            StoreOp::Clear => hal::pass::AttachmentStoreOp::DontCare, //TODO!
-            StoreOp::Store => hal::pass::AttachmentStoreOp::Store,
+        store: match store {
+            wgt::StoreOp::Clear => hal::pass::AttachmentStoreOp::DontCare, //TODO!
+            wgt::StoreOp::Store => hal::pass::AttachmentStoreOp::Store,
         },
     }
 }
@@ -787,7 +618,6 @@ pub fn map_wrap(address: wgt::AddressMode) -> hal::image::WrapMode {
         Am::ClampToEdge => W::Clamp,
         Am::Repeat => W::Tile,
         Am::MirrorRepeat => W::Mirror,
-        Am::ClampToBorder => W::Border,
     }
 }
 
@@ -796,12 +626,8 @@ pub fn map_rasterization_state_descriptor(
 ) -> hal::pso::Rasterizer {
     use hal::pso;
     pso::Rasterizer {
-        depth_clamping: desc.clamp_depth,
-        polygon_mode: match desc.polygon_mode {
-            wgt::PolygonMode::Fill => pso::PolygonMode::Fill,
-            wgt::PolygonMode::Line => pso::PolygonMode::Line,
-            wgt::PolygonMode::Point => pso::PolygonMode::Point,
-        },
+        depth_clamping: false,
+        polygon_mode: pso::PolygonMode::Fill,
         cull_face: match desc.cull_mode {
             wgt::CullMode::None => pso::Face::empty(),
             wgt::CullMode::Front => pso::Face::FRONT,

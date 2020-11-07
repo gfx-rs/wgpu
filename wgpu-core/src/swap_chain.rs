@@ -36,16 +36,12 @@
 use crate::device::trace::Action;
 use crate::{
     conv,
-    device::DeviceError,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
-    id::{DeviceId, SwapChainId, TextureViewId, Valid},
-    resource, span,
-    track::TextureSelector,
-    LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
+    id::{DeviceId, SwapChainId, TextureViewId},
+    resource, LifeGuard, PrivateFeatures, Stored,
 };
 
 use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
-use thiserror::Error;
 use wgt::{SwapChainDescriptor, SwapChainStatus};
 
 const FRAME_TIMEOUT_MS: u64 = 1000;
@@ -60,36 +56,6 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) semaphore: B::Semaphore,
     pub(crate) acquired_view_id: Option<Stored<TextureViewId>>,
     pub(crate) acquired_framebuffers: Vec<B::Framebuffer>,
-    pub(crate) active_submission_index: SubmissionIndex,
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum SwapChainError {
-    #[error("swap chain is invalid")]
-    Invalid,
-    #[error("parent surface is invalid")]
-    InvalidSurface,
-    #[error(transparent)]
-    Device(#[from] DeviceError),
-    #[error("swap chain image is already acquired")]
-    AlreadyAcquired,
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum CreateSwapChainError {
-    #[error(transparent)]
-    Device(#[from] DeviceError),
-    #[error("invalid surface")]
-    InvalidSurface,
-    #[error("`SwapChainOutput` must be dropped before a new `SwapChain` is made")]
-    SwapChainOutputExists,
-    #[error("surface does not support the adapter's queue family")]
-    UnsupportedQueueFamily,
-    #[error("requested format {requested:?} is not in list of supported formats: {available:?}")]
-    UnsupportedFormat {
-        requested: hal::format::Format,
-        available: Vec<hal::format::Format>,
-    },
 }
 
 pub(crate) fn swap_chain_descriptor_to_hal(
@@ -122,25 +88,19 @@ pub struct SwapChainOutput {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn swap_chain_get_current_texture_view<B: GfxBackend>(
+    pub fn swap_chain_get_next_texture<B: GfxBackend>(
         &self,
         swap_chain_id: SwapChainId,
         view_id_in: Input<G, TextureViewId>,
-    ) -> Result<SwapChainOutput, SwapChainError> {
-        span!(_guard, INFO, "SwapChain::get_next_texture");
-
+    ) -> SwapChainOutput {
         let hub = B::hub(self);
         let mut token = Token::root();
 
         let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
-        let surface = surface_guard
-            .get_mut(swap_chain_id.to_surface_id())
-            .map_err(|_| SwapChainError::InvalidSurface)?;
+        let surface = &mut surface_guard[swap_chain_id.to_surface_id()];
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
-        let sc = swap_chain_guard
-            .get_mut(swap_chain_id)
-            .map_err(|_| SwapChainError::Invalid)?;
+        let sc = &mut swap_chain_guard[swap_chain_id];
         #[cfg_attr(not(feature = "trace"), allow(unused_variables))]
         let device = &device_guard[sc.device_id.value];
 
@@ -151,136 +111,109 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Err(err) => (
                 None,
                 match err {
-                    hal::window::AcquireError::OutOfMemory(_) => Err(DeviceError::OutOfMemory)?,
+                    hal::window::AcquireError::OutOfMemory(_) => SwapChainStatus::OutOfMemory,
                     hal::window::AcquireError::NotReady => unreachable!(), // we always set a timeout
                     hal::window::AcquireError::Timeout => SwapChainStatus::Timeout,
                     hal::window::AcquireError::OutOfDate => SwapChainStatus::Outdated,
                     hal::window::AcquireError::SurfaceLost(_) => SwapChainStatus::Lost,
-                    hal::window::AcquireError::DeviceLost(_) => Err(DeviceError::Lost)?,
+                    hal::window::AcquireError::DeviceLost(_) => SwapChainStatus::Lost,
                 },
             ),
         };
 
-        let view_id = match image {
-            Some(image) => {
-                let view = resource::TextureView {
-                    inner: resource::TextureViewInner::SwapChain {
-                        image,
-                        source_id: Stored {
-                            value: Valid(swap_chain_id),
-                            ref_count: sc.life_guard.add_ref(),
-                        },
+        let view_id = image.map(|image| {
+            let view = resource::TextureView {
+                inner: resource::TextureViewInner::SwapChain {
+                    image,
+                    source_id: Stored {
+                        value: swap_chain_id,
+                        ref_count: sc.life_guard.add_ref(),
                     },
+                },
+                format: sc.desc.format,
+                extent: hal::image::Extent {
+                    width: sc.desc.width,
+                    height: sc.desc.height,
+                    depth: 1,
+                },
+                samples: 1,
+                range: hal::image::SubresourceRange {
                     aspects: hal::format::Aspects::COLOR,
-                    format: sc.desc.format,
-                    extent: hal::image::Extent {
-                        width: sc.desc.width,
-                        height: sc.desc.height,
-                        depth: 1,
-                    },
-                    samples: 1,
-                    selector: TextureSelector {
-                        layers: 0..1,
-                        levels: 0..1,
-                    },
-                    life_guard: LifeGuard::new(),
-                };
+                    layers: 0..1,
+                    levels: 0..1,
+                },
+                life_guard: LifeGuard::new(),
+            };
 
-                let ref_count = view.life_guard.add_ref();
-                let id = hub
-                    .texture_views
-                    .register_identity(view_id_in, view, &mut token);
+            let ref_count = view.life_guard.add_ref();
+            let id = hub
+                .texture_views
+                .register_identity(view_id_in, view, &mut token);
 
-                if sc.acquired_view_id.is_some() {
-                    return Err(SwapChainError::AlreadyAcquired);
-                }
+            assert!(
+                sc.acquired_view_id.is_none(),
+                "Swap chain image is already acquired"
+            );
 
-                sc.acquired_view_id = Some(Stored {
-                    value: id,
-                    ref_count,
-                });
+            sc.acquired_view_id = Some(Stored {
+                value: id,
+                ref_count,
+            });
 
-                Some(id.0)
-            }
-            None => None,
-        };
+            id
+        });
 
         #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(Action::GetSwapChainTexture {
+        match device.trace {
+            Some(ref trace) => trace.lock().add(Action::GetSwapChainTexture {
                 id: view_id,
                 parent_id: swap_chain_id,
-            });
-        }
+            }),
+            None => (),
+        };
 
-        Ok(SwapChainOutput { status, view_id })
+        SwapChainOutput { status, view_id }
     }
 
-    pub fn swap_chain_present<B: GfxBackend>(
-        &self,
-        swap_chain_id: SwapChainId,
-    ) -> Result<SwapChainStatus, SwapChainError> {
-        span!(_guard, INFO, "SwapChain::present");
-
+    pub fn swap_chain_present<B: GfxBackend>(&self, swap_chain_id: SwapChainId) {
         let hub = B::hub(self);
         let mut token = Token::root();
 
         let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
-        let surface = surface_guard
-            .get_mut(swap_chain_id.to_surface_id())
-            .map_err(|_| SwapChainError::InvalidSurface)?;
+        let surface = &mut surface_guard[swap_chain_id.to_surface_id()];
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
-        let sc = swap_chain_guard
-            .get_mut(swap_chain_id)
-            .map_err(|_| SwapChainError::Invalid)?;
+        let sc = &mut swap_chain_guard[swap_chain_id];
         let device = &mut device_guard[sc.device_id.value];
 
         #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(Action::PresentSwapChain(swap_chain_id));
-        }
+        match device.trace {
+            Some(ref trace) => trace.lock().add(Action::PresentSwapChain(swap_chain_id)),
+            None => (),
+        };
 
         let view_id = sc
             .acquired_view_id
             .take()
-            .ok_or(SwapChainError::AlreadyAcquired)?;
-        let (view_maybe, _) = hub.texture_views.unregister(view_id.value.0, &mut token);
-        let view = view_maybe.ok_or(SwapChainError::Invalid)?;
+            .expect("Swap chain image is not acquired");
+        let (view, _) = hub.texture_views.unregister(view_id.value, &mut token);
         let image = match view.inner {
             resource::TextureViewInner::Native { .. } => unreachable!(),
             resource::TextureViewInner::SwapChain { image, .. } => image,
         };
 
-        let sem = if sc.active_submission_index > device.last_completed_submission_index() {
-            Some(&sc.semaphore)
-        } else {
-            None
+        let err = unsafe {
+            let queue = &mut device.queue_group.queues[0];
+            queue.present_surface(B::get_surface_mut(surface), image, Some(&sc.semaphore))
         };
-        let queue = &mut device.queue_group.queues[0];
-        let result = unsafe { queue.present(B::get_surface_mut(surface), image, sem) };
-
-        tracing::debug!(trace = true, "Presented. End of Frame");
+        if let Err(e) = err {
+            log::warn!("present failed: {:?}", e);
+        }
 
         for fbo in sc.acquired_framebuffers.drain(..) {
             unsafe {
                 device.raw.destroy_framebuffer(fbo);
             }
-        }
-
-        match result {
-            Ok(None) => Ok(SwapChainStatus::Good),
-            Ok(Some(_)) => Ok(SwapChainStatus::Suboptimal),
-            Err(err) => match err {
-                hal::window::PresentError::OutOfMemory(_) => {
-                    Err(SwapChainError::Device(DeviceError::OutOfMemory))
-                }
-                hal::window::PresentError::OutOfDate => Ok(SwapChainStatus::Outdated),
-                hal::window::PresentError::SurfaceLost(_) => Ok(SwapChainStatus::Lost),
-                hal::window::PresentError::DeviceLost(_) => {
-                    Err(SwapChainError::Device(DeviceError::Lost))
-                }
-            },
         }
     }
 }

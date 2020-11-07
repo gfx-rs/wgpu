@@ -1,11 +1,10 @@
 # wgpu player
 
-This is application that allows replaying the `wgpu` workloads recorded elsewhere. You must use the player built from
-the same revision as an application was linking to, or otherwise the data may fail to load.
+This is application that allows replaying the `wgpu` workloads recorded elsewhere.
 
 Launch as:
 ```rust
-play <trace-dir>
+player <trace-dir>
 ```
 
 When built with "winit" feature, it's able to replay the workloads that operate on a swapchain. It renders each frame sequentially, then waits for the user to close the window. When built without "winit", it launches in console mode and can replay any trace that doesn't use swapchains.

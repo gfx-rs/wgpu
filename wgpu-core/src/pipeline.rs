@@ -3,23 +3,38 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
-    device::{DeviceError, RenderPassContext},
+    device::RenderPassContext,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation::StageError,
-    Label, LifeGuard, RefCount, Stored,
+    LifeGuard, RawString, RefCount, Stored, U32Array,
 };
-use std::borrow::{Borrow, Cow};
-use thiserror::Error;
-use wgt::{BufferAddress, IndexFormat, InputStepMode};
+use std::borrow::Borrow;
+use wgt::{
+    BufferAddress, ColorStateDescriptor, DepthStencilStateDescriptor, IndexFormat, InputStepMode,
+    PrimitiveTopology, RasterizationStateDescriptor, VertexAttributeDescriptor,
+};
 
-// Unable to serialize with `naga::Module` in here:
-// requires naga serialization feature.
+#[repr(C)]
 #[derive(Debug)]
-pub enum ShaderModuleSource<'a> {
-    SpirV(Cow<'a, [u32]>),
-    Wgsl(Cow<'a, str>),
-    Naga(naga::Module),
+pub struct VertexBufferLayoutDescriptor {
+    pub array_stride: BufferAddress,
+    pub step_mode: InputStepMode,
+    pub attributes: *const VertexAttributeDescriptor,
+    pub attributes_length: usize,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct VertexStateDescriptor {
+    pub index_format: IndexFormat,
+    pub vertex_buffers: *const VertexBufferLayoutDescriptor,
+    pub vertex_buffers_length: usize,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct ShaderModuleDescriptor {
+    pub code: U32Array,
 }
 
 #[derive(Debug)]
@@ -29,62 +44,22 @@ pub struct ShaderModule<B: hal::Backend> {
     pub(crate) module: Option<naga::Module>,
 }
 
-#[derive(Clone, Debug, Error)]
-pub enum CreateShaderModuleError {
-    #[error(transparent)]
-    Device(#[from] DeviceError),
-    #[error(transparent)]
-    Validation(#[from] naga::proc::ValidationError),
-}
-
-/// Describes a programmable pipeline stage.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct ProgrammableStageDescriptor<'a> {
-    /// The compiled shader module for this stage.
+#[repr(C)]
+#[derive(Debug)]
+pub struct ProgrammableStageDescriptor {
     pub module: ShaderModuleId,
-    /// The name of the entry point in the compiled shader. There must be a function that returns
-    /// void with this name in the shader.
-    pub entry_point: Cow<'a, str>,
+    pub entry_point: RawString,
 }
 
-/// Number of implicit bind groups derived at pipeline creation.
-pub type ImplicitBindGroupCount = u8;
-
-#[derive(Clone, Debug, Error)]
-pub enum ImplicitLayoutError {
-    #[error("missing IDs for deriving {0} bind groups")]
-    MissingIds(ImplicitBindGroupCount),
-    #[error("unable to reflect the shader {0:?} interface")]
-    ReflectionError(wgt::ShaderStage),
-    #[error(transparent)]
-    BindGroup(#[from] CreateBindGroupLayoutError),
-    #[error(transparent)]
-    Pipeline(#[from] CreatePipelineLayoutError),
+#[repr(C)]
+#[derive(Debug)]
+pub struct ComputePipelineDescriptor {
+    pub layout: PipelineLayoutId,
+    pub compute_stage: ProgrammableStageDescriptor,
 }
 
-/// Describes a compute pipeline.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct ComputePipelineDescriptor<'a> {
-    pub label: Label<'a>,
-    /// The layout of bind groups for this pipeline.
-    pub layout: Option<PipelineLayoutId>,
-    /// The compiled compute stage and its entry point.
-    pub compute_stage: ProgrammableStageDescriptor<'a>,
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum CreateComputePipelineError {
-    #[error(transparent)]
-    Device(#[from] DeviceError),
-    #[error("pipeline layout is invalid")]
-    InvalidLayout,
-    #[error("unable to derive an implicit layout")]
-    Implicit(#[from] ImplicitLayoutError),
-    #[error(transparent)]
+pub enum ComputePipelineError {
     Stage(StageError),
 }
 
@@ -102,94 +77,37 @@ impl<B: hal::Backend> Borrow<RefCount> for ComputePipeline<B> {
     }
 }
 
-/// Describes how the vertex buffer is interpreted.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexBufferDescriptor<'a> {
-    /// The stride, in bytes, between elements of this buffer.
-    pub stride: BufferAddress,
-    /// How often this vertex buffer is "stepped" forward.
-    pub step_mode: InputStepMode,
-    /// The list of attributes which comprise a single vertex.
-    pub attributes: Cow<'a, [wgt::VertexAttributeDescriptor]>,
-}
-
-/// Describes vertex input state for a render pipeline.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexStateDescriptor<'a> {
-    /// The format of any index buffers used with this pipeline.
-    pub index_format: IndexFormat,
-    /// The format of any vertex buffers used with this pipeline.
-    pub vertex_buffers: Cow<'a, [VertexBufferDescriptor<'a>]>,
-}
-
-/// Describes a render (graphics) pipeline.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct RenderPipelineDescriptor<'a> {
-    pub label: Label<'a>,
-    /// The layout of bind groups for this pipeline.
-    pub layout: Option<PipelineLayoutId>,
-    /// The compiled vertex stage and its entry point.
-    pub vertex_stage: ProgrammableStageDescriptor<'a>,
-    /// The compiled fragment stage and its entry point, if any.
-    pub fragment_stage: Option<ProgrammableStageDescriptor<'a>>,
-    /// The rasterization process for this pipeline.
-    pub rasterization_state: Option<wgt::RasterizationStateDescriptor>,
-    /// The primitive topology used to interpret vertices.
-    pub primitive_topology: wgt::PrimitiveTopology,
-    /// The effect of draw calls on the color aspect of the output target.
-    pub color_states: Cow<'a, [wgt::ColorStateDescriptor]>,
-    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
-    pub depth_stencil_state: Option<wgt::DepthStencilStateDescriptor>,
-    /// The vertex input state for this pipeline.
-    pub vertex_state: VertexStateDescriptor<'a>,
-    /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
-    /// this should be `1`
+#[repr(C)]
+#[derive(Debug)]
+pub struct RenderPipelineDescriptor {
+    pub layout: PipelineLayoutId,
+    pub vertex_stage: ProgrammableStageDescriptor,
+    pub fragment_stage: *const ProgrammableStageDescriptor,
+    pub primitive_topology: PrimitiveTopology,
+    pub rasterization_state: *const RasterizationStateDescriptor,
+    pub color_states: *const ColorStateDescriptor,
+    pub color_states_length: usize,
+    pub depth_stencil_state: *const DepthStencilStateDescriptor,
+    pub vertex_state: VertexStateDescriptor,
     pub sample_count: u32,
-    /// Bitmask that restricts the samples of a pixel modified by this pipeline. All samples
-    /// can be enabled using the value `!0`
     pub sample_mask: u32,
-    /// When enabled, produces another sample mask per pixel based on the alpha output value, that
-    /// is ANDed with the sample_mask and the primitive coverage to restrict the set of samples
-    /// affected by a primitive.
-    ///
-    /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
-    /// is guaranteed to be all 1-s.
     pub alpha_to_coverage_enabled: bool,
 }
 
-#[derive(Clone, Debug, Error)]
-pub enum CreateRenderPipelineError {
-    #[error(transparent)]
-    Device(#[from] DeviceError),
-    #[error("pipelie layout is invalid")]
-    InvalidLayout,
-    #[error("unable to derive an implicit layout")]
-    Implicit(#[from] ImplicitLayoutError),
-    #[error("incompatible output format at index {index}")]
-    IncompatibleOutputFormat { index: u8 },
-    #[error("invalid sample count {0}")]
-    InvalidSampleCount(u32),
-    #[error("vertex buffer {index} stride {stride} does not respect `VERTEX_STRIDE_ALIGNMENT`")]
-    UnalignedVertexStride { index: u32, stride: BufferAddress },
-    #[error("vertex attribute at location {location} has invalid offset {offset}")]
+#[derive(Clone, Debug)]
+pub enum RenderPipelineError {
     InvalidVertexAttributeOffset {
         location: wgt::ShaderLocation,
         offset: BufferAddress,
     },
-    #[error("missing required device features {0:?}")]
-    MissingFeature(wgt::Features),
-    #[error("error in stage {flag:?}")]
     Stage {
         flag: wgt::ShaderStage,
-        #[source]
         error: StageError,
     },
+    IncompatibleOutputFormat {
+        index: u8,
+    },
+    InvalidSampleCount(u32),
 }
 
 bitflags::bitflags! {
@@ -197,7 +115,7 @@ bitflags::bitflags! {
     pub struct PipelineFlags: u32 {
         const BLEND_COLOR = 1;
         const STENCIL_REFERENCE = 2;
-        const WRITES_DEPTH_STENCIL = 4;
+        const DEPTH_STENCIL_READ_ONLY = 4;
     }
 }
 
@@ -209,6 +127,7 @@ pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
     pub(crate) index_format: IndexFormat,
+    pub(crate) sample_count: u8,
     pub(crate) vertex_strides: Vec<(BufferAddress, InputStepMode)>,
     pub(crate) life_guard: LifeGuard,
 }

@@ -5,22 +5,22 @@
 use crate::{
     backend,
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
-    command::{CommandBuffer, RenderBundle},
+    command::CommandBuffer,
     device::Device,
     id::{
         AdapterId, BindGroupId, BindGroupLayoutId, BufferId, CommandBufferId, ComputePipelineId,
-        DeviceId, PipelineLayoutId, RenderBundleId, RenderPipelineId, SamplerId, ShaderModuleId,
-        SurfaceId, SwapChainId, TextureId, TextureViewId, TypedId, Valid,
+        DeviceId, PipelineLayoutId, RenderPipelineId, SamplerId, ShaderModuleId, SurfaceId,
+        SwapChainId, TextureId, TextureViewId, TypedId,
     },
     instance::{Adapter, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     resource::{Buffer, Sampler, Texture, TextureView},
-    span,
     swap_chain::SwapChain,
     Epoch, Index,
 };
 
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use vec_map::VecMap;
 use wgt::Backend;
 
 #[cfg(debug_assertions)]
@@ -36,7 +36,7 @@ pub struct IdentityManager {
 
 impl Default for IdentityManager {
     fn default() -> Self {
-        Self {
+        IdentityManager {
             free: Default::default(),
             epochs: Default::default(),
         }
@@ -45,7 +45,7 @@ impl Default for IdentityManager {
 
 impl IdentityManager {
     pub fn from_index(min_index: u32) -> Self {
-        Self {
+        IdentityManager {
             free: (0..min_index).collect(),
             epochs: vec![1; min_index as usize],
         }
@@ -77,138 +77,75 @@ impl IdentityManager {
 }
 
 #[derive(Debug)]
-enum Element<T> {
-    Vacant,
-    Occupied(T, Epoch),
-    Error(Epoch),
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct InvalidId;
-
-#[derive(Debug)]
 pub struct Storage<T, I: TypedId> {
-    map: Vec<Element<T>>,
+    //TODO: consider concurrent hashmap?
+    map: VecMap<(T, Epoch)>,
     kind: &'static str,
     _phantom: PhantomData<I>,
 }
 
-impl<T, I: TypedId> ops::Index<Valid<I>> for Storage<T, I> {
+impl<T, I: TypedId> ops::Index<I> for Storage<T, I> {
     type Output = T;
-    fn index(&self, id: Valid<I>) -> &T {
-        self.get(id.0).unwrap()
+    fn index(&self, id: I) -> &T {
+        let (index, epoch, _) = id.unzip();
+        let (ref value, storage_epoch) = match self.map.get(index as usize) {
+            Some(v) => v,
+            None => panic!("{}[{}] does not exist", self.kind, index),
+        };
+        assert_eq!(
+            epoch, *storage_epoch,
+            "{}[{}] is no longer alive",
+            self.kind, index
+        );
+        value
     }
 }
 
-impl<T, I: TypedId> ops::IndexMut<Valid<I>> for Storage<T, I> {
-    fn index_mut(&mut self, id: Valid<I>) -> &mut T {
-        self.get_mut(id.0).unwrap()
+impl<T, I: TypedId> ops::IndexMut<I> for Storage<T, I> {
+    fn index_mut(&mut self, id: I) -> &mut T {
+        let (index, epoch, _) = id.unzip();
+        let (ref mut value, storage_epoch) = match self.map.get_mut(index as usize) {
+            Some(v) => v,
+            None => panic!("{}[{}] does not exist", self.kind, index),
+        };
+        assert_eq!(
+            epoch, *storage_epoch,
+            "{}[{}] is no longer alive",
+            self.kind, index
+        );
+        value
     }
 }
 
 impl<T, I: TypedId> Storage<T, I> {
-    pub(crate) fn contains(&self, id: I) -> bool {
+    pub fn contains(&self, id: I) -> bool {
         let (index, epoch, _) = id.unzip();
-        match self.map[index as usize] {
-            Element::Vacant => false,
-            Element::Occupied(_, storage_epoch) | Element::Error(storage_epoch) => {
-                epoch == storage_epoch
-            }
+        match self.map.get(index as usize) {
+            Some(&(_, storage_epoch)) => epoch == storage_epoch,
+            None => false,
         }
     }
 
-    /// Get a reference to an item behind a potentially invalid ID.
-    /// Panics if there is an epoch mismatch, or the entry is empty.
-    pub(crate) fn get(&self, id: I) -> Result<&T, InvalidId> {
+    pub fn insert(&mut self, id: I, value: T) -> Option<T> {
         let (index, epoch, _) = id.unzip();
-        let (result, storage_epoch) = match self.map[index as usize] {
-            Element::Occupied(ref v, epoch) => (Ok(v), epoch),
-            Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            Element::Error(epoch) => (Err(InvalidId), epoch),
-        };
-        assert_eq!(
-            epoch, storage_epoch,
-            "{}[{}] is no longer alive",
-            self.kind, index
-        );
-        result
+        let old = self.map.insert(index as usize, (value, epoch));
+        old.map(|(v, _storage_epoch)| v)
     }
 
-    /// Get a mutable reference to an item behind a potentially invalid ID.
-    /// Panics if there is an epoch mismatch, or the entry is empty.
-    pub(crate) fn get_mut(&mut self, id: I) -> Result<&mut T, InvalidId> {
+    pub fn remove(&mut self, id: I) -> Option<T> {
         let (index, epoch, _) = id.unzip();
-        let (result, storage_epoch) = match self.map[index as usize] {
-            Element::Occupied(ref mut v, epoch) => (Ok(v), epoch),
-            Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            Element::Error(epoch) => (Err(InvalidId), epoch),
-        };
-        assert_eq!(
-            epoch, storage_epoch,
-            "{}[{}] is no longer alive",
-            self.kind, index
-        );
-        result
-    }
-
-    fn insert_impl(&mut self, index: usize, element: Element<T>) {
-        if index >= self.map.len() {
-            self.map.resize_with(index + 1, || Element::Vacant);
-        }
-        match std::mem::replace(&mut self.map[index], element) {
-            Element::Vacant => {}
-            _ => panic!("Index {:?} is already occupied", index),
-        }
-    }
-
-    pub(crate) fn insert(&mut self, id: I, value: T) {
-        let (index, epoch, _) = id.unzip();
-        self.insert_impl(index as usize, Element::Occupied(value, epoch))
-    }
-
-    pub(crate) fn insert_error(&mut self, id: I) {
-        let (index, epoch, _) = id.unzip();
-        self.insert_impl(index as usize, Element::Error(epoch))
-    }
-
-    pub(crate) fn remove(&mut self, id: I) -> Option<T> {
-        let (index, epoch, _) = id.unzip();
-        match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
-            Element::Occupied(value, storage_epoch) => {
-                assert_eq!(epoch, storage_epoch);
-                Some(value)
-            }
-            Element::Error(_) => None,
-            Element::Vacant => panic!("Cannot remove a vacant resource"),
-        }
-    }
-
-    // Prevents panic on out of range access, allows Vacant elements.
-    pub(crate) fn try_remove(&mut self, id: I) -> Option<T> {
-        let (index, epoch, _) = id.unzip();
-        if index as usize >= self.map.len() {
-            None
-        } else if let Element::Occupied(value, storage_epoch) =
-            std::mem::replace(&mut self.map[index as usize], Element::Vacant)
-        {
-            assert_eq!(epoch, storage_epoch);
-            Some(value)
-        } else {
-            None
-        }
-    }
-
-    pub(crate) fn iter(&self, backend: Backend) -> impl Iterator<Item = (I, &T)> {
         self.map
-            .iter()
-            .enumerate()
-            .filter_map(move |(index, x)| match *x {
-                Element::Occupied(ref value, storage_epoch) => {
-                    Some((I::zip(index as Index, storage_epoch, backend), value))
-                }
-                _ => None,
+            .remove(index as usize)
+            .map(|(value, storage_epoch)| {
+                assert_eq!(epoch, storage_epoch);
+                value
             })
-            .into_iter()
+    }
+
+    pub fn iter(&self, backend: Backend) -> impl Iterator<Item = (I, &T)> {
+        self.map.iter().map(move |(index, (value, storage_epoch))| {
+            (I::zip(index as Index, *storage_epoch, backend), value)
+        })
     }
 }
 
@@ -237,7 +174,7 @@ impl<B: hal::Backend> Access<SwapChain<B>> for Root {}
 impl<B: hal::Backend> Access<SwapChain<B>> for Device<B> {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Root {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Device<B> {}
-impl<B: hal::Backend> Access<PipelineLayout<B>> for RenderBundle {}
+impl<B: hal::Backend> Access<PipelineLayout<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Root {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Device<B> {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for PipelineLayout<B> {}
@@ -249,8 +186,6 @@ impl<B: hal::Backend> Access<BindGroup<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for Root {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for Device<B> {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for SwapChain<B> {}
-impl<B: hal::Backend> Access<RenderBundle> for Device<B> {}
-impl<B: hal::Backend> Access<RenderBundle> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<ComputePipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<ComputePipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for Device<B> {}
@@ -298,7 +233,7 @@ impl<'a, T> Token<'a, T> {
             assert_ne!(old, 0, "Root token was dropped");
             active.set(old + 1);
         });
-        Self { level: PhantomData }
+        Token { level: PhantomData }
     }
 }
 
@@ -309,7 +244,7 @@ impl Token<'static, Root> {
             assert_eq!(0, active.replace(1), "Root token is already active");
         });
 
-        Self { level: PhantomData }
+        Token { level: PhantomData }
     }
 }
 
@@ -363,7 +298,6 @@ pub trait GlobalIdentityHandlerFactory:
     + IdentityHandlerFactory<BindGroupLayoutId>
     + IdentityHandlerFactory<BindGroupId>
     + IdentityHandlerFactory<CommandBufferId>
-    + IdentityHandlerFactory<RenderBundleId>
     + IdentityHandlerFactory<RenderPipelineId>
     + IdentityHandlerFactory<ComputePipelineId>
     + IdentityHandlerFactory<BufferId>
@@ -387,10 +321,10 @@ pub struct Registry<T, I: TypedId, F: IdentityHandlerFactory<I>> {
 
 impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     fn new(backend: Backend, factory: &F, kind: &'static str) -> Self {
-        Self {
+        Registry {
             identity: factory.spawn(0),
             data: RwLock::new(Storage {
-                map: Vec::new(),
+                map: VecMap::new(),
                 kind,
                 _phantom: PhantomData,
             }),
@@ -399,10 +333,10 @@ impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     }
 
     fn without_backend(factory: &F, kind: &'static str) -> Self {
-        Self {
+        Registry {
             identity: factory.spawn(1),
             data: RwLock::new(Storage {
-                map: Vec::new(),
+                map: VecMap::new(),
                 kind,
                 _phantom: PhantomData,
             }),
@@ -414,7 +348,8 @@ impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
 impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     pub fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
         debug_assert_eq!(id.unzip().2, self.backend);
-        self.data.write().insert(id, value);
+        let old = self.data.write().insert(id, value);
+        assert!(old.is_none());
     }
 
     pub fn read<'a, A: Access<T>>(
@@ -430,62 +365,29 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     ) -> (RwLockWriteGuard<'a, Storage<T, I>>, Token<'a, T>) {
         (self.data.write(), Token::new())
     }
+}
 
-    pub(crate) fn register_identity<A: Access<T>>(
+impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
+    pub fn register_identity<A: Access<T>>(
         &self,
         id_in: <F::Filter as IdentityHandler<I>>::Input,
         value: T,
         token: &mut Token<A>,
-    ) -> Valid<I> {
-        let id = self.identity.process(id_in, self.backend);
-        self.register(id, value, token);
-        Valid(id)
-    }
-
-    pub(crate) fn register_identity_locked(
-        &self,
-        id_in: <F::Filter as IdentityHandler<I>>::Input,
-        value: T,
-        guard: &mut Storage<T, I>,
-    ) -> Valid<I> {
-        let id = self.identity.process(id_in, self.backend);
-        guard.insert(id, value);
-        Valid(id)
-    }
-
-    pub fn register_error<A: Access<T>>(
-        &self,
-        id_in: <F::Filter as IdentityHandler<I>>::Input,
-        _token: &mut Token<A>,
     ) -> I {
         let id = self.identity.process(id_in, self.backend);
-        debug_assert_eq!(id.unzip().2, self.backend);
-        self.data.write().insert_error(id);
+        self.register(id, value, token);
         id
-    }
-
-    pub fn unregister_locked(&self, id: I, guard: &mut Storage<T, I>) -> Option<T> {
-        let value = guard.remove(id);
-        //Note: careful about the order here!
-        self.identity.free(id);
-        //Returning None is legal if it's an error ID
-        value
     }
 
     pub fn unregister<'a, A: Access<T>>(
         &self,
         id: I,
         _token: &'a mut Token<A>,
-    ) -> (Option<T>, Token<'a, T>) {
-        let value = self.data.write().remove(id);
+    ) -> (T, Token<'a, T>) {
+        let value = self.data.write().remove(id).unwrap();
         //Note: careful about the order here!
         self.identity.free(id);
-        //Returning None is legal if it's an error ID
         (value, Token::new())
-    }
-
-    pub fn process_id(&self, id_in: <F::Filter as IdentityHandler<I>>::Input) -> I {
-        self.identity.process(id_in, self.backend)
     }
 
     pub fn free_id(&self, id: I) {
@@ -503,7 +405,6 @@ pub struct Hub<B: hal::Backend, F: GlobalIdentityHandlerFactory> {
     pub bind_group_layouts: Registry<BindGroupLayout<B>, BindGroupLayoutId, F>,
     pub bind_groups: Registry<BindGroup<B>, BindGroupId, F>,
     pub command_buffers: Registry<CommandBuffer<B>, CommandBufferId, F>,
-    pub render_bundles: Registry<RenderBundle, RenderBundleId, F>,
     pub render_pipelines: Registry<RenderPipeline<B>, RenderPipelineId, F>,
     pub compute_pipelines: Registry<ComputePipeline<B>, ComputePipelineId, F>,
     pub buffers: Registry<Buffer<B>, BufferId, F>,
@@ -514,7 +415,7 @@ pub struct Hub<B: hal::Backend, F: GlobalIdentityHandlerFactory> {
 
 impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
     fn new(factory: &F) -> Self {
-        Self {
+        Hub {
             adapters: Registry::new(B::VARIANT, factory, "Adapter"),
             devices: Registry::new(B::VARIANT, factory, "Device"),
             swap_chains: Registry::new(B::VARIANT, factory, "SwapChain"),
@@ -523,7 +424,6 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
             bind_group_layouts: Registry::new(B::VARIANT, factory, "BindGroupLayout"),
             bind_groups: Registry::new(B::VARIANT, factory, "BindGroup"),
             command_buffers: Registry::new(B::VARIANT, factory, "CommandBuffer"),
-            render_bundles: Registry::new(B::VARIANT, factory, "RenderBundle"),
             render_pipelines: Registry::new(B::VARIANT, factory, "RenderPipeline"),
             compute_pipelines: Registry::new(B::VARIANT, factory, "ComputePipeline"),
             buffers: Registry::new(B::VARIANT, factory, "Buffer"),
@@ -535,153 +435,129 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
 }
 
 impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
-    fn clear(&self, surface_guard: &mut Storage<Surface, SurfaceId>) {
+    fn clear(&mut self, surface_guard: &mut Storage<Surface, SurfaceId>) {
         use crate::resource::TextureViewInner;
         use hal::{device::Device as _, window::PresentationSurface as _};
 
         let mut devices = self.devices.data.write();
-        for element in devices.map.iter_mut() {
-            if let Element::Occupied(device, _) = element {
-                device.prepare_to_die();
-            }
+        for (device, _) in devices.map.values_mut() {
+            device.prepare_to_die();
         }
 
-        for element in self.samplers.data.write().map.drain(..) {
-            if let Element::Occupied(sampler, _) = element {
-                unsafe {
-                    devices[sampler.device_id.value]
-                        .raw
-                        .destroy_sampler(sampler.raw);
-                }
+        for (_, (sampler, _)) in self.samplers.data.write().map.drain() {
+            unsafe {
+                devices[sampler.device_id.value]
+                    .raw
+                    .destroy_sampler(sampler.raw);
             }
         }
         {
             let textures = self.textures.data.read();
-            for element in self.texture_views.data.write().map.drain(..) {
-                if let Element::Occupied(texture_view, _) = element {
-                    match texture_view.inner {
-                        TextureViewInner::Native { raw, source_id } => {
-                            let device = &devices[textures[source_id.value].device_id.value];
-                            unsafe {
-                                device.raw.destroy_image_view(raw);
-                            }
+            for (_, (texture_view, _)) in self.texture_views.data.write().map.drain() {
+                match texture_view.inner {
+                    TextureViewInner::Native { raw, source_id } => {
+                        let device = &devices[textures[source_id.value].device_id.value];
+                        unsafe {
+                            device.raw.destroy_image_view(raw);
                         }
-                        TextureViewInner::SwapChain { .. } => {} //TODO
                     }
+                    TextureViewInner::SwapChain { .. } => {} //TODO
                 }
             }
         }
 
-        for element in self.textures.data.write().map.drain(..) {
-            if let Element::Occupied(texture, _) = element {
-                devices[texture.device_id.value].destroy_texture(texture);
+        for (_, (texture, _)) in self.textures.data.write().map.drain() {
+            devices[texture.device_id.value].destroy_texture(texture);
+        }
+        for (_, (buffer, _)) in self.buffers.data.write().map.drain() {
+            //TODO: unmap if needed
+            devices[buffer.device_id.value].destroy_buffer(buffer);
+        }
+        for (_, (command_buffer, _)) in self.command_buffers.data.write().map.drain() {
+            devices[command_buffer.device_id.value]
+                .com_allocator
+                .after_submit(command_buffer, 0);
+        }
+        for (_, (bind_group, _)) in self.bind_groups.data.write().map.drain() {
+            let device = &devices[bind_group.device_id.value];
+            device.destroy_bind_group(bind_group);
+        }
+
+        for (_, (module, _)) in self.shader_modules.data.write().map.drain() {
+            let device = &devices[module.device_id.value];
+            unsafe {
+                device.raw.destroy_shader_module(module.raw);
             }
         }
-        for element in self.buffers.data.write().map.drain(..) {
-            if let Element::Occupied(buffer, _) = element {
-                //TODO: unmap if needed
-                devices[buffer.device_id.value].destroy_buffer(buffer);
+        for (_, (bgl, _)) in self.bind_group_layouts.data.write().map.drain() {
+            let device = &devices[bgl.device_id.value];
+            unsafe {
+                device.raw.destroy_descriptor_set_layout(bgl.raw);
             }
         }
-        for element in self.command_buffers.data.write().map.drain(..) {
-            if let Element::Occupied(command_buffer, _) = element {
-                devices[command_buffer.device_id.value]
-                    .cmd_allocator
-                    .after_submit(command_buffer, 0);
+        for (_, (pipeline_layout, _)) in self.pipeline_layouts.data.write().map.drain() {
+            let device = &devices[pipeline_layout.device_id.value];
+            unsafe {
+                device.raw.destroy_pipeline_layout(pipeline_layout.raw);
             }
         }
-        for element in self.bind_groups.data.write().map.drain(..) {
-            if let Element::Occupied(bind_group, _) = element {
-                let device = &devices[bind_group.device_id.value];
-                device.destroy_bind_group(bind_group);
+        for (_, (pipeline, _)) in self.compute_pipelines.data.write().map.drain() {
+            let device = &devices[pipeline.device_id.value];
+            unsafe {
+                device.raw.destroy_compute_pipeline(pipeline.raw);
+            }
+        }
+        for (_, (pipeline, _)) in self.render_pipelines.data.write().map.drain() {
+            let device = &devices[pipeline.device_id.value];
+            unsafe {
+                device.raw.destroy_graphics_pipeline(pipeline.raw);
             }
         }
 
-        for element in self.shader_modules.data.write().map.drain(..) {
-            if let Element::Occupied(module, _) = element {
-                let device = &devices[module.device_id.value];
-                unsafe {
-                    device.raw.destroy_shader_module(module.raw);
-                }
-            }
-        }
-        for element in self.bind_group_layouts.data.write().map.drain(..) {
-            if let Element::Occupied(bgl, _) = element {
-                let device = &devices[bgl.device_id.value];
-                unsafe {
-                    device.raw.destroy_descriptor_set_layout(bgl.raw);
-                }
-            }
-        }
-        for element in self.pipeline_layouts.data.write().map.drain(..) {
-            if let Element::Occupied(pipeline_layout, _) = element {
-                let device = &devices[pipeline_layout.device_id.value];
-                unsafe {
-                    device.raw.destroy_pipeline_layout(pipeline_layout.raw);
-                }
-            }
-        }
-        for element in self.compute_pipelines.data.write().map.drain(..) {
-            if let Element::Occupied(pipeline, _) = element {
-                let device = &devices[pipeline.device_id.value];
-                unsafe {
-                    device.raw.destroy_compute_pipeline(pipeline.raw);
-                }
-            }
-        }
-        for element in self.render_pipelines.data.write().map.drain(..) {
-            if let Element::Occupied(pipeline, _) = element {
-                let device = &devices[pipeline.device_id.value];
-                unsafe {
-                    device.raw.destroy_graphics_pipeline(pipeline.raw);
-                }
+        for (index, (swap_chain, epoch)) in self.swap_chains.data.write().map.drain() {
+            let device = &devices[swap_chain.device_id.value];
+            let surface = &mut surface_guard[TypedId::zip(index as Index, epoch, B::VARIANT)];
+            let suf = B::get_surface_mut(surface);
+            unsafe {
+                device.raw.destroy_semaphore(swap_chain.semaphore);
+                suf.unconfigure_swapchain(&device.raw);
             }
         }
 
-        for (index, element) in self.swap_chains.data.write().map.drain(..).enumerate() {
-            if let Element::Occupied(swap_chain, epoch) = element {
-                let device = &devices[swap_chain.device_id.value];
-                let surface = surface_guard
-                    .get_mut(TypedId::zip(index as Index, epoch, B::VARIANT))
-                    .unwrap();
-                let suf = B::get_surface_mut(surface);
-                unsafe {
-                    device.raw.destroy_semaphore(swap_chain.semaphore);
-                    suf.unconfigure_swapchain(&device.raw);
-                }
-            }
-        }
-
-        for element in devices.map.drain(..) {
-            if let Element::Occupied(device, _) = element {
-                device.dispose();
-            }
+        for (_, (device, _)) in devices.map.drain() {
+            device.dispose();
         }
     }
 }
 
 #[derive(Debug)]
 pub struct Hubs<F: GlobalIdentityHandlerFactory> {
-    #[cfg(vulkan)]
+    #[cfg(any(
+        not(any(target_os = "ios", target_os = "macos")),
+        feature = "gfx-backend-vulkan"
+    ))]
     vulkan: Hub<backend::Vulkan, F>,
-    #[cfg(metal)]
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
     metal: Hub<backend::Metal, F>,
-    #[cfg(dx12)]
+    #[cfg(windows)]
     dx12: Hub<backend::Dx12, F>,
-    #[cfg(dx11)]
+    #[cfg(windows)]
     dx11: Hub<backend::Dx11, F>,
 }
 
 impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
     fn new(factory: &F) -> Self {
-        Self {
-            #[cfg(vulkan)]
+        Hubs {
+            #[cfg(any(
+                not(any(target_os = "ios", target_os = "macos")),
+                feature = "gfx-backend-vulkan"
+            ))]
             vulkan: Hub::new(factory),
-            #[cfg(metal)]
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
             metal: Hub::new(factory),
-            #[cfg(dx12)]
+            #[cfg(windows)]
             dx12: Hub::new(factory),
-            #[cfg(dx11)]
+            #[cfg(windows)]
             dx11: Hub::new(factory),
         }
     }
@@ -695,51 +571,35 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn new(name: &str, factory: G, backends: wgt::BackendBit) -> Self {
-        span!(_guard, INFO, "Global::new");
-        Self {
-            instance: Instance::new(name, 1, backends),
+    pub fn new(name: &str, factory: G) -> Self {
+        Global {
+            instance: Instance::new(name, 1),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
         }
-    }
-
-    pub fn clear_backend<B: GfxBackend>(&self, _dummy: ()) {
-        let mut surface_guard = self.surfaces.data.write();
-        let hub = B::hub(self);
-        hub.clear(&mut *surface_guard);
     }
 }
 
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            tracing::info!("Dropping Global");
+            log::info!("Dropping Global");
             let mut surface_guard = self.surfaces.data.write();
-
             // destroy hubs
-            #[cfg(vulkan)]
-            {
-                self.hubs.vulkan.clear(&mut *surface_guard);
-            }
-            #[cfg(metal)]
-            {
-                self.hubs.metal.clear(&mut *surface_guard);
-            }
-            #[cfg(dx12)]
-            {
-                self.hubs.dx12.clear(&mut *surface_guard);
-            }
-            #[cfg(dx11)]
-            {
-                self.hubs.dx11.clear(&mut *surface_guard);
-            }
-
+            #[cfg(any(
+                not(any(target_os = "ios", target_os = "macos")),
+                feature = "gfx-backend-vulkan"
+            ))]
+            self.hubs.vulkan.clear(&mut *surface_guard);
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            self.hubs.metal.clear(&mut *surface_guard);
+            #[cfg(windows)]
+            self.hubs.dx12.clear(&mut *surface_guard);
+            #[cfg(windows)]
+            self.hubs.dx11.clear(&mut *surface_guard);
             // destroy surfaces
-            for element in surface_guard.map.drain(..) {
-                if let Element::Occupied(surface, _) = element {
-                    self.instance.destroy_surface(surface);
-                }
+            for (_, (surface, _)) in surface_guard.map.drain() {
+                self.instance.destroy_surface(surface);
             }
         }
     }
@@ -751,7 +611,10 @@ pub trait GfxBackend: hal::Backend {
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
 }
 
-#[cfg(vulkan)]
+#[cfg(any(
+    not(any(target_os = "ios", target_os = "macos")),
+    feature = "gfx-backend-vulkan"
+))]
 impl GfxBackend for backend::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
@@ -762,18 +625,18 @@ impl GfxBackend for backend::Vulkan {
     }
 }
 
-#[cfg(metal)]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 impl GfxBackend for backend::Metal {
     const VARIANT: Backend = Backend::Metal;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.metal
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
-        surface.metal.as_mut().unwrap()
+        &mut surface.metal
     }
 }
 
-#[cfg(dx12)]
+#[cfg(windows)]
 impl GfxBackend for backend::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
@@ -784,19 +647,13 @@ impl GfxBackend for backend::Dx12 {
     }
 }
 
-#[cfg(dx11)]
+#[cfg(windows)]
 impl GfxBackend for backend::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx11
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
-        surface.dx11.as_mut().unwrap()
+        &mut surface.dx11
     }
-}
-
-#[cfg(test)]
-fn _test_send_sync(global: &Global<IdentityManagerFactory>) {
-    fn test_internal<T: Send + Sync>(_: T) {}
-    test_internal(global)
 }

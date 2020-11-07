@@ -3,10 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::{PendingTransition, ResourceState, Unit};
-use crate::{
-    id::{BufferId, Valid},
-    resource::BufferUse,
-};
+use crate::{id::BufferId, resource::BufferUse};
 
 //TODO: store `hal::buffer::State` here to avoid extra conversions
 pub(crate) type BufferState = Unit<BufferUse>;
@@ -26,7 +23,7 @@ impl PendingTransition<BufferState> {
 
 impl Default for BufferState {
     fn default() -> Self {
-        Self {
+        BufferState {
             first: None,
             last: BufferUse::empty(),
         }
@@ -50,7 +47,7 @@ impl ResourceState for BufferState {
 
     fn change(
         &mut self,
-        id: Valid<Self::Id>,
+        id: Self::Id,
         _selector: Self::Selector,
         usage: Self::Usage,
         output: Option<&mut Vec<PendingTransition<Self>>>,
@@ -82,28 +79,9 @@ impl ResourceState for BufferState {
         Ok(())
     }
 
-    fn prepend(
-        &mut self,
-        id: Valid<Self::Id>,
-        _selector: Self::Selector,
-        usage: Self::Usage,
-    ) -> Result<(), PendingTransition<Self>> {
-        match self.first {
-            Some(old) if old != usage => Err(PendingTransition {
-                id,
-                selector: (),
-                usage: old..usage,
-            }),
-            _ => {
-                self.first = Some(usage);
-                Ok(())
-            }
-        }
-    }
-
     fn merge(
         &mut self,
-        id: Valid<Self::Id>,
+        id: Self::Id,
         other: &Self,
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
@@ -153,7 +131,7 @@ mod test {
             first: None,
             last: BufferUse::INDEX,
         };
-        let id = Id::dummy();
+        let id = Id::default();
         assert_eq!(
             bs.change(id, (), BufferUse::STORAGE_STORE, None),
             Err(PendingTransition {
@@ -173,7 +151,7 @@ mod test {
             first: None,
             last: BufferUse::STORAGE_STORE,
         };
-        let id = Id::dummy();
+        let id = Id::default();
         let mut list = Vec::new();
         bs.change(id, (), BufferUse::VERTEX, Some(&mut list))
             .unwrap();
@@ -209,32 +187,6 @@ mod test {
             Unit {
                 first: Some(BufferUse::STORAGE_STORE),
                 last: BufferUse::STORAGE_STORE,
-            }
-        );
-    }
-
-    #[test]
-    fn prepend() {
-        let mut bs = Unit {
-            first: None,
-            last: BufferUse::VERTEX,
-        };
-        let id = Id::dummy();
-        bs.prepend(id, (), BufferUse::INDEX).unwrap();
-        bs.prepend(id, (), BufferUse::INDEX).unwrap();
-        assert_eq!(
-            bs.prepend(id, (), BufferUse::STORAGE_LOAD),
-            Err(PendingTransition {
-                id,
-                selector: (),
-                usage: BufferUse::INDEX..BufferUse::STORAGE_LOAD,
-            })
-        );
-        assert_eq!(
-            bs,
-            Unit {
-                first: Some(BufferUse::INDEX),
-                last: BufferUse::VERTEX,
             }
         );
     }
