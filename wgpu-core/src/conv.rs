@@ -68,7 +68,7 @@ pub fn map_texture_usage(
     if usage.contains(W::STORAGE) {
         value |= U::STORAGE;
     }
-    if usage.contains(W::OUTPUT_ATTACHMENT) {
+    if usage.contains(W::RENDER_ATTACHMENT) {
         if aspects.intersects(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL) {
             value |= U::DEPTH_STENCIL_ATTACHMENT;
         } else {

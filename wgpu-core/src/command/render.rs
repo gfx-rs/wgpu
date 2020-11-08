@@ -1589,7 +1589,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         for ot in output_attachments {
             let texture = &texture_guard[ot.texture_id.value];
-            check_texture_usage(texture.usage, TextureUsage::OUTPUT_ATTACHMENT)?;
+            check_texture_usage(texture.usage, TextureUsage::RENDER_ATTACHMENT)?;
 
             // the tracker set of the pass is always in "extend" mode
             trackers
