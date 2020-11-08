@@ -466,13 +466,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // instead of the special read-only one, which would be `None`.
         let mut is_ds_read_only = false;
 
-        struct OutputAttachment<'a> {
+        struct RenderAttachment<'a> {
             texture_id: &'a Stored<id::TextureId>,
             selector: &'a TextureSelector,
             previous_use: Option<TextureUse>,
             new_use: TextureUse,
         }
-        let mut output_attachments = AttachmentDataVec::<OutputAttachment>::new();
+        let mut render_attachments = AttachmentDataVec::<RenderAttachment>::new();
 
         let mut attachment_width = None;
         let mut attachment_height = None;
@@ -542,7 +542,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         } else {
                             TextureUse::ATTACHMENT_WRITE
                         };
-                        output_attachments.push(OutputAttachment {
+                        render_attachments.push(RenderAttachment {
                             texture_id: source_id,
                             selector: &view.selector,
                             previous_use,
@@ -591,7 +591,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .textures
                                 .query(source_id.value, view.selector.clone());
                             let new_use = TextureUse::ATTACHMENT_WRITE;
-                            output_attachments.push(OutputAttachment {
+                            render_attachments.push(RenderAttachment {
                                 texture_id: source_id,
                                 selector: &view.selector,
                                 previous_use,
@@ -668,7 +668,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .textures
                                 .query(source_id.value, view.selector.clone());
                             let new_use = TextureUse::ATTACHMENT_WRITE;
-                            output_attachments.push(OutputAttachment {
+                            render_attachments.push(RenderAttachment {
                                 texture_id: source_id,
                                 selector: &view.selector,
                                 previous_use,
@@ -1587,31 +1587,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw.end_render_pass();
         }
 
-        for ot in output_attachments {
-            let texture = &texture_guard[ot.texture_id.value];
+        for ra in render_attachments {
+            let texture = &texture_guard[ra.texture_id.value];
             check_texture_usage(texture.usage, TextureUsage::RENDER_ATTACHMENT)?;
 
             // the tracker set of the pass is always in "extend" mode
             trackers
                 .textures
                 .change_extend(
-                    ot.texture_id.value,
-                    &ot.texture_id.ref_count,
-                    ot.selector.clone(),
-                    ot.new_use,
+                    ra.texture_id.value,
+                    &ra.texture_id.ref_count,
+                    ra.selector.clone(),
+                    ra.new_use,
                 )
                 .unwrap();
 
-            if let Some(usage) = ot.previous_use {
+            if let Some(usage) = ra.previous_use {
                 // Make the attachment tracks to be aware of the internal
                 // transition done by the render pass, by registering the
                 // previous usage as the initial state.
                 trackers
                     .textures
                     .prepend(
-                        ot.texture_id.value,
-                        &ot.texture_id.ref_count,
-                        ot.selector.clone(),
+                        ra.texture_id.value,
+                        &ra.texture_id.ref_count,
+                        ra.selector.clone(),
                         usage,
                     )
                     .unwrap();
