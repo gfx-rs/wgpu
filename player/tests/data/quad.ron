@@ -86,7 +86,7 @@
             ],
             depth_stencil_state: None,
             vertex_state: (
-                index_format: Uint16,
+                index_format: None,
                 vertex_buffers: [],
             ),
             sample_count: 1,

@@ -208,6 +208,7 @@ impl OptionalState {
 struct IndexState {
     bound_buffer_view: Option<(id::Valid<id::BufferId>, Range<BufferAddress>)>,
     format: IndexFormat,
+    pipeline_format: Option<IndexFormat>,
     limit: u32,
 }
 
@@ -303,6 +304,11 @@ impl State {
         }
         if self.blend_color == OptionalState::Required {
             return Err(DrawError::MissingBlendColor);
+        }
+        if let Some(pipeline_index_format) = self.index.pipeline_format {
+            if pipeline_index_format != self.index.format {
+                return Err(DrawError::UnmatchedIndexFormats);
+            }
         }
         Ok(())
     }
@@ -1156,24 +1162,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
 
-                    // Rebind index buffer if the index format has changed with the pipeline switch
-                    if state.index.format != pipeline.index_format {
-                        state.index.format = pipeline.index_format;
-                        state.index.update_limit();
+                    state.index.pipeline_format = pipeline.index_format;
 
-                        if let Some((buffer_id, ref range)) = state.index.bound_buffer_view {
-                            let &(ref buffer, _) = buffer_guard[buffer_id].raw.as_ref().unwrap();
-
-                            let range = hal::buffer::SubRange {
-                                offset: range.start,
-                                size: Some(range.end - range.start),
-                            };
-                            let index_type = conv::map_index_format(state.index.format);
-                            unsafe {
-                                raw.bind_index_buffer(buffer, range, index_type);
-                            }
-                        }
-                    }
                     // Update vertex buffer limits
                     for (vbs, &(stride, rate)) in
                         state.vertex.inputs.iter_mut().zip(&pipeline.vertex_strides)
@@ -1190,6 +1180,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 RenderCommand::SetIndexBuffer {
                     buffer_id,
+                    index_format,
                     offset,
                     size,
                 } => {
@@ -1211,6 +1202,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         None => buffer.size,
                     };
                     state.index.bound_buffer_view = Some((id::Valid(buffer_id), offset..end));
+
+                    state.index.format = index_format;
                     state.index.update_limit();
 
                     let range = hal::buffer::SubRange {
@@ -1764,12 +1757,14 @@ pub mod render_ffi {
     pub extern "C" fn wgpu_render_pass_set_index_buffer(
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
+        index_format: wgt::IndexFormat,
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
         span!(_guard, DEBUG, "RenderPass::set_index_buffer");
         pass.base.commands.push(RenderCommand::SetIndexBuffer {
             buffer_id,
+            index_format,
             offset,
             size,
         });
