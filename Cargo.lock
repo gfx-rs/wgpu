@@ -711,19 +711,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gfx-memory"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dccdda5d2b39412f4ca2cb15c70b5a82783a86b0606f5e985342754c8ed88f05"
-dependencies = [
- "bit-set",
- "fxhash",
- "gfx-hal",
- "log",
- "slab",
-]
-
-[[package]]
 name = "gimli"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -770,6 +757,23 @@ dependencies = [
  "slotmap",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "gpu-alloc"
+version = "0.1.0"
+source = "git+https://github.com/zakarumych/gpu-alloc?rev=2bb7ef947443b1b13e34d3b98a116da6d69ac15b#2bb7ef947443b1b13e34d3b98a116da6d69ac15b"
+dependencies = [
+ "bitflags",
+ "gpu-alloc-types",
+]
+
+[[package]]
+name = "gpu-alloc-types"
+version = "0.1.0"
+source = "git+https://github.com/zakarumych/gpu-alloc?rev=2bb7ef947443b1b13e34d3b98a116da6d69ac15b#2bb7ef947443b1b13e34d3b98a116da6d69ac15b"
+dependencies = [
+ "bitflags",
 ]
 
 [[package]]
@@ -2172,7 +2176,7 @@ dependencies = [
  "gfx-backend-vulkan",
  "gfx-descriptor",
  "gfx-hal",
- "gfx-memory",
+ "gpu-alloc",
  "loom",
  "naga",
  "parking_lot 0.11.0",

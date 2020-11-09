@@ -3,19 +3,19 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::DeviceError,
+    device::{alloc::MemoryBlock, DeviceError},
     id::{DeviceId, SwapChainId, TextureId},
     track::{TextureSelector, DUMMY_SELECTOR},
     validation::MissingBufferUsageError,
     Label, LifeGuard, RefCount, Stored,
 };
 
-use gfx_memory::MemoryBlock;
 use thiserror::Error;
 
 use std::{
     borrow::Borrow,
     num::{NonZeroU32, NonZeroU8},
+    ops::Range,
     ptr::NonNull,
 };
 
@@ -143,20 +143,9 @@ pub enum BufferAccessError {
     UnalignedRange,
 }
 
-impl From<hal::device::MapError> for BufferAccessError {
-    fn from(error: hal::device::MapError) -> Self {
-        match error {
-            hal::device::MapError::OutOfMemory(_) => {
-                BufferAccessError::Device(DeviceError::OutOfMemory)
-            }
-            _ => panic!("failed to map buffer: {}", error),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct BufferPendingMapping {
-    pub sub_range: hal::buffer::SubRange,
+    pub range: Range<wgt::BufferAddress>,
     pub op: BufferMapOperation,
     // hold the parent alive while the mapping is active
     pub parent_ref_count: RefCount,
