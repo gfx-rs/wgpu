@@ -207,7 +207,7 @@ fn start<E: Example>(
     };
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
-        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+        usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
         // TODO: Allow srgb unconditionally
         format: if cfg!(target_arch = "wasm32") {
             wgpu::TextureFormat::Bgra8Unorm
