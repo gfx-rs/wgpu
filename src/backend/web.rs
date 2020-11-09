@@ -50,18 +50,14 @@ impl Context {
     ) -> Sendable<web_sys::GpuBuffer> {
         // Emulate buffer mapping with the old API. This is a temporary
         // polyfill until the new buffer mapping API is available on gecko.
-        let mut mapped_desc =
+        let mut buffer_desc =
             web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
         if let Some(label) = desc.label {
-            mapped_desc.label(label);
+            buffer_desc.label(label);
         }
-        let pair = device.0.create_buffer_mapped(&mapped_desc);
-        let buffer: web_sys::GpuBuffer = pair.get(0).into();
-        let array_buffer: js_sys::ArrayBuffer = pair.get(1).into();
-        let mapped = js_sys::Uint8Array::new(&array_buffer);
-        let js_contents: js_sys::Uint8Array = contents.into();
-        mapped.set(&js_contents, 0);
-        buffer.unmap();
+        let buffer = device.0.create_buffer(&buffer_desc);
+        let data = js_sys::Uint8Array::from(contents).buffer();
+        device.0.default_queue().write_buffer_with_u32(&buffer, 0, &data);
         Sendable(buffer)
     }
 }
