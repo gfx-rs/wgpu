@@ -1315,8 +1315,8 @@ bitflags::bitflags! {
         const SAMPLED = 4;
         /// Allows a texture to be a [`BindingType::StorageTexture`] in a bind group.
         const STORAGE = 8;
-        /// Allows a texture to be a output attachment of a renderpass.
-        const OUTPUT_ATTACHMENT = 16;
+        /// Allows a texture to be an output attachment of a renderpass.
+        const RENDER_ATTACHMENT = 16;
     }
 }
 
@@ -1326,7 +1326,7 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct SwapChainDescriptor {
-    /// The usage of the swap chain. The only supported usage is OUTPUT_ATTACHMENT
+    /// The usage of the swap chain. The only supported usage is `RENDER_ATTACHMENT`.
     pub usage: TextureUsage,
     /// The texture format of the swap chain. The only formats that are guaranteed are
     /// `Bgra8Unorm` and `Bgra8UnormSrgb`
