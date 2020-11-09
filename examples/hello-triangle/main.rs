@@ -66,7 +66,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
     });
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
-        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+        usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
         format: swapchain_format,
         width: size.width,
         height: size.height,
