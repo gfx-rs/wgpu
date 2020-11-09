@@ -292,3 +292,45 @@ impl<T: Copy + PartialEq> StateChange<T> {
         self.last_state = None;
     }
 }
+
+trait MapPassErr<T, O> {
+    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, O>;
+}
+
+#[derive(Clone, Copy, Debug, Error)]
+enum PassErrorScope {
+    #[error("In a bundle parameter")]
+    Bundle,
+    #[error("In a pass parameter")]
+    Pass,
+    #[error("In a set_bind_group command")]
+    SetBindGroup,
+    #[error("In a set_pipeline command")]
+    SetPipeline,
+    #[error("In a set_push_constant command")]
+    SetPushConstant,
+    #[error("In a set_vertex_buffer command")]
+    SetVertexBuffer,
+    #[error("In a set_index_buffer command")]
+    SetIndexBuffer,
+    #[error("In a set_viewport command")]
+    SetViewport,
+    #[error("In a set_scissor_rect command")]
+    SetScissorRect,
+    #[error("In a draw command")]
+    Draw,
+    #[error("In a draw_indexed command")]
+    DrawIndexed,
+    #[error("In a draw_indirect command")]
+    DrawIndirect,
+    #[error("In a draw_indexed_indirect command")]
+    DrawIndexedIndirect,
+    #[error("In a execute_bundle command")]
+    ExecuteBundle,
+    #[error("In a dispatch command")]
+    Dispatch,
+    #[error("In a dispatch_indirect command")]
+    DispatchIndirect,
+    #[error("In a pop_debug_group command")]
+    PopDebugGroup,
+}
