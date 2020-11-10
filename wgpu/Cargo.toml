@@ -57,7 +57,7 @@ gfx-backend-gl = { version = "0.6", features = ["x11"] }
 cgmath = "0.17"
 log = "0.4"
 png = "0.16"
-winit = { version = "0.22.1", features = ["web-sys"] }
+winit = { version = "0.23.0", features = ["web-sys"] }
 rand = { version = "0.7.2", features = ["wasm-bindgen"] }
 bytemuck = { version = "1.4", features = ["derive"] }
 noise = "0.6"
