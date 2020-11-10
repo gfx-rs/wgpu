@@ -189,7 +189,16 @@ impl Writer {
             *e.get()
         } else {
             match lookup_ty {
-                LookupType::Handle(handle) => self.write_type_declaration_arena(arena, handle),
+                LookupType::Handle(handle) => match arena[handle].inner {
+                    crate::TypeInner::Scalar { kind, width } => self.get_type_id(
+                        arena,
+                        LookupType::Local(LocalType::Scalar {
+                            kind,
+                            width,
+                        }),
+                    ),
+                    _ => self.write_type_declaration_arena(arena, handle),
+                },
                 LookupType::Local(local_ty) => self.write_type_declaration_local(arena, local_ty),
             }
         }
