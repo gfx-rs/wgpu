@@ -1092,12 +1092,17 @@ pomelo! {
         }
     }
 
-    function_definition ::= function_prototype(mut f) compound_statement_no_new_scope(cs) {
+    function_definition ::= function_prototype(mut f) compound_statement_no_new_scope(mut cs) {
         std::mem::swap(&mut f.expressions, &mut extra.context.expressions);
         std::mem::swap(&mut f.local_variables, &mut extra.context.local_variables);
         extra.context.clear_scopes();
         extra.context.lookup_global_var_exps.clear();
         extra.context.typifier = Typifier::new();
+        // make sure function ends with return
+        match cs.last() {
+            Some(Statement::Return {..}) => {}
+            _ => {cs.push(Statement::Return { value:None });}
+        }
         f.body = cs;
         f.fill_global_use(&extra.module.global_variables);
         f
