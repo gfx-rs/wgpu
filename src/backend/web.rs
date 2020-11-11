@@ -46,6 +46,8 @@ impl fmt::Debug for Context {
 pub(crate) struct ComputePass(web_sys::GpuComputePassEncoder);
 #[derive(Debug)]
 pub(crate) struct RenderPass(web_sys::GpuRenderPassEncoder);
+#[derive(Debug)]
+pub(crate) struct RenderBundleEncoder(web_sys::GpuRenderBundleEncoder);
 
 // We need to assert that any future we return is Send to match the native API.
 //
@@ -238,6 +240,130 @@ impl crate::RenderInner<Context> for RenderPass {
     }
 }
 
+impl crate::RenderInner<Context> for RenderBundleEncoder {
+    fn set_pipeline(&mut self, pipeline: &Sendable<web_sys::GpuRenderPipeline>) {
+        self.0.set_pipeline(&pipeline.0);
+    }
+    fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: &Sendable<web_sys::GpuBindGroup>,
+        offsets: &[wgt::DynamicOffset],
+    ) {
+        self.0
+            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                index,
+                &bind_group.0,
+                offsets,
+                0f64,
+                offsets.len() as u32,
+            );
+    }
+    fn set_index_buffer(
+        &mut self,
+        buffer: &Sendable<web_sys::GpuBuffer>,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
+    ) {
+        let mapped_size = match size {
+            Some(s) => s.get() as f64,
+            None => 0f64,
+        };
+        self.0
+            .set_index_buffer_with_f64_and_f64(&buffer.0, offset as f64, mapped_size);
+    }
+    fn set_vertex_buffer(
+        &mut self,
+        slot: u32,
+        buffer: &Sendable<web_sys::GpuBuffer>,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
+    ) {
+        let mapped_size = match size {
+            Some(s) => s.get() as f64,
+            None => 0f64,
+        };
+        self.0
+            .set_vertex_buffer_with_f64_and_f64(slot, &buffer.0, offset as f64, mapped_size);
+    }
+    fn set_push_constants(&mut self, _stages: wgt::ShaderStage, _offset: u32, _data: &[u8]) {
+        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    }
+    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
+        self.0
+            .draw_with_instance_count_and_first_vertex_and_first_instance(
+                vertices.end - vertices.start,
+                instances.end - instances.start,
+                vertices.start,
+                instances.start,
+            );
+    }
+    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
+        self.0
+            .draw_indexed_with_instance_count_and_first_index_and_base_vertex_and_first_instance(
+                indices.end - indices.start,
+                instances.end - instances.start,
+                indices.start,
+                base_vertex,
+                instances.start,
+            );
+    }
+    fn draw_indirect(
+        &mut self,
+        indirect_buffer: &Sendable<web_sys::GpuBuffer>,
+        indirect_offset: wgt::BufferAddress,
+    ) {
+        self.0
+            .draw_indirect_with_f64(&indirect_buffer.0, indirect_offset as f64);
+    }
+    fn draw_indexed_indirect(
+        &mut self,
+        indirect_buffer: &Sendable<web_sys::GpuBuffer>,
+        indirect_offset: wgt::BufferAddress,
+    ) {
+        self.0
+            .draw_indexed_indirect_with_f64(&indirect_buffer.0, indirect_offset as f64);
+    }
+    fn multi_draw_indirect(
+        &mut self,
+        _indirect_buffer: &Sendable<web_sys::GpuBuffer>,
+        _indirect_offset: wgt::BufferAddress,
+        _count: u32,
+    ) {
+        panic!("MULTI_DRAW_INDIRECT feature must be enabled to call multi_draw_indirect")
+    }
+    fn multi_draw_indexed_indirect(
+        &mut self,
+        _indirect_buffer: &Sendable<web_sys::GpuBuffer>,
+        _indirect_offset: wgt::BufferAddress,
+        _count: u32,
+    ) {
+        panic!("MULTI_DRAW_INDIRECT feature must be enabled to call multi_draw_indexed_indirect")
+    }
+    fn multi_draw_indirect_count(
+        &mut self,
+        _indirect_buffer: &Sendable<web_sys::GpuBuffer>,
+        _indirect_offset: wgt::BufferAddress,
+        _count_buffer: &Sendable<web_sys::GpuBuffer>,
+        _count_buffer_offset: wgt::BufferAddress,
+        _max_count: u32,
+    ) {
+        panic!(
+            "MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indirect_count"
+        )
+    }
+    fn multi_draw_indexed_indirect_count(
+        &mut self,
+        _indirect_buffer: &Sendable<web_sys::GpuBuffer>,
+        _indirect_offset: wgt::BufferAddress,
+        _count_buffer: &Sendable<web_sys::GpuBuffer>,
+        _count_buffer_offset: wgt::BufferAddress,
+        _max_count: u32,
+    ) {
+        panic!("MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indexed_indirect_count")
+    }
+}
+
 impl crate::RenderPassInner<Context> for RenderPass {
     fn set_blend_color(&mut self, color: wgt::Color) {
         self.0
@@ -274,8 +400,11 @@ impl crate::RenderPassInner<Context> for RenderPass {
         // TODO
     }
 
-    fn execute_bundles<'a, I: Iterator<Item = &'a ()>>(&mut self, _render_bundles: I) {
-        unimplemented!()
+    fn execute_bundles<'a, I: Iterator<Item = &'a Sendable<web_sys::GpuRenderBundle>>>(&mut self, render_bundles: I) {
+        let mapped = render_bundles
+            .map(|bundle| &bundle.0)
+            .collect::<js_sys::Array>();
+        self.0.execute_bundles(&mapped);
     }
 }
 
@@ -702,8 +831,8 @@ impl crate::Context for Context {
     type ComputePassId = ComputePass;
     type RenderPassId = RenderPass;
     type CommandBufferId = Sendable<web_sys::GpuCommandBuffer>;
-    type RenderBundleEncoderId = RenderPass; //web_sys::GpuRenderBundleEncoder;
-    type RenderBundleId = (); //web_sys::GpuRenderBundle;
+    type RenderBundleEncoderId = RenderBundleEncoder;
+    type RenderBundleId = Sendable<web_sys::GpuRenderBundle>;
     type SurfaceId = Sendable<web_sys::GpuCanvasContext>;
     type SwapChainId = Sendable<web_sys::GpuSwapChain>;
 
@@ -1123,10 +1252,22 @@ impl crate::Context for Context {
 
     fn device_create_render_bundle_encoder(
         &self,
-        _device: &Self::DeviceId,
-        _desc: &RenderBundleEncoderDescriptor,
+        device: &Self::DeviceId,
+        desc: &RenderBundleEncoderDescriptor,
     ) -> Self::RenderBundleEncoderId {
-        unimplemented!()
+        let mapped_color_formats = desc.color_formats
+            .iter()
+            .map(|cf| wasm_bindgen::JsValue::from(map_texture_format(*cf)))
+            .collect::<js_sys::Array>();
+        let mut mapped_desc = web_sys::GpuRenderBundleEncoderDescriptor::new(&mapped_color_formats);
+        if let Some(ref label) = desc.label {
+            mapped_desc.label(label);
+        }
+        if let Some(dsf) = desc.depth_stencil_format {
+            mapped_desc.depth_stencil_format(map_texture_format(dsf));
+        }
+        mapped_desc.sample_count(desc.sample_count);
+        RenderBundleEncoder(device.0.create_render_bundle_encoder(&mapped_desc))
     }
 
     fn device_drop(&self, _device: &Self::DeviceId) {
@@ -1462,11 +1603,14 @@ impl crate::Context for Context {
     }
 
     fn command_encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId {
-        let mut mapped_desc = web_sys::GpuCommandBufferDescriptor::new();
-        if let Some(ref label) = encoder.label() {
-            mapped_desc.label(label);
-        }
-        Sendable(encoder.finish_with_descriptor(&mapped_desc))
+        Sendable(match encoder.label() {
+            Some(ref label) => {
+                let mut mapped_desc = web_sys::GpuCommandBufferDescriptor::new();
+                mapped_desc.label(label);
+                encoder.finish_with_descriptor(&mapped_desc)
+            }
+            None => encoder.finish(),
+        })
     }
 
     fn command_encoder_insert_debug_marker(&self, _encoder: &Self::CommandEncoderId, _label: &str) {
@@ -1481,10 +1625,17 @@ impl crate::Context for Context {
 
     fn render_bundle_encoder_finish(
         &self,
-        _encoder: Self::RenderBundleEncoderId,
-        _desc: &crate::RenderBundleDescriptor,
+        encoder: Self::RenderBundleEncoderId,
+        desc: &crate::RenderBundleDescriptor,
     ) -> Self::RenderBundleId {
-        unimplemented!()
+        Sendable(match desc.label {
+            Some(label) => {
+                let mut mapped_desc = web_sys::GpuRenderBundleDescriptor::new();
+                mapped_desc.label(label);
+                encoder.0.finish_with_descriptor(&mapped_desc)
+            }
+            None => encoder.0.finish(),
+        })
     }
 
     fn queue_write_buffer(
