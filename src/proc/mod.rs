@@ -1,10 +1,12 @@
 //! Module processing functionality.
 
 mod interface;
+mod namer;
 mod typifier;
 mod validator;
 
 pub use interface::{Interface, Visitor};
+pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use typifier::{check_constant_type, ResolveContext, ResolveError, Typifier};
 pub use validator::{ValidationError, Validator};
 

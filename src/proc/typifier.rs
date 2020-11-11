@@ -91,6 +91,16 @@ impl Typifier {
         }
     }
 
+    pub fn get_handle(
+        &self,
+        expr_handle: Handle<crate::Expression>,
+    ) -> Option<Handle<crate::Type>> {
+        match self.resolutions[expr_handle.index()] {
+            Resolution::Handle(ty_handle) => Some(ty_handle),
+            Resolution::Value(_) => None,
+        }
+    }
+
     fn resolve_impl(
         &self,
         expr: &crate::Expression,
