@@ -37,7 +37,7 @@ where
                     self.traverse_expr(comp);
                 }
             }
-            E::FunctionParameter(_) | E::GlobalVariable(_) | E::LocalVariable(_) => {}
+            E::FunctionArgument(_) | E::GlobalVariable(_) | E::LocalVariable(_) => {}
             E::Load { pointer } => {
                 self.traverse_expr(pointer);
             }
@@ -259,7 +259,7 @@ mod tests {
 
         let mut function = crate::Function {
             name: None,
-            parameter_types: Vec::new(),
+            arguments: Vec::new(),
             return_type: None,
             local_variables: Arena::new(),
             expressions,

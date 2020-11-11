@@ -97,7 +97,7 @@ struct StatementContext<'input, 'temp, 'out> {
     types: &'out mut Arena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
     global_vars: &'out Arena<crate::GlobalVariable>,
-    parameter_types: &'out [Handle<crate::Type>],
+    arguments: &'out [crate::FunctionArgument],
 }
 
 impl<'a> StatementContext<'a, '_, '_> {
@@ -110,7 +110,7 @@ impl<'a> StatementContext<'a, '_, '_> {
             types: self.types,
             constants: self.constants,
             global_vars: self.global_vars,
-            parameter_types: self.parameter_types,
+            arguments: self.arguments,
         }
     }
 
@@ -123,7 +123,7 @@ impl<'a> StatementContext<'a, '_, '_> {
             constants: self.constants,
             global_vars: self.global_vars,
             local_vars: self.variables,
-            parameter_types: self.parameter_types,
+            arguments: self.arguments,
         }
     }
 }
@@ -136,7 +136,7 @@ struct ExpressionContext<'input, 'temp, 'out> {
     constants: &'out mut Arena<crate::Constant>,
     global_vars: &'out Arena<crate::GlobalVariable>,
     local_vars: &'out Arena<crate::LocalVariable>,
-    parameter_types: &'out [Handle<crate::Type>],
+    arguments: &'out [crate::FunctionArgument],
 }
 
 impl<'a> ExpressionContext<'a, '_, '_> {
@@ -149,7 +149,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             constants: self.constants,
             global_vars: self.global_vars,
             local_vars: self.local_vars,
-            parameter_types: self.parameter_types,
+            arguments: self.arguments,
         }
     }
 
@@ -163,7 +163,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             global_vars: self.global_vars,
             local_vars: self.local_vars,
             functions: &functions,
-            parameter_types: self.parameter_types,
+            arguments: self.arguments,
         };
         match self
             .typifier
@@ -1545,19 +1545,22 @@ impl Parser {
             lookup_ident.insert(name, expr_handle);
         }
         // read parameter list
-        let mut parameter_types = Vec::new();
+        let mut arguments = Vec::new();
         lexer.expect(Token::Paren('('))?;
         while !lexer.skip(Token::Paren(')')) {
-            if !parameter_types.is_empty() {
+            if !arguments.is_empty() {
                 lexer.expect(Token::Separator(','))?;
             }
             let (param_name, param_type) =
                 self.parse_variable_ident_decl(lexer, &mut module.types, &mut module.constants)?;
-            let param_index = parameter_types.len() as u32;
+            let param_index = arguments.len() as u32;
             let expression_token =
-                expressions.append(crate::Expression::FunctionParameter(param_index));
+                expressions.append(crate::Expression::FunctionArgument(param_index));
             lookup_ident.insert(param_name, expression_token);
-            parameter_types.push(param_type);
+            arguments.push(crate::FunctionArgument {
+                name: Some(param_name.to_string()),
+                ty: param_type,
+            });
         }
         // read return type
         lexer.expect(Token::Arrow)?;
@@ -1569,7 +1572,7 @@ impl Parser {
 
         let mut fun = crate::Function {
             name: Some(fun_name.to_string()),
-            parameter_types,
+            arguments,
             return_type,
             global_usage: Vec::new(),
             local_variables: Arena::new(),
@@ -1589,7 +1592,7 @@ impl Parser {
                 types: &mut module.types,
                 constants: &mut module.constants,
                 global_vars: &module.global_variables,
-                parameter_types: &fun.parameter_types,
+                arguments: &fun.arguments,
             },
         )?;
         // done

@@ -57,13 +57,13 @@ impl Program {
         handle: Handle<crate::Expression>,
     ) -> Result<&crate::TypeInner, ErrorKind> {
         let functions = Arena::new(); //TODO
-        let parameter_types: Vec<Handle<Type>> = vec![]; //TODO
+        let arguments = Vec::new(); //TODO
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
             global_vars: &self.module.global_variables,
             local_vars: &self.context.local_variables,
             functions: &functions,
-            parameter_types: &parameter_types,
+            arguments: &arguments,
         };
         match self.context.typifier.grow(
             handle,

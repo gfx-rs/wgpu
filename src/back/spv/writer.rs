@@ -324,21 +324,18 @@ impl Writer {
 
         let return_type_id =
             self.get_function_return_type(ir_function.return_type, &ir_module.types);
-        let mut parameter_type_ids = Vec::with_capacity(ir_function.parameter_types.len());
+        let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
 
         let mut function_parameter_pointer_ids = vec![];
 
-        for parameter_type in ir_function.parameter_types.iter() {
+        for argument in ir_function.arguments.iter() {
             let id = self.generate_id();
-            let pointer_id = self.get_pointer_id(
-                &ir_module.types,
-                *parameter_type,
-                crate::StorageClass::Function,
-            );
+            let pointer_id =
+                self.get_pointer_id(&ir_module.types, argument.ty, crate::StorageClass::Function);
 
             function_parameter_pointer_ids.push(pointer_id);
             parameter_type_ids
-                .push(self.get_type_id(&ir_module.types, LookupType::Handle(*parameter_type)));
+                .push(self.get_type_id(&ir_module.types, LookupType::Handle(argument.ty)));
             function
                 .parameters
                 .push(super::instructions::instruction_function_parameter(
@@ -868,21 +865,21 @@ impl Writer {
         block: &mut Block,
         function: &mut Function,
     ) -> Result<WriteExpressionOutput, Error> {
-        match expression {
+        match *expression {
             crate::Expression::Access { base, index } => {
                 let id = self.generate_id();
 
                 let (base_id, base_lookup_ty) = self.write_expression(
                     ir_module,
                     ir_function,
-                    &ir_function.expressions[*base],
+                    &ir_function.expressions[base],
                     block,
                     function,
                 )?;
                 let (index_id, _) = self.write_expression(
                     ir_module,
                     ir_function,
-                    &ir_function.expressions[*index],
+                    &ir_function.expressions[index],
                     block,
                     function,
                 )?;
@@ -926,7 +923,7 @@ impl Writer {
                     .write_expression(
                         ir_module,
                         ir_function,
-                        &ir_function.expressions[*base],
+                        &ir_function.expressions[base],
                         block,
                         function,
                     )
@@ -947,7 +944,7 @@ impl Writer {
                         )
                     }
                     crate::TypeInner::Struct { ref members } => {
-                        let member = &members[*index as usize];
+                        let member = &members[index as usize];
                         let type_id =
                             self.get_type_id(&ir_module.types, LookupType::Handle(member.ty));
                         (
@@ -966,7 +963,7 @@ impl Writer {
                         width: 4,
                     }),
                 );
-                let const_id = self.create_constant(const_ty_id, &[*index]);
+                let const_id = self.create_constant(const_ty_id, &[index]);
 
                 block
                     .body
@@ -985,18 +982,18 @@ impl Writer {
                 Ok((load_id, Some(lookup_ty)))
             }
             crate::Expression::GlobalVariable(handle) => {
-                let var = &ir_module.global_variables[*handle];
-                let id = self.get_global_variable_id(&ir_module, *handle);
+                let var = &ir_module.global_variables[handle];
+                let id = self.get_global_variable_id(&ir_module, handle);
 
                 Ok((id, Some(LookupType::Handle(var.ty))))
             }
             crate::Expression::Constant(handle) => {
-                let var = &ir_module.constants[*handle];
-                let id = self.get_constant_id(*handle, ir_module);
+                let var = &ir_module.constants[handle];
+                let id = self.get_constant_id(handle, ir_module);
                 Ok((id, Some(LookupType::Handle(var.ty))))
             }
             crate::Expression::Compose { ty, ref components } => {
-                let base_type_id = self.get_type_id(&ir_module.types, LookupType::Handle(*ty));
+                let base_type_id = self.get_type_id(&ir_module.types, LookupType::Handle(ty));
 
                 let mut constituent_ids = Vec::with_capacity(components.len());
                 for component in components {
@@ -1013,7 +1010,7 @@ impl Writer {
                 }
                 let constituent_ids_slice = constituent_ids.as_slice();
 
-                let id = match ir_module.types[*ty].inner {
+                let id = match ir_module.types[ty].inner {
                     crate::TypeInner::Vector { .. } => {
                         self.write_composite_construct(base_type_id, constituent_ids_slice, block)
                     }
@@ -1053,14 +1050,14 @@ impl Writer {
                     _ => unreachable!(),
                 };
 
-                Ok((id, Some(LookupType::Handle(*ty))))
+                Ok((id, Some(LookupType::Handle(ty))))
             }
             crate::Expression::Binary { op, left, right } => {
                 match op {
                     crate::BinaryOperator::Multiply => {
                         let id = self.generate_id();
-                        let left_expression = &ir_function.expressions[*left];
-                        let right_expression = &ir_function.expressions[*right];
+                        let left_expression = &ir_function.expressions[left];
+                        let right_expression = &ir_function.expressions[right];
                         let (left_id, left_lookup_ty) = self.write_expression(
                             ir_module,
                             ir_function,
@@ -1205,7 +1202,7 @@ impl Writer {
                 }
             }
             crate::Expression::LocalVariable(variable) => {
-                let var = &ir_function.local_variables[*variable];
+                let var = &ir_function.local_variables[variable];
                 function
                     .variables
                     .iter()
@@ -1213,25 +1210,25 @@ impl Writer {
                     .map(|local_var| (local_var.id, Some(LookupType::Handle(var.ty))))
                     .ok_or_else(|| Error::UnknownLocalVariable(var.clone()))
             }
-            crate::Expression::FunctionParameter(index) => {
-                let handle = ir_function.parameter_types.get(*index as usize).unwrap();
-                let type_id = self.get_type_id(&ir_module.types, LookupType::Handle(*handle));
+            crate::Expression::FunctionArgument(index) => {
+                let handle = ir_function.arguments[index as usize].ty;
+                let type_id = self.get_type_id(&ir_module.types, LookupType::Handle(handle));
                 let load_id = self.generate_id();
 
                 block.body.push(super::instructions::instruction_load(
                     type_id,
                     load_id,
-                    function.parameters[*index as usize].result_id.unwrap(),
+                    function.parameters[index as usize].result_id.unwrap(),
                     None,
                 ));
-                Ok((load_id, Some(LookupType::Handle(*handle))))
+                Ok((load_id, Some(LookupType::Handle(handle))))
             }
             crate::Expression::Call {
                 ref origin,
                 ref arguments,
-            } => match origin {
+            } => match *origin {
                 crate::FunctionOrigin::Local(local_function) => {
-                    let origin_function = &ir_module.functions[*local_function];
+                    let origin_function = &ir_module.functions[local_function];
                     let id = self.generate_id();
                     let mut argument_ids = vec![];
 
@@ -1306,7 +1303,7 @@ impl Writer {
                 let (expr_id, expr_type) = self.write_expression(
                     ir_module,
                     ir_function,
-                    &ir_function.expressions[*expr],
+                    &ir_function.expressions[expr],
                     block,
                     function,
                 )?;
@@ -1321,10 +1318,10 @@ impl Writer {
                     } => {
                         let kind_type_id = self.get_type_id(
                             &ir_module.types,
-                            LookupType::Local(LocalType::Scalar { kind: *kind, width }),
+                            LookupType::Local(LocalType::Scalar { kind, width }),
                         );
 
-                        if *convert {
+                        if convert {
                             super::instructions::instruction_bit_cast(kind_type_id, id, expr_id)
                         } else {
                             match (expr_kind, kind) {
@@ -1375,7 +1372,7 @@ impl Writer {
                 depth_ref: _,
             } => {
                 // image
-                let image_expression = &ir_function.expressions[*image];
+                let image_expression = &ir_function.expressions[image];
                 let (image_id, image_lookup_ty) = self.write_expression(
                     ir_module,
                     ir_function,
@@ -1414,7 +1411,7 @@ impl Writer {
                 );
 
                 // sampler
-                let sampler_expression = &ir_function.expressions[*sampler];
+                let sampler_expression = &ir_function.expressions[sampler];
                 let (sampler_id, sampler_lookup_ty) = self.write_expression(
                     ir_module,
                     ir_function,
@@ -1440,7 +1437,7 @@ impl Writer {
                 };
 
                 // coordinate
-                let coordinate_expression = &ir_function.expressions[*coordinate];
+                let coordinate_expression = &ir_function.expressions[coordinate];
                 let (coordinate_id, coordinate_lookup_ty) = self.write_expression(
                     ir_module,
                     ir_function,

@@ -73,7 +73,7 @@
             workgroup_size: (0, 0, 0),
             function: (
                 name: Some("main"),
-                parameter_types: [],
+                arguments: [],
                 return_type: None,
                 global_usage: [
                     (

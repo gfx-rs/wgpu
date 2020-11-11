@@ -66,7 +66,7 @@ pub struct ResolveContext<'a> {
     pub global_vars: &'a Arena<crate::GlobalVariable>,
     pub local_vars: &'a Arena<crate::LocalVariable>,
     pub functions: &'a Arena<crate::Function>,
-    pub parameter_types: &'a [Handle<crate::Type>],
+    pub arguments: &'a [crate::FunctionArgument],
 }
 
 impl Typifier {
@@ -168,8 +168,8 @@ impl Typifier {
             },
             crate::Expression::Constant(h) => Resolution::Handle(ctx.constants[h].ty),
             crate::Expression::Compose { ty, .. } => Resolution::Handle(ty),
-            crate::Expression::FunctionParameter(index) => {
-                Resolution::Handle(ctx.parameter_types[index as usize])
+            crate::Expression::FunctionArgument(index) => {
+                Resolution::Handle(ctx.arguments[index as usize].ty)
             }
             crate::Expression::GlobalVariable(h) => Resolution::Handle(ctx.global_vars[h].ty),
             crate::Expression::LocalVariable(h) => Resolution::Handle(ctx.local_vars[h].ty),

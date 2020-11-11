@@ -1007,7 +1007,7 @@ pomelo! {
     function_header ::= fully_specified_type(t) Identifier(n) LeftParen {
         Function {
             name: Some(n.1),
-            parameter_types: vec![],
+            arguments: vec![],
             return_type: t.1,
             global_usage: vec![],
             local_variables: Arena::<LocalVariable>::new(),

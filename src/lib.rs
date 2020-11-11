@@ -584,7 +584,7 @@ pub enum Expression {
         components: Vec<Handle<Expression>>,
     },
     /// Reference a function parameter, by its index.
-    FunctionParameter(u32),
+    FunctionArgument(u32),
     /// Reference a global variable.
     GlobalVariable(Handle<GlobalVariable>),
     /// Reference a local variable.
@@ -702,6 +702,17 @@ pub enum Statement {
     },
 }
 
+/// A function argument.
+#[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub struct FunctionArgument {
+    /// Name of the argument, if any.
+    pub name: Option<String>,
+    /// Type of the argument.
+    pub ty: Handle<Type>,
+}
+
 /// A function defined in the module.
 #[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -709,9 +720,8 @@ pub enum Statement {
 pub struct Function {
     /// Name of the function, if any.
     pub name: Option<String>,
-    //pub control: spirv::FunctionControl,
-    /// The types of the parameters of this function.
-    pub parameter_types: Vec<Handle<Type>>,
+    /// Information about function argument.
+    pub arguments: Vec<FunctionArgument>,
     /// The return type of this function, if any.
     pub return_type: Option<Handle<Type>>,
     /// Vector of global variable usages.

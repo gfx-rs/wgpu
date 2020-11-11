@@ -9,7 +9,7 @@ pub enum NameKey {
     Type(Handle<crate::Type>),
     StructMember(Handle<crate::Type>, u32),
     Function(Handle<crate::Function>),
-    FunctionParameter(Handle<crate::Function>, u32),
+    FunctionArgument(Handle<crate::Function>, u32),
     FunctionLocal(Handle<crate::Function>, Handle<crate::LocalVariable>),
     EntryPoint(EntryPointIndex),
     EntryPointLocal(EntryPointIndex, Handle<crate::LocalVariable>),
@@ -20,9 +20,6 @@ pub enum NameKey {
 pub struct Namer {
     unique: FastHashMap<String, u32>,
 }
-
-const MAX_PARAM_COUNT: u32 = 100;
-const PARAM_NAME: &str = "param";
 
 impl Namer {
     fn sanitize(string: &str) -> String {
@@ -73,9 +70,6 @@ impl Namer {
                 .map(|string| (string.to_string(), 0))
                 .collect(),
         };
-        // Force the starting suffix for the function parameter names
-        // to be higher than whatever we assign explicitly.
-        this.unique.insert(PARAM_NAME.to_string(), MAX_PARAM_COUNT);
 
         for (handle, var) in module.global_variables.iter() {
             let name = this.call_or(&var.name, "global");
@@ -97,12 +91,9 @@ impl Namer {
         for (fun_handle, fun) in module.functions.iter() {
             let fun_name = this.call_or(&fun.name, "function");
             output.insert(NameKey::Function(fun_handle), fun_name);
-            if fun.parameter_types.len() >= MAX_PARAM_COUNT as usize {
-                unreachable!()
-            }
-            for (index, _) in fun.parameter_types.iter().enumerate() {
-                let name = format!("{}{}", PARAM_NAME, index + 1);
-                output.insert(NameKey::FunctionParameter(fun_handle, index as u32), name);
+            for (index, arg) in fun.arguments.iter().enumerate() {
+                let name = this.call_or(&arg.name, "param");
+                output.insert(NameKey::FunctionArgument(fun_handle, index as u32), name);
             }
             for (handle, var) in fun.local_variables.iter() {
                 let name = this.call_or(&var.name, "local");

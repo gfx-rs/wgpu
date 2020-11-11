@@ -383,12 +383,12 @@ impl<W: Write> Writer<W> {
                     _ => return Err(Error::UnsupportedCompose(ty)),
                 }
             }
-            crate::Expression::FunctionParameter(index) => {
+            crate::Expression::FunctionArgument(index) => {
                 let fun_handle = match context.origin {
                     FunctionOrigin::Handle(handle) => handle,
                     FunctionOrigin::EntryPoint(_) => unreachable!(),
                 };
-                let name = &self.names[&NameKey::FunctionParameter(fun_handle, index)];
+                let name = &self.names[&NameKey::FunctionArgument(fun_handle, index)];
                 write!(self.out, "{}", name)?;
             }
             crate::Expression::GlobalVariable(handle) => {
@@ -900,7 +900,7 @@ impl<W: Write> Writer<W> {
                     global_vars: &module.global_variables,
                     local_vars: &fun.local_variables,
                     functions: &module.functions,
-                    parameter_types: &fun.parameter_types,
+                    arguments: &fun.arguments,
                 },
             )?;
 
@@ -911,10 +911,10 @@ impl<W: Write> Writer<W> {
             };
             writeln!(self.out, "{} {}(", result_type_name, fun_name)?;
 
-            for (index, &ty) in fun.parameter_types.iter().enumerate() {
-                let name = &self.names[&NameKey::FunctionParameter(fun_handle, index as u32)];
-                let param_type_name = &self.names[&NameKey::Type(ty)];
-                let separator = separate(index + 1 == fun.parameter_types.len());
+            for (index, arg) in fun.arguments.iter().enumerate() {
+                let name = &self.names[&NameKey::FunctionArgument(fun_handle, index as u32)];
+                let param_type_name = &self.names[&NameKey::Type(arg.ty)];
+                let separator = separate(index + 1 == fun.arguments.len());
                 writeln!(self.out, "\t{} {}{}", param_type_name, name, separator)?;
             }
             writeln!(self.out, ") {{")?;
@@ -949,7 +949,7 @@ impl<W: Write> Writer<W> {
                     global_vars: &module.global_variables,
                     local_vars: &fun.local_variables,
                     functions: &module.functions,
-                    parameter_types: &fun.parameter_types,
+                    arguments: &fun.arguments,
                 },
             )?;
 

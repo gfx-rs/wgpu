@@ -422,10 +422,10 @@ pub fn write<'a>(
                 .as_deref()
                 .unwrap_or("void"),
             name,
-            func.parameter_types
+            func.arguments
                 .iter()
-                .map(|ty| write_type(
-                    *ty,
+                .map(|arg| write_type(
+                    arg.ty,
                     &module.types,
                     &module.constants,
                     &structs,
@@ -658,15 +658,22 @@ pub fn write<'a>(
                 global_vars: &module.global_variables,
                 local_vars: &func.local_variables,
                 functions: &module.functions,
-                parameter_types: &func.parameter_types,
+                arguments: &func.arguments,
             },
         )?;
 
         let args: FastHashMap<_, _> = func
-            .parameter_types
+            .arguments
             .iter()
             .enumerate()
-            .map(|(pos, _)| (pos as u32, format!("arg_{}", pos)))
+            .map(|(pos, arg)| {
+                let name = arg
+                    .name
+                    .clone()
+                    .filter(|ident| is_valid_ident(ident))
+                    .unwrap_or_else(|| format!("arg_{}", pos + 1));
+                (pos as u32, name)
+            })
             .collect();
 
         writeln!(
@@ -685,20 +692,19 @@ pub fn write<'a>(
                 .as_deref()
                 .unwrap_or("void"),
             name,
-            func.parameter_types
+            func.arguments
                 .iter()
-                .zip(args.values())
-                .map::<Result<_, Error>, _>(|(ty, name)| {
+                .enumerate()
+                .map::<Result<_, Error>, _>(|(pos, arg)| {
                     let ty = write_type(
-                        *ty,
+                        arg.ty,
                         &module.types,
                         &module.constants,
                         &structs,
                         None,
                         &mut manager,
                     )?;
-
-                    Ok(format!("{} {}", ty, name))
+                    Ok(format!("{} {}", ty, args[&(pos as u32)]))
                 })
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
@@ -1035,7 +1041,7 @@ fn write_expression<'a, 'b>(
                     .join(","),
             ))
         }
-        Expression::FunctionParameter(pos) => Cow::Borrowed(builder.args.get(&pos).unwrap()),
+        Expression::FunctionArgument(pos) => Cow::Borrowed(builder.args.get(&pos).unwrap()),
         Expression::GlobalVariable(handle) => Cow::Borrowed(builder.globals.get(&handle).unwrap()),
         Expression::LocalVariable(handle) => {
             Cow::Borrowed(builder.locals_lookup.get(&handle).unwrap())

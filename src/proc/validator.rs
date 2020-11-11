@@ -252,7 +252,7 @@ impl Validator {
             global_vars: &module.global_variables,
             local_vars: &fun.local_variables,
             functions: &module.functions,
-            parameter_types: &fun.parameter_types,
+            arguments: &fun.arguments,
         };
         self.typifier
             .resolve_all(&fun.expressions, &module.types, &resolve_ctx)?;
