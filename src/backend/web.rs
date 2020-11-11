@@ -91,16 +91,16 @@ impl crate::ComputePassInner<Context> for ComputePass {
         panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
     }
 
-    fn insert_debug_marker(&mut self, _label: &str) {
-        // TODO
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.0.insert_debug_marker(label);
     }
 
-    fn push_debug_group(&mut self, _group_label: &str) {
-        // TODO
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.0.push_debug_group(group_label);
     }
 
     fn pop_debug_group(&mut self) {
-        // TODO
+        self.0.pop_debug_group();
     }
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
@@ -388,16 +388,16 @@ impl crate::RenderPassInner<Context> for RenderPass {
         self.0.set_stencil_reference(reference);
     }
 
-    fn insert_debug_marker(&mut self, _label: &str) {
-        // TODO
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.0.insert_debug_marker(label);
     }
 
-    fn push_debug_group(&mut self, _group_label: &str) {
-        // TODO
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.0.push_debug_group(group_label);
     }
 
     fn pop_debug_group(&mut self) {
-        // TODO
+        self.0.pop_debug_group();
     }
 
     fn execute_bundles<'a, I: Iterator<Item = &'a Sendable<web_sys::GpuRenderBundle>>>(&mut self, render_bundles: I) {
@@ -1083,7 +1083,7 @@ impl crate::Context for Context {
 
         let mut mapped_desc =
             web_sys::GpuBindGroupDescriptor::new(&mapped_entries, &desc.layout.id.0);
-        if let Some(ref label) = desc.label {
+        if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
         Sendable(device.0.create_bind_group(&mapped_desc))
@@ -1099,8 +1099,10 @@ impl crate::Context for Context {
             .iter()
             .map(|bgl| bgl.id.0.clone())
             .collect::<js_sys::Array>();
-        let mapped_desc = web_sys::GpuPipelineLayoutDescriptor::new(&temp_layouts);
-        // TODO: label
+        let mut mapped_desc = web_sys::GpuPipelineLayoutDescriptor::new(&temp_layouts);
+        if let Some(label) = desc.label {
+            mapped_desc.label(label);
+        }
         Sendable(device.0.create_pipeline_layout(&mapped_desc))
     }
 
@@ -1175,9 +1177,11 @@ impl crate::Context for Context {
     ) -> Self::ComputePipelineId {
         let mapped_compute_stage = map_stage_descriptor(&desc.compute_stage);
         let mut mapped_desc = web_sys::GpuComputePipelineDescriptor::new(&mapped_compute_stage);
-        // TODO: label
         if let Some(layout) = desc.layout {
             mapped_desc.layout(&layout.id.0);
+        }
+        if let Some(label) = desc.label {
+            mapped_desc.label(label);
         }
         Sendable(device.0.create_compute_pipeline(&mapped_desc))
     }
@@ -1221,7 +1225,6 @@ impl crate::Context for Context {
         desc: &SamplerDescriptor,
     ) -> Self::SamplerId {
         let mut mapped_desc = web_sys::GpuSamplerDescriptor::new();
-        // TODO: label
         mapped_desc.address_mode_u(map_address_mode(desc.address_mode_u));
         mapped_desc.address_mode_v(map_address_mode(desc.address_mode_v));
         mapped_desc.address_mode_w(map_address_mode(desc.address_mode_w));
@@ -1233,6 +1236,9 @@ impl crate::Context for Context {
         mapped_desc.mag_filter(map_filter_mode(desc.mag_filter));
         mapped_desc.min_filter(map_filter_mode(desc.min_filter));
         mapped_desc.mipmap_filter(map_filter_mode(desc.mipmap_filter));
+        if let Some(label) = desc.label {
+            mapped_desc.label(label);
+        }
         Sendable(device.0.create_sampler_with_descriptor(&mapped_desc))
     }
 
@@ -1371,7 +1377,9 @@ impl crate::Context for Context {
         if let Some(count) = desc.level_count {
             mapped.mip_level_count(count.get());
         }
-        // TODO: label
+        if let Some(label) = desc.label {
+            mapped.label(label);
+        }
         Sendable(texture.0.create_view_with_descriptor(&mapped))
     }
 
@@ -1383,45 +1391,58 @@ impl crate::Context for Context {
         // Dropped automatically
     }
 
-    fn buffer_destroy(&self, _buffer: &Self::BufferId) {
-        // TODO
+    fn buffer_destroy(&self, buffer: &Self::BufferId) {
+        buffer.0.destroy();
     }
+
     fn buffer_drop(&self, _buffer: &Self::BufferId) {
         // Dropped automatically
     }
-    fn texture_destroy(&self, _texture: &Self::TextureId) {
-        // TODO
-    }
+
     fn texture_drop(&self, _texture: &Self::TextureId) {
         // Dropped automatically
     }
+
+    fn texture_destroy(&self, texture: &Self::TextureId) {
+        texture.0.destroy();
+    }
+
     fn texture_view_drop(&self, _texture_view: &Self::TextureViewId) {
         // Dropped automatically
     }
+
     fn sampler_drop(&self, _sampler: &Self::SamplerId) {
         // Dropped automatically
     }
+
     fn bind_group_drop(&self, _bind_group: &Self::BindGroupId) {
         // Dropped automatically
     }
+
     fn bind_group_layout_drop(&self, _bind_group_layout: &Self::BindGroupLayoutId) {
         // Dropped automatically
     }
+
     fn pipeline_layout_drop(&self, _pipeline_layout: &Self::PipelineLayoutId) {
         // Dropped automatically
     }
+
     fn shader_module_drop(&self, _shader_module: &Self::ShaderModuleId) {
         // Dropped automatically
     }
+
     fn command_buffer_drop(&self, _command_buffer: &Self::CommandBufferId) {
         // Dropped automatically
     }
+
     fn render_bundle_drop(&self, _render_bundle: &Self::RenderBundleId) {
         // Dropped automatically
     }
+
     fn compute_pipeline_drop(&self, _pipeline: &Self::ComputePipelineId) {
         // Dropped automatically
     }
+
     fn render_pipeline_drop(&self, _pipeline: &Self::RenderPipelineId) {
         // Dropped automatically
     }
@@ -1613,14 +1634,16 @@ impl crate::Context for Context {
         })
     }
 
-    fn command_encoder_insert_debug_marker(&self, _encoder: &Self::CommandEncoderId, _label: &str) {
-        // TODO
+    fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str) {
+        encoder.insert_debug_marker(label);
     }
-    fn command_encoder_push_debug_group(&self, _encoder: &Self::CommandEncoderId, _label: &str) {
-        // TODO
+
+    fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str) {
+        encoder.push_debug_group(label);
     }
-    fn command_encoder_pop_debug_group(&self, _encoder: &Self::CommandEncoderId) {
-        // TODO
+
+    fn command_encoder_pop_debug_group(&self, encoder: &Self::CommandEncoderId) {
+        encoder.pop_debug_group();
     }
 
     fn render_bundle_encoder_finish(
