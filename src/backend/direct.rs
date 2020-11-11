@@ -1216,7 +1216,7 @@ impl crate::Context for Context {
         &self,
         buffer: &Self::BufferId,
         sub_range: Range<wgt::BufferAddress>,
-    ) -> &[u8] {
+    ) -> BufferMappedRange {
         let size = sub_range.end - sub_range.start;
         let global = &self.0;
         match wgc::gfx_select!(buffer.id => global.buffer_get_mapped_range(
@@ -1224,25 +1224,12 @@ impl crate::Context for Context {
             sub_range.start,
             wgt::BufferSize::new(size)
         )) {
-            Ok(ptr) => unsafe { slice::from_raw_parts(ptr, size as usize) },
+            Ok(ptr) => BufferMappedRange {
+                ptr,
+                size: size as usize,
+                phantom: PhantomData,
+            },
             Err(err) => self.handle_error_fatal(err, "Buffer::get_mapped_range"),
-        }
-    }
-
-    fn buffer_get_mapped_range_mut(
-        &self,
-        buffer: &Self::BufferId,
-        sub_range: Range<wgt::BufferAddress>,
-    ) -> &mut [u8] {
-        let size = sub_range.end - sub_range.start;
-        let global = &self.0;
-        match wgc::gfx_select!(buffer.id => global.buffer_get_mapped_range(
-            buffer.id,
-            sub_range.start,
-            wgt::BufferSize::new(size)
-        )) {
-            Ok(ptr) => unsafe { slice::from_raw_parts_mut(ptr, size as usize) },
-            Err(err) => self.handle_error_fatal(err, "Buffer::get_mapped_range_mut"),
         }
     }
 
@@ -1739,4 +1726,28 @@ fn default_error_handler(err: crate::Error) {
     eprintln!("wgpu error: {}\n", err);
 
     panic!("Handling wgpu errors as fatal by default");
+}
+
+#[derive(Debug)]
+pub struct BufferMappedRange<'a> {
+    ptr: *mut u8,
+    size: usize,
+    phantom: PhantomData<&'a ()>,
+}
+
+impl<'a> crate::BufferMappedRangeSlice for BufferMappedRange<'a> {
+    fn slice(&self) -> &[u8] {
+        unsafe { slice::from_raw_parts(self.ptr, self.size) }
+    }
+
+    fn slice_mut(&mut self) -> &mut [u8] {
+        unsafe { slice::from_raw_parts_mut(self.ptr, self.size) }
+    }
+}
+
+impl<'a> Drop for BufferMappedRange<'a> {
+    fn drop(&mut self) {
+        // Intentionally left blank so that `BufferMappedRange` still
+        // implements `Drop`, to match the web backend
+    }
 }

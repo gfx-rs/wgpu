@@ -97,6 +97,10 @@ test = true
 #gfx-backend-dx12 = { version = "0.6", path = "../gfx/src/backend/dx12" }
 #gfx-backend-dx11 = { version = "0.6", path = "../gfx/src/backend/dx11" }
 #gfx-backend-metal = { version = "0.6", path = "../gfx/src/backend/metal" }
+wasm-bindgen = { git = "https://github.com/rustwasm/wasm-bindgen", rev = "316c5a70fdc4a052fb65ef82bf02d52107b5671b" }
+wasm-bindgen-futures = { git = "https://github.com/rustwasm/wasm-bindgen", rev = "316c5a70fdc4a052fb65ef82bf02d52107b5671b" }
+web-sys = { git = "https://github.com/rustwasm/wasm-bindgen", rev = "316c5a70fdc4a052fb65ef82bf02d52107b5671b" }
+js-sys = { git = "https://github.com/rustwasm/wasm-bindgen", rev = "316c5a70fdc4a052fb65ef82bf02d52107b5671b" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.7"
@@ -149,6 +153,7 @@ web-sys = { version = "=0.3.45", features = [
     "GpuInputStepMode",
     "GpuLimits",
     "GpuLoadOp",
+    "GpuMapMode",
     "GpuOrigin3dDict",
     "GpuPipelineLayout",
     "GpuPipelineLayoutDescriptor",
