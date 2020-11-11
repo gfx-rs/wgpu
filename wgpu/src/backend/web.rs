@@ -87,6 +87,7 @@ impl crate::ComputePassInner<Context> for ComputePass {
                 offsets.len() as u32,
             );
     }
+
     fn set_push_constants(&mut self, _offset: u32, _data: &[u8]) {
         panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
     }
@@ -400,7 +401,10 @@ impl crate::RenderPassInner<Context> for RenderPass {
         self.0.pop_debug_group();
     }
 
-    fn execute_bundles<'a, I: Iterator<Item = &'a Sendable<web_sys::GpuRenderBundle>>>(&mut self, render_bundles: I) {
+    fn execute_bundles<'a, I: Iterator<Item = &'a Sendable<web_sys::GpuRenderBundle>>>(
+        &mut self,
+        render_bundles: I,
+    ) {
         let mapped = render_bundles
             .map(|bundle| &bundle.0)
             .collect::<js_sys::Array>();
@@ -461,7 +465,9 @@ fn map_texture_component_type(
         wgt::TextureComponentType::Float => web_sys::GpuTextureComponentType::Float,
         wgt::TextureComponentType::Sint => web_sys::GpuTextureComponentType::Sint,
         wgt::TextureComponentType::Uint => web_sys::GpuTextureComponentType::Uint,
-        wgt::TextureComponentType::DepthComparison => web_sys::GpuTextureComponentType::DepthComparison,
+        wgt::TextureComponentType::DepthComparison => {
+            web_sys::GpuTextureComponentType::DepthComparison
+        }
     }
 }
 
@@ -804,13 +810,8 @@ fn future_request_device(
         .map_err(|_| crate::RequestDeviceError)
 }
 
-fn future_map_async(
-    result: JsFutureResult,
-) -> Result<(), crate::BufferAsyncError>
-{
-    result
-        .map(|_| ())
-        .map_err(|_| crate::BufferAsyncError)
+fn future_map_async(result: JsFutureResult) -> Result<(), crate::BufferAsyncError> {
+    result.map(|_| ()).map_err(|_| crate::BufferAsyncError)
 }
 
 impl crate::Context for Context {
@@ -987,7 +988,9 @@ impl crate::Context for Context {
                     BindingType::StorageBuffer { readonly: true, .. } => bt::ReadonlyStorageBuffer,
                     BindingType::Sampler { comparison: false } => bt::Sampler,
                     BindingType::Sampler { .. } => bt::ComparisonSampler,
-                    BindingType::SampledTexture { multisampled: true, .. } => bt::MultisampledTexture,
+                    BindingType::SampledTexture {
+                        multisampled: true, ..
+                    } => bt::MultisampledTexture,
                     BindingType::SampledTexture { .. } => bt::SampledTexture,
                     BindingType::StorageTexture { readonly: true, .. } => {
                         bt::ReadonlyStorageTexture
@@ -1014,11 +1017,7 @@ impl crate::Context for Context {
                     _ => {}
                 }
 
-                if let BindingType::SampledTexture {
-                    component_type,
-                    ..
-                } = bind.ty
-                {
+                if let BindingType::SampledTexture { component_type, .. } = bind.ty {
                     mapped_entry.texture_component_type(map_texture_component_type(component_type));
                 }
 
@@ -1261,7 +1260,8 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &RenderBundleEncoderDescriptor,
     ) -> Self::RenderBundleEncoderId {
-        let mapped_color_formats = desc.color_formats
+        let mapped_color_formats = desc
+            .color_formats
             .iter()
             .map(|cf| wasm_bindgen::JsValue::from(map_texture_format(*cf)))
             .collect::<js_sys::Array>();
@@ -1304,9 +1304,7 @@ impl crate::Context for Context {
             (range.end - range.start) as f64,
         );
 
-        MakeSendFuture(
-            wasm_bindgen_futures::JsFuture::from(map_promise).map(future_map_async),
-        )
+        MakeSendFuture(wasm_bindgen_futures::JsFuture::from(map_promise).map(future_map_async))
     }
 
     fn buffer_get_mapped_range(
@@ -1449,17 +1447,18 @@ impl crate::Context for Context {
 
     fn compute_pipeline_get_bind_group_layout(
         &self,
-        _pipeline: &Self::ComputePipelineId,
-        _index: u32,
+        pipeline: &Self::ComputePipelineId,
+        index: u32,
     ) -> Self::BindGroupLayoutId {
-        unimplemented!()
+        Sendable(pipeline.0.get_bind_group_layout(index))
     }
+
     fn render_pipeline_get_bind_group_layout(
         &self,
-        _pipeline: &Self::RenderPipelineId,
-        _index: u32,
+        pipeline: &Self::RenderPipelineId,
+        index: u32,
     ) -> Self::BindGroupLayoutId {
-        unimplemented!()
+        Sendable(pipeline.0.get_bind_group_layout(index))
     }
 
     fn command_encoder_copy_buffer_to_buffer(
@@ -1677,13 +1676,15 @@ impl crate::Context for Context {
             data.len() as f64,
         );
         */
-        queue.0.write_buffer_with_f64_and_buffer_source_and_f64_and_f64(
-            &buffer.0,
-            offset as f64,
-            &js_sys::Uint8Array::from(data).buffer(),
-            0f64,
-            data.len() as f64,
-        );
+        queue
+            .0
+            .write_buffer_with_f64_and_buffer_source_and_f64_and_f64(
+                &buffer.0,
+                offset as f64,
+                &js_sys::Uint8Array::from(data).buffer(),
+                0f64,
+                data.len() as f64,
+            );
     }
 
     fn queue_write_texture(
@@ -1707,12 +1708,14 @@ impl crate::Context for Context {
             &map_extent_3d(size),
         );
         */
-        queue.0.write_texture_with_buffer_source_and_gpu_extent_3d_dict(
-            &map_texture_copy_view(texture),
-            &js_sys::Uint8Array::from(data).buffer(),
-            &mapped_data_layout,
-            &map_extent_3d(size),
-        );
+        queue
+            .0
+            .write_texture_with_buffer_source_and_gpu_extent_3d_dict(
+                &map_texture_copy_view(texture),
+                &js_sys::Uint8Array::from(data).buffer(),
+                &mapped_data_layout,
+                &map_extent_3d(size),
+            );
     }
 
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
@@ -1753,7 +1756,8 @@ impl<'a> Drop for BufferMappedRange<'a> {
         unsafe {
             // Note: no allocations can happen between `view` and `set`, or this
             // will break
-            self.actual_mapping.set(&js_sys::Uint8Array::view(temporary_mapping_slice), 0);
+            self.actual_mapping
+                .set(&js_sys::Uint8Array::view(temporary_mapping_slice), 0);
         }
     }
 }
