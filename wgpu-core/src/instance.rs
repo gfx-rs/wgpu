@@ -107,6 +107,18 @@ pub struct Surface {
     pub gl: Option<GfxSurface<backend::Gl>>,
 }
 
+impl crate::hub::Resource for Surface {
+    const TYPE: &'static str = "Surface";
+
+    fn life_guard(&self) -> &LifeGuard {
+        unreachable!()
+    }
+
+    fn label(&self) -> &str {
+        "<Surface>"
+    }
+}
+
 #[derive(Debug)]
 pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
@@ -212,8 +224,16 @@ impl<B: hal::Backend> Adapter<B> {
             raw,
             features,
             limits,
-            life_guard: LifeGuard::new(),
+            life_guard: LifeGuard::new("<Adapter>"),
         }
+    }
+}
+
+impl<B: hal::Backend> crate::hub::Resource for Adapter<B> {
+    const TYPE: &'static str = "Adapter";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 

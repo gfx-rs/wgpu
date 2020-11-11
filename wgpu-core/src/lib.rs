@@ -58,6 +58,22 @@ type Epoch = u32;
 pub type RawString = *const c_char;
 pub type Label<'a> = Option<Cow<'a, str>>;
 
+trait LabelHelpers<'a> {
+    fn to_string_or_default(&'a self) -> String;
+    fn borrow_or_default(&'a self) -> &'a str;
+}
+impl<'a> LabelHelpers<'a> for Label<'a> {
+    fn borrow_or_default(&'a self) -> &'a str {
+        self.as_ref().map(|cow| cow.as_ref()).unwrap_or("")
+    }
+    fn to_string_or_default(&'a self) -> String {
+        self.as_ref()
+            .map(|cow| cow.as_ref())
+            .unwrap_or("")
+            .to_string()
+    }
+}
+
 /// Reference count object that is 1:1 with each reference.
 #[derive(Debug)]
 struct RefCount(ptr::NonNull<AtomicUsize>);
@@ -163,17 +179,22 @@ impl Drop for MultiRefCount {
 }
 
 #[derive(Debug)]
-struct LifeGuard {
+pub struct LifeGuard {
     ref_count: Option<RefCount>,
     submission_index: AtomicUsize,
+    #[cfg(debug_assertions)]
+    pub(crate) label: String,
 }
 
 impl LifeGuard {
-    fn new() -> Self {
+    #[allow(unused_variables)]
+    fn new(label: &str) -> Self {
         let bx = Box::new(AtomicUsize::new(1));
         Self {
             ref_count: ptr::NonNull::new(Box::into_raw(bx)).map(RefCount),
             submission_index: AtomicUsize::new(0),
+            #[cfg(debug_assertions)]
+            label: label.to_string(),
         }
     }
 

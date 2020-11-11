@@ -183,6 +183,14 @@ impl<B: hal::Backend> Borrow<RefCount> for Buffer<B> {
     }
 }
 
+impl<B: hal::Backend> crate::hub::Resource for Buffer<B> {
+    const TYPE: &'static str = "Buffer";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
+    }
+}
+
 impl<B: hal::Backend> Borrow<()> for Buffer<B> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
@@ -238,6 +246,14 @@ pub enum CreateTextureError {
 impl<B: hal::Backend> Borrow<RefCount> for Texture<B> {
     fn borrow(&self) -> &RefCount {
         self.life_guard.ref_count.as_ref().unwrap()
+    }
+}
+
+impl<B: hal::Backend> crate::hub::Resource for Texture<B> {
+    const TYPE: &'static str = "Texture";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 
@@ -345,6 +361,14 @@ impl<B: hal::Backend> Borrow<RefCount> for TextureView<B> {
     }
 }
 
+impl<B: hal::Backend> crate::hub::Resource for TextureView<B> {
+    const TYPE: &'static str = "TextureView";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
+    }
+}
+
 impl<B: hal::Backend> Borrow<()> for TextureView<B> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
@@ -420,6 +444,14 @@ pub enum CreateSamplerError {
 impl<B: hal::Backend> Borrow<RefCount> for Sampler<B> {
     fn borrow(&self) -> &RefCount {
         self.life_guard.ref_count.as_ref().unwrap()
+    }
+}
+
+impl<B: hal::Backend> crate::hub::Resource for Sampler<B> {
+    const TYPE: &'static str = "Sampler";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 

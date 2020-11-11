@@ -224,7 +224,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         if !dst.usage.contains(wgt::BufferUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag)?;
+            Err(TransferError::MissingCopyDstUsageFlag(
+                Some(buffer_id),
+                None,
+            ))?;
         }
         dst.life_guard.use_at(device.active_submission_index + 1);
 
@@ -357,7 +360,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         if !dst.usage.contains(wgt::TextureUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag)?
+            Err(TransferError::MissingCopyDstUsageFlag(
+                None,
+                Some(destination.texture),
+            ))?
         }
         validate_texture_copy_range(
             destination,
