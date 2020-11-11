@@ -42,29 +42,6 @@ impl fmt::Debug for Context {
     }
 }
 
-impl Context {
-    pub fn create_buffer_init_polyfill(
-        device: &Sendable<web_sys::GpuDevice>,
-        desc: &BufferDescriptor<'_>,
-        contents: &[u8],
-    ) -> Sendable<web_sys::GpuBuffer> {
-        // Emulate buffer mapping with the old API. This is a temporary
-        // polyfill until the new buffer mapping API is available on gecko.
-        let mut buffer_desc =
-            web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
-        if let Some(label) = desc.label {
-            buffer_desc.label(label);
-        }
-        let buffer = device.0.create_buffer(&buffer_desc);
-        let data = js_sys::Uint8Array::from(contents).buffer();
-        device
-            .0
-            .default_queue()
-            .write_buffer_with_u32(&buffer, 0, &data);
-        Sendable(buffer)
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct ComputePass(web_sys::GpuComputePassEncoder);
 #[derive(Debug)]
@@ -331,7 +308,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Bgra8Unorm => tf::Bgra8unorm,
         TextureFormat::Bgra8UnormSrgb => tf::Bgra8unormSrgb,
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
-        TextureFormat::Rg11b10Float => tf::Rg11b10float,
+        TextureFormat::Rg11b10Float => tf::Rg11b10ufloat,
         TextureFormat::Rg32Uint => tf::Rg32uint,
         TextureFormat::Rg32Sint => tf::Rg32sint,
         TextureFormat::Rg32Float => tf::Rg32float,
@@ -355,9 +332,7 @@ fn map_texture_component_type(
         wgt::TextureComponentType::Float => web_sys::GpuTextureComponentType::Float,
         wgt::TextureComponentType::Sint => web_sys::GpuTextureComponentType::Sint,
         wgt::TextureComponentType::Uint => web_sys::GpuTextureComponentType::Uint,
-        wgt::TextureComponentType::DepthComparison => {
-            panic!("depth-comparison is not supported here yet")
-        }
+        wgt::TextureComponentType::DepthComparison => web_sys::GpuTextureComponentType::DepthComparison,
     }
 }
 
@@ -583,7 +558,11 @@ fn map_vertex_state_descriptor(
 }
 
 fn map_extent_3d(extent: wgt::Extent3d) -> web_sys::GpuExtent3dDict {
-    web_sys::GpuExtent3dDict::new(extent.depth, extent.height, extent.width)
+    let mut mapped = web_sys::GpuExtent3dDict::new();
+    mapped.depth(extent.depth);
+    mapped.height(extent.height);
+    mapped.width(extent.height);
+    mapped
 }
 
 fn map_origin_3d(origin: wgt::Origin3d) -> web_sys::GpuOrigin3dDict {
@@ -617,7 +596,8 @@ fn map_texture_view_dimension(
 }
 
 fn map_buffer_copy_view(view: crate::BufferCopyView) -> web_sys::GpuBufferCopyView {
-    let mut mapped = web_sys::GpuBufferCopyView::new(view.layout.bytes_per_row, &view.buffer.id.0);
+    let mut mapped = web_sys::GpuBufferCopyView::new(&view.buffer.id.0);
+    mapped.bytes_per_row(view.layout.bytes_per_row);
     mapped.rows_per_image(view.layout.rows_per_image);
     mapped.offset(view.layout.offset as f64);
     mapped
@@ -666,6 +646,13 @@ fn map_store_op(store: bool) -> web_sys::GpuStoreOp {
     }
 }
 
+fn map_map_mode(mode: crate::MapMode) -> u32 {
+    match mode {
+        crate::MapMode::Read => web_sys::GpuMapMode::READ,
+        crate::MapMode::Write => web_sys::GpuMapMode::WRITE,
+    }
+}
+
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 type FutureMap<T> = futures::future::Map<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> T>;
 
@@ -688,35 +675,13 @@ fn future_request_device(
         .map_err(|_| crate::RequestDeviceError)
 }
 
-pub(crate) struct MapFuture<T> {
-    child: wasm_bindgen_futures::JsFuture,
-    buffer: Option<web_sys::GpuBuffer>,
-    marker: PhantomData<T>,
-}
-impl<T> Unpin for MapFuture<T> {}
-//type MapData = (web_sys::GpuBuffer, Vec<u8>);
-
-impl std::future::Future for MapFuture<()> {
-    type Output = Result<(), crate::BufferAsyncError>;
-    fn poll(
-        mut self: std::pin::Pin<&mut Self>,
-        context: &mut std::task::Context,
-    ) -> std::task::Poll<Self::Output> {
-        std::future::Future::poll(
-            std::pin::Pin::new(&mut self.as_mut().get_mut().child),
-            context,
-        )
-        .map(|result| {
-            let _buffer = self.buffer.take().unwrap();
-            result
-                .map(|js_value| {
-                    let array_buffer = js_sys::ArrayBuffer::from(js_value);
-                    let _view = js_sys::Uint8Array::new(&array_buffer);
-                    () //TODO
-                })
-                .map_err(|_| crate::BufferAsyncError)
-        })
-    }
+fn future_map_async(
+    result: JsFutureResult,
+) -> Result<(), crate::BufferAsyncError>
+{
+    result
+        .map(|_| ())
+        .map_err(|_| crate::BufferAsyncError)
 }
 
 impl crate::Context for Context {
@@ -748,7 +713,7 @@ impl crate::Context for Context {
     type RequestDeviceFuture = MakeSendFuture<
         FutureMap<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>,
     >;
-    type MapAsyncFuture = MakeSendFuture<MapFuture<()>>;
+    type MapAsyncFuture = MakeSendFuture<FutureMap<Result<(), crate::BufferAsyncError>>>;
 
     fn init(_backends: wgt::BackendBit) -> Self {
         Context(web_sys::window().unwrap().navigator().gpu())
@@ -893,6 +858,7 @@ impl crate::Context for Context {
                     BindingType::StorageBuffer { readonly: true, .. } => bt::ReadonlyStorageBuffer,
                     BindingType::Sampler { comparison: false } => bt::Sampler,
                     BindingType::Sampler { .. } => bt::ComparisonSampler,
+                    BindingType::SampledTexture { multisampled: true, .. } => bt::MultisampledTexture,
                     BindingType::SampledTexture { .. } => bt::SampledTexture,
                     BindingType::StorageTexture { readonly: true, .. } => {
                         bt::ReadonlyStorageTexture
@@ -921,12 +887,10 @@ impl crate::Context for Context {
 
                 if let BindingType::SampledTexture {
                     component_type,
-                    multisampled,
                     ..
                 } = bind.ty
                 {
                     mapped_entry.texture_component_type(map_texture_component_type(component_type));
-                    mapped_entry.multisampled(multisampled);
                 }
 
                 match bind.ty {
@@ -1096,6 +1060,7 @@ impl crate::Context for Context {
     ) -> Self::BufferId {
         let mut mapped_desc =
             web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
+        mapped_desc.mapped_at_creation(desc.mapped_at_creation);
         if let Some(ref label) = desc.label {
             mapped_desc.label(label);
         }
@@ -1182,32 +1147,37 @@ impl crate::Context for Context {
 
     fn buffer_map_async(
         &self,
-        _buffer: &Self::BufferId,
-        _mode: crate::MapMode,
-        _range: Range<wgt::BufferAddress>,
+        buffer: &Self::BufferId,
+        mode: crate::MapMode,
+        range: Range<wgt::BufferAddress>,
     ) -> Self::MapAsyncFuture {
-        unimplemented!()
-        //MakeSendFuture(MapFuture {
-        //    child: wasm_bindgen_futures::JsFuture::from(buffer.0.map_async()),
-        //    buffer: Some(buffer.0.clone()),
-        //    marker: PhantomData,
-        //})
+        let map_promise = buffer.0.map_async_with_f64_and_f64(
+            map_map_mode(mode),
+            range.start as f64,
+            (range.end - range.start) as f64,
+        );
+
+        MakeSendFuture(
+            wasm_bindgen_futures::JsFuture::from(map_promise).map(future_map_async),
+        )
     }
 
     fn buffer_get_mapped_range(
         &self,
-        _buffer: &Self::BufferId,
-        _sub_range: Range<wgt::BufferAddress>,
-    ) -> &[u8] {
-        unimplemented!()
-    }
-
-    fn buffer_get_mapped_range_mut(
-        &self,
-        _buffer: &Self::BufferId,
-        _sub_range: Range<wgt::BufferAddress>,
-    ) -> &mut [u8] {
-        unimplemented!()
+        buffer: &Self::BufferId,
+        sub_range: Range<wgt::BufferAddress>,
+    ) -> BufferMappedRange {
+        let array_buffer = buffer.0.get_mapped_range_with_f64_and_f64(
+            sub_range.start as f64,
+            (sub_range.end - sub_range.start) as f64,
+        );
+        let actual_mapping = js_sys::Uint8Array::new(&array_buffer);
+        let temporary_mapping = actual_mapping.to_vec();
+        BufferMappedRange {
+            actual_mapping,
+            temporary_mapping,
+            phantom: PhantomData,
+        }
     }
 
     fn buffer_unmap(&self, buffer: &Self::BufferId) {
@@ -1499,13 +1469,13 @@ impl crate::Context for Context {
         Sendable(encoder.finish_with_descriptor(&mapped_desc))
     }
 
-    fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str) {
+    fn command_encoder_insert_debug_marker(&self, _encoder: &Self::CommandEncoderId, _label: &str) {
         // TODO
     }
-    fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str) {
+    fn command_encoder_push_debug_group(&self, _encoder: &Self::CommandEncoderId, _label: &str) {
         // TODO
     }
-    fn command_encoder_pop_debug_group(&self, encoder: &Self::CommandEncoderId) {
+    fn command_encoder_pop_debug_group(&self, _encoder: &Self::CommandEncoderId) {
         // TODO
     }
 
@@ -1524,7 +1494,16 @@ impl crate::Context for Context {
         offset: wgt::BufferAddress,
         data: &[u8],
     ) {
-        queue.0.write_buffer_with_f64_and_f64_and_f64(
+        /* Skip the copy once gecko allows BufferSource instead of ArrayBuffer
+        queue.0.write_buffer_with_f64_and_u8_array_and_f64_and_f64(
+            &buffer.0,
+            offset as f64,
+            data,
+            0f64,
+            data.len() as f64,
+        );
+        */
+        queue.0.write_buffer_with_f64_and_buffer_source_and_f64_and_f64(
             &buffer.0,
             offset as f64,
             &js_sys::Uint8Array::from(data).buffer(),
@@ -1541,11 +1520,20 @@ impl crate::Context for Context {
         data_layout: wgt::TextureDataLayout,
         size: wgt::Extent3d,
     ) {
-        let mut mapped_data_layout = web_sys::GpuTextureDataLayout::new(data_layout.bytes_per_row);
+        let mut mapped_data_layout = web_sys::GpuTextureDataLayout::new();
+        mapped_data_layout.bytes_per_row(data_layout.bytes_per_row);
         mapped_data_layout.rows_per_image(data_layout.rows_per_image);
         mapped_data_layout.offset(data_layout.offset as f64);
 
-        queue.0.write_texture_with_gpu_extent_3d_dict(
+        /* Skip the copy once gecko allows BufferSource instead of ArrayBuffer
+        queue.0.write_texture_with_u8_array_and_gpu_extent_3d_dict(
+            &map_texture_copy_view(texture),
+            data,
+            &mapped_data_layout,
+            &map_extent_3d(size),
+        );
+        */
+        queue.0.write_texture_with_buffer_source_and_gpu_extent_3d_dict(
             &map_texture_copy_view(texture),
             &js_sys::Uint8Array::from(data).buffer(),
             &mapped_data_layout,
@@ -1565,3 +1553,33 @@ impl crate::Context for Context {
 }
 
 pub(crate) type SwapChainOutputDetail = ();
+
+#[derive(Debug)]
+pub struct BufferMappedRange<'a> {
+    actual_mapping: js_sys::Uint8Array,
+    temporary_mapping: Vec<u8>,
+    phantom: PhantomData<&'a ()>,
+}
+
+impl<'a> crate::BufferMappedRangeSlice for BufferMappedRange<'a> {
+    fn slice(&self) -> &[u8] {
+        &self.temporary_mapping
+    }
+
+    fn slice_mut(&mut self) -> &mut [u8] {
+        &mut self.temporary_mapping
+    }
+}
+
+impl<'a> Drop for BufferMappedRange<'a> {
+    fn drop(&mut self) {
+        // Copy from the temporary mapping back into the array buffer that was
+        // originally provided by the browser
+        let temporary_mapping_slice = self.temporary_mapping.as_slice();
+        unsafe {
+            // Note: no allocations can happen between `view` and `set`, or this
+            // will break
+            self.actual_mapping.set(&js_sys::Uint8Array::view(temporary_mapping_slice), 0);
+        }
+    }
+}

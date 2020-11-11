@@ -9,7 +9,6 @@ use std::{
 };
 
 pub use belt::StagingBelt;
-use std::sync::Arc;
 
 /// Treat the given byte slice as a SPIR-V module.
 ///
@@ -75,39 +74,16 @@ impl DeviceExt for crate::Device {
 
         map_context.initial_range = 0..padded_size;
 
-        #[cfg(target_arch = "wasm32")]
-        let buffer = crate::Buffer {
-            context: Arc::clone(&self.context),
-            id: crate::backend::Context::create_buffer_init_polyfill(
-                &self.id,
-                &wgt_descriptor,
-                descriptor.contents,
-            ),
-            map_context: parking_lot::Mutex::new(map_context),
-            usage: descriptor.usage,
-        };
-        #[cfg(not(target_arch = "wasm32"))]
-        let buffer = {
-            let buffer = crate::Buffer {
-                context: Arc::clone(&self.context),
-                id: crate::Context::device_create_buffer(&*self.context, &self.id, &wgt_descriptor),
-                map_context: parking_lot::Mutex::new(map_context),
-                usage: descriptor.usage,
-            };
-
-            let range = crate::Context::buffer_get_mapped_range_mut(
-                &*self.context,
-                &buffer.id,
-                0..padded_size,
-            );
-            range[0..unpadded_size as usize].copy_from_slice(descriptor.contents);
+        let buffer = self.create_buffer(&wgt_descriptor);
+        {
+            let mut slice = buffer.slice(..).get_mapped_range_mut();
+            slice[0..unpadded_size as usize].copy_from_slice(descriptor.contents);
+        
             for i in unpadded_size..padded_size {
-                range[i as usize] = 0;
+                slice[i as usize] = 0;
             }
-
-            buffer.unmap();
-            buffer
-        };
+        }
+        buffer.unmap();
         buffer
     }
 }
