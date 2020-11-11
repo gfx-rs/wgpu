@@ -83,7 +83,6 @@ pub enum Error {
     UnsupportedCall(String),
     UnsupportedDynamicArrayLength,
     UnableToReturnValue(Handle<crate::Expression>),
-    AccessIndexExceedsStaticLength(u32, u32),
     /// The source IR is not valid.
     Validation,
 }
@@ -450,19 +449,10 @@ impl<W: Write> Writer<W> {
                         let name = member.name.or_index(MemberIndex(index as usize));
                         write!(self.out, ".{}", name)?;
                     }
-                    crate::TypeInner::Matrix { rows: size, .. }
-                    | crate::TypeInner::Vector { size, .. } => {
-                        if index >= size as u32 {
-                            return Err(Error::AccessIndexExceedsStaticLength(index, size as u32));
-                        }
+                    crate::TypeInner::Matrix { .. } | crate::TypeInner::Vector { .. } => {
                         write!(self.out, ".{}", COMPONENTS[index as usize])?;
                     }
-                    crate::TypeInner::Array { size, .. } => {
-                        if let crate::ArraySize::Static(length) = size {
-                            if index >= length {
-                                return Err(Error::AccessIndexExceedsStaticLength(index, length));
-                            }
-                        }
+                    crate::TypeInner::Array { .. } => {
                         write!(self.out, "[{}]", index)?;
                     }
                     _ => {
@@ -682,19 +672,16 @@ impl<W: Write> Writer<W> {
                 }
                 other => return Err(Error::UnsupportedCall(other.to_owned())),
             },
-            crate::Expression::ArrayLength(expr) => {
-                let size = match *self.typifier.get(expr, &module.types) {
-                    crate::TypeInner::Array {
-                        size: crate::ArraySize::Static(size),
-                        ..
-                    } => size,
-                    crate::TypeInner::Array { .. } => {
-                        return Err(Error::UnsupportedDynamicArrayLength)
-                    }
-                    _ => return Err(Error::Validation),
-                };
-                write!(self.out, "{}", size)?;
-            }
+            crate::Expression::ArrayLength(expr) => match *self.typifier.get(expr, &module.types) {
+                crate::TypeInner::Array {
+                    size: crate::ArraySize::Constant(const_handle),
+                    ..
+                } => {
+                    self.put_constant(const_handle, module)?;
+                }
+                crate::TypeInner::Array { .. } => return Err(Error::UnsupportedDynamicArrayLength),
+                _ => return Err(Error::Validation),
+            },
         }
         Ok(())
     }
@@ -900,15 +887,14 @@ impl<W: Write> Writer<W> {
                     stride: _,
                 } => {
                     let base_name = module.types[base].name.or_index(base);
-                    let resolved_size = match size {
-                        crate::ArraySize::Static(length) => length,
-                        crate::ArraySize::Dynamic => 1,
-                    };
-                    write!(
-                        self.out,
-                        "typedef {} {}[{}]",
-                        base_name, name, resolved_size
-                    )?;
+                    write!(self.out, "typedef {} {}[", base_name, name)?;
+                    match size {
+                        crate::ArraySize::Constant(const_handle) => {
+                            self.put_constant(const_handle, module)?;
+                            write!(self.out, "]")?;
+                        }
+                        crate::ArraySize::Dynamic => write!(self.out, "1]")?,
+                    }
                 }
                 crate::TypeInner::Struct { ref members } => {
                     writeln!(self.out, "struct {} {{", name)?;

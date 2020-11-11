@@ -410,14 +410,28 @@ pub fn write<'a>(
             &mut buf,
             "{} {}({});",
             func.return_type
-                .map(|ty| write_type(ty, &module.types, &structs, None, &mut manager))
+                .map(|ty| write_type(
+                    ty,
+                    &module.types,
+                    &module.constants,
+                    &structs,
+                    None,
+                    &mut manager
+                ))
                 .transpose()?
                 .as_deref()
                 .unwrap_or("void"),
             name,
             func.parameter_types
                 .iter()
-                .map(|ty| write_type(*ty, &module.types, &structs, None, &mut manager))
+                .map(|ty| write_type(
+                    *ty,
+                    &module.types,
+                    &module.constants,
+                    &structs,
+                    None,
+                    &mut manager
+                ))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
         )?;
@@ -618,7 +632,14 @@ pub fn write<'a>(
             &mut buf,
             "{}{} {};",
             write_storage_class(global.class, &mut manager)?,
-            write_type(global.ty, &module.types, &structs, block, &mut manager)?,
+            write_type(
+                global.ty,
+                &module.types,
+                &module.constants,
+                &structs,
+                block,
+                &mut manager
+            )?,
             name
         )?;
 
@@ -652,7 +673,14 @@ pub fn write<'a>(
             &mut buf,
             "{} {}({}) {{",
             func.return_type
-                .map(|ty| write_type(ty, &module.types, &structs, None, &mut manager))
+                .map(|ty| write_type(
+                    ty,
+                    &module.types,
+                    &module.constants,
+                    &structs,
+                    None,
+                    &mut manager
+                ))
                 .transpose()?
                 .as_deref()
                 .unwrap_or("void"),
@@ -661,7 +689,14 @@ pub fn write<'a>(
                 .iter()
                 .zip(args.values())
                 .map::<Result<_, Error>, _>(|(ty, name)| {
-                    let ty = write_type(*ty, &module.types, &structs, None, &mut manager)?;
+                    let ty = write_type(
+                        *ty,
+                        &module.types,
+                        &module.constants,
+                        &structs,
+                        None,
+                        &mut manager,
+                    )?;
 
                     Ok(format!("{} {}", ty, name))
                 })
@@ -699,7 +734,14 @@ pub fn write<'a>(
             write!(
                 &mut buf,
                 "\t{} {}",
-                write_type(var.ty, &module.types, &structs, None, &mut manager)?,
+                write_type(
+                    var.ty,
+                    &module.types,
+                    &module.constants,
+                    &structs,
+                    None,
+                    &mut manager
+                )?,
                 name
             )?;
             if let Some(init) = var.init {
@@ -953,14 +995,27 @@ fn write_expression<'a, 'b>(
                     columns as u8,
                     rows as u8,
                 ),
-                TypeInner::Array { .. } => {
-                    write_type(ty, &module.types, builder.structs, None, manager)?.into_owned()
-                }
+                TypeInner::Array { .. } => write_type(
+                    ty,
+                    &module.types,
+                    &module.constants,
+                    builder.structs,
+                    None,
+                    manager,
+                )?
+                .into_owned(),
                 TypeInner::Struct { .. } => builder.structs.get(&ty).unwrap().clone(),
                 _ => {
                     return Err(Error::Custom(format!(
                         "Cannot compose type {}",
-                        write_type(ty, &module.types, builder.structs, None, manager)?
+                        write_type(
+                            ty,
+                            &module.types,
+                            &module.constants,
+                            builder.structs,
+                            None,
+                            manager
+                        )?
                     )))
                 }
             };
@@ -1334,12 +1389,25 @@ fn write_constant(
                     Cow::Owned(format!("mat{}x{}", columns as u8, rows as u8,)),
                 TypeInner::Struct { .. } =>
                     Cow::<str>::Borrowed(builder.structs.get(&constant.ty).unwrap()),
-                TypeInner::Array { .. } =>
-                    write_type(constant.ty, &module.types, builder.structs, None, manager)?,
+                TypeInner::Array { .. } => write_type(
+                    constant.ty,
+                    &module.types,
+                    &module.constants,
+                    builder.structs,
+                    None,
+                    manager
+                )?,
                 _ =>
                     return Err(Error::Custom(format!(
                         "Cannot build constant of type {}",
-                        write_type(constant.ty, &module.types, builder.structs, None, manager)?
+                        write_type(
+                            constant.ty,
+                            &module.types,
+                            &module.constants,
+                            builder.structs,
+                            None,
+                            manager
+                        )?
                     ))),
             },
             components
@@ -1405,6 +1473,7 @@ fn map_scalar(
 fn write_type<'a>(
     ty: Handle<Type>,
     types: &Arena<Type>,
+    constants: &Arena<Constant>,
     structs: &'a FastHashMap<Handle<Type>, String>,
     block: Option<String>,
     manager: &mut FeaturesManager,
@@ -1432,7 +1501,9 @@ fn write_type<'a>(
                 rows as u8
             ))
         }
-        TypeInner::Pointer { base, .. } => write_type(base, types, structs, None, manager)?,
+        TypeInner::Pointer { base, .. } => {
+            write_type(base, types, constants, structs, None, manager)?
+        }
         TypeInner::Array { base, size, .. } => {
             if let TypeInner::Array { .. } = types[base].inner {
                 manager.request(Features::ARRAY_OF_ARRAYS)
@@ -1440,8 +1511,8 @@ fn write_type<'a>(
 
             Cow::Owned(format!(
                 "{}[{}]",
-                write_type(base, types, structs, None, manager)?,
-                write_array_size(size)?
+                write_type(base, types, constants, structs, None, manager)?,
+                write_array_size(size, constants)?
             ))
         }
         TypeInner::Struct { ref members } => {
@@ -1453,7 +1524,7 @@ fn write_type<'a>(
                     writeln!(
                         &mut out,
                         "\t{} {};",
-                        write_type(member.ty, types, structs, None, manager)?,
+                        write_type(member.ty, types, constants, structs, None, manager)?,
                         member
                             .name
                             .clone()
@@ -1551,9 +1622,12 @@ fn write_interpolation(interpolation: Interpolation) -> Result<&'static str, Err
     })
 }
 
-fn write_array_size(size: ArraySize) -> Result<String, Error> {
+fn write_array_size(size: ArraySize, constants: &Arena<Constant>) -> Result<String, Error> {
     Ok(match size {
-        ArraySize::Static(size) => size.to_string(),
+        ArraySize::Constant(const_handle) => match constants[const_handle].inner {
+            ConstantInner::Uint(size) => size.to_string(),
+            _ => unreachable!(),
+        },
         ArraySize::Dynamic => String::from(""),
     })
 }
@@ -1615,7 +1689,14 @@ fn write_struct(
         writeln!(
             &mut tmp,
             "\t{} {};",
-            write_type(member.ty, &module.types, &structs, None, manager)?,
+            write_type(
+                member.ty,
+                &module.types,
+                &module.constants,
+                &structs,
+                None,
+                manager
+            )?,
             member
                 .name
                 .clone()

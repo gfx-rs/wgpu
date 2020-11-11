@@ -80,6 +80,8 @@ pub enum ValidationError {
     InvalidTypeWidth(crate::ScalarKind, crate::Bytes),
     #[error("The type handle {0:?} can not be resolved")]
     UnresolvedType(Handle<crate::Type>),
+    #[error("The constant {0:?} can not be used for an array size")]
+    InvalidArraySizeConstant(Handle<crate::Constant>),
     #[error("Global variable {handle:?} '{name}' is invalid: {error:?}")]
     GlobalVariable {
         handle: Handle<crate::GlobalVariable>,
@@ -94,6 +96,8 @@ pub enum ValidationError {
         name: String,
         error: EntryPointError,
     },
+    #[error("Module is corrupted")]
+    Corrupted,
 }
 
 impl crate::GlobalVariable {
@@ -427,9 +431,21 @@ impl Validator {
                         return Err(ValidationError::UnresolvedType(base));
                     }
                 }
-                Ti::Array { base, .. } => {
+                Ti::Array { base, size, .. } => {
                     if base >= handle {
                         return Err(ValidationError::UnresolvedType(base));
+                    }
+                    if let crate::ArraySize::Constant(const_handle) = size {
+                        let constant = module
+                            .constants
+                            .try_get(const_handle)
+                            .ok_or(ValidationError::Corrupted)?;
+                        match constant.inner {
+                            crate::ConstantInner::Uint(_) => {}
+                            _ => {
+                                return Err(ValidationError::InvalidArraySizeConstant(const_handle))
+                            }
+                        }
                     }
                 }
                 Ti::Struct { ref members } => {

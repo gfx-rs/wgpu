@@ -192,8 +192,8 @@ pub enum ScalarKind {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ArraySize {
-    /// The array size is known at compilation.
-    Static(u32),
+    /// The array size is constant.
+    Constant(Handle<Constant>),
     /// The array size can change at runtime.
     Dynamic,
 }

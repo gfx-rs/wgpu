@@ -564,8 +564,9 @@ impl Writer {
 
                 let type_id = self.get_type_id(arena, LookupType::Handle(base));
                 match size {
-                    crate::ArraySize::Static(length) => {
-                        super::instructions::instruction_type_array(id, type_id, length)
+                    crate::ArraySize::Constant(const_handle) => {
+                        let length_id = self.lookup_constant[&const_handle];
+                        super::instructions::instruction_type_array(id, type_id, length_id)
                     }
                     crate::ArraySize::Dynamic => {
                         super::instructions::instruction_type_runtime_array(id, type_id)

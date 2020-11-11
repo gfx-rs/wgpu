@@ -165,6 +165,10 @@ impl<T> Arena<T> {
         self.fetch_if_or_append(value, T::eq)
     }
 
+    pub fn try_get(&self, handle: Handle<T>) -> Option<&T> {
+        self.data.get(handle.index.get() as usize - 1)
+    }
+
     /// Get a mutable reference to an element in the arena.
     pub fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
         self.data.get_mut(handle.index.get() as usize - 1).unwrap()

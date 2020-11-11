@@ -1946,12 +1946,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect(4)?;
         let id = self.next()?;
         let type_id = self.next()?;
-        let length = self.next()?;
+        let length_id = self.next()?;
+        let length_const = self.lookup_constant.lookup(length_id)?;
 
         let decor = self.future_decor.remove(&id);
         let inner = crate::TypeInner::Array {
             base: self.lookup_type.lookup(type_id)?.handle,
-            size: crate::ArraySize::Static(length),
+            size: crate::ArraySize::Constant(length_const.handle),
             stride: decor.as_ref().and_then(|dec| dec.array_stride),
         };
         self.lookup_type.insert(
