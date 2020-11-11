@@ -1373,6 +1373,7 @@ impl crate::Context for Context {
         wgc::gfx_select!(
             encoder.id => global.command_encoder_run_compute_pass(encoder.id, pass)
         )
+        .map_err(|err| err.with_context("In a ComputePass".to_string()))
         .unwrap_error_sink(&encoder.error_sink, || ())
     }
 
@@ -1416,6 +1417,7 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         wgc::gfx_select!(encoder.id => global.command_encoder_run_render_pass(encoder.id, pass))
+            .map_err(|err| err.with_context("In a RenderPass".to_string()))
             .unwrap_error_sink(&encoder.error_sink, || ())
     }
 
@@ -1423,6 +1425,7 @@ impl crate::Context for Context {
         let desc = wgt::CommandBufferDescriptor::default();
         let global = &self.0;
         wgc::gfx_select!(encoder.id => global.command_encoder_finish(encoder.id, &desc))
+            .map_err(|err| err.with_context("In a CommandEncoder".to_string()))
             .unwrap_error_sink(
                 &encoder.error_sink,
                 || wgc::gfx_select!( encoder.id => global.command_buffer_error(PhantomData)),
@@ -1432,8 +1435,8 @@ impl crate::Context for Context {
     fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str) {
         let global = &self.0;
         wgc::gfx_select!(encoder.id => global.command_encoder_insert_debug_marker(encoder.id, &label))
-                                   .map_err(|err| err.with_context("In CommandEncoder::insert_debug_marker".to_string()))
-        .unwrap_error_sink(&encoder.error_sink, ||())
+            .map_err(|err| err.with_context("In CommandEncoder::insert_debug_marker".to_string()))
+            .unwrap_error_sink(&encoder.error_sink, ||())
     }
     fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str) {
         let global = &self.0;
@@ -1461,6 +1464,7 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
+        .map_err(|err| err.with_context("In a RenderBundleEncoder".to_string()))
         .unwrap_pretty()
     }
 
