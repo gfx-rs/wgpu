@@ -45,7 +45,7 @@ pub use wgt::{
     COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
 };
 
-use backend::{Context as C, BufferMappedRange};
+use backend::{BufferMappedRange, Context as C};
 
 trait ComputePassInner<Ctx: Context> {
     fn set_pipeline(&mut self, pipeline: &Ctx::ComputePipelineId);

@@ -78,7 +78,7 @@ impl DeviceExt for crate::Device {
         {
             let mut slice = buffer.slice(..).get_mapped_range_mut();
             slice[0..unpadded_size as usize].copy_from_slice(descriptor.contents);
-        
+
             for i in unpadded_size..padded_size {
                 slice[i as usize] = 0;
             }
