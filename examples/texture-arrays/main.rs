@@ -13,12 +13,6 @@ struct Vertex {
     _index: u32,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct Uniform {
-    index: u32,
-}
-
 fn vertex(pos: [i8; 2], tc: [i8; 2], index: i8) -> Vertex {
     Vertex {
         _pos: [pos[0] as f32, pos[1] as f32],
