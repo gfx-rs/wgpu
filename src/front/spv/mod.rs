@@ -1283,6 +1283,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             inst.expect(base_wc + 1)?;
                             "length"
                         }
+                        Some(spirv::GLOp::Distance) => {
+                            inst.expect(base_wc + 2)?;
+                            "distance"
+                        }
                         Some(spirv::GLOp::Cross) => {
                             inst.expect(base_wc + 2)?;
                             "cross"
