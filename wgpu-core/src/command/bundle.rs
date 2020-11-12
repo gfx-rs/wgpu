@@ -38,7 +38,10 @@
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
-    command::{BasePass, DrawError, RenderCommand, RenderCommandError, StateChange},
+    command::{
+        BasePass, DrawError, MapPassErr, PassErrorScope, RenderCommand, RenderCommandError,
+        StateChange,
+    },
     conv,
     device::{
         AttachmentData, DeviceError, RenderPassContext, MAX_VERTEX_BUFFERS, SHADER_STAGE_COUNT,
@@ -656,15 +659,45 @@ impl State {
 
 /// Error encountered when finishing recording a render bundle.
 #[derive(Clone, Debug, Error)]
-pub enum RenderBundleError {
+pub(super) enum RenderBundleErrorInner {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    RenderCommand(#[from] RenderCommandError),
+    RenderCommand(RenderCommandError),
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
     #[error(transparent)]
     Draw(#[from] DrawError),
+}
+
+impl<T> From<T> for RenderBundleErrorInner
+where
+    T: Into<RenderCommandError>,
+{
+    fn from(t: T) -> Self {
+        Self::RenderCommand(t.into())
+    }
+}
+
+/// Error encountered when finishing recording a render bundle.
+#[derive(Clone, Debug, Error)]
+#[error("{scope}")]
+pub struct RenderBundleError {
+    scope: PassErrorScope,
+    #[source]
+    inner: RenderBundleErrorInner,
+}
+
+impl<T, E> MapPassErr<T, RenderBundleError> for Result<T, E>
+where
+    E: Into<RenderBundleErrorInner>,
+{
+    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, RenderBundleError> {
+        self.map_err(|inner| RenderBundleError {
+            scope,
+            inner: inner.into(),
+        })
+    }
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -675,13 +708,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id_in: Input<G, id::RenderBundleId>,
     ) -> Result<id::RenderBundleId, RenderBundleError> {
         span!(_guard, INFO, "RenderBundleEncoder::finish");
+        let scope = PassErrorScope::Bundle;
+
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let device = device_guard
             .get(bundle_encoder.parent_id)
-            .map_err(|_| DeviceError::Invalid)?;
+            .map_err(|_| DeviceError::Invalid)
+            .map_pass_err(scope)?;
         let render_bundle = {
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
@@ -712,12 +748,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         num_dynamic_offsets,
                         bind_group_id,
                     } => {
+                        let scope = PassErrorScope::SetBindGroup;
+
                         let max_bind_groups = device.limits.max_bind_groups;
                         if (index as u32) >= max_bind_groups {
-                            Err(RenderCommandError::BindGroupIndexOutOfRange {
+                            return Err(RenderCommandError::BindGroupIndexOutOfRange {
                                 index,
                                 max: max_bind_groups,
-                            })?
+                            })
+                            .map_pass_err(scope);
                         }
 
                         let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
@@ -729,25 +768,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map(|offset| *offset as wgt::BufferAddress)
                             .find(|offset| offset % wgt::BIND_BUFFER_ALIGNMENT != 0)
                         {
-                            Err(RenderCommandError::UnalignedBufferOffset(offset))?
+                            return Err(RenderCommandError::UnalignedBufferOffset(offset))
+                                .map_pass_err(scope);
                         }
 
                         let bind_group = state
                             .trackers
                             .bind_groups
                             .use_extend(&*bind_group_guard, bind_group_id, (), ())
-                            .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))?;
+                            .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))
+                            .map_pass_err(scope)?;
                         if bind_group.dynamic_binding_info.len() != offsets.len() {
-                            Err(RenderCommandError::InvalidDynamicOffsetCount {
+                            return Err(RenderCommandError::InvalidDynamicOffsetCount {
                                 actual: offsets.len(),
                                 expected: bind_group.dynamic_binding_info.len(),
-                            })?
+                            })
+                            .map_pass_err(scope);
                         }
 
                         state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
-                        state.trackers.merge_extend(&bind_group.used)?;
+                        state
+                            .trackers
+                            .merge_extend(&bind_group.used)
+                            .map_pass_err(scope)?;
                     }
                     RenderCommand::SetPipeline(pipeline_id) => {
+                        let scope = PassErrorScope::SetPipeline;
                         if state.pipeline.set_and_check_redundant(pipeline_id) {
                             continue;
                         }
@@ -761,7 +807,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         bundle_encoder
                             .context
                             .check_compatible(&pipeline.pass_context)
-                            .map_err(RenderCommandError::IncompatiblePipeline)?;
+                            .map_err(RenderCommandError::IncompatiblePipeline)
+                            .map_pass_err(scope)?;
 
                         //TODO: check read-only depth
 
@@ -784,13 +831,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         offset,
                         size,
                     } => {
+                        let scope = PassErrorScope::SetIndexBuffer;
                         let buffer = state
                             .trackers
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
                             .unwrap();
                         check_buffer_usage(buffer.usage, wgt::BufferUsage::INDEX)
-                            .map_err(RenderCommandError::from)?;
+                            .map_pass_err(scope)?;
 
                         let end = match size {
                             Some(s) => offset + s.get(),
@@ -804,13 +852,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         offset,
                         size,
                     } => {
+                        let scope = PassErrorScope::SetVertexBuffer;
                         let buffer = state
                             .trackers
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::VERTEX)
                             .unwrap();
                         check_buffer_usage(buffer.usage, wgt::BufferUsage::VERTEX)
-                            .map_err(RenderCommandError::from)?;
+                            .map_pass_err(scope)?;
 
                         let end = match size {
                             Some(s) => offset + s.get(),
@@ -824,15 +873,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size_bytes,
                         values_offset: _,
                     } => {
+                        let scope = PassErrorScope::SetPushConstant;
                         let end_offset = offset + size_bytes;
 
-                        let pipeline_layout_id =
-                            pipeline_layout_id.ok_or(DrawError::MissingPipeline)?;
+                        let pipeline_layout_id = pipeline_layout_id
+                            .ok_or(DrawError::MissingPipeline)
+                            .map_pass_err(scope)?;
                         let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
 
                         pipeline_layout
                             .validate_push_constant_ranges(stages, offset, end_offset)
-                            .map_err(RenderCommandError::from)?;
+                            .map_pass_err(scope)?;
 
                         commands.push(command);
                     }
@@ -842,20 +893,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         first_vertex,
                         first_instance,
                     } => {
+                        let scope = PassErrorScope::Draw;
                         let (vertex_limit, instance_limit) = state.vertex_limits();
                         let last_vertex = first_vertex + vertex_count;
                         if last_vertex > vertex_limit {
-                            Err(DrawError::VertexBeyondLimit {
+                            return Err(DrawError::VertexBeyondLimit {
                                 last_vertex,
                                 vertex_limit,
-                            })?
+                            })
+                            .map_pass_err(scope);
                         }
                         let last_instance = first_instance + instance_count;
                         if last_instance > instance_limit {
-                            Err(DrawError::InstanceBeyondLimit {
+                            return Err(DrawError::InstanceBeyondLimit {
                                 last_instance,
                                 instance_limit,
-                            })?
+                            })
+                            .map_pass_err(scope);
                         }
                         commands.extend(state.flush_vertices());
                         commands.extend(state.flush_binds());
@@ -868,22 +922,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         base_vertex: _,
                         first_instance,
                     } => {
+                        let scope = PassErrorScope::DrawIndexed;
                         //TODO: validate that base_vertex + max_index() is within the provided range
                         let (_, instance_limit) = state.vertex_limits();
                         let index_limit = state.index.limit();
                         let last_index = first_index + index_count;
                         if last_index > index_limit {
-                            Err(DrawError::IndexBeyondLimit {
+                            return Err(DrawError::IndexBeyondLimit {
                                 last_index,
                                 index_limit,
-                            })?
+                            })
+                            .map_pass_err(scope);
                         }
                         let last_instance = first_instance + instance_count;
                         if last_instance > instance_limit {
-                            Err(DrawError::InstanceBeyondLimit {
+                            return Err(DrawError::InstanceBeyondLimit {
                                 last_instance,
                                 instance_limit,
-                            })?
+                            })
+                            .map_pass_err(scope);
                         }
                         commands.extend(state.index.flush());
                         commands.extend(state.flush_vertices());
@@ -896,13 +953,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         count: None,
                         indexed: false,
                     } => {
+                        let scope = PassErrorScope::DrawIndirect;
                         let buffer = state
                             .trackers
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                             .unwrap();
                         check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
-                            .map_err(RenderCommandError::from)?;
+                            .map_pass_err(scope)?;
 
                         commands.extend(state.flush_vertices());
                         commands.extend(state.flush_binds());
@@ -914,13 +972,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         count: None,
                         indexed: true,
                     } => {
+                        let scope = PassErrorScope::DrawIndexedIndirect;
                         let buffer = state
                             .trackers
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
-                            .map_err(|err| RenderCommandError::Buffer(buffer_id, err))?;
+                            .map_err(|err| RenderCommandError::Buffer(buffer_id, err))
+                            .map_pass_err(scope)?;
                         check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
-                            .map_err(RenderCommandError::from)?;
+                            .map_pass_err(scope)?;
 
                         commands.extend(state.index.flush());
                         commands.extend(state.flush_vertices());
