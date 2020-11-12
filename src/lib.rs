@@ -619,6 +619,13 @@ pub enum Expression {
         left: Handle<Expression>,
         right: Handle<Expression>,
     },
+    /// Select between two values based on a condition.
+    Select {
+        /// Boolean expression
+        condition: Handle<Expression>,
+        accept: Handle<Expression>,
+        reject: Handle<Expression>,
+    },
     /// Call an intrinsic function.
     Intrinsic {
         fun: IntrinsicFunction,

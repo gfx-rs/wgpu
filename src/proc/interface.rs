@@ -79,6 +79,15 @@ where
                 self.traverse_expr(left);
                 self.traverse_expr(right);
             }
+            E::Select {
+                condition,
+                accept,
+                reject,
+            } => {
+                self.traverse_expr(condition);
+                self.traverse_expr(accept);
+                self.traverse_expr(reject);
+            }
             E::Intrinsic { argument, .. } => {
                 self.traverse_expr(argument);
             }

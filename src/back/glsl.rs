@@ -1208,6 +1208,22 @@ fn write_expression<'a, 'b>(
 
             Cow::Owned(format!("({} {} {})", left_expr, op_str, right_expr))
         }
+        Expression::Select {
+            condition,
+            accept,
+            reject,
+        } => {
+            let cond_expr =
+                write_expression(&builder.expressions[condition], module, builder, manager)?;
+            let accept_expr =
+                write_expression(&builder.expressions[accept], module, builder, manager)?;
+            let reject_expr =
+                write_expression(&builder.expressions[reject], module, builder, manager)?;
+            Cow::Owned(format!(
+                "({} ? {} : {})",
+                cond_expr, accept_expr, reject_expr
+            ))
+        }
         Expression::Intrinsic { fun, argument } => {
             let expr = write_expression(&builder.expressions[argument], module, builder, manager)?;
 

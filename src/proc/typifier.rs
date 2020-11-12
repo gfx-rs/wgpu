@@ -245,6 +245,7 @@ impl Typifier {
                 | crate::BinaryOperator::ShiftLeft
                 | crate::BinaryOperator::ShiftRight => self.resolutions[left.index()].clone(),
             },
+            crate::Expression::Select { accept, .. } => self.resolutions[accept.index()].clone(),
             crate::Expression::Intrinsic { .. } => unimplemented!(),
             crate::Expression::Transpose(expr) => match *self.get(expr, types) {
                 crate::TypeInner::Matrix {

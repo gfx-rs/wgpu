@@ -1067,6 +1067,31 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
+                Op::Select => {
+                    inst.expect(6)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let condition = self.next()?;
+                    let o1_id = self.next()?;
+                    let o2_id = self.next()?;
+
+                    let cond_lexp = self.lookup_expression.lookup(condition)?;
+                    let o1_lexp = self.lookup_expression.lookup(o1_id)?;
+                    let o2_lexp = self.lookup_expression.lookup(o2_id)?;
+
+                    let expr = crate::Expression::Select {
+                        condition: cond_lexp.handle,
+                        accept: o1_lexp.handle,
+                        reject: o2_lexp.handle,
+                    };
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: expressions.append(expr),
+                            type_id: result_type_id,
+                        },
+                    );
+                }
                 Op::VectorShuffle => {
                     inst.expect_at_least(5)?;
                     let result_type_id = self.next()?;

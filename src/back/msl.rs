@@ -524,6 +524,19 @@ impl<W: Write> Writer<W> {
                     //write!(self.out, ")")?;
                 }
             }
+            crate::Expression::Select {
+                condition,
+                accept,
+                reject,
+            } => {
+                write!(self.out, "(")?;
+                self.put_expression(condition, context)?;
+                write!(self.out, " ? ")?;
+                self.put_expression(accept, context)?;
+                write!(self.out, " : ")?;
+                self.put_expression(reject, context)?;
+                write!(self.out, ")")?;
+            }
             crate::Expression::Intrinsic { fun, argument } => {
                 let op = match fun {
                     crate::IntrinsicFunction::Any => "any",
