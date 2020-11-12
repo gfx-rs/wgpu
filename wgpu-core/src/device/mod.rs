@@ -3032,7 +3032,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 None => wgt::ShaderStage::VERTEX,
             };
             if desc.layout.is_none() && !validated_stages.contains(last_stage) {
-                Err(pipeline::ImplicitLayoutError::ReflectionError(last_stage))?
+                return Err(pipeline::ImplicitLayoutError::ReflectionError(last_stage).into());
             }
 
             let primitive_assembler = hal::pso::PrimitiveAssemblerDesc::Vertex {
@@ -3307,7 +3307,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 )
                 .map_err(pipeline::CreateComputePipelineError::Stage)?;
             } else if desc.layout.is_none() {
-                Err(pipeline::ImplicitLayoutError::ReflectionError(flag))?
+                return Err(pipeline::ImplicitLayoutError::ReflectionError(flag).into());
             }
 
             let shader = hal::pso::EntryPoint::<B> {
