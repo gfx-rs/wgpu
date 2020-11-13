@@ -67,26 +67,26 @@ impl Instance {
         }
     }
 
-    pub(crate) fn destroy_surface(&mut self, surface: Surface) {
+    pub(crate) fn destroy_surface(&self, surface: Surface) {
         backends_map! {
             let map = |(surface_backend, self_backend)| {
                 unsafe {
                     if let Some(suf) = surface_backend {
-                        self_backend.as_mut().unwrap().destroy_surface(suf);
+                        self_backend.as_ref().unwrap().destroy_surface(suf);
                     }
                 }
             };
 
             #[cfg(vulkan)]
-            map((surface.vulkan, &mut self.vulkan)),
+            map((surface.vulkan, &self.vulkan)),
             #[cfg(metal)]
-            map((surface.metal, &mut self.metal)),
+            map((surface.metal, &self.metal)),
             #[cfg(dx12)]
-            map((surface.dx12, &mut self.dx12)),
+            map((surface.dx12, &self.dx12)),
             #[cfg(dx11)]
-            map((surface.dx11, &mut self.dx11)),
+            map((surface.dx11, &self.dx11)),
             #[cfg(gl)]
-            map((surface.gl, &mut self.gl)),
+            map((surface.gl, &self.gl)),
         }
     }
 }
@@ -373,6 +373,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
+    pub fn surface_drop(&self, id: SurfaceId) {
+        span!(_guard, INFO, "Surface::drop");
+        let mut token = Token::root();
+        let (surface, _) = self.surfaces.unregister(id, &mut token);
+        self.instance.destroy_surface(surface.unwrap());
+    }
+
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
         span!(_guard, INFO, "Instance::enumerate_adapters");
 
@@ -613,7 +620,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| InvalidAdapter)
     }
 
-    pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {
+    pub fn adapter_drop<B: GfxBackend>(&self, adapter_id: AdapterId) {
         span!(_guard, INFO, "Adapter::drop");
 
         let hub = B::hub(self);
