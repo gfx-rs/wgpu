@@ -641,13 +641,17 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
         for (index, element) in self.swap_chains.data.write().map.drain(..).enumerate() {
             if let Element::Occupied(swap_chain, epoch) = element {
                 let device = &devices[swap_chain.device_id.value];
-                let surface = surface_guard
-                    .get_mut(TypedId::zip(index as Index, epoch, B::VARIANT))
-                    .unwrap();
-                let suf = B::get_surface_mut(surface);
                 unsafe {
                     device.raw.destroy_semaphore(swap_chain.semaphore);
-                    suf.unconfigure_swapchain(&device.raw);
+                }
+                let suf_id = TypedId::zip(index as Index, epoch, B::VARIANT);
+                //TODO: hold the surface alive by the swapchain
+                if surface_guard.contains(suf_id) {
+                    let surface = surface_guard.get_mut(suf_id).unwrap();
+                    let suf = B::get_surface_mut(surface);
+                    unsafe {
+                        suf.unconfigure_swapchain(&device.raw);
+                    }
                 }
             }
         }
