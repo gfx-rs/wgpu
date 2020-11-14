@@ -135,6 +135,21 @@ impl<'a, T> ops::Deref for MaybeOwned<'a, T> {
     }
 }
 
+enum Dimension {
+    Scalar,
+    Vector,
+    Matrix,
+}
+
+fn get_dimension(ty_inner: &crate::TypeInner) -> Dimension {
+    match *ty_inner {
+        crate::TypeInner::Scalar { .. } => Dimension::Scalar,
+        crate::TypeInner::Vector { .. } => Dimension::Vector,
+        crate::TypeInner::Matrix { .. } => Dimension::Matrix,
+        _ => unreachable!(),
+    }
+}
+
 pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
@@ -1114,70 +1129,60 @@ impl Writer {
                     _ => right_id,
                 };
 
+                let left_dimension = get_dimension(&left_ty_inner);
+                let right_dimension = get_dimension(&right_ty_inner);
+
                 let (instruction, lookup_ty) = match op {
-                    crate::BinaryOperator::Multiply => match *left_ty_inner {
-                        crate::TypeInner::Vector { .. } => match *right_ty_inner {
-                            crate::TypeInner::Scalar { .. } => (
-                                super::instructions::instruction_vector_times_scalar(
-                                    left_result_type_id,
-                                    id,
-                                    left_id,
-                                    right_id,
-                                ),
-                                left_lookup_ty,
+                    crate::BinaryOperator::Multiply => match (left_dimension, right_dimension) {
+                        (Dimension::Vector, Dimension::Scalar { .. }) => (
+                            super::instructions::instruction_vector_times_scalar(
+                                left_result_type_id,
+                                id,
+                                left_id,
+                                right_id,
                             ),
-                            crate::TypeInner::Matrix { .. } => (
-                                super::instructions::instruction_vector_times_matrix(
-                                    left_result_type_id,
-                                    id,
-                                    left_id,
-                                    right_id,
-                                ),
-                                left_lookup_ty,
+                            left_lookup_ty,
+                        ),
+                        (Dimension::Vector, Dimension::Matrix) => (
+                            super::instructions::instruction_vector_times_matrix(
+                                left_result_type_id,
+                                id,
+                                left_id,
+                                right_id,
                             ),
-                            _ => unreachable!(),
-                        },
-                        crate::TypeInner::Matrix { .. } => match *right_ty_inner {
-                            crate::TypeInner::Scalar { .. } => (
-                                super::instructions::instruction_matrix_times_scalar(
-                                    left_result_type_id,
-                                    id,
-                                    left_id,
-                                    right_id,
-                                ),
-                                left_lookup_ty,
+                            left_lookup_ty,
+                        ),
+                        (Dimension::Matrix, Dimension::Scalar { .. }) => (
+                            super::instructions::instruction_matrix_times_scalar(
+                                left_result_type_id,
+                                id,
+                                left_id,
+                                right_id,
                             ),
-                            crate::TypeInner::Vector { .. } => (
-                                super::instructions::instruction_matrix_times_vector(
-                                    right_result_type_id,
-                                    id,
-                                    left_id,
-                                    right_id,
-                                ),
-                                right_lookup_ty,
+                            left_lookup_ty,
+                        ),
+                        (Dimension::Matrix, Dimension::Vector) => (
+                            super::instructions::instruction_matrix_times_vector(
+                                right_result_type_id,
+                                id,
+                                left_id,
+                                right_id,
                             ),
-                            crate::TypeInner::Matrix { .. } => (
-                                super::instructions::instruction_matrix_times_matrix(
-                                    left_result_type_id,
-                                    id,
-                                    left_id,
-                                    right_id,
-                                ),
-                                left_lookup_ty,
+                            right_lookup_ty,
+                        ),
+                        (Dimension::Matrix, Dimension::Matrix) => (
+                            super::instructions::instruction_matrix_times_matrix(
+                                left_result_type_id,
+                                id,
+                                left_id,
+                                right_id,
                             ),
-                            _ => unreachable!(),
-                        },
-                        crate::TypeInner::Scalar { kind, .. } => match kind {
-                            crate::ScalarKind::Sint | crate::ScalarKind::Uint => (
-                                super::instructions::instruction_i_mul(
-                                    left_result_type_id,
-                                    id,
-                                    left_id,
-                                    right_id,
-                                ),
-                                left_lookup_ty,
-                            ),
-                            crate::ScalarKind::Float => (
+                            left_lookup_ty,
+                        ),
+                        (Dimension::Scalar, Dimension::Scalar)
+                            if left_ty_inner.scalar_kind() == Some(crate::ScalarKind::Float) =>
+                        {
+                            (
                                 super::instructions::instruction_f_mul(
                                     left_result_type_id,
                                     id,
@@ -1185,9 +1190,17 @@ impl Writer {
                                     right_id,
                                 ),
                                 left_lookup_ty,
+                            )
+                        }
+                        (Dimension::Scalar, Dimension::Scalar) => (
+                            super::instructions::instruction_i_mul(
+                                left_result_type_id,
+                                id,
+                                left_id,
+                                right_id,
                             ),
-                            _ => unreachable!(),
-                        },
+                            left_lookup_ty,
+                        ),
                         _ => unreachable!(),
                     },
                     crate::BinaryOperator::Subtract => match *left_ty_inner {
