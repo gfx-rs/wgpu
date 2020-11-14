@@ -571,6 +571,38 @@ pub(super) fn instruction_composite_construct(
 //
 // Arithmetic Instructions
 //
+fn instruction_binary(
+    op: Op,
+    result_type_id: Word,
+    id: Word,
+    operand_1: Word,
+    operand_2: Word,
+) -> Instruction {
+    let mut instruction = Instruction::new(op);
+    instruction.set_type(result_type_id);
+    instruction.set_result(id);
+    instruction.add_operand(operand_1);
+    instruction.add_operand(operand_2);
+    instruction
+}
+
+pub(super) fn instruction_i_sub(
+    result_type_id: Word,
+    id: Word,
+    operand_1: Word,
+    operand_2: Word,
+) -> Instruction {
+    instruction_binary(Op::ISub, result_type_id, id, operand_1, operand_2)
+}
+
+pub(super) fn instruction_f_sub(
+    result_type_id: Word,
+    id: Word,
+    operand_1: Word,
+    operand_2: Word,
+) -> Instruction {
+    instruction_binary(Op::FSub, result_type_id, id, operand_1, operand_2)
+}
 
 pub(super) fn instruction_i_mul(
     result_type_id: Word,
@@ -578,12 +610,7 @@ pub(super) fn instruction_i_mul(
     operand_1: Word,
     operand_2: Word,
 ) -> Instruction {
-    let mut instruction = Instruction::new(Op::IMul);
-    instruction.set_type(result_type_id);
-    instruction.set_result(id);
-    instruction.add_operand(operand_1);
-    instruction.add_operand(operand_2);
-    instruction
+    instruction_binary(Op::IMul, result_type_id, id, operand_1, operand_2)
 }
 
 pub(super) fn instruction_f_mul(
@@ -592,12 +619,7 @@ pub(super) fn instruction_f_mul(
     operand_1: Word,
     operand_2: Word,
 ) -> Instruction {
-    let mut instruction = Instruction::new(Op::FMul);
-    instruction.set_type(result_type_id);
-    instruction.set_result(id);
-    instruction.add_operand(operand_1);
-    instruction.add_operand(operand_2);
-    instruction
+    instruction_binary(Op::FMul, result_type_id, id, operand_1, operand_2)
 }
 
 pub(super) fn instruction_vector_times_scalar(
