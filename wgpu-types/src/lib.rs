@@ -4,7 +4,6 @@
 
 // The `broken_intra_doc_links` is a new name, and will fail if built on the old compiler.
 #![allow(unknown_lints)]
-
 // The intra doc links to the wgpu crate in this crate actually succesfully link to the types in the wgpu crate, when built from the wgpu crate.
 // However when building from both the wgpu crate or this crate cargo doc will claim all the links cannot be resolved
 // despite the fact that it works fine when it needs to.

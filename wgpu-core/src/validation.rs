@@ -132,14 +132,18 @@ fn get_aligned_type_size(
         Ti::Pointer { .. } => 4,
         Ti::Array {
             base,
-            size: naga::ArraySize::Static(count),
+            size: naga::ArraySize::Constant(const_handle),
             stride,
         } => {
             let base_size = match stride {
                 Some(stride) => stride.get() as wgt::BufferAddress,
                 None => get_aligned_type_size(module, base, false),
             };
-            base_size * count as wgt::BufferAddress
+            let count = match module.constants[const_handle].inner {
+                naga::ConstantInner::Uint(count) => count,
+                ref other => panic!("Unexpected array size {:?}", other),
+            };
+            base_size * count
         }
         Ti::Array {
             base,
@@ -786,7 +790,7 @@ fn derive_binding_type(
                     dynamic,
                     min_binding_size: wgt::BufferSize::new(actual_size),
                 },
-                naga::StorageClass::StorageBuffer => BindingType::StorageBuffer {
+                naga::StorageClass::Storage => BindingType::StorageBuffer {
                     dynamic,
                     min_binding_size: wgt::BufferSize::new(actual_size),
                     readonly: !usage.contains(naga::GlobalUse::STORE),

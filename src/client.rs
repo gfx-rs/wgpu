@@ -2,7 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{cow_label, ByteBuf, CommandEncoderAction, DeviceAction, RawString, TextureAction};
+use crate::{
+    cow_label, ByteBuf, CommandEncoderAction, DeviceAction, DropAction, ImplicitLayout, RawString,
+    TextureAction,
+};
 
 use wgc::{hub::IdentityManager, id};
 use wgt::Backend;
@@ -13,20 +16,13 @@ use parking_lot::Mutex;
 
 use std::{
     borrow::Cow,
-    mem,
     num::{NonZeroU32, NonZeroU8},
     ptr, slice,
 };
 
 fn make_byte_buf<T: serde::Serialize>(data: &T) -> ByteBuf {
     let vec = bincode::serialize(data).unwrap();
-    let bb = ByteBuf {
-        data: vec.as_ptr(),
-        len: vec.len(),
-        capacity: vec.capacity(),
-    };
-    mem::forget(vec);
-    bb
+    ByteBuf::from_vec(vec)
 }
 
 #[repr(C)]
@@ -191,6 +187,19 @@ struct IdentityHub {
     samplers: IdentityManager,
 }
 
+impl ImplicitLayout<'_> {
+    fn new(identities: &mut IdentityHub, backend: Backend) -> Self {
+        ImplicitLayout {
+            pipeline: identities.pipeline_layouts.alloc(backend),
+            bind_groups: Cow::Owned(
+                (0..wgc::MAX_BIND_GROUPS)
+                    .map(|_| identities.bind_group_layouts.alloc(backend))
+                    .collect(),
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 struct Identities {
     surfaces: IdentityManager,
@@ -217,6 +226,22 @@ impl Identities {
 #[derive(Debug)]
 pub struct Client {
     identities: Mutex<Identities>,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_client_drop_action(client: &mut Client, byte_buf: &ByteBuf) {
+    let mut cursor = std::io::Cursor::new(byte_buf.as_slice());
+    let mut identities = client.identities.lock();
+    while let Ok(action) = bincode::deserialize_from(&mut cursor) {
+        match action {
+            DropAction::Buffer(id) => identities.select(id.backend()).buffers.free(id),
+            DropAction::Texture(id) => identities.select(id.backend()).textures.free(id),
+            DropAction::Sampler(id) => identities.select(id.backend()).samplers.free(id),
+            DropAction::BindGroupLayout(id) => {
+                identities.select(id.backend()).bind_group_layouts.free(id)
+            }
+        }
+    }
 }
 
 #[repr(C)]
@@ -613,8 +638,13 @@ pub unsafe extern "C" fn wgpu_client_create_bind_group_layout(
                 RawBindingType::Sampler => wgt::BindingType::Sampler { comparison: false },
                 RawBindingType::ComparisonSampler => wgt::BindingType::Sampler { comparison: true },
                 RawBindingType::SampledTexture => wgt::BindingType::SampledTexture {
-                    dimension: *entry.view_dimension.unwrap(),
-                    component_type: *entry.texture_component_type.unwrap(),
+                    //TODO: the spec has a bug here
+                    dimension: *entry
+                        .view_dimension
+                        .unwrap_or(&wgt::TextureViewDimension::D2),
+                    component_type: *entry
+                        .texture_component_type
+                        .unwrap_or(&wgt::TextureComponentType::Float),
                     multisampled: entry.multisampled,
                 },
                 RawBindingType::ReadonlyStorageTexture => wgt::BindingType::StorageTexture {
@@ -763,12 +793,15 @@ pub unsafe extern "C" fn wgpu_client_create_shader_module(
         .alloc(backend);
 
     assert!(!desc.spirv_words.is_null());
-    let data = Cow::Borrowed(slice::from_raw_parts(
-        desc.spirv_words,
-        desc.spirv_words_length,
-    ));
+    let spv = Cow::Borrowed(if desc.spirv_words.is_null() {
+        &[][..]
+    } else {
+        slice::from_raw_parts(desc.spirv_words, desc.spirv_words_length)
+    });
 
-    let action = DeviceAction::CreateShaderModule(id, data);
+    let wgsl = cow_label(&desc.wgsl_chars).unwrap_or_default();
+
+    let action = DeviceAction::CreateShaderModule(id, spv, wgsl);
     *bb = make_byte_buf(&action);
     id
 }
@@ -789,14 +822,11 @@ pub unsafe extern "C" fn wgpu_client_create_compute_pipeline(
     device_id: id::DeviceId,
     desc: &ComputePipelineDescriptor,
     bb: &mut ByteBuf,
+    implicit_bind_group_layout_ids: *mut Option<id::BindGroupLayoutId>,
 ) -> id::ComputePipelineId {
     let backend = device_id.backend();
-    let id = client
-        .identities
-        .lock()
-        .select(backend)
-        .compute_pipelines
-        .alloc(backend);
+    let mut identities = client.identities.lock();
+    let id = identities.select(backend).compute_pipelines.alloc(backend);
 
     let wgpu_desc = wgc::pipeline::ComputePipelineDescriptor {
         label: cow_label(&desc.label),
@@ -804,7 +834,18 @@ pub unsafe extern "C" fn wgpu_client_create_compute_pipeline(
         compute_stage: desc.compute_stage.to_wgpu(),
     };
 
-    let action = DeviceAction::CreateComputePipeline(id, wgpu_desc);
+    let implicit = match desc.layout {
+        Some(_) => None,
+        None => {
+            let implicit = ImplicitLayout::new(identities.select(backend), backend);
+            for (i, bgl_id) in implicit.bind_groups.iter().enumerate() {
+                *implicit_bind_group_layout_ids.add(i) = Some(*bgl_id);
+            }
+            Some(implicit)
+        }
+    };
+
+    let action = DeviceAction::CreateComputePipeline(id, wgpu_desc, implicit);
     *bb = make_byte_buf(&action);
     id
 }
@@ -825,14 +866,11 @@ pub unsafe extern "C" fn wgpu_client_create_render_pipeline(
     device_id: id::DeviceId,
     desc: &RenderPipelineDescriptor,
     bb: &mut ByteBuf,
+    implicit_bind_group_layout_ids: *mut Option<id::BindGroupLayoutId>,
 ) -> id::RenderPipelineId {
     let backend = device_id.backend();
-    let id = client
-        .identities
-        .lock()
-        .select(backend)
-        .render_pipelines
-        .alloc(backend);
+    let mut identities = client.identities.lock();
+    let id = identities.select(backend).render_pipelines.alloc(backend);
 
     let wgpu_desc = wgc::pipeline::RenderPipelineDescriptor {
         label: cow_label(&desc.label),
@@ -875,7 +913,18 @@ pub unsafe extern "C" fn wgpu_client_create_render_pipeline(
         alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
     };
 
-    let action = DeviceAction::CreateRenderPipeline(id, wgpu_desc);
+    let implicit = match desc.layout {
+        Some(_) => None,
+        None => {
+            let implicit = ImplicitLayout::new(identities.select(backend), backend);
+            for (i, bgl_id) in implicit.bind_groups.iter().enumerate() {
+                *implicit_bind_group_layout_ids.add(i) = Some(*bgl_id);
+            }
+            Some(implicit)
+        }
+    };
+
+    let action = DeviceAction::CreateRenderPipeline(id, wgpu_desc, implicit);
     *bb = make_byte_buf(&action);
     id
 }

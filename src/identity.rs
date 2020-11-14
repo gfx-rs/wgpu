@@ -28,6 +28,7 @@ impl<I: id::TypedId + Clone + std::fmt::Debug> wgc::hub::IdentityHandler<I>
     }
 }
 
+//TODO: remove this in favor of `DropAction` that could be sent over IPC.
 #[repr(C)]
 pub struct IdentityRecyclerFactory {
     param: FactoryParam,

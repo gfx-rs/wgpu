@@ -4,7 +4,7 @@
 
 use crate::{
     cow_label, identity::IdentityRecyclerFactory, ByteBuf, CommandEncoderAction, DeviceAction,
-    RawString, TextureAction,
+    DropAction, RawString, TextureAction,
 };
 
 use wgc::{gfx_select, id};
@@ -164,7 +164,11 @@ pub extern "C" fn wgpu_server_buffer_drop(global: &Global, self_id: id::BufferId
 }
 
 trait GlobalExt {
-    fn device_action<B: wgc::hub::GfxBackend>(&self, self_id: id::DeviceId, action: DeviceAction);
+    fn device_action<B: wgc::hub::GfxBackend>(
+        &self,
+        self_id: id::DeviceId,
+        action: DeviceAction,
+    ) -> Vec<u8>;
     fn texture_action<B: wgc::hub::GfxBackend>(
         &self,
         self_id: id::TextureId,
@@ -178,8 +182,12 @@ trait GlobalExt {
 }
 
 impl GlobalExt for Global {
-    fn device_action<B: wgc::hub::GfxBackend>(&self, self_id: id::DeviceId, action: DeviceAction) {
-        let implicit_ids = None; //TODO
+    fn device_action<B: wgc::hub::GfxBackend>(
+        &self,
+        self_id: id::DeviceId,
+        action: DeviceAction,
+    ) -> Vec<u8> {
+        let mut drop_actions = Vec::new();
         match action {
             DeviceAction::CreateBuffer(id, desc) => {
                 self.device_create_buffer::<B>(self_id, &desc, id).unwrap();
@@ -202,21 +210,54 @@ impl GlobalExt for Global {
                 self.device_create_bind_group::<B>(self_id, &desc, id)
                     .unwrap();
             }
-            DeviceAction::CreateShaderModule(id, spirv) => {
-                self.device_create_shader_module::<B>(
-                    self_id,
-                    wgc::pipeline::ShaderModuleSource::SpirV(spirv),
-                    id,
-                )
-                .unwrap();
-            }
-            DeviceAction::CreateComputePipeline(id, desc) => {
-                self.device_create_compute_pipeline::<B>(self_id, &desc, id, implicit_ids)
+            DeviceAction::CreateShaderModule(id, spirv, wgsl) => {
+                let source = if spirv.is_empty() {
+                    wgc::pipeline::ShaderModuleSource::Wgsl(wgsl)
+                } else {
+                    wgc::pipeline::ShaderModuleSource::SpirV(spirv)
+                };
+                self.device_create_shader_module::<B>(self_id, source, id)
                     .unwrap();
             }
-            DeviceAction::CreateRenderPipeline(id, desc) => {
-                self.device_create_render_pipeline::<B>(self_id, &desc, id, implicit_ids)
+            DeviceAction::CreateComputePipeline(id, desc, implicit) => {
+                let implicit_ids = implicit
+                    .as_ref()
+                    .map(|imp| wgc::device::ImplicitPipelineIds {
+                        root_id: imp.pipeline,
+                        group_ids: &imp.bind_groups,
+                    });
+                let (_, group_count) = self
+                    .device_create_compute_pipeline::<B>(self_id, &desc, id, implicit_ids)
                     .unwrap();
+                if let Some(ref imp) = implicit {
+                    for &bgl_id in imp.bind_groups[group_count as usize..].iter() {
+                        bincode::serialize_into(
+                            &mut drop_actions,
+                            &DropAction::BindGroupLayout(bgl_id),
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+            DeviceAction::CreateRenderPipeline(id, desc, implicit) => {
+                let implicit_ids = implicit
+                    .as_ref()
+                    .map(|imp| wgc::device::ImplicitPipelineIds {
+                        root_id: imp.pipeline,
+                        group_ids: &imp.bind_groups,
+                    });
+                let (_, group_count) = self
+                    .device_create_render_pipeline::<B>(self_id, &desc, id, implicit_ids)
+                    .unwrap();
+                if let Some(ref imp) = implicit {
+                    for &bgl_id in imp.bind_groups[group_count as usize..].iter() {
+                        bincode::serialize_into(
+                            &mut drop_actions,
+                            &DropAction::BindGroupLayout(bgl_id),
+                        )
+                        .unwrap();
+                    }
+                }
             }
             DeviceAction::CreateRenderBundle(_id, desc, _base) => {
                 wgc::command::RenderBundleEncoder::new(&desc, self_id, None).unwrap();
@@ -226,6 +267,7 @@ impl GlobalExt for Global {
                     .unwrap();
             }
         }
+        drop_actions
     }
 
     fn texture_action<B: wgc::hub::GfxBackend>(
@@ -292,9 +334,11 @@ pub unsafe extern "C" fn wgpu_server_device_action(
     global: &Global,
     self_id: id::DeviceId,
     byte_buf: &ByteBuf,
+    drop_byte_buf: &mut ByteBuf,
 ) {
     let action = bincode::deserialize(byte_buf.as_slice()).unwrap();
-    gfx_select!(self_id => global.device_action(self_id, action));
+    let drop_actions = gfx_select!(self_id => global.device_action(self_id, action));
+    *drop_byte_buf = ByteBuf::from_vec(drop_actions);
 }
 
 #[no_mangle]
@@ -464,4 +508,22 @@ pub extern "C" fn wgpu_server_texture_view_drop(global: &Global, self_id: id::Te
 #[no_mangle]
 pub extern "C" fn wgpu_server_sampler_drop(global: &Global, self_id: id::SamplerId) {
     gfx_select!(self_id => global.sampler_drop(self_id));
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_compute_pipeline_get_bind_group_layout(
+    global: &Global,
+    self_id: id::ComputePipelineId,
+    index: u32,
+) -> id::BindGroupLayoutId {
+    gfx_select!(self_id => global.compute_pipeline_get_bind_group_layout(self_id, index)).unwrap()
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_render_pipeline_get_bind_group_layout(
+    global: &Global,
+    self_id: id::RenderPipelineId,
+    index: u32,
+) -> id::BindGroupLayoutId {
+    gfx_select!(self_id => global.render_pipeline_get_bind_group_layout(self_id, index)).unwrap()
 }
