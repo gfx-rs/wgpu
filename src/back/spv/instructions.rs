@@ -696,6 +696,15 @@ pub(super) fn instruction_matrix_times_matrix(
 // Bit Instructions
 //
 
+pub(super) fn instruction_bitwise_and(
+    result_type_id: Word,
+    id: Word,
+    operand_1: Word,
+    operand_2: Word,
+) -> Instruction {
+    instruction_binary(Op::BitwiseAnd, result_type_id, id, operand_1, operand_2)
+}
+
 //
 // Relational and Logical Instructions
 //

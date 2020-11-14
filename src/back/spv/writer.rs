@@ -1214,6 +1214,15 @@ impl Writer {
                         },
                         _ => unreachable!(),
                     },
+                    crate::BinaryOperator::And => (
+                        super::instructions::instruction_bitwise_and(
+                            left_result_type_id,
+                            id,
+                            left_id,
+                            right_id,
+                        ),
+                        left_lookup_ty,
+                    ),
                     _ => unimplemented!("{:?}", op),
                 };
 
