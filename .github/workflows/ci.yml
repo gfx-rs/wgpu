@@ -25,13 +25,6 @@ jobs:
       TARGET: aarch64-linux-android
     steps:
       - uses: actions/checkout@v2
-      - name: Install NDK
-        run: |
-          curl -LO https://dl.google.com/android/repository/android-ndk-r21b-linux-x86_64.zip
-          unzip -qq android-ndk-r21b-linux-x86_64.zip -d $GITHUB_WORKSPACE
-          export NDK_HOME_BIN=$GITHUB_WORKSPACE/android-ndk-r21b/toolchains/llvm/prebuilt/linux-x86_64/bin
-          ln -s $NDK_HOME_BIN/aarch64-linux-android21-clang $NDK_HOME_BIN/aarch64-linux-android-clang
-          echo "::add-path::$NDK_HOME_BIN"
       - run: rustup component add clippy
       - run: rustup target add ${{ env.TARGET }}
       - run: cargo clippy --target ${{ env.TARGET }}
