@@ -25,6 +25,8 @@ jobs:
       TARGET: aarch64-linux-android
     steps:
       - uses: actions/checkout@v2
+      - name: Install NDK
+        run: echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
       - run: rustup component add clippy
       - run: rustup target add ${{ env.TARGET }}
       - run: cargo clippy --target ${{ env.TARGET }}
@@ -61,10 +63,10 @@ jobs:
           - name: Ubuntu Nightly
             os: ubuntu-18.04
             channel: nightly
-            build_command: | 
+            build_command: |
               sudo add-apt-repository ppa:oibaf/graphics-drivers;
               sudo apt-get install mesa-vulkan-drivers;
-              cargo test -- --nocapture; 
+              cargo test -- --nocapture;
             additional_core_features: serial-pass
             additional_player_features: winit
           - name: Windows Stable
