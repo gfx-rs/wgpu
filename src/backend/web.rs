@@ -1261,6 +1261,14 @@ impl crate::Context for Context {
         Sendable(texture.0.create_view_with_descriptor(&mapped))
     }
 
+    fn surface_drop(&self, _surface: &Self::SurfaceId) {
+        // Dropped automatically
+    }
+
+    fn adapter_drop(&self, _adapter: &Self::AdapterId) {
+        // Dropped automatically
+    }
+
     fn buffer_destroy(&self, _buffer: &Self::BufferId) {
         // TODO
     }
