@@ -245,13 +245,9 @@ pomelo! {
         match fc.kind {
             FunctionCallKind::TypeConstructor(ty) => {
                 let h = if fc.args.len() == 1 {
-                    let kind = match extra.module.types[ty].inner {
-                        TypeInner::Scalar{kind, ..} => kind,
-                        TypeInner::Vector{kind, ..} => kind,
-                        _ => {
-                            return Err(ErrorKind::SemanticError("Can only cast to scalar or vector"));
-                        }
-                    };
+                    let kind = extra.module.types[ty].inner
+                        .scalar_kind()
+                        .ok_or(ErrorKind::SemanticError("Can only cast to scalar or vector"))?;
                     extra.context.expressions.append(Expression::As {
                         kind,
                         expr: fc.args[0].expression,
