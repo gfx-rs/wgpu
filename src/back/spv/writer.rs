@@ -1017,13 +1017,28 @@ impl Writer {
                 let mut constituent_ids = Vec::with_capacity(components.len());
                 for component in components {
                     let expression = &ir_function.expressions[*component];
-                    let (component_id, _) = self.write_expression(
+                    let (component_id, component_local_ty) = self.write_expression(
                         ir_module,
                         &ir_function,
                         expression,
                         block,
                         function,
                     )?;
+
+                    let component_id = match expression {
+                        crate::Expression::LocalVariable(_)
+                        | crate::Expression::GlobalVariable(_) => {
+                            let load_id = self.generate_id();
+                            block.body.push(super::instructions::instruction_load(
+                                self.get_type_id(&ir_module.types, component_local_ty.unwrap()),
+                                load_id,
+                                component_id,
+                                None,
+                            ));
+                            load_id
+                        }
+                        _ => component_id,
+                    };
 
                     constituent_ids.push(component_id);
                 }
