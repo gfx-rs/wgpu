@@ -1671,10 +1671,6 @@ impl Writer {
             ));
         }
 
-        for annotation in self.annotations.iter() {
-            annotation.to_words(&mut self.logical_layout.annotations);
-        }
-
         for (handle, ir_function) in ir_module.functions.iter() {
             let id = self.write_function(ir_function, ir_module);
             self.lookup_function.insert(handle, id);
@@ -1702,6 +1698,10 @@ impl Writer {
             for debug in self.debugs.iter() {
                 debug.to_words(&mut self.logical_layout.debugs);
             }
+        }
+
+        for annotation in self.annotations.iter() {
+            annotation.to_words(&mut self.logical_layout.annotations);
         }
     }
 
