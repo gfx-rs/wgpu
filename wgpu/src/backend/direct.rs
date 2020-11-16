@@ -33,7 +33,7 @@ impl Context {
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub unsafe fn create_surface_from_core_animation_layer(
-        &self,
+        self: &Arc<Self>,
         layer: *mut std::ffi::c_void,
     ) -> crate::Surface {
         let surface = wgc::instance::Surface {
@@ -52,7 +52,16 @@ impl Context {
         self.0
             .surfaces
             .register(id, surface, &mut wgc::hub::Token::root());
-        crate::Surface { id }
+        crate::Surface {
+            context: Arc::clone(self),
+            id,
+        }
+    }
+}
+
+impl Drop for Context {
+    fn drop(&mut self) {
+        //nothing
     }
 }
 
@@ -1205,6 +1214,15 @@ impl crate::Context for Context {
             &texture.error_sink,
             || wgc::gfx_select!( texture.id =>global.texture_view_error(PhantomData)),
         )
+    }
+
+    fn surface_drop(&self, surface: &Self::SurfaceId) {
+        self.0.surface_drop(*surface)
+    }
+
+    fn adapter_drop(&self, adapter: &Self::AdapterId) {
+        let global = &self.0;
+        wgc::gfx_select!(*adapter => global.adapter_drop(*adapter))
     }
 
     fn buffer_destroy(&self, buffer: &Self::BufferId) {

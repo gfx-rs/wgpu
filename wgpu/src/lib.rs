@@ -302,6 +302,8 @@ trait Context: Debug + Send + Sized + Sync {
         desc: &TextureViewDescriptor,
     ) -> Self::TextureViewId;
 
+    fn surface_drop(&self, surface: &Self::SurfaceId);
+    fn adapter_drop(&self, adapter: &Self::AdapterId);
     fn buffer_destroy(&self, buffer: &Self::BufferId);
     fn buffer_drop(&self, buffer: &Self::BufferId);
     fn texture_destroy(&self, buffer: &Self::TextureId);
@@ -432,6 +434,14 @@ pub struct Instance {
 pub struct Adapter {
     context: Arc<C>,
     id: <C as Context>::AdapterId,
+}
+
+impl Drop for Adapter {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context.adapter_drop(&self.id)
+        }
+    }
 }
 
 /// Open connection to a graphics and/or compute device.
@@ -586,7 +596,16 @@ impl Drop for Sampler {
 /// be presented. A `Surface` may be created with the unsafe function [`Instance::create_surface`].
 #[derive(Debug)]
 pub struct Surface {
+    context: Arc<C>,
     id: <C as Context>::SurfaceId,
+}
+
+impl Drop for Surface {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context.surface_drop(&self.id)
+        }
+    }
 }
 
 /// Handle to a swap chain.
@@ -1335,6 +1354,7 @@ impl Instance {
         window: &W,
     ) -> Surface {
         Surface {
+            context: Arc::clone(&self.context),
             id: Context::instance_create_surface(&*self.context, window),
         }
     }
