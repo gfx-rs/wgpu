@@ -66,7 +66,7 @@ impl framework::Example for Example {
                         visibility: wgpu::ShaderStage::COMPUTE,
                         ty: wgpu::BindingType::UniformBuffer {
                             dynamic: false,
-                            min_binding_size: wgpu::BufferSize::new(sim_param_data.len() as _),
+                            min_binding_size: wgpu::BufferSize::new((sim_param_data.len()*std::mem::size_of::<f32>()) as _),
                         },
                         count: None,
                     },
@@ -151,7 +151,7 @@ impl framework::Example for Example {
         // create compute pipeline
 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
+            label: Some("Compute pipeline"),
             layout: Some(&compute_pipeline_layout),
             compute_stage: wgpu::ProgrammableStageDescriptor {
                 module: &boids_module,
