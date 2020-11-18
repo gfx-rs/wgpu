@@ -66,7 +66,9 @@ impl framework::Example for Example {
                         visibility: wgpu::ShaderStage::COMPUTE,
                         ty: wgpu::BindingType::UniformBuffer {
                             dynamic: false,
-                            min_binding_size: wgpu::BufferSize::new((sim_param_data.len()*std::mem::size_of::<f32>()) as _),
+                            min_binding_size: wgpu::BufferSize::new(
+                                (sim_param_data.len() * std::mem::size_of::<f32>()) as _,
+                            ),
                         },
                         count: None,
                     },
