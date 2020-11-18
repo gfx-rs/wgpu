@@ -57,7 +57,10 @@ impl Context {
         }
         let buffer = device.0.create_buffer(&buffer_desc);
         let data = js_sys::Uint8Array::from(contents).buffer();
-        device.0.default_queue().write_buffer_with_u32(&buffer, 0, &data);
+        device
+            .0
+            .default_queue()
+            .write_buffer_with_u32(&buffer, 0, &data);
         Sendable(buffer)
     }
 }
