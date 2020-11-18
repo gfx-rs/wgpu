@@ -1194,7 +1194,8 @@ impl Writer {
                             ),
                             left_lookup_ty,
                         ),
-                        (Dimension::Scalar, Dimension::Scalar)
+                        (Dimension::Vector, Dimension::Vector)
+                        | (Dimension::Scalar, Dimension::Scalar)
                             if left_ty_inner.scalar_kind() == Some(crate::ScalarKind::Float) =>
                         {
                             (
@@ -1207,7 +1208,8 @@ impl Writer {
                                 left_lookup_ty,
                             )
                         }
-                        (Dimension::Scalar, Dimension::Scalar) => (
+                        (Dimension::Vector, Dimension::Vector)
+                        | (Dimension::Scalar, Dimension::Scalar) => (
                             super::instructions::instruction_i_mul(
                                 left_result_type_id,
                                 id,
