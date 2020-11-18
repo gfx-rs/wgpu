@@ -63,6 +63,14 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) active_submission_index: SubmissionIndex,
 }
 
+impl<B: hal::Backend> crate::hub::Resource for SwapChain<B> {
+    const TYPE: &'static str = "SwapChain";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum SwapChainError {
     #[error("swap chain is invalid")]
@@ -183,7 +191,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         layers: 0..1,
                         levels: 0..1,
                     },
-                    life_guard: LifeGuard::new(),
+                    life_guard: LifeGuard::new("<SwapChain View>"),
                 };
 
                 let ref_count = view.life_guard.add_ref();

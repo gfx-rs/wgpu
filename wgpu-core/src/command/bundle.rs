@@ -52,7 +52,7 @@ use crate::{
     span,
     track::{TrackerSet, UsageConflict},
     validation::check_buffer_usage,
-    Label, LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
+    Label, LabelHelpers, LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
 use std::{
@@ -351,6 +351,14 @@ impl RenderBundle {
 impl Borrow<RefCount> for RenderBundle {
     fn borrow(&self) -> &RefCount {
         self.life_guard.ref_count.as_ref().unwrap()
+    }
+}
+
+impl crate::hub::Resource for RenderBundle {
+    const TYPE: &'static str = "RenderBundle";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 
@@ -1018,7 +1026,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 },
                 used: state.trackers,
                 context: bundle_encoder.context,
-                life_guard: LifeGuard::new(),
+                life_guard: LifeGuard::new(desc.label.borrow_or_default()),
             }
         };
 

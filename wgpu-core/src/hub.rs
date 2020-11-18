@@ -80,7 +80,7 @@ impl IdentityManager {
 enum Element<T> {
     Vacant,
     Occupied(T, Epoch),
-    Error(Epoch),
+    Error(Epoch, String),
 }
 
 #[derive(Clone, Debug)]
@@ -111,7 +111,7 @@ impl<T, I: TypedId> Storage<T, I> {
         let (index, epoch, _) = id.unzip();
         match self.map[index as usize] {
             Element::Vacant => false,
-            Element::Occupied(_, storage_epoch) | Element::Error(storage_epoch) => {
+            Element::Occupied(_, storage_epoch) | Element::Error(storage_epoch, ..) => {
                 epoch == storage_epoch
             }
         }
@@ -124,7 +124,7 @@ impl<T, I: TypedId> Storage<T, I> {
         let (result, storage_epoch) = match self.map[index as usize] {
             Element::Occupied(ref v, epoch) => (Ok(v), epoch),
             Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            Element::Error(epoch) => (Err(InvalidId), epoch),
+            Element::Error(epoch, ..) => (Err(InvalidId), epoch),
         };
         assert_eq!(
             epoch, storage_epoch,
@@ -141,7 +141,7 @@ impl<T, I: TypedId> Storage<T, I> {
         let (result, storage_epoch) = match self.map[index as usize] {
             Element::Occupied(ref mut v, epoch) => (Ok(v), epoch),
             Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            Element::Error(epoch) => (Err(InvalidId), epoch),
+            Element::Error(epoch, ..) => (Err(InvalidId), epoch),
         };
         assert_eq!(
             epoch, storage_epoch,
@@ -149,6 +149,14 @@ impl<T, I: TypedId> Storage<T, I> {
             self.kind, index
         );
         result
+    }
+
+    pub(crate) fn label_for_invalid_id(&self, id: I) -> &str {
+        let (index, _, _) = id.unzip();
+        match self.map[index as usize] {
+            Element::Error(_, ref label) => label,
+            _ => "",
+        }
     }
 
     fn insert_impl(&mut self, index: usize, element: Element<T>) {
@@ -166,9 +174,9 @@ impl<T, I: TypedId> Storage<T, I> {
         self.insert_impl(index as usize, Element::Occupied(value, epoch))
     }
 
-    pub(crate) fn insert_error(&mut self, id: I) {
+    pub(crate) fn insert_error(&mut self, id: I, label: &str) {
         let (index, epoch, _) = id.unzip();
-        self.insert_impl(index as usize, Element::Error(epoch))
+        self.insert_impl(index as usize, Element::Error(epoch, label.to_string()))
     }
 
     pub(crate) fn remove(&mut self, id: I) -> Option<T> {
@@ -178,7 +186,7 @@ impl<T, I: TypedId> Storage<T, I> {
                 assert_eq!(epoch, storage_epoch);
                 Some(value)
             }
-            Element::Error(_) => None,
+            Element::Error(..) => None,
             Element::Vacant => panic!("Cannot remove a vacant resource"),
         }
     }
@@ -378,20 +386,31 @@ impl GlobalIdentityHandlerFactory for IdentityManagerFactory {}
 
 pub type Input<G, I> = <<G as IdentityHandlerFactory<I>>::Filter as IdentityHandler<I>>::Input;
 
+pub trait Resource {
+    const TYPE: &'static str;
+    fn life_guard(&self) -> &crate::LifeGuard;
+    fn label(&self) -> &str {
+        #[cfg(debug_assertions)]
+        return &self.life_guard().label;
+        #[cfg(not(debug_assertions))]
+        return "";
+    }
+}
+
 #[derive(Debug)]
-pub struct Registry<T, I: TypedId, F: IdentityHandlerFactory<I>> {
+pub struct Registry<T: Resource, I: TypedId, F: IdentityHandlerFactory<I>> {
     identity: F::Filter,
     data: RwLock<Storage<T, I>>,
     backend: Backend,
 }
 
-impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
-    fn new(backend: Backend, factory: &F, kind: &'static str) -> Self {
+impl<T: Resource, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
+    fn new(backend: Backend, factory: &F) -> Self {
         Self {
             identity: factory.spawn(0),
             data: RwLock::new(Storage {
                 map: Vec::new(),
-                kind,
+                kind: T::TYPE,
                 _phantom: PhantomData,
             }),
             backend,
@@ -411,7 +430,7 @@ impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     }
 }
 
-impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
+impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     pub fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
         debug_assert_eq!(id.unzip().2, self.backend);
         self.data.write().insert(id, value);
@@ -456,11 +475,12 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     pub fn register_error<A: Access<T>>(
         &self,
         id_in: <F::Filter as IdentityHandler<I>>::Input,
+        label: &str,
         _token: &mut Token<A>,
     ) -> I {
         let id = self.identity.process(id_in, self.backend);
         debug_assert_eq!(id.unzip().2, self.backend);
-        self.data.write().insert_error(id);
+        self.data.write().insert_error(id, label);
         id
     }
 
@@ -491,6 +511,27 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     pub fn free_id(&self, id: I) {
         self.identity.free(id)
     }
+
+    pub fn label_for_resource(&self, id: I) -> String {
+        let guard = self.data.read();
+
+        let type_name = guard.kind;
+        match guard.get(id) {
+            Ok(res) => {
+                let label = res.label();
+                if label.is_empty() {
+                    format!("<{}-{:?}>", type_name, id.unzip())
+                } else {
+                    label.to_string()
+                }
+            }
+            Err(_) => format!(
+                "<Invalid-{} label={}>",
+                type_name,
+                guard.label_for_invalid_id(id)
+            ),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -515,21 +556,21 @@ pub struct Hub<B: hal::Backend, F: GlobalIdentityHandlerFactory> {
 impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
     fn new(factory: &F) -> Self {
         Self {
-            adapters: Registry::new(B::VARIANT, factory, "Adapter"),
-            devices: Registry::new(B::VARIANT, factory, "Device"),
-            swap_chains: Registry::new(B::VARIANT, factory, "SwapChain"),
-            pipeline_layouts: Registry::new(B::VARIANT, factory, "PipelineLayout"),
-            shader_modules: Registry::new(B::VARIANT, factory, "ShaderModule"),
-            bind_group_layouts: Registry::new(B::VARIANT, factory, "BindGroupLayout"),
-            bind_groups: Registry::new(B::VARIANT, factory, "BindGroup"),
-            command_buffers: Registry::new(B::VARIANT, factory, "CommandBuffer"),
-            render_bundles: Registry::new(B::VARIANT, factory, "RenderBundle"),
-            render_pipelines: Registry::new(B::VARIANT, factory, "RenderPipeline"),
-            compute_pipelines: Registry::new(B::VARIANT, factory, "ComputePipeline"),
-            buffers: Registry::new(B::VARIANT, factory, "Buffer"),
-            textures: Registry::new(B::VARIANT, factory, "Texture"),
-            texture_views: Registry::new(B::VARIANT, factory, "TextureView"),
-            samplers: Registry::new(B::VARIANT, factory, "Sampler"),
+            adapters: Registry::new(B::VARIANT, factory),
+            devices: Registry::new(B::VARIANT, factory),
+            swap_chains: Registry::new(B::VARIANT, factory),
+            pipeline_layouts: Registry::new(B::VARIANT, factory),
+            shader_modules: Registry::new(B::VARIANT, factory),
+            bind_group_layouts: Registry::new(B::VARIANT, factory),
+            bind_groups: Registry::new(B::VARIANT, factory),
+            command_buffers: Registry::new(B::VARIANT, factory),
+            render_bundles: Registry::new(B::VARIANT, factory),
+            render_pipelines: Registry::new(B::VARIANT, factory),
+            compute_pipelines: Registry::new(B::VARIANT, factory),
+            buffers: Registry::new(B::VARIANT, factory),
+            textures: Registry::new(B::VARIANT, factory),
+            texture_views: Registry::new(B::VARIANT, factory),
+            samplers: Registry::new(B::VARIANT, factory),
         }
     }
 }

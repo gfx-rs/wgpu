@@ -47,6 +47,8 @@ pub struct CommandBuffer<B: hal::Backend> {
     private_features: PrivateFeatures,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
+    #[cfg(debug_assertions)]
+    pub(crate) label: String,
 }
 
 impl<B: GfxBackend> CommandBuffer<B> {
@@ -98,6 +100,21 @@ impl<B: GfxBackend> CommandBuffer<B> {
                 buffer_barriers.chain(texture_barriers),
             );
         }
+    }
+}
+
+impl<B: hal::Backend> crate::hub::Resource for CommandBuffer<B> {
+    const TYPE: &'static str = "CommandBuffer";
+
+    fn life_guard(&self) -> &crate::LifeGuard {
+        unreachable!()
+    }
+
+    fn label(&self) -> &str {
+        #[cfg(debug_assertions)]
+        return &self.label;
+        #[cfg(not(debug_assertions))]
+        return "";
     }
 }
 

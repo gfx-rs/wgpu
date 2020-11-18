@@ -316,6 +316,23 @@ pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) desc_counts: DescriptorCounts,
     pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
+    #[cfg(debug_assertions)]
+    pub(crate) label: String,
+}
+
+impl<B: hal::Backend> crate::hub::Resource for BindGroupLayout<B> {
+    const TYPE: &'static str = "BindGroupLayout";
+
+    fn life_guard(&self) -> &LifeGuard {
+        unreachable!()
+    }
+
+    fn label(&self) -> &str {
+        #[cfg(debug_assertions)]
+        return &self.label;
+        #[cfg(not(debug_assertions))]
+        return "";
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -488,6 +505,14 @@ impl<B: hal::Backend> PipelineLayout<B> {
     }
 }
 
+impl<B: hal::Backend> crate::hub::Resource for PipelineLayout<B> {
+    const TYPE: &'static str = "PipelineLayout";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -582,6 +607,14 @@ impl<B: hal::Backend> Borrow<RefCount> for BindGroup<B> {
 impl<B: hal::Backend> Borrow<()> for BindGroup<B> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
+    }
+}
+
+impl<B: hal::Backend> crate::hub::Resource for BindGroup<B> {
+    const TYPE: &'static str = "BindGroup";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 

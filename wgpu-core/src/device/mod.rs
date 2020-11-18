@@ -12,8 +12,8 @@ use crate::{
     id, pipeline, resource, span, swap_chain,
     track::{BufferState, TextureSelector, TextureState, TrackerSet},
     validation::{self, check_buffer_usage, check_texture_usage},
-    FastHashMap, Label, LifeGuard, MultiRefCount, PrivateFeatures, Stored, SubmissionIndex,
-    MAX_BIND_GROUPS,
+    FastHashMap, Label, LabelHelpers, LifeGuard, MultiRefCount, PrivateFeatures, Stored,
+    SubmissionIndex, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -273,7 +273,7 @@ impl<B: GfxBackend> Device<B> {
             mem_allocator: Mutex::new(mem_allocator),
             desc_allocator: Mutex::new(descriptors),
             queue_group,
-            life_guard: LifeGuard::new(),
+            life_guard: LifeGuard::new("<device>"),
             active_submission_index: 0,
             trackers: Mutex::new(TrackerSet::new(B::VARIANT)),
             render_passes: Mutex::new(FastHashMap::default()),
@@ -489,7 +489,7 @@ impl<B: GfxBackend> Device<B> {
             full_range: (),
             sync_mapped_writes: None,
             map_state: resource::BufferMapState::Idle,
-            life_guard: LifeGuard::new(),
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
     }
 
@@ -581,7 +581,7 @@ impl<B: GfxBackend> Device<B> {
                 levels: 0..desc.mip_level_count as hal::image::Level,
                 layers: 0..kind.num_layers(),
             },
-            life_guard: LifeGuard::new(),
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
     }
 
@@ -721,6 +721,8 @@ impl<B: GfxBackend> Device<B> {
                 .count(),
             count_validator,
             entries: entry_map,
+            #[cfg(debug_assertions)]
+            label: label.unwrap_or("").to_string(),
         })
     }
 
@@ -822,7 +824,7 @@ impl<B: GfxBackend> Device<B> {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
             },
-            life_guard: LifeGuard::new(),
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
             bind_group_layout_ids: desc
                 .bind_group_layouts
                 .iter()
@@ -901,6 +903,14 @@ impl<B: hal::Backend> Device<B> {
                 self.raw.destroy_framebuffer(fbo);
             }
         }
+    }
+}
+
+impl<B: hal::Backend> crate::hub::Resource for Device<B> {
+    const TYPE: &'static str = "Device";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 
@@ -1156,10 +1166,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn buffer_error<B: GfxBackend>(&self, id_in: Input<G, id::BufferId>) -> id::BufferId {
+    pub fn buffer_label<B: GfxBackend>(&self, id: id::BufferId) -> String {
+        B::hub(self).buffers.label_for_resource(id)
+    }
+
+    pub fn buffer_error<B: GfxBackend>(
+        &self,
+        id_in: Input<G, id::BufferId>,
+        label: Option<&str>,
+    ) -> id::BufferId {
         B::hub(self)
             .buffers
-            .register_error(id_in, &mut Token::root())
+            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn buffer_destroy<B: GfxBackend>(
@@ -1304,10 +1322,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(id.0)
     }
 
-    pub fn texture_error<B: GfxBackend>(&self, id_in: Input<G, id::TextureId>) -> id::TextureId {
+    pub fn texture_label<B: GfxBackend>(&self, id: id::TextureId) -> String {
+        B::hub(self).textures.label_for_resource(id)
+    }
+
+    pub fn texture_error<B: GfxBackend>(
+        &self,
+        id_in: Input<G, id::TextureId>,
+        label: Option<&str>,
+    ) -> id::TextureId {
         B::hub(self)
             .textures
-            .register_error(id_in, &mut Token::root())
+            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn texture_destroy<B: GfxBackend>(
@@ -1567,7 +1593,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             extent: texture.kind.extent().at_level(desc.base_mip_level as _),
             samples: texture.kind.num_samples(),
             selector,
-            life_guard: LifeGuard::new(),
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         };
         let ref_count = view.life_guard.add_ref();
 
@@ -1593,10 +1619,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn texture_view_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::TextureViewId>,
+        label: Option<&str>,
     ) -> id::TextureViewId {
         B::hub(self)
             .texture_views
-            .register_error(id_in, &mut Token::root())
+            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn texture_view_drop<B: GfxBackend>(
@@ -1726,7 +1753,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 value: id::Valid(device_id),
                 ref_count: device.life_guard.add_ref(),
             },
-            life_guard: LifeGuard::new(),
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
             comparison: info.comparison.is_some(),
         };
         let ref_count = sampler.life_guard.add_ref();
@@ -1748,10 +1775,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(id.0)
     }
 
-    pub fn sampler_error<B: GfxBackend>(&self, id_in: Input<G, id::SamplerId>) -> id::SamplerId {
+    pub fn sampler_error<B: GfxBackend>(
+        &self,
+        id_in: Input<G, id::SamplerId>,
+        label: Option<&str>,
+    ) -> id::SamplerId {
         B::hub(self)
             .samplers
-            .register_error(id_in, &mut Token::root())
+            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn sampler_drop<B: GfxBackend>(&self, sampler_id: id::SamplerId) {
@@ -1840,10 +1871,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn bind_group_layout_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::BindGroupLayoutId>,
+        label: Option<&str>,
     ) -> id::BindGroupLayoutId {
-        B::hub(self)
-            .bind_group_layouts
-            .register_error(id_in, &mut Token::root())
+        B::hub(self).bind_group_layouts.register_error(
+            id_in,
+            label.unwrap_or(""),
+            &mut Token::root(),
+        )
     }
 
     pub fn bind_group_layout_drop<B: GfxBackend>(
@@ -1910,10 +1944,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn pipeline_layout_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::PipelineLayoutId>,
+        label: Option<&str>,
     ) -> id::PipelineLayoutId {
         B::hub(self)
             .pipeline_layouts
-            .register_error(id_in, &mut Token::root())
+            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn pipeline_layout_drop<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {
@@ -2385,7 +2420,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ref_count: device.life_guard.add_ref(),
             },
             layout_id: id::Valid(desc.layout),
-            life_guard: LifeGuard::new(),
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
             used,
             dynamic_binding_info,
         };
@@ -2418,10 +2453,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn bind_group_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::BindGroupId>,
+        label: Option<&str>,
     ) -> id::BindGroupId {
         B::hub(self)
             .bind_groups
-            .register_error(id_in, &mut Token::root())
+            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn bind_group_drop<B: GfxBackend>(&self, bind_group_id: id::BindGroupId) {
@@ -2562,7 +2598,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (_, mut token) = hub.devices.read(&mut token);
-        hub.shader_modules.register_error(id_in, &mut token)
+        hub.shader_modules.register_error(id_in, "", &mut token)
     }
 
     pub fn shader_module_drop<B: GfxBackend>(&self, shader_module_id: id::ShaderModuleId) {
@@ -2612,6 +2648,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &device.raw,
             device.limits.clone(),
             device.private_features,
+            &desc.label,
             #[cfg(feature = "trace")]
             device.trace.is_some(),
         )?;
@@ -2639,16 +2676,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> id::CommandEncoderId {
         B::hub(self)
             .command_buffers
-            .register_error(id_in, &mut Token::root())
+            .register_error(id_in, "", &mut Token::root())
     }
 
     pub fn command_buffer_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::CommandBufferId>,
+        label: Option<&str>,
     ) -> id::CommandBufferId {
         B::hub(self)
             .command_buffers
-            .register_error(id_in, &mut Token::root())
+            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn command_encoder_drop<B: GfxBackend>(&self, command_encoder_id: id::CommandEncoderId) {
@@ -2686,11 +2724,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn render_bundle_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::RenderBundleId>,
+        label: Option<&str>,
     ) -> id::RenderBundleId {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (_, mut token) = hub.devices.read(&mut token);
-        hub.render_bundles.register_error(id_in, &mut token)
+        hub.render_bundles
+            .register_error(id_in, label.unwrap_or(""), &mut token)
     }
 
     pub fn render_bundle_drop<B: GfxBackend>(&self, render_bundle_id: id::RenderBundleId) {
@@ -3151,7 +3191,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             flags,
             index_format: desc.vertex_state.index_format,
             vertex_strides,
-            life_guard: LifeGuard::new(),
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         };
 
         let id = hub
@@ -3201,11 +3241,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn render_pipeline_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::RenderPipelineId>,
+        label: Option<&str>,
     ) -> id::RenderPipelineId {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (_, mut token) = hub.devices.read(&mut token);
-        hub.render_pipelines.register_error(id_in, &mut token)
+        hub.render_pipelines
+            .register_error(id_in, label.unwrap_or(""), &mut token)
     }
 
     pub fn render_pipeline_drop<B: GfxBackend>(&self, render_pipeline_id: id::RenderPipelineId) {
@@ -3373,7 +3415,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 value: id::Valid(device_id),
                 ref_count: device.life_guard.add_ref(),
             },
-            life_guard: LifeGuard::new(),
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         };
         let id = hub
             .compute_pipelines
@@ -3422,11 +3464,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn compute_pipeline_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::ComputePipelineId>,
+        label: Option<&str>,
     ) -> id::ComputePipelineId {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (_, mut token) = hub.devices.read(&mut token);
-        hub.compute_pipelines.register_error(id_in, &mut token)
+        hub.compute_pipelines
+            .register_error(id_in, label.unwrap_or(""), &mut token)
     }
 
     pub fn compute_pipeline_drop<B: GfxBackend>(&self, compute_pipeline_id: id::ComputePipelineId) {
@@ -3576,7 +3620,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let swap_chain = swap_chain::SwapChain {
-            life_guard: LifeGuard::new(),
+            life_guard: LifeGuard::new("<SwapChain>"),
             device_id: Stored {
                 value: id::Valid(device_id),
                 ref_count: device.life_guard.add_ref(),
@@ -3682,7 +3726,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_error<B: GfxBackend>(&self, id_in: Input<G, id::DeviceId>) -> id::DeviceId {
         B::hub(self)
             .devices
-            .register_error(id_in, &mut Token::root())
+            .register_error(id_in, "", &mut Token::root())
     }
 
     pub fn device_drop<B: GfxBackend>(&self, device_id: id::DeviceId) {
