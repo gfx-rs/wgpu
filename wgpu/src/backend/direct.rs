@@ -671,7 +671,7 @@ impl crate::Context for Context {
             }, PhantomData)
         )
             .map_err(|err| err.with_context(format!("In Device::create_bind_group_layout with label {:?}", desc.label)))
-        .unwrap_error_sink(&device.error_sink, || wgc::gfx_select!( device.id => global.bind_group_layout_error(PhantomData)))
+        .unwrap_error_sink(&device.error_sink, || wgc::gfx_select!( device.id => global.bind_group_layout_error(PhantomData, desc.label)))
     }
 
     fn device_create_bind_group(
@@ -730,7 +730,7 @@ impl crate::Context for Context {
         })
         .unwrap_error_sink(
             &device.error_sink,
-            || wgc::gfx_select!( device.id => global.bind_group_error(PhantomData)),
+            || wgc::gfx_select!( device.id => global.bind_group_error(PhantomData, desc.label)),
         )
     }
 
@@ -774,7 +774,7 @@ impl crate::Context for Context {
         })
         .unwrap_error_sink(
             &device.error_sink,
-            || wgc::gfx_select!( device.id => global.pipeline_layout_error(PhantomData)),
+            || wgc::gfx_select!( device.id => global.pipeline_layout_error(PhantomData, desc.label)),
         )
     }
 
@@ -846,8 +846,8 @@ impl crate::Context for Context {
                 desc.label
             ))
         })
-        .unwrap_error_sink(&device.error_sink, || {
-            let err = wgc::gfx_select!( device.id => global.render_pipeline_error(PhantomData));
+        .unwrap_error_sink(&device.error_sink,  || {
+            let err = wgc::gfx_select!( device.id => global.render_pipeline_error(PhantomData, desc.label));
             (err, 0u8)
         })
         .0
@@ -889,7 +889,7 @@ impl crate::Context for Context {
             ))
         })
         .unwrap_error_sink(&device.error_sink, || {
-            let err = wgc::gfx_select!( device.id => global.compute_pipeline_error(PhantomData));
+            let err = wgc::gfx_select!( device.id => global.compute_pipeline_error(PhantomData, desc.label));
             (err, 0u8)
         })
         .0
@@ -919,7 +919,7 @@ impl crate::Context for Context {
         })
         .unwrap_error_sink(
             &device.error_sink,
-            || wgc::gfx_select!( device.id => global.buffer_error(PhantomData)),
+            || wgc::gfx_select!( device.id => global.buffer_error(PhantomData, desc.label)),
         );
         Buffer {
             id: buffer_id,
@@ -954,7 +954,7 @@ impl crate::Context for Context {
         })
         .unwrap_error_sink(
             &device.error_sink,
-            || wgc::gfx_select!( device.id => global.texture_error(PhantomData)),
+            || wgc::gfx_select!( device.id => global.texture_error(PhantomData, desc.label)),
         );
         Texture {
             id: texture_id,
@@ -992,7 +992,7 @@ impl crate::Context for Context {
         })
         .unwrap_error_sink(
             &device.error_sink,
-            || wgc::gfx_select!( device.id => global.sampler_error(PhantomData)),
+            || wgc::gfx_select!( device.id => global.sampler_error(PhantomData, desc.label)),
         )
     }
 
@@ -1212,7 +1212,7 @@ impl crate::Context for Context {
         })
         .unwrap_error_sink(
             &texture.error_sink,
-            || wgc::gfx_select!( texture.id =>global.texture_view_error(PhantomData)),
+            || wgc::gfx_select!( texture.id =>global.texture_view_error(PhantomData, desc.label)),
         )
     }
 
@@ -1447,7 +1447,7 @@ impl crate::Context for Context {
             .map_err(|err| err.with_context("In a CommandEncoder".to_string()))
             .unwrap_error_sink(
                 &encoder.error_sink,
-                || wgc::gfx_select!( encoder.id => global.command_buffer_error(PhantomData)),
+                || wgc::gfx_select!( encoder.id => global.command_buffer_error(PhantomData, None)),
             )
     }
 
