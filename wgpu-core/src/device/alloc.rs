@@ -135,7 +135,7 @@ impl<B: hal::Backend> MemoryBlock<B> {
     }
 
     pub fn unmap(&mut self, device: &B::Device) {
-        unsafe { self.0.unmap(&MemoryDevice::<B>(device)) }
+        unsafe { self.0.unmap(&MemoryDevice::<B>(device)) };
     }
 
     pub fn write_bytes(

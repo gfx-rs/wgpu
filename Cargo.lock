@@ -763,8 +763,8 @@ dependencies = [
 
 [[package]]
 name = "gpu-alloc"
-version = "0.1.0"
-source = "git+https://github.com/zakarumych/gpu-alloc?rev=2bb7ef947443b1b13e34d3b98a116da6d69ac15b#2bb7ef947443b1b13e34d3b98a116da6d69ac15b"
+version = "0.2.0"
+source = "git+https://github.com/zakarumych/gpu-alloc?rev=7bd745e4885286d453258cafc99ee742b64e46ea#7bd745e4885286d453258cafc99ee742b64e46ea"
 dependencies = [
  "bitflags",
  "gpu-alloc-types",
@@ -773,7 +773,7 @@ dependencies = [
 [[package]]
 name = "gpu-alloc-types"
 version = "0.1.0"
-source = "git+https://github.com/zakarumych/gpu-alloc?rev=2bb7ef947443b1b13e34d3b98a116da6d69ac15b#2bb7ef947443b1b13e34d3b98a116da6d69ac15b"
+source = "git+https://github.com/zakarumych/gpu-alloc?rev=7bd745e4885286d453258cafc99ee742b64e46ea#7bd745e4885286d453258cafc99ee742b64e46ea"
 dependencies = [
  "bitflags",
 ]
@@ -1121,7 +1121,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.2.0"
-source = "git+https://github.com/gfx-rs/naga?rev=4d4e1cd4cbfad2b81264a7239a336b6ec1346611#4d4e1cd4cbfad2b81264a7239a336b6ec1346611"
+source = "git+https://github.com/gfx-rs/naga?rev=27ec95a2381ae8e0afd07fa13c83a436a9e0bd41#27ec95a2381ae8e0afd07fa13c83a436a9e0bd41"
 dependencies = [
  "bitflags",
  "fxhash",
