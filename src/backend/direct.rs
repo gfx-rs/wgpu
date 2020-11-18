@@ -1216,8 +1216,9 @@ impl crate::Context for Context {
         )
     }
 
-    fn surface_drop(&self, surface: &Self::SurfaceId) {
-        self.0.surface_drop(*surface)
+    fn surface_drop(&self, _surface: &Self::SurfaceId) {
+        //TODO: swapchain needs to hold the surface alive
+        //self.0.surface_drop(*surface)
     }
 
     fn adapter_drop(&self, adapter: &Self::AdapterId) {
