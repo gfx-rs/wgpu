@@ -25,106 +25,7 @@ use std::{
     string::FromUtf8Error,
 };
 
-//TODO: find a complete list
-const RESERVED_WORDS: &[&str] = &[
-    // control flow
-    "break",
-    "if",
-    "else",
-    "continue",
-    "goto",
-    "do",
-    "while",
-    "for",
-    "switch",
-    "case",
-    // types and values
-    "void",
-    "unsigned",
-    "signed",
-    "bool",
-    "char",
-    "int",
-    "long",
-    "float",
-    "double",
-    "char8_t",
-    "wchar_t",
-    "true",
-    "false",
-    "nullptr",
-    "union",
-    "class",
-    "struct",
-    "enum",
-    // other
-    "main",
-    "decltype",
-    "sizeof",
-    "typeof",
-    "typedef",
-    "explicit",
-    "export",
-    "friend",
-    "namespace",
-    "operator",
-    "public",
-    "template",
-    "typename",
-    "typeid",
-    "co_await",
-    "co_return",
-    "co_yield",
-    "module",
-    "import",
-    "ray_data",
-    "vec_step",
-    "visible",
-    "as_type",
-    // qualifiers
-    "mutable",
-    "static",
-    "volatile",
-    "restrict",
-    "const",
-    "non-temporal",
-    "dereferenceable",
-    "invariant",
-    // exceptions
-    "throw",
-    "try",
-    "catch",
-    // operators
-    "const_cast",
-    "dynamic_cast",
-    "reinterpret_cast",
-    "static_cast",
-    "new",
-    "delete",
-    "and",
-    "and_eq",
-    "bitand",
-    "bitor",
-    "compl",
-    "not",
-    "not_eq",
-    "or",
-    "or_eq",
-    "xor",
-    "xor_eq",
-    "compl",
-    // Metal-specific
-    "constant",
-    "device",
-    "threadgroup",
-    "threadgroup_imageblock",
-    "compute",
-    "vertex",
-    "fragment",
-    "read_only",
-    "write_only",
-    "read_write",
-];
+mod keywords;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BindTarget {
@@ -856,7 +757,7 @@ impl<W: Write> Writer<W> {
 
     pub fn write(&mut self, module: &crate::Module, options: &Options) -> Result<(), Error> {
         self.names.clear();
-        Namer::process(module, RESERVED_WORDS, &mut self.names);
+        Namer::process(module, keywords::RESERVED, &mut self.names);
 
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;
