@@ -98,7 +98,7 @@ pomelo! {
     %type initializer ExpressionRule;
 
     // declarations
-    %type declaration VarDeclaration;
+    %type declaration Option<VarDeclaration>;
     %type init_declarator_list VarDeclaration;
     %type single_declaration VarDeclaration;
     %type layout_qualifier Binding;
@@ -528,26 +528,30 @@ pomelo! {
 
     // declaration
     declaration ::= init_declarator_list(idl) Semicolon {
-        idl
+        Some(idl)
     }
 
     declaration ::= type_qualifier(t) Identifier(i) LeftBrace
         struct_declaration_list(sdl) RightBrace Semicolon {
-        VarDeclaration {
-            type_qualifiers: t,
-            ids_initializers: vec![(None, None)],
-            ty: extra.module.types.fetch_or_append(Type{
-                name: Some(i.1),
-                inner: TypeInner::Struct {
-                    members: sdl
-                }
-            }),
+        if i.1 == "gl_PerVertex" {
+            None
+        } else {
+            Some(VarDeclaration {
+                type_qualifiers: t,
+                ids_initializers: vec![(None, None)],
+                ty: extra.module.types.fetch_or_append(Type{
+                    name: Some(i.1),
+                    inner: TypeInner::Struct {
+                        members: sdl
+                    }
+                }),
+            })
         }
     }
 
     declaration ::= type_qualifier(t) Identifier(i1) LeftBrace
         struct_declaration_list(sdl) RightBrace Identifier(i2) Semicolon {
-        VarDeclaration {
+        Some(VarDeclaration {
             type_qualifiers: t,
             ids_initializers: vec![(Some(i2.1), None)],
             ty: extra.module.types.fetch_or_append(Type{
@@ -556,7 +560,7 @@ pomelo! {
                     members: sdl
                 }
             }),
-        }
+        })
     }
 
     // declaration ::= type_qualifier(t) Identifier(i1) LeftBrace
@@ -762,43 +766,45 @@ pomelo! {
     declaration_statement ::= declaration(d) {
         let mut statements = Vec::<Statement>::new();
         // local variables
-        for (id, initializer) in d.ids_initializers {
-            let id = id.ok_or(ErrorKind::SemanticError("local var must be named"))?;
-            // check if already declared in current scope
-            #[cfg(feature = "glsl-validate")]
-            {
-                if extra.context.lookup_local_var_current_scope(&id).is_some() {
-                    return Err(ErrorKind::VariableAlreadyDeclared(id))
+        if let Some(d) = d {
+            for (id, initializer) in d.ids_initializers {
+                let id = id.ok_or(ErrorKind::SemanticError("local var must be named"))?;
+                // check if already declared in current scope
+                #[cfg(feature = "glsl-validate")]
+                {
+                    if extra.context.lookup_local_var_current_scope(&id).is_some() {
+                        return Err(ErrorKind::VariableAlreadyDeclared(id))
+                    }
                 }
-            }
-            let mut init_exp: Option<Handle<Expression>> = None;
-            let localVar = extra.context.local_variables.append(
-                LocalVariable {
-                    name: Some(id.clone()),
-                    ty: d.ty,
-                    init: initializer.map(|i| {
-                        statements.extend(i.statements);
-                        if let Expression::Constant(constant) = extra.context.expressions[i.expression] {
-                            Some(constant)
-                        } else {
-                            init_exp = Some(i.expression);
-                            None
-                        }
-                    }).flatten(),
-                }
-            );
-            let exp = extra.context.expressions.append(Expression::LocalVariable(localVar));
-            extra.context.add_local_var(id, exp);
-
-            if let Some(value) = init_exp {
-                statements.push(
-                    Statement::Store {
-                        pointer: exp,
-                        value,
+                let mut init_exp: Option<Handle<Expression>> = None;
+                let localVar = extra.context.local_variables.append(
+                    LocalVariable {
+                        name: Some(id.clone()),
+                        ty: d.ty,
+                        init: initializer.map(|i| {
+                            statements.extend(i.statements);
+                            if let Expression::Constant(constant) = extra.context.expressions[i.expression] {
+                                Some(constant)
+                            } else {
+                                init_exp = Some(i.expression);
+                                None
+                            }
+                        }).flatten(),
                     }
                 );
+                let exp = extra.context.expressions.append(Expression::LocalVariable(localVar));
+                extra.context.add_local_var(id, exp);
+
+                if let Some(value) = init_exp {
+                    statements.push(
+                        Statement::Store {
+                            pointer: exp,
+                            value,
+                        }
+                    );
+                }
             }
-        }
+        };
         match statements.len() {
             1 => statements.remove(0),
             _ => Statement::Block(statements),
@@ -1073,32 +1079,34 @@ pomelo! {
         }
     }
     external_declaration ::= declaration(d) {
-        let class = d.type_qualifiers.iter().find_map(|tq| {
-            if let TypeQualifier::StorageClass(sc) = tq { Some(*sc) } else { None }
-        }).ok_or(ErrorKind::SemanticError("Missing storage class for global var"))?;
+        if let Some(d) = d {
+            let class = d.type_qualifiers.iter().find_map(|tq| {
+                if let TypeQualifier::StorageClass(sc) = tq { Some(*sc) } else { None }
+            }).ok_or(ErrorKind::SemanticError("Missing storage class for global var"))?;
 
-        let binding = d.type_qualifiers.iter().find_map(|tq| {
-            if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
-        });
+            let binding = d.type_qualifiers.iter().find_map(|tq| {
+                if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
+            });
 
-        let interpolation = d.type_qualifiers.iter().find_map(|tq| {
-            if let TypeQualifier::Interpolation(i) = tq { Some(*i) } else { None }
-        });
+            let interpolation = d.type_qualifiers.iter().find_map(|tq| {
+                if let TypeQualifier::Interpolation(i) = tq { Some(*i) } else { None }
+            });
 
-        for (id, initializer) in d.ids_initializers {
-            let h = extra.module.global_variables.fetch_or_append(
-                GlobalVariable {
-                    name: id.clone(),
-                    class,
-                    binding: binding.clone(),
-                    ty: d.ty,
-                    init: None,
-                    interpolation,
-                    storage_access: StorageAccess::empty(), //TODO
-                },
-            );
-            if let Some(id) = id {
-                extra.lookup_global_variables.insert(id, h);
+            for (id, initializer) in d.ids_initializers {
+                let h = extra.module.global_variables.fetch_or_append(
+                    GlobalVariable {
+                        name: id.clone(),
+                        class,
+                        binding: binding.clone(),
+                        ty: d.ty,
+                        init: None,
+                        interpolation,
+                        storage_access: StorageAccess::empty(), //TODO
+                    },
+                );
+                if let Some(id) = id {
+                    extra.lookup_global_variables.insert(id, h);
+                }
             }
         }
     }
