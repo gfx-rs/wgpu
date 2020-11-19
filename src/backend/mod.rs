@@ -5,6 +5,8 @@ pub(crate) use web::Context;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod direct;
+#[cfg(not(target_arch = "wasm32"))]
+mod error;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use direct::Context;

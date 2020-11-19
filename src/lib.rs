@@ -2696,6 +2696,8 @@ pub enum Error {
     ValidationError {
         ///
         source: Box<dyn error::Error + Send + Sync + 'static>,
+        ///
+        description: String,
     },
 }
 
@@ -2703,7 +2705,7 @@ impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Error::OutOfMemoryError { source } => Some(source.as_ref()),
-            Error::ValidationError { source } => Some(source.as_ref()),
+            Error::ValidationError { source, .. } => Some(source.as_ref()),
         }
     }
 }
@@ -2712,7 +2714,7 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::OutOfMemoryError { .. } => f.write_str("Out of Memory"),
-            Error::ValidationError { .. } => f.write_str("Validation error"),
+            Error::ValidationError { description, .. } => f.write_str(description),
         }
     }
 }
