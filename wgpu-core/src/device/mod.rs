@@ -1616,6 +1616,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(id.0)
     }
 
+    pub fn texture_view_label<B: GfxBackend>(&self, id: id::TextureViewId) -> String {
+        B::hub(self).texture_views.label_for_resource(id)
+    }
+
     pub fn texture_view_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::TextureViewId>,
@@ -1775,6 +1779,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(id.0)
     }
 
+    pub fn sampler_label<B: GfxBackend>(&self, id: id::SamplerId) -> String {
+        B::hub(self).samplers.label_for_resource(id)
+    }
+
     pub fn sampler_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::SamplerId>,
@@ -1868,6 +1876,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(id.0)
     }
 
+    pub fn bind_group_layout_label<B: GfxBackend>(&self, id: id::BindGroupLayoutId) -> String {
+        B::hub(self).bind_group_layouts.label_for_resource(id)
+    }
+
     pub fn bind_group_layout_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::BindGroupLayoutId>,
@@ -1939,6 +1951,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .add(trace::Action::CreatePipelineLayout(id.0, desc.clone()));
         }
         Ok(id.0)
+    }
+
+    pub fn pipeline_layout_label<B: GfxBackend>(&self, id: id::PipelineLayoutId) -> String {
+        B::hub(self).pipeline_layouts.label_for_resource(id)
     }
 
     pub fn pipeline_layout_error<B: GfxBackend>(
@@ -2450,6 +2466,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(id.0)
     }
 
+    pub fn bind_group_label<B: GfxBackend>(&self, id: id::BindGroupId) -> String {
+        B::hub(self).bind_groups.label_for_resource(id)
+    }
+
     pub fn bind_group_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::BindGroupId>,
@@ -2591,6 +2611,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(id.0)
     }
 
+    pub fn shader_module_label<B: GfxBackend>(&self, id: id::ShaderModuleId) -> String {
+        B::hub(self).shader_modules.label_for_resource(id)
+    }
+
     pub fn shader_module_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::ShaderModuleId>,
@@ -2679,6 +2703,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .register_error(id_in, "", &mut Token::root())
     }
 
+    pub fn command_buffer_label<B: GfxBackend>(&self, id: id::CommandBufferId) -> String {
+        B::hub(self).command_buffers.label_for_resource(id)
+    }
+
     pub fn command_buffer_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::CommandBufferId>,
@@ -2719,6 +2747,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         span!(_guard, INFO, "Device::create_render_bundle_encoder");
         let encoder = command::RenderBundleEncoder::new(desc, device_id, None);
         encoder.map(|encoder| Box::into_raw(Box::new(encoder)))
+    }
+
+    pub fn render_bundle_label<B: GfxBackend>(&self, id: id::RenderBundleId) -> String {
+        B::hub(self).render_bundles.label_for_resource(id)
     }
 
     pub fn render_bundle_error<B: GfxBackend>(
@@ -3238,6 +3270,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(id.0)
     }
 
+    pub fn render_pipeline_label<B: GfxBackend>(&self, id: id::RenderPipelineId) -> String {
+        B::hub(self).render_pipelines.label_for_resource(id)
+    }
+
     pub fn render_pipeline_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::RenderPipelineId>,
@@ -3459,6 +3495,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ))?;
         bgl_guard[*id].multi_ref_count.inc();
         Ok(id.0)
+    }
+
+    pub fn compute_pipeline_label<B: GfxBackend>(&self, id: id::ComputePipelineId) -> String {
+        B::hub(self).compute_pipelines.label_for_resource(id)
     }
 
     pub fn compute_pipeline_error<B: GfxBackend>(
@@ -3721,6 +3761,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         fire_map_callbacks(callbacks);
 
         Ok(())
+    }
+
+    pub fn device_label<B: GfxBackend>(&self, id: id::DeviceId) -> String {
+        B::hub(self).devices.label_for_resource(id)
     }
 
     pub fn device_error<B: GfxBackend>(&self, id_in: Input<G, id::DeviceId>) -> id::DeviceId {
