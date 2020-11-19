@@ -318,7 +318,7 @@ impl State {
 
 /// Error encountered when performing a render pass.
 #[derive(Clone, Debug, Error)]
-pub(super) enum RenderPassErrorInner {
+pub enum RenderPassErrorInner {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
     #[error("attachment texture view {0:?} is invalid")]
