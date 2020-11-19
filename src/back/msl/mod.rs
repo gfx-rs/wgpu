@@ -415,7 +415,10 @@ impl<W: Write> Writer<W> {
         parameters: &[Handle<crate::Expression>],
         context: &ExpressionContext,
     ) -> Result<(), Error> {
-        write!(self.out, "{}(", name)?;
+        if !name.is_empty() {
+            write!(self.out, "metal::{}", name)?;
+        }
+        write!(self.out, "(")?;
         for (i, &handle) in parameters.iter().enumerate() {
             if i != 0 {
                 write!(self.out, ", ")?;
@@ -474,7 +477,8 @@ impl<W: Write> Writer<W> {
                         self.put_call("", components, context)?;
                     }
                     crate::TypeInner::Scalar { width: 4, kind } if components.len() == 1 => {
-                        self.put_call(scalar_kind_string(kind), components, context)?;
+                        write!(self.out, "{}", scalar_kind_string(kind),)?;
+                        self.put_call("", components, context)?;
                     }
                     _ => return Err(Error::UnsupportedCompose(ty)),
                 }
@@ -856,7 +860,6 @@ impl<W: Write> Writer<W> {
 
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;
-        writeln!(self.out, "using namespace metal;")?;
 
         writeln!(self.out)?;
         self.write_type_defs(module)?;
