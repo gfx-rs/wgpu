@@ -119,7 +119,7 @@ pub enum DispatchError {
 
 /// Error encountered when performing a compute pass.
 #[derive(Clone, Debug, Error)]
-pub(super) enum ComputePassErrorInner {
+pub enum ComputePassErrorInner {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
     #[error("bind group {0:?} is invalid")]
