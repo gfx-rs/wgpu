@@ -411,7 +411,7 @@ pub struct Sampler<B: hal::Backend> {
     pub(crate) comparison: bool,
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum CreateSamplerError {
     #[error(transparent)]
     Device(#[from] DeviceError),

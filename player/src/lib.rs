@@ -171,7 +171,8 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             A::CreateSampler(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_sampler::<B>(device, &desc, id).unwrap();
+                let (_, error) = self.device_create_sampler::<B>(device, &desc, id);
+                assert_eq!(error, None);
             }
             A::DestroySampler(id) => {
                 self.sampler_drop::<B>(id);

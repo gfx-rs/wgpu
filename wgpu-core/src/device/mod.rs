@@ -753,6 +753,86 @@ impl<B: GfxBackend> Device<B> {
         })
     }
 
+    fn create_sampler(
+        &self,
+        self_id: id::DeviceId,
+        desc: &resource::SamplerDescriptor,
+    ) -> Result<resource::Sampler<B>, resource::CreateSamplerError> {
+        let clamp_to_border_enabled = self
+            .features
+            .contains(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER);
+        let clamp_to_border_found = desc
+            .address_modes
+            .iter()
+            .any(|am| am == &wgt::AddressMode::ClampToBorder);
+        if clamp_to_border_found && !clamp_to_border_enabled {
+            return Err(resource::CreateSamplerError::MissingFeature(
+                wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+            ));
+        }
+
+        let actual_clamp = if let Some(clamp) = desc.anisotropy_clamp {
+            let clamp = clamp.get();
+            let valid_clamp = clamp <= MAX_ANISOTROPY && conv::is_power_of_two(clamp as u32);
+            if !valid_clamp {
+                return Err(resource::CreateSamplerError::InvalidClamp(clamp));
+            }
+            if self.private_features.anisotropic_filtering {
+                Some(clamp)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let actual_border: hal::image::PackedColor = desc
+            .border_color
+            .map(|c| match c {
+                wgt::SamplerBorderColor::TransparentBlack => [0., 0., 0., 0.].into(),
+                wgt::SamplerBorderColor::OpaqueBlack => [0., 0., 0., 1.].into(),
+                wgt::SamplerBorderColor::OpaqueWhite => [1., 1., 1., 1.].into(),
+            })
+            .unwrap_or([0., 0., 0., 0.].into());
+
+        let info = hal::image::SamplerDesc {
+            min_filter: conv::map_filter(desc.min_filter),
+            mag_filter: conv::map_filter(desc.mag_filter),
+            mip_filter: conv::map_filter(desc.mipmap_filter),
+            wrap_mode: (
+                conv::map_wrap(desc.address_modes[0]),
+                conv::map_wrap(desc.address_modes[1]),
+                conv::map_wrap(desc.address_modes[2]),
+            ),
+            lod_bias: hal::image::Lod(0.0),
+            lod_range: hal::image::Lod(desc.lod_min_clamp)..hal::image::Lod(desc.lod_max_clamp),
+            comparison: desc.compare.map(conv::map_compare_function),
+            border: actual_border,
+            normalized: true,
+            anisotropy_clamp: actual_clamp,
+        };
+
+        let raw = unsafe {
+            self.raw.create_sampler(&info).map_err(|err| match err {
+                hal::device::AllocationError::OutOfMemory(_) => {
+                    resource::CreateSamplerError::Device(DeviceError::OutOfMemory)
+                }
+                hal::device::AllocationError::TooManyObjects => {
+                    resource::CreateSamplerError::TooManyObjects
+                }
+            })?
+        };
+        Ok(resource::Sampler {
+            raw,
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+            comparison: info.comparison.is_some(),
+        })
+    }
+
     /// Create a compatible render pass with a given key.
     ///
     /// This functions doesn't consider the following aspects for compatibility:
@@ -1724,120 +1804,50 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &resource::SamplerDescriptor,
         id_in: Input<G, id::SamplerId>,
-    ) -> Result<id::SamplerId, resource::CreateSamplerError> {
+    ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
         span!(_guard, INFO, "Device::create_sampler");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
 
-        let clamp_to_border_enabled = device
-            .features
-            .contains(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER);
-        let clamp_to_border_found = desc
-            .address_modes
-            .iter()
-            .any(|am| am == &wgt::AddressMode::ClampToBorder);
-        if clamp_to_border_found && !clamp_to_border_enabled {
-            return Err(resource::CreateSamplerError::MissingFeature(
-                wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
-            ));
-        }
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
 
-        let actual_clamp = if let Some(clamp) = desc.anisotropy_clamp {
-            let clamp = clamp.get();
-            let valid_clamp = clamp <= MAX_ANISOTROPY && conv::is_power_of_two(clamp as u32);
-            if !valid_clamp {
-                return Err(resource::CreateSamplerError::InvalidClamp(clamp));
+            let sampler = match device.create_sampler(device_id, desc) {
+                Ok(sampler) => sampler,
+                Err(e) => break e,
+            };
+            let ref_count = sampler.life_guard.add_ref();
+
+            let id = hub.samplers.register_identity(id_in, sampler, &mut token);
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateSampler(id.0, desc.clone()));
             }
-            if device.private_features.anisotropic_filtering {
-                Some(clamp)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
 
-        let actual_border: hal::image::PackedColor = desc
-            .border_color
-            .map(|c| match c {
-                wgt::SamplerBorderColor::TransparentBlack => [0., 0., 0., 0.].into(),
-                wgt::SamplerBorderColor::OpaqueBlack => [0., 0., 0., 1.].into(),
-                wgt::SamplerBorderColor::OpaqueWhite => [1., 1., 1., 1.].into(),
-            })
-            .unwrap_or([0., 0., 0., 0.].into());
-
-        let info = hal::image::SamplerDesc {
-            min_filter: conv::map_filter(desc.min_filter),
-            mag_filter: conv::map_filter(desc.mag_filter),
-            mip_filter: conv::map_filter(desc.mipmap_filter),
-            wrap_mode: (
-                conv::map_wrap(desc.address_modes[0]),
-                conv::map_wrap(desc.address_modes[1]),
-                conv::map_wrap(desc.address_modes[2]),
-            ),
-            lod_bias: hal::image::Lod(0.0),
-            lod_range: hal::image::Lod(desc.lod_min_clamp)..hal::image::Lod(desc.lod_max_clamp),
-            comparison: desc.compare.map(conv::map_compare_function),
-            border: actual_border,
-            normalized: true,
-            anisotropy_clamp: actual_clamp,
-        };
-
-        let raw = unsafe {
-            device.raw.create_sampler(&info).map_err(|err| match err {
-                hal::device::AllocationError::OutOfMemory(_) => {
-                    resource::CreateSamplerError::Device(DeviceError::OutOfMemory)
-                }
-                hal::device::AllocationError::TooManyObjects => {
-                    resource::CreateSamplerError::TooManyObjects
-                }
-            })?
-        };
-        let sampler = resource::Sampler {
-            raw,
-            device_id: Stored {
-                value: id::Valid(device_id),
-                ref_count: device.life_guard.add_ref(),
-            },
-            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
-            comparison: info.comparison.is_some(),
-        };
-        let ref_count = sampler.life_guard.add_ref();
-
-        let id = hub.samplers.register_identity(id_in, sampler, &mut token);
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace
+            device
+                .trackers
                 .lock()
-                .add(trace::Action::CreateSampler(id.0, desc.clone()));
-        }
+                .samplers
+                .init(id, ref_count, PhantomData)
+                .unwrap();
+            return (id.0, None);
+        };
 
-        device
-            .trackers
-            .lock()
+        let id = hub
             .samplers
-            .init(id, ref_count, PhantomData)
-            .unwrap();
-        Ok(id.0)
+            .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
     }
 
     pub fn sampler_label<B: GfxBackend>(&self, id: id::SamplerId) -> String {
         B::hub(self).samplers.label_for_resource(id)
-    }
-
-    pub fn sampler_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::SamplerId>,
-        label: Option<&str>,
-    ) -> id::SamplerId {
-        B::hub(self)
-            .samplers
-            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn sampler_drop<B: GfxBackend>(&self, sampler_id: id::SamplerId) {
