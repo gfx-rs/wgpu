@@ -40,7 +40,7 @@ gpu-alloc = { git = "https://github.com/zakarumych/gpu-alloc", rev = "7bd745e488
 [dependencies.naga]
 version = "0.2"
 git = "https://github.com/gfx-rs/naga"
-rev = "27ec95a2381ae8e0afd07fa13c83a436a9e0bd41"
+rev = "7c7702c9d8d59325328aa7081347e151a7bb63d7"
 features = ["spv-in", "spv-out", "wgsl-in"]
 
 [dependencies.wgt]

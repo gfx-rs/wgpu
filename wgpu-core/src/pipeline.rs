@@ -14,13 +14,23 @@ use std::borrow::Cow;
 use thiserror::Error;
 use wgt::{BufferAddress, IndexFormat, InputStepMode};
 
-// Unable to serialize with `naga::Module` in here:
-// requires naga serialization feature.
 #[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum ShaderModuleSource<'a> {
     SpirV(Cow<'a, [u32]>),
     Wgsl(Cow<'a, str>),
-    Naga(naga::Module),
+    // Unable to serialize with `naga::Module` in here:
+    // requires naga serialization feature.
+    //Naga(naga::Module),
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct ShaderModuleDescriptor<'a> {
+    pub label: Label<'a>,
+    pub source: ShaderModuleSource<'a>,
 }
 
 #[derive(Debug)]
@@ -28,6 +38,8 @@ pub struct ShaderModule<B: hal::Backend> {
     pub(crate) raw: B::ShaderModule,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) module: Option<naga::Module>,
+    #[cfg(debug_assertions)]
+    pub(crate) label: String,
 }
 
 impl<B: hal::Backend> Resource for ShaderModule<B> {
@@ -38,11 +50,14 @@ impl<B: hal::Backend> Resource for ShaderModule<B> {
     }
 
     fn label(&self) -> &str {
-        "<ShaderModule>"
+        #[cfg(debug_assertions)]
+        return &self.label;
+        #[cfg(not(debug_assertions))]
+        return "";
     }
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum CreateShaderModuleError {
     #[error(transparent)]
     Device(#[from] DeviceError),

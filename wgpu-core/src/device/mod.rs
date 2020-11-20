@@ -833,6 +833,89 @@ impl<B: GfxBackend> Device<B> {
         })
     }
 
+    fn create_shader_module<'a>(
+        &self,
+        self_id: id::DeviceId,
+        desc: &'a pipeline::ShaderModuleDescriptor<'a>,
+    ) -> Result<(pipeline::ShaderModule<B>, Cow<'a, [u32]>), pipeline::CreateShaderModuleError>
+    {
+        let spv_flags = if cfg!(debug_assertions) {
+            naga::back::spv::WriterFlags::DEBUG
+        } else {
+            naga::back::spv::WriterFlags::empty()
+        };
+
+        let (spv, naga) = match desc.source {
+            pipeline::ShaderModuleSource::SpirV(ref spv) => {
+                let module = if self.private_features.shader_validation {
+                    // Parse the given shader code and store its representation.
+                    let spv_iter = spv.iter().cloned();
+                    naga::front::spv::Parser::new(spv_iter, &Default::default())
+                        .parse()
+                        .map_err(|err| {
+                            // TODO: eventually, when Naga gets support for all features,
+                            // we want to convert these to a hard error,
+                            tracing::warn!("Failed to parse shader SPIR-V code: {:?}", err);
+                            tracing::warn!("Shader module will not be validated");
+                        })
+                        .ok()
+                } else {
+                    None
+                };
+                (Cow::Borrowed(&**spv), module)
+            }
+            pipeline::ShaderModuleSource::Wgsl(ref code) => {
+                // TODO: refactor the corresponding Naga error to be owned, and then
+                // display it instead of unwrapping
+                let module = naga::front::wgsl::parse_str(code).unwrap();
+                let spv = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
+                (
+                    Cow::Owned(spv),
+                    if self.private_features.shader_validation {
+                        Some(module)
+                    } else {
+                        None
+                    },
+                )
+            } /*
+              pipeline::ShaderModuleSource::Naga(module) => {
+                  let spv = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
+                  (
+                      Cow::Owned(spv),
+                      if device.private_features.shader_validation {
+                          Some(module)
+                      } else {
+                          None
+                      },
+                  )
+              }*/
+        };
+
+        if let Some(ref module) = naga {
+            naga::proc::Validator::new().validate(module)?;
+        }
+
+        let raw = unsafe {
+            self.raw
+                .create_shader_module(&spv)
+                .map_err(|err| match err {
+                    hal::device::ShaderError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    _ => panic!("failed to create shader module: {}", err),
+                })?
+        };
+        let shader = pipeline::ShaderModule {
+            raw,
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            module: naga,
+            #[cfg(debug_assertions)]
+            label: desc.label.to_string_or_default(),
+        };
+        Ok((shader, spv))
+    }
+
     /// Create a compatible render pass with a given key.
     ///
     /// This functions doesn't consider the following aspects for compatibility:
@@ -2569,117 +2652,57 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_shader_module<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        source: pipeline::ShaderModuleSource,
+        desc: &pipeline::ShaderModuleDescriptor,
         id_in: Input<G, id::ShaderModuleId>,
-    ) -> Result<id::ShaderModuleId, pipeline::CreateShaderModuleError> {
+    ) -> (
+        id::ShaderModuleId,
+        Option<pipeline::CreateShaderModuleError>,
+    ) {
         span!(_guard, INFO, "Device::create_shader_module");
 
         let hub = B::hub(self);
         let mut token = Token::root();
+
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
-        let spv_flags = if cfg!(debug_assertions) {
-            naga::back::spv::WriterFlags::DEBUG
-        } else {
-            naga::back::spv::WriterFlags::empty()
-        };
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+            let (shader, spv) = match device.create_shader_module(device_id, desc) {
+                Ok(pair) => pair,
+                Err(e) => break e,
+            };
 
-        let (spv, naga) = match source {
-            pipeline::ShaderModuleSource::SpirV(spv) => {
-                let module = if device.private_features.shader_validation {
-                    // Parse the given shader code and store its representation.
-                    let spv_iter = spv.into_iter().cloned();
-                    naga::front::spv::Parser::new(spv_iter, &Default::default())
-                        .parse()
-                        .map_err(|err| {
-                            // TODO: eventually, when Naga gets support for all features,
-                            // we want to convert these to a hard error,
-                            tracing::warn!("Failed to parse shader SPIR-V code: {:?}", err);
-                            tracing::warn!("Shader module will not be validated");
-                        })
-                        .ok()
-                } else {
-                    None
-                };
-                (spv, module)
+            let id = hub
+                .shader_modules
+                .register_identity(id_in, shader, &mut token);
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                let mut trace = trace.lock();
+                let data = trace.make_binary("spv", unsafe {
+                    std::slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)
+                });
+                let label = desc.label.clone();
+                trace.add(trace::Action::CreateShaderModule {
+                    id: id.0,
+                    data,
+                    label,
+                });
             }
-            pipeline::ShaderModuleSource::Wgsl(code) => {
-                // TODO: refactor the corresponding Naga error to be owned, and then
-                // display it instead of unwrapping
-                let module = naga::front::wgsl::parse_str(&code).unwrap();
-                let spv = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
-                (
-                    Cow::Owned(spv),
-                    if device.private_features.shader_validation {
-                        Some(module)
-                    } else {
-                        None
-                    },
-                )
-            }
-            pipeline::ShaderModuleSource::Naga(module) => {
-                let spv = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
-                (
-                    Cow::Owned(spv),
-                    if device.private_features.shader_validation {
-                        Some(module)
-                    } else {
-                        None
-                    },
-                )
-            }
+
+            let _ = spv;
+            return (id.0, None);
         };
 
-        if let Some(ref module) = naga {
-            naga::proc::Validator::new().validate(module)?;
-        }
-
-        let raw = unsafe {
-            device
-                .raw
-                .create_shader_module(&spv)
-                .map_err(|err| match err {
-                    hal::device::ShaderError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    _ => panic!("failed to create shader module: {}", err),
-                })?
-        };
-        let shader = pipeline::ShaderModule {
-            raw,
-            device_id: Stored {
-                value: id::Valid(device_id),
-                ref_count: device.life_guard.add_ref(),
-            },
-            module: naga,
-        };
-
-        let id = hub
-            .shader_modules
-            .register_identity(id_in, shader, &mut token);
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            let mut trace = trace.lock();
-            let data = trace.make_binary("spv", unsafe {
-                std::slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)
-            });
-            trace.add(trace::Action::CreateShaderModule { id: id.0, data });
-        }
-        Ok(id.0)
+        let id =
+            hub.shader_modules
+                .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
     }
 
     pub fn shader_module_label<B: GfxBackend>(&self, id: id::ShaderModuleId) -> String {
         B::hub(self).shader_modules.label_for_resource(id)
-    }
-
-    pub fn shader_module_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::ShaderModuleId>,
-    ) -> id::ShaderModuleId {
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let (_, mut token) = hub.devices.read(&mut token);
-        hub.shader_modules.register_error(id_in, "", &mut token)
     }
 
     pub fn shader_module_drop<B: GfxBackend>(&self, shader_module_id: id::ShaderModuleId) {
