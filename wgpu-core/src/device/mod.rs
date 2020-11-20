@@ -500,6 +500,14 @@ impl<B: GfxBackend> Device<B> {
     ) -> Result<resource::Texture<B>, resource::CreateTextureError> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
+        let features = conv::texture_features(desc.format);
+        if !self.features.contains(features) {
+            return Err(resource::CreateTextureError::MissingFeature(
+                features,
+                desc.format,
+            ));
+        }
+
         // Ensure `D24Plus` textures cannot be copied
         match desc.format {
             TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {
@@ -915,10 +923,10 @@ impl<B: hal::Backend> crate::hub::Resource for Device<B> {
 }
 
 #[error("device is invalid")]
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub struct InvalidDevice;
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum DeviceError {
     #[error("parent device is invalid")]
     Invalid,
@@ -1280,60 +1288,51 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
-    ) -> Result<id::TextureId, resource::CreateTextureError> {
+    ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         span!(_guard, INFO, "Device::create_texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+            let texture = match device.create_texture(device_id, desc) {
+                Ok(texture) => texture,
+                Err(error) => break error,
+            };
+            let num_levels = texture.full_range.levels.end;
+            let num_layers = texture.full_range.layers.end;
+            let ref_count = texture.life_guard.add_ref();
 
-        let texture_features = conv::texture_features(desc.format);
-        if texture_features != wgt::Features::empty() && !device.features.contains(texture_features)
-        {
-            return Err(resource::CreateTextureError::MissingFeature(
-                texture_features,
-                desc.format,
-            ));
-        }
+            let id = hub.textures.register_identity(id_in, texture, &mut token);
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateTexture(id.0, desc.clone()));
+            }
 
-        let texture = device.create_texture(device_id, desc)?;
-        let num_levels = texture.full_range.levels.end;
-        let num_layers = texture.full_range.layers.end;
-        let ref_count = texture.life_guard.add_ref();
-
-        let id = hub.textures.register_identity(id_in, texture, &mut token);
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace
+            device
+                .trackers
                 .lock()
-                .add(trace::Action::CreateTexture(id.0, desc.clone()));
-        }
+                .textures
+                .init(id, ref_count, TextureState::new(num_levels, num_layers))
+                .unwrap();
+            return (id.0, None);
+        };
 
-        device
-            .trackers
-            .lock()
+        let id = hub
             .textures
-            .init(id, ref_count, TextureState::new(num_levels, num_layers))
-            .unwrap();
-        Ok(id.0)
+            .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
     }
 
     pub fn texture_label<B: GfxBackend>(&self, id: id::TextureId) -> String {
         B::hub(self).textures.label_for_resource(id)
-    }
-
-    pub fn texture_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::TextureId>,
-        label: Option<&str>,
-    ) -> id::TextureId {
-        B::hub(self)
-            .textures
-            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn texture_destroy<B: GfxBackend>(

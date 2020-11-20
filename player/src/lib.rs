@@ -147,7 +147,8 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             A::CreateTexture(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_texture::<B>(device, &desc, id).unwrap();
+                let (_, error) = self.device_create_texture::<B>(device, &desc, id);
+                assert_eq!(error, None);
             }
             A::FreeTexture(id) => {
                 self.texture_destroy::<B>(id).unwrap();

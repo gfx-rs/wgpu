@@ -207,14 +207,14 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TextureErrorDimension {
     X,
     Y,
     Z,
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum TextureDimensionError {
     #[error("Dimension {0:?} is zero")]
     Zero(TextureErrorDimension),
@@ -224,7 +224,7 @@ pub enum TextureDimensionError {
     InvalidSampleCount(u32),
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
