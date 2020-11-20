@@ -41,7 +41,7 @@ pub struct Typifier {
     resolutions: Vec<Resolution>,
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum ResolveError {
     #[error("Invalid index into array")]
     InvalidAccessIndex,

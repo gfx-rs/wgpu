@@ -13,7 +13,7 @@ pub struct Validator {
     typifier: Typifier,
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum GlobalVariableError {
     #[error("Usage isn't compatible with the storage class")]
     InvalidUsage,
@@ -32,7 +32,7 @@ pub enum GlobalVariableError {
     OutOfRangeBinding,
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum LocalVariableError {
     #[error("Initializer is not a constant expression")]
     InitializerConst,
@@ -40,7 +40,7 @@ pub enum LocalVariableError {
     InitializerType,
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum FunctionError {
     #[error(transparent)]
     Resolve(#[from] ResolveError),
@@ -54,7 +54,7 @@ pub enum FunctionError {
     },
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum EntryPointError {
     #[error("Early depth test is not applicable")]
     UnexpectedEarlyDepthTest,
@@ -74,7 +74,7 @@ pub enum EntryPointError {
     Function(#[from] FunctionError),
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum ValidationError {
     #[error("The type {0:?} width {1} is not supported")]
     InvalidTypeWidth(crate::ScalarKind, crate::Bytes),
