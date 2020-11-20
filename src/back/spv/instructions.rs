@@ -379,11 +379,9 @@ pub(super) fn instruction_load(
     instruction.set_result(id);
     instruction.add_operand(pointer_type_id);
 
-    instruction.add_operand(if let Some(memory_access) = memory_access {
-        memory_access.bits()
-    } else {
-        spirv::MemoryAccess::NONE.bits()
-    });
+    if let Some(memory_access) = memory_access {
+        instruction.add_operand(memory_access.bits());
+    }
 
     instruction
 }
@@ -397,11 +395,9 @@ pub(super) fn instruction_store(
     instruction.add_operand(pointer_type_id);
     instruction.add_operand(object_id);
 
-    instruction.add_operand(if let Some(memory_access) = memory_access {
-        memory_access.bits()
-    } else {
-        spirv::MemoryAccess::NONE.bits()
-    });
+    if let Some(memory_access) = memory_access {
+        instruction.add_operand(memory_access.bits());
+    }
 
     instruction
 }
