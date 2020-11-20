@@ -163,7 +163,8 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 desc,
             } => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.texture_create_view::<B>(parent_id, &desc, id).unwrap();
+                let (_, error) = self.texture_create_view::<B>(parent_id, &desc, id);
+                assert_eq!(error, None);
             }
             A::DestroyTextureView(id) => {
                 self.texture_view_drop::<B>(id).unwrap();

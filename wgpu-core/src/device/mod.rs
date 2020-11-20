@@ -598,6 +598,161 @@ impl<B: GfxBackend> Device<B> {
         })
     }
 
+    fn create_texture_view(
+        &self,
+        texture: &resource::Texture<B>,
+        texture_id: id::TextureId,
+        desc: &resource::TextureViewDescriptor,
+    ) -> Result<resource::TextureView<B>, resource::CreateTextureViewError> {
+        let &(ref texture_raw, _) = texture
+            .raw
+            .as_ref()
+            .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
+
+        let view_dim =
+            match desc.dimension {
+                Some(dim) => {
+                    use hal::image::Kind;
+
+                    let required_tex_dim = dim.compatible_texture_dimension();
+
+                    if required_tex_dim != texture.dimension {
+                        return Err(
+                            resource::CreateTextureViewError::InvalidTextureViewDimension {
+                                view: dim,
+                                image: texture.dimension,
+                            },
+                        );
+                    }
+
+                    if let Kind::D2(_, _, depth, _) = texture.kind {
+                        match dim {
+                            TextureViewDimension::Cube if depth != 6 => {
+                                return Err(
+                                    resource::CreateTextureViewError::InvalidCubemapTextureDepth {
+                                        depth,
+                                    },
+                                )
+                            }
+                            TextureViewDimension::CubeArray if depth % 6 != 0 => return Err(
+                                resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {
+                                    depth,
+                                },
+                            ),
+                            _ => {}
+                        }
+                    }
+
+                    dim
+                }
+                None => match texture.kind {
+                    hal::image::Kind::D1(..) => wgt::TextureViewDimension::D1,
+                    hal::image::Kind::D2(_, _, depth, _)
+                        if depth > 1 && desc.array_layer_count.is_none() =>
+                    {
+                        wgt::TextureViewDimension::D2Array
+                    }
+                    hal::image::Kind::D2(..) => wgt::TextureViewDimension::D2,
+                    hal::image::Kind::D3(..) => wgt::TextureViewDimension::D3,
+                },
+            };
+
+        let required_level_count =
+            desc.base_mip_level + desc.level_count.map_or(1, |count| count.get());
+        let required_layer_count =
+            desc.base_array_layer + desc.array_layer_count.map_or(1, |count| count.get());
+        let level_end = texture.full_range.levels.end;
+        let layer_end = texture.full_range.layers.end;
+        if required_level_count > level_end as u32 {
+            return Err(resource::CreateTextureViewError::TooManyMipLevels {
+                requested: required_level_count,
+                total: level_end,
+            });
+        }
+        if required_layer_count > layer_end as u32 {
+            return Err(resource::CreateTextureViewError::TooManyArrayLayers {
+                requested: required_layer_count,
+                total: layer_end,
+            });
+        };
+
+        let aspects = match desc.aspect {
+            wgt::TextureAspect::All => texture.aspects,
+            wgt::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
+            wgt::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
+        };
+        if !texture.aspects.contains(aspects) {
+            return Err(resource::CreateTextureViewError::InvalidAspect {
+                requested: aspects,
+                total: texture.aspects,
+            });
+        }
+
+        let end_level = desc
+            .level_count
+            .map_or(level_end, |_| required_level_count as u8);
+        let end_layer = desc
+            .array_layer_count
+            .map_or(layer_end, |_| required_layer_count as u16);
+        let selector = TextureSelector {
+            levels: desc.base_mip_level as u8..end_level,
+            layers: desc.base_array_layer as u16..end_layer,
+        };
+
+        let view_layer_count = (selector.layers.end - selector.layers.start) as u32;
+        let layer_check_ok = match view_dim {
+            wgt::TextureViewDimension::D1
+            | wgt::TextureViewDimension::D2
+            | wgt::TextureViewDimension::D3 => view_layer_count == 1,
+            wgt::TextureViewDimension::D2Array => true,
+            wgt::TextureViewDimension::Cube => view_layer_count == 6,
+            wgt::TextureViewDimension::CubeArray => view_layer_count % 6 == 0,
+        };
+        if !layer_check_ok {
+            return Err(resource::CreateTextureViewError::InvalidArrayLayerCount {
+                requested: view_layer_count,
+                dim: view_dim,
+            });
+        }
+
+        let format = desc.format.unwrap_or(texture.format);
+        let range = hal::image::SubresourceRange {
+            aspects,
+            level_start: desc.base_mip_level as _,
+            level_count: desc.level_count.map(|v| v.get() as _),
+            layer_start: desc.base_array_layer as _,
+            layer_count: desc.array_layer_count.map(|v| v.get() as _),
+        };
+
+        let raw = unsafe {
+            self.raw
+                .create_image_view(
+                    texture_raw,
+                    conv::map_texture_view_dimension(view_dim),
+                    conv::map_texture_format(format, self.private_features),
+                    hal::format::Swizzle::NO,
+                    range.clone(),
+                )
+                .or(Err(resource::CreateTextureViewError::OutOfMemory))?
+        };
+
+        Ok(resource::TextureView {
+            inner: resource::TextureViewInner::Native {
+                raw,
+                source_id: Stored {
+                    value: id::Valid(texture_id),
+                    ref_count: texture.life_guard.add_ref(),
+                },
+            },
+            aspects,
+            format: texture.format,
+            extent: texture.kind.extent().at_level(desc.base_mip_level as _),
+            samples: texture.kind.num_samples(),
+            selector,
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+        })
+    }
+
     /// Create a compatible render pass with a given key.
     ///
     /// This functions doesn't consider the following aspects for compatibility:
@@ -1472,7 +1627,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         texture_id: id::TextureId,
         desc: &resource::TextureViewDescriptor,
         id_in: Input<G, id::TextureViewId>,
-    ) -> Result<id::TextureViewId, resource::CreateTextureViewError> {
+    ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
         span!(_guard, INFO, "Texture::create_view");
 
         let hub = B::hub(self);
@@ -1480,190 +1635,46 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (texture_guard, mut token) = hub.textures.read(&mut token);
-        let texture = texture_guard
-            .get(texture_id)
-            .map_err(|_| resource::CreateTextureViewError::InvalidTexture)?;
-        let &(ref texture_raw, _) = texture
-            .raw
-            .as_ref()
-            .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
-        let device = &device_guard[texture.device_id.value];
-
-        let view_dim =
-            match desc.dimension {
-                Some(dim) => {
-                    use hal::image::Kind;
-
-                    let required_tex_dim = dim.compatible_texture_dimension();
-
-                    if required_tex_dim != texture.dimension {
-                        return Err(
-                            resource::CreateTextureViewError::InvalidTextureViewDimension {
-                                view: dim,
-                                image: texture.dimension,
-                            },
-                        );
-                    }
-
-                    if let Kind::D2(_, _, depth, _) = texture.kind {
-                        match dim {
-                            TextureViewDimension::Cube if depth != 6 => {
-                                return Err(
-                                    resource::CreateTextureViewError::InvalidCubemapTextureDepth {
-                                        depth,
-                                    },
-                                )
-                            }
-                            TextureViewDimension::CubeArray if depth % 6 != 0 => return Err(
-                                resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {
-                                    depth,
-                                },
-                            ),
-                            _ => {}
-                        }
-                    }
-
-                    dim
-                }
-                None => match texture.kind {
-                    hal::image::Kind::D1(..) => wgt::TextureViewDimension::D1,
-                    hal::image::Kind::D2(_, _, depth, _)
-                        if depth > 1 && desc.array_layer_count.is_none() =>
-                    {
-                        wgt::TextureViewDimension::D2Array
-                    }
-                    hal::image::Kind::D2(..) => wgt::TextureViewDimension::D2,
-                    hal::image::Kind::D3(..) => wgt::TextureViewDimension::D3,
-                },
+        let error = loop {
+            let texture = match texture_guard.get(texture_id) {
+                Ok(texture) => texture,
+                Err(_) => break resource::CreateTextureViewError::InvalidTexture,
             };
-        let required_level_count =
-            desc.base_mip_level + desc.level_count.map_or(1, |count| count.get());
-        let required_layer_count =
-            desc.base_array_layer + desc.array_layer_count.map_or(1, |count| count.get());
-        let level_end = texture.full_range.levels.end;
-        let layer_end = texture.full_range.layers.end;
-        if required_level_count > level_end as u32 {
-            return Err(resource::CreateTextureViewError::TooManyMipLevels {
-                requested: required_level_count,
-                total: level_end,
-            });
-        }
-        if required_layer_count > layer_end as u32 {
-            return Err(resource::CreateTextureViewError::TooManyArrayLayers {
-                requested: required_layer_count,
-                total: layer_end,
-            });
-        };
+            let device = &device_guard[texture.device_id.value];
 
-        let aspects = match desc.aspect {
-            wgt::TextureAspect::All => texture.aspects,
-            wgt::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
-            wgt::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
-        };
-        if !texture.aspects.contains(aspects) {
-            return Err(resource::CreateTextureViewError::InvalidAspect {
-                requested: aspects,
-                total: texture.aspects,
-            });
-        }
+            let view = match device.create_texture_view(texture, texture_id, desc) {
+                Ok(view) => view,
+                Err(e) => break e,
+            };
+            let ref_count = view.life_guard.add_ref();
 
-        let end_level = desc
-            .level_count
-            .map_or(level_end, |_| required_level_count as u8);
-        let end_layer = desc
-            .array_layer_count
-            .map_or(layer_end, |_| required_layer_count as u16);
-        let selector = TextureSelector {
-            levels: desc.base_mip_level as u8..end_level,
-            layers: desc.base_array_layer as u16..end_layer,
-        };
+            let id = hub.texture_views.register_identity(id_in, view, &mut token);
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace.lock().add(trace::Action::CreateTextureView {
+                    id: id.0,
+                    parent_id: texture_id,
+                    desc: desc.clone(),
+                });
+            }
 
-        let view_layer_count = (selector.layers.end - selector.layers.start) as u32;
-        let layer_check_ok = match view_dim {
-            wgt::TextureViewDimension::D1
-            | wgt::TextureViewDimension::D2
-            | wgt::TextureViewDimension::D3 => view_layer_count == 1,
-            wgt::TextureViewDimension::D2Array => true,
-            wgt::TextureViewDimension::Cube => view_layer_count == 6,
-            wgt::TextureViewDimension::CubeArray => view_layer_count % 6 == 0,
-        };
-        if !layer_check_ok {
-            return Err(resource::CreateTextureViewError::InvalidArrayLayerCount {
-                requested: view_layer_count,
-                dim: view_dim,
-            });
-        }
-
-        let format = desc.format.unwrap_or(texture.format);
-        let range = hal::image::SubresourceRange {
-            aspects,
-            level_start: desc.base_mip_level as _,
-            level_count: desc.level_count.map(|v| v.get() as _),
-            layer_start: desc.base_array_layer as _,
-            layer_count: desc.array_layer_count.map(|v| v.get() as _),
-        };
-
-        let raw = unsafe {
             device
-                .raw
-                .create_image_view(
-                    texture_raw,
-                    conv::map_texture_view_dimension(view_dim),
-                    conv::map_texture_format(format, device.private_features),
-                    hal::format::Swizzle::NO,
-                    range.clone(),
-                )
-                .or(Err(resource::CreateTextureViewError::OutOfMemory))?
+                .trackers
+                .lock()
+                .views
+                .init(id, ref_count, PhantomData)
+                .unwrap();
+            return (id.0, None);
         };
 
-        let view = resource::TextureView {
-            inner: resource::TextureViewInner::Native {
-                raw,
-                source_id: Stored {
-                    value: id::Valid(texture_id),
-                    ref_count: texture.life_guard.add_ref(),
-                },
-            },
-            aspects,
-            format: texture.format,
-            extent: texture.kind.extent().at_level(desc.base_mip_level as _),
-            samples: texture.kind.num_samples(),
-            selector,
-            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
-        };
-        let ref_count = view.life_guard.add_ref();
-
-        let id = hub.texture_views.register_identity(id_in, view, &mut token);
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(trace::Action::CreateTextureView {
-                id: id.0,
-                parent_id: texture_id,
-                desc: desc.clone(),
-            });
-        }
-
-        device
-            .trackers
-            .lock()
-            .views
-            .init(id, ref_count, PhantomData)
-            .unwrap();
-        Ok(id.0)
+        let id =
+            hub.texture_views
+                .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
     }
 
     pub fn texture_view_label<B: GfxBackend>(&self, id: id::TextureViewId) -> String {
         B::hub(self).texture_views.label_for_resource(id)
-    }
-
-    pub fn texture_view_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::TextureViewId>,
-        label: Option<&str>,
-    ) -> id::TextureViewId {
-        B::hub(self)
-            .texture_views
-            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn texture_view_drop<B: GfxBackend>(

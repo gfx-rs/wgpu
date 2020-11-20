@@ -305,7 +305,7 @@ pub struct TextureView<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum CreateTextureViewError {
     #[error("parent texture is invalid or destroyed")]
     InvalidTexture,
