@@ -1369,55 +1369,31 @@ impl Writer {
                 let id = self.generate_id();
                 let expr_type_inner = self.get_type_inner(&ir_module.types, expr_type.unwrap());
 
-                let instruction = match *expr_type_inner {
+                let (expr_kind, local_type) = match *expr_type_inner {
                     crate::TypeInner::Scalar {
                         kind: expr_kind,
                         width,
-                    } => {
-                        let kind_type_id = self.get_type_id(
-                            &ir_module.types,
-                            LookupType::Local(LocalType::Scalar { kind, width }),
-                        );
-
-                        if convert {
-                            super::instructions::instruction_bit_cast(kind_type_id, id, expr_id)
-                        } else {
-                            match (expr_kind, kind) {
-                                (crate::ScalarKind::Float, crate::ScalarKind::Uint) => {
-                                    super::instructions::instruction_convert_f_to_u(
-                                        kind_type_id,
-                                        id,
-                                        expr_id,
-                                    )
-                                }
-                                (crate::ScalarKind::Float, crate::ScalarKind::Sint) => {
-                                    super::instructions::instruction_convert_f_to_s(
-                                        kind_type_id,
-                                        id,
-                                        expr_id,
-                                    )
-                                }
-                                (crate::ScalarKind::Sint, crate::ScalarKind::Float) => {
-                                    super::instructions::instruction_convert_s_to_f(
-                                        kind_type_id,
-                                        id,
-                                        expr_id,
-                                    )
-                                }
-                                (crate::ScalarKind::Uint, crate::ScalarKind::Float) => {
-                                    super::instructions::instruction_convert_u_to_f(
-                                        kind_type_id,
-                                        id,
-                                        expr_id,
-                                    )
-                                }
-                                _ => unreachable!(),
-                            }
-                        }
-                    }
+                    } => (expr_kind, LocalType::Scalar { kind, width }),
+                    crate::TypeInner::Vector {
+                        size,
+                        kind: expr_kind,
+                        width,
+                    } => (expr_kind, LocalType::Vector { size, kind, width }),
                     _ => unreachable!(),
                 };
 
+                let op = match (expr_kind, kind) {
+                    _ if !convert => spirv::Op::Bitcast,
+                    (crate::ScalarKind::Float, crate::ScalarKind::Uint) => spirv::Op::ConvertFToU,
+                    (crate::ScalarKind::Float, crate::ScalarKind::Sint) => spirv::Op::ConvertFToS,
+                    (crate::ScalarKind::Sint, crate::ScalarKind::Float) => spirv::Op::ConvertSToF,
+                    (crate::ScalarKind::Uint, crate::ScalarKind::Float) => spirv::Op::ConvertUToF,
+                    _ => unreachable!(),
+                };
+                let kind_type_id =
+                    self.get_type_id(&ir_module.types, LookupType::Local(local_type));
+                let instruction =
+                    super::instructions::instruction_unary(op, kind_type_id, id, expr_id);
                 block.body.push(instruction);
 
                 Ok((id, None))

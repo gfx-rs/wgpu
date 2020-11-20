@@ -505,7 +505,12 @@ pub(super) fn instruction_image_sample_implicit_lod(
 //
 // Conversion Instructions
 //
-fn instruction_unary(op: Op, result_type_id: Word, id: Word, value: Word) -> Instruction {
+pub(super) fn instruction_unary(
+    op: Op,
+    result_type_id: Word,
+    id: Word,
+    value: Word,
+) -> Instruction {
     let mut instruction = Instruction::new(op);
     instruction.set_type(result_type_id);
     instruction.set_result(id);
@@ -513,41 +518,6 @@ fn instruction_unary(op: Op, result_type_id: Word, id: Word, value: Word) -> Ins
     instruction
 }
 
-pub(super) fn instruction_convert_f_to_u(
-    result_type_id: Word,
-    id: Word,
-    float_value: Word,
-) -> Instruction {
-    instruction_unary(Op::ConvertFToU, result_type_id, id, float_value)
-}
-
-pub(super) fn instruction_convert_f_to_s(
-    result_type_id: Word,
-    id: Word,
-    float_value: Word,
-) -> Instruction {
-    instruction_unary(Op::ConvertFToS, result_type_id, id, float_value)
-}
-
-pub(super) fn instruction_convert_s_to_f(
-    result_type_id: Word,
-    id: Word,
-    signed_value: Word,
-) -> Instruction {
-    instruction_unary(Op::ConvertSToF, result_type_id, id, signed_value)
-}
-
-pub(super) fn instruction_convert_u_to_f(
-    result_type_id: Word,
-    id: Word,
-    unsigned_value: Word,
-) -> Instruction {
-    instruction_unary(Op::ConvertUToF, result_type_id, id, unsigned_value)
-}
-
-pub(super) fn instruction_bit_cast(result_type_id: Word, id: Word, operand: Word) -> Instruction {
-    instruction_unary(Op::Bitcast, result_type_id, id, operand)
-}
 //
 // Composite Instructions
 //
