@@ -8,7 +8,7 @@ use std::collections::hash_map::Entry;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 #[error("buffer usage is {actual:?} which does not contain required usage {expected:?}")]
 pub struct MissingBufferUsageError {
     pub(crate) actual: wgt::BufferUsage,

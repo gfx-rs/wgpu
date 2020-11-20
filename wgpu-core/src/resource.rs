@@ -126,7 +126,7 @@ impl BufferMapOperation {
     }
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum BufferAccessError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -166,7 +166,7 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) map_state: BufferMapState<B>,
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum CreateBufferError {
     #[error(transparent)]
     Device(#[from] DeviceError),

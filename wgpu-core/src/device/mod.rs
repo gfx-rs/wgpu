@@ -417,9 +417,14 @@ impl<B: GfxBackend> Device<B> {
     ) -> Result<resource::Buffer<B>, resource::CreateBufferError> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
         let (mut usage, _memory_properties) = conv::map_buffer_usage(desc.usage);
-        if desc.mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
-            // we are going to be copying into it, internally
-            usage |= hal::buffer::Usage::TRANSFER_DST;
+        if desc.mapped_at_creation {
+            if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+                return Err(resource::CreateBufferError::UnalignedSize);
+            }
+            if !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
+                // we are going to be copying into it, internally
+                usage |= hal::buffer::Usage::TRANSFER_DST;
+            }
         }
 
         let mem_usage = {
@@ -1004,7 +1009,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &resource::BufferDescriptor,
         id_in: Input<G, id::BufferId>,
-    ) -> Result<id::BufferId, resource::CreateBufferError> {
+    ) -> (id::BufferId, Option<resource::CreateBufferError>) {
         span!(_guard, INFO, "Device::create_buffer");
 
         let hub = B::hub(self);
@@ -1012,73 +1017,114 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         tracing::info!("Create buffer {:?} with ID {:?}", desc, id_in);
 
-        if desc.mapped_at_creation && desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(resource::CreateBufferError::UnalignedSize);
-        }
-
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
-        let mut buffer = device.create_buffer(device_id, desc, false)?;
-        let ref_count = buffer.life_guard.add_ref();
-
-        let buffer_use = if !desc.mapped_at_creation {
-            resource::BufferUse::EMPTY
-        } else if desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
-            // buffer is mappable, so we are just doing that at start
-            let size = buffer.size;
-            let ptr = map_buffer(&device.raw, &mut buffer, 0, size, HostMap::Write)?;
-
-            buffer.map_state = resource::BufferMapState::Active {
-                ptr,
-                sub_range: hal::buffer::SubRange::WHOLE,
-                host: HostMap::Write,
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
             };
+            let mut buffer = match device.create_buffer(device_id, desc, false) {
+                Ok(buffer) => buffer,
+                Err(e) => break e,
+            };
+            let ref_count = buffer.life_guard.add_ref();
 
-            resource::BufferUse::MAP_WRITE
-        } else {
-            // buffer needs staging area for initialization only
-            let stage = device.create_buffer(
-                device_id,
-                &wgt::BufferDescriptor {
+            let buffer_use = if !desc.mapped_at_creation {
+                resource::BufferUse::EMPTY
+            } else if desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
+                // buffer is mappable, so we are just doing that at start
+                let map_size = buffer.size;
+                let ptr = match map_buffer(&device.raw, &mut buffer, 0, map_size, HostMap::Write) {
+                    Ok(ptr) => ptr,
+                    Err(e) => {
+                        let (raw, memory) = buffer.raw.unwrap();
+                        device.lock_life(&mut token).schedule_resource_destruction(
+                            queue::TempResource::Buffer(raw),
+                            memory,
+                            !0,
+                        );
+                        break e.into();
+                    }
+                };
+                buffer.map_state = resource::BufferMapState::Active {
+                    ptr,
+                    sub_range: hal::buffer::SubRange::WHOLE,
+                    host: HostMap::Write,
+                };
+                resource::BufferUse::MAP_WRITE
+            } else {
+                // buffer needs staging area for initialization only
+                let stage_desc = wgt::BufferDescriptor {
                     label: Some(Cow::Borrowed("<init_buffer>")),
                     size: desc.size,
                     usage: wgt::BufferUsage::MAP_WRITE | wgt::BufferUsage::COPY_SRC,
                     mapped_at_creation: false,
-                },
-                true,
-            )?;
-            let (stage_buffer, mut stage_memory) = stage.raw.unwrap();
-            let ptr = stage_memory.map(&device.raw, 0, stage.size)?;
-            buffer.map_state = resource::BufferMapState::Init {
-                ptr,
-                needs_flush: !stage_memory.is_coherent(),
-                stage_buffer,
-                stage_memory,
+                };
+                let stage = match device.create_buffer(device_id, &stage_desc, true) {
+                    Ok(stage) => stage,
+                    Err(e) => {
+                        let (raw, memory) = buffer.raw.unwrap();
+                        device.lock_life(&mut token).schedule_resource_destruction(
+                            queue::TempResource::Buffer(raw),
+                            memory,
+                            !0,
+                        );
+                        break e;
+                    }
+                };
+                let (stage_buffer, mut stage_memory) = stage.raw.unwrap();
+                let ptr = match stage_memory.map(&device.raw, 0, stage.size) {
+                    Ok(ptr) => ptr,
+                    Err(e) => {
+                        let (raw, memory) = buffer.raw.unwrap();
+                        let mut life_lock = device.lock_life(&mut token);
+                        life_lock.schedule_resource_destruction(
+                            queue::TempResource::Buffer(raw),
+                            memory,
+                            !0,
+                        );
+                        life_lock.schedule_resource_destruction(
+                            queue::TempResource::Buffer(stage_buffer),
+                            stage_memory,
+                            !0,
+                        );
+                        break e.into();
+                    }
+                };
+                buffer.map_state = resource::BufferMapState::Init {
+                    ptr,
+                    needs_flush: !stage_memory.is_coherent(),
+                    stage_buffer,
+                    stage_memory,
+                };
+                resource::BufferUse::COPY_DST
             };
-            resource::BufferUse::COPY_DST
+
+            let id = hub.buffers.register_identity(id_in, buffer, &mut token);
+            tracing::info!("Created buffer {:?} with {:?}", id, desc);
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                let mut desc = desc.clone();
+                let mapped_at_creation = mem::replace(&mut desc.mapped_at_creation, false);
+                if mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
+                    desc.usage |= wgt::BufferUsage::COPY_DST;
+                }
+                trace.lock().add(trace::Action::CreateBuffer(id.0, desc));
+            }
+
+            device
+                .trackers
+                .lock()
+                .buffers
+                .init(id, ref_count, BufferState::with_usage(buffer_use))
+                .unwrap();
+            return (id.0, None);
         };
 
-        let id = hub.buffers.register_identity(id_in, buffer, &mut token);
-        tracing::info!("Created buffer {:?} with {:?}", id, desc);
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            let mut desc = desc.clone();
-            let mapped_at_creation = mem::replace(&mut desc.mapped_at_creation, false);
-            if mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
-                desc.usage |= wgt::BufferUsage::COPY_DST;
-            }
-            trace.lock().add(trace::Action::CreateBuffer(id.0, desc));
-        }
-
-        device
-            .trackers
-            .lock()
+        let id = hub
             .buffers
-            .init(id, ref_count, BufferState::with_usage(buffer_use))
-            .unwrap();
-        Ok(id.0)
+            .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
     }
 
     #[cfg(feature = "replay")]
@@ -1176,16 +1222,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn buffer_label<B: GfxBackend>(&self, id: id::BufferId) -> String {
         B::hub(self).buffers.label_for_resource(id)
-    }
-
-    pub fn buffer_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::BufferId>,
-        label: Option<&str>,
-    ) -> id::BufferId {
-        B::hub(self)
-            .buffers
-            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn buffer_destroy<B: GfxBackend>(
@@ -1309,6 +1345,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = texture.life_guard.add_ref();
 
             let id = hub.textures.register_identity(id_in, texture, &mut token);
+            tracing::info!("Created texture {:?} with {:?}", id, desc);
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace

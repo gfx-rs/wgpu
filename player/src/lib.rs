@@ -137,7 +137,8 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             A::CreateBuffer(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_buffer::<B>(device, &desc, id).unwrap();
+                let (_, error) = self.device_create_buffer::<B>(device, &desc, id);
+                assert_eq!(error, None);
             }
             A::FreeBuffer(id) => {
                 self.buffer_destroy::<B>(id).unwrap();
