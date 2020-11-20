@@ -32,6 +32,7 @@ pub const RESERVED: &[&str] = &[
     "enum",
     // other
     "main",
+    "using",
     "decltype",
     "sizeof",
     "typeof",
@@ -91,6 +92,7 @@ pub const RESERVED: &[&str] = &[
     "device",
     "threadgroup",
     "threadgroup_imageblock",
+    "kernel",
     "compute",
     "vertex",
     "fragment",
