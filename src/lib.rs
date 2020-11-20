@@ -9,6 +9,8 @@
     clippy::unneeded_field_pattern,
     clippy::match_like_matches_macro
 )]
+// TODO: use `strip_prefix` instead when Rust 1.45 <= MSRV
+#![allow(clippy::manual_strip, clippy::unknown_clippy_lints)]
 #![deny(clippy::panic)]
 
 mod arena;
