@@ -7,15 +7,12 @@ mod range;
 mod texture;
 
 use crate::{
-    conv,
-    hub::Storage,
+    conv, hub,
     id::{self, TypedId, Valid},
     resource, Epoch, FastHashMap, Index, RefCount,
 };
 
-use std::{
-    borrow::Borrow, collections::hash_map::Entry, fmt, marker::PhantomData, ops, vec::Drain,
-};
+use std::{collections::hash_map::Entry, fmt, marker::PhantomData, ops, vec::Drain};
 use thiserror::Error;
 
 pub(crate) use buffer::BufferState;
@@ -408,9 +405,9 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// the last read-only usage, if possible.
     ///
     /// Returns the old usage as an error if there is a conflict.
-    pub(crate) fn use_extend<'a, T: 'a + Borrow<RefCount>>(
+    pub(crate) fn use_extend<'a, T: 'a + hub::Resource>(
         &mut self,
-        storage: &'a Storage<T, S::Id>,
+        storage: &'a hub::Storage<T, S::Id>,
         id: S::Id,
         selector: S::Selector,
         usage: S::Usage,
@@ -418,24 +415,34 @@ impl<S: ResourceState> ResourceTracker<S> {
         let item = storage
             .get(id)
             .map_err(|_| UseExtendError::InvalidResource)?;
-        self.change_extend(Valid(id), item.borrow(), selector, usage)
-            .map(|()| item)
-            .map_err(|pending| UseExtendError::Conflict(pending.usage.end))
+        self.change_extend(
+            Valid(id),
+            item.life_guard().ref_count.as_ref().unwrap(),
+            selector,
+            usage,
+        )
+        .map(|()| item)
+        .map_err(|pending| UseExtendError::Conflict(pending.usage.end))
     }
 
     /// Use a given resource provided by an `Id` with the specified usage.
     /// Combines storage access by 'Id' with the transition that replaces
     /// the last usage with a new one, returning an iterator over these
     /// transitions.
-    pub(crate) fn use_replace<'a, T: 'a + Borrow<RefCount>>(
+    pub(crate) fn use_replace<'a, T: 'a + hub::Resource>(
         &mut self,
-        storage: &'a Storage<T, S::Id>,
+        storage: &'a hub::Storage<T, S::Id>,
         id: S::Id,
         selector: S::Selector,
         usage: S::Usage,
     ) -> Result<(&'a T, Drain<PendingTransition<S>>), S::Id> {
         let item = storage.get(id).map_err(|_| id)?;
-        let drain = self.change_replace(Valid(id), item.borrow(), selector, usage);
+        let drain = self.change_replace(
+            Valid(id),
+            item.life_guard().ref_count.as_ref().unwrap(),
+            selector,
+            usage,
+        );
         Ok((item, drain))
     }
 }

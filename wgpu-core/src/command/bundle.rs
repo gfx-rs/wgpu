@@ -46,21 +46,16 @@ use crate::{
     device::{
         AttachmentData, DeviceError, RenderPassContext, MAX_VERTEX_BUFFERS, SHADER_STAGE_COUNT,
     },
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Storage, Token},
+    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Resource, Storage, Token},
     id,
     resource::BufferUse,
     span,
     track::{TrackerSet, UsageConflict},
     validation::check_buffer_usage,
-    Label, LabelHelpers, LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
+    Label, LabelHelpers, LifeGuard, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
-use std::{
-    borrow::{Borrow, Cow},
-    iter,
-    marker::PhantomData,
-    ops::Range,
-};
+use std::{borrow::Cow, iter, marker::PhantomData, ops::Range};
 use thiserror::Error;
 
 /// Describes a [`RenderBundleEncoder`].
@@ -348,13 +343,7 @@ impl RenderBundle {
     }
 }
 
-impl Borrow<RefCount> for RenderBundle {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
-    }
-}
-
-impl crate::hub::Resource for RenderBundle {
+impl Resource for RenderBundle {
     const TYPE: &'static str = "RenderBundle";
 
     fn life_guard(&self) -> &LifeGuard {

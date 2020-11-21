@@ -3,7 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::{alloc::MemoryBlock, DeviceError},
+    device::{alloc::MemoryBlock, DeviceError, HostMap},
+    hub::Resource,
     id::{DeviceId, SwapChainId, TextureId},
     track::{TextureSelector, DUMMY_SELECTOR},
     validation::MissingBufferUsageError,
@@ -93,7 +94,7 @@ pub(crate) enum BufferMapState<B: hal::Backend> {
     Active {
         ptr: NonNull<u8>,
         sub_range: hal::buffer::SubRange,
-        host: crate::device::HostMap,
+        host: HostMap,
     },
     /// Not mapped
     Idle,
@@ -107,7 +108,7 @@ pub type BufferMapCallback = unsafe extern "C" fn(status: BufferMapAsyncStatus, 
 #[repr(C)]
 #[derive(Debug)]
 pub struct BufferMapOperation {
-    pub host: crate::device::HostMap,
+    pub host: HostMap,
     pub callback: BufferMapCallback,
     pub user_data: *mut u8,
 }
@@ -177,13 +178,7 @@ pub enum CreateBufferError {
     UsageMismatch(wgt::BufferUsage),
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for Buffer<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
-    }
-}
-
-impl<B: hal::Backend> crate::hub::Resource for Buffer<B> {
+impl<B: hal::Backend> Resource for Buffer<B> {
     const TYPE: &'static str = "Buffer";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -243,13 +238,7 @@ pub enum CreateTextureError {
     MissingFeature(wgt::Features, wgt::TextureFormat),
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for Texture<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
-    }
-}
-
-impl<B: hal::Backend> crate::hub::Resource for Texture<B> {
+impl<B: hal::Backend> Resource for Texture<B> {
     const TYPE: &'static str = "Texture";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -355,13 +344,7 @@ pub enum TextureViewDestroyError {
     SwapChainImage,
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for TextureView<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
-    }
-}
-
-impl<B: hal::Backend> crate::hub::Resource for TextureView<B> {
+impl<B: hal::Backend> Resource for TextureView<B> {
     const TYPE: &'static str = "TextureView";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -441,13 +424,7 @@ pub enum CreateSamplerError {
     MissingFeature(wgt::Features),
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for Sampler<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
-    }
-}
-
-impl<B: hal::Backend> crate::hub::Resource for Sampler<B> {
+impl<B: hal::Backend> Resource for Sampler<B> {
     const TYPE: &'static str = "Sampler";
 
     fn life_guard(&self) -> &LifeGuard {

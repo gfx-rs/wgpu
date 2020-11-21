@@ -5,11 +5,12 @@
 use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
     device::{DeviceError, RenderPassContext},
+    hub::Resource,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation::StageError,
-    Label, LifeGuard, RefCount, Stored,
+    Label, LifeGuard, Stored,
 };
-use std::borrow::{Borrow, Cow};
+use std::borrow::Cow;
 use thiserror::Error;
 use wgt::{BufferAddress, IndexFormat, InputStepMode};
 
@@ -29,7 +30,7 @@ pub struct ShaderModule<B: hal::Backend> {
     pub(crate) module: Option<naga::Module>,
 }
 
-impl<B: hal::Backend> crate::hub::Resource for ShaderModule<B> {
+impl<B: hal::Backend> Resource for ShaderModule<B> {
     const TYPE: &'static str = "ShaderModule";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -108,13 +109,7 @@ pub struct ComputePipeline<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for ComputePipeline<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
-    }
-}
-
-impl<B: hal::Backend> crate::hub::Resource for ComputePipeline<B> {
+impl<B: hal::Backend> Resource for ComputePipeline<B> {
     const TYPE: &'static str = "ComputePipeline";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -233,13 +228,7 @@ pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for RenderPipeline<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
-    }
-}
-
-impl<B: hal::Backend> crate::hub::Resource for RenderPipeline<B> {
+impl<B: hal::Backend> Resource for RenderPipeline<B> {
     const TYPE: &'static str = "RenderPipeline";
 
     fn life_guard(&self) -> &LifeGuard {
