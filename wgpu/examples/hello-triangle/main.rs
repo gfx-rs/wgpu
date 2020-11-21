@@ -15,7 +15,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
             compatible_surface: Some(&surface),
         })
         .await
-        .expect("Failed to find an appropiate adapter");
+        .expect("Failed to find an appropriate adapter");
 
     // Create the logical device and command queue
     let (device, queue) = adapter
