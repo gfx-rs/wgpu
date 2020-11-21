@@ -8,7 +8,7 @@ use std::collections::hash_map::Entry;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 #[error("buffer usage is {actual:?} which does not contain required usage {expected:?}")]
 pub struct MissingBufferUsageError {
     pub(crate) actual: wgt::BufferUsage,
@@ -28,7 +28,7 @@ pub fn check_buffer_usage(
     }
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 #[error("texture usage is {actual:?} which does not contain required usage {expected:?}")]
 pub struct MissingTextureUsageError {
     pub(crate) actual: wgt::TextureUsage,
@@ -48,7 +48,7 @@ pub fn check_texture_usage(
     }
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum BindingError {
     #[error("binding is missing from the pipeline layout")]
     Missing,
@@ -78,7 +78,7 @@ pub enum BindingError {
     BadStorageFormat(wgt::TextureFormat),
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum InputError {
     #[error("input is not provided by the earlier stage in the pipeline")]
     Missing,
@@ -87,7 +87,7 @@ pub enum InputError {
 }
 
 /// Errors produced when validating a programmable stage of a pipeline.
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,

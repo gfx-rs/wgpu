@@ -26,7 +26,7 @@ use std::{
 
 use thiserror::Error;
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum CreateBindGroupLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -40,7 +40,7 @@ pub enum CreateBindGroupLayoutError {
     TooManyBindings(BindingTypeMaxCountError),
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum CreateBindGroupError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -96,7 +96,7 @@ pub enum CreateBindGroupError {
     DepthStencilAspect,
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum BindingZone {
     #[error("stage {0:?}")]
     Stage(wgt::ShaderStage),
@@ -104,7 +104,7 @@ pub enum BindingZone {
     Pipeline,
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 #[error("too many bindings of type {kind:?} in {zone}, limit is {count}")]
 pub struct BindingTypeMaxCountError {
     pub kind: BindingTypeMaxCountErrorKind,
@@ -112,7 +112,7 @@ pub struct BindingTypeMaxCountError {
     pub count: u32,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum BindingTypeMaxCountErrorKind {
     DynamicUniformBuffers,
     DynamicStorageBuffers,
@@ -336,7 +336,7 @@ impl<B: hal::Backend> Resource for BindGroupLayout<B> {
     }
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum CreatePipelineLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),

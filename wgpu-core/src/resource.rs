@@ -126,7 +126,7 @@ impl BufferMapOperation {
     }
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum BufferAccessError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -166,7 +166,7 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) map_state: BufferMapState<B>,
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum CreateBufferError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -207,14 +207,14 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum TextureErrorDimension {
     X,
     Y,
     Z,
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum TextureDimensionError {
     #[error("Dimension {0:?} is zero")]
     Zero(TextureErrorDimension),
@@ -224,7 +224,7 @@ pub enum TextureDimensionError {
     InvalidSampleCount(u32),
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -305,7 +305,7 @@ pub struct TextureView<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum CreateTextureViewError {
     #[error("parent texture is invalid or destroyed")]
     InvalidTexture,
@@ -411,7 +411,7 @@ pub struct Sampler<B: hal::Backend> {
     pub(crate) comparison: bool,
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum CreateSamplerError {
     #[error(transparent)]
     Device(#[from] DeviceError),

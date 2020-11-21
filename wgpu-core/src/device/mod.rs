@@ -2206,10 +2206,10 @@ impl<B: hal::Backend> crate::hub::Resource for Device<B> {
 }
 
 #[error("device is invalid")]
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub struct InvalidDevice;
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum DeviceError {
     #[error("parent device is invalid")]
     Invalid,
@@ -3288,70 +3288,64 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Input<G, id::CommandEncoderId>,
-    ) -> Result<id::CommandEncoderId, command::CommandAllocatorError> {
+    ) -> (id::CommandEncoderId, Option<command::CommandAllocatorError>) {
         span!(_guard, INFO, "Device::create_command_encoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
 
-        let dev_stored = Stored {
-            value: id::Valid(device_id),
-            ref_count: device.life_guard.add_ref(),
+            let dev_stored = Stored {
+                value: id::Valid(device_id),
+                ref_count: device.life_guard.add_ref(),
+            };
+
+            let mut command_buffer = match device.cmd_allocator.allocate(
+                dev_stored,
+                &device.raw,
+                device.limits.clone(),
+                device.private_features,
+                &desc.label,
+                #[cfg(feature = "trace")]
+                device.trace.is_some(),
+            ) {
+                Ok(cmd_buf) => cmd_buf,
+                Err(e) => break e,
+            };
+
+            unsafe {
+                let raw_command_buffer = command_buffer.raw.last_mut().unwrap();
+                if let Some(ref label) = desc.label {
+                    device
+                        .raw
+                        .set_command_buffer_name(raw_command_buffer, label);
+                }
+                raw_command_buffer.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+            }
+
+            let id = hub
+                .command_buffers
+                .register_identity(id_in, command_buffer, &mut token);
+
+            return (id.0, None);
         };
 
-        let mut command_buffer = device.cmd_allocator.allocate(
-            dev_stored,
-            &device.raw,
-            device.limits.clone(),
-            device.private_features,
-            &desc.label,
-            #[cfg(feature = "trace")]
-            device.trace.is_some(),
-        )?;
-
-        unsafe {
-            let raw_command_buffer = command_buffer.raw.last_mut().unwrap();
-            if let Some(ref label) = desc.label {
-                device
-                    .raw
-                    .set_command_buffer_name(raw_command_buffer, label);
-            }
-            raw_command_buffer.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
-        }
-
-        let id = hub
-            .command_buffers
-            .register_identity(id_in, command_buffer, &mut token);
-
-        Ok(id.0)
-    }
-
-    pub fn command_encoder_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::CommandEncoderId>,
-    ) -> id::CommandEncoderId {
-        B::hub(self)
-            .command_buffers
-            .register_error(id_in, "", &mut Token::root())
+        let id = B::hub(self).command_buffers.register_error(
+            id_in,
+            desc.label.borrow_or_default(),
+            &mut token,
+        );
+        (id, Some(error))
     }
 
     pub fn command_buffer_label<B: GfxBackend>(&self, id: id::CommandBufferId) -> String {
         B::hub(self).command_buffers.label_for_resource(id)
-    }
-
-    pub fn command_buffer_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::CommandBufferId>,
-        label: Option<&str>,
-    ) -> id::CommandBufferId {
-        B::hub(self)
-            .command_buffers
-            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn command_encoder_drop<B: GfxBackend>(&self, command_encoder_id: id::CommandEncoderId) {
@@ -3380,26 +3374,79 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
         desc: &command::RenderBundleEncoderDescriptor,
-    ) -> Result<id::RenderBundleEncoderId, command::CreateRenderBundleError> {
+    ) -> (
+        id::RenderBundleEncoderId,
+        Option<command::CreateRenderBundleError>,
+    ) {
         span!(_guard, INFO, "Device::create_render_bundle_encoder");
-        let encoder = command::RenderBundleEncoder::new(desc, device_id, None);
-        encoder.map(|encoder| Box::into_raw(Box::new(encoder)))
+        let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id, None) {
+            Ok(encoder) => (encoder, None),
+            Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
+        };
+        (Box::into_raw(Box::new(encoder)), error)
+    }
+
+    pub fn render_bundle_encoder_finish<B: GfxBackend>(
+        &self,
+        bundle_encoder: command::RenderBundleEncoder,
+        desc: &command::RenderBundleDescriptor,
+        id_in: Input<G, id::RenderBundleId>,
+    ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
+        span!(_guard, INFO, "RenderBundleEncoder::finish");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+
+        let error = loop {
+            let device = match device_guard.get(bundle_encoder.parent()) {
+                Ok(device) => device,
+                Err(_) => break command::RenderBundleError::INVALID_DEVICE,
+            };
+
+            let render_bundle = match bundle_encoder.finish(desc, device, &hub, &mut token) {
+                Ok(bundle) => bundle,
+                Err(e) => break e,
+            };
+
+            tracing::debug!("Render bundle {:?} = {:#?}", id_in, render_bundle.used);
+
+            let ref_count = render_bundle.life_guard.add_ref();
+            let id = hub
+                .render_bundles
+                .register_identity(id_in, render_bundle, &mut token);
+
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                let (bundle_guard, _) = hub.render_bundles.read(&mut token);
+                let bundle = &bundle_guard[id];
+                let label = desc.label.as_ref().map(|l| l.as_ref());
+                trace.lock().add(trace::Action::CreateRenderBundle {
+                    id: id.0,
+                    desc: trace::new_render_bundle_encoder_descriptor(label, &bundle.context),
+                    base: bundle.to_base_pass(),
+                });
+            }
+
+            device
+                .trackers
+                .lock()
+                .bundles
+                .init(id, ref_count, PhantomData)
+                .unwrap();
+            return (id.0, None);
+        };
+
+        let id = B::hub(self).render_bundles.register_error(
+            id_in,
+            desc.label.borrow_or_default(),
+            &mut token,
+        );
+        (id, Some(error))
     }
 
     pub fn render_bundle_label<B: GfxBackend>(&self, id: id::RenderBundleId) -> String {
         B::hub(self).render_bundles.label_for_resource(id)
-    }
-
-    pub fn render_bundle_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::RenderBundleId>,
-        label: Option<&str>,
-    ) -> id::RenderBundleId {
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let (_, mut token) = hub.devices.read(&mut token);
-        hub.render_bundles
-            .register_error(id_in, label.unwrap_or(""), &mut token)
     }
 
     pub fn render_bundle_drop<B: GfxBackend>(&self, render_bundle_id: id::RenderBundleId) {
@@ -3527,18 +3574,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn render_pipeline_label<B: GfxBackend>(&self, id: id::RenderPipelineId) -> String {
         B::hub(self).render_pipelines.label_for_resource(id)
-    }
-
-    pub fn render_pipeline_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::RenderPipelineId>,
-        label: Option<&str>,
-    ) -> id::RenderPipelineId {
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let (_, mut token) = hub.devices.read(&mut token);
-        hub.render_pipelines
-            .register_error(id_in, label.unwrap_or(""), &mut token)
     }
 
     pub fn render_pipeline_drop<B: GfxBackend>(&self, render_pipeline_id: id::RenderPipelineId) {

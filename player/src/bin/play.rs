@@ -91,7 +91,9 @@ fn main() {
                 None,
                 id
             ));
-            assert_eq!(error, None);
+            if let Some(e) = error {
+                panic!("{:?}", e);
+            }
             id
         }
         _ => panic!("Expected Action::Init"),

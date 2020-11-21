@@ -98,7 +98,9 @@ impl Test<'_> {
             None,
             device
         ));
-        assert_eq!(error, None);
+        if let Some(e) = error {
+            panic!("{:?}", e);
+        }
 
         let mut command_buffer_id_manager = wgc::hub::IdentityManager::default();
         println!("\t\t\tRunning...");

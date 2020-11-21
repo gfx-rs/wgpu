@@ -57,7 +57,7 @@ impl<B: hal::Backend> Resource for ShaderModule<B> {
     }
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum CreateShaderModuleError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -80,7 +80,7 @@ pub struct ProgrammableStageDescriptor<'a> {
 /// Number of implicit bind groups derived at pipeline creation.
 pub type ImplicitBindGroupCount = u8;
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum ImplicitLayoutError {
     #[error("missing IDs for deriving {0} bind groups")]
     MissingIds(ImplicitBindGroupCount),
@@ -104,7 +104,7 @@ pub struct ComputePipelineDescriptor<'a> {
     pub compute_stage: ProgrammableStageDescriptor<'a>,
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum CreateComputePipelineError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -193,7 +193,7 @@ pub struct RenderPipelineDescriptor<'a> {
     pub alpha_to_coverage_enabled: bool,
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum CreateRenderPipelineError {
     #[error(transparent)]
     Device(#[from] DeviceError),

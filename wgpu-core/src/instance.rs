@@ -417,7 +417,7 @@ impl AdapterInfo {
     }
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 /// Error when requesting a device from the adaptor
 pub enum RequestDeviceError {
     #[error("parent adapter is invalid")]
