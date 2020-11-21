@@ -79,7 +79,7 @@ async fn run(
             compatible_surface: viewports.first().map(|desc| &desc.surface),
         })
         .await
-        .expect("Failed to find an appropiate adapter");
+        .expect("Failed to find an appropriate adapter");
 
     // Create the logical device and command queue
     let (device, queue) = adapter
