@@ -315,21 +315,23 @@ trait MapPassErr<T, O> {
 }
 
 #[derive(Clone, Copy, Debug, Error)]
-enum PassErrorScope {
+pub enum PassErrorScope {
     #[error("In a bundle parameter")]
     Bundle,
     #[error("In a pass parameter")]
-    Pass,
+    Pass(id::CommandEncoderId),
     #[error("In a set_bind_group command")]
-    SetBindGroup,
+    SetBindGroup(id::BindGroupId),
     #[error("In a set_pipeline command")]
-    SetPipeline,
+    SetPipelineRender(id::RenderPipelineId),
+    #[error("In a set_pipeline command")]
+    SetPipelineCompute(id::ComputePipelineId),
     #[error("In a set_push_constant command")]
     SetPushConstant,
     #[error("In a set_vertex_buffer command")]
-    SetVertexBuffer,
+    SetVertexBuffer(id::BufferId),
     #[error("In a set_index_buffer command")]
-    SetIndexBuffer,
+    SetIndexBuffer(id::BufferId),
     #[error("In a set_viewport command")]
     SetViewport,
     #[error("In a set_scissor_rect command")]

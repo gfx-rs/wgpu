@@ -680,7 +680,7 @@ where
 #[derive(Clone, Debug, Error)]
 #[error("{scope}")]
 pub struct RenderBundleError {
-    scope: PassErrorScope,
+    pub scope: PassErrorScope,
     #[source]
     inner: RenderBundleErrorInner,
 }
@@ -745,7 +745,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         num_dynamic_offsets,
                         bind_group_id,
                     } => {
-                        let scope = PassErrorScope::SetBindGroup;
+                        let scope = PassErrorScope::SetBindGroup(bind_group_id);
 
                         let max_bind_groups = device.limits.max_bind_groups;
                         if (index as u32) >= max_bind_groups {
@@ -790,7 +790,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                     }
                     RenderCommand::SetPipeline(pipeline_id) => {
-                        let scope = PassErrorScope::SetPipeline;
+                        let scope = PassErrorScope::SetPipelineRender(pipeline_id);
                         if state.pipeline.set_and_check_redundant(pipeline_id) {
                             continue;
                         }
@@ -828,7 +828,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         offset,
                         size,
                     } => {
-                        let scope = PassErrorScope::SetIndexBuffer;
+                        let scope = PassErrorScope::SetIndexBuffer(buffer_id);
                         let buffer = state
                             .trackers
                             .buffers
@@ -849,7 +849,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         offset,
                         size,
                     } => {
-                        let scope = PassErrorScope::SetVertexBuffer;
+                        let scope = PassErrorScope::SetVertexBuffer(buffer_id);
                         let buffer = state
                             .trackers
                             .buffers
