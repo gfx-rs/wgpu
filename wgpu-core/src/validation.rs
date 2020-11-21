@@ -48,7 +48,7 @@ pub fn check_texture_usage(
     }
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum BindingError {
     #[error("binding is missing from the pipeline layout")]
     Missing,
@@ -78,7 +78,7 @@ pub enum BindingError {
     BadStorageFormat(wgt::TextureFormat),
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum InputError {
     #[error("input is not provided by the earlier stage in the pipeline")]
     Missing,
@@ -87,7 +87,7 @@ pub enum InputError {
 }
 
 /// Errors produced when validating a programmable stage of a pipeline.
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,

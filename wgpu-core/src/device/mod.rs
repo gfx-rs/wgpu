@@ -1500,6 +1500,634 @@ impl<B: GfxBackend> Device<B> {
         })
     }
 
+    //TODO: refactor this. It's the only method of `Device` that registers new objects
+    // (the pipeline layout).
+    fn derive_pipeline_layout<G: GlobalIdentityHandlerFactory>(
+        &self,
+        self_id: id::DeviceId,
+        implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
+        mut derived_group_layouts: ArrayVec<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>,
+        bgl_guard: &mut Storage<binding_model::BindGroupLayout<B>, id::BindGroupLayoutId>,
+        pipeline_layout_guard: &mut Storage<binding_model::PipelineLayout<B>, id::PipelineLayoutId>,
+        hub: &Hub<B, G>,
+    ) -> Result<
+        (id::PipelineLayoutId, pipeline::ImplicitBindGroupCount),
+        pipeline::ImplicitLayoutError,
+    > {
+        let derived_bind_group_count =
+            derived_group_layouts.len() as pipeline::ImplicitBindGroupCount;
+
+        while derived_group_layouts
+            .last()
+            .map_or(false, |map| map.is_empty())
+        {
+            derived_group_layouts.pop();
+        }
+        let ids = implicit_pipeline_ids
+            .as_ref()
+            .ok_or(pipeline::ImplicitLayoutError::MissingIds(0))?;
+        if ids.group_ids.len() < derived_group_layouts.len() {
+            tracing::error!(
+                "Not enough bind group IDs ({}) specified for the implicit layout ({})",
+                ids.group_ids.len(),
+                derived_group_layouts.len()
+            );
+            return Err(pipeline::ImplicitLayoutError::MissingIds(
+                derived_bind_group_count,
+            ));
+        }
+
+        let mut derived_group_layout_ids =
+            ArrayVec::<[id::BindGroupLayoutId; MAX_BIND_GROUPS]>::new();
+        for (bgl_id, map) in ids.group_ids.iter().zip(derived_group_layouts) {
+            let processed_id = match Device::deduplicate_bind_group_layout(self_id, &map, bgl_guard)
+            {
+                Some(dedup_id) => dedup_id,
+                None => {
+                    #[cfg(feature = "trace")]
+                    let bgl_desc = binding_model::BindGroupLayoutDescriptor {
+                        label: None,
+                        entries: if self.trace.is_some() {
+                            Cow::Owned(map.values().cloned().collect())
+                        } else {
+                            Cow::Borrowed(&[])
+                        },
+                    };
+                    let bgl = self.create_bind_group_layout(self_id, None, map)?;
+                    let out_id = hub.bind_group_layouts.register_identity_locked(
+                        bgl_id.clone(),
+                        bgl,
+                        bgl_guard,
+                    );
+                    #[cfg(feature = "trace")]
+                    if let Some(ref trace) = self.trace {
+                        trace
+                            .lock()
+                            .add(trace::Action::CreateBindGroupLayout(out_id.0, bgl_desc));
+                    }
+                    out_id.0
+                }
+            };
+            derived_group_layout_ids.push(processed_id);
+        }
+
+        let layout_desc = binding_model::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: Cow::Borrowed(&derived_group_layout_ids),
+            push_constant_ranges: Cow::Borrowed(&[]), //TODO?
+        };
+        let layout = self.create_pipeline_layout(self_id, &layout_desc, bgl_guard)?;
+        let layout_id = hub.pipeline_layouts.register_identity_locked(
+            ids.root_id.clone(),
+            layout,
+            pipeline_layout_guard,
+        );
+        #[cfg(feature = "trace")]
+        if let Some(ref trace) = self.trace {
+            trace.lock().add(trace::Action::CreatePipelineLayout(
+                layout_id.0,
+                layout_desc,
+            ));
+        }
+        Ok((layout_id.0, derived_bind_group_count))
+    }
+
+    fn create_compute_pipeline<G: GlobalIdentityHandlerFactory>(
+        &self,
+        self_id: id::DeviceId,
+        desc: &pipeline::ComputePipelineDescriptor,
+        implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
+        hub: &Hub<B, G>,
+        token: &mut Token<Self>,
+    ) -> Result<
+        (
+            pipeline::ComputePipeline<B>,
+            pipeline::ImplicitBindGroupCount,
+            id::PipelineLayoutId,
+        ),
+        pipeline::CreateComputePipelineError,
+    > {
+        //TODO: only lock mutable if the layout is derived
+        let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
+        let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
+
+        let mut derived_group_layouts =
+            ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
+
+        let interface = validation::StageInterface::default();
+        let pipeline_stage = &desc.compute_stage;
+        let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
+
+        let entry_point_name = &pipeline_stage.entry_point;
+        let shader_module = shader_module_guard
+            .get(pipeline_stage.module)
+            .map_err(|_| {
+                pipeline::CreateComputePipelineError::Stage(validation::StageError::InvalidModule)
+            })?;
+
+        let flag = wgt::ShaderStage::COMPUTE;
+        if let Some(ref module) = shader_module.module {
+            let group_layouts = match desc.layout {
+                Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
+                    pipeline_layout_guard
+                        .get(pipeline_layout_id)
+                        .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?,
+                    &*bgl_guard,
+                ),
+                None => {
+                    for _ in 0..self.limits.max_bind_groups {
+                        derived_group_layouts.push(binding_model::BindEntryMap::default());
+                    }
+                    validation::IntrospectionBindGroupLayouts::Derived(&mut derived_group_layouts)
+                }
+            };
+            let _ =
+                validation::check_stage(module, group_layouts, &entry_point_name, flag, interface)
+                    .map_err(pipeline::CreateComputePipelineError::Stage)?;
+        } else if desc.layout.is_none() {
+            return Err(pipeline::ImplicitLayoutError::ReflectionError(flag).into());
+        }
+
+        let shader = hal::pso::EntryPoint::<B> {
+            entry: &entry_point_name, // TODO
+            module: &shader_module.raw,
+            specialization: hal::pso::Specialization::EMPTY,
+        };
+
+        // TODO
+        let flags = hal::pso::PipelineCreationFlags::empty();
+        // TODO
+        let parent = hal::pso::BasePipeline::None;
+
+        let (pipeline_layout_id, derived_bind_group_count) = match desc.layout {
+            Some(id) => (id, 0),
+            None => self.derive_pipeline_layout(
+                self_id,
+                implicit_pipeline_ids,
+                derived_group_layouts,
+                &mut *bgl_guard,
+                &mut *pipeline_layout_guard,
+                &hub,
+            )?,
+        };
+        let layout = pipeline_layout_guard
+            .get(pipeline_layout_id)
+            .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
+
+        let pipeline_desc = hal::pso::ComputePipelineDesc {
+            shader,
+            layout: &layout.raw,
+            flags,
+            parent,
+        };
+
+        let raw = match unsafe { self.raw.create_compute_pipeline(&pipeline_desc, None) } {
+            Ok(pipeline) => pipeline,
+            Err(hal::pso::CreationError::OutOfMemory(_)) => {
+                return Err(pipeline::CreateComputePipelineError::Device(
+                    DeviceError::OutOfMemory,
+                ))
+            }
+            other => panic!("Compute pipeline creation error: {:?}", other),
+        };
+        if let Some(_) = desc.label {
+            //TODO-0.6: self.raw.set_compute_pipeline_name(&mut raw, label);
+        }
+
+        let pipeline = pipeline::ComputePipeline {
+            raw,
+            layout_id: Stored {
+                value: id::Valid(pipeline_layout_id),
+                ref_count: layout.life_guard.add_ref(),
+            },
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+        };
+        Ok((pipeline, derived_bind_group_count, pipeline_layout_id))
+    }
+
+    fn create_render_pipeline<G: GlobalIdentityHandlerFactory>(
+        &self,
+        self_id: id::DeviceId,
+        desc: &pipeline::RenderPipelineDescriptor,
+        implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
+        hub: &Hub<B, G>,
+        token: &mut Token<Self>,
+    ) -> Result<
+        (
+            pipeline::RenderPipeline<B>,
+            pipeline::ImplicitBindGroupCount,
+            id::PipelineLayoutId,
+        ),
+        pipeline::CreateRenderPipelineError,
+    > {
+        //TODO: only lock mutable if the layout is derived
+        let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
+        let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
+
+        let mut derived_group_layouts =
+            ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
+
+        let samples = {
+            let sc = desc.sample_count;
+            if sc == 0 || sc > 32 || !conv::is_power_of_two(sc) {
+                return Err(pipeline::CreateRenderPipelineError::InvalidSampleCount(sc));
+            }
+            sc as u8
+        };
+
+        let color_states = &desc.color_states;
+        let depth_stencil_state = desc.depth_stencil_state.as_ref();
+
+        let rasterization_state = desc
+            .rasterization_state
+            .as_ref()
+            .cloned()
+            .unwrap_or_default();
+        let rasterizer = conv::map_rasterization_state_descriptor(&rasterization_state);
+
+        let mut interface = validation::StageInterface::default();
+        let mut validated_stages = wgt::ShaderStage::empty();
+
+        let desc_vbs = &desc.vertex_state.vertex_buffers;
+        let mut vertex_strides = Vec::with_capacity(desc_vbs.len());
+        let mut vertex_buffers = Vec::with_capacity(desc_vbs.len());
+        let mut attributes = Vec::new();
+        for (i, vb_state) in desc_vbs.iter().enumerate() {
+            vertex_strides
+                .alloc()
+                .init((vb_state.stride, vb_state.step_mode));
+            if vb_state.attributes.is_empty() {
+                continue;
+            }
+            if vb_state.stride % wgt::VERTEX_STRIDE_ALIGNMENT != 0 {
+                return Err(pipeline::CreateRenderPipelineError::UnalignedVertexStride {
+                    index: i as u32,
+                    stride: vb_state.stride,
+                });
+            }
+            vertex_buffers.alloc().init(hal::pso::VertexBufferDesc {
+                binding: i as u32,
+                stride: vb_state.stride as u32,
+                rate: match vb_state.step_mode {
+                    InputStepMode::Vertex => hal::pso::VertexInputRate::Vertex,
+                    InputStepMode::Instance => hal::pso::VertexInputRate::Instance(1),
+                },
+            });
+            let desc_atts = &vb_state.attributes;
+            for attribute in desc_atts.iter() {
+                if attribute.offset >= 0x10000000 {
+                    return Err(
+                        pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
+                            location: attribute.shader_location,
+                            offset: attribute.offset,
+                        },
+                    );
+                }
+                attributes.alloc().init(hal::pso::AttributeDesc {
+                    location: attribute.shader_location,
+                    binding: i as u32,
+                    element: hal::pso::Element {
+                        format: conv::map_vertex_format(attribute.format),
+                        offset: attribute.offset as u32,
+                    },
+                });
+                interface.insert(
+                    attribute.shader_location,
+                    validation::MaybeOwned::Owned(validation::map_vertex_format(attribute.format)),
+                );
+            }
+        }
+
+        let input_assembler = hal::pso::InputAssemblerDesc {
+            primitive: conv::map_primitive_topology(desc.primitive_topology),
+            with_adjacency: false,
+            restart_index: None, //TODO
+        };
+
+        let blender = hal::pso::BlendDesc {
+            logic_op: None, // TODO
+            targets: color_states
+                .iter()
+                .map(conv::map_color_state_descriptor)
+                .collect(),
+        };
+        let depth_stencil = depth_stencil_state
+            .map(conv::map_depth_stencil_state_descriptor)
+            .unwrap_or_default();
+
+        let multisampling: Option<hal::pso::Multisampling> = if samples == 1 {
+            None
+        } else {
+            Some(hal::pso::Multisampling {
+                rasterization_samples: samples,
+                sample_shading: None,
+                sample_mask: desc.sample_mask as u64,
+                alpha_coverage: desc.alpha_to_coverage_enabled,
+                alpha_to_one: false,
+            })
+        };
+
+        // TODO
+        let baked_states = hal::pso::BakedStates {
+            viewport: None,
+            scissor: None,
+            blend_color: None,
+            depth_bounds: None,
+        };
+
+        if rasterization_state.clamp_depth && !self.features.contains(wgt::Features::DEPTH_CLAMPING)
+        {
+            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
+                wgt::Features::DEPTH_CLAMPING,
+            ));
+        }
+        if rasterization_state.polygon_mode != wgt::PolygonMode::Fill
+            && !self.features.contains(wgt::Features::NON_FILL_POLYGON_MODE)
+        {
+            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
+                wgt::Features::NON_FILL_POLYGON_MODE,
+            ));
+        }
+
+        if desc.layout.is_none() {
+            for _ in 0..self.limits.max_bind_groups {
+                derived_group_layouts.push(binding_model::BindEntryMap::default());
+            }
+        }
+
+        let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
+
+        let rp_key = RenderPassKey {
+            colors: color_states
+                .iter()
+                .map(|state| {
+                    let at = hal::pass::Attachment {
+                        format: Some(conv::map_texture_format(
+                            state.format,
+                            self.private_features,
+                        )),
+                        samples,
+                        ops: hal::pass::AttachmentOps::PRESERVE,
+                        stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
+                        layouts: hal::image::Layout::General..hal::image::Layout::General,
+                    };
+                    (at, hal::image::Layout::ColorAttachmentOptimal)
+                })
+                .collect(),
+            // We can ignore the resolves as the vulkan specs says:
+            // As an additional special case, if two render passes have a single subpass,
+            // they are compatible even if they have different resolve attachment references
+            // or depth/stencil resolve modes but satisfy the other compatibility conditions.
+            resolves: ArrayVec::new(),
+            depth_stencil: depth_stencil_state.map(|state| {
+                let at = hal::pass::Attachment {
+                    format: Some(conv::map_texture_format(
+                        state.format,
+                        self.private_features,
+                    )),
+                    samples,
+                    ops: hal::pass::AttachmentOps::PRESERVE,
+                    stencil_ops: hal::pass::AttachmentOps::PRESERVE,
+                    layouts: hal::image::Layout::General..hal::image::Layout::General,
+                };
+                (at, hal::image::Layout::DepthStencilAttachmentOptimal)
+            }),
+        };
+
+        let vertex = {
+            let entry_point_name = &desc.vertex_stage.entry_point;
+            let flag = wgt::ShaderStage::VERTEX;
+
+            let shader_module =
+                shader_module_guard
+                    .get(desc.vertex_stage.module)
+                    .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
+                        flag,
+                        error: validation::StageError::InvalidModule,
+                    })?;
+
+            if let Some(ref module) = shader_module.module {
+                let group_layouts = match desc.layout {
+                    Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
+                        pipeline_layout_guard
+                            .get(pipeline_layout_id)
+                            .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?,
+                        &*bgl_guard,
+                    ),
+                    None => validation::IntrospectionBindGroupLayouts::Derived(
+                        &mut derived_group_layouts,
+                    ),
+                };
+
+                interface = validation::check_stage(
+                    module,
+                    group_layouts,
+                    &entry_point_name,
+                    flag,
+                    interface,
+                )
+                .map_err(|error| pipeline::CreateRenderPipelineError::Stage { flag, error })?;
+                validated_stages |= flag;
+            }
+
+            hal::pso::EntryPoint::<B> {
+                entry: &entry_point_name, // TODO
+                module: &shader_module.raw,
+                specialization: hal::pso::Specialization::EMPTY,
+            }
+        };
+
+        let fragment = match &desc.fragment_stage {
+            Some(stage) => {
+                let entry_point_name = &stage.entry_point;
+                let flag = wgt::ShaderStage::FRAGMENT;
+
+                let shader_module = shader_module_guard.get(stage.module).map_err(|_| {
+                    pipeline::CreateRenderPipelineError::Stage {
+                        flag,
+                        error: validation::StageError::InvalidModule,
+                    }
+                })?;
+
+                let group_layouts = match desc.layout {
+                    Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
+                        pipeline_layout_guard
+                            .get(pipeline_layout_id)
+                            .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?,
+                        &*bgl_guard,
+                    ),
+                    None => validation::IntrospectionBindGroupLayouts::Derived(
+                        &mut derived_group_layouts,
+                    ),
+                };
+
+                if validated_stages == wgt::ShaderStage::VERTEX {
+                    if let Some(ref module) = shader_module.module {
+                        interface = validation::check_stage(
+                            module,
+                            group_layouts,
+                            &entry_point_name,
+                            flag,
+                            interface,
+                        )
+                        .map_err(|error| {
+                            pipeline::CreateRenderPipelineError::Stage { flag, error }
+                        })?;
+                        validated_stages |= flag;
+                    }
+                }
+
+                Some(hal::pso::EntryPoint::<B> {
+                    entry: &entry_point_name,
+                    module: &shader_module.raw,
+                    specialization: hal::pso::Specialization::EMPTY,
+                })
+            }
+            None => None,
+        };
+
+        if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
+            for (i, state) in color_states.iter().enumerate() {
+                let output = &interface[&(i as wgt::ShaderLocation)];
+                if !validation::check_texture_format(state.format, output) {
+                    tracing::warn!(
+                        "Incompatible fragment output[{}]. Shader: {:?}. Expected: {:?}",
+                        i,
+                        state.format,
+                        &**output
+                    );
+                    return Err(
+                        pipeline::CreateRenderPipelineError::IncompatibleOutputFormat {
+                            index: i as u8,
+                        },
+                    );
+                }
+            }
+        }
+        let last_stage = match desc.fragment_stage {
+            Some(_) => wgt::ShaderStage::FRAGMENT,
+            None => wgt::ShaderStage::VERTEX,
+        };
+        if desc.layout.is_none() && !validated_stages.contains(last_stage) {
+            return Err(pipeline::ImplicitLayoutError::ReflectionError(last_stage).into());
+        }
+
+        let primitive_assembler = hal::pso::PrimitiveAssemblerDesc::Vertex {
+            buffers: &vertex_buffers,
+            attributes: &attributes,
+            input_assembler,
+            vertex,
+            tessellation: None,
+            geometry: None,
+        };
+
+        // TODO
+        let flags = hal::pso::PipelineCreationFlags::empty();
+        // TODO
+        let parent = hal::pso::BasePipeline::None;
+
+        let (pipeline_layout_id, derived_bind_group_count) = match desc.layout {
+            Some(id) => (id, 0),
+            None => self.derive_pipeline_layout(
+                self_id,
+                implicit_pipeline_ids,
+                derived_group_layouts,
+                &mut *bgl_guard,
+                &mut *pipeline_layout_guard,
+                &hub,
+            )?,
+        };
+        let layout = pipeline_layout_guard
+            .get(pipeline_layout_id)
+            .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
+
+        let mut render_pass_cache = self.render_passes.lock();
+        let pipeline_desc = hal::pso::GraphicsPipelineDesc {
+            primitive_assembler,
+            rasterizer,
+            fragment,
+            blender,
+            depth_stencil,
+            multisampling,
+            baked_states,
+            layout: &layout.raw,
+            subpass: hal::pass::Subpass {
+                index: 0,
+                main_pass: match render_pass_cache.entry(rp_key) {
+                    Entry::Occupied(e) => e.into_mut(),
+                    Entry::Vacant(e) => {
+                        let pass = self
+                            .create_compatible_render_pass(e.key())
+                            .or(Err(DeviceError::OutOfMemory))?;
+                        e.insert(pass)
+                    }
+                },
+            },
+            flags,
+            parent,
+        };
+        // TODO: cache
+        let raw = unsafe {
+            self.raw
+                .create_graphics_pipeline(&pipeline_desc, None)
+                .map_err(|err| match err {
+                    hal::pso::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    _ => panic!("failed to create graphics pipeline: {}", err),
+                })?
+        };
+        if let Some(_) = desc.label {
+            //TODO-0.6: self.set_graphics_pipeline_name(&mut raw, label)
+        }
+
+        let pass_context = RenderPassContext {
+            attachments: AttachmentData {
+                colors: color_states.iter().map(|state| state.format).collect(),
+                resolves: ArrayVec::new(),
+                depth_stencil: depth_stencil_state
+                    .as_ref()
+                    .map(|state| state.format.clone()),
+            },
+            sample_count: samples,
+        };
+
+        let mut flags = pipeline::PipelineFlags::empty();
+        for state in color_states.iter() {
+            if state.color_blend.uses_color() | state.alpha_blend.uses_color() {
+                flags |= pipeline::PipelineFlags::BLEND_COLOR;
+            }
+        }
+        if let Some(ds) = depth_stencil_state.as_ref() {
+            if ds.stencil.is_enabled() && ds.stencil.needs_ref_value() {
+                flags |= pipeline::PipelineFlags::STENCIL_REFERENCE;
+            }
+            if !ds.is_read_only() {
+                flags |= pipeline::PipelineFlags::WRITES_DEPTH_STENCIL;
+            }
+        }
+
+        let pipeline = pipeline::RenderPipeline {
+            raw,
+            layout_id: Stored {
+                value: id::Valid(pipeline_layout_id),
+                ref_count: layout.life_guard.add_ref(),
+            },
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            pass_context,
+            flags,
+            index_format: desc.vertex_state.index_format,
+            vertex_strides,
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+        };
+        Ok((pipeline, derived_bind_group_count, pipeline_layout_id))
+    }
+
     fn wait_for_submit(
         &self,
         submission_index: SubmissionIndex,
@@ -2479,97 +3107,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
     }
 
-    fn derive_pipeline_layout<B: GfxBackend>(
-        &self,
-        device: &Device<B>,
-        device_id: id::DeviceId,
-        implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
-        mut derived_group_layouts: ArrayVec<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>,
-        bgl_guard: &mut Storage<binding_model::BindGroupLayout<B>, id::BindGroupLayoutId>,
-        pipeline_layout_guard: &mut Storage<binding_model::PipelineLayout<B>, id::PipelineLayoutId>,
-    ) -> Result<
-        (id::PipelineLayoutId, pipeline::ImplicitBindGroupCount),
-        pipeline::ImplicitLayoutError,
-    > {
-        let hub = B::hub(self);
-        let derived_bind_group_count =
-            derived_group_layouts.len() as pipeline::ImplicitBindGroupCount;
-
-        while derived_group_layouts
-            .last()
-            .map_or(false, |map| map.is_empty())
-        {
-            derived_group_layouts.pop();
-        }
-        let ids = implicit_pipeline_ids
-            .as_ref()
-            .ok_or(pipeline::ImplicitLayoutError::MissingIds(0))?;
-        if ids.group_ids.len() < derived_group_layouts.len() {
-            tracing::error!(
-                "Not enough bind group IDs ({}) specified for the implicit layout ({})",
-                ids.group_ids.len(),
-                derived_group_layouts.len()
-            );
-            return Err(pipeline::ImplicitLayoutError::MissingIds(
-                derived_bind_group_count,
-            ));
-        }
-
-        let mut derived_group_layout_ids =
-            ArrayVec::<[id::BindGroupLayoutId; MAX_BIND_GROUPS]>::new();
-        for (bgl_id, map) in ids.group_ids.iter().zip(derived_group_layouts) {
-            let processed_id =
-                match Device::deduplicate_bind_group_layout(device_id, &map, bgl_guard) {
-                    Some(dedup_id) => dedup_id,
-                    None => {
-                        #[cfg(feature = "trace")]
-                        let bgl_desc = binding_model::BindGroupLayoutDescriptor {
-                            label: None,
-                            entries: if device.trace.is_some() {
-                                Cow::Owned(map.values().cloned().collect())
-                            } else {
-                                Cow::Borrowed(&[])
-                            },
-                        };
-                        let bgl = device.create_bind_group_layout(device_id, None, map)?;
-                        let out_id = hub.bind_group_layouts.register_identity_locked(
-                            bgl_id.clone(),
-                            bgl,
-                            bgl_guard,
-                        );
-                        #[cfg(feature = "trace")]
-                        if let Some(ref trace) = device.trace {
-                            trace
-                                .lock()
-                                .add(trace::Action::CreateBindGroupLayout(out_id.0, bgl_desc));
-                        }
-                        out_id.0
-                    }
-                };
-            derived_group_layout_ids.push(processed_id);
-        }
-
-        let layout_desc = binding_model::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: Cow::Borrowed(&derived_group_layout_ids),
-            push_constant_ranges: Cow::Borrowed(&[]), //TODO?
-        };
-        let layout = device.create_pipeline_layout(device_id, &layout_desc, bgl_guard)?;
-        let layout_id = hub.pipeline_layouts.register_identity_locked(
-            ids.root_id.clone(),
-            layout,
-            pipeline_layout_guard,
-        );
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(trace::Action::CreatePipelineLayout(
-                layout_id.0,
-                layout_desc,
-            ));
-        }
-        Ok((layout_id.0, derived_bind_group_count))
-    }
-
     pub fn device_create_bind_group<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
@@ -2899,448 +3436,51 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &pipeline::RenderPipelineDescriptor,
         id_in: Input<G, id::RenderPipelineId>,
         implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
-    ) -> Result<
-        (id::RenderPipelineId, pipeline::ImplicitBindGroupCount),
-        pipeline::CreateRenderPipelineError,
-    > {
+    ) -> (
+        id::RenderPipelineId,
+        pipeline::ImplicitBindGroupCount,
+        Option<pipeline::CreateRenderPipelineError>,
+    ) {
         span!(_guard, INFO, "Device::create_render_pipeline");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let samples = {
-            let sc = desc.sample_count;
-            if sc == 0 || sc > 32 || !conv::is_power_of_two(sc) {
-                return Err(pipeline::CreateRenderPipelineError::InvalidSampleCount(sc));
-            }
-            sc as u8
-        };
-
-        let color_states = &desc.color_states;
-        let depth_stencil_state = desc.depth_stencil_state.as_ref();
-
-        let rasterization_state = desc
-            .rasterization_state
-            .as_ref()
-            .cloned()
-            .unwrap_or_default();
-        let rasterizer = conv::map_rasterization_state_descriptor(&rasterization_state);
-
-        let mut interface = validation::StageInterface::default();
-        let mut validated_stages = wgt::ShaderStage::empty();
-
-        let desc_vbs = &desc.vertex_state.vertex_buffers;
-        let mut vertex_strides = Vec::with_capacity(desc_vbs.len());
-        let mut vertex_buffers = Vec::with_capacity(desc_vbs.len());
-        let mut attributes = Vec::new();
-        for (i, vb_state) in desc_vbs.iter().enumerate() {
-            vertex_strides
-                .alloc()
-                .init((vb_state.stride, vb_state.step_mode));
-            if vb_state.attributes.is_empty() {
-                continue;
-            }
-            if vb_state.stride % wgt::VERTEX_STRIDE_ALIGNMENT != 0 {
-                return Err(pipeline::CreateRenderPipelineError::UnalignedVertexStride {
-                    index: i as u32,
-                    stride: vb_state.stride,
-                });
-            }
-            vertex_buffers.alloc().init(hal::pso::VertexBufferDesc {
-                binding: i as u32,
-                stride: vb_state.stride as u32,
-                rate: match vb_state.step_mode {
-                    InputStepMode::Vertex => hal::pso::VertexInputRate::Vertex,
-                    InputStepMode::Instance => hal::pso::VertexInputRate::Instance(1),
-                },
-            });
-            let desc_atts = &vb_state.attributes;
-            for attribute in desc_atts.iter() {
-                if attribute.offset >= 0x10000000 {
-                    return Err(
-                        pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
-                            location: attribute.shader_location,
-                            offset: attribute.offset,
-                        },
-                    );
-                }
-                attributes.alloc().init(hal::pso::AttributeDesc {
-                    location: attribute.shader_location,
-                    binding: i as u32,
-                    element: hal::pso::Element {
-                        format: conv::map_vertex_format(attribute.format),
-                        offset: attribute.offset as u32,
-                    },
-                });
-                interface.insert(
-                    attribute.shader_location,
-                    validation::MaybeOwned::Owned(validation::map_vertex_format(attribute.format)),
-                );
-            }
-        }
-
-        let input_assembler = hal::pso::InputAssemblerDesc {
-            primitive: conv::map_primitive_topology(desc.primitive_topology),
-            with_adjacency: false,
-            restart_index: None, //TODO
-        };
-
-        let blender = hal::pso::BlendDesc {
-            logic_op: None, // TODO
-            targets: color_states
-                .iter()
-                .map(conv::map_color_state_descriptor)
-                .collect(),
-        };
-        let depth_stencil = depth_stencil_state
-            .map(conv::map_depth_stencil_state_descriptor)
-            .unwrap_or_default();
-
-        let multisampling: Option<hal::pso::Multisampling> = if samples == 1 {
-            None
-        } else {
-            Some(hal::pso::Multisampling {
-                rasterization_samples: samples,
-                sample_shading: None,
-                sample_mask: desc.sample_mask as u64,
-                alpha_coverage: desc.alpha_to_coverage_enabled,
-                alpha_to_one: false,
-            })
-        };
-
-        // TODO
-        let baked_states = hal::pso::BakedStates {
-            viewport: None,
-            scissor: None,
-            blend_color: None,
-            depth_bounds: None,
-        };
-
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
-        if rasterization_state.clamp_depth
-            && !device.features.contains(wgt::Features::DEPTH_CLAMPING)
-        {
-            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
-                wgt::Features::DEPTH_CLAMPING,
-            ));
-        }
-        if rasterization_state.polygon_mode != wgt::PolygonMode::Fill
-            && !device
-                .features
-                .contains(wgt::Features::NON_FILL_POLYGON_MODE)
-        {
-            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
-                wgt::Features::NON_FILL_POLYGON_MODE,
-            ));
-        }
-
-        let (raw_pipeline, layout_id, layout_ref_count, derived_bind_group_count) = {
-            //TODO: only lock mutable if the layout is derived
-            let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
-            let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
-
-            let mut derived_group_layouts =
-                ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
-            if desc.layout.is_none() {
-                for _ in 0..device.limits.max_bind_groups {
-                    derived_group_layouts.push(binding_model::BindEntryMap::default());
-                }
-            }
-
-            let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
-
-            let rp_key = RenderPassKey {
-                colors: color_states
-                    .iter()
-                    .map(|state| {
-                        let at = hal::pass::Attachment {
-                            format: Some(conv::map_texture_format(
-                                state.format,
-                                device.private_features,
-                            )),
-                            samples,
-                            ops: hal::pass::AttachmentOps::PRESERVE,
-                            stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
-                            layouts: hal::image::Layout::General..hal::image::Layout::General,
-                        };
-                        (at, hal::image::Layout::ColorAttachmentOptimal)
-                    })
-                    .collect(),
-                // We can ignore the resolves as the vulkan specs says:
-                // As an additional special case, if two render passes have a single subpass,
-                // they are compatible even if they have different resolve attachment references
-                // or depth/stencil resolve modes but satisfy the other compatibility conditions.
-                resolves: ArrayVec::new(),
-                depth_stencil: depth_stencil_state.map(|state| {
-                    let at = hal::pass::Attachment {
-                        format: Some(conv::map_texture_format(
-                            state.format,
-                            device.private_features,
-                        )),
-                        samples,
-                        ops: hal::pass::AttachmentOps::PRESERVE,
-                        stencil_ops: hal::pass::AttachmentOps::PRESERVE,
-                        layouts: hal::image::Layout::General..hal::image::Layout::General,
-                    };
-                    (at, hal::image::Layout::DepthStencilAttachmentOptimal)
-                }),
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+            let (pipeline, derived_bind_group_count, layout_id) = match device
+                .create_render_pipeline(device_id, desc, implicit_pipeline_ids, &hub, &mut token)
+            {
+                Ok(pair) => pair,
+                Err(e) => break e,
             };
 
-            let vertex = {
-                let entry_point_name = &desc.vertex_stage.entry_point;
-                let flag = wgt::ShaderStage::VERTEX;
+            let id = hub
+                .render_pipelines
+                .register_identity(id_in, pipeline, &mut token);
 
-                let shader_module =
-                    shader_module_guard
-                        .get(desc.vertex_stage.module)
-                        .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
-                            flag,
-                            error: validation::StageError::InvalidModule,
-                        })?;
-
-                if let Some(ref module) = shader_module.module {
-                    let group_layouts = match desc.layout {
-                        Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
-                            pipeline_layout_guard
-                                .get(pipeline_layout_id)
-                                .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?,
-                            &*bgl_guard,
-                        ),
-                        None => validation::IntrospectionBindGroupLayouts::Derived(
-                            &mut derived_group_layouts,
-                        ),
-                    };
-
-                    interface = validation::check_stage(
-                        module,
-                        group_layouts,
-                        &entry_point_name,
-                        flag,
-                        interface,
-                    )
-                    .map_err(|error| pipeline::CreateRenderPipelineError::Stage { flag, error })?;
-                    validated_stages |= flag;
-                }
-
-                hal::pso::EntryPoint::<B> {
-                    entry: &entry_point_name, // TODO
-                    module: &shader_module.raw,
-                    specialization: hal::pso::Specialization::EMPTY,
-                }
-            };
-
-            let fragment = match &desc.fragment_stage {
-                Some(stage) => {
-                    let entry_point_name = &stage.entry_point;
-                    let flag = wgt::ShaderStage::FRAGMENT;
-
-                    let shader_module = shader_module_guard.get(stage.module).map_err(|_| {
-                        pipeline::CreateRenderPipelineError::Stage {
-                            flag,
-                            error: validation::StageError::InvalidModule,
-                        }
-                    })?;
-
-                    let group_layouts = match desc.layout {
-                        Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
-                            pipeline_layout_guard
-                                .get(pipeline_layout_id)
-                                .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?,
-                            &*bgl_guard,
-                        ),
-                        None => validation::IntrospectionBindGroupLayouts::Derived(
-                            &mut derived_group_layouts,
-                        ),
-                    };
-
-                    if validated_stages == wgt::ShaderStage::VERTEX {
-                        if let Some(ref module) = shader_module.module {
-                            interface = validation::check_stage(
-                                module,
-                                group_layouts,
-                                &entry_point_name,
-                                flag,
-                                interface,
-                            )
-                            .map_err(|error| {
-                                pipeline::CreateRenderPipelineError::Stage { flag, error }
-                            })?;
-                            validated_stages |= flag;
-                        }
-                    }
-
-                    Some(hal::pso::EntryPoint::<B> {
-                        entry: &entry_point_name,
-                        module: &shader_module.raw,
-                        specialization: hal::pso::Specialization::EMPTY,
-                    })
-                }
-                None => None,
-            };
-
-            if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
-                for (i, state) in color_states.iter().enumerate() {
-                    let output = &interface[&(i as wgt::ShaderLocation)];
-                    if !validation::check_texture_format(state.format, output) {
-                        tracing::warn!(
-                            "Incompatible fragment output[{}]. Shader: {:?}. Expected: {:?}",
-                            i,
-                            state.format,
-                            &**output
-                        );
-                        return Err(
-                            pipeline::CreateRenderPipelineError::IncompatibleOutputFormat {
-                                index: i as u8,
-                            },
-                        );
-                    }
-                }
-            }
-            let last_stage = match desc.fragment_stage {
-                Some(_) => wgt::ShaderStage::FRAGMENT,
-                None => wgt::ShaderStage::VERTEX,
-            };
-            if desc.layout.is_none() && !validated_stages.contains(last_stage) {
-                return Err(pipeline::ImplicitLayoutError::ReflectionError(last_stage).into());
-            }
-
-            let primitive_assembler = hal::pso::PrimitiveAssemblerDesc::Vertex {
-                buffers: &vertex_buffers,
-                attributes: &attributes,
-                input_assembler,
-                vertex,
-                tessellation: None,
-                geometry: None,
-            };
-
-            // TODO
-            let flags = hal::pso::PipelineCreationFlags::empty();
-            // TODO
-            let parent = hal::pso::BasePipeline::None;
-
-            let (pipeline_layout_id, derived_bind_group_count) = match desc.layout {
-                Some(id) => (id, 0),
-                None => self.derive_pipeline_layout(
-                    device,
-                    device_id,
-                    implicit_pipeline_ids,
-                    derived_group_layouts,
-                    &mut *bgl_guard,
-                    &mut *pipeline_layout_guard,
-                )?,
-            };
-            let layout = pipeline_layout_guard
-                .get(pipeline_layout_id)
-                .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
-
-            let mut render_pass_cache = device.render_passes.lock();
-            let pipeline_desc = hal::pso::GraphicsPipelineDesc {
-                primitive_assembler,
-                rasterizer,
-                fragment,
-                blender,
-                depth_stencil,
-                multisampling,
-                baked_states,
-                layout: &layout.raw,
-                subpass: hal::pass::Subpass {
-                    index: 0,
-                    main_pass: match render_pass_cache.entry(rp_key) {
-                        Entry::Occupied(e) => e.into_mut(),
-                        Entry::Vacant(e) => {
-                            let pass = device
-                                .create_compatible_render_pass(e.key())
-                                .or(Err(DeviceError::OutOfMemory))?;
-                            e.insert(pass)
-                        }
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace.lock().add(trace::Action::CreateRenderPipeline(
+                    id.0,
+                    pipeline::RenderPipelineDescriptor {
+                        layout: Some(layout_id),
+                        ..desc.clone()
                     },
-                },
-                flags,
-                parent,
-            };
-            // TODO: cache
-            let raw = unsafe {
-                device
-                    .raw
-                    .create_graphics_pipeline(&pipeline_desc, None)
-                    .map_err(|err| match err {
-                        hal::pso::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                        _ => panic!("failed to create graphics pipeline: {}", err),
-                    })?
-            };
-            if let Some(_) = desc.label {
-                //TODO-0.6: device.set_graphics_pipeline_name(&mut raw, label)
+                ));
             }
-
-            (
-                raw,
-                pipeline_layout_id,
-                layout.life_guard.add_ref(),
-                derived_bind_group_count,
-            )
+            let _ = layout_id;
+            return (id.0, derived_bind_group_count, None);
         };
 
-        let pass_context = RenderPassContext {
-            attachments: AttachmentData {
-                colors: color_states.iter().map(|state| state.format).collect(),
-                resolves: ArrayVec::new(),
-                depth_stencil: depth_stencil_state
-                    .as_ref()
-                    .map(|state| state.format.clone()),
-            },
-            sample_count: samples,
-        };
-
-        let mut flags = pipeline::PipelineFlags::empty();
-        for state in color_states.iter() {
-            if state.color_blend.uses_color() | state.alpha_blend.uses_color() {
-                flags |= pipeline::PipelineFlags::BLEND_COLOR;
-            }
-        }
-        if let Some(ds) = depth_stencil_state.as_ref() {
-            if ds.stencil.is_enabled() && ds.stencil.needs_ref_value() {
-                flags |= pipeline::PipelineFlags::STENCIL_REFERENCE;
-            }
-            if !ds.is_read_only() {
-                flags |= pipeline::PipelineFlags::WRITES_DEPTH_STENCIL;
-            }
-        }
-
-        let pipeline = pipeline::RenderPipeline {
-            raw: raw_pipeline,
-            layout_id: Stored {
-                value: id::Valid(layout_id),
-                ref_count: layout_ref_count,
-            },
-            device_id: Stored {
-                value: id::Valid(device_id),
-                ref_count: device.life_guard.add_ref(),
-            },
-            pass_context,
-            flags,
-            index_format: desc.vertex_state.index_format,
-            vertex_strides,
-            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
-        };
-
-        let id = hub
-            .render_pipelines
-            .register_identity(id_in, pipeline, &mut token);
-
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(trace::Action::CreateRenderPipeline(
-                id.0,
-                pipeline::RenderPipelineDescriptor {
-                    layout: Some(layout_id),
-                    ..desc.clone()
-                },
-            ));
-        }
-        Ok((id.0, derived_bind_group_count))
+        let id =
+            hub.render_pipelines
+                .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        (id, 0, Some(error))
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
@@ -3349,25 +3489,40 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         pipeline_id: id::RenderPipelineId,
         index: u32,
-    ) -> Result<id::BindGroupLayoutId, binding_model::GetBindGroupLayoutError> {
+        id_in: Input<G, id::BindGroupLayoutId>,
+    ) -> (
+        id::BindGroupLayoutId,
+        Option<binding_model::GetBindGroupLayoutError>,
+    ) {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
-        let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
-        let (_, mut token) = hub.bind_groups.read(&mut token);
-        let (pipeline_guard, _) = hub.render_pipelines.read(&mut token);
 
-        let pipeline = pipeline_guard
-            .get(pipeline_id)
-            .map_err(|_| binding_model::GetBindGroupLayoutError::InvalidPipeline)?;
-        let id = pipeline_layout_guard[pipeline.layout_id.value]
-            .bind_group_layout_ids
-            .get(index as usize)
-            .ok_or(binding_model::GetBindGroupLayoutError::InvalidGroupIndex(
-                index,
-            ))?;
-        bgl_guard[*id].multi_ref_count.inc();
-        Ok(id.0)
+        let error = loop {
+            let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
+            let (_, mut token) = hub.bind_groups.read(&mut token);
+            let (pipeline_guard, _) = hub.render_pipelines.read(&mut token);
+
+            let pipeline = match pipeline_guard.get(pipeline_id) {
+                Ok(pipeline) => pipeline,
+                Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
+            };
+            let id = match pipeline_layout_guard[pipeline.layout_id.value]
+                .bind_group_layout_ids
+                .get(index as usize)
+            {
+                Some(id) => id,
+                None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+            };
+
+            bgl_guard[*id].multi_ref_count.inc();
+            return (id.0, None);
+        };
+
+        let id = hub
+            .bind_group_layouts
+            .register_error(id_in, "<derived>", &mut token);
+        (id, Some(error))
     }
 
     pub fn render_pipeline_label<B: GfxBackend>(&self, id: id::RenderPipelineId) -> String {
@@ -3424,150 +3579,51 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &pipeline::ComputePipelineDescriptor,
         id_in: Input<G, id::ComputePipelineId>,
         implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
-    ) -> Result<
-        (id::ComputePipelineId, pipeline::ImplicitBindGroupCount),
-        pipeline::CreateComputePipelineError,
-    > {
+    ) -> (
+        id::ComputePipelineId,
+        pipeline::ImplicitBindGroupCount,
+        Option<pipeline::CreateComputePipelineError>,
+    ) {
         span!(_guard, INFO, "Device::create_compute_pipeline");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
-        let (raw_pipeline, layout_id, layout_ref_count, derived_bind_group_count) = {
-            //TODO: only lock mutable if the layout is derived
-            let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
-            let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+            let (pipeline, derived_bind_group_count, layout_id) = match device
+                .create_compute_pipeline(device_id, desc, implicit_pipeline_ids, &hub, &mut token)
+            {
+                Ok(pair) => pair,
+                Err(e) => break e,
+            };
 
-            let mut derived_group_layouts =
-                ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
+            let id = hub
+                .compute_pipelines
+                .register_identity(id_in, pipeline, &mut token);
 
-            let interface = validation::StageInterface::default();
-            let pipeline_stage = &desc.compute_stage;
-            let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
-
-            let entry_point_name = &pipeline_stage.entry_point;
-            let shader_module = shader_module_guard
-                .get(pipeline_stage.module)
-                .map_err(|_| {
-                    pipeline::CreateComputePipelineError::Stage(
-                        validation::StageError::InvalidModule,
-                    )
-                })?;
-
-            let flag = wgt::ShaderStage::COMPUTE;
-            if let Some(ref module) = shader_module.module {
-                let group_layouts = match desc.layout {
-                    Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
-                        pipeline_layout_guard
-                            .get(pipeline_layout_id)
-                            .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?,
-                        &*bgl_guard,
-                    ),
-                    None => {
-                        for _ in 0..device.limits.max_bind_groups {
-                            derived_group_layouts.push(binding_model::BindEntryMap::default());
-                        }
-                        validation::IntrospectionBindGroupLayouts::Derived(
-                            &mut derived_group_layouts,
-                        )
-                    }
-                };
-                let _ = validation::check_stage(
-                    module,
-                    group_layouts,
-                    &entry_point_name,
-                    flag,
-                    interface,
-                )
-                .map_err(pipeline::CreateComputePipelineError::Stage)?;
-            } else if desc.layout.is_none() {
-                return Err(pipeline::ImplicitLayoutError::ReflectionError(flag).into());
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace.lock().add(trace::Action::CreateComputePipeline(
+                    id.0,
+                    pipeline::ComputePipelineDescriptor {
+                        layout: Some(layout_id),
+                        ..desc.clone()
+                    },
+                ));
             }
-
-            let shader = hal::pso::EntryPoint::<B> {
-                entry: &entry_point_name, // TODO
-                module: &shader_module.raw,
-                specialization: hal::pso::Specialization::EMPTY,
-            };
-
-            // TODO
-            let flags = hal::pso::PipelineCreationFlags::empty();
-            // TODO
-            let parent = hal::pso::BasePipeline::None;
-
-            let (pipeline_layout_id, derived_bind_group_count) = match desc.layout {
-                Some(id) => (id, 0),
-                None => self.derive_pipeline_layout(
-                    device,
-                    device_id,
-                    implicit_pipeline_ids,
-                    derived_group_layouts,
-                    &mut *bgl_guard,
-                    &mut *pipeline_layout_guard,
-                )?,
-            };
-            let layout = pipeline_layout_guard
-                .get(pipeline_layout_id)
-                .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
-
-            let pipeline_desc = hal::pso::ComputePipelineDesc {
-                shader,
-                layout: &layout.raw,
-                flags,
-                parent,
-            };
-
-            let raw = match unsafe { device.raw.create_compute_pipeline(&pipeline_desc, None) } {
-                Ok(pipeline) => pipeline,
-                Err(hal::pso::CreationError::OutOfMemory(_)) => {
-                    return Err(pipeline::CreateComputePipelineError::Device(
-                        DeviceError::OutOfMemory,
-                    ))
-                }
-                other => panic!("Compute pipeline creation error: {:?}", other),
-            };
-            if let Some(_) = desc.label {
-                //TODO-0.6: device.raw.set_compute_pipeline_name(&mut raw, label);
-            }
-            (
-                raw,
-                pipeline_layout_id,
-                layout.life_guard.add_ref(),
-                derived_bind_group_count,
-            )
+            let _ = layout_id;
+            return (id.0, derived_bind_group_count, None);
         };
 
-        let pipeline = pipeline::ComputePipeline {
-            raw: raw_pipeline,
-            layout_id: Stored {
-                value: id::Valid(layout_id),
-                ref_count: layout_ref_count,
-            },
-            device_id: Stored {
-                value: id::Valid(device_id),
-                ref_count: device.life_guard.add_ref(),
-            },
-            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
-        };
-        let id = hub
-            .compute_pipelines
-            .register_identity(id_in, pipeline, &mut token);
-
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(trace::Action::CreateComputePipeline(
-                id.0,
-                pipeline::ComputePipelineDescriptor {
-                    layout: Some(layout_id),
-                    ..desc.clone()
-                },
-            ));
-        }
-        Ok((id.0, derived_bind_group_count))
+        let id =
+            hub.compute_pipelines
+                .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        (id, 0, Some(error))
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
@@ -3576,41 +3632,44 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         pipeline_id: id::ComputePipelineId,
         index: u32,
-    ) -> Result<id::BindGroupLayoutId, binding_model::GetBindGroupLayoutError> {
+        id_in: Input<G, id::BindGroupLayoutId>,
+    ) -> (
+        id::BindGroupLayoutId,
+        Option<binding_model::GetBindGroupLayoutError>,
+    ) {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
-        let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
-        let (_, mut token) = hub.bind_groups.read(&mut token);
-        let (pipeline_guard, _) = hub.compute_pipelines.read(&mut token);
 
-        let pipeline = pipeline_guard
-            .get(pipeline_id)
-            .map_err(|_| binding_model::GetBindGroupLayoutError::InvalidPipeline)?;
-        let id = pipeline_layout_guard[pipeline.layout_id.value]
-            .bind_group_layout_ids
-            .get(index as usize)
-            .ok_or(binding_model::GetBindGroupLayoutError::InvalidGroupIndex(
-                index,
-            ))?;
-        bgl_guard[*id].multi_ref_count.inc();
-        Ok(id.0)
+        let error = loop {
+            let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
+            let (_, mut token) = hub.bind_groups.read(&mut token);
+            let (pipeline_guard, _) = hub.compute_pipelines.read(&mut token);
+
+            let pipeline = match pipeline_guard.get(pipeline_id) {
+                Ok(pipeline) => pipeline,
+                Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
+            };
+            let id = match pipeline_layout_guard[pipeline.layout_id.value]
+                .bind_group_layout_ids
+                .get(index as usize)
+            {
+                Some(id) => id,
+                None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+            };
+
+            bgl_guard[*id].multi_ref_count.inc();
+            return (id.0, None);
+        };
+
+        let id = hub
+            .bind_group_layouts
+            .register_error(id_in, "<derived>", &mut token);
+        (id, Some(error))
     }
 
     pub fn compute_pipeline_label<B: GfxBackend>(&self, id: id::ComputePipelineId) -> String {
         B::hub(self).compute_pipelines.label_for_resource(id)
-    }
-
-    pub fn compute_pipeline_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::ComputePipelineId>,
-        label: Option<&str>,
-    ) -> id::ComputePipelineId {
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let (_, mut token) = hub.devices.read(&mut token);
-        hub.compute_pipelines
-            .register_error(id_in, label.unwrap_or(""), &mut token)
     }
 
     pub fn compute_pipeline_drop<B: GfxBackend>(&self, compute_pipeline_id: id::ComputePipelineId) {

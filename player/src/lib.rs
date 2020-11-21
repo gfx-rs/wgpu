@@ -231,16 +231,18 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             A::CreateComputePipeline(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_compute_pipeline::<B>(device, &desc, id, None)
-                    .unwrap();
+                let (_, _, error) =
+                    self.device_create_compute_pipeline::<B>(device, &desc, id, None);
+                assert_eq!(error, None);
             }
             A::DestroyComputePipeline(id) => {
                 self.compute_pipeline_drop::<B>(id);
             }
             A::CreateRenderPipeline(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_render_pipeline::<B>(device, &desc, id, None)
-                    .unwrap();
+                let (_, _, error) =
+                    self.device_create_render_pipeline::<B>(device, &desc, id, None);
+                assert_eq!(error, None);
             }
             A::DestroyRenderPipeline(id) => {
                 self.render_pipeline_drop::<B>(id);
