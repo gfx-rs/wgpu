@@ -4,10 +4,11 @@
 
 use crate::{
     device::{DeviceError, SHADER_STAGE_COUNT},
+    hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
     track::{TrackerSet, DUMMY_SELECTOR},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
-    FastHashMap, Label, LifeGuard, MultiRefCount, RefCount, Stored, MAX_BIND_GROUPS,
+    FastHashMap, Label, LifeGuard, MultiRefCount, Stored, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -320,7 +321,7 @@ pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) label: String,
 }
 
-impl<B: hal::Backend> crate::hub::Resource for BindGroupLayout<B> {
+impl<B: hal::Backend> Resource for BindGroupLayout<B> {
     const TYPE: &'static str = "BindGroupLayout";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -505,7 +506,7 @@ impl<B: hal::Backend> PipelineLayout<B> {
     }
 }
 
-impl<B: hal::Backend> crate::hub::Resource for PipelineLayout<B> {
+impl<B: hal::Backend> Resource for PipelineLayout<B> {
     const TYPE: &'static str = "PipelineLayout";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -598,19 +599,13 @@ impl<B: hal::Backend> BindGroup<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for BindGroup<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
-    }
-}
-
 impl<B: hal::Backend> Borrow<()> for BindGroup<B> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
 }
 
-impl<B: hal::Backend> crate::hub::Resource for BindGroup<B> {
+impl<B: hal::Backend> Resource for BindGroup<B> {
     const TYPE: &'static str = "BindGroup";
 
     fn life_guard(&self) -> &LifeGuard {
