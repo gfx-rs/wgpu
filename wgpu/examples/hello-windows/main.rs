@@ -67,7 +67,7 @@ async fn run(
     viewports: Vec<(Window, wgpu::Color)>,
     swapchain_format: wgpu::TextureFormat,
 ) {
-    let instance = wgpu::Instance::new(wgpu::BackendBit::all());
+    let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let viewports: Vec<_> = viewports
         .into_iter()
         .map(|(window, color)| ViewportDesc::new(window, color, &instance))
@@ -79,7 +79,7 @@ async fn run(
             compatible_surface: viewports.first().map(|desc| &desc.surface),
         })
         .await
-        .expect("Failed to find an appropiate adapter");
+        .expect("Failed to find an appropriate adapter");
 
     // Create the logical device and command queue
     let (device, queue) = adapter
