@@ -1,10 +1,14 @@
 //! Module processing functionality.
 
+#[cfg(feature = "petgraph")]
+mod call_graph;
 mod interface;
 mod namer;
 mod typifier;
 mod validator;
 
+#[cfg(feature = "petgraph")]
+pub use call_graph::{CallGraph, CallGraphBuilder};
 pub use interface::{Interface, Visitor};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use typifier::{check_constant_type, ResolveContext, ResolveError, Typifier};

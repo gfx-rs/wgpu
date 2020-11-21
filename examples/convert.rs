@@ -216,14 +216,17 @@ fn main() {
                 ),
             };
 
-            let mut file = fs::OpenOptions::new()
+            let file = fs::OpenOptions::new()
                 .write(true)
                 .truncate(true)
                 .create(true)
                 .open(&args[2])
                 .unwrap();
 
-            glsl::write(&module, &mut file, options)
+            let mut writer = glsl::Writer::new(file, &module, &options).unwrap();
+
+            writer
+                .write()
                 .map_err(|e| {
                     fs::remove_file(&args[2]).unwrap();
                     e
