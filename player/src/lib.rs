@@ -186,24 +186,24 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 }
             }
             A::CreateBindGroupLayout(id, desc) => {
-                self.device_create_bind_group_layout::<B>(device, &desc, id)
-                    .unwrap();
+                let (_, error) = self.device_create_bind_group_layout::<B>(device, &desc, id);
+                assert_eq!(error, None);
             }
             A::DestroyBindGroupLayout(id) => {
                 self.bind_group_layout_drop::<B>(id);
             }
             A::CreatePipelineLayout(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_pipeline_layout::<B>(device, &desc, id)
-                    .unwrap();
+                let (_, error) = self.device_create_pipeline_layout::<B>(device, &desc, id);
+                assert_eq!(error, None);
             }
             A::DestroyPipelineLayout(id) => {
                 self.pipeline_layout_drop::<B>(id);
             }
             A::CreateBindGroup(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_bind_group::<B>(device, &desc, id)
-                    .unwrap();
+                let (_, error) = self.device_create_bind_group::<B>(device, &desc, id);
+                assert_eq!(error, None);
             }
             A::DestroyBindGroup(id) => {
                 self.bind_group_drop::<B>(id);

@@ -4,13 +4,13 @@
 
 use crate::{
     backend,
-    device::Device,
+    device::{Device, DeviceDescriptor},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId, Valid},
-    span, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
+    span, LabelHelpers, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
 };
 
-use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, BIND_BUFFER_ALIGNMENT};
+use wgt::{Backend, BackendBit, PowerPreference, BIND_BUFFER_ALIGNMENT};
 
 use hal::{
     adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
@@ -127,7 +127,7 @@ pub struct Adapter<B: hal::Backend> {
     life_guard: LifeGuard,
 }
 
-impl<B: hal::Backend> Adapter<B> {
+impl<B: GfxBackend> Adapter<B> {
     fn new(raw: hal::adapter::Adapter<B>) -> Self {
         span!(_guard, INFO, "Adapter::new");
 
@@ -226,6 +226,150 @@ impl<B: hal::Backend> Adapter<B> {
             limits,
             life_guard: LifeGuard::new("<Adapter>"),
         }
+    }
+
+    fn create_device(
+        &self,
+        self_id: AdapterId,
+        desc: &DeviceDescriptor,
+        trace_path: Option<&std::path::Path>,
+    ) -> Result<Device<B>, RequestDeviceError> {
+        // Verify all features were exposed by the adapter
+        if !self.features.contains(desc.features) {
+            return Err(RequestDeviceError::UnsupportedFeature(
+                desc.features - self.features,
+            ));
+        }
+
+        // Verify feature preconditions
+        if desc
+            .features
+            .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
+            && self.raw.info.device_type == hal::adapter::DeviceType::DiscreteGpu
+        {
+            tracing::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
+        }
+
+        let phd = &self.raw.physical_device;
+        let available_features = phd.features();
+
+        // Check features that are always needed
+        let wishful_features = hal::Features::ROBUST_BUFFER_ACCESS
+            | hal::Features::VERTEX_STORES_AND_ATOMICS
+            | hal::Features::FRAGMENT_STORES_AND_ATOMICS
+            | hal::Features::NDC_Y_UP
+            | hal::Features::INDEPENDENT_BLENDING
+            | hal::Features::SAMPLER_ANISOTROPY
+            | hal::Features::IMAGE_CUBE_ARRAY;
+        let mut enabled_features = available_features & wishful_features;
+        if enabled_features != wishful_features {
+            tracing::warn!(
+                "Missing internal features: {:?}",
+                wishful_features - enabled_features
+            );
+        }
+
+        // Features
+        enabled_features.set(
+            hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
+            desc.features
+                .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
+        );
+        enabled_features.set(
+            hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
+            desc.features
+                .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
+        );
+        enabled_features.set(
+            hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
+            desc.features
+                .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+        );
+        enabled_features.set(
+            hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
+            desc.features.contains(wgt::Features::UNSIZED_BINDING_ARRAY),
+        );
+        enabled_features.set(
+            hal::Features::MULTI_DRAW_INDIRECT,
+            desc.features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
+        );
+        enabled_features.set(
+            hal::Features::DRAW_INDIRECT_COUNT,
+            desc.features
+                .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT),
+        );
+        enabled_features.set(
+            hal::Features::NON_FILL_POLYGON_MODE,
+            desc.features.contains(wgt::Features::NON_FILL_POLYGON_MODE),
+        );
+
+        let family = self
+            .raw
+            .queue_families
+            .iter()
+            .find(|family| family.queue_type().supports_graphics())
+            .ok_or(RequestDeviceError::NoGraphicsQueue)?;
+        let mut gpu =
+            unsafe { phd.open(&[(family, &[1.0])], enabled_features) }.map_err(|err| {
+                use hal::device::CreationError::*;
+                match err {
+                    DeviceLost => RequestDeviceError::DeviceLost,
+                    InitializationFailed => RequestDeviceError::Internal,
+                    OutOfMemory(_) => RequestDeviceError::OutOfMemory,
+                    _ => panic!("failed to create `gfx-hal` device: {}", err),
+                }
+            })?;
+
+        if let Some(_) = desc.label {
+            //TODO
+        }
+
+        let limits = phd.limits();
+        assert_eq!(
+            0,
+            BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
+            "Adapter storage buffer offset alignment not compatible with WGPU"
+        );
+        assert_eq!(
+            0,
+            BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
+            "Adapter uniform buffer offset alignment not compatible with WGPU"
+        );
+        if self.limits < desc.limits {
+            return Err(RequestDeviceError::LimitsExceeded);
+        }
+
+        let mem_props = phd.memory_properties();
+        if !desc.shader_validation {
+            tracing::warn!("Shader validation is disabled");
+        }
+        let private_features = PrivateFeatures {
+            shader_validation: desc.shader_validation,
+            anisotropic_filtering: enabled_features.contains(hal::Features::SAMPLER_ANISOTROPY),
+            texture_d24: phd
+                .format_properties(Some(hal::format::Format::X8D24Unorm))
+                .optimal_tiling
+                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+            texture_d24_s8: phd
+                .format_properties(Some(hal::format::Format::D24UnormS8Uint))
+                .optimal_tiling
+                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+        };
+
+        Device::new(
+            gpu.device,
+            Stored {
+                value: Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            gpu.queue_groups.swap_remove(0),
+            mem_props,
+            limits,
+            private_features,
+            desc,
+            trace_path,
+        )
+        .or(Err(RequestDeviceError::OutOfMemory))
     }
 }
 
@@ -668,152 +812,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
-    ) -> Result<DeviceId, RequestDeviceError> {
+    ) -> (DeviceId, Option<RequestDeviceError>) {
         span!(_guard, INFO, "Adapter::request_device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
-        let device = {
-            let (adapter_guard, _) = hub.adapters.read(&mut token);
-            let adapter = adapter_guard
-                .get(adapter_id)
-                .map_err(|_| RequestDeviceError::InvalidAdapter)?;
-            let phd = &adapter.raw.physical_device;
 
-            // Verify all features were exposed by the adapter
-            if !adapter.features.contains(desc.features) {
-                return Err(RequestDeviceError::UnsupportedFeature(
-                    desc.features - adapter.features,
-                ));
-            }
-
-            // Verify feature preconditions
-            if desc
-                .features
-                .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
-                && adapter.raw.info.device_type == hal::adapter::DeviceType::DiscreteGpu
-            {
-                tracing::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
-            }
-
-            let available_features = adapter.raw.physical_device.features();
-
-            // Check features that are always needed
-            let wishful_features = hal::Features::ROBUST_BUFFER_ACCESS
-                | hal::Features::VERTEX_STORES_AND_ATOMICS
-                | hal::Features::FRAGMENT_STORES_AND_ATOMICS
-                | hal::Features::NDC_Y_UP
-                | hal::Features::INDEPENDENT_BLENDING
-                | hal::Features::SAMPLER_ANISOTROPY
-                | hal::Features::IMAGE_CUBE_ARRAY;
-            let mut enabled_features = available_features & wishful_features;
-            if enabled_features != wishful_features {
-                tracing::warn!(
-                    "Missing internal features: {:?}",
-                    wishful_features - enabled_features
-                );
-            }
-
-            // Features
-            enabled_features.set(
-                hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
-                desc.features
-                    .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
-            );
-            enabled_features.set(
-                hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
-                desc.features
-                    .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
-            );
-            enabled_features.set(
-                hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
-                desc.features
-                    .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
-            );
-            enabled_features.set(
-                hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
-                desc.features.contains(wgt::Features::UNSIZED_BINDING_ARRAY),
-            );
-            enabled_features.set(
-                hal::Features::MULTI_DRAW_INDIRECT,
-                desc.features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
-            );
-            enabled_features.set(
-                hal::Features::DRAW_INDIRECT_COUNT,
-                desc.features
-                    .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT),
-            );
-            enabled_features.set(
-                hal::Features::NON_FILL_POLYGON_MODE,
-                desc.features.contains(wgt::Features::NON_FILL_POLYGON_MODE),
-            );
-
-            let family = adapter
-                .raw
-                .queue_families
-                .iter()
-                .find(|family| family.queue_type().supports_graphics())
-                .ok_or(RequestDeviceError::NoGraphicsQueue)?;
-            let mut gpu =
-                unsafe { phd.open(&[(family, &[1.0])], enabled_features) }.map_err(|err| {
-                    use hal::device::CreationError::*;
-                    match err {
-                        DeviceLost => RequestDeviceError::DeviceLost,
-                        InitializationFailed => RequestDeviceError::Internal,
-                        OutOfMemory(_) => RequestDeviceError::OutOfMemory,
-                        _ => panic!("failed to create `gfx-hal` device: {}", err),
-                    }
-                })?;
-
-            let limits = phd.limits();
-            assert_eq!(
-                0,
-                BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
-                "Adapter storage buffer offset alignment not compatible with WGPU"
-            );
-            assert_eq!(
-                0,
-                BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
-                "Adapter uniform buffer offset alignment not compatible with WGPU"
-            );
-            if adapter.limits < desc.limits {
-                return Err(RequestDeviceError::LimitsExceeded);
-            }
-
-            let mem_props = phd.memory_properties();
-            if !desc.shader_validation {
-                tracing::warn!("Shader validation is disabled");
-            }
-            let private_features = PrivateFeatures {
-                shader_validation: desc.shader_validation,
-                anisotropic_filtering: enabled_features.contains(hal::Features::SAMPLER_ANISOTROPY),
-                texture_d24: phd
-                    .format_properties(Some(hal::format::Format::X8D24Unorm))
-                    .optimal_tiling
-                    .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
-                texture_d24_s8: phd
-                    .format_properties(Some(hal::format::Format::D24UnormS8Uint))
-                    .optimal_tiling
-                    .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+        let error = loop {
+            let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+            let adapter = match adapter_guard.get(adapter_id) {
+                Ok(adapter) => adapter,
+                Err(_) => break RequestDeviceError::InvalidAdapter,
             };
-
-            Device::new(
-                gpu.device,
-                Stored {
-                    value: Valid(adapter_id),
-                    ref_count: adapter.life_guard.add_ref(),
-                },
-                gpu.queue_groups.swap_remove(0),
-                mem_props,
-                limits,
-                private_features,
-                desc,
-                trace_path,
-            )
-            .or(Err(RequestDeviceError::OutOfMemory))?
+            let device = match adapter.create_device(adapter_id, desc, trace_path) {
+                Ok(device) => device,
+                Err(e) => break e,
+            };
+            let id = hub.devices.register_identity(id_in, device, &mut token);
+            return (id.0, None);
         };
 
-        let id = hub.devices.register_identity(id_in, device, &mut token);
-        Ok(id.0)
+        let id = hub
+            .devices
+            .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
     }
 }

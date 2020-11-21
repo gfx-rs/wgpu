@@ -3,8 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    binding_model::{self, CreateBindGroupError, CreatePipelineLayoutError},
-    command, conv,
+    binding_model, command, conv,
     device::life::WaitIdleError,
     hub::{
         GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, InvalidId, Storage, Token,
@@ -56,6 +55,8 @@ pub const MAX_MIP_LEVELS: u32 = 16;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const SHADER_STAGE_COUNT: usize = 3;
+
+pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
     use hal::pso::PipelineStage as Ps;
@@ -252,7 +253,7 @@ impl<B: GfxBackend> Device<B> {
         mem_props: hal::adapter::MemoryProperties,
         hal_limits: hal::Limits,
         private_features: PrivateFeatures,
-        desc: &wgt::DeviceDescriptor,
+        desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Self, CreateDeviceError> {
         let cmd_allocator = command::CommandAllocator::new(queue_group.family, &raw)
@@ -1057,16 +1058,351 @@ impl<B: GfxBackend> Device<B> {
         })
     }
 
+    fn create_bind_group<G: GlobalIdentityHandlerFactory>(
+        &self,
+        self_id: id::DeviceId,
+        layout: &binding_model::BindGroupLayout<B>,
+        desc: &binding_model::BindGroupDescriptor,
+        hub: &Hub<B, G>,
+        token: &mut Token<binding_model::BindGroupLayout<B>>,
+    ) -> Result<binding_model::BindGroup<B>, binding_model::CreateBindGroupError> {
+        use crate::binding_model::{BindingResource as Br, CreateBindGroupError as Error};
+        {
+            // Check that the number of entries in the descriptor matches
+            // the number of entries in the layout.
+            let actual = desc.entries.len();
+            let expected = layout.entries.len();
+            if actual != expected {
+                return Err(Error::BindingsNumMismatch { expected, actual });
+            }
+        }
+
+        // TODO: arrayvec/smallvec
+        // Record binding info for dynamic offset validation
+        let mut dynamic_binding_info = Vec::new();
+        // fill out the descriptors
+        let mut used = TrackerSet::new(B::VARIANT);
+
+        let (buffer_guard, mut token) = hub.buffers.read(token);
+        let (texture_guard, mut token) = hub.textures.read(&mut token); //skip token
+        let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
+        let (sampler_guard, _) = hub.samplers.read(&mut token);
+
+        // `BTreeMap` has ordered bindings as keys, which allows us to coalesce
+        // the descriptor writes into a single transaction.
+        let mut write_map = BTreeMap::new();
+        for entry in desc.entries.iter() {
+            let binding = entry.binding;
+            // Find the corresponding declaration in the layout
+            let decl = layout
+                .entries
+                .get(&binding)
+                .ok_or(Error::MissingBindingDeclaration(binding))?;
+            let descriptors: SmallVec<[_; 1]> = match entry.resource {
+                Br::Buffer(ref bb) => {
+                    let (pub_usage, internal_use, min_size, dynamic) = match decl.ty {
+                        wgt::BindingType::UniformBuffer {
+                            dynamic,
+                            min_binding_size,
+                        } => (
+                            wgt::BufferUsage::UNIFORM,
+                            resource::BufferUse::UNIFORM,
+                            min_binding_size,
+                            dynamic,
+                        ),
+                        wgt::BindingType::StorageBuffer {
+                            dynamic,
+                            min_binding_size,
+                            readonly,
+                        } => (
+                            wgt::BufferUsage::STORAGE,
+                            if readonly {
+                                resource::BufferUse::STORAGE_LOAD
+                            } else {
+                                resource::BufferUse::STORAGE_STORE
+                            },
+                            min_binding_size,
+                            dynamic,
+                        ),
+                        _ => {
+                            return Err(Error::WrongBindingType {
+                                binding,
+                                actual: decl.ty.clone(),
+                                expected: "UniformBuffer, StorageBuffer or ReadonlyStorageBuffer",
+                            })
+                        }
+                    };
+
+                    if bb.offset % wgt::BIND_BUFFER_ALIGNMENT != 0 {
+                        return Err(Error::UnalignedBufferOffset(bb.offset));
+                    }
+
+                    let buffer = used
+                        .buffers
+                        .use_extend(&*buffer_guard, bb.buffer_id, (), internal_use)
+                        .map_err(|_| Error::InvalidBuffer(bb.buffer_id))?;
+                    check_buffer_usage(buffer.usage, pub_usage)?;
+                    let &(ref buffer_raw, _) = buffer
+                        .raw
+                        .as_ref()
+                        .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
+
+                    let (bind_size, bind_end) = match bb.size {
+                        Some(size) => {
+                            let end = bb.offset + size.get();
+                            if end > buffer.size {
+                                return Err(Error::BindingRangeTooLarge {
+                                    range: bb.offset..end,
+                                    size: buffer.size,
+                                });
+                            }
+                            (size.get(), end)
+                        }
+                        None => (buffer.size - bb.offset, buffer.size),
+                    };
+
+                    if pub_usage == wgt::BufferUsage::UNIFORM
+                        && (self.limits.max_uniform_buffer_binding_size as u64) < bind_size
+                    {
+                        return Err(Error::UniformBufferRangeTooLarge);
+                    }
+
+                    // Record binding info for validating dynamic offsets
+                    if dynamic {
+                        dynamic_binding_info.push(binding_model::BindGroupDynamicBindingData {
+                            maximum_dynamic_offset: buffer.size - bind_end,
+                        });
+                    }
+
+                    if let Some(non_zero) = min_size {
+                        let min_size = non_zero.get();
+                        if min_size > bind_size {
+                            return Err(Error::BindingSizeTooSmall {
+                                actual: bind_size,
+                                min: min_size,
+                            });
+                        }
+                    }
+
+                    let sub_range = hal::buffer::SubRange {
+                        offset: bb.offset,
+                        size: Some(bind_size),
+                    };
+                    SmallVec::from([hal::pso::Descriptor::Buffer(buffer_raw, sub_range)])
+                }
+                Br::Sampler(id) => {
+                    match decl.ty {
+                        wgt::BindingType::Sampler { comparison } => {
+                            let sampler = used
+                                .samplers
+                                .use_extend(&*sampler_guard, id, (), ())
+                                .map_err(|_| Error::InvalidSampler(id))?;
+
+                            // Check the actual sampler to also (not) be a comparison sampler
+                            if sampler.comparison != comparison {
+                                return Err(Error::WrongSamplerComparison);
+                            }
+
+                            SmallVec::from([hal::pso::Descriptor::Sampler(&sampler.raw)])
+                        }
+                        _ => {
+                            return Err(Error::WrongBindingType {
+                                binding,
+                                actual: decl.ty.clone(),
+                                expected: "Sampler",
+                            })
+                        }
+                    }
+                }
+                Br::TextureView(id) => {
+                    let view = used
+                        .views
+                        .use_extend(&*texture_view_guard, id, (), ())
+                        .map_err(|_| Error::InvalidTextureView(id))?;
+                    let (pub_usage, internal_use) = match decl.ty {
+                        wgt::BindingType::SampledTexture { .. } => {
+                            (wgt::TextureUsage::SAMPLED, resource::TextureUse::SAMPLED)
+                        }
+                        wgt::BindingType::StorageTexture { readonly, .. } => (
+                            wgt::TextureUsage::STORAGE,
+                            if readonly {
+                                resource::TextureUse::STORAGE_LOAD
+                            } else {
+                                resource::TextureUse::STORAGE_STORE
+                            },
+                        ),
+                        _ => return Err(Error::WrongBindingType {
+                            binding,
+                            actual: decl.ty.clone(),
+                            expected:
+                                "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
+                        }),
+                    };
+                    if view
+                        .aspects
+                        .contains(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL)
+                    {
+                        return Err(Error::DepthStencilAspect);
+                    }
+                    match view.inner {
+                        resource::TextureViewInner::Native {
+                            ref raw,
+                            ref source_id,
+                        } => {
+                            // Careful here: the texture may no longer have its own ref count,
+                            // if it was deleted by the user.
+                            let texture = &texture_guard[source_id.value];
+                            used.textures
+                                .change_extend(
+                                    source_id.value,
+                                    &source_id.ref_count,
+                                    view.selector.clone(),
+                                    internal_use,
+                                )
+                                .unwrap();
+                            check_texture_usage(texture.usage, pub_usage)?;
+                            let image_layout =
+                                conv::map_texture_state(internal_use, view.aspects).1;
+                            SmallVec::from([hal::pso::Descriptor::Image(raw, image_layout)])
+                        }
+                        resource::TextureViewInner::SwapChain { .. } => {
+                            return Err(Error::SwapChainImage);
+                        }
+                    }
+                }
+                Br::TextureViewArray(ref bindings_array) => {
+                    let required_feats = wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY;
+                    if !self.features.contains(required_feats) {
+                        return Err(Error::MissingFeatures(required_feats));
+                    }
+
+                    if let Some(count) = decl.count {
+                        let count = count.get() as usize;
+                        let num_bindings = bindings_array.len();
+                        if count != num_bindings {
+                            return Err(Error::BindingArrayLengthMismatch {
+                                actual: num_bindings,
+                                expected: count,
+                            });
+                        }
+                    } else {
+                        return Err(Error::SingleBindingExpected);
+                    }
+
+                    let (pub_usage, internal_use) = match decl.ty {
+                        wgt::BindingType::SampledTexture { .. } => {
+                            (wgt::TextureUsage::SAMPLED, resource::TextureUse::SAMPLED)
+                        }
+                        _ => {
+                            return Err(Error::WrongBindingType {
+                                binding,
+                                actual: decl.ty.clone(),
+                                expected: "SampledTextureArray",
+                            })
+                        }
+                    };
+                    bindings_array
+                        .iter()
+                        .map(|&id| {
+                            let view = used
+                                .views
+                                .use_extend(&*texture_view_guard, id, (), ())
+                                .map_err(|_| Error::InvalidTextureView(id))?;
+                            match view.inner {
+                                resource::TextureViewInner::Native {
+                                    ref raw,
+                                    ref source_id,
+                                } => {
+                                    // Careful here: the texture may no longer have its own ref count,
+                                    // if it was deleted by the user.
+                                    let texture = &texture_guard[source_id.value];
+                                    used.textures
+                                        .change_extend(
+                                            source_id.value,
+                                            &source_id.ref_count,
+                                            view.selector.clone(),
+                                            internal_use,
+                                        )
+                                        .unwrap();
+                                    check_texture_usage(texture.usage, pub_usage)?;
+                                    let image_layout =
+                                        conv::map_texture_state(internal_use, view.aspects).1;
+                                    Ok(hal::pso::Descriptor::Image(raw, image_layout))
+                                }
+                                resource::TextureViewInner::SwapChain { .. } => {
+                                    Err(Error::SwapChainImage)
+                                }
+                            }
+                        })
+                        .collect::<Result<_, _>>()?
+                }
+            };
+            if write_map.insert(binding, descriptors).is_some() {
+                return Err(Error::DuplicateBinding(binding));
+            }
+        }
+
+        let mut desc_sets = ArrayVec::<[_; 1]>::new();
+        self.desc_allocator
+            .lock()
+            .allocate(
+                &self.raw,
+                &layout.raw,
+                &layout.desc_counts,
+                1,
+                &mut desc_sets,
+            )
+            .expect("failed to allocate descriptor set");
+        let mut desc_set = desc_sets.pop().unwrap();
+
+        // Set the descriptor set's label for easier debugging.
+        if let Some(label) = desc.label.as_ref() {
+            unsafe {
+                self.raw.set_descriptor_set_name(desc_set.raw_mut(), &label);
+            }
+        }
+
+        if let Some(start_binding) = write_map.keys().next().cloned() {
+            let descriptors = write_map
+                .into_iter()
+                .flat_map(|(_, list)| list)
+                .collect::<Vec<_>>();
+            let write = hal::pso::DescriptorSetWrite {
+                set: desc_set.raw(),
+                binding: start_binding,
+                array_offset: 0,
+                descriptors,
+            };
+            unsafe {
+                self.raw.write_descriptor_sets(iter::once(write));
+            }
+        }
+
+        Ok(binding_model::BindGroup {
+            raw: desc_set,
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            layout_id: id::Valid(desc.layout),
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+            used,
+            dynamic_binding_info,
+        })
+    }
+
     fn create_pipeline_layout(
         &self,
         self_id: id::DeviceId,
         desc: &binding_model::PipelineLayoutDescriptor,
         bgl_guard: &Storage<binding_model::BindGroupLayout<B>, id::BindGroupLayoutId>,
-    ) -> Result<binding_model::PipelineLayout<B>, CreatePipelineLayoutError> {
+    ) -> Result<binding_model::PipelineLayout<B>, binding_model::CreatePipelineLayoutError> {
+        use crate::binding_model::CreatePipelineLayoutError as Error;
+
         let bind_group_layouts_count = desc.bind_group_layouts.len();
         let device_max_bind_groups = self.limits.max_bind_groups as usize;
         if bind_group_layouts_count > device_max_bind_groups {
-            return Err(CreatePipelineLayoutError::TooManyGroups {
+            return Err(Error::TooManyGroups {
                 actual: bind_group_layouts_count,
                 max: device_max_bind_groups,
             });
@@ -1075,26 +1411,22 @@ impl<B: GfxBackend> Device<B> {
         if !desc.push_constant_ranges.is_empty()
             && !self.features.contains(wgt::Features::PUSH_CONSTANTS)
         {
-            return Err(CreatePipelineLayoutError::MissingFeature(
-                wgt::Features::PUSH_CONSTANTS,
-            ));
+            return Err(Error::MissingFeature(wgt::Features::PUSH_CONSTANTS));
         }
         let mut used_stages = wgt::ShaderStage::empty();
         for (index, pc) in desc.push_constant_ranges.iter().enumerate() {
             if pc.stages.intersects(used_stages) {
-                return Err(
-                    CreatePipelineLayoutError::MoreThanOnePushConstantRangePerStage {
-                        index,
-                        provided: pc.stages,
-                        intersected: pc.stages & used_stages,
-                    },
-                );
+                return Err(Error::MoreThanOnePushConstantRangePerStage {
+                    index,
+                    provided: pc.stages,
+                    intersected: pc.stages & used_stages,
+                });
             }
             used_stages |= pc.stages;
 
             let device_max_pc_size = self.limits.max_push_constant_size;
             if device_max_pc_size < pc.range.end {
-                return Err(CreatePipelineLayoutError::PushConstantRangeTooLarge {
+                return Err(Error::PushConstantRangeTooLarge {
                     index,
                     range: pc.range.clone(),
                     max: device_max_pc_size,
@@ -1102,13 +1434,13 @@ impl<B: GfxBackend> Device<B> {
             }
 
             if pc.range.start % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
-                return Err(CreatePipelineLayoutError::MisalignedPushConstantRange {
+                return Err(Error::MisalignedPushConstantRange {
                     index,
                     bound: pc.range.start,
                 });
             }
             if pc.range.end % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
-                return Err(CreatePipelineLayoutError::MisalignedPushConstantRange {
+                return Err(Error::MisalignedPushConstantRange {
                     index,
                     bound: pc.range.end,
                 });
@@ -1121,12 +1453,12 @@ impl<B: GfxBackend> Device<B> {
         for &id in desc.bind_group_layouts.iter() {
             let bind_group_layout = bgl_guard
                 .get(id)
-                .map_err(|_| CreatePipelineLayoutError::InvalidBindGroupLayout(id))?;
+                .map_err(|_| Error::InvalidBindGroupLayout(id))?;
             count_validator.merge(&bind_group_layout.count_validator);
         }
         count_validator
             .validate(&self.limits)
-            .map_err(CreatePipelineLayoutError::TooManyBindings)?;
+            .map_err(Error::TooManyBindings)?;
 
         let descriptor_set_layouts = desc
             .bind_group_layouts
@@ -1967,69 +2299,74 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &binding_model::BindGroupLayoutDescriptor,
         id_in: Input<G, id::BindGroupLayoutId>,
-    ) -> Result<id::BindGroupLayoutId, binding_model::CreateBindGroupLayoutError> {
+    ) -> (
+        id::BindGroupLayoutId,
+        Option<binding_model::CreateBindGroupLayoutError>,
+    ) {
         span!(_guard, INFO, "Device::create_bind_group_layout");
 
         let mut token = Token::root();
         let hub = B::hub(self);
-        let mut entry_map = FastHashMap::default();
-        for entry in desc.entries.iter() {
-            if entry_map.insert(entry.binding, entry.clone()).is_some() {
-                return Err(binding_model::CreateBindGroupLayoutError::ConflictBinding(
-                    entry.binding,
-                ));
+
+        let error = 'outer: loop {
+            let mut entry_map = FastHashMap::default();
+            for entry in desc.entries.iter() {
+                if entry_map.insert(entry.binding, entry.clone()).is_some() {
+                    break 'outer binding_model::CreateBindGroupLayoutError::ConflictBinding(
+                        entry.binding,
+                    );
+                }
             }
-        }
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
+            let (device_guard, mut token) = hub.devices.read(&mut token);
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
 
-        // If there is an equivalent BGL, just bump the refcount and return it.
-        // This is only applicable for identity filters that are generating new IDs,
-        // so their inputs are `PhantomData` of size 0.
-        if mem::size_of::<Input<G, id::BindGroupLayoutId>>() == 0 {
-            let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
-            if let Some(id) =
-                Device::deduplicate_bind_group_layout(device_id, &entry_map, &*bgl_guard)
-            {
-                return Ok(id);
+            // If there is an equivalent BGL, just bump the refcount and return it.
+            // This is only applicable for identity filters that are generating new IDs,
+            // so their inputs are `PhantomData` of size 0.
+            if mem::size_of::<Input<G, id::BindGroupLayoutId>>() == 0 {
+                let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
+                if let Some(id) =
+                    Device::deduplicate_bind_group_layout(device_id, &entry_map, &*bgl_guard)
+                {
+                    return (id, None);
+                }
             }
-        }
 
-        let layout = device.create_bind_group_layout(
-            device_id,
-            desc.label.as_ref().map(|cow| cow.as_ref()),
-            entry_map,
-        )?;
+            let layout = match device.create_bind_group_layout(
+                device_id,
+                desc.label.as_ref().map(|cow| cow.as_ref()),
+                entry_map,
+            ) {
+                Ok(layout) => layout,
+                Err(e) => break e,
+            };
 
-        let id = hub
-            .bind_group_layouts
-            .register_identity(id_in, layout, &mut token);
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace
-                .lock()
-                .add(trace::Action::CreateBindGroupLayout(id.0, desc.clone()));
-        }
-        Ok(id.0)
+            let id = hub
+                .bind_group_layouts
+                .register_identity(id_in, layout, &mut token);
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateBindGroupLayout(id.0, desc.clone()));
+            }
+            return (id.0, None);
+        };
+
+        let id = hub.bind_group_layouts.register_error(
+            id_in,
+            desc.label.borrow_or_default(),
+            &mut token,
+        );
+        (id, Some(error))
     }
 
     pub fn bind_group_layout_label<B: GfxBackend>(&self, id: id::BindGroupLayoutId) -> String {
         B::hub(self).bind_group_layouts.label_for_resource(id)
-    }
-
-    pub fn bind_group_layout_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::BindGroupLayoutId>,
-        label: Option<&str>,
-    ) -> id::BindGroupLayoutId {
-        B::hub(self).bind_group_layouts.register_error(
-            id_in,
-            label.unwrap_or(""),
-            &mut Token::root(),
-        )
     }
 
     pub fn bind_group_layout_drop<B: GfxBackend>(
@@ -2065,46 +2402,50 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &binding_model::PipelineLayoutDescriptor,
         id_in: Input<G, id::PipelineLayoutId>,
-    ) -> Result<id::PipelineLayoutId, CreatePipelineLayoutError> {
+    ) -> (
+        id::PipelineLayoutId,
+        Option<binding_model::CreatePipelineLayoutError>,
+    ) {
         span!(_guard, INFO, "Device::create_pipeline_layout");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
 
-        let layout = {
-            let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
-            device.create_pipeline_layout(device_id, desc, &*bgl_guard)?
+            let layout = {
+                let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
+                match device.create_pipeline_layout(device_id, desc, &*bgl_guard) {
+                    Ok(layout) => layout,
+                    Err(e) => break e,
+                }
+            };
+
+            let id = hub
+                .pipeline_layouts
+                .register_identity(id_in, layout, &mut token);
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreatePipelineLayout(id.0, desc.clone()));
+            }
+            return (id.0, None);
         };
 
-        let id = hub
-            .pipeline_layouts
-            .register_identity(id_in, layout, &mut token);
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace
-                .lock()
-                .add(trace::Action::CreatePipelineLayout(id.0, desc.clone()));
-        }
-        Ok(id.0)
+        let id =
+            hub.pipeline_layouts
+                .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
     }
 
     pub fn pipeline_layout_label<B: GfxBackend>(&self, id: id::PipelineLayoutId) -> String {
         B::hub(self).pipeline_layouts.label_for_resource(id)
-    }
-
-    pub fn pipeline_layout_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::PipelineLayoutId>,
-        label: Option<&str>,
-    ) -> id::PipelineLayoutId {
-        B::hub(self)
-            .pipeline_layouts
-            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn pipeline_layout_drop<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {
@@ -2234,390 +2575,69 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &binding_model::BindGroupDescriptor,
         id_in: Input<G, id::BindGroupId>,
-    ) -> Result<id::BindGroupId, CreateBindGroupError> {
-        use crate::binding_model::BindingResource as Br;
-
+    ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
         span!(_guard, INFO, "Device::create_bind_group");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
         let (bind_group_layout_guard, mut token) = hub.bind_group_layouts.read(&mut token);
-        let bind_group_layout = bind_group_layout_guard
-            .get(desc.layout)
-            .map_err(|_| CreateBindGroupError::InvalidLayout)?;
 
-        {
-            // Check that the number of entries in the descriptor matches
-            // the number of entries in the layout.
-            let actual = desc.entries.len();
-            let expected = bind_group_layout.entries.len();
-            if actual != expected {
-                return Err(CreateBindGroupError::BindingsNumMismatch { expected, actual });
-            }
-        }
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+            let bind_group_layout = match bind_group_layout_guard.get(desc.layout) {
+                Ok(layout) => layout,
+                Err(_) => break binding_model::CreateBindGroupError::InvalidLayout,
+            };
 
-        // TODO: arrayvec/smallvec
-        // Record binding info for dynamic offset validation
-        let mut dynamic_binding_info = Vec::new();
+            let bind_group = match device.create_bind_group(
+                device_id,
+                bind_group_layout,
+                desc,
+                &hub,
+                &mut token,
+            ) {
+                Ok(bind_group) => bind_group,
+                Err(e) => break e,
+            };
+            let ref_count = bind_group.life_guard.add_ref();
 
-        // fill out the descriptors
-        let mut used = TrackerSet::new(B::VARIANT);
-        let desc_set = {
-            let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-            let (texture_guard, mut token) = hub.textures.read(&mut token); //skip token
-            let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
-            let (sampler_guard, _) = hub.samplers.read(&mut token);
-
-            // `BTreeMap` has ordered bindings as keys, which allows us to coalesce
-            // the descriptor writes into a single transaction.
-            let mut write_map = BTreeMap::new();
-            for entry in desc.entries.iter() {
-                let binding = entry.binding;
-                // Find the corresponding declaration in the layout
-                let decl = bind_group_layout
-                    .entries
-                    .get(&binding)
-                    .ok_or(CreateBindGroupError::MissingBindingDeclaration(binding))?;
-                let descriptors: SmallVec<[_; 1]> = match entry.resource {
-                    Br::Buffer(ref bb) => {
-                        let (pub_usage, internal_use, min_size, dynamic) = match decl.ty {
-                            wgt::BindingType::UniformBuffer {
-                                dynamic,
-                                min_binding_size,
-                            } => (
-                                wgt::BufferUsage::UNIFORM,
-                                resource::BufferUse::UNIFORM,
-                                min_binding_size,
-                                dynamic,
-                            ),
-                            wgt::BindingType::StorageBuffer {
-                                dynamic,
-                                min_binding_size,
-                                readonly,
-                            } => (
-                                wgt::BufferUsage::STORAGE,
-                                if readonly {
-                                    resource::BufferUse::STORAGE_LOAD
-                                } else {
-                                    resource::BufferUse::STORAGE_STORE
-                                },
-                                min_binding_size,
-                                dynamic,
-                            ),
-                            _ => {
-                                return Err(CreateBindGroupError::WrongBindingType {
-                                    binding,
-                                    actual: decl.ty.clone(),
-                                    expected:
-                                        "UniformBuffer, StorageBuffer or ReadonlyStorageBuffer",
-                                })
-                            }
-                        };
-
-                        if bb.offset % wgt::BIND_BUFFER_ALIGNMENT != 0 {
-                            return Err(CreateBindGroupError::UnalignedBufferOffset(bb.offset));
-                        }
-
-                        let buffer = used
-                            .buffers
-                            .use_extend(&*buffer_guard, bb.buffer_id, (), internal_use)
-                            .map_err(|_| CreateBindGroupError::InvalidBuffer(bb.buffer_id))?;
-                        check_buffer_usage(buffer.usage, pub_usage)?;
-                        let &(ref buffer_raw, _) = buffer
-                            .raw
-                            .as_ref()
-                            .ok_or(CreateBindGroupError::InvalidBuffer(bb.buffer_id))?;
-
-                        let (bind_size, bind_end) = match bb.size {
-                            Some(size) => {
-                                let end = bb.offset + size.get();
-                                if end > buffer.size {
-                                    return Err(CreateBindGroupError::BindingRangeTooLarge {
-                                        range: bb.offset..end,
-                                        size: buffer.size,
-                                    });
-                                }
-                                (size.get(), end)
-                            }
-                            None => (buffer.size - bb.offset, buffer.size),
-                        };
-
-                        if pub_usage == wgt::BufferUsage::UNIFORM
-                            && (device.limits.max_uniform_buffer_binding_size as u64) < bind_size
-                        {
-                            return Err(CreateBindGroupError::UniformBufferRangeTooLarge);
-                        }
-
-                        // Record binding info for validating dynamic offsets
-                        if dynamic {
-                            dynamic_binding_info.push(binding_model::BindGroupDynamicBindingData {
-                                maximum_dynamic_offset: buffer.size - bind_end,
-                            });
-                        }
-
-                        if let Some(non_zero) = min_size {
-                            let min_size = non_zero.get();
-                            if min_size > bind_size {
-                                return Err(CreateBindGroupError::BindingSizeTooSmall {
-                                    actual: bind_size,
-                                    min: min_size,
-                                });
-                            }
-                        }
-
-                        let sub_range = hal::buffer::SubRange {
-                            offset: bb.offset,
-                            size: Some(bind_size),
-                        };
-                        SmallVec::from([hal::pso::Descriptor::Buffer(buffer_raw, sub_range)])
-                    }
-                    Br::Sampler(id) => {
-                        match decl.ty {
-                            wgt::BindingType::Sampler { comparison } => {
-                                let sampler = used
-                                    .samplers
-                                    .use_extend(&*sampler_guard, id, (), ())
-                                    .map_err(|_| CreateBindGroupError::InvalidSampler(id))?;
-
-                                // Check the actual sampler to also (not) be a comparison sampler
-                                if sampler.comparison != comparison {
-                                    return Err(CreateBindGroupError::WrongSamplerComparison);
-                                }
-
-                                SmallVec::from([hal::pso::Descriptor::Sampler(&sampler.raw)])
-                            }
-                            _ => {
-                                return Err(CreateBindGroupError::WrongBindingType {
-                                    binding,
-                                    actual: decl.ty.clone(),
-                                    expected: "Sampler",
-                                })
-                            }
-                        }
-                    }
-                    Br::TextureView(id) => {
-                        let view = used
-                            .views
-                            .use_extend(&*texture_view_guard, id, (), ())
-                            .map_err(|_| CreateBindGroupError::InvalidTextureView(id))?;
-                        let (pub_usage, internal_use) = match decl.ty {
-                            wgt::BindingType::SampledTexture { .. } => (
-                                wgt::TextureUsage::SAMPLED,
-                                resource::TextureUse::SAMPLED,
-                            ),
-                            wgt::BindingType::StorageTexture { readonly, .. } => (
-                                wgt::TextureUsage::STORAGE,
-                                if readonly {
-                                    resource::TextureUse::STORAGE_LOAD
-                                } else {
-                                    resource::TextureUse::STORAGE_STORE
-                                },
-                            ),
-                            _ => return Err(CreateBindGroupError::WrongBindingType {
-                                binding,
-                                actual: decl.ty.clone(),
-                                expected: "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture"
-                            })
-                        };
-                        if view
-                            .aspects
-                            .contains(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL)
-                        {
-                            return Err(CreateBindGroupError::DepthStencilAspect);
-                        }
-                        match view.inner {
-                            resource::TextureViewInner::Native {
-                                ref raw,
-                                ref source_id,
-                            } => {
-                                // Careful here: the texture may no longer have its own ref count,
-                                // if it was deleted by the user.
-                                let texture = &texture_guard[source_id.value];
-                                used.textures
-                                    .change_extend(
-                                        source_id.value,
-                                        &source_id.ref_count,
-                                        view.selector.clone(),
-                                        internal_use,
-                                    )
-                                    .unwrap();
-                                check_texture_usage(texture.usage, pub_usage)?;
-                                let image_layout =
-                                    conv::map_texture_state(internal_use, view.aspects).1;
-                                SmallVec::from([hal::pso::Descriptor::Image(raw, image_layout)])
-                            }
-                            resource::TextureViewInner::SwapChain { .. } => {
-                                return Err(CreateBindGroupError::SwapChainImage);
-                            }
-                        }
-                    }
-                    Br::TextureViewArray(ref bindings_array) => {
-                        let required_feats = wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY;
-                        if !device.features.contains(required_feats) {
-                            return Err(CreateBindGroupError::MissingFeatures(required_feats));
-                        }
-
-                        if let Some(count) = decl.count {
-                            let count = count.get() as usize;
-                            let num_bindings = bindings_array.len();
-                            if count != num_bindings {
-                                return Err(CreateBindGroupError::BindingArrayLengthMismatch {
-                                    actual: num_bindings,
-                                    expected: count,
-                                });
-                            }
-                        } else {
-                            return Err(CreateBindGroupError::SingleBindingExpected);
-                        }
-
-                        let (pub_usage, internal_use) = match decl.ty {
-                            wgt::BindingType::SampledTexture { .. } => {
-                                (wgt::TextureUsage::SAMPLED, resource::TextureUse::SAMPLED)
-                            }
-                            _ => {
-                                return Err(CreateBindGroupError::WrongBindingType {
-                                    binding,
-                                    actual: decl.ty.clone(),
-                                    expected: "SampledTextureArray",
-                                })
-                            }
-                        };
-                        bindings_array
-                            .iter()
-                            .map(|&id| {
-                                let view = used
-                                    .views
-                                    .use_extend(&*texture_view_guard, id, (), ())
-                                    .map_err(|_| CreateBindGroupError::InvalidTextureView(id))?;
-                                match view.inner {
-                                    resource::TextureViewInner::Native {
-                                        ref raw,
-                                        ref source_id,
-                                    } => {
-                                        // Careful here: the texture may no longer have its own ref count,
-                                        // if it was deleted by the user.
-                                        let texture = &texture_guard[source_id.value];
-                                        used.textures
-                                            .change_extend(
-                                                source_id.value,
-                                                &source_id.ref_count,
-                                                view.selector.clone(),
-                                                internal_use,
-                                            )
-                                            .unwrap();
-                                        check_texture_usage(texture.usage, pub_usage)?;
-                                        let image_layout =
-                                            conv::map_texture_state(internal_use, view.aspects).1;
-                                        Ok(hal::pso::Descriptor::Image(raw, image_layout))
-                                    }
-                                    resource::TextureViewInner::SwapChain { .. } => {
-                                        Err(CreateBindGroupError::SwapChainImage)
-                                    }
-                                }
-                            })
-                            .collect::<Result<_, _>>()?
-                    }
-                };
-                if write_map.insert(binding, descriptors).is_some() {
-                    return Err(CreateBindGroupError::DuplicateBinding(binding));
-                }
+            let id = hub
+                .bind_groups
+                .register_identity(id_in, bind_group, &mut token);
+            tracing::debug!(
+                "Bind group {:?} {:#?}",
+                id,
+                hub.bind_groups.read(&mut token).0[id].used
+            );
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateBindGroup(id.0, desc.clone()));
             }
 
-            let mut desc_sets = ArrayVec::<[_; 1]>::new();
             device
-                .desc_allocator
+                .trackers
                 .lock()
-                .allocate(
-                    &device.raw,
-                    &bind_group_layout.raw,
-                    &bind_group_layout.desc_counts,
-                    1,
-                    &mut desc_sets,
-                )
-                .expect("failed to allocate descriptor set");
-            let mut desc_set = desc_sets.pop().unwrap();
-
-            // Set the descriptor set's label for easier debugging.
-            if let Some(label) = desc.label.as_ref() {
-                unsafe {
-                    device
-                        .raw
-                        .set_descriptor_set_name(desc_set.raw_mut(), &label);
-                }
-            }
-
-            if let Some(start_binding) = write_map.keys().next().cloned() {
-                let descriptors = write_map
-                    .into_iter()
-                    .flat_map(|(_, list)| list)
-                    .collect::<Vec<_>>();
-                let write = hal::pso::DescriptorSetWrite {
-                    set: desc_set.raw(),
-                    binding: start_binding,
-                    array_offset: 0,
-                    descriptors,
-                };
-                unsafe {
-                    device.raw.write_descriptor_sets(iter::once(write));
-                }
-            }
-            desc_set
+                .bind_groups
+                .init(id, ref_count, PhantomData)
+                .unwrap();
+            return (id.0, None);
         };
-
-        let bind_group = binding_model::BindGroup {
-            raw: desc_set,
-            device_id: Stored {
-                value: id::Valid(device_id),
-                ref_count: device.life_guard.add_ref(),
-            },
-            layout_id: id::Valid(desc.layout),
-            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
-            used,
-            dynamic_binding_info,
-        };
-        let ref_count = bind_group.life_guard.add_ref();
 
         let id = hub
             .bind_groups
-            .register_identity(id_in, bind_group, &mut token);
-        tracing::debug!(
-            "Bind group {:?} {:#?}",
-            id,
-            hub.bind_groups.read(&mut token).0[id].used
-        );
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace
-                .lock()
-                .add(trace::Action::CreateBindGroup(id.0, desc.clone()));
-        }
-
-        device
-            .trackers
-            .lock()
-            .bind_groups
-            .init(id, ref_count, PhantomData)
-            .unwrap();
-        Ok(id.0)
+            .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
     }
 
     pub fn bind_group_label<B: GfxBackend>(&self, id: id::BindGroupId) -> String {
         B::hub(self).bind_groups.label_for_resource(id)
-    }
-
-    pub fn bind_group_error<B: GfxBackend>(
-        &self,
-        id_in: Input<G, id::BindGroupId>,
-        label: Option<&str>,
-    ) -> id::BindGroupId {
-        B::hub(self)
-            .bind_groups
-            .register_error(id_in, label.unwrap_or(""), &mut Token::root())
     }
 
     pub fn bind_group_drop<B: GfxBackend>(&self, bind_group_id: id::BindGroupId) {
@@ -3845,12 +3865,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn device_label<B: GfxBackend>(&self, id: id::DeviceId) -> String {
         B::hub(self).devices.label_for_resource(id)
-    }
-
-    pub fn device_error<B: GfxBackend>(&self, id_in: Input<G, id::DeviceId>) -> id::DeviceId {
-        B::hub(self)
-            .devices
-            .register_error(id_in, "", &mut Token::root())
     }
 
     pub fn device_drop<B: GfxBackend>(&self, device_id: id::DeviceId) {

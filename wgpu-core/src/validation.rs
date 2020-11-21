@@ -28,7 +28,7 @@ pub fn check_buffer_usage(
     }
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 #[error("texture usage is {actual:?} which does not contain required usage {expected:?}")]
 pub struct MissingTextureUsageError {
     pub(crate) actual: wgt::TextureUsage,
