@@ -82,7 +82,7 @@ pub trait PrettyError: Error {
 
 impl PrettyError for super::direct::ContextError {
     fn fmt_pretty(&self, _context: &Context) -> String {
-        format_error_line(self.as_display()) + &format_label_line("label", &self.label)
+        format_error_line(self.as_display()) + &format_label_line(self.label_key, &self.label)
     }
 }
 
