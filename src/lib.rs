@@ -35,10 +35,10 @@ pub use wgt::{
     AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType, BlendDescriptor,
     BlendFactor, BlendOperation, BufferAddress, BufferSize, BufferUsage, Color,
     ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction, CullMode,
-    DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset, Extent3d, Features, FilterMode,
-    FrontFace, IndexFormat, InputStepMode, Limits, Origin3d, PolygonMode, PowerPreference,
-    PresentMode, PrimitiveTopology, PushConstantRange, RasterizationStateDescriptor,
-    SamplerBorderColor, ShaderLocation, ShaderStage, StencilOperation, StencilStateDescriptor,
+    DepthStencilStateDescriptor, DynamicOffset, Extent3d, Features, FilterMode, FrontFace,
+    IndexFormat, InputStepMode, Limits, Origin3d, PolygonMode, PowerPreference, PresentMode,
+    PrimitiveTopology, PushConstantRange, RasterizationStateDescriptor, SamplerBorderColor,
+    ShaderLocation, ShaderStage, StencilOperation, StencilStateDescriptor,
     StencilStateFaceDescriptor, SwapChainDescriptor, SwapChainStatus, TextureAspect,
     TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
     TextureViewDimension, VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT,
@@ -969,58 +969,21 @@ pub struct RenderPassDepthStencilAttachmentDescriptor<'a> {
 
 // The underlying types are also exported so that documentation shows up for them
 
+/// Object label.
+pub type Label<'a> = Option<&'a str>;
 pub use wgt::RequestAdapterOptions as RequestAdapterOptionsBase;
 /// Additional information required when requesting an adapter.
 pub type RequestAdapterOptions<'a> = RequestAdapterOptionsBase<&'a Surface>;
-
+/// Describes a [`Device`].
+pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 /// Describes a [`Buffer`].
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BufferDescriptor<'a> {
-    /// Debug label of a buffer. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
-    /// Size of a buffer.
-    pub size: BufferAddress,
-    /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
-    /// will panic.
-    pub usage: BufferUsage,
-    /// Allows a buffer to be mapped immediately after they are made. It does not have to be [`BufferUsage::MAP_READ`] or
-    /// [`BufferUsage::MAP_WRITE`], all buffers are allowed to be mapped at creation.
-    pub mapped_at_creation: bool,
-}
-
+pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 /// Describes a [`CommandEncoder`].
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
-pub struct CommandEncoderDescriptor<'a> {
-    /// Debug label for the command encoder. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
-}
-
+pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>;
 /// Describes a [`RenderBundle`].
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
-pub struct RenderBundleDescriptor<'a> {
-    /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
-}
-
+pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 /// Describes a [`Texture`].
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct TextureDescriptor<'a> {
-    /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
-    /// Size of the texture. For a regular 1D/2D texture, the unused sizes will be 1. For 2DArray textures, Z is the
-    /// number of 2D textures in that array.
-    pub size: Extent3d,
-    /// Mip count of texture. For a texture with no extra mips, this must be 1.
-    pub mip_level_count: u32,
-    /// Sample count of texture. If this is not 1, texture must have [`BindingType::SampledTexture::multisampled`] set to true.
-    pub sample_count: u32,
-    /// Dimensions of the texture.
-    pub dimension: TextureDimension,
-    /// Format of the texture.
-    pub format: TextureFormat,
-    /// Allowed usages of the texture. If used in other ways, the operation will panic.
-    pub usage: TextureUsage,
-}
+pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 
 /// Describes a [`TextureView`].
 #[derive(Clone, Debug, Default, PartialEq)]
