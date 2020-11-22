@@ -35,6 +35,12 @@ use std::{
     io::{Error as IoError, Write},
 };
 
+/// Contains a constant with a slice of all the reserved keywords RESERVED_KEYWORDS
+mod keywords;
+
+const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450];
+const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310];
+
 #[derive(Debug)]
 pub enum Error {
     FormatError(FmtError),
@@ -86,11 +92,10 @@ impl Version {
         }
     }
 
-    fn is_valid(&self) -> bool {
+    fn is_supported(&self) -> bool {
         match self {
-            Version::Desktop(v) if SUPPORTED_CORE_VERSIONS.contains(v) => true,
-            Version::Embedded(v) if SUPPORTED_ES_VERSIONS.contains(v) => true,
-            _ => false,
+            Version::Desktop(v) => SUPPORTED_CORE_VERSIONS.contains(v),
+            Version::Embedded(v) => SUPPORTED_ES_VERSIONS.contains(v),
         }
     }
 }
@@ -125,11 +130,6 @@ pub struct TextureMapping {
     pub texture: Handle<GlobalVariable>,
     pub sampler: Option<Handle<GlobalVariable>>,
 }
-
-// imports a list of reserved keywords called RESERVED_KEYWORDS
-include!(concat!(env!("OUT_DIR"), "/glsl_keywords.rs"));
-const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450];
-const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310];
 
 bitflags::bitflags! {
     struct Features: u32 {
@@ -326,26 +326,16 @@ struct FunctionCtx<'a, 'b> {
 }
 
 impl<'a, 'b> FunctionCtx<'a, 'b> {
-    fn get_local<'c>(
-        &self,
-        local: Handle<LocalVariable>,
-        names: &'c FastHashMap<NameKey, String>,
-    ) -> &'c str {
+    fn name_key(&self, local: Handle<LocalVariable>) -> NameKey {
         match self.func {
-            FunctionType::Function(handle) => {
-                names.get(&NameKey::FunctionLocal(handle, local)).unwrap()
-            }
-            FunctionType::EntryPoint(idx) => {
-                names.get(&NameKey::EntryPointLocal(idx, local)).unwrap()
-            }
+            FunctionType::Function(handle) => NameKey::FunctionLocal(handle, local),
+            FunctionType::EntryPoint(idx) => NameKey::EntryPointLocal(idx, local),
         }
     }
 
     fn get_arg<'c>(&self, arg: u32, names: &'c FastHashMap<NameKey, String>) -> &'c str {
         match self.func {
-            FunctionType::Function(handle) => {
-                names.get(&NameKey::FunctionArgument(handle, arg)).unwrap()
-            }
+            FunctionType::Function(handle) => &names[&NameKey::FunctionArgument(handle, arg)],
             FunctionType::EntryPoint(_) => unreachable!(),
         }
     }
@@ -383,7 +373,7 @@ pub struct Writer<'a, W> {
 
 impl<'a, W: Write> Writer<'a, W> {
     pub fn new(out: W, module: &'a Module, options: &'a Options) -> Result<Self, Error> {
-        if !options.version.is_valid() {
+        if !options.version.is_supported() {
             return Err(Error::Custom(format!(
                 "Version not supported {}",
                 options.version
@@ -400,7 +390,7 @@ impl<'a, W: Write> Writer<'a, W> {
             .ok_or_else(|| Error::Custom(String::from("Entry point not found")))?;
 
         let mut names = FastHashMap::default();
-        Namer::process(module, RESERVED_KEYWORDS, &mut names);
+        Namer::process(module, keywords::RESERVED_KEYWORDS, &mut names);
 
         let call_graph = CallGraphBuilder {
             functions: &module.functions,
@@ -545,30 +535,9 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        let mut built_structs = FastHashMap::default();
-
-        for (_, global) in self
-            .module
-            .global_variables
-            .iter()
-            .zip(&self.entry_point.function.global_usage)
-            .filter_map(|(global, usage)| Some(global).filter(|_| !usage.is_empty()))
-        {
-            match global.class {
-                StorageClass::Storage | StorageClass::Uniform => (),
-                _ => continue,
-            }
-
-            if let TypeInner::Struct { .. } = self.module.types[global.ty].inner {
-                built_structs.insert(global.ty, ());
-            }
-        }
-
         for (handle, ty) in self.module.types.iter() {
             if let TypeInner::Struct { ref members } = ty.inner {
-                if built_structs.get(&handle).is_none() {
-                    self.write_struct(handle, members)?
-                }
+                self.write_struct(handle, members)?
             }
         }
 
@@ -589,94 +558,54 @@ impl<'a, W: Write> Writer<'a, W> {
             .zip(&self.entry_point.function.global_usage)
             .filter_map(|(global, usage)| Some(global).filter(|_| !usage.is_empty()))
         {
-            if let TypeInner::Image {
-                dim,
-                arrayed,
-                class,
-            } = self.module.types[global.ty].inner
-            {
-                if let TypeInner::Image {
-                    class: ImageClass::Storage(format),
-                    ..
-                } = self.module.types[global.ty].inner
-                {
-                    write!(self.out, "layout({}) ", glsl_storage_format(format))?;
-                }
-
-                if global.storage_access == StorageAccess::LOAD {
-                    write!(self.out, "readonly ")?;
-                } else if global.storage_access == StorageAccess::STORE {
-                    write!(self.out, "writeonly ")?;
-                }
-
-                write!(self.out, "uniform ")?;
-
-                self.write_image_type(dim, arrayed, class)?;
-
-                let name = self.names.get(&NameKey::GlobalVariable(handle)).unwrap();
-                writeln!(self.out, " {};", name)?
-            }
-        }
-
-        for (handle, global) in self
-            .module
-            .global_variables
-            .iter()
-            .zip(&self.entry_point.function.global_usage)
-            .filter_map(|(global, usage)| Some(global).filter(|_| !usage.is_empty()))
-        {
-            match self.module.types[global.ty].inner {
-                TypeInner::Image { .. } | TypeInner::Sampler { .. } => continue,
-                _ => {}
-            }
-
             if let Some(crate::Binding::BuiltIn(_)) = global.binding {
                 continue;
             }
 
-            if global.storage_access == StorageAccess::LOAD {
-                write!(self.out, "readonly ")?;
-            } else if global.storage_access == StorageAccess::STORE {
-                write!(self.out, "writeonly ")?;
-            }
-
-            if let Some(interpolation) = global.interpolation {
-                match (self.options.entry_point.0, global.class) {
-                    (ShaderStage::Fragment, StorageClass::Input)
-                    | (ShaderStage::Vertex, StorageClass::Output) => {
-                        write!(self.out, "{} ", glsl_interpolation(interpolation)?)?;
+            match self.module.types[global.ty].inner {
+                TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class,
+                } => {
+                    if let TypeInner::Image {
+                        class: ImageClass::Storage(format),
+                        ..
+                    } = self.module.types[global.ty].inner
+                    {
+                        write!(self.out, "layout({}) ", glsl_storage_format(format))?;
                     }
-                    _ => {}
-                };
-            }
 
-            let block = match global.class {
-                StorageClass::Storage | StorageClass::Uniform => {
-                    let block_name = self.names.get(&NameKey::Type(global.ty)).cloned().unwrap();
+                    if global.storage_access == StorageAccess::LOAD {
+                        write!(self.out, "readonly ")?;
+                    } else if global.storage_access == StorageAccess::STORE {
+                        write!(self.out, "writeonly ")?;
+                    }
 
-                    Some(block_name)
+                    write!(self.out, "uniform ")?;
+
+                    self.write_image_type(dim, arrayed, class)?;
+
+                    writeln!(
+                        self.out,
+                        " {};",
+                        self.names[&NameKey::GlobalVariable(handle)]
+                    )?
                 }
-                _ => None,
-            };
-
-            write!(self.out, "{} ", glsl_storage_class(global.class))?;
-
-            self.write_type(global.ty, block)?;
-
-            let name = self.names.get(&NameKey::GlobalVariable(handle)).unwrap();
-            writeln!(self.out, " {};", name)?
+                TypeInner::Sampler { .. } => continue,
+                _ => self.write_global(handle, global)?,
+            }
         }
 
         writeln!(self.out)?;
 
-        let functions: Vec<_> = self
-            .call_graph
-            .raw_nodes()
-            .iter()
-            .map(|node| node.weight)
-            .collect();
-        for handle in functions {
-            let name = self.names.get(&NameKey::Function(handle)).cloned().unwrap();
+        // Sort the graph topologically so that functions calls are valid
+        // It's impossible for this to panic because the IR forbids cycles
+        let functions = petgraph::algo::toposort(&self.call_graph, None).unwrap();
+
+        for node in functions {
+            let handle = self.call_graph[node];
+            let name = self.names[&NameKey::Function(handle)].clone();
             self.write_function(
                 FunctionType::Function(handle),
                 &self.module.functions[handle],
@@ -691,6 +620,46 @@ impl<'a, W: Write> Writer<'a, W> {
         )?;
 
         Ok(texture_mappings)
+    }
+
+    fn write_global(
+        &mut self,
+        handle: Handle<GlobalVariable>,
+        global: &GlobalVariable,
+    ) -> Result<(), Error> {
+        if global.storage_access == StorageAccess::LOAD {
+            write!(self.out, "readonly ")?;
+        } else if global.storage_access == StorageAccess::STORE {
+            write!(self.out, "writeonly ")?;
+        }
+
+        if let Some(interpolation) = global.interpolation {
+            match (self.options.entry_point.0, global.class) {
+                (ShaderStage::Fragment, StorageClass::Input)
+                | (ShaderStage::Vertex, StorageClass::Output) => {
+                    write!(self.out, "{} ", glsl_interpolation(interpolation)?)?;
+                }
+                _ => (),
+            };
+        }
+
+        let block = match global.class {
+            StorageClass::Storage | StorageClass::Uniform => {
+                let block_name = self.names[&NameKey::Type(global.ty)].clone();
+
+                Some(block_name)
+            }
+            _ => None,
+        };
+
+        write!(self.out, "{} ", glsl_storage_class(global.class))?;
+
+        self.write_type(global.ty, block)?;
+
+        let name = &self.names[&NameKey::GlobalVariable(handle)];
+        writeln!(self.out, " {};", name)?;
+
+        Ok(())
     }
 
     fn write_function<N: AsRef<str>>(
@@ -713,7 +682,7 @@ impl<'a, W: Write> Writer<'a, W> {
             },
         )?;
 
-        let mut ctx = FunctionCtx {
+        let ctx = FunctionCtx {
             func: ty,
             expressions: &func.expressions,
             typifier: &typifier,
@@ -726,9 +695,7 @@ impl<'a, W: Write> Writer<'a, W> {
             write!(self.out, "\t")?;
             self.write_type(local.ty, None)?;
 
-            let name = ctx.get_local(handle, &self.names);
-
-            write!(self.out, " {}", name)?;
+            write!(self.out, " {}", self.names[&ctx.name_key(handle)])?;
 
             if let Some(init) = local.init {
                 write!(self.out, " = ",)?;
@@ -742,7 +709,7 @@ impl<'a, W: Write> Writer<'a, W> {
         writeln!(self.out)?;
 
         for sta in func.body.iter() {
-            self.write_stmt(sta, &mut ctx, 1)?;
+            self.write_stmt(sta, &ctx, 1)?;
         }
 
         Ok(writeln!(self.out, "}}")?)
@@ -831,15 +798,13 @@ impl<'a, W: Write> Writer<'a, W> {
                         writeln!(
                             self.out,
                             " {};",
-                            self.names
-                                .get(&NameKey::StructMember(ty, idx as u32))
-                                .unwrap()
+                            &self.names[&NameKey::StructMember(ty, idx as u32)]
                         )?;
                     }
 
                     write!(self.out, "}}")?
                 } else {
-                    write!(self.out, "{}", self.names.get(&NameKey::Type(ty)).unwrap())?
+                    write!(self.out, "{}", &self.names[&NameKey::Type(ty)])?
                 }
             }
             _ => unreachable!(),
@@ -917,29 +882,26 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<Type>,
         members: &[StructMember],
     ) -> Result<(), Error> {
-        let name = self.names.get(&NameKey::Type(handle)).unwrap();
+        writeln!(self.out, "struct {} {{", self.names[&NameKey::Type(handle)])?;
 
-        writeln!(self.out, "struct {} {{", name)?;
         for (idx, member) in members.iter().enumerate() {
             write!(self.out, "\t")?;
             self.write_type(member.ty, None)?;
             writeln!(
                 self.out,
                 " {};",
-                self.names
-                    .get(&NameKey::StructMember(handle, idx as u32))
-                    .unwrap()
+                self.names[&NameKey::StructMember(handle, idx as u32)]
             )?;
         }
-        writeln!(self.out, "}};")?;
 
+        writeln!(self.out, "}};")?;
         Ok(())
     }
 
     fn write_stmt(
         &mut self,
         sta: &Statement,
-        ctx: &mut FunctionCtx<'_, '_>,
+        ctx: &FunctionCtx<'_, '_>,
         indent: usize,
     ) -> Result<(), Error> {
         write!(self.out, "{}", "\t".repeat(indent))?;
@@ -1040,7 +1002,7 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_expr(
         &mut self,
         expr: Handle<Expression>,
-        ctx: &mut FunctionCtx<'_, '_>,
+        ctx: &FunctionCtx<'_, '_>,
     ) -> Result<(), Error> {
         match ctx.expressions[expr] {
             Expression::Access { base, index } => {
@@ -1062,7 +1024,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(
                             self.out,
                             ".{}",
-                            self.names.get(&NameKey::StructMember(ty, index)).unwrap()
+                            &self.names[&NameKey::StructMember(ty, index)]
                         )?
                     }
                     ref other => return Err(Error::Custom(format!("Cannot index {:?}", other))),
@@ -1096,12 +1058,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(
                         self.out,
                         "{}",
-                        self.names.get(&NameKey::GlobalVariable(handle)).unwrap()
+                        &self.names[&NameKey::GlobalVariable(handle)]
                     )?
                 }
             }
             Expression::LocalVariable(handle) => {
-                write!(self.out, "{}", ctx.get_local(handle, &self.names))?
+                write!(self.out, "{}", self.names[&ctx.name_key(handle)])?
             }
             Expression::Load { pointer } => self.write_expr(pointer, ctx)?,
             Expression::ImageSample {
@@ -1356,11 +1318,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 origin: FunctionOrigin::Local(ref function),
                 ref arguments,
             } => {
-                write!(
-                    self.out,
-                    "{}(",
-                    self.names.get(&NameKey::Function(*function)).unwrap()
-                )?;
+                write!(self.out, "{}(", &self.names[&NameKey::Function(*function)])?;
                 self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
                 write!(self.out, ")")?
             }
@@ -1579,11 +1537,7 @@ impl<'a> Visitor for TextureMappingVisitor<'a> {
                     Expression::GlobalVariable(global) => global,
                     _ => unreachable!(),
                 };
-                let tex_name = self
-                    .names
-                    .get(&NameKey::GlobalVariable(tex_handle))
-                    .unwrap()
-                    .clone();
+                let tex_name = self.names[&NameKey::GlobalVariable(tex_handle)].clone();
 
                 let sampler_handle = match self.expressions[*sampler] {
                     Expression::GlobalVariable(global) => global,
@@ -1606,11 +1560,7 @@ impl<'a> Visitor for TextureMappingVisitor<'a> {
                     Expression::GlobalVariable(global) => global,
                     _ => unreachable!(),
                 };
-                let tex_name = self
-                    .names
-                    .get(&NameKey::GlobalVariable(tex_handle))
-                    .unwrap()
-                    .clone();
+                let tex_name = self.names[&NameKey::GlobalVariable(tex_handle)].clone();
 
                 let mapping = self.map.entry(tex_name).or_insert(TextureMapping {
                     texture: tex_handle,

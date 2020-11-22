@@ -8,7 +8,6 @@ homepage = "https://github.com/gfx-rs/naga"
 repository = "https://github.com/gfx-rs/naga"
 keywords = ["shader", "SPIR-V"]
 license = "MIT OR Apache-2.0"
-build = "build.rs"
 
 [dependencies]
 bitflags = "1"
