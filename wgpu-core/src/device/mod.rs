@@ -117,14 +117,14 @@ pub(crate) struct RenderPassContext {
 }
 #[derive(Clone, Debug, Error)]
 pub enum RenderPassCompatibilityError {
-    #[error("incompatible color attachment: {0:?} != {1:?}")]
+    #[error("Incompatible color attachment: {0:?} != {1:?}")]
     IncompatibleColorAttachment(
         ArrayVec<[TextureFormat; MAX_COLOR_TARGETS]>,
         ArrayVec<[TextureFormat; MAX_COLOR_TARGETS]>,
     ),
-    #[error("incompatible depth-stencil attachment: {0:?} != {1:?}")]
+    #[error("Incompatible depth-stencil attachment: {0:?} != {1:?}")]
     IncompatibleDepthStencilAttachment(Option<TextureFormat>, Option<TextureFormat>),
-    #[error("incompatible sample count: {0:?} != {1:?}")]
+    #[error("Incompatible sample count: {0:?} != {1:?}")]
     IncompatibleSampleCount(u8, u8),
 }
 

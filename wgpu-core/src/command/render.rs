@@ -396,7 +396,7 @@ impl From<MissingTextureUsageError> for RenderPassErrorInner {
 #[derive(Clone, Debug, Error)]
 #[error("{scope}")]
 pub struct RenderPassError {
-    scope: PassErrorScope,
+    pub scope: PassErrorScope,
     #[source]
     inner: RenderPassErrorInner,
 }
@@ -449,7 +449,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         depth_stencil_attachment: Option<&DepthStencilAttachmentDescriptor>,
     ) -> Result<(), RenderPassError> {
         span!(_guard, INFO, "CommandEncoder::run_render_pass");
-        let scope = PassErrorScope::Pass;
+        let scope = PassErrorScope::Pass(encoder_id);
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1003,7 +1003,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    let scope = PassErrorScope::SetBindGroup;
+                    let scope = PassErrorScope::SetBindGroup(bind_group_id);
                     let max_bind_groups = device.limits.max_bind_groups;
                     if (index as u32) >= max_bind_groups {
                         return Err(RenderCommandError::BindGroupIndexOutOfRange {
@@ -1055,7 +1055,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
-                    let scope = PassErrorScope::SetPipeline;
+                    let scope = PassErrorScope::SetPipelineRender(pipeline_id);
                     if state.pipeline.set_and_check_redundant(pipeline_id) {
                         continue;
                     }
@@ -1197,7 +1197,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     offset,
                     size,
                 } => {
-                    let scope = PassErrorScope::SetIndexBuffer;
+                    let scope = PassErrorScope::SetIndexBuffer(buffer_id);
                     let buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
@@ -1236,7 +1236,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     offset,
                     size,
                 } => {
-                    let scope = PassErrorScope::SetVertexBuffer;
+                    let scope = PassErrorScope::SetVertexBuffer(buffer_id);
                     let buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::VERTEX)

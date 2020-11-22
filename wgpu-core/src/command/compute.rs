@@ -148,7 +148,7 @@ pub enum ComputePassErrorInner {
 #[derive(Clone, Debug, Error)]
 #[error("{scope}")]
 pub struct ComputePassError {
-    scope: PassErrorScope,
+    pub scope: PassErrorScope,
     #[source]
     inner: ComputePassErrorInner,
 }
@@ -234,7 +234,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         mut base: BasePassRef<ComputeCommand>,
     ) -> Result<(), ComputePassError> {
         span!(_guard, INFO, "CommandEncoder::run_compute_pass");
-        let scope = PassErrorScope::Pass;
+        let scope = PassErrorScope::Pass(encoder_id);
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -273,7 +273,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    let scope = PassErrorScope::SetBindGroup;
+                    let scope = PassErrorScope::SetBindGroup(bind_group_id);
 
                     let max_bind_groups = cmd_buf.limits.max_bind_groups;
                     if (index as u32) >= max_bind_groups {
@@ -324,7 +324,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::SetPipeline(pipeline_id) => {
-                    let scope = PassErrorScope::SetPipeline;
+                    let scope = PassErrorScope::SetPipelineCompute(pipeline_id);
 
                     if state.pipeline.set_and_check_redundant(pipeline_id) {
                         continue;
