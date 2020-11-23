@@ -186,7 +186,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor<Label>,
-    ) -> Result<id::CommandBufferId, CommandEncoderError> {
+    ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
         span!(_guard, INFO, "CommandEncoder::finish");
 
         let hub = B::hub(self);
@@ -194,18 +194,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
         //TODO: actually close the last recorded command buffer
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
-        cmd_buf.is_recording = false;
-        // stop tracking the swapchain image, if used
-        if let Some((ref sc_id, _)) = cmd_buf.used_swap_chain {
-            let view_id = swap_chain_guard[sc_id.value]
-                .acquired_view_id
-                .as_ref()
-                .expect("Used swap chain frame has already presented");
-            cmd_buf.trackers.views.remove(view_id.value);
-        }
-        tracing::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
-        Ok(encoder_id)
+
+        let error = match CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id) {
+            Ok(cmd_buf) => {
+                cmd_buf.is_recording = false;
+                // stop tracking the swapchain image, if used
+                if let Some((ref sc_id, _)) = cmd_buf.used_swap_chain {
+                    let view_id = swap_chain_guard[sc_id.value]
+                        .acquired_view_id
+                        .as_ref()
+                        .expect("Used swap chain frame has already presented");
+                    cmd_buf.trackers.views.remove(view_id.value);
+                }
+                tracing::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
+                None
+            }
+            Err(e) => Some(e),
+        };
+
+        (encoder_id, error)
     }
 
     pub fn command_encoder_push_debug_group<B: GfxBackend>(

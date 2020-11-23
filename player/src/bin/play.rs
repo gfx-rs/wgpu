@@ -84,16 +84,21 @@ fn main() {
 
             let info = gfx_select!(adapter => global.adapter_get_info(adapter)).unwrap();
             log::info!("Picked '{}'", info.name);
-            gfx_select!(adapter => global.adapter_request_device(
+            let id = wgc::id::TypedId::zip(1, 0, wgt::Backend::Empty);
+            let (_, error) = gfx_select!(adapter => global.adapter_request_device(
                 adapter,
                 &desc,
                 None,
-                wgc::id::TypedId::zip(1, 0, wgt::Backend::Empty)
-            ))
-            .expect("Failed to request device")
+                id
+            ));
+            if let Some(e) = error {
+                panic!("{:?}", e);
+            }
+            id
         }
         _ => panic!("Expected Action::Init"),
     };
+
     log::info!("Executing actions");
     #[cfg(not(feature = "winit"))]
     {

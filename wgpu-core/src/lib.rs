@@ -8,6 +8,8 @@
     unused_extern_crates,
     unused_qualifications
 )]
+// We use loops for getting early-out of scope without closures.
+#![allow(clippy::never_loop)]
 
 #[macro_use]
 mod macros;

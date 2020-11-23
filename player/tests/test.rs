@@ -86,17 +86,21 @@ impl Test<'_> {
         test_num: u32,
     ) {
         let backend = adapter.backend();
-        let device = gfx_select!(adapter => global.adapter_request_device(
+        let device = wgc::id::TypedId::zip(test_num, 0, backend);
+        let (_, error) = gfx_select!(adapter => global.adapter_request_device(
             adapter,
             &wgt::DeviceDescriptor {
+                label: None,
                 features: self.features | wgt::Features::MAPPABLE_PRIMARY_BUFFERS,
                 limits: wgt::Limits::default(),
                 shader_validation: true,
             },
             None,
-            wgc::id::TypedId::zip(test_num, 0, backend)
-        ))
-        .unwrap();
+            device
+        ));
+        if let Some(e) = error {
+            panic!("{:?}", e);
+        }
 
         let mut command_buffer_id_manager = wgc::hub::IdentityManager::default();
         println!("\t\t\tRunning...");

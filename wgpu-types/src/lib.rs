@@ -382,7 +382,9 @@ impl Default for Limits {
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct DeviceDescriptor {
+pub struct DeviceDescriptor<L> {
+    /// Debug label for the device.
+    pub label: L,
     /// Features that the device should support. If any feature is not supported by
     /// the adapter, creating a device will panic.
     pub features: Features,
@@ -392,6 +394,17 @@ pub struct DeviceDescriptor {
     /// Switch shader validation on/off. This is a temporary field
     /// that will be removed once our validation logic is complete.
     pub shader_validation: bool,
+}
+
+impl<L> DeviceDescriptor<L> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> DeviceDescriptor<K> {
+        DeviceDescriptor {
+            label: fun(&self.label),
+            features: self.features,
+            limits: self.limits.clone(),
+            shader_validation: self.shader_validation,
+        }
+    }
 }
 
 bitflags::bitflags! {
