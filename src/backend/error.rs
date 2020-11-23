@@ -37,7 +37,16 @@ fn fmt_pretty_any(error: &(dyn Error + 'static), context: &Context) -> String {
     if let Some(pretty_err) = error.downcast_ref::<wgc::command::RenderPassErrorInner>() {
         return pretty_err.fmt_pretty(context);
     }
+    if let Some(pretty_err) = error.downcast_ref::<wgc::command::RenderPassError>() {
+        return pretty_err.fmt_pretty(context);
+    }
     if let Some(pretty_err) = error.downcast_ref::<wgc::command::ComputePassErrorInner>() {
+        return pretty_err.fmt_pretty(context);
+    }
+    if let Some(pretty_err) = error.downcast_ref::<wgc::command::ComputePassError>() {
+        return pretty_err.fmt_pretty(context);
+    }
+    if let Some(pretty_err) = error.downcast_ref::<wgc::command::RenderBundleError>() {
         return pretty_err.fmt_pretty(context);
     }
     if let Some(pretty_err) = error.downcast_ref::<wgc::command::TransferError>() {
@@ -82,7 +91,7 @@ pub trait PrettyError: Error {
 
 impl PrettyError for super::direct::ContextError {
     fn fmt_pretty(&self, _context: &Context) -> String {
-        format_error_line(self.as_display()) + &format_label_line("label", &self.label)
+        format_error_line(self.as_display()) + &format_label_line(self.label_key, &self.label)
     }
 }
 
@@ -175,6 +184,29 @@ impl PrettyError for wgc::command::RenderPassErrorInner {
     }
 }
 
+impl PrettyError for wgc::command::RenderPassError {
+    fn fmt_pretty(&self, context: &Context) -> String {
+        // This error is wrapper for the inner error,
+        // but the scope has useful labels
+        format_error_line(self) + &self.scope.fmt_pretty(context)
+    }
+}
+
+impl PrettyError for wgc::command::ComputePassError {
+    fn fmt_pretty(&self, context: &Context) -> String {
+        // This error is wrapper for the inner error,
+        // but the scope has useful labels
+        format_error_line(self) + &self.scope.fmt_pretty(context)
+    }
+}
+impl PrettyError for wgc::command::RenderBundleError {
+    fn fmt_pretty(&self, context: &Context) -> String {
+        // This error is wrapper for the inner error,
+        // but the scope has useful labels
+        format_error_line(self) + &self.scope.fmt_pretty(context)
+    }
+}
+
 impl PrettyError for wgc::command::ComputePassErrorInner {
     fn fmt_pretty(&self, context: &Context) -> String {
         let global = context.global();
@@ -234,5 +266,39 @@ impl PrettyError for wgc::command::TransferError {
             _ => {}
         };
         ret
+    }
+}
+
+impl PrettyError for wgc::command::PassErrorScope {
+    fn fmt_pretty(&self, context: &Context) -> String {
+        // This error is not in the error chain, only notes are needed
+        let global = context.global();
+        match *self {
+            Self::Pass(id) => {
+                let name = wgc::gfx_select!(id => global.command_buffer_label(id));
+                format_label_line("command buffer", &name)
+            }
+            Self::SetBindGroup(id) => {
+                let name = wgc::gfx_select!(id => global.bind_group_label(id));
+                format_label_line("bind group", &name)
+            }
+            Self::SetPipelineRender(id) => {
+                let name = wgc::gfx_select!(id => global.render_pipeline_label(id));
+                format_label_line("render pipeline", &name)
+            }
+            Self::SetPipelineCompute(id) => {
+                let name = wgc::gfx_select!(id => global.compute_pipeline_label(id));
+                format_label_line("compute pipeline", &name)
+            }
+            Self::SetVertexBuffer(id) => {
+                let name = wgc::gfx_select!(id => global.buffer_label(id));
+                format_label_line("buffer", &name)
+            }
+            Self::SetIndexBuffer(id) => {
+                let name = wgc::gfx_select!(id => global.buffer_label(id));
+                format_label_line("buffer", &name)
+            }
+            _ => String::new(),
+        }
     }
 }

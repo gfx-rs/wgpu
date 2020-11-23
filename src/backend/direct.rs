@@ -1419,7 +1419,10 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         wgc::gfx_select!(encoder.id => global.command_encoder_run_render_pass(encoder.id, pass))
-            .map_err(|err| err.with_context("In a RenderPass", None))
+            .map_err(|err| {
+                let name = wgc::gfx_select!(encoder.id => global.command_buffer_label(encoder.id));
+                err.with_context_label_key("In a render pass", "encoder", Some(&name))
+            })
             .unwrap_error_sink(&encoder.error_sink, &self, || ())
     }
 
@@ -1578,15 +1581,29 @@ where
 }
 
 trait WithContextError: Error + Send + Sync + 'static + Sized {
-    fn with_context(self, string: &str, label: Option<&str>) -> ContextError;
+    fn with_context_label_key(
+        self,
+        string: &str,
+        label_key: &'static str,
+        label: Option<&str>,
+    ) -> ContextError;
+    fn with_context(self, string: &str, label: Option<&str>) -> ContextError {
+        self.with_context_label_key(string, "label", label)
+    }
 }
 
 impl<E: Error + Send + Sync + 'static> WithContextError for E {
-    fn with_context(self, string: &str, label: Option<&str>) -> ContextError {
+    fn with_context_label_key(
+        self,
+        string: &str,
+        label_key: &'static str,
+        label: Option<&str>,
+    ) -> ContextError {
         ContextError {
             string: string.to_string(),
             cause: Box::new(self),
             label: label.unwrap_or("").to_string(),
+            label_key,
         }
     }
 }
@@ -1595,6 +1612,7 @@ impl<E: Error + Send + Sync + 'static> WithContextError for E {
 pub(crate) struct ContextError {
     pub string: String,
     pub cause: Box<dyn Error + Send + Sync + 'static>,
+    pub label_key: &'static str,
     pub label: String,
 }
 
