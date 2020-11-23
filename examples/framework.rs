@@ -149,6 +149,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
+                label: None,
                 features: (optional_features & adapter_features) | required_features,
                 limits: needed_limits,
                 shader_validation: true,
