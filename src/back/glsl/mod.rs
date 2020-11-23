@@ -18,10 +18,12 @@
 //! - 310
 //!
 
+pub use error::Error;
+pub use features::Features;
+
 use crate::{
     proc::{
-        CallGraph, CallGraphBuilder, Interface, NameKey, Namer, ResolveContext, ResolveError,
-        Typifier, Visitor,
+        CallGraph, CallGraphBuilder, Interface, NameKey, Namer, ResolveContext, Typifier, Visitor,
     },
     Arena, ArraySize, BinaryOperator, BuiltIn, ConservativeDepth, Constant, ConstantInner,
     DerivativeAxis, Expression, FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle,
@@ -29,62 +31,33 @@ use crate::{
     Statement, StorageAccess, StorageClass, StorageFormat, StructMember, Type, TypeInner,
     UnaryOperator,
 };
-use std::{
-    cmp::Ordering,
-    fmt::{self, Error as FmtError},
-    io::{Error as IoError, Write},
-};
+use error::BackendResult;
+use features::FeaturesManager;
+use std::{cmp::Ordering, fmt, io::Write};
 
+/// Contains the backend error enum and a shorthand Result type
+mod error;
+/// Contains the features related code and the features querying method
+mod features;
 /// Contains a constant with a slice of all the reserved keywords RESERVED_KEYWORDS
 mod keywords;
 
+/// List of supported core glsl versions
 const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450];
+/// List of supported es glsl versions
 const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310];
 
-#[derive(Debug)]
-pub enum Error {
-    FormatError(FmtError),
-    IoError(IoError),
-    Type(ResolveError),
-    Custom(String),
-}
-
-impl From<FmtError> for Error {
-    fn from(err: FmtError) -> Self {
-        Error::FormatError(err)
-    }
-}
-
-impl From<IoError> for Error {
-    fn from(err: IoError) -> Self {
-        Error::IoError(err)
-    }
-}
-
-impl From<ResolveError> for Error {
-    fn from(err: ResolveError) -> Self {
-        Error::Type(err)
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::FormatError(err) => write!(f, "Formatting error {}", err),
-            Error::IoError(err) => write!(f, "Io error: {}", err),
-            Error::Type(err) => write!(f, "Type error: {:?}", err),
-            Error::Custom(err) => write!(f, "{}", err),
-        }
-    }
-}
-
+/// glsl version
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Version {
+    /// `core` glsl
     Desktop(u16),
+    /// `es` glsl
     Embedded(u16),
 }
 
 impl Version {
+    /// Returns true if self is `Version::Embedded` (i.e. is a es version)
     fn is_es(&self) -> bool {
         match self {
             Version::Desktop(_) => false,
@@ -92,6 +65,12 @@ impl Version {
         }
     }
 
+    /// Checks the list of currently supported versions and returns true if it contains the
+    /// specified version
+    ///
+    /// # Notes
+    /// As an invalid version number will never be added to the supported version list
+    /// so this also checks for verson validity
     fn is_supported(&self) -> bool {
         match self {
             Version::Desktop(v) => SUPPORTED_CORE_VERSIONS.contains(v),
@@ -119,213 +98,57 @@ impl fmt::Display for Version {
     }
 }
 
+/// Structure that contains the configuration used in the [`Writer`](struct.Writer.html)
 #[derive(Debug, Clone)]
 pub struct Options {
+    /// The glsl version to be used
     pub version: Version,
+    /// The name and stage of the entry point
+    ///
+    /// If no enty point that matches is found a error will be thrown while creating a new instance
+    /// of [`Writer`](struct.Writer.html)
     pub entry_point: (ShaderStage, String),
 }
 
+/// Structure that connects a texture to a sampler or not
+///
+/// glsl pre vulkan has no concept of separate textures and samplers instead everything is a
+/// `gsamplerN` where `g` is the scalar type and `N` is the dimension, but naga uses separate textures
+/// and samplers in the IR so the backend produces a [`HashMap`](crate::FastHashMap) with the texture name
+/// as a key and a [`TextureMapping`](TextureMapping) as a value this way the user knows where to bind.
+///
+/// [`Storage`](crate::ImageClass::Storage) images produce `gimageN` and don't have an associated sampler
+/// so the [`sampler`](Self::sampler) field will be [`None`](std::option::Option::None)
 #[derive(Debug, Clone)]
 pub struct TextureMapping {
+    /// Handle to the image global variable
     pub texture: Handle<GlobalVariable>,
+    /// Handle to the associated sampler global variable if it exists
     pub sampler: Option<Handle<GlobalVariable>>,
 }
 
-bitflags::bitflags! {
-    struct Features: u32 {
-        const BUFFER_STORAGE = 1;
-        const ARRAY_OF_ARRAYS = 1 << 1;
-        const DOUBLE_TYPE = 1 << 2;
-        const FULL_IMAGE_FORMATS = 1 << 3;
-        const MULTISAMPLED_TEXTURES = 1 << 4;
-        const MULTISAMPLED_TEXTURE_ARRAYS = 1 << 5;
-        const CUBE_TEXTURES_ARRAY = 1 << 6;
-        const COMPUTE_SHADER = 1 << 7;
-        const IMAGE_LOAD_STORE = 1 << 8;
-        const CONSERVATIVE_DEPTH = 1 << 9;
-        const TEXTURE_1D = 1 << 10;
-        const PUSH_CONSTANT = 1 << 11;
-    }
-}
-
-struct FeaturesManager(Features);
-
-impl FeaturesManager {
-    pub fn new() -> Self {
-        Self(Features::empty())
-    }
-
-    pub fn request(&mut self, features: Features) {
-        self.0 |= features
-    }
-
-    #[allow(clippy::collapsible_if)]
-    pub fn write(&self, version: Version, mut out: impl Write) -> Result<(), Error> {
-        if self.0.contains(Features::COMPUTE_SHADER) {
-            if version < Version::Embedded(310) || version < Version::Desktop(420) {
-                return Err(Error::Custom(format!(
-                    "Version {} doesn't support compute shaders",
-                    version
-                )));
-            }
-
-            if !version.is_es() {
-                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_compute_shader.txt
-                writeln!(out, "#extension GL_ARB_compute_shader : require")?;
-            }
-        }
-
-        if self.0.contains(Features::BUFFER_STORAGE) {
-            if version < Version::Embedded(310) || version < Version::Desktop(400) {
-                return Err(Error::Custom(format!(
-                    "Version {} doesn't support buffer storage class",
-                    version
-                )));
-            }
-
-            if let Version::Desktop(_) = version {
-                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shader_storage_buffer_object.txt
-                writeln!(
-                    out,
-                    "#extension GL_ARB_shader_storage_buffer_object : require"
-                )?;
-            }
-        }
-
-        if self.0.contains(Features::DOUBLE_TYPE) {
-            if version.is_es() || version < Version::Desktop(150) {
-                return Err(Error::Custom(format!(
-                    "Version {} doesn't support doubles",
-                    version
-                )));
-            }
-
-            if version < Version::Desktop(400) {
-                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_gpu_shader_fp64.txt
-                writeln!(out, "#extension GL_ARB_gpu_shader_fp64 : require")?;
-            }
-        }
-
-        if self.0.contains(Features::CUBE_TEXTURES_ARRAY) {
-            if version < Version::Embedded(310) || version < Version::Desktop(130) {
-                return Err(Error::Custom(format!(
-                    "Version {} doesn't support cube map array textures",
-                    version
-                )));
-            }
-
-            if version.is_es() {
-                // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_texture_cube_map_array.txt
-                writeln!(out, "#extension GL_EXT_texture_cube_map_array : require")?;
-            } else if version < Version::Desktop(400) {
-                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_texture_cube_map_array.txt
-                writeln!(out, "#extension GL_ARB_texture_cube_map_array : require")?;
-            }
-        }
-
-        if self.0.contains(Features::MULTISAMPLED_TEXTURES) {
-            if version < Version::Embedded(300) {
-                return Err(Error::Custom(format!(
-                    "Version {} doesn't support multi sampled textures",
-                    version
-                )));
-            }
-        }
-
-        if self.0.contains(Features::MULTISAMPLED_TEXTURE_ARRAYS) {
-            if version < Version::Embedded(310) {
-                return Err(Error::Custom(format!(
-                    "Version {} doesn't support multi sampled texture arrays",
-                    version
-                )));
-            }
-
-            if version.is_es() {
-                // https://www.khronos.org/registry/OpenGL/extensions/OES/OES_texture_storage_multisample_2d_array.txt
-                writeln!(
-                    out,
-                    "#extension GL_OES_texture_storage_multisample_2d_array : require"
-                )?;
-            }
-        }
-
-        if self.0.contains(Features::ARRAY_OF_ARRAYS) {
-            if version < Version::Embedded(310) || version < Version::Desktop(120) {
-                return Err(Error::Custom(format!(
-                    "Version {} doesn't arrays of arrays",
-                    version
-                )));
-            }
-
-            if version < Version::Desktop(430) {
-                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_arrays_of_arrays.txt
-                writeln!(out, "#extension ARB_arrays_of_arrays : require")?;
-            }
-        }
-
-        if self.0.contains(Features::IMAGE_LOAD_STORE) {
-            if version < Version::Embedded(310) || version < Version::Desktop(130) {
-                return Err(Error::Custom(format!(
-                    "Version {} doesn't support images load/stores",
-                    version
-                )));
-            }
-
-            if self.0.contains(Features::FULL_IMAGE_FORMATS) && version.is_es() {
-                // https://www.khronos.org/registry/OpenGL/extensions/NV/NV_image_formats.txt
-                writeln!(out, "#extension GL_NV_image_formats : require")?;
-            }
-
-            if version < Version::Desktop(420) {
-                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shader_image_load_store.txt
-                writeln!(out, "#extension GL_ARB_shader_image_load_store : require")?;
-            }
-        }
-
-        if self.0.contains(Features::CONSERVATIVE_DEPTH) {
-            if version < Version::Embedded(300) || version < Version::Desktop(130) {
-                return Err(Error::Custom(format!(
-                    "Version {} doesn't support conservative depth",
-                    version
-                )));
-            }
-
-            if version.is_es() {
-                // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_conservative_depth.txt
-                writeln!(out, "#extension GL_EXT_conservative_depth : require")?;
-            }
-
-            if version < Version::Desktop(420) {
-                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt
-                writeln!(out, "#extension GL_ARB_conservative_depth : require")?;
-            }
-        }
-
-        if self.0.contains(Features::TEXTURE_1D) {
-            if version.is_es() {
-                return Err(Error::Custom(format!(
-                    "Version {} doesn't support 1d textures",
-                    version
-                )));
-            }
-        }
-
-        Ok(())
-    }
-}
-
+/// Stores the current function type (either a regular function or an entry point)
+///
+/// Also stores data needed to identify it (handle for a regular function or index for an entry point)
 enum FunctionType {
+    /// A regular function and it's handle
     Function(Handle<Function>),
+    /// A entry point and it's index
     EntryPoint(crate::proc::EntryPointIndex),
 }
 
+/// Helper structure that stores data needed when writing the function
 struct FunctionCtx<'a, 'b> {
+    /// The current function being written
     func: FunctionType,
+    /// The expression arena of the current function being written
     expressions: &'a Arena<Expression>,
+    /// A typifier that has already resolved all expressions in the function being written
     typifier: &'b Typifier,
 }
 
 impl<'a, 'b> FunctionCtx<'a, 'b> {
+    /// Helper method that generates a [`NameKey`](crate::proc::NameKey) for a local in the current function
     fn name_key(&self, local: Handle<LocalVariable>) -> NameKey {
         match self.func {
             FunctionType::Function(handle) => NameKey::FunctionLocal(handle, local),
@@ -333,6 +156,12 @@ impl<'a, 'b> FunctionCtx<'a, 'b> {
         }
     }
 
+    /// Helper method that retrieves the name of the argument in the current function
+    ///
+    /// # Panics
+    /// - If the function is an entry point
+    /// - If the function arguments are less or equal to `arg`
+    /// - If `names` hasn't been filled properly
     fn get_arg<'c>(&self, arg: u32, names: &'c FastHashMap<NameKey, String>) -> &'c str {
         match self.func {
             FunctionType::Function(handle) => &names[&NameKey::FunctionArgument(handle, arg)],
@@ -346,7 +175,9 @@ impl<'a, 'b> FunctionCtx<'a, 'b> {
 struct IdGenerator(u32);
 
 impl IdGenerator {
+    /// Generates a number that's guaranteed to be unique for this `IdGenerator`
     fn generate(&mut self) -> u32 {
+        // It's just an increasing number but it does the job
         let ret = self.0;
         self.0 += 1;
         ret
@@ -356,23 +187,37 @@ impl IdGenerator {
 /// Main structure of the glsl backend responsible for all code generation
 pub struct Writer<'a, W> {
     // Inputs
+    /// The module being written
     module: &'a Module,
+    /// The output writer
     out: W,
+    /// User defined configuration to be used
     options: &'a Options,
 
     // Internal State
+    /// Features manager used to store all the needed features and write them
     features: FeaturesManager,
+    /// A map with all the names needed for writing the module
+    /// (generated by a [`Namer`](crate::proc::Namer))
     names: FastHashMap<NameKey, String>,
+    /// The selected entry point
     entry_point: &'a crate::EntryPoint,
+    /// The index of the selected entry point
     entry_point_idx: crate::proc::EntryPointIndex,
+    /// The current entry point call_graph (doesn't contain the entry point)
     call_graph: CallGraph,
-
     /// Used to generate a unique number for blocks
     block_id: IdGenerator,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
+    /// Creates a new [`Writer`](Writer) instance
+    ///
+    /// # Errors
+    /// - If the version specified isn't supported (or invalid)
+    /// - If the entry point couldn't be found on the module
     pub fn new(out: W, module: &'a Module, options: &'a Options) -> Result<Self, Error> {
+        // Check if the requested version is supported
         if !options.version.is_supported() {
             return Err(Error::Custom(format!(
                 "Version not supported {}",
@@ -380,6 +225,7 @@ impl<'a, W: Write> Writer<'a, W> {
             )));
         }
 
+        // Try to find the entry point and correspoding index
         let (ep_idx, ep) = module
             .entry_points
             .iter()
@@ -389,14 +235,17 @@ impl<'a, W: Write> Writer<'a, W> {
             })
             .ok_or_else(|| Error::Custom(String::from("Entry point not found")))?;
 
+        // Generate a map with names required to write the module
         let mut names = FastHashMap::default();
         Namer::process(module, keywords::RESERVED_KEYWORDS, &mut names);
 
+        // Generate a call graph for the entry point
         let call_graph = CallGraphBuilder {
             functions: &module.functions,
         }
         .process(&ep.function);
 
+        // Build the instance
         let mut this = Self {
             module,
             out,
@@ -411,121 +260,48 @@ impl<'a, W: Write> Writer<'a, W> {
             block_id: IdGenerator::default(),
         };
 
-        this.collect_required_features()?;
+        // Find all features required to print this module
+        // TODO: We should throw errors here and not in `write`
+        this.collect_required_features();
 
         Ok(this)
     }
 
-    fn collect_required_features(&mut self) -> Result<(), Error> {
-        let stage = self.options.entry_point.0;
-
-        if let Some(depth_test) = self.entry_point.early_depth_test {
-            self.features.request(Features::IMAGE_LOAD_STORE);
-
-            if depth_test.conservative.is_some() {
-                self.features.request(Features::CONSERVATIVE_DEPTH);
-            }
-        }
-
-        if let ShaderStage::Compute = stage {
-            self.features.request(Features::COMPUTE_SHADER)
-        }
-
-        for (_, ty) in self.module.types.iter() {
-            match ty.inner {
-                TypeInner::Scalar { kind, width } => self.scalar_required_features(kind, width),
-                TypeInner::Vector { kind, width, .. } => self.scalar_required_features(kind, width),
-                TypeInner::Matrix { .. } => self.scalar_required_features(ScalarKind::Float, 8),
-                TypeInner::Array { base, .. } => {
-                    if let TypeInner::Array { .. } = self.module.types[base].inner {
-                        self.features.request(Features::ARRAY_OF_ARRAYS)
-                    }
-                }
-                TypeInner::Image {
-                    dim,
-                    arrayed,
-                    class,
-                } => {
-                    if arrayed && dim == crate::ImageDimension::Cube {
-                        self.features.request(Features::CUBE_TEXTURES_ARRAY)
-                    } else if dim == crate::ImageDimension::D1 {
-                        self.features.request(Features::TEXTURE_1D)
-                    }
-
-                    match class {
-                        ImageClass::Sampled { multi: true, .. } => {
-                            self.features.request(Features::MULTISAMPLED_TEXTURES);
-                            if arrayed {
-                                self.features.request(Features::MULTISAMPLED_TEXTURE_ARRAYS);
-                            }
-                        }
-                        ImageClass::Storage(format) => match format {
-                            StorageFormat::R8Unorm
-                            | StorageFormat::R8Snorm
-                            | StorageFormat::R8Uint
-                            | StorageFormat::R8Sint
-                            | StorageFormat::R16Uint
-                            | StorageFormat::R16Sint
-                            | StorageFormat::R16Float
-                            | StorageFormat::Rg8Unorm
-                            | StorageFormat::Rg8Snorm
-                            | StorageFormat::Rg8Uint
-                            | StorageFormat::Rg8Sint
-                            | StorageFormat::Rg16Uint
-                            | StorageFormat::Rg16Sint
-                            | StorageFormat::Rg16Float
-                            | StorageFormat::Rgb10a2Unorm
-                            | StorageFormat::Rg11b10Float
-                            | StorageFormat::Rg32Uint
-                            | StorageFormat::Rg32Sint
-                            | StorageFormat::Rg32Float => {
-                                self.features.request(Features::FULL_IMAGE_FORMATS)
-                            }
-                            _ => {}
-                        },
-                        _ => {}
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        for (_, global) in self.module.global_variables.iter() {
-            match global.class {
-                StorageClass::WorkGroup => self.features.request(Features::COMPUTE_SHADER),
-                StorageClass::Storage => self.features.request(Features::BUFFER_STORAGE),
-                StorageClass::PushConstant => self.features.request(Features::PUSH_CONSTANT),
-                _ => {}
-            }
-        }
-
-        Ok(())
-    }
-
-    fn scalar_required_features(&mut self, kind: ScalarKind, width: crate::Bytes) {
-        if kind == ScalarKind::Float && width == 8 {
-            self.features.request(Features::DOUBLE_TYPE);
-        }
-    }
-
+    /// Writes the [`Module`](crate::Module) as glsl to the output
+    ///
+    /// # Notes
+    /// If an error occurs while writing, the output might have been written partially
     pub fn write(&mut self) -> Result<FastHashMap<String, TextureMapping>, Error> {
+        // We use `writeln!(self.out)` troughout the write to add newlines
+        // to make the output more readable
+
         let es = self.options.version.is_es();
 
+        // Write the version (It must be the first thing or it isn't a valid glsl output)
         writeln!(self.out, "#version {}", self.options.version)?;
+        // Write all the needed extensions
+        //
+        // This used to be the last thing being written as it allowed to search for features while
+        // writing the module saving some loops but some older versions (420 or less) required the
+        // extensions to appear before being used, even though extensions are part of the
+        // preprocessor not the processor ¯\_(ツ)_/¯
         self.features.write(self.options.version, &mut self.out)?;
         writeln!(self.out)?;
 
+        // glsl es requires a precision to be specified for floats
+        // TODO: Should this be user configurable?
         if es {
             writeln!(self.out, "precision highp float;\n")?;
         }
 
+        // Enable early depth tests if needed
         if let Some(depth_test) = self.entry_point.early_depth_test {
-            writeln!(self.out, "layout(early_fragment_tests) in;\n")?;
+            writeln!(self.out, "layout(early_fragment_tests) in;")?;
 
             if let Some(conservative) = depth_test.conservative {
                 writeln!(
                     self.out,
-                    "layout (depth_{}) out float gl_FragDepth;\n",
+                    "layout (depth_{}) out float gl_FragDepth;",
                     match conservative {
                         ConservativeDepth::GreaterEqual => "greater",
                         ConservativeDepth::LessEqual => "less",
@@ -535,6 +311,12 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
+        writeln!(self.out)?;
+
+        // Write all structs
+        //
+        // This are always ordered because of the IR is structured in a way that you can't make a
+        // struct without adding all of it's members first
         for (handle, ty) in self.module.types.iter() {
             if let TypeInner::Struct { ref members } = ty.inner {
                 self.write_struct(handle, members)?
@@ -543,14 +325,11 @@ impl<'a, W: Write> Writer<'a, W> {
 
         writeln!(self.out)?;
 
-        let texture_mappings = self.collect_texture_mapping(
-            self.call_graph
-                .raw_nodes()
-                .iter()
-                .map(|node| &self.module.functions[node.weight])
-                .chain(std::iter::once(&self.entry_point.function)),
-        )?;
-
+        // Write the globals
+        //
+        // We filter all globals that aren't used by the selected entry point as they might be
+        // interfere with each other (i.e. two globals with the same location but different with
+        // different classes)
         for (handle, global) in self
             .module
             .global_variables
@@ -558,16 +337,21 @@ impl<'a, W: Write> Writer<'a, W> {
             .zip(&self.entry_point.function.global_usage)
             .filter_map(|(global, usage)| Some(global).filter(|_| !usage.is_empty()))
         {
+            // Skip builtins
+            // TODO: Write them if they have modifiers
             if let Some(crate::Binding::BuiltIn(_)) = global.binding {
                 continue;
             }
 
             match self.module.types[global.ty].inner {
+                // We treat images separately because they might require
+                // writing the storage format
                 TypeInner::Image {
                     dim,
                     arrayed,
                     class,
                 } => {
+                    // Write the storage format if needed
                     if let TypeInner::Image {
                         class: ImageClass::Storage(format),
                         ..
@@ -576,23 +360,38 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, "layout({}) ", glsl_storage_format(format))?;
                     }
 
+                    // Write the storage access modifier
+                    //
+                    // glsl allows adding both `readonly` and `writeonly` but this means that
+                    // they can only be used to query information about the image which isn't what
+                    // we want here so when storage access is both `LOAD` and `STORE` add no modifiers
                     if global.storage_access == StorageAccess::LOAD {
                         write!(self.out, "readonly ")?;
                     } else if global.storage_access == StorageAccess::STORE {
                         write!(self.out, "writeonly ")?;
                     }
 
+                    // All images in glsl are `uniform`
+                    // The trailing space is important
                     write!(self.out, "uniform ")?;
 
+                    // write the type
+                    //
+                    // This is way we need the leading space because `write_image_type` doesn't add
+                    // any spaces at the beginning or end
                     self.write_image_type(dim, arrayed, class)?;
 
+                    // Finally write the name and end the global with a `;`
+                    // The leading space is important
                     writeln!(
                         self.out,
                         " {};",
                         self.names[&NameKey::GlobalVariable(handle)]
                     )?
                 }
+                // glsl has no concept of samplers so we just ignore it
                 TypeInner::Sampler { .. } => continue,
+                // All other globals are written by `write_global`
                 _ => self.write_global(handle, global)?,
             }
         }
@@ -603,14 +402,22 @@ impl<'a, W: Write> Writer<'a, W> {
         // It's impossible for this to panic because the IR forbids cycles
         let functions = petgraph::algo::toposort(&self.call_graph, None).unwrap();
 
+        // Write all regular functions that are in the call graph this is important
+        // because other functions might require for example globals that weren't written
         for node in functions {
+            // We do this inside the loop instead of using `map` to sastify the borrow checker
             let handle = self.call_graph[node];
+            // We also `clone` to sastify the borrow checker
             let name = self.names[&NameKey::Function(handle)].clone();
+
+            // Write the function
             self.write_function(
                 FunctionType::Function(handle),
                 &self.module.functions[handle],
                 name,
             )?;
+
+            writeln!(self.out)?;
         }
 
         self.write_function(
@@ -619,20 +426,197 @@ impl<'a, W: Write> Writer<'a, W> {
             "main",
         )?;
 
-        Ok(texture_mappings)
+        // Collect all of the texture mappings and return them to the user
+        self.collect_texture_mapping(
+            // Create an iterator with all functions in the call graph and the entry point
+            self.call_graph
+                .raw_nodes()
+                .iter()
+                .map(|node| &self.module.functions[node.weight])
+                .chain(std::iter::once(&self.entry_point.function)),
+        )
     }
 
+    /// Helper method used to write non image/sampler types
+    ///
+    /// # Notes
+    /// Adds no trailing or leading whitespaces
+    ///
+    /// # Panics
+    /// - If type is either a image or sampler
+    /// - If it's an Array with a [`ArraySize::Constant`](crate::ArraySize::Constant) with a
+    /// constant that isn't [`Uint`](crate::ConstantInner::Uint)
+    fn write_type(&mut self, ty: Handle<Type>, block: bool) -> BackendResult {
+        match self.module.types[ty].inner {
+            // Scalars are simple we just get the full name from `glsl_scalar`
+            TypeInner::Scalar { kind, width } => {
+                write!(self.out, "{}", glsl_scalar(kind, width)?.full)?
+            }
+            // Vectors are just `gvecN` where `g` is the scalar prefix and `N` is the vector size
+            TypeInner::Vector { size, kind, width } => write!(
+                self.out,
+                "{}vec{}",
+                glsl_scalar(kind, width)?.prefix,
+                size as u8
+            )?,
+            // Matrices are written with `gmatMxN` where `g` is the scalar prefix (only floats and
+            // doubles are allowed), `M` is the columns count and `N` is the rows count
+            //
+            // glsl supports a matrix shorthand `gmatN` where `N` = `M` but it doesn't justify the
+            // extra branch to write matrices this way
+            TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => write!(
+                self.out,
+                "{}mat{}x{}",
+                glsl_scalar(ScalarKind::Float, width)?.prefix,
+                columns as u8,
+                rows as u8
+            )?,
+            // glsl has no pointer types so just write types as normal and loads are skipped
+            TypeInner::Pointer { base, .. } => self.write_type(base, false)?,
+            // Arrays are written as `base[size]`
+            TypeInner::Array { base, size, .. } => {
+                self.write_type(base, false)?;
+
+                write!(self.out, "[")?;
+
+                // Write the array size
+                // Writes nothing if `ArraySize::Dynamic`
+                // Panics if `ArraySize::Constant` has a constant that isn't an uint
+                match size {
+                    ArraySize::Constant(const_handle) => {
+                        match self.module.constants[const_handle].inner {
+                            ConstantInner::Uint(size) => write!(self.out, "{}", size)?,
+                            _ => unreachable!(),
+                        }
+                    }
+                    ArraySize::Dynamic => (),
+                }
+
+                write!(self.out, "]")?
+            }
+            // glsl structs are written as just the struct name if it isn't a block
+            //
+            // If it's a block we need to write `block_name { members }` where `block_name` must be
+            // unique between blocks and structs so we add `_block_ID` where `ID` is a `IdGenerator`
+            // generated number so it's unique and `members` are the same as in a struct
+            TypeInner::Struct { ref members } => {
+                // Get the struct name
+                let name = &self.names[&NameKey::Type(ty)];
+
+                if block {
+                    // Write the block name, it's just the struct name appended with `_block_ID`
+                    writeln!(self.out, "{}_block_{} {{", name, self.block_id.generate())?;
+
+                    // Write the block members
+                    for (idx, member) in members.iter().enumerate() {
+                        // Add a tab for identation (readability only)
+                        writeln!(self.out, "\t")?;
+                        // Write the member type
+                        self.write_type(member.ty, false)?;
+
+                        // Finish the member with the name, a semicolon and a newline
+                        // The leading space is important
+                        writeln!(
+                            self.out,
+                            " {};",
+                            &self.names[&NameKey::StructMember(ty, idx as u32)]
+                        )?;
+                    }
+
+                    // Close braces
+                    write!(self.out, "}}")?
+                } else {
+                    // Write the struct name
+                    write!(self.out, "{}", name)?
+                }
+            }
+            // Panic if either Image or Sampler is being written
+            //
+            // Write all variants instead of `_` so that if new variants are added a
+            // no exhaustivenes error is thrown
+            TypeInner::Image { .. } | TypeInner::Sampler { .. } => unreachable!(),
+        }
+
+        Ok(())
+    }
+
+    /// Helper method to write a image type
+    ///
+    /// # Notes
+    /// Adds no leading or trailing whitespaces
+    fn write_image_type(
+        &mut self,
+        dim: crate::ImageDimension,
+        arrayed: bool,
+        class: ImageClass,
+    ) -> BackendResult {
+        // glsl images consist of four parts the scalar prefix, the image "type", the dimensions
+        // and modifiers
+        //
+        // There exists two image types
+        // - sampler - for sampled images
+        // - image - for storage images
+        //
+        // There are three possible modifiers that can be used together and must be written in
+        // this order to be valid
+        // - MS - used if it's a multisampled image
+        // - Array - used if it's an image array
+        // - Shadow - used if it's a depth image
+
+        let (base, kind, ms, comparison) = match class {
+            ImageClass::Sampled { kind, multi: true } => ("sampler", kind, "MS", ""),
+            ImageClass::Sampled { kind, multi: false } => ("sampler", kind, "", ""),
+            ImageClass::Depth => ("sampler", crate::ScalarKind::Float, "", "Shadow"),
+            ImageClass::Storage(format) => ("image", format.into(), "", ""),
+        };
+
+        write!(
+            self.out,
+            "{}{}{}{}{}{}",
+            glsl_scalar(kind, 4)?.prefix,
+            base,
+            glsl_dimension(dim),
+            ms,
+            if arrayed { "Array" } else { "" },
+            comparison
+        )?;
+
+        Ok(())
+    }
+
+    /// Helper method used to write non images/sampler globals
+    ///
+    /// # Notes
+    /// Adds a newline
+    ///
+    /// # Panics
+    /// If the global has type sampler
     fn write_global(
         &mut self,
         handle: Handle<GlobalVariable>,
         global: &GlobalVariable,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
+        // Write the storage access modifier
+        //
+        // glsl allows adding both `readonly` and `writeonly` but this means that
+        // they can only be used to query information about the resource which isn't what
+        // we want here so when storage access is both `LOAD` and `STORE` add no modifiers
         if global.storage_access == StorageAccess::LOAD {
             write!(self.out, "readonly ")?;
         } else if global.storage_access == StorageAccess::STORE {
             write!(self.out, "writeonly ")?;
         }
 
+        // Write the interpolation modifier if needed
+        //
+        // We ignore all interpolation modifiers that aren't used in input globals in fragment
+        // shaders or output globals in vertex shaders
+        //
+        // TODO: Should this throw an error?
         if let Some(interpolation) = global.interpolation {
             match (self.options.entry_point.0, global.class) {
                 (ShaderStage::Fragment, StorageClass::Input)
@@ -643,33 +627,41 @@ impl<'a, W: Write> Writer<'a, W> {
             };
         }
 
+        // glsl doesn't allow structures as types in `buffer` and `uniform` instead blocks must be
+        // used so we set block to true in `write_type`
         let block = match global.class {
-            StorageClass::Storage | StorageClass::Uniform => {
-                let block_name = self.names[&NameKey::Type(global.ty)].clone();
-
-                Some(block_name)
-            }
-            _ => None,
+            StorageClass::Storage | StorageClass::Uniform => true,
+            _ => false,
         };
 
+        // Write the storage class
+        // Trailing space is important
         write!(self.out, "{} ", glsl_storage_class(global.class))?;
 
+        // Write the type
+        // `write_type` adds no leading or trailing spaces
         self.write_type(global.ty, block)?;
 
+        // Finally write the global name and end the global with a `;` and a newline
+        // Leading space is important
         let name = &self.names[&NameKey::GlobalVariable(handle)];
         writeln!(self.out, " {};", name)?;
 
         Ok(())
     }
 
+    /// Helper method used to write functions (both entry points and regular functions)
+    ///
+    /// # Notes
+    /// Adds a newline
     fn write_function<N: AsRef<str>>(
         &mut self,
         ty: FunctionType,
         func: &Function,
         name: N,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
+        // Create a new typifier and resolve all types for the current function
         let mut typifier = Typifier::new();
-
         typifier.resolve_all(
             &func.expressions,
             &self.module.types,
@@ -682,211 +674,169 @@ impl<'a, W: Write> Writer<'a, W> {
             },
         )?;
 
+        // Create a function context for the function being written
         let ctx = FunctionCtx {
             func: ty,
             expressions: &func.expressions,
             typifier: &typifier,
         };
 
-        self.write_fn_header(name.as_ref(), func, &ctx)?;
-        writeln!(self.out, " {{",)?;
+        // Write the function header
+        //
+        // glsl headers are the same as in c:
+        // `ret_type name(args)`
+        // `ret_type` is the return type
+        // `name` is the function name
+        // `args` is a comma separated list of `type name`
+        //  | - `type` is the argument type
+        //  | - `name` is the argument name
 
+        // Start by writing the return type if any otherwise write void
+        // This is the only place where `void` is a valid type
+        // (though it's more a keyword than a type)
+        if let Some(ty) = func.return_type {
+            self.write_type(ty, false)?;
+        } else {
+            write!(self.out, "void")?;
+        }
+
+        // Write the function name and open parantheses for the argument list
+        write!(self.out, " {}(", name.as_ref())?;
+
+        // Write the comma separated argument list
+        //
+        // We need access to `Self` here so we use the reference passed to the closure as an
+        // argument instead of capturing as that would cause a borrow checker error
+        self.write_slice(&func.arguments, |this, i, arg| {
+            // Write the argument type
+            // `write_type` adds no trailing spaces
+            this.write_type(arg.ty, false)?;
+
+            // Write the argument name
+            // The leading space is important
+            write!(this.out, " {}", ctx.get_arg(i, &this.names))?;
+
+            Ok(())
+        })?;
+
+        // Close the parantheses and open braces to start the function body
+        writeln!(self.out, ") {{")?;
+
+        // Write all function locals
+        // Locals are `type name (= init)?;` where the init part (including the =) are optional
+        //
+        // Always adds a newline
         for (handle, local) in func.local_variables.iter() {
+            // Write identation (only for readability) and the type
+            // `write_type` adds no trailing space
             write!(self.out, "\t")?;
-            self.write_type(local.ty, None)?;
+            self.write_type(local.ty, false)?;
 
+            // Write the local name
+            // The leading space is important
             write!(self.out, " {}", self.names[&ctx.name_key(handle)])?;
 
+            // Write the local initializer if needed
             if let Some(init) = local.init {
-                write!(self.out, " = ",)?;
+                // Put the equal signal only if there's a initializer
+                // The leading and trailing spaces aren't needed but help with readability
+                write!(self.out, " = ")?;
 
+                // Write the constant
+                // `write_constant` adds no trailing or leading space/newline
                 self.write_constant(&self.module.constants[init])?;
             }
 
+            // Finish the local with `;` and add a newline (only for readability)
             writeln!(self.out, ";")?
         }
 
         writeln!(self.out)?;
 
+        // Write the function body (statement list)
         for sta in func.body.iter() {
+            // Write a statement, the indentation should always be 1 when writing the function body
+            // `write_stmt` adds a newline
             self.write_stmt(sta, &ctx, 1)?;
         }
 
-        Ok(writeln!(self.out, "}}")?)
+        // Close braces and add a newline
+        writeln!(self.out, "}}")?;
+
+        Ok(())
     }
 
-    fn write_slice<T, F: FnMut(&mut Self, u32, &T) -> Result<(), Error>>(
+    /// Helper method that writes a list of comma separated `T` with a writer function `F`
+    ///
+    /// The writer function `F` receives a mutable reference to `self` that if needed won't cause
+    /// borrow checker issues (using for example a closure with `self` will cause issues), the
+    /// second argument is the 0 based index of the element on the list, and the last element is
+    /// a reference to the element `T` being written
+    ///
+    /// # Notes
+    /// - Adds no newlines or leading/trailing whitespaces
+    /// - The last element won't have a trailing `,`
+    fn write_slice<T, F: FnMut(&mut Self, u32, &T) -> BackendResult>(
         &mut self,
         data: &[T],
         mut f: F,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
+        // Loop trough `data` invoking `f` for each element
         for (i, item) in data.iter().enumerate() {
             f(self, i as u32, item)?;
 
+            // Only write a comma if isn't the last element
             if i != data.len().saturating_sub(1) {
-                write!(self.out, ",")?;
+                // The leading space is for readability only
+                write!(self.out, ", ")?;
             }
         }
 
         Ok(())
     }
 
-    fn write_fn_header(
-        &mut self,
-        name: &str,
-        func: &Function,
-        ctx: &FunctionCtx<'_, '_>,
-    ) -> Result<(), Error> {
-        if let Some(ty) = func.return_type {
-            self.write_type(ty, None)?;
-        } else {
-            write!(self.out, "void")?;
-        }
+    /// Helper method used to write constants
+    ///
+    /// # Notes
+    /// Adds no newlines or leading/trailing whitespaces
+    fn write_constant(&mut self, constant: &Constant) -> BackendResult {
+        match constant.inner {
+            // Signed integers don't need anything special
+            ConstantInner::Sint(int) => write!(self.out, "{}", int)?,
+            // Unsigned integers need a `u` at the end
+            //
+            // While `core` doesn't necessarily need it, it's allowed and since `es` needs it we
+            // always write it as the extra branch wouldn't have any benefit in readability
+            ConstantInner::Uint(int) => write!(self.out, "{}u", int)?,
+            // Floats are written using `Debug` insted of `Display` because it always appends the
+            // decimal part even it's zero which is needed for a valid glsl float constant
+            ConstantInner::Float(float) => write!(self.out, "{:?}", float)?,
+            // Booleans are either `true` or `false` so nothing special needs to be done
+            ConstantInner::Bool(boolean) => write!(self.out, "{}", boolean)?,
+            // Composite constant are created using the same syntax as compose
+            // `type(components)` where `components` is a comma separated list of constants
+            ConstantInner::Composite(ref components) => {
+                self.write_type(constant.ty, false)?;
+                write!(self.out, "(")?;
 
-        write!(self.out, " {}(", name)?;
+                // Write the comma separated constants
+                self.write_slice(components, |this, _, arg| {
+                    this.write_constant(&this.module.constants[*arg])
+                })?;
 
-        self.write_slice(&func.arguments, |this, i, arg| {
-            this.write_type(arg.ty, None)?;
-
-            let name = ctx.get_arg(i, &this.names);
-
-            Ok(write!(this.out, " {}", name)?)
-        })?;
-
-        write!(self.out, ")")?;
-
-        Ok(())
-    }
-
-    fn write_type(&mut self, ty: Handle<Type>, block: Option<String>) -> Result<(), Error> {
-        match self.module.types[ty].inner {
-            TypeInner::Scalar { kind, width } => {
-                write!(self.out, "{}", glsl_scalar(kind, width)?.full)?
+                write!(self.out, ")")?
             }
-            TypeInner::Vector { size, kind, width } => write!(
-                self.out,
-                "{}vec{}",
-                glsl_scalar(kind, width)?.prefix,
-                size as u8
-            )?,
-            TypeInner::Matrix {
-                columns,
-                rows,
-                width,
-            } => write!(
-                self.out,
-                "{}mat{}x{}",
-                glsl_scalar(ScalarKind::Float, width)?.prefix,
-                columns as u8,
-                rows as u8
-            )?,
-            TypeInner::Pointer { base, .. } => self.write_type(base, None)?,
-            TypeInner::Array { base, size, .. } => {
-                self.write_type(base, None)?;
-
-                write!(self.out, "[")?;
-                self.write_array_size(size)?;
-                write!(self.out, "]")?
-            }
-            TypeInner::Struct { ref members } => {
-                if let Some(name) = block {
-                    writeln!(self.out, "{}_block_{} {{", name, self.block_id.generate())?;
-
-                    for (idx, member) in members.iter().enumerate() {
-                        self.write_type(member.ty, None)?;
-
-                        writeln!(
-                            self.out,
-                            " {};",
-                            &self.names[&NameKey::StructMember(ty, idx as u32)]
-                        )?;
-                    }
-
-                    write!(self.out, "}}")?
-                } else {
-                    write!(self.out, "{}", &self.names[&NameKey::Type(ty)])?
-                }
-            }
-            _ => unreachable!(),
         }
 
         Ok(())
     }
 
-    fn write_image_type(
-        &mut self,
-        dim: crate::ImageDimension,
-        arrayed: bool,
-        class: ImageClass,
-    ) -> Result<(), Error> {
-        let (base, kind, ms, comparison) = match class {
-            ImageClass::Sampled { kind, multi: true } => ("sampler", kind, "MS", ""),
-            ImageClass::Sampled { kind, multi: false } => ("sampler", kind, "", ""),
-            ImageClass::Depth => ("sampler", crate::ScalarKind::Float, "", "Shadow"),
-            ImageClass::Storage(format) => ("image", format.into(), "", ""),
-        };
-
-        Ok(write!(
-            self.out,
-            "{}{}{}{}{}{}",
-            glsl_scalar(kind, 4)?.prefix,
-            base,
-            ImageDimension(dim),
-            ms,
-            if arrayed { "Array" } else { "" },
-            comparison
-        )?)
-    }
-
-    fn write_array_size(&mut self, size: ArraySize) -> Result<(), Error> {
-        match size {
-            ArraySize::Constant(const_handle) => match self.module.constants[const_handle].inner {
-                ConstantInner::Uint(size) => write!(self.out, "{}", size)?,
-                _ => unreachable!(),
-            },
-            ArraySize::Dynamic => (),
-        }
-
-        Ok(())
-    }
-
-    fn collect_texture_mapping(
-        &self,
-        functions: impl Iterator<Item = &'a Function>,
-    ) -> Result<FastHashMap<String, TextureMapping>, Error> {
-        let mut mappings = FastHashMap::default();
-
-        for func in functions {
-            let mut interface = Interface {
-                expressions: &func.expressions,
-                local_variables: &func.local_variables,
-                visitor: TextureMappingVisitor {
-                    names: &self.names,
-                    expressions: &func.expressions,
-                    map: &mut mappings,
-                    error: None,
-                },
-            };
-            interface.traverse(&func.body);
-
-            if let Some(error) = interface.visitor.error {
-                return Err(error);
-            }
-        }
-
-        Ok(mappings)
-    }
-
-    fn write_struct(
-        &mut self,
-        handle: Handle<Type>,
-        members: &[StructMember],
-    ) -> Result<(), Error> {
+    fn write_struct(&mut self, handle: Handle<Type>, members: &[StructMember]) -> BackendResult {
         writeln!(self.out, "struct {} {{", self.names[&NameKey::Type(handle)])?;
 
         for (idx, member) in members.iter().enumerate() {
             write!(self.out, "\t")?;
-            self.write_type(member.ty, None)?;
+            self.write_type(member.ty, false)?;
             writeln!(
                 self.out,
                 " {};",
@@ -903,7 +853,7 @@ impl<'a, W: Write> Writer<'a, W> {
         sta: &Statement,
         ctx: &FunctionCtx<'_, '_>,
         indent: usize,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         write!(self.out, "{}", "\t".repeat(indent))?;
 
         match sta {
@@ -999,11 +949,7 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
-    fn write_expr(
-        &mut self,
-        expr: Handle<Expression>,
-        ctx: &FunctionCtx<'_, '_>,
-    ) -> Result<(), Error> {
+    fn write_expr(&mut self, expr: Handle<Expression>, ctx: &FunctionCtx<'_, '_>) -> BackendResult {
         match ctx.expressions[expr] {
             Expression::Access { base, index } => {
                 self.write_expr(base, ctx)?;
@@ -1038,7 +984,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     TypeInner::Vector { .. }
                     | TypeInner::Matrix { .. }
                     | TypeInner::Array { .. }
-                    | TypeInner::Struct { .. } => self.write_type(ty, None)?,
+                    | TypeInner::Struct { .. } => self.write_type(ty, false)?,
                     _ => unreachable!(),
                 }
 
@@ -1267,7 +1213,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 convert,
             } => {
                 if convert {
-                    self.write_type(ctx.typifier.get_handle(expr).unwrap(), None)?;
+                    self.write_type(ctx.typifier.get_handle(expr).unwrap(), false)?;
                 } else {
                     let source_kind = match *ctx.typifier.get(expr, &self.module.types) {
                         TypeInner::Scalar {
@@ -1362,23 +1308,31 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
-    fn write_constant(&mut self, constant: &Constant) -> Result<(), Error> {
-        match constant.inner {
-            ConstantInner::Sint(int) => write!(self.out, "{}", int)?,
-            ConstantInner::Uint(int) => write!(self.out, "{}u", int)?,
-            ConstantInner::Float(float) => write!(self.out, "{:?}", float)?,
-            ConstantInner::Bool(boolean) => write!(self.out, "{}", boolean)?,
-            ConstantInner::Composite(ref components) => {
-                self.write_type(constant.ty, None)?;
-                write!(self.out, "(")?;
-                self.write_slice(components, |this, _, arg| {
-                    this.write_constant(&this.module.constants[*arg])
-                })?;
-                write!(self.out, ")")?
+    fn collect_texture_mapping(
+        &self,
+        functions: impl Iterator<Item = &'a Function>,
+    ) -> Result<FastHashMap<String, TextureMapping>, Error> {
+        let mut mappings = FastHashMap::default();
+
+        for func in functions {
+            let mut interface = Interface {
+                expressions: &func.expressions,
+                local_variables: &func.local_variables,
+                visitor: TextureMappingVisitor {
+                    names: &self.names,
+                    expressions: &func.expressions,
+                    map: &mut mappings,
+                    error: None,
+                },
+            };
+            interface.traverse(&func.body);
+
+            if let Some(error) = interface.visitor.error {
+                return Err(error);
             }
         }
 
-        Ok(())
+        Ok(mappings)
     }
 }
 
@@ -1469,19 +1423,12 @@ fn glsl_interpolation(interpolation: Interpolation) -> Result<&'static str, Erro
     })
 }
 
-struct ImageDimension(crate::ImageDimension);
-impl fmt::Display for ImageDimension {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self.0 {
-                crate::ImageDimension::D1 => "1D",
-                crate::ImageDimension::D2 => "2D",
-                crate::ImageDimension::D3 => "3D",
-                crate::ImageDimension::Cube => "Cube",
-            }
-        )
+fn glsl_dimension(dim: crate::ImageDimension) -> &'static str {
+    match dim {
+        crate::ImageDimension::D1 => "1D",
+        crate::ImageDimension::D2 => "2D",
+        crate::ImageDimension::D3 => "3D",
+        crate::ImageDimension::Cube => "Cube",
     }
 }
 
