@@ -21,6 +21,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
+                label: None,
                 features: wgpu::Features::empty(),
                 limits: wgpu::Limits::default(),
                 shader_validation: true,
