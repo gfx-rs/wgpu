@@ -18,6 +18,29 @@
 //! - 310
 //!
 
+// GLSL is mostly a superset of C but it also removes some parts of it this is a list of relevant
+// aspects for this backend.
+//
+// The most notable change is the introduction of the version preprocessor directive that must
+// always be the first line of a glsl file and is written as
+// `#version number profile`
+// `number` is the version itself (i.e. 300) and `profile` is the
+// shader profile we only support "core" and "es", the former is used in desktop applications and
+// the later is used in embedded contexts, mobile devices and browsers. Each one as it's own
+// versions (at the time of writing this the latest version for "core" is 460 and for "es" is 320)
+//
+// Other important preprocessor addition is the extension directive which is written as
+// `#extension name: behaviour`
+// Extensions provide increased features in a plugin fashion but they aren't required to be
+// supported hence why they are called extensions, that's why `behaviour` is used it specifies
+// wether the extension is strictly required or if it should only be enabled if needed. In our case
+// when we use extensions we set behaviour to `require` always.
+//
+// The only thing that glsl removes that makes a difference are pointers.
+//
+// Addititions that are relevant for the backend are the discard keyword, the introduction of
+// vector, matrices, samplers, image types and functions that provide common shader operations
+
 pub use error::Error;
 pub use features::Features;
 
@@ -831,12 +854,32 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Helper method used to write structs
+    ///
+    /// # Notes
+    /// Ends in a newline
     fn write_struct(&mut self, handle: Handle<Type>, members: &[StructMember]) -> BackendResult {
+        // glsl structs are written as in C
+        // `struct name() { members };`
+        //  | `struct` is a keyword
+        //  | `name` is the struct name
+        //  | `members` is a semicolon separated list of `type name`
+        //      | `type` is the member type
+        //      | `name` is the member name
+
         writeln!(self.out, "struct {} {{", self.names[&NameKey::Type(handle)])?;
 
         for (idx, member) in members.iter().enumerate() {
+            // The identation is only for readability
             write!(self.out, "\t")?;
+
+            // Write the member type
+            // Adds no trailing space
             self.write_type(member.ty, false)?;
+
+            // Write the member name and put a semicolon
+            // The leading space is important
+            // All members must have a semicolon even the last one
             writeln!(
                 self.out,
                 " {};",
@@ -848,22 +891,39 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Helper method used to write statements
+    ///
+    /// # Notes
+    /// Always adds a newline
     fn write_stmt(
         &mut self,
         sta: &Statement,
         ctx: &FunctionCtx<'_, '_>,
         indent: usize,
     ) -> BackendResult {
+        // The indentation is only for readability
         write!(self.out, "{}", "\t".repeat(indent))?;
 
         match sta {
+            // Blocks are simple we just need to write the block statements between braces
+            // We could also just print the statements but this is more readable and maps more
+            // closely to the IR
             Statement::Block(block) => {
                 writeln!(self.out, "{{")?;
                 for sta in block.iter() {
+                    // Increase the indentation to help with readability
                     self.write_stmt(sta, ctx, indent + 1)?
                 }
                 writeln!(self.out, "{}}}", "\t".repeat(indent))?
             }
+            // Ifs are written as in C:
+            // ```
+            // if(condition) {
+            //  accept
+            // } else {
+            //  reject
+            // }
+            // ```
             Statement::If {
                 condition,
                 accept,
@@ -874,28 +934,50 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ") {{")?;
 
                 for sta in accept {
+                    // Increase indentation to help with readability
                     self.write_stmt(sta, ctx, indent + 1)?;
                 }
 
+                // If there are no statements in the reject block we skip writing it
+                // This is only for readability
                 if !reject.is_empty() {
                     writeln!(self.out, "{}}} else {{", "\t".repeat(indent))?;
 
                     for sta in reject {
+                        // Increase identation to help with readability
                         self.write_stmt(sta, ctx, indent + 1)?;
                     }
                 }
 
                 writeln!(self.out, "{}}}", "\t".repeat(indent))?
             }
+            // Switch are written as in C:
+            // ```
+            // switch (selector) {
+            //      // Falltrough
+            //      case label:
+            //          block
+            //      // Non fallthrough
+            //      case label:
+            //          block
+            //          break;
+            //      default:
+            //          block
+            //  }
+            //  ```
+            //  Where the `default` case happens isn't important but we put it last
+            //  so that we don't need to print a `break` for it
             Statement::Switch {
                 selector,
                 cases,
                 default,
             } => {
+                // Start the switch
                 write!(self.out, "switch(")?;
                 self.write_expr(*selector, ctx)?;
                 writeln!(self.out, ") {{")?;
 
+                // Write all cases
                 for (label, (block, fallthrough)) in cases {
                     writeln!(self.out, "{}case {}:", "\t".repeat(indent + 1), label)?;
 
@@ -903,11 +985,14 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_stmt(sta, ctx, indent + 2)?;
                     }
 
+                    // Write `break;` if the block isn't fallthrough
                     if fallthrough.is_none() {
                         writeln!(self.out, "{}break;", "\t".repeat(indent + 2))?;
                     }
                 }
 
+                // Only write the default block if the block isn't empty
+                // Writing default without a block is valid but it's more readable this way
                 if !default.is_empty() {
                     writeln!(self.out, "{}default:", "\t".repeat(indent + 1))?;
 
@@ -918,6 +1003,14 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 writeln!(self.out, "{}}}", "\t".repeat(indent))?
             }
+            // Loops in naga IR are based on wgsl loops, glsl can emulate the behaviour by using a
+            // while true loop and appending the continuing block to the body resulting on:
+            // ```
+            // while(true) {
+            //  body
+            //  continuing
+            // }
+            // ```
             Statement::Loop { body, continuing } => {
                 writeln!(self.out, "while(true) {{")?;
 
@@ -927,17 +1020,26 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 writeln!(self.out, "{}}}", "\t".repeat(indent))?
             }
+            // Break, continue and return as written as in C
+            // `break;`
             Statement::Break => writeln!(self.out, "break;")?,
+            // `continue;`
             Statement::Continue => writeln!(self.out, "continue;")?,
+            // `return expr;`, `expr` is optional
             Statement::Return { value } => {
                 write!(self.out, "return")?;
+                // Write the expression to be returned if needed
                 if let Some(expr) = value {
                     write!(self.out, " ")?;
                     self.write_expr(*expr, ctx)?;
                 }
                 writeln!(self.out, ";")?;
             }
+            // This is one of the places were glsl adds to the syntax of C in this case the discard
+            // keyword which ceases all further processing in a fragment shader, it's called OpKill
+            // in spir-v that's why it's called `Statement::Kill`
             Statement::Kill => writeln!(self.out, "discard;")?,
+            // Stores in glsl are just variable assignments written as `pointer = value;`
             Statement::Store { pointer, value } => {
                 self.write_expr(*pointer, ctx)?;
                 write!(self.out, " = ")?;
@@ -949,14 +1051,22 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Helper method to write expressions
+    ///
+    /// # Notes
+    /// Doesn't add any newlines or leading/trailing spaces
     fn write_expr(&mut self, expr: Handle<Expression>, ctx: &FunctionCtx<'_, '_>) -> BackendResult {
         match ctx.expressions[expr] {
+            // `Access` is applied to arrays, vectors and matrices and is written as indexing
             Expression::Access { base, index } => {
                 self.write_expr(base, ctx)?;
                 write!(self.out, "[")?;
                 self.write_expr(index, ctx)?;
                 write!(self.out, "]")?
             }
+            // `AccessIndex` is the same as `Access` except that the index is a constant and it can
+            // be applied to structs, in this case we need to find the name of the field at that
+            // index and write `base.field_name`
             Expression::AccessIndex { base, index } => {
                 self.write_expr(base, ctx)?;
 
@@ -965,6 +1075,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     | TypeInner::Matrix { .. }
                     | TypeInner::Array { .. } => write!(self.out, "[{}]", index)?,
                     TypeInner::Struct { .. } => {
+                        // This will never panic in case the type is a `Struct`, this is not true
+                        // for other types so we can only check while inside this match arm
                         let ty = ctx.typifier.get_handle(base).unwrap();
 
                         write!(
@@ -976,31 +1088,34 @@ impl<'a, W: Write> Writer<'a, W> {
                     ref other => return Err(Error::Custom(format!("Cannot index {:?}", other))),
                 }
             }
+            // Constants are delegated to `write_constant`
             Expression::Constant(constant) => {
                 self.write_constant(&self.module.constants[constant])?
             }
+            // `Compose` is pretty simple we just write `type(components)` where `components` is a
+            // comma separated list of expressions
             Expression::Compose { ty, ref components } => {
-                match self.module.types[ty].inner {
-                    TypeInner::Vector { .. }
-                    | TypeInner::Matrix { .. }
-                    | TypeInner::Array { .. }
-                    | TypeInner::Struct { .. } => self.write_type(ty, false)?,
-                    _ => unreachable!(),
-                }
+                self.write_type(ty, false)?;
 
                 write!(self.out, "(")?;
                 self.write_slice(components, |this, _, arg| this.write_expr(*arg, ctx))?;
                 write!(self.out, ")")?
             }
+            // Function arguments are written as the argument name
             Expression::FunctionArgument(pos) => {
                 write!(self.out, "{}", ctx.get_arg(pos, &self.names))?
             }
+            // Global variables need some special work, if they are a builtin we write the glsl
+            // variable name produced by `glsl_built_in` otherwise we write the global name
+            // produced by the `Namer`
             Expression::GlobalVariable(handle) => {
                 if let Some(crate::Binding::BuiltIn(built_in)) =
                     self.module.global_variables[handle].binding
                 {
+                    // Global is a builtin so get the glsl variable name
                     write!(self.out, "{}", glsl_built_in(built_in))?
                 } else {
+                    // Global isn't a builtin so just write the name
                     write!(
                         self.out,
                         "{}",
@@ -1008,10 +1123,21 @@ impl<'a, W: Write> Writer<'a, W> {
                     )?
                 }
             }
+            // A local is written as it's name
             Expression::LocalVariable(handle) => {
                 write!(self.out, "{}", self.names[&ctx.name_key(handle)])?
             }
+            // glsl has no pointers so there's no load operation, just write the pointer expression
             Expression::Load { pointer } => self.write_expr(pointer, ctx)?,
+            // `ImageSample` is a bit complicated compared to the rest of the IR.
+            //
+            // First there are three variations depending wether the sample level is explicitly set,
+            // if it's automatic or it it's bias:
+            // `texture(image, coordinate)` - Automatic sample level
+            // `texture(image, coordinate, bias)` - Bias sample level
+            // `textureLod(image, coordinate, level)` - Zero or Exact sample level
+            //
+            // Furthermore if `depth_ref` is some we need to append it to the coordinate vector
             Expression::ImageSample {
                 image,
                 coordinate,
@@ -1020,6 +1146,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 ..
             } => {
                 //TODO: handle MS
+
+                //Write the function to be used depending on the sample level
                 write!(
                     self.out,
                     "{}(",
@@ -1028,45 +1156,61 @@ impl<'a, W: Write> Writer<'a, W> {
                         crate::SampleLevel::Zero | crate::SampleLevel::Exact(_) => "textureLod",
                     }
                 )?;
+
+                // Write the image that will be used
                 self.write_expr(image, ctx)?;
+                // The space here isn't required but it helps with readability
                 write!(self.out, ", ")?;
 
+                // We need to get the coordinates vector size to later build a vector that's `size + 1`
+                // if `depth_ref` is some, if it isn't a vector we panic as that's not a valid expression
                 let size = match *ctx.typifier.get(coordinate, &self.module.types) {
                     TypeInner::Vector { size, .. } => size,
-                    ref other => {
-                        return Err(Error::Custom(format!(
-                            "Cannot sample with coordinates of type {:?}",
-                            other
-                        )))
-                    }
+                    _ => unreachable!(),
                 };
 
                 if let Some(depth_ref) = depth_ref {
+                    // Compose a new vector with the coordinates and `depth_ref`
                     write!(self.out, "vec{}(", size as u8 + 1)?;
                     self.write_expr(coordinate, ctx)?;
+                    // The space here isn't required but it helps with readability
                     write!(self.out, ", ")?;
                     self.write_expr(depth_ref, ctx)?;
                     write!(self.out, ")")?
                 } else {
+                    // There's no `depth_ref` so just write the coordinate expression
                     self.write_expr(coordinate, ctx)?
                 }
 
                 match level {
+                    // Auto needs no more arguments
                     crate::SampleLevel::Auto => (),
+                    // Zero needs level set to 0
                     crate::SampleLevel::Zero => write!(self.out, ", 0")?,
+                    // Exact and bias require another argument
                     crate::SampleLevel::Exact(expr) | crate::SampleLevel::Bias(expr) => {
                         write!(self.out, ", ")?;
                         self.write_expr(expr, ctx)?;
                     }
                 }
 
+                // End the function
                 write!(self.out, ")")?
             }
+            // `ImageLoad` is also a bit complicated.
+            // There are two functions one for sampled
+            // images another for storage images, the former uses `texelFetch` and the latter uses
+            // `imageLoad`.
+            // Furthermore we have `index` which is always `Some` for sampled images
+            // and `None` for storage images, so we end up with two functions:
+            // `texelFetch(image, coordinate, index)` - for sampled images
+            // `imageLoad(image, coordinate)` - for storage images
             Expression::ImageLoad {
                 image,
                 coordinate,
                 index,
             } => {
+                // This will only panic if the module is invalid
                 let class = match ctx.typifier.get(image, &self.module.types) {
                     TypeInner::Image { class, .. } => class,
                     _ => unreachable!(),
@@ -1075,6 +1219,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 match class {
                     ImageClass::Sampled { .. } => write!(self.out, "texelFetch(")?,
                     ImageClass::Storage(_) => write!(self.out, "imageLoad(")?,
+                    // TODO: Is there even a function for this?
                     ImageClass::Depth => todo!(),
                 }
 
@@ -1085,6 +1230,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 match class {
                     ImageClass::Sampled { .. } => {
                         write!(self.out, ", ")?;
+                        // This will only panic if the module is invalid
                         self.write_expr(index.unwrap(), ctx)?;
                         write!(self.out, ")")?
                     }
@@ -1092,6 +1238,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     ImageClass::Depth => todo!(),
                 }
             }
+            // `Unary` is pretty straightforward
+            // "-" - for `Negate`
+            // "~" - for `Not` if it's an integer
+            // "!" - for `Not` if it's a boolean
+            //
+            // We also wrap the everything in parantheses to avoid precedence issues
             Expression::Unary { op, expr } => {
                 write!(
                     self.out,
@@ -1124,6 +1276,8 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 write!(self.out, ")")?
             }
+            // `Binary` we just write `left op right`
+            // Once again we wrap everything in parantheses to avoid precedence issues
             Expression::Binary { op, left, right } => {
                 write!(self.out, "(")?;
                 self.write_expr(left, ctx)?;
@@ -1157,6 +1311,8 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 write!(self.out, ")")?
             }
+            // `Select` is written as `condition ? accept : reject`
+            // We wrap everything in parantheses to avoid precedence issues
             Expression::Select {
                 condition,
                 accept,
@@ -1170,14 +1326,17 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(reject, ctx)?;
                 write!(self.out, ")")?
             }
+            // `Intrinsic` is a normal function call to some glsl provided functions
             Expression::Intrinsic { fun, argument } => {
                 write!(
                     self.out,
                     "{}(",
                     match fun {
+                        // There's no specific function for this but we can invert the result of `isinf`
                         IntrinsicFunction::IsFinite => "!isinf",
                         IntrinsicFunction::IsInf => "isinf",
                         IntrinsicFunction::IsNan => "isnan",
+                        // There's also no function for this but we can invert `isnan`
                         IntrinsicFunction::IsNormal => "!isnan",
                         IntrinsicFunction::All => "all",
                         IntrinsicFunction::Any => "any",
@@ -1188,11 +1347,14 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 write!(self.out, ")")?
             }
+            // `Transpose` is a call to the glsl function `transpose`
             Expression::Transpose(matrix) => {
                 write!(self.out, "transpose(")?;
                 self.write_expr(matrix, ctx)?;
                 write!(self.out, ")")?
             }
+            // Both `Dot` and `Cross` products are a call to a glsl provide functions with `left`
+            // and `right` as arguments
             Expression::DotProduct(left, right) => {
                 write!(self.out, "dot(")?;
                 self.write_expr(left, ctx)?;
@@ -1207,6 +1369,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(right, ctx)?;
                 write!(self.out, ")")?
             }
+            // `As` is always a call.
+            // If `convert` is true the function name is the type
+            // Else the function name is one of the glsl provided bitcast functions
             Expression::As {
                 expr,
                 kind,
@@ -1247,6 +1412,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(expr, ctx)?;
                 write!(self.out, ")")?
             }
+            // `Derivative` is a function call to a glsl provided function
             Expression::Derivative { axis, expr } => {
                 write!(
                     self.out,
@@ -1260,6 +1426,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(expr, ctx)?;
                 write!(self.out, ")")?
             }
+            // A `Call` is written `name(arguments)` where `arguments` is a comma separated expressions list
             Expression::Call {
                 origin: FunctionOrigin::Local(ref function),
                 ref arguments,
@@ -1284,6 +1451,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
                     write!(self.out, ")")?
                 }
+                // `atan2` is implemented as `atan(y,x)` so we must handle it separately
                 "atan2" => {
                     write!(self.out, "atan(")?;
                     self.write_expr(arguments[1], ctx)?;
@@ -1298,6 +1466,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     )))
                 }
             },
+            // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {
                 write!(self.out, "uint(")?;
                 self.write_expr(expr, ctx)?;
@@ -1308,12 +1477,18 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Helper method used to produce the images mapping that's returned to the user
+    ///
+    /// It takes an iterator of [`Function`](crate::Function) references instead of
+    /// [`Handle`](crate::arena::Handle) because [`EntryPoint`](crate::EntryPoint) isn't in any
+    /// [`Arena`](crate::arena::Arena) and we need to traverse it
     fn collect_texture_mapping(
         &self,
         functions: impl Iterator<Item = &'a Function>,
     ) -> Result<FastHashMap<String, TextureMapping>, Error> {
         let mut mappings = FastHashMap::default();
 
+        // Traverse each function in the `functions` iterator with `TextureMappingVisitor`
         for func in functions {
             let mut interface = Interface {
                 expressions: &func.expressions,
@@ -1327,6 +1502,7 @@ impl<'a, W: Write> Writer<'a, W> {
             };
             interface.traverse(&func.body);
 
+            // Check if any error occurred
             if let Some(error) = interface.visitor.error {
                 return Err(error);
             }
@@ -1336,11 +1512,22 @@ impl<'a, W: Write> Writer<'a, W> {
     }
 }
 
+/// Structure returned by [`glsl_scalar`](glsl_scalar)
+///
+/// It contains both a prefix used in other types and the full type name
 struct ScalarString<'a> {
+    /// The prefix used to compose other types
     prefix: &'a str,
+    /// The name of the scalar type
     full: &'a str,
 }
 
+/// Helper function that returns scalar related strings
+///
+/// Check [`ScalarString`](ScalarString) for the information provided
+///
+/// # Errors
+/// If a [`Float`](crate::ScalarKind::Float) with an width that isn't 4 or 8
 fn glsl_scalar(kind: ScalarKind, width: crate::Bytes) -> Result<ScalarString<'static>, Error> {
     Ok(match kind {
         ScalarKind::Sint => ScalarString {
@@ -1374,6 +1561,7 @@ fn glsl_scalar(kind: ScalarKind, width: crate::Bytes) -> Result<ScalarString<'st
     })
 }
 
+/// Helper function that returns the glsl variable name for a builtin
 fn glsl_built_in(built_in: BuiltIn) -> &'static str {
     match built_in {
         BuiltIn::Position => "gl_Position",
@@ -1394,6 +1582,7 @@ fn glsl_built_in(built_in: BuiltIn) -> &'static str {
     }
 }
 
+/// Helper function that returns the string correspoding to the storage class
 fn glsl_storage_class(class: StorageClass) -> &'static str {
     match class {
         StorageClass::Function => "",
@@ -1408,6 +1597,10 @@ fn glsl_storage_class(class: StorageClass) -> &'static str {
     }
 }
 
+/// Helper function that returns the string correspoding to the glsl interpolation qualifier
+///
+/// # Errors
+/// If [`Patch`](crate::Interpolation::Patch) is passed, as it isn't supported in glsl
 fn glsl_interpolation(interpolation: Interpolation) -> Result<&'static str, Error> {
     Ok(match interpolation {
         Interpolation::Perspective => "smooth",
@@ -1423,6 +1616,7 @@ fn glsl_interpolation(interpolation: Interpolation) -> Result<&'static str, Erro
     })
 }
 
+/// Helper function that returns the glsl dimension string of [`ImageDimension`](crate::ImageDimension)
 fn glsl_dimension(dim: crate::ImageDimension) -> &'static str {
     match dim {
         crate::ImageDimension::D1 => "1D",
@@ -1432,6 +1626,7 @@ fn glsl_dimension(dim: crate::ImageDimension) -> &'static str {
     }
 }
 
+/// Helper function that returns the glsl storage format string of [`StorageFormat`](crate::StorageFormat)
 fn glsl_storage_format(format: StorageFormat) -> &'static str {
     match format {
         StorageFormat::R8Unorm => "r8",
@@ -1469,15 +1664,27 @@ fn glsl_storage_format(format: StorageFormat) -> &'static str {
     }
 }
 
+/// [`Visitor`](crate::proc::Visitor) used by [`collect_texture_mapping`](Writer::collect_texture_mapping)
 struct TextureMappingVisitor<'a> {
+    /// Names needed by the module (used to get the image name)
     names: &'a FastHashMap<NameKey, String>,
+    /// [`Arena`](crate::arena::Arena) of expressions of the function being currently visited
     expressions: &'a Arena<Expression>,
+    /// The mapping that we are building
     map: &'a mut FastHashMap<String, TextureMapping>,
+    /// Used to return errors since [`visit_expr`](crate::proc::Visitor::visit_expr) doesn't allow
+    /// us to return anything
     error: Option<Error>,
 }
 
 impl<'a> Visitor for TextureMappingVisitor<'a> {
     fn visit_expr(&mut self, expr: &crate::Expression) {
+        // We only care about `ImageSample` and `ImageLoad`
+        //
+        // Both `image` and `sampler` are `Expression::GlobalVariable` otherwise the module is
+        // invalid so it's okay to panic
+        //
+        // A image can only be used with one sampler or with none at all
         match expr {
             Expression::ImageSample { image, sampler, .. } => {
                 let tex_handle = match self.expressions[*image] {
