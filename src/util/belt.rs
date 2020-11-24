@@ -140,7 +140,10 @@ impl StagingBelt {
                 .buffer
                 .slice(..)
                 .map_async(MapMode::Write)
-                .inspect(move |_| sender.send(chunk).unwrap())
+                .inspect(move |_| {
+                    // The only possible error is the other side disconnecting, which is fine
+                    let _ = sender.send(chunk);
+                })
         }))
         .map(|_| ())
     }
