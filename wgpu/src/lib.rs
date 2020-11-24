@@ -45,7 +45,7 @@ pub use wgt::{
     COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
 };
 
-use backend::Context as C;
+use backend::{BufferMappedRange, Context as C};
 
 trait ComputePassInner<Ctx: Context> {
     fn set_pipeline(&mut self, pipeline: &Ctx::ComputePipelineId);
@@ -274,18 +274,11 @@ trait Context: Debug + Send + Sized + Sync {
         mode: MapMode,
         range: Range<BufferAddress>,
     ) -> Self::MapAsyncFuture;
-    //TODO: we might be able to merge these, depending on how Web backend
-    // turns out to be implemented.
     fn buffer_get_mapped_range(
         &self,
         buffer: &Self::BufferId,
         sub_range: Range<BufferAddress>,
-    ) -> &[u8];
-    fn buffer_get_mapped_range_mut(
-        &self,
-        buffer: &Self::BufferId,
-        sub_range: Range<BufferAddress>,
-    ) -> &mut [u8];
+    ) -> BufferMappedRange;
     fn buffer_unmap(&self, buffer: &Self::BufferId);
     fn swap_chain_get_current_texture_view(
         &self,
@@ -466,9 +459,8 @@ pub enum Maintain {
     Poll,
 }
 
-/// The main purpose of this struct is to resolve mapped ranges
-/// (convert sizes to end points), and to ensure that the sub-ranges
-/// don't intersect.
+/// The main purpose of this struct is to resolve mapped ranges (convert sizes
+/// to end points), and to ensure that the sub-ranges don't intersect.
 #[derive(Debug)]
 struct MapContext {
     total_size: BufferAddress,
@@ -1602,18 +1594,23 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
     (offset, size)
 }
 
+trait BufferMappedRangeSlice {
+    fn slice(&self) -> &[u8];
+    fn slice_mut(&mut self) -> &mut [u8];
+}
+
 /// Read only view into a mapped buffer.
 #[derive(Debug)]
 pub struct BufferView<'a> {
     slice: BufferSlice<'a>,
-    data: &'a [u8],
+    data: BufferMappedRange<'a>,
 }
 
 /// Write only view into mapped buffer.
 #[derive(Debug)]
 pub struct BufferViewMut<'a> {
     slice: BufferSlice<'a>,
-    data: &'a mut [u8],
+    data: BufferMappedRange<'a>,
     readable: bool,
 }
 
@@ -1621,7 +1618,7 @@ impl std::ops::Deref for BufferView<'_> {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        self.data
+        self.data.slice()
     }
 }
 
@@ -1634,25 +1631,25 @@ impl std::ops::Deref for BufferViewMut<'_> {
             "Attempting to read a write-only mapping for buffer {:?}",
             self.slice.buffer.id
         );
-        self.data
+        self.data.slice()
     }
 }
 
 impl std::ops::DerefMut for BufferViewMut<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.data
+        self.data.slice_mut()
     }
 }
 
 impl AsRef<[u8]> for BufferView<'_> {
     fn as_ref(&self) -> &[u8] {
-        self.data
+        self.data.slice()
     }
 }
 
 impl AsMut<[u8]> for BufferViewMut<'_> {
     fn as_mut(&mut self) -> &mut [u8] {
-        self.data
+        self.data.slice_mut()
     }
 }
 
@@ -1724,21 +1721,19 @@ impl<'a> BufferSlice<'a> {
         &self,
         mode: MapMode,
     ) -> impl Future<Output = Result<(), BufferAsyncError>> + Send {
-        let end = {
-            let mut mc = self.buffer.map_context.lock();
-            assert_eq!(
-                mc.initial_range,
-                0..0,
-                "Buffer {:?} is already mapped",
-                self.buffer.id
-            );
-            let end = match self.size {
-                Some(s) => self.offset + s.get(),
-                None => mc.total_size,
-            };
-            mc.initial_range = self.offset..end;
-            end
+        let mut mc = self.buffer.map_context.lock();
+        assert_eq!(
+            mc.initial_range,
+            0..0,
+            "Buffer {:?} is already mapped",
+            self.buffer.id
+        );
+        let end = match self.size {
+            Some(s) => self.offset + s.get(),
+            None => mc.total_size,
         };
+        mc.initial_range = self.offset..end;
+
         Context::buffer_map_async(
             &*self.buffer.context,
             &self.buffer.id,
@@ -1763,7 +1758,7 @@ impl<'a> BufferSlice<'a> {
     /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
     pub fn get_mapped_range_mut(&self) -> BufferViewMut<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        let data = Context::buffer_get_mapped_range_mut(
+        let data = Context::buffer_get_mapped_range(
             &*self.buffer.context,
             &self.buffer.id,
             self.offset..end,
