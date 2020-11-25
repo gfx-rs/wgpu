@@ -895,7 +895,7 @@ pub enum BindingResource<'a> {
     ///
     /// Corresponds to [`BindingType::SampledTexture`] and [`BindingType::StorageTexture`] with
     /// [`BindGroupLayoutEntry::count`] set to Some.
-    TextureViewArray(&'a [TextureView]),
+    TextureViewArray(&'a [&'a TextureView]),
 }
 
 /// Operation to perform to the output attachment at the start of a renderpass.
