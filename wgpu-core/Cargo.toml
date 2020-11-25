@@ -35,7 +35,7 @@ smallvec = "1"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 thiserror = "1"
 gfx-descriptor = "0.2"
-gpu-alloc = { git = "https://github.com/zakarumych/gpu-alloc", rev = "b807b5fb41dc1a102d5ed5f8506265192c7a1c5e" }
+gpu-alloc = { git = "https://github.com/zakarumych/gpu-alloc", rev = "d07be73f9439a37c89f5b72f2500cbf0eb4ff613" }
 
 [dependencies.naga]
 version = "0.2"
