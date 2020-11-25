@@ -218,8 +218,8 @@ impl framework::Example for Example {
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::TextureViewArray(&[
-                        red_texture_view,
-                        green_texture_view,
+                        &red_texture_view,
+                        &green_texture_view,
                     ]),
                 },
                 wgpu::BindGroupEntry {
