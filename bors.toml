@@ -1,11 +1,6 @@
 status = [
-  "build (macos-10.15, true)",
-  "build (macos-10.15, false)",
-  "build (ubuntu-18.04, true)",
-  "build (ubuntu-18.04, false)",
-  "build (windows-2019, true)",
-  "build (windows-2019, false)",
+  "build (macos-10.15)",
+  "build (ubuntu-18.04)",
+  "build (windows-2019)",
   "docs",
 ]
-
-timeout_sec = 18000 # 5 hours
