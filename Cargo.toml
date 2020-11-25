@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.6.1"
+version = "0.6.2"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "Rusty WebGPU API wrapper"
