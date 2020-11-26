@@ -3965,6 +3965,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device
                     .pending_writes
                     .consume_temp(queue::TempResource::Buffer(stage_buffer), stage_memory);
+                device.pending_writes.dst_buffers.insert(buffer_id);
             }
             resource::BufferMapState::Idle => {
                 return Err(resource::BufferAccessError::NotMapped);
