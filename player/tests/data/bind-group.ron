@@ -34,11 +34,9 @@
                 (
                     binding: 0,
                     visibility: (bits: 0x3),
-                    ty: UniformBuffer(
-                        dynamic: false,
-                        min_binding_size: None,
+                    ty: Buffer(
+                        ty: Uniform,
                     ),
-                    count: None,
                 ),
             ],
         )),

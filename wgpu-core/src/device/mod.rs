@@ -989,7 +989,7 @@ impl<B: GfxBackend> Device<B> {
         for binding in entry_map.values() {
             if binding.count.is_some() {
                 match binding.ty {
-                    wgt::BindingType::SampledTexture { .. } => {
+                    wgt::BindingType::Texture { .. } => {
                         if !self
                             .features
                             .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY)
@@ -1100,30 +1100,12 @@ impl<B: GfxBackend> Device<B> {
                 .ok_or(Error::MissingBindingDeclaration(binding))?;
             let descriptors: SmallVec<[_; 1]> = match entry.resource {
                 Br::Buffer(ref bb) => {
-                    let (pub_usage, internal_use, min_size, dynamic) = match decl.ty {
-                        wgt::BindingType::UniformBuffer {
-                            dynamic,
+                    let (binding_ty, dynamic, min_size) = match decl.ty {
+                        wgt::BindingType::Buffer {
+                            ty,
+                            has_dynamic_offset,
                             min_binding_size,
-                        } => (
-                            wgt::BufferUsage::UNIFORM,
-                            resource::BufferUse::UNIFORM,
-                            min_binding_size,
-                            dynamic,
-                        ),
-                        wgt::BindingType::StorageBuffer {
-                            dynamic,
-                            min_binding_size,
-                            readonly,
-                        } => (
-                            wgt::BufferUsage::STORAGE,
-                            if readonly {
-                                resource::BufferUse::STORAGE_LOAD
-                            } else {
-                                resource::BufferUse::STORAGE_STORE
-                            },
-                            min_binding_size,
-                            dynamic,
-                        ),
+                        } => (ty, has_dynamic_offset, min_binding_size),
                         _ => {
                             return Err(Error::WrongBindingType {
                                 binding,
@@ -1131,6 +1113,19 @@ impl<B: GfxBackend> Device<B> {
                                 expected: "UniformBuffer, StorageBuffer or ReadonlyStorageBuffer",
                             })
                         }
+                    };
+                    let (pub_usage, internal_use) = match binding_ty {
+                        wgt::BufferBindingType::Uniform => {
+                            (wgt::BufferUsage::UNIFORM, resource::BufferUse::UNIFORM)
+                        }
+                        wgt::BufferBindingType::Storage { read_only } => (
+                            wgt::BufferUsage::STORAGE,
+                            if read_only {
+                                resource::BufferUse::STORAGE_LOAD
+                            } else {
+                                resource::BufferUse::STORAGE_STORE
+                            },
+                        ),
                     };
 
                     if bb.offset % wgt::BIND_BUFFER_ALIGNMENT != 0 {
@@ -1161,7 +1156,7 @@ impl<B: GfxBackend> Device<B> {
                         None => (buffer.size - bb.offset, buffer.size),
                     };
 
-                    if pub_usage == wgt::BufferUsage::UNIFORM
+                    if binding_ty == wgt::BufferBindingType::Uniform
                         && (self.limits.max_uniform_buffer_binding_size as u64) < bind_size
                     {
                         return Err(Error::UniformBufferRangeTooLarge);
@@ -1192,7 +1187,10 @@ impl<B: GfxBackend> Device<B> {
                 }
                 Br::Sampler(id) => {
                     match decl.ty {
-                        wgt::BindingType::Sampler { comparison } => {
+                        wgt::BindingType::Sampler {
+                            filtering: _,
+                            comparison,
+                        } => {
                             let sampler = used
                                 .samplers
                                 .use_extend(&*sampler_guard, id, (), ())
@@ -1220,15 +1218,18 @@ impl<B: GfxBackend> Device<B> {
                         .use_extend(&*texture_view_guard, id, (), ())
                         .map_err(|_| Error::InvalidTextureView(id))?;
                     let (pub_usage, internal_use) = match decl.ty {
-                        wgt::BindingType::SampledTexture { .. } => {
+                        wgt::BindingType::Texture { .. } => {
                             (wgt::TextureUsage::SAMPLED, resource::TextureUse::SAMPLED)
                         }
-                        wgt::BindingType::StorageTexture { readonly, .. } => (
+                        wgt::BindingType::StorageTexture { access, .. } => (
                             wgt::TextureUsage::STORAGE,
-                            if readonly {
-                                resource::TextureUse::STORAGE_LOAD
-                            } else {
-                                resource::TextureUse::STORAGE_STORE
+                            match access {
+                                wgt::StorageTextureAccess::ReadOnly => {
+                                    resource::TextureUse::STORAGE_LOAD
+                                }
+                                wgt::StorageTextureAccess::WriteOnly => {
+                                    resource::TextureUse::STORAGE_STORE
+                                }
                             },
                         ),
                         _ => return Err(Error::WrongBindingType {
@@ -1290,7 +1291,7 @@ impl<B: GfxBackend> Device<B> {
                     }
 
                     let (pub_usage, internal_use) = match decl.ty {
-                        wgt::BindingType::SampledTexture { .. } => {
+                        wgt::BindingType::Texture { .. } => {
                             (wgt::TextureUsage::SAMPLED, resource::TextureUse::SAMPLED)
                         }
                         _ => {
