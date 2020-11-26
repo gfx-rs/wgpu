@@ -1,7 +1,7 @@
 //! OpenGL shading language backend
 //!
-//! The main structure is [`Writer`](struct.Writer.html), it maintains internal state that is used
-//! to output a `Module` into glsl
+//! The main structure is [`Writer`](Writer), it maintains internal state that is used
+//! to output a [`Module`](crate::Module) into glsl
 //!
 //! # Supported versions
 //! ### Core
@@ -41,25 +41,27 @@
 // Addititions that are relevant for the backend are the discard keyword, the introduction of
 // vector, matrices, samplers, image types and functions that provide common shader operations
 
-pub use error::Error;
 pub use features::Features;
 
 use crate::{
     proc::{
-        CallGraph, CallGraphBuilder, Interface, NameKey, Namer, ResolveContext, Typifier, Visitor,
+        CallGraph, CallGraphBuilder, Interface, NameKey, Namer, ResolveContext, ResolveError,
+        Typifier, Visitor,
     },
-    Arena, ArraySize, BinaryOperator, BuiltIn, ConservativeDepth, Constant, ConstantInner,
+    Arena, ArraySize, BinaryOperator, BuiltIn, Bytes, ConservativeDepth, Constant, ConstantInner,
     DerivativeAxis, Expression, FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle,
     ImageClass, Interpolation, IntrinsicFunction, LocalVariable, Module, ScalarKind, ShaderStage,
     Statement, StorageAccess, StorageClass, StorageFormat, StructMember, Type, TypeInner,
     UnaryOperator,
 };
-use error::BackendResult;
 use features::FeaturesManager;
-use std::{cmp::Ordering, fmt, io::Write};
+use std::{
+    cmp::Ordering,
+    fmt,
+    io::{Error as IoError, Write},
+};
+use thiserror::Error;
 
-/// Contains the backend error enum and a shorthand Result type
-mod error;
 /// Contains the features related code and the features querying method
 mod features;
 /// Contains a constant with a slice of all the reserved keywords RESERVED_KEYWORDS
@@ -121,7 +123,7 @@ impl fmt::Display for Version {
     }
 }
 
-/// Structure that contains the configuration used in the [`Writer`](struct.Writer.html)
+/// Structure that contains the configuration used in the [`Writer`](Writer)
 #[derive(Debug, Clone)]
 pub struct Options {
     /// The glsl version to be used
@@ -207,6 +209,49 @@ impl IdGenerator {
     }
 }
 
+/// Shorthand result used internally by the backend
+type BackendResult = std::result::Result<(), Error>;
+
+/// A glsl compilation error.
+#[derive(Debug, Error)]
+pub enum Error {
+    /// A error occurred while writing to the output
+    #[error("Io error: {0}")]
+    IoError(#[from] IoError),
+    /// The [`Module`](crate::Module) failed type resolution
+    #[error("Type error: {0}")]
+    Type(#[from] ResolveError),
+    /// The specified [`Version`](Version) doesn't have all required [`Features`](super)
+    ///
+    /// Contains the missing [`Features`](Features)
+    #[error("The selected version doesn't support {0:?}")]
+    MissingFeatures(Features),
+    /// [`StorageClass::PushConstant`](crate::StorageClass::PushConstant) was used and isn't
+    /// supported in the glsl backend
+    #[error("Push constants aren't supported")]
+    PushConstantNotSupported,
+    /// The specified [`Version`](Version) isn't supported
+    #[error("The specified version isn't supported")]
+    VersionNotSupported,
+    /// The entry point couldn't be found
+    #[error("The requested entry point couldn't be found")]
+    EntryPointNotFound,
+    /// A call was made to an unsupported external
+    #[error("A call was made to an unsupported external: {0}")]
+    UnsupportedExternal(String),
+    /// A scalar with an unsupported width was requested
+    #[error("A scalar with an unsupported width was requested: {0:?} {1:?}")]
+    UnsupportedScalar(ScalarKind, Bytes),
+    /// [`Interpolation::Patch`](crate::Interpolation::Patch) isn't supported
+    #[error("Patch interpolation isn't supported")]
+    PatchInterpolationNotSupported,
+    /// A image was used with multiple samplers, this isn't supported
+    #[error("A image was used with multiple samplers")]
+    ImageMultipleSamplers,
+    #[error("{0}")]
+    Custom(String),
+}
+
 /// Main structure of the glsl backend responsible for all code generation
 pub struct Writer<'a, W> {
     // Inputs
@@ -239,13 +284,11 @@ impl<'a, W: Write> Writer<'a, W> {
     /// # Errors
     /// - If the version specified isn't supported (or invalid)
     /// - If the entry point couldn't be found on the module
+    /// - If the version specified doesn't support some used features
     pub fn new(out: W, module: &'a Module, options: &'a Options) -> Result<Self, Error> {
         // Check if the requested version is supported
         if !options.version.is_supported() {
-            return Err(Error::Custom(format!(
-                "Version not supported {}",
-                options.version
-            )));
+            return Err(Error::VersionNotSupported);
         }
 
         // Try to find the entry point and correspoding index
@@ -256,7 +299,7 @@ impl<'a, W: Write> Writer<'a, W> {
             .find_map(|(i, (key, entry_point))| {
                 Some((i as u16, entry_point)).filter(|_| &options.entry_point == key)
             })
-            .ok_or_else(|| Error::Custom(String::from("Entry point not found")))?;
+            .ok_or(Error::EntryPointNotFound)?;
 
         // Generate a map with names required to write the module
         let mut names = FastHashMap::default();
@@ -284,8 +327,7 @@ impl<'a, W: Write> Writer<'a, W> {
         };
 
         // Find all features required to print this module
-        // TODO: We should throw errors here and not in `write`
-        this.collect_required_features();
+        this.collect_required_features()?;
 
         Ok(this)
     }
@@ -294,6 +336,9 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Notes
     /// If an error occurs while writing, the output might have been written partially
+    ///
+    /// # Panics
+    /// Might panic if the module is invalid
     pub fn write(&mut self) -> Result<FastHashMap<String, TextureMapping>, Error> {
         // We use `writeln!(self.out)` troughout the write to add newlines
         // to make the output more readable
@@ -1459,12 +1504,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.write_expr(arguments[0], ctx)?;
                     write!(self.out, ")")?
                 }
-                other => {
-                    return Err(Error::Custom(format!(
-                        "Unsupported function call {}",
-                        other
-                    )))
-                }
+                _ => return Err(Error::UnsupportedExternal(name.clone())),
             },
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {
@@ -1547,12 +1587,7 @@ fn glsl_scalar(kind: ScalarKind, width: crate::Bytes) -> Result<ScalarString<'st
                 prefix: "d",
                 full: "double",
             },
-            _ => {
-                return Err(Error::Custom(format!(
-                    "Cannot build float of width {}",
-                    width
-                )))
-            }
+            _ => return Err(Error::UnsupportedScalar(kind, width)),
         },
         ScalarKind::Bool => ScalarString {
             prefix: "b",
@@ -1608,11 +1643,7 @@ fn glsl_interpolation(interpolation: Interpolation) -> Result<&'static str, Erro
         Interpolation::Flat => "flat",
         Interpolation::Centroid => "centroid",
         Interpolation::Sample => "sample",
-        Interpolation::Patch => {
-            return Err(Error::Custom(
-                "patch interpolation qualifier not supported".to_string(),
-            ))
-        }
+        Interpolation::Patch => return Err(Error::PatchInterpolationNotSupported),
     })
 }
 
@@ -1704,9 +1735,7 @@ impl<'a> Visitor for TextureMappingVisitor<'a> {
                 });
 
                 if mapping.sampler != Some(sampler_handle) {
-                    self.error = Some(Error::Custom(String::from(
-                        "Cannot use texture with two different samplers",
-                    )));
+                    self.error = Some(Error::ImageMultipleSamplers);
                 }
             }
             Expression::ImageLoad { image, .. } => {
@@ -1722,9 +1751,7 @@ impl<'a> Visitor for TextureMappingVisitor<'a> {
                 });
 
                 if mapping.sampler != None {
-                    self.error = Some(Error::Custom(String::from(
-                        "Cannot use texture with two different samplers",
-                    )));
+                    self.error = Some(Error::ImageMultipleSamplers);
                 }
             }
             _ => {}
