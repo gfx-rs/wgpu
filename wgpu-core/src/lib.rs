@@ -241,7 +241,7 @@ macro_rules! gfx_select {
             wgt::Backend::Dx11 => $global.$method::<$crate::backend::Dx11>( $($param),* ),
             #[cfg(all(unix, not(target_os = "ios")))]
             wgt::Backend::Gl => $global.$method::<$crate::backend::Gl>( $($param),+ ),
-            _ => unreachable!()
+            other => panic!("Unexpected backend {:?}", other),
         }
     };
 }

@@ -14,23 +14,6 @@ use wgc::device::trace;
 
 use std::{borrow::Cow, fmt::Debug, fs, marker::PhantomData, path::Path};
 
-#[macro_export]
-macro_rules! gfx_select {
-    ($id:expr => $global:ident.$method:ident( $($param:expr),+ )) => {
-        match $id.backend() {
-            #[cfg(not(any(target_os = "ios", target_os = "macos")))]
-            wgt::Backend::Vulkan => $global.$method::<wgc::backend::Vulkan>( $($param),+ ),
-            #[cfg(any(target_os = "ios", target_os = "macos"))]
-            wgt::Backend::Metal => $global.$method::<wgc::backend::Metal>( $($param),+ ),
-            #[cfg(windows)]
-            wgt::Backend::Dx12 => $global.$method::<wgc::backend::Dx12>( $($param),+ ),
-            #[cfg(windows)]
-            wgt::Backend::Dx11 => $global.$method::<wgc::backend::Dx11>( $($param),+ ),
-            _ => unreachable!()
-        }
-    };
-}
-
 #[derive(Debug)]
 pub struct IdentityPassThrough<I>(PhantomData<I>);
 
