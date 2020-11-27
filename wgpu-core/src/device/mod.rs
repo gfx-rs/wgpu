@@ -1992,19 +1992,28 @@ impl<B: GfxBackend> Device<B> {
 
         if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
             for (i, state) in color_states.iter().enumerate() {
-                let output = &interface[&(i as wgt::ShaderLocation)];
-                if !validation::check_texture_format(state.format, output) {
-                    tracing::warn!(
-                        "Incompatible fragment output[{}]. Shader: {:?}. Expected: {:?}",
-                        i,
-                        state.format,
-                        &**output
-                    );
-                    return Err(
-                        pipeline::CreateRenderPipelineError::IncompatibleOutputFormat {
+                match interface.get(&(i as wgt::ShaderLocation)) {
+                    Some(output) if validation::check_texture_format(state.format, output) => {}
+                    Some(output) => {
+                        tracing::warn!(
+                            "Incompatible fragment output[{}] from shader: {:?}, expected {:?}",
+                            i,
+                            &**output,
+                            state.format,
+                        );
+                        return Err(
+                            pipeline::CreateRenderPipelineError::IncompatibleOutputFormat {
+                                index: i as u8,
+                            },
+                        );
+                    }
+                    None if state.write_mask.is_empty() => {}
+                    None => {
+                        tracing::warn!("Missing fragment output[{}], expected {:?}", i, state,);
+                        return Err(pipeline::CreateRenderPipelineError::MissingOutput {
                             index: i as u8,
-                        },
-                    );
+                        });
+                    }
                 }
             }
         }
