@@ -201,6 +201,8 @@ pub enum CreateRenderPipelineError {
     InvalidLayout,
     #[error("unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
+    #[error("missing output at index {index}")]
+    MissingOutput { index: u8 },
     #[error("incompatible output format at index {index}")]
     IncompatibleOutputFormat { index: u8 },
     #[error("invalid sample count {0}")]
