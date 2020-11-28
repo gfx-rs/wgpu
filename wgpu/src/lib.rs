@@ -33,16 +33,17 @@ use serde::Serialize;
 pub use wgc::instance::{AdapterInfo, DeviceType};
 pub use wgt::{
     AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType, BlendDescriptor,
-    BlendFactor, BlendOperation, BufferAddress, BufferSize, BufferUsage, Color,
+    BlendFactor, BlendOperation, BufferAddress, BufferBindingType, BufferSize, BufferUsage, Color,
     ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction, CullMode,
     DepthStencilStateDescriptor, DynamicOffset, Extent3d, Features, FilterMode, FrontFace,
     IndexFormat, InputStepMode, Limits, Origin3d, PolygonMode, PowerPreference, PresentMode,
     PrimitiveTopology, PushConstantRange, RasterizationStateDescriptor, SamplerBorderColor,
     ShaderLocation, ShaderStage, StencilOperation, StencilStateDescriptor,
-    StencilStateFaceDescriptor, SwapChainDescriptor, SwapChainStatus, TextureAspect,
-    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
-    TextureViewDimension, VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT,
-    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    StencilStateFaceDescriptor, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus,
+    TextureAspect, TextureDataLayout, TextureDimension, TextureFormat, TextureSampleType,
+    TextureUsage, TextureViewDimension, VertexAttributeDescriptor, VertexFormat,
+    BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    PUSH_CONSTANT_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C};

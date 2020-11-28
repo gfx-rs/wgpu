@@ -314,8 +314,9 @@ impl framework::Example for Example {
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::UniformBuffer {
-                        dynamic: true,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
                         min_binding_size: wgpu::BufferSize::new(entity_uniform_size),
                     },
                     count: None,
@@ -426,8 +427,9 @@ impl framework::Example for Example {
                     entries: &[wgpu::BindGroupLayoutEntry {
                         binding: 0, // global
                         visibility: wgpu::ShaderStage::VERTEX,
-                        ty: wgpu::BindingType::UniformBuffer {
-                            dynamic: false,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
                             min_binding_size: wgpu::BufferSize::new(uniform_size),
                         },
                         count: None,
@@ -508,8 +510,9 @@ impl framework::Example for Example {
                         wgpu::BindGroupLayoutEntry {
                             binding: 0, // global
                             visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::UniformBuffer {
-                                dynamic: false,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
                                 min_binding_size: wgpu::BufferSize::new(mem::size_of::<
                                     ForwardUniforms,
                                 >(
@@ -521,8 +524,9 @@ impl framework::Example for Example {
                         wgpu::BindGroupLayoutEntry {
                             binding: 1, // lights
                             visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::UniformBuffer {
-                                dynamic: false,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
                                 min_binding_size: wgpu::BufferSize::new(light_uniform_size),
                             },
                             count: None,
@@ -530,17 +534,20 @@ impl framework::Example for Example {
                         wgpu::BindGroupLayoutEntry {
                             binding: 2,
                             visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::SampledTexture {
+                            ty: wgpu::BindingType::Texture {
                                 multisampled: false,
-                                component_type: wgpu::TextureComponentType::DepthComparison,
-                                dimension: wgpu::TextureViewDimension::D2Array,
+                                sample_type: wgpu::TextureSampleType::Depth,
+                                view_dimension: wgpu::TextureViewDimension::D2Array,
                             },
                             count: None,
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 3,
                             visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler { comparison: true },
+                            ty: wgpu::BindingType::Sampler {
+                                comparison: true,
+                                filtering: false,
+                            },
                             count: None,
                         },
                     ],

@@ -1,9 +1,9 @@
 use crate::{
-    BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BindingType, BufferDescriptor,
-    CommandEncoderDescriptor, ComputePipelineDescriptor, LoadOp, PipelineLayoutDescriptor,
-    ProgrammableStageDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleSource, SwapChainStatus, TextureDescriptor,
-    TextureViewDescriptor, TextureViewDimension,
+    BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BindingType,
+    BufferBindingType, BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor,
+    LoadOp, PipelineLayoutDescriptor, ProgrammableStageDescriptor, RenderBundleEncoderDescriptor,
+    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleSource, StorageTextureAccess,
+    SwapChainStatus, TextureDescriptor, TextureViewDescriptor, TextureViewDimension,
 };
 
 use futures::FutureExt;
@@ -459,15 +459,13 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
 }
 
 fn map_texture_component_type(
-    texture_component_type: wgt::TextureComponentType,
+    sample_type: wgt::TextureSampleType,
 ) -> web_sys::GpuTextureComponentType {
-    match texture_component_type {
-        wgt::TextureComponentType::Float => web_sys::GpuTextureComponentType::Float,
-        wgt::TextureComponentType::Sint => web_sys::GpuTextureComponentType::Sint,
-        wgt::TextureComponentType::Uint => web_sys::GpuTextureComponentType::Uint,
-        wgt::TextureComponentType::DepthComparison => {
-            web_sys::GpuTextureComponentType::DepthComparison
-        }
+    match sample_type {
+        wgt::TextureSampleType::Float { .. } => web_sys::GpuTextureComponentType::Float,
+        wgt::TextureSampleType::Sint => web_sys::GpuTextureComponentType::Sint,
+        wgt::TextureSampleType::Uint => web_sys::GpuTextureComponentType::Uint,
+        wgt::TextureSampleType::Depth => web_sys::GpuTextureComponentType::DepthComparison,
     }
 }
 
@@ -981,20 +979,30 @@ impl crate::Context for Context {
             .iter()
             .map(|bind| {
                 let mapped_type = match bind.ty {
-                    BindingType::UniformBuffer { .. } => bt::UniformBuffer,
-                    BindingType::StorageBuffer {
-                        readonly: false, ..
+                    BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        ..
+                    } => bt::UniformBuffer,
+                    BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: false },
+                        ..
                     } => bt::StorageBuffer,
-                    BindingType::StorageBuffer { readonly: true, .. } => bt::ReadonlyStorageBuffer,
-                    BindingType::Sampler { comparison: false } => bt::Sampler,
+                    BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        ..
+                    } => bt::ReadonlyStorageBuffer,
+                    BindingType::Sampler {
+                        comparison: false, ..
+                    } => bt::Sampler,
                     BindingType::Sampler { .. } => bt::ComparisonSampler,
-                    BindingType::SampledTexture {
+                    BindingType::Texture {
                         multisampled: true, ..
                     } => bt::MultisampledTexture,
-                    BindingType::SampledTexture { .. } => bt::SampledTexture,
-                    BindingType::StorageTexture { readonly: true, .. } => {
-                        bt::ReadonlyStorageTexture
-                    }
+                    BindingType::Texture { .. } => bt::SampledTexture,
+                    BindingType::StorageTexture {
+                        access: StorageTextureAccess::ReadOnly,
+                        ..
+                    } => bt::ReadonlyStorageTexture,
                     BindingType::StorageTexture { .. } => bt::WriteonlyStorageTexture,
                 };
 
@@ -1009,22 +1017,21 @@ impl crate::Context for Context {
                     bind.visibility.bits(),
                 );
 
-                match bind.ty {
-                    BindingType::UniformBuffer { dynamic, .. }
-                    | BindingType::StorageBuffer { dynamic, .. } => {
-                        mapped_entry.has_dynamic_offset(dynamic);
-                    }
-                    _ => {}
+                if let BindingType::Buffer {
+                    has_dynamic_offset, ..
+                } = bind.ty
+                {
+                    mapped_entry.has_dynamic_offset(has_dynamic_offset);
                 }
 
-                if let BindingType::SampledTexture { component_type, .. } = bind.ty {
-                    mapped_entry.texture_component_type(map_texture_component_type(component_type));
+                if let BindingType::Texture { sample_type, .. } = bind.ty {
+                    mapped_entry.texture_component_type(map_texture_component_type(sample_type));
                 }
 
                 match bind.ty {
-                    BindingType::SampledTexture { dimension, .. }
-                    | BindingType::StorageTexture { dimension, .. } => {
-                        mapped_entry.view_dimension(map_texture_view_dimension(dimension));
+                    BindingType::Texture { view_dimension, .. }
+                    | BindingType::StorageTexture { view_dimension, .. } => {
+                        mapped_entry.view_dimension(map_texture_view_dimension(view_dimension));
                     }
                     _ => {}
                 }
