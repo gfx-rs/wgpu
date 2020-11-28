@@ -85,9 +85,12 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,                             // The location
             visibility: wgpu::ShaderStage::COMPUTE, // Which shader type in the pipeline this buffer is available to.
-            ty: wgpu::BindingType::StorageBuffer {
-                dynamic: false,
-                readonly: false, // Specifies if the buffer can only be read within the shader
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage {
+                    // Specifies if the buffer can only be read within the shader
+                    read_only: false,
+                },
+                has_dynamic_offset: false,
                 min_binding_size: wgpu::BufferSize::new(4),
             },
             count: None,
