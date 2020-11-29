@@ -401,6 +401,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
         stage.memory.unmap(&device.raw);
+        if !stage.memory.is_coherent() {
+            stage.memory.flush_range(&device.raw, 0, None)?;
+        }
 
         let region = hal::command::BufferImageCopy {
             buffer_offset: 0,
