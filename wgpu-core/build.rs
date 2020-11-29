@@ -15,6 +15,6 @@ fn main() {
         metal: { apple },
         dx12: { windows },
         dx11: { windows },
-        gl: { all(unix, not(ios)) },
+        gl: { all(unix, not(apple)) },
     }
 }
