@@ -45,7 +45,7 @@ impl<B: hal::Backend> MemoryAllocator<B> {
                 mem_props
                     .memory_heaps
                     .iter()
-                    .map(|mh| gpu_alloc::MemoryHeap { size: *mh })
+                    .map(|mh| gpu_alloc::MemoryHeap { size: mh.size })
                     .collect::<Vec<_>>(),
             ),
             max_memory_allocation_count: if limits.max_memory_allocation_count == 0 {

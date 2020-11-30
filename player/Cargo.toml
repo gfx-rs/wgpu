@@ -39,8 +39,5 @@ git = "https://github.com/gfx-rs/subscriber.git"
 rev = "cdc9feb53f152f9c41905ed9efeff2c1ed214361"
 version = "0.1"
 
-[target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-vulkan = { version = "0.6", features = ["x11"] }
-
 [dev-dependencies]
 serde = "1"

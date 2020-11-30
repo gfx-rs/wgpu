@@ -534,16 +534,11 @@ impl RenderBundle {
                         .raw
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
-                    let view = hal::buffer::IndexBufferView {
-                        buffer,
-                        range: hal::buffer::SubRange {
-                            offset,
-                            size: size.map(|s| s.get()),
-                        },
-                        index_type,
+                    let range = hal::buffer::SubRange {
+                        offset,
+                        size: size.map(|s| s.get()),
                     };
-
-                    cmd_buf.bind_index_buffer(view);
+                    cmd_buf.bind_index_buffer(buffer, range, index_type);
                 }
                 RenderCommand::SetVertexBuffer {
                     slot,

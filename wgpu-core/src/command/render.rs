@@ -1164,17 +1164,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         if let Some((buffer_id, ref range)) = state.index.bound_buffer_view {
                             let &(ref buffer, _) = buffer_guard[buffer_id].raw.as_ref().unwrap();
 
-                            let view = hal::buffer::IndexBufferView {
-                                buffer,
-                                range: hal::buffer::SubRange {
-                                    offset: range.start,
-                                    size: Some(range.end - range.start),
-                                },
-                                index_type: conv::map_index_format(state.index.format),
+                            let range = hal::buffer::SubRange {
+                                offset: range.start,
+                                size: Some(range.end - range.start),
                             };
-
+                            let index_type = conv::map_index_format(state.index.format);
                             unsafe {
-                                raw.bind_index_buffer(view);
+                                raw.bind_index_buffer(buffer, range, index_type);
                             }
                         }
                     }
@@ -1217,17 +1213,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     state.index.bound_buffer_view = Some((id::Valid(buffer_id), offset..end));
                     state.index.update_limit();
 
-                    let view = hal::buffer::IndexBufferView {
-                        buffer: buf_raw,
-                        range: hal::buffer::SubRange {
-                            offset,
-                            size: Some(end - offset),
-                        },
-                        index_type: conv::map_index_format(state.index.format),
+                    let range = hal::buffer::SubRange {
+                        offset,
+                        size: Some(end - offset),
                     };
-
+                    let index_type = conv::map_index_format(state.index.format);
                     unsafe {
-                        raw.bind_index_buffer(view);
+                        raw.bind_index_buffer(buf_raw, range, index_type);
                     }
                 }
                 RenderCommand::SetVertexBuffer {

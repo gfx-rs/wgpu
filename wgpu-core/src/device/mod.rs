@@ -787,14 +787,13 @@ impl<B: GfxBackend> Device<B> {
             None
         };
 
-        let actual_border: hal::image::PackedColor = desc
-            .border_color
-            .map(|c| match c {
-                wgt::SamplerBorderColor::TransparentBlack => [0., 0., 0., 0.].into(),
-                wgt::SamplerBorderColor::OpaqueBlack => [0., 0., 0., 1.].into(),
-                wgt::SamplerBorderColor::OpaqueWhite => [1., 1., 1., 1.].into(),
-            })
-            .unwrap_or([0., 0., 0., 0.].into());
+        let border = match desc.border_color {
+            None | Some(wgt::SamplerBorderColor::TransparentBlack) => {
+                hal::image::BorderColor::TransparentBlack
+            }
+            Some(wgt::SamplerBorderColor::OpaqueBlack) => hal::image::BorderColor::OpaqueBlack,
+            Some(wgt::SamplerBorderColor::OpaqueWhite) => hal::image::BorderColor::OpaqueWhite,
+        };
 
         let info = hal::image::SamplerDesc {
             min_filter: conv::map_filter(desc.min_filter),
@@ -808,7 +807,7 @@ impl<B: GfxBackend> Device<B> {
             lod_bias: hal::image::Lod(0.0),
             lod_range: hal::image::Lod(desc.lod_min_clamp)..hal::image::Lod(desc.lod_max_clamp),
             comparison: desc.compare.map(conv::map_compare_function),
-            border: actual_border,
+            border,
             normalized: true,
             anisotropy_clamp: actual_clamp,
         };
