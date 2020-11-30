@@ -121,6 +121,15 @@ async fn setup<E: Example>(title: &str) -> Setup {
     } else {
         wgpu::BackendBit::PRIMARY
     };
+    let power_preference = if let Ok(power_preference) = std::env::var("WGPU_POWER_PREF") {
+        match power_preference.to_lowercase().as_str() {
+            "low" => wgpu::PowerPreference::LowPower,
+            "high" => wgpu::PowerPreference::HighPerformance,
+            other => panic!("Unknown power preference: {}", other),
+        }
+    } else {
+        wgpu::PowerPreference::default()
+    };
     let instance = wgpu::Instance::new(backend);
     let (size, surface) = unsafe {
         let size = window.inner_size();
@@ -129,11 +138,18 @@ async fn setup<E: Example>(title: &str) -> Setup {
     };
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
+            power_preference,
             compatible_surface: Some(&surface),
         })
         .await
         .unwrap();
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let adapter_info = adapter.get_info();
+        println!("Using {} ({:?})", adapter_info.name, adapter_info.backend);
+    }
+
     let optional_features = E::optional_features();
     let required_features = E::required_features();
     let adapter_features = adapter.features();
