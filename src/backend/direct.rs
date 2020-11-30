@@ -66,7 +66,6 @@ impl Context {
                 .metal
                 .as_ref()
                 .map(|inst| inst.create_surface_from_layer(std::mem::transmute(layer))),
-            gl: None,
         };
 
         let id = self.0.surfaces.process_id(PhantomData);
