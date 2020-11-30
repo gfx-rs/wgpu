@@ -353,6 +353,7 @@ pub(crate) fn map_texture_format(
         // Packed 32 bit formats
         Tf::Rgb10a2Unorm => H::A2r10g10b10Unorm,
         Tf::Rg11b10Float => H::B10g11r11Ufloat,
+        Tf::Rgb9e5uFloat => H::E5b9g9r9Ufloat,
 
         // Normal 64 bit formats
         Tf::Rg32Uint => H::Rg32Uint,
@@ -383,6 +384,7 @@ pub(crate) fn map_texture_format(
                 H::D32SfloatS8Uint
             }
         }
+        Tf::Stencil8 => H::S8Uint,
 
         // BCn compressed formats
         Tf::Bc1RgbaUnorm => H::Bc1RgbaUnorm,
@@ -431,6 +433,7 @@ pub fn texture_block_size(format: wgt::TextureFormat) -> (u32, u32) {
         | Tf::Bgra8UnormSrgb
         | Tf::Rgb10a2Unorm
         | Tf::Rg11b10Float
+        | Tf::Rgb9e5uFloat
         | Tf::Rg32Uint
         | Tf::Rg32Sint
         | Tf::Rg32Float
@@ -442,7 +445,8 @@ pub fn texture_block_size(format: wgt::TextureFormat) -> (u32, u32) {
         | Tf::Rgba32Float
         | Tf::Depth32Float
         | Tf::Depth24Plus
-        | Tf::Depth24PlusStencil8 => (1, 1),
+        | Tf::Depth24PlusStencil8
+        | Tf::Stencil8 => (1, 1),
 
         Tf::Bc1RgbaUnorm
         | Tf::Bc1RgbaUnormSrgb
@@ -490,6 +494,7 @@ pub fn texture_features(format: wgt::TextureFormat) -> wgt::Features {
         | Tf::Bgra8UnormSrgb
         | Tf::Rgb10a2Unorm
         | Tf::Rg11b10Float
+        | Tf::Rgb9e5uFloat
         | Tf::Rg32Uint
         | Tf::Rg32Sint
         | Tf::Rg32Float
@@ -501,7 +506,8 @@ pub fn texture_features(format: wgt::TextureFormat) -> wgt::Features {
         | Tf::Rgba32Float
         | Tf::Depth32Float
         | Tf::Depth24Plus
-        | Tf::Depth24PlusStencil8 => wgt::Features::empty(),
+        | Tf::Depth24PlusStencil8
+        | Tf::Stencil8 => wgt::Features::empty(),
 
         Tf::Bc1RgbaUnorm
         | Tf::Bc1RgbaUnormSrgb
