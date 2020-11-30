@@ -5,7 +5,12 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    device::{alloc, queue::TempResource, DeviceError},
+    device::{
+        alloc,
+        descriptor::{DescriptorAllocator, DescriptorSet},
+        queue::TempResource,
+        DeviceError,
+    },
     hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Token},
     id, resource,
     track::TrackerSet,
@@ -13,7 +18,6 @@ use crate::{
 };
 
 use copyless::VecHelper as _;
-use gfx_descriptor::{DescriptorAllocator, DescriptorSet};
 use hal::device::Device as _;
 use parking_lot::Mutex;
 use thiserror::Error;
@@ -159,7 +163,7 @@ impl<B: hal::Backend> NonReferencedResources<B> {
         if !self.desc_sets.is_empty() {
             descriptor_allocator_mutex
                 .lock()
-                .free(self.desc_sets.drain(..));
+                .free(device, self.desc_sets.drain(..));
         }
 
         for raw in self.compute_pipes.drain(..) {

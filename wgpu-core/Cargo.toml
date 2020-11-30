@@ -34,8 +34,8 @@ serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 thiserror = "1"
-gfx-descriptor = "0.2"
 gpu-alloc = { git = "https://github.com/zakarumych/gpu-alloc", rev = "d07be73f9439a37c89f5b72f2500cbf0eb4ff613" }
+gpu-descriptor = { git = "https://github.com/zakarumych/gpu-descriptor", rev = "831460c4b5120d9a74744d542f39a95b9816b5ab"}
 
 [dependencies.naga]
 version = "0.2"

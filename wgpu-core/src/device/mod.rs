@@ -17,7 +17,6 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
-use gfx_descriptor::DescriptorAllocator;
 use hal::{
     command::CommandBuffer as _,
     device::Device as _,
@@ -41,6 +40,7 @@ use std::{
 };
 
 pub mod alloc;
+pub mod descriptor;
 mod life;
 mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
@@ -218,7 +218,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) queue_group: hal::queue::QueueGroup<B>,
     pub(crate) cmd_allocator: command::CommandAllocator<B>,
     mem_allocator: Mutex<alloc::MemoryAllocator<B>>,
-    desc_allocator: Mutex<DescriptorAllocator<B>>,
+    desc_allocator: Mutex<descriptor::DescriptorAllocator<B>>,
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) life_guard: LifeGuard,
     pub(crate) active_submission_index: SubmissionIndex,
@@ -260,7 +260,7 @@ impl<B: GfxBackend> Device<B> {
             .or(Err(CreateDeviceError::OutOfMemory))?;
 
         let mem_allocator = alloc::MemoryAllocator::new(mem_props, hal_limits);
-        let descriptors = unsafe { DescriptorAllocator::new() };
+        let descriptors = descriptor::DescriptorAllocator::new();
         #[cfg(not(feature = "trace"))]
         match trace_path {
             Some(_) => tracing::error!("Feature 'trace' is not enabled"),
@@ -985,23 +985,51 @@ impl<B: GfxBackend> Device<B> {
         label: Option<&str>,
         entry_map: binding_model::BindEntryMap,
     ) -> Result<binding_model::BindGroupLayout<B>, binding_model::CreateBindGroupLayoutError> {
-        // Validate the count parameter
+        let mut desc_count = descriptor::DescriptorTotalCount::default();
         for binding in entry_map.values() {
-            if binding.count.is_some() {
-                match binding.ty {
-                    wgt::BindingType::Texture { .. } => {
-                        if !self
-                            .features
-                            .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY)
-                        {
-                            return Err(binding_model::CreateBindGroupLayoutError::MissingFeature(
-                                wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
-                            ));
-                        }
+            use wgt::BindingType as Bt;
+            let (counter, array_feature) = match binding.ty {
+                Bt::Buffer {
+                    ty: wgt::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: _,
+                } => (&mut desc_count.uniform_buffer, None),
+                Bt::Buffer {
+                    ty: wgt::BufferBindingType::Uniform,
+                    has_dynamic_offset: true,
+                    min_binding_size: _,
+                } => (&mut desc_count.uniform_buffer_dynamic, None),
+                Bt::Buffer {
+                    ty: wgt::BufferBindingType::Storage { .. },
+                    has_dynamic_offset: false,
+                    min_binding_size: _,
+                } => (&mut desc_count.storage_buffer, None),
+                Bt::Buffer {
+                    ty: wgt::BufferBindingType::Storage { .. },
+                    has_dynamic_offset: true,
+                    min_binding_size: _,
+                } => (&mut desc_count.storage_buffer_dynamic, None),
+                Bt::Sampler { .. } => (&mut desc_count.sampler, None),
+                Bt::Texture { .. } => (
+                    &mut desc_count.sampled_image,
+                    Some(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
+                ),
+                Bt::StorageTexture { .. } => (&mut desc_count.storage_image, None),
+            };
+            *counter += match binding.count {
+                // Validate the count parameter
+                Some(count) => {
+                    let feature = array_feature
+                        .ok_or(binding_model::CreateBindGroupLayoutError::ArrayUnsupported)?;
+                    if !self.features.contains(feature) {
+                        return Err(binding_model::CreateBindGroupLayoutError::MissingFeature(
+                            feature,
+                        ));
                     }
-                    _ => return Err(binding_model::CreateBindGroupLayoutError::ArrayUnsupported),
+                    count.get()
                 }
-            }
+                None => 1,
+            };
         }
 
         let raw_bindings = entry_map
@@ -1015,8 +1043,6 @@ impl<B: GfxBackend> Device<B> {
                 stage_flags: conv::map_shader_stage_flags(entry.visibility),
                 immutable_samplers: false, // TODO
             });
-        let desc_counts = raw_bindings.clone().collect();
-
         let raw = unsafe {
             let mut raw_layout = self
                 .raw
@@ -1046,7 +1072,7 @@ impl<B: GfxBackend> Device<B> {
                 ref_count: self.life_guard.add_ref(),
             },
             multi_ref_count: MultiRefCount::new(),
-            desc_counts,
+            desc_count,
             dynamic_count: entry_map
                 .values()
                 .filter(|b| b.ty.has_dynamic_offset())
@@ -1343,17 +1369,10 @@ impl<B: GfxBackend> Device<B> {
             }
         }
 
-        let mut desc_sets = ArrayVec::<[_; 1]>::new();
-        self.desc_allocator
-            .lock()
-            .allocate(
-                &self.raw,
-                &layout.raw,
-                &layout.desc_counts,
-                1,
-                &mut desc_sets,
-            )
-            .expect("failed to allocate descriptor set");
+        let mut desc_sets =
+            self.desc_allocator
+                .lock()
+                .allocate(&self.raw, &layout.raw, &layout.desc_count, 1)?;
         let mut desc_set = desc_sets.pop().unwrap();
 
         // Set the descriptor set's label for easier debugging.
@@ -2156,9 +2175,9 @@ impl<B: GfxBackend> Device<B> {
 
 impl<B: hal::Backend> Device<B> {
     pub(crate) fn destroy_bind_group(&self, bind_group: binding_model::BindGroup<B>) {
-        unsafe {
-            self.desc_allocator.lock().free(iter::once(bind_group.raw));
-        }
+        self.desc_allocator
+            .lock()
+            .free(&self.raw, iter::once(bind_group.raw));
     }
 
     pub(crate) fn destroy_buffer(&self, buffer: resource::Buffer<B>) {
@@ -2195,7 +2214,7 @@ impl<B: hal::Backend> Device<B> {
             .dispose(&self.raw, &self.cmd_allocator, &mut mem_alloc);
         self.cmd_allocator.destroy(&self.raw);
         unsafe {
-            desc_alloc.clear(&self.raw);
+            desc_alloc.cleanup(&self.raw);
             mem_alloc.clear(&self.raw);
             for (_, rp) in self.render_passes.lock().drain() {
                 self.raw.destroy_render_pass(rp);

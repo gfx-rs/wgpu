@@ -3,7 +3,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::{DeviceError, SHADER_STAGE_COUNT},
+    device::{
+        descriptor::{DescriptorSet, DescriptorTotalCount},
+        DeviceError, SHADER_STAGE_COUNT,
+    },
     hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
     track::{TrackerSet, DUMMY_SELECTOR},
@@ -12,7 +15,6 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use gfx_descriptor::{DescriptorCounts, DescriptorSet};
 
 #[cfg(feature = "replay")]
 use serde::Deserialize;
@@ -322,7 +324,7 @@ pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) multi_ref_count: MultiRefCount,
     pub(crate) entries: BindEntryMap,
-    pub(crate) desc_counts: DescriptorCounts,
+    pub(crate) desc_count: DescriptorTotalCount,
     pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
     #[cfg(debug_assertions)]
