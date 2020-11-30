@@ -193,22 +193,30 @@ impl BindingTypeMaxCountValidator {
     pub(crate) fn add_binding(&mut self, binding: &wgt::BindGroupLayoutEntry) {
         let count = binding.count.map_or(1, |count| count.get());
         match binding.ty {
-            wgt::BindingType::UniformBuffer { dynamic, .. } => {
+            wgt::BindingType::Buffer {
+                ty: wgt::BufferBindingType::Uniform,
+                has_dynamic_offset,
+                ..
+            } => {
                 self.uniform_buffers.add(binding.visibility, count);
-                if dynamic {
+                if has_dynamic_offset {
                     self.dynamic_uniform_buffers += count;
                 }
             }
-            wgt::BindingType::StorageBuffer { dynamic, .. } => {
+            wgt::BindingType::Buffer {
+                ty: wgt::BufferBindingType::Storage { .. },
+                has_dynamic_offset,
+                ..
+            } => {
                 self.storage_buffers.add(binding.visibility, count);
-                if dynamic {
+                if has_dynamic_offset {
                     self.dynamic_storage_buffers += count;
                 }
             }
             wgt::BindingType::Sampler { .. } => {
                 self.samplers.add(binding.visibility, count);
             }
-            wgt::BindingType::SampledTexture { .. } => {
+            wgt::BindingType::Texture { .. } => {
                 self.sampled_textures.add(binding.visibility, count);
             }
             wgt::BindingType::StorageTexture { .. } => {

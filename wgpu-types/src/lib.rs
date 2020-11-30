@@ -447,6 +447,12 @@ pub enum TextureViewDimension {
     D3,
 }
 
+impl Default for TextureViewDimension {
+    fn default() -> Self {
+        Self::D2
+    }
+}
+
 impl TextureViewDimension {
     /// Get the texture dimension required fo this texture view dimension.
     pub fn compatible_texture_dimension(self) -> TextureDimension {
@@ -1225,9 +1231,9 @@ bitflags::bitflags! {
         const INDEX = 16;
         /// Allow a buffer to be the vertex buffer in a draw operation.
         const VERTEX = 32;
-        /// Allow a buffer to be a [`BindingType::UniformBuffer`] inside a bind group.
+        /// Allow a buffer to be a [`BufferBindingType::Uniform`] inside a bind group.
         const UNIFORM = 64;
-        /// Allow a buffer to be a [`BindingType::StorageBuffer`] inside a bind group.
+        /// Allow a buffer to be a [`BufferBindingType::Storage`] inside a bind group.
         const STORAGE = 128;
         /// Allow a buffer to be the indirect buffer in an indirect draw call.
         const INDIRECT = 256;
@@ -1324,7 +1330,7 @@ bitflags::bitflags! {
         /// Allows a texture to be the destination in a  [`CommandEncoder::copy_texture_to_buffer`],
         /// [`CommandEncoder::copy_texture_to_texture`], or [`Queue::write_texture`] operation.
         const COPY_DST = 2;
-        /// Allows a texture to be a [`BindingType::SampledTexture`] in a bind group.
+        /// Allows a texture to be a [`BindingType::Texture`] in a bind group.
         const SAMPLED = 4;
         /// Allows a texture to be a [`BindingType::StorageTexture`] in a bind group.
         const STORAGE = 8;
@@ -1485,7 +1491,7 @@ pub struct TextureDescriptor<L> {
     pub size: Extent3d,
     /// Mip count of texture. For a texture with no extra mips, this must be 1.
     pub mip_level_count: u32,
-    /// Sample count of texture. If this is not 1, texture must have [`BindingType::SampledTexture::multisampled`] set to true.
+    /// Sample count of texture. If this is not 1, texture must have [`BindingType::Texture::multisampled`] set to true.
     pub sample_count: u32,
     /// Dimensions of the texture.
     pub dimension: TextureDimension,
@@ -1640,85 +1646,6 @@ impl<T> Default for RenderBundleDescriptor<Option<T>> {
     }
 }
 
-/// Type of data shaders will read from a texture.
-///
-/// Only relevant for [`BindingType::SampledTexture`] bindings. See [`TextureFormat`] for more information.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub enum TextureComponentType {
-    /// They see it as a floating point number `texture1D`, `texture2D` etc
-    Float,
-    /// They see it as a signed integer `itexture1D`, `itexture2D` etc
-    Sint,
-    /// They see it as a unsigned integer `utexture1D`, `utexture2D` etc
-    Uint,
-    /// They see it as a floating point 0-1 result of comparison, i.e. `shadowTexture2D`
-    DepthComparison,
-}
-
-impl From<TextureFormat> for TextureComponentType {
-    fn from(format: TextureFormat) -> Self {
-        match format {
-            TextureFormat::R8Uint
-            | TextureFormat::R16Uint
-            | TextureFormat::Rg8Uint
-            | TextureFormat::R32Uint
-            | TextureFormat::Rg16Uint
-            | TextureFormat::Rgba8Uint
-            | TextureFormat::Rg32Uint
-            | TextureFormat::Rgba16Uint
-            | TextureFormat::Rgba32Uint => Self::Uint,
-
-            TextureFormat::R8Sint
-            | TextureFormat::R16Sint
-            | TextureFormat::Rg8Sint
-            | TextureFormat::R32Sint
-            | TextureFormat::Rg16Sint
-            | TextureFormat::Rgba8Sint
-            | TextureFormat::Rg32Sint
-            | TextureFormat::Rgba16Sint
-            | TextureFormat::Rgba32Sint => Self::Sint,
-
-            TextureFormat::R8Unorm
-            | TextureFormat::R8Snorm
-            | TextureFormat::R16Float
-            | TextureFormat::R32Float
-            | TextureFormat::Rg8Unorm
-            | TextureFormat::Rg8Snorm
-            | TextureFormat::Rg16Float
-            | TextureFormat::Rg11b10Float
-            | TextureFormat::Rg32Float
-            | TextureFormat::Rgba8Snorm
-            | TextureFormat::Rgba16Float
-            | TextureFormat::Rgba32Float
-            | TextureFormat::Rgba8Unorm
-            | TextureFormat::Rgba8UnormSrgb
-            | TextureFormat::Bgra8Unorm
-            | TextureFormat::Bgra8UnormSrgb
-            | TextureFormat::Rgb10a2Unorm
-            | TextureFormat::Depth32Float
-            | TextureFormat::Depth24Plus
-            | TextureFormat::Depth24PlusStencil8
-            | TextureFormat::Bc1RgbaUnorm
-            | TextureFormat::Bc1RgbaUnormSrgb
-            | TextureFormat::Bc2RgbaUnorm
-            | TextureFormat::Bc2RgbaUnormSrgb
-            | TextureFormat::Bc3RgbaUnorm
-            | TextureFormat::Bc3RgbaUnormSrgb
-            | TextureFormat::Bc4RUnorm
-            | TextureFormat::Bc4RSnorm
-            | TextureFormat::Bc5RgUnorm
-            | TextureFormat::Bc5RgSnorm
-            | TextureFormat::Bc6hRgbSfloat
-            | TextureFormat::Bc6hRgbUfloat
-            | TextureFormat::Bc7RgbaUnorm
-            | TextureFormat::Bc7RgbaUnormSrgb => Self::Float,
-        }
-    }
-}
-
 /// Layout of a texture in a buffer's memory.
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
@@ -1743,13 +1670,13 @@ pub struct TextureDataLayout {
     pub rows_per_image: u32,
 }
 
-/// Specific type of a binding.
+/// Specific type of a buffer binding.
 ///
-/// WebGPU spec: https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+/// WebGPU spec: https://gpuweb.github.io/gpuweb/#enumdef-gpubufferbindingtype
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub enum BindingType {
+pub enum BufferBindingType {
     /// A buffer for uniform values.
     ///
     /// Example GLSL syntax:
@@ -1760,16 +1687,7 @@ pub enum BindingType {
     ///     vec2 anotherUniform;
     /// };
     /// ```
-    UniformBuffer {
-        /// Indicates that the binding has a dynamic offset.
-        /// One offset must be passed to [`RenderPass::set_bind_group`] for each dynamic binding in increasing order of binding number.
-        dynamic: bool,
-        /// Minimum size of the corresponding `BufferBinding` required to match this entry.
-        /// When pipeline is created, the size has to cover at least the corresponding structure in the shader
-        /// plus one element of the unbound array, which can only be last in the structure.
-        /// If `None`, the check is performed at draw call time instead of pipeline and bind group creation.
-        min_binding_size: Option<BufferSize>,
-    },
+    Uniform,
     /// A storage buffer.
     ///
     /// Example GLSL syntax:
@@ -1778,16 +1696,9 @@ pub enum BindingType {
     ///     vec4 myElement[];
     /// };
     /// ```
-    StorageBuffer {
-        /// Indicates that the binding has a dynamic offset.
-        /// One offset must be passed to [`RenderPass::set_bind_group`] for each dynamic binding in increasing order of binding number.
-        dynamic: bool,
-        /// Minimum size of the corresponding `BufferBinding` required to match this entry.
-        /// When pipeline is created, the size has to cover at least the corresponding structure in the shader
-        /// plus one element of the unbound array, which can only be last in the structure.
-        /// If `None`, the check is performed at draw call time instead of pipeline and bind group creation.
-        min_binding_size: Option<BufferSize>,
-        /// The buffer can only be read in the shader and it must be annotated with `readonly`.
+    Storage {
+        /// If `true`, the buffer can only be read in the shader,
+        /// and it must be annotated with `readonly`.
         ///
         /// Example GLSL syntax:
         /// ```cpp,ignore
@@ -1795,7 +1706,176 @@ pub enum BindingType {
         ///     vec4 myElement[];
         /// };
         /// ```
-        readonly: bool,
+        read_only: bool,
+    },
+}
+
+impl Default for BufferBindingType {
+    fn default() -> Self {
+        Self::Uniform
+    }
+}
+
+/// Specific type of a sample in a texture binding.
+///
+/// WebGPU spec: https://gpuweb.github.io/gpuweb/#enumdef-gputexturesampletype
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub enum TextureSampleType {
+    /// Sampling returns floats.
+    ///
+    /// If `filterable` is false, the texture can't be sampled with
+    /// a filtering sampler.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(binding = 0)
+    /// uniform texture2D t;
+    /// ```
+    Float { filterable: bool },
+    /// Sampling does the depth reference comparison.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(binding = 0)
+    /// uniform texture2DShadow t;
+    /// ```
+    Depth,
+    /// Sampling returns signed integers.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(binding = 0)
+    /// uniform itexture2D t;
+    /// ```
+    Sint,
+    /// Sampling returns unsigned integers.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(binding = 0)
+    /// uniform utexture2D t;
+    /// ```
+    Uint,
+}
+
+impl Default for TextureSampleType {
+    fn default() -> Self {
+        Self::Float { filterable: true }
+    }
+}
+
+impl From<TextureFormat> for TextureSampleType {
+    fn from(format: TextureFormat) -> Self {
+        match format {
+            TextureFormat::R8Uint
+            | TextureFormat::R16Uint
+            | TextureFormat::Rg8Uint
+            | TextureFormat::R32Uint
+            | TextureFormat::Rg16Uint
+            | TextureFormat::Rgba8Uint
+            | TextureFormat::Rg32Uint
+            | TextureFormat::Rgba16Uint
+            | TextureFormat::Rgba32Uint => Self::Uint,
+
+            TextureFormat::R8Sint
+            | TextureFormat::R16Sint
+            | TextureFormat::Rg8Sint
+            | TextureFormat::R32Sint
+            | TextureFormat::Rg16Sint
+            | TextureFormat::Rgba8Sint
+            | TextureFormat::Rg32Sint
+            | TextureFormat::Rgba16Sint
+            | TextureFormat::Rgba32Sint => Self::Sint,
+
+            TextureFormat::R32Float | TextureFormat::Rg32Float | TextureFormat::Rgba32Float => {
+                Self::Float { filterable: false }
+            }
+
+            TextureFormat::R8Unorm
+            | TextureFormat::R8Snorm
+            | TextureFormat::R16Float
+            | TextureFormat::Rg8Unorm
+            | TextureFormat::Rg8Snorm
+            | TextureFormat::Rg16Float
+            | TextureFormat::Rg11b10Float
+            | TextureFormat::Rgba8Snorm
+            | TextureFormat::Rgba16Float
+            | TextureFormat::Rgba8Unorm
+            | TextureFormat::Rgba8UnormSrgb
+            | TextureFormat::Bgra8Unorm
+            | TextureFormat::Bgra8UnormSrgb
+            | TextureFormat::Rgb10a2Unorm
+            | TextureFormat::Bc1RgbaUnorm
+            | TextureFormat::Bc1RgbaUnormSrgb
+            | TextureFormat::Bc2RgbaUnorm
+            | TextureFormat::Bc2RgbaUnormSrgb
+            | TextureFormat::Bc3RgbaUnorm
+            | TextureFormat::Bc3RgbaUnormSrgb
+            | TextureFormat::Bc4RUnorm
+            | TextureFormat::Bc4RSnorm
+            | TextureFormat::Bc5RgUnorm
+            | TextureFormat::Bc5RgSnorm
+            | TextureFormat::Bc6hRgbSfloat
+            | TextureFormat::Bc6hRgbUfloat
+            | TextureFormat::Bc7RgbaUnorm
+            | TextureFormat::Bc7RgbaUnormSrgb => Self::Float { filterable: true },
+
+            TextureFormat::Depth32Float
+            | TextureFormat::Depth24Plus
+            | TextureFormat::Depth24PlusStencil8 => Self::Depth,
+        }
+    }
+}
+
+/// Specific type of a sample in a texture binding.
+///
+/// WebGPU spec: https://gpuweb.github.io/gpuweb/#enumdef-gpustoragetextureaccess
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub enum StorageTextureAccess {
+    /// The texture can only be read in the shader and it must be annotated with `readonly`.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(set=0, binding=0, r32f) readonly uniform image2D myStorageImage;
+    /// ```
+    ReadOnly,
+    /// The texture can only be read in the shader and it must be annotated with `writeonly`.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(set=0, binding=0, r32f) writeonly uniform image2D myStorageImage;
+    /// ```
+    WriteOnly,
+}
+
+/// Specific type of a binding.
+///
+/// WebGPU spec: the enum of
+/// - https://gpuweb.github.io/gpuweb/#dictdef-gpubufferbindinglayout
+/// - https://gpuweb.github.io/gpuweb/#dictdef-gpusamplerbindinglayout
+/// - https://gpuweb.github.io/gpuweb/#dictdef-gputexturebindinglayout
+/// - https://gpuweb.github.io/gpuweb/#dictdef-gpustoragetexturebindinglayout
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub enum BindingType {
+    /// A buffer binding.
+    Buffer {
+        ty: BufferBindingType,
+        /// Indicates that the binding has a dynamic offset.
+        /// One offset must be passed to [`RenderPass::set_bind_group`] for each dynamic binding in increasing order of binding number.
+        #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
+        has_dynamic_offset: bool,
+        /// Minimum size of the corresponding `BufferBinding` required to match this entry.
+        /// When pipeline is created, the size has to cover at least the corresponding structure in the shader
+        /// plus one element of the unbound array, which can only be last in the structure.
+        /// If `None`, the check is performed at draw call time instead of pipeline and bind group creation.
+        #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
+        min_binding_size: Option<BufferSize>,
     },
     /// A sampler that can be used to sample a texture.
     ///
@@ -1805,23 +1885,27 @@ pub enum BindingType {
     /// uniform sampler s;
     /// ```
     Sampler {
+        /// The sampling result is produced based on more than a single color sample from a texture,
+        /// e.g. when bilinear interpolation is enabled.
+        ///
+        /// A filtering sampler can only be used with a filterable texture.
+        filtering: bool,
         /// Use as a comparison sampler instead of a normal sampler.
         /// For more info take a look at the analogous functionality in OpenGL: https://www.khronos.org/opengl/wiki/Sampler_Object#Comparison_mode.
         comparison: bool,
     },
-    /// A texture.
+    /// A texture binding.
     ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
     /// uniform texture2D t;
     /// ```
-    SampledTexture {
+    Texture {
+        /// Sample type of the texture binding.
+        sample_type: TextureSampleType,
         /// Dimension of the texture view that is going to be sampled.
-        dimension: TextureViewDimension,
-        /// Component type of the texture.
-        /// This must be compatible with the format of the texture.
-        component_type: TextureComponentType,
+        view_dimension: TextureViewDimension,
         /// True if the texture has a sample count greater than 1. If this is true,
         /// the texture must be read from shaders with `texture1DMS`, `texture2DMS`, or `texture3DMS`,
         /// depending on `dimension`.
@@ -1836,24 +1920,21 @@ pub enum BindingType {
     /// Note that the texture format must be specified in the shader as well.
     /// A list of valid formats can be found in the specification here: https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#layout-qualifiers
     StorageTexture {
-        /// Dimension of the texture view that is going to be sampled.
-        dimension: TextureViewDimension,
+        /// Allowed access to this texture.
+        access: StorageTextureAccess,
         /// Format of the texture.
         format: TextureFormat,
-        /// The texture can only be read in the shader and it must be annotated with `readonly`.
-        ///
-        /// Example GLSL syntax:
-        /// ```cpp,ignore
-        /// layout(set=0, binding=0, r32f) readonly uniform image2D myStorageImage;
-        /// ```
-        readonly: bool,
+        /// Dimension of the texture view that is going to be sampled.
+        view_dimension: TextureViewDimension,
     },
 }
 
 impl BindingType {
     pub fn has_dynamic_offset(&self) -> bool {
         match *self {
-            Self::UniformBuffer { dynamic, .. } | Self::StorageBuffer { dynamic, .. } => dynamic,
+            Self::Buffer {
+                has_dynamic_offset, ..
+            } => has_dynamic_offset,
             _ => false,
         }
     }
@@ -1873,9 +1954,10 @@ pub struct BindGroupLayoutEntry {
     pub ty: BindingType,
     /// If this value is Some, indicates this entry is an array. Array size must be 1 or greater.
     ///
-    /// If this value is Some and `ty` is `BindingType::SampledTexture`, [`Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY`] must be supported.
+    /// If this value is Some and `ty` is `BindingType::Texture`, [`Features::SAMPLED_TEXTURE_BINDING_ARRAY`] must be supported.
     ///
     /// If this value is Some and `ty` is any other variant, bind group creation will fail.
+    #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
     pub count: Option<NonZeroU32>,
 }
 
