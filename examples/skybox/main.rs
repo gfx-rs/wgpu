@@ -54,8 +54,9 @@ impl framework::Example for Skybox {
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::UniformBuffer {
-                        dynamic: false,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
@@ -63,17 +64,20 @@ impl framework::Example for Skybox {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::SampledTexture {
-                        component_type: wgpu::TextureComponentType::Float,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
                         multisampled: false,
-                        dimension: wgpu::TextureViewDimension::Cube,
+                        view_dimension: wgpu::TextureViewDimension::Cube,
                     },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler { comparison: false },
+                    ty: wgpu::BindingType::Sampler {
+                        comparison: false,
+                        filtering: true,
+                    },
                     count: None,
                 },
             ],
@@ -86,7 +90,7 @@ impl framework::Example for Skybox {
         let aspect = sc_desc.width as f32 / sc_desc.height as f32;
         let uniforms = Self::generate_uniforms(aspect);
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniform Buffer"),
+            label: Some("  Buffer"),
             contents: bytemuck::cast_slice(&raw_uniforms(&uniforms)),
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         });

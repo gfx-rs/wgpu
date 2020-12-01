@@ -64,8 +64,9 @@ impl framework::Example for Example {
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStage::COMPUTE,
-                        ty: wgpu::BindingType::UniformBuffer {
-                            dynamic: false,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
                             min_binding_size: wgpu::BufferSize::new(
                                 (sim_param_data.len() * std::mem::size_of::<f32>()) as _,
                             ),
@@ -75,20 +76,20 @@ impl framework::Example for Example {
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStage::COMPUTE,
-                        ty: wgpu::BindingType::StorageBuffer {
-                            dynamic: false,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
                             min_binding_size: wgpu::BufferSize::new((NUM_PARTICLES * 16) as _),
-                            readonly: false,
                         },
                         count: None,
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
                         visibility: wgpu::ShaderStage::COMPUTE,
-                        ty: wgpu::BindingType::StorageBuffer {
-                            dynamic: false,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
                             min_binding_size: wgpu::BufferSize::new((NUM_PARTICLES * 16) as _),
-                            readonly: false,
                         },
                         count: None,
                     },

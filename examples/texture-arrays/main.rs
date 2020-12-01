@@ -197,9 +197,9 @@ impl framework::Example for Example {
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::SampledTexture {
-                        component_type: wgpu::TextureComponentType::Float,
-                        dimension: wgpu::TextureViewDimension::D2,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
                         multisampled: false,
                     },
                     count: std::num::NonZeroU32::new(2),
@@ -207,7 +207,10 @@ impl framework::Example for Example {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler { comparison: false },
+                    ty: wgpu::BindingType::Sampler {
+                        comparison: false,
+                        filtering: true,
+                    },
                     count: None,
                 },
             ],
