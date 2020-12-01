@@ -20,20 +20,20 @@ default = []
 trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
 # Make Vulkan backend available on platforms where it is by default not, e.g. macOS
-vulkan-portability = ["wgc/gfx-backend-vulkan", "gfx-backend-vulkan"]
+vulkan-portability = ["wgc/gfx-backend-vulkan"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 #version = "0.6"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "67e652f471d5b138a34231666c953f26ec25aa18"
+rev = "2d87fd9067e6600beea494f83aa27955b0c8e100"
 features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 #version = "0.6"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "67e652f471d5b138a34231666c953f26ec25aa18"
+rev = "2d87fd9067e6600beea494f83aa27955b0c8e100"
 
 [dependencies]
 arrayvec = "0.5"
@@ -45,12 +45,11 @@ tracing = { version = "0.1", default-features = false, features = ["std"] }
 typed-arena = "2.0.1"
 serde = { version = "1", features = ["derive"], optional = true }
 
-# Enable X11 support
+# Enable X11 support for GL
 # Note: we may consider switching this to "dev-dependencies" if users
 # want to opt into X11 explicitly.
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-vulkan = { version = "0.6", features = ["x11"] }
-gfx-backend-gl = { version = "0.6", features = ["x11"] }
+gfx-backend-gl = { git = "https://github.com/gfx-rs/gfx", features = ["x11"] }
 
 [dev-dependencies]
 cgmath = "0.17"
@@ -82,24 +81,20 @@ test = true
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }
 
-[patch."https://github.com/gfx-rs/gfx-extras"]
-#gfx-descriptor = { version = "0.2", path = "../gfx-extras/gfx-descriptor" }
+[patch."https://github.com/zakarumych/gpu-descriptor"]
+#gpu-descriptor = { path = "../gpu-descriptor/gpu-descriptor" }
 
 [patch."https://github.com/zakarumych/gpu-alloc"]
 #gpu-alloc = { path = "../gpu-alloc/gpu-alloc" }
 
-[patch.crates-io]
-#gfx-hal = { version = "0.6", path = "../gfx/src/hal" }
-#gfx-backend-empty = { version = "0.6", path = "../gfx/src/backend/empty" }
-#gfx-backend-vulkan = { version = "0.6", path = "../gfx/src/backend/vulkan" }
-#gfx-backend-gl = { version = "0.6", path = "../gfx/src/backend/gl" }
-#gfx-backend-dx12 = { version = "0.6", path = "../gfx/src/backend/dx12" }
-#gfx-backend-dx11 = { version = "0.6", path = "../gfx/src/backend/dx11" }
-#gfx-backend-metal = { version = "0.6", path = "../gfx/src/backend/metal" }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-objc = "0.2.7"
-gfx-backend-vulkan = { version = "0.6", optional = true }
+[patch."https://github.com/gfx-rs/gfx"]
+#gfx-hal = { path = "../gfx/src/hal" }
+#gfx-backend-empty = { path = "../gfx/src/backend/empty" }
+#gfx-backend-vulkan = { path = "../gfx/src/backend/vulkan" }
+#gfx-backend-gl = { path = "../gfx/src/backend/gl" }
+#gfx-backend-dx12 = { path = "../gfx/src/backend/dx12" }
+#gfx-backend-dx11 = { path = "../gfx/src/backend/dx11" }
+#gfx-backend-metal = { path = "../gfx/src/backend/metal" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "=0.2.69" # remember to change version in readme as well
