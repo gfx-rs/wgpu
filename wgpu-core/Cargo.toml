@@ -25,8 +25,8 @@ arrayvec = "0.5"
 bitflags = "1.0"
 copyless = "0.1"
 fxhash = "0.2"
-hal = { package = "gfx-hal", version = "0.6" }
-gfx-backend-empty = "0.6"
+hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx", rev = "1d14789011cb892f4c1a205d3f8a87d479c2e354" }
+gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "1d14789011cb892f4c1a205d3f8a87d479c2e354" }
 parking_lot = "0.11"
 raw-window-handle = { version = "0.3", optional = true }
 ron = { version = "0.6", optional = true }
@@ -48,20 +48,18 @@ path = "../wgpu-types"
 package = "wgpu-types"
 version = "0.6"
 
-[target.'cfg(all(unix, not(any(target_os = "ios", target_os = "macos"))))'.dependencies]
-gfx-backend-gl = { version = "0.6" }
+[target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "1d14789011cb892f4c1a205d3f8a87d479c2e354" }
+gfx-backend-gl = { git = "https://github.com/gfx-rs/gfx", rev = "1d14789011cb892f4c1a205d3f8a87d479c2e354" }
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
-gfx-backend-metal = { version = "0.6" }
-gfx-backend-vulkan = { version = "0.6.4", optional = true }
-
-[target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-vulkan = { version = "0.6.4" }
+gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", rev = "1d14789011cb892f4c1a205d3f8a87d479c2e354" }
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "1d14789011cb892f4c1a205d3f8a87d479c2e354", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-gfx-backend-dx12 = { version = "0.6" }
-gfx-backend-dx11 = { version = "0.6" }
-gfx-backend-vulkan = { version = "0.6.4" }
+gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", rev = "1d14789011cb892f4c1a205d3f8a87d479c2e354" }
+gfx-backend-dx11 = { git = "https://github.com/gfx-rs/gfx", rev = "1d14789011cb892f4c1a205d3f8a87d479c2e354" }
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "1d14789011cb892f4c1a205d3f8a87d479c2e354" }
 
 [dev-dependencies]
 loom = "0.3"
