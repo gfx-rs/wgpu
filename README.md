@@ -58,7 +58,7 @@ To run examples on the `wasm32-unknown-unknown` target, first build the example 
 # Checkout `gecko` branch that matches the state of Firefox
 git checkout upstream/gecko
 # Install or update wasm-bindgen-cli
-cargo install -f wasm-bindgen-cli --version 0.2.68
+cargo install -f wasm-bindgen-cli --version 0.2.69
 # Build with the wasm target
 RUSTFLAGS=--cfg=web_sys_unstable_apis cargo build --target wasm32-unknown-unknown --example hello-triangle
 # Generate bindings in a `target/generated` directory
