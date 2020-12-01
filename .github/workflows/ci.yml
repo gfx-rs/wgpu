@@ -9,36 +9,44 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    env:
-      RUSTFLAGS: ${{ matrix.RUSTFLAGS }}
     strategy:
       fail-fast: false
       matrix:
         os: [macos-10.15, ubuntu-18.04, windows-2019]
-        wasm: [true, false]
         include:
           - os: macos-10.15
-            wasm: false
+            PREPARE_COMMAND: echo "Ready"
             CHECK_COMMAND: cargo check --all-targets --all-features
             TEST_COMMAND: cargo test --all-targets --no-run
           - os: ubuntu-18.04
-            wasm: false
+            PREPARE_COMMAND: |
+              sudo apt-get update -y -qq
+              sudo apt-get install -y -qq libegl1-mesa-dev
             CHECK_COMMAND: cargo check --all-targets --all-features
             TEST_COMMAND: cargo test --all-targets --no-run
           - os: windows-2019
-            wasm: false
-            CHECK_COMMAND: rustup default stable-msvc && cargo check --all-targets --all-features
-            TEST_COMMAND: rustup default stable-msvc && cargo test --all-targets --no-run
-          - wasm: true
-            CHECK_COMMAND: rustup target add wasm32-unknown-unknown && cargo check --all-targets --all-features --target=wasm32-unknown-unknown
-            TEST_COMMAND: rustup target add wasm32-unknown-unknown && cargo test --all-targets --no-run --target=wasm32-unknown-unknown
-            RUSTFLAGS: --cfg=web_sys_unstable_apis
+            PREPARE_COMMAND: rustup default stable-msvc
+            CHECK_COMMAND: cargo check --all-targets --all-features
+            TEST_COMMAND: cargo test --all-targets --no-run
     steps:
     - uses: actions/checkout@v2
-    - name: cargo check
+    - name: Prepare
+      run: ${{ matrix.PREPARE_COMMAND }}
+    - name: Check
       run: ${{ matrix.CHECK_COMMAND }}
-    - name: cargo test
+    - name: Test
       run: ${{ matrix.TEST_COMMAND }}
+
+  wasm:
+    runs-on: [ubuntu-18.04]
+    env:
+      RUSTFLAGS: --cfg=web_sys_unstable_apis
+    steps:
+    - uses: actions/checkout@v2
+    - run: rustup target add wasm32-unknown-unknown
+    - name: Check
+      run: cargo check --all-targets --all-features --target=wasm32-unknown-unknown
+
   docs:
     runs-on: [ubuntu-18.04]
     steps:
