@@ -1007,7 +1007,7 @@ where
 
 /// Error encountered when finishing recording a render bundle.
 #[derive(Clone, Debug, Error)]
-#[error("{scope}")]
+#[error("Render bundle error {scope}: {inner}")]
 pub struct RenderBundleError {
     pub scope: PassErrorScope,
     #[source]

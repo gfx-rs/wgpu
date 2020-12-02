@@ -146,7 +146,7 @@ pub enum ComputePassErrorInner {
 
 /// Error encountered when performing a compute pass.
 #[derive(Clone, Debug, Error)]
-#[error("{scope}")]
+#[error("Compute pass error {scope}: {inner}")]
 pub struct ComputePassError {
     pub scope: PassErrorScope,
     #[source]

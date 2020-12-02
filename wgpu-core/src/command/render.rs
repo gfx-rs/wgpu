@@ -400,7 +400,7 @@ impl From<MissingTextureUsageError> for RenderPassErrorInner {
 
 /// Error encountered when performing a render pass.
 #[derive(Clone, Debug, Error)]
-#[error("{scope}")]
+#[error("Render pass error {scope}: {inner}")]
 pub struct RenderPassError {
     pub scope: PassErrorScope,
     #[source]
