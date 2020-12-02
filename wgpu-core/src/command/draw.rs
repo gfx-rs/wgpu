@@ -41,6 +41,8 @@ pub enum DrawError {
     },
     #[error("index {last_index} extends beyond limit {index_limit}")]
     IndexBeyondLimit { last_index: u32, index_limit: u32 },
+    #[error("pipeline index format and buffer index format do not match")]
+    UnmatchedIndexFormats,
 }
 
 /// Error encountered when encoding a render command.
@@ -112,6 +114,7 @@ pub enum RenderCommand {
     SetPipeline(id::RenderPipelineId),
     SetIndexBuffer {
         buffer_id: id::BufferId,
+        index_format: wgt::IndexFormat,
         offset: BufferAddress,
         size: Option<BufferSize>,
     },

@@ -151,7 +151,7 @@ pub struct VertexBufferDescriptor<'a> {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct VertexStateDescriptor<'a> {
     /// The format of any index buffers used with this pipeline.
-    pub index_format: IndexFormat,
+    pub index_format: Option<IndexFormat>,
     /// The format of any vertex buffers used with this pipeline.
     pub vertex_buffers: Cow<'a, [VertexBufferDescriptor<'a>]>,
 }
@@ -240,7 +240,7 @@ pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
-    pub(crate) index_format: IndexFormat,
+    pub(crate) index_format: Option<IndexFormat>,
     pub(crate) vertex_strides: Vec<(BufferAddress, InputStepMode)>,
     pub(crate) life_guard: LifeGuard,
 }

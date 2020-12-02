@@ -245,6 +245,7 @@ impl RenderBundleEncoder {
                 }
                 RenderCommand::SetIndexBuffer {
                     buffer_id,
+                    index_format,
                     offset,
                     size,
                 } => {
@@ -261,6 +262,7 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
+                    state.index.set_format(index_format);
                     state.index.set_buffer(buffer_id, offset..end);
                 }
                 RenderCommand::SetVertexBuffer {
@@ -520,14 +522,17 @@ impl RenderBundle {
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let pipeline = pipeline_guard.get(pipeline_id).unwrap();
                     cmd_buf.bind_graphics_pipeline(&pipeline.raw);
-                    index_type = conv::map_index_format(pipeline.index_format);
+
                     pipeline_layout_id = Some(pipeline.layout_id.value);
                 }
                 RenderCommand::SetIndexBuffer {
                     buffer_id,
+                    index_format,
                     offset,
                     size,
                 } => {
+                    index_type = conv::map_index_format(index_format);
+
                     let &(ref buffer, _) = buffer_guard
                         .get(buffer_id)
                         .unwrap()
@@ -675,6 +680,7 @@ impl Resource for RenderBundle {
 struct IndexState {
     buffer: Option<id::BufferId>,
     format: wgt::IndexFormat,
+    pipeline_format: Option<wgt::IndexFormat>,
     range: Range<wgt::BufferAddress>,
     is_dirty: bool,
 }
@@ -684,6 +690,7 @@ impl IndexState {
         Self {
             buffer: None,
             format: wgt::IndexFormat::default(),
+            pipeline_format: None,
             range: 0..0,
             is_dirty: false,
         }
@@ -703,6 +710,7 @@ impl IndexState {
             self.is_dirty = false;
             Some(RenderCommand::SetIndexBuffer {
                 buffer_id: self.buffer.unwrap(),
+                index_format: self.format,
                 offset: self.range.start,
                 size: wgt::BufferSize::new(self.range.end - self.range.start),
             })
@@ -883,12 +891,13 @@ impl State {
 
     fn set_pipeline(
         &mut self,
-        index_format: wgt::IndexFormat,
+        index_format: Option<wgt::IndexFormat>,
         vertex_strides: &[(wgt::BufferAddress, wgt::InputStepMode)],
         layout_ids: &[id::Valid<id::BindGroupLayoutId>],
         push_constant_layouts: &[wgt::PushConstantRange],
     ) {
-        self.index.set_format(index_format);
+        self.index.pipeline_format = index_format;
+
         for (vs, &(stride, step_mode)) in self.vertex.iter_mut().zip(vertex_strides) {
             if vs.stride != stride || vs.rate != step_mode {
                 vs.stride = stride;
@@ -1072,12 +1081,14 @@ pub mod bundle_ffi {
     pub extern "C" fn wgpu_render_bundle_set_index_buffer(
         bundle: &mut RenderBundleEncoder,
         buffer_id: id::BufferId,
+        index_format: wgt::IndexFormat,
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
         span!(_guard, DEBUG, "RenderBundle::set_index_buffer");
         bundle.base.commands.push(RenderCommand::SetIndexBuffer {
             buffer_id,
+            index_format,
             offset,
             size,
         });
