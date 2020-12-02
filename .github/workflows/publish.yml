@@ -28,7 +28,7 @@ jobs:
         run: cargo build --release --target wasm32-unknown-unknown --examples
 
       - name: Install wasm-bindgen-cli
-        run: cargo install wasm-bindgen-cli
+        run: cargo install --force wasm-bindgen-cli --version 0.2.69
 
       - name: Generate JS bindings for the examples
         run: |
