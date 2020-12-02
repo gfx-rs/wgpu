@@ -500,7 +500,6 @@ impl RenderBundle {
         use hal::command::CommandBuffer as _;
 
         let mut offsets = self.base.dynamic_offsets.as_slice();
-        let mut index_type = hal::IndexType::U16;
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
 
         for command in self.base.commands.iter() {
@@ -531,7 +530,7 @@ impl RenderBundle {
                     offset,
                     size,
                 } => {
-                    index_type = conv::map_index_format(index_format);
+                    let index_type = conv::map_index_format(index_format);
 
                     let &(ref buffer, _) = buffer_guard
                         .get(buffer_id)
