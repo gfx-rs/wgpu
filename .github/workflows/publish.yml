@@ -44,4 +44,4 @@ jobs:
           FOLDER: target/generated
           REPOSITORY_NAME: gfx-rs/wgpu-rs.github.io
           BRANCH: master
-          TARGET_FOLDER: examples
+          TARGET_FOLDER: examples/wasm
