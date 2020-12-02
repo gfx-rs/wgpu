@@ -92,16 +92,19 @@ impl crate::ComputePassInner<Context> for ComputePass {
         panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
     }
 
-    fn insert_debug_marker(&mut self, label: &str) {
-        self.0.insert_debug_marker(label);
+    fn insert_debug_marker(&mut self, _label: &str) {
+        // Not available in gecko yet
+        // self.0.insert_debug_marker(label);
     }
 
-    fn push_debug_group(&mut self, group_label: &str) {
-        self.0.push_debug_group(group_label);
+    fn push_debug_group(&mut self, _group_label: &str) {
+        // Not available in gecko yet
+        // self.0.push_debug_group(group_label);
     }
 
     fn pop_debug_group(&mut self) {
-        self.0.pop_debug_group();
+        // Not available in gecko yet
+        // self.0.pop_debug_group();
     }
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
@@ -389,16 +392,19 @@ impl crate::RenderPassInner<Context> for RenderPass {
         self.0.set_stencil_reference(reference);
     }
 
-    fn insert_debug_marker(&mut self, label: &str) {
-        self.0.insert_debug_marker(label);
+    fn insert_debug_marker(&mut self, _label: &str) {
+        // Not available in gecko yet
+        // self.0.insert_debug_marker(label);
     }
 
-    fn push_debug_group(&mut self, group_label: &str) {
-        self.0.push_debug_group(group_label);
+    fn push_debug_group(&mut self, _group_label: &str) {
+        // Not available in gecko yet
+        // self.0.push_debug_group(group_label);
     }
 
     fn pop_debug_group(&mut self) {
-        self.0.pop_debug_group();
+        // Not available in gecko yet
+        // self.0.pop_debug_group();
     }
 
     fn execute_bundles<'a, I: Iterator<Item = &'a Sendable<web_sys::GpuRenderBundle>>>(
@@ -1640,16 +1646,19 @@ impl crate::Context for Context {
         })
     }
 
-    fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str) {
-        encoder.insert_debug_marker(label);
+    fn command_encoder_insert_debug_marker(&self, _encoder: &Self::CommandEncoderId, _label: &str) {
+        // Not available in gecko yet
+        // encoder.insert_debug_marker(label);
     }
 
-    fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str) {
-        encoder.push_debug_group(label);
+    fn command_encoder_push_debug_group(&self, _encoder: &Self::CommandEncoderId, _label: &str) {
+        // Not available in gecko yet
+        // encoder.push_debug_group(label);
     }
 
-    fn command_encoder_pop_debug_group(&self, encoder: &Self::CommandEncoderId) {
-        encoder.pop_debug_group();
+    fn command_encoder_pop_debug_group(&self, _encoder: &Self::CommandEncoderId) {
+        // Not available in gecko yet
+        // encoder.pop_debug_group();
     }
 
     fn render_bundle_encoder_finish(
