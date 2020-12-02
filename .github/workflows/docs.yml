@@ -22,6 +22,11 @@ jobs:
           override: true
         continue-on-error: true
 
+      - name: Add EGL for OpenGL
+        run: |
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq libegl1-mesa-dev
+
       - name: Build the docs (nightly)
         run: |
           cargo +nightly doc --lib --all-features
