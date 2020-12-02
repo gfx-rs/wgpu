@@ -700,7 +700,7 @@ fn map_extent_3d(extent: wgt::Extent3d) -> web_sys::GpuExtent3dDict {
     let mut mapped = web_sys::GpuExtent3dDict::new();
     mapped.depth(extent.depth);
     mapped.height(extent.height);
-    mapped.width(extent.height);
+    mapped.width(extent.width);
     mapped
 }
 
