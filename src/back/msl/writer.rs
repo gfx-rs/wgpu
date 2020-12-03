@@ -1,4 +1,4 @@
-use super::{keywords::RESERVED, Error, LocationMode, Options, ResolvedBinding};
+use super::{keywords::RESERVED, Error, LocationMode, Options, ResolvedBinding, TranslationInfo};
 use crate::{
     arena::Handle,
     proc::{EntryPointIndex, NameKey, Namer, ResolveContext, Typifier},
@@ -563,7 +563,11 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    pub fn write(&mut self, module: &crate::Module, options: &Options) -> Result<(), Error> {
+    pub fn write(
+        &mut self,
+        module: &crate::Module,
+        options: &Options,
+    ) -> Result<TranslationInfo, Error> {
         self.names.clear();
         Namer::process(module, RESERVED, &mut self.names);
 
@@ -574,9 +578,7 @@ impl<W: Write> Writer<W> {
         self.write_type_defs(module)?;
 
         writeln!(self.out)?;
-        self.write_functions(module, options)?;
-
-        Ok(())
+        self.write_functions(module, options)
     }
 
     fn write_type_defs(&mut self, module: &crate::Module) -> Result<(), Error> {
@@ -711,7 +713,12 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_functions(&mut self, module: &crate::Module, options: &Options) -> Result<(), Error> {
+    // Returns the array of mapped entry point names.
+    fn write_functions(
+        &mut self,
+        module: &crate::Module,
+        options: &Options,
+    ) -> Result<TranslationInfo, Error> {
         for (fun_handle, fun) in module.functions.iter() {
             self.typifier.resolve_all(
                 &fun.expressions,
@@ -760,6 +767,9 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, "}}")?;
         }
 
+        let mut info = TranslationInfo {
+            entry_point_names: Vec::with_capacity(module.entry_points.len()),
+        };
         for (ep_index, (&(stage, _), ep)) in module.entry_points.iter().enumerate() {
             let fun = &ep.function;
             self.typifier.resolve_all(
@@ -792,6 +802,7 @@ impl<W: Write> Writer<W> {
             }
 
             let fun_name = &self.names[&NameKey::EntryPoint(ep_index as _)];
+            info.entry_point_names.push(fun_name.clone());
             let output_name = format!("{}Output", fun_name);
             let location_input_name = format!("{}Input", fun_name);
 
@@ -985,6 +996,6 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, "}}")?;
         }
 
-        Ok(())
+        Ok(info)
     }
 }

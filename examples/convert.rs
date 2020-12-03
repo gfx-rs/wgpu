@@ -159,7 +159,7 @@ fn main() {
                 spirv_cross_compatibility: false,
                 binding_map,
             };
-            let msl = msl::write_string(&module, &options).unwrap();
+            let (msl, _) = msl::write_string(&module, &options).unwrap();
             fs::write(&args[2], msl).unwrap();
         }
         #[cfg(feature = "spv-out")]

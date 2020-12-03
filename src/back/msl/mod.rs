@@ -204,8 +204,20 @@ impl ResolvedBinding {
     }
 }
 
-pub fn write_string(module: &crate::Module, options: &Options) -> Result<String, Error> {
+/// Information about a translated module that is required
+/// for the use of the result.
+pub struct TranslationInfo {
+    /// Mapping of the entry point names. Each item in the array
+    /// corresponds to an entry point in `module.entry_points.iter()`.
+    pub entry_point_names: Vec<String>,
+}
+
+pub fn write_string(
+    module: &crate::Module,
+    options: &Options,
+) -> Result<(String, TranslationInfo), Error> {
     let mut w = writer::Writer::new(Vec::new());
-    w.write(module, options)?;
-    Ok(String::from_utf8(w.finish())?)
+    let info = w.write(module, options)?;
+    let string = String::from_utf8(w.finish())?;
+    Ok((string, info))
 }
