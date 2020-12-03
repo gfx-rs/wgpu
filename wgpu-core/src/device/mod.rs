@@ -836,84 +836,105 @@ impl<B: GfxBackend> Device<B> {
     fn create_shader_module<'a>(
         &self,
         self_id: id::DeviceId,
-        desc: &'a pipeline::ShaderModuleDescriptor<'a>,
-    ) -> Result<(pipeline::ShaderModule<B>, Cow<'a, [u32]>), pipeline::CreateShaderModuleError>
-    {
-        let spv_flags = if cfg!(debug_assertions) {
-            naga::back::spv::WriterFlags::DEBUG
-        } else {
-            naga::back::spv::WriterFlags::empty()
-        };
-
-        let (spv, naga) = match desc.source {
-            pipeline::ShaderModuleSource::SpirV(ref spv) => {
-                let module = if self.private_features.shader_validation {
-                    // Parse the given shader code and store its representation.
-                    let spv_iter = spv.iter().cloned();
-                    naga::front::spv::Parser::new(spv_iter, &Default::default())
-                        .parse()
-                        .map_err(|err| {
-                            // TODO: eventually, when Naga gets support for all features,
-                            // we want to convert these to a hard error,
-                            tracing::warn!("Failed to parse shader SPIR-V code: {:?}", err);
-                            tracing::warn!("Shader module will not be validated");
-                        })
-                        .ok()
-                } else {
-                    None
+        desc: &pipeline::ShaderModuleDescriptor<'a>,
+        source: pipeline::ShaderModuleSource<'a>,
+    ) -> Result<pipeline::ShaderModule<B>, pipeline::CreateShaderModuleError> {
+        // First, try to produce a Naga module.
+        let (spv, module) = match source {
+            pipeline::ShaderModuleSource::SpirV(spv) => {
+                // Parse the given shader code and store its representation.
+                let parser =
+                    naga::front::spv::Parser::new(spv.iter().cloned(), &Default::default());
+                let module = match parser.parse() {
+                    Ok(module) => Some(module),
+                    Err(err) => {
+                        // TODO: eventually, when Naga gets support for all features,
+                        // we want to convert these to a hard error,
+                        tracing::warn!("Failed to parse shader SPIR-V code: {:?}", err);
+                        tracing::warn!("Shader module will not be validated or reflected");
+                        None
+                    }
                 };
-                (Cow::Borrowed(&**spv), module)
+                (Some(spv), module)
             }
-            pipeline::ShaderModuleSource::Wgsl(ref code) => {
+            pipeline::ShaderModuleSource::Wgsl(code) => {
                 // TODO: refactor the corresponding Naga error to be owned, and then
                 // display it instead of unwrapping
-                let module = naga::front::wgsl::parse_str(code).unwrap();
-                let spv = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
-                (
-                    Cow::Owned(spv),
-                    if self.private_features.shader_validation {
-                        Some(module)
-                    } else {
-                        None
-                    },
-                )
-            } /*
-              pipeline::ShaderModuleSource::Naga(module) => {
-                  let spv = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
-                  (
-                      Cow::Owned(spv),
-                      if device.private_features.shader_validation {
-                          Some(module)
-                      } else {
-                          None
-                      },
-                  )
-              }*/
+                match naga::front::wgsl::parse_str(&code) {
+                    Ok(module) => (None, Some(module)),
+                    Err(err) => {
+                        tracing::error!("Failed to parse WGSL code: {}", err);
+                        return Err(pipeline::CreateShaderModuleError::Parsing);
+                    }
+                }
+            }
+            pipeline::ShaderModuleSource::Naga(module) => (None, Some(module)),
         };
 
-        if let Some(ref module) = naga {
-            naga::proc::Validator::new().validate(module)?;
-        }
+        let interface = module.as_ref().map(|m| validation::Interface::new(m));
 
-        let raw = unsafe {
-            self.raw
-                .create_shader_module(&spv)
-                .map_err(|err| match err {
-                    hal::device::ShaderError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    _ => panic!("failed to create shader module: {}", err),
-                })?
+        let naga_result = match module {
+            // If succeeded, then validate it and attempt to give it to gfx-hal directly.
+            Some(module) => {
+                if self.private_features.shader_validation {
+                    naga::proc::Validator::new().validate(&module)?;
+                }
+                if desc.experimental_translation {
+                    match unsafe { self.raw.create_shader_module_from_naga(module) } {
+                        Ok(raw) => Ok(raw),
+                        Err((hal::device::ShaderError::CompilationFailed(msg), module)) => {
+                            tracing::warn!("Shader module compilation failed: {}", msg);
+                            Err(Some(module))
+                        }
+                        Err((_, module)) => Err(Some(module)),
+                    }
+                } else {
+                    Err(Some(module))
+                }
+            }
+            None => Err(None),
         };
-        let shader = pipeline::ShaderModule {
-            raw,
+
+        // Otherwise, fall back to SPIR-V.
+        let spv_result = match naga_result {
+            Ok(raw) => Ok(raw),
+            Err(maybe_module) => {
+                let spv = match spv {
+                    Some(data) => data,
+                    None => {
+                        // Produce a SPIR-V from the Naga module
+                        let module = maybe_module.unwrap();
+                        let mut flags = naga::back::spv::WriterFlags::empty();
+                        if cfg!(debug_assertions) {
+                            flags |= naga::back::spv::WriterFlags::DEBUG;
+                        }
+                        let data = naga::back::spv::write_vec(&module, flags);
+                        Cow::Owned(data)
+                    }
+                };
+                unsafe { self.raw.create_shader_module(&spv) }
+            }
+        };
+
+        Ok(pipeline::ShaderModule {
+            raw: match spv_result {
+                Ok(raw) => raw,
+                Err(hal::device::ShaderError::OutOfMemory(_)) => {
+                    return Err(DeviceError::OutOfMemory.into());
+                }
+                Err(error) => {
+                    tracing::error!("Shader error: {}", error);
+                    return Err(pipeline::CreateShaderModuleError::Parsing);
+                }
+            },
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
             },
-            module: naga,
+            interface,
             #[cfg(debug_assertions)]
             label: desc.label.to_string_or_default(),
-        };
-        Ok((shader, spv))
+        })
     }
 
     /// Create a compatible render pass with a given key.
@@ -968,14 +989,12 @@ impl<B: GfxBackend> Device<B> {
     fn get_introspection_bind_group_layouts<'a>(
         pipeline_layout: &binding_model::PipelineLayout<B>,
         bgl_guard: &'a Storage<binding_model::BindGroupLayout<B>, id::BindGroupLayoutId>,
-    ) -> validation::IntrospectionBindGroupLayouts<'a> {
-        validation::IntrospectionBindGroupLayouts::Given(
-            pipeline_layout
-                .bind_group_layout_ids
-                .iter()
-                .map(|&id| &bgl_guard[id].entries)
-                .collect(),
-        )
+    ) -> ArrayVec<[&'a binding_model::BindEntryMap; MAX_BIND_GROUPS]> {
+        pipeline_layout
+            .bind_group_layout_ids
+            .iter()
+            .map(|&id| &bgl_guard[id].entries)
+            .collect()
     }
 
     fn create_bind_group_layout(
@@ -1633,7 +1652,7 @@ impl<B: GfxBackend> Device<B> {
         let mut derived_group_layouts =
             ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
 
-        let interface = validation::StageInterface::default();
+        let io = validation::StageIo::default();
         let pipeline_stage = &desc.compute_stage;
         let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
@@ -1645,24 +1664,30 @@ impl<B: GfxBackend> Device<B> {
             })?;
 
         let flag = wgt::ShaderStage::COMPUTE;
-        if let Some(ref module) = shader_module.module {
-            let group_layouts = match desc.layout {
-                Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
+        if let Some(ref interface) = shader_module.interface {
+            let provided_layouts = match desc.layout {
+                Some(pipeline_layout_id) => Some(Device::get_introspection_bind_group_layouts(
                     pipeline_layout_guard
                         .get(pipeline_layout_id)
                         .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?,
                     &*bgl_guard,
-                ),
+                )),
                 None => {
                     for _ in 0..self.limits.max_bind_groups {
                         derived_group_layouts.push(binding_model::BindEntryMap::default());
                     }
-                    validation::IntrospectionBindGroupLayouts::Derived(&mut derived_group_layouts)
+                    None
                 }
             };
-            let _ =
-                validation::check_stage(module, group_layouts, &entry_point_name, flag, interface)
-                    .map_err(pipeline::CreateComputePipelineError::Stage)?;
+            let _ = interface
+                .check_stage(
+                    provided_layouts.as_ref().map(|p| p.as_slice()),
+                    &mut derived_group_layouts,
+                    &entry_point_name,
+                    flag,
+                    io,
+                )
+                .map_err(pipeline::CreateComputePipelineError::Stage)?;
         } else if desc.layout.is_none() {
             return Err(pipeline::ImplicitLayoutError::ReflectionError(flag).into());
         }
@@ -1768,7 +1793,7 @@ impl<B: GfxBackend> Device<B> {
             .unwrap_or_default();
         let rasterizer = conv::map_rasterization_state_descriptor(&rasterization_state);
 
-        let mut interface = validation::StageInterface::default();
+        let mut io = validation::StageIo::default();
         let mut validated_stages = wgt::ShaderStage::empty();
 
         let desc_vbs = &desc.vertex_state.vertex_buffers;
@@ -1814,9 +1839,9 @@ impl<B: GfxBackend> Device<B> {
                         offset: attribute.offset as u32,
                     },
                 });
-                interface.insert(
+                io.insert(
                     attribute.shader_location,
-                    validation::MaybeOwned::Owned(validation::map_vertex_format(attribute.format)),
+                    validation::NumericType::from_vertex_format(attribute.format),
                 );
             }
         }
@@ -1929,27 +1954,26 @@ impl<B: GfxBackend> Device<B> {
                         error: validation::StageError::InvalidModule,
                     })?;
 
-            if let Some(ref module) = shader_module.module {
-                let group_layouts = match desc.layout {
-                    Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
+            if let Some(ref interface) = shader_module.interface {
+                let provided_layouts = match desc.layout {
+                    Some(pipeline_layout_id) => Some(Device::get_introspection_bind_group_layouts(
                         pipeline_layout_guard
                             .get(pipeline_layout_id)
                             .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?,
                         &*bgl_guard,
-                    ),
-                    None => validation::IntrospectionBindGroupLayouts::Derived(
-                        &mut derived_group_layouts,
-                    ),
+                    )),
+                    None => None,
                 };
 
-                interface = validation::check_stage(
-                    module,
-                    group_layouts,
-                    &entry_point_name,
-                    flag,
-                    interface,
-                )
-                .map_err(|error| pipeline::CreateRenderPipelineError::Stage { flag, error })?;
+                io = interface
+                    .check_stage(
+                        provided_layouts.as_ref().map(|p| p.as_slice()),
+                        &mut derived_group_layouts,
+                        &entry_point_name,
+                        flag,
+                        io,
+                    )
+                    .map_err(|error| pipeline::CreateRenderPipelineError::Stage { flag, error })?;
                 validated_stages |= flag;
             }
 
@@ -1972,30 +1996,30 @@ impl<B: GfxBackend> Device<B> {
                     }
                 })?;
 
-                let group_layouts = match desc.layout {
-                    Some(pipeline_layout_id) => Device::get_introspection_bind_group_layouts(
+                let provided_layouts = match desc.layout {
+                    Some(pipeline_layout_id) => Some(Device::get_introspection_bind_group_layouts(
                         pipeline_layout_guard
                             .get(pipeline_layout_id)
                             .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?,
                         &*bgl_guard,
-                    ),
-                    None => validation::IntrospectionBindGroupLayouts::Derived(
-                        &mut derived_group_layouts,
-                    ),
+                    )),
+                    None => None,
                 };
 
                 if validated_stages == wgt::ShaderStage::VERTEX {
-                    if let Some(ref module) = shader_module.module {
-                        interface = validation::check_stage(
-                            module,
-                            group_layouts,
-                            &entry_point_name,
-                            flag,
-                            interface,
-                        )
-                        .map_err(|error| {
-                            pipeline::CreateRenderPipelineError::Stage { flag, error }
-                        })?;
+                    if let Some(ref interface) = shader_module.interface {
+                        io = interface
+                            .check_stage(
+                                provided_layouts.as_ref().map(|p| p.as_slice()),
+                                &mut derived_group_layouts,
+                                &entry_point_name,
+                                flag,
+                                io,
+                            )
+                            .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
+                                flag,
+                                error,
+                            })?;
                         validated_stages |= flag;
                     }
                 }
@@ -2011,13 +2035,13 @@ impl<B: GfxBackend> Device<B> {
 
         if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
             for (i, state) in color_states.iter().enumerate() {
-                match interface.get(&(i as wgt::ShaderLocation)) {
+                match io.get(&(i as wgt::ShaderLocation)) {
                     Some(output) if validation::check_texture_format(state.format, output) => {}
                     Some(output) => {
                         tracing::warn!(
                             "Incompatible fragment output[{}] from shader: {:?}, expected {:?}",
                             i,
-                            &**output,
+                            output,
                             state.format,
                         );
                         return Err(
@@ -2247,11 +2271,11 @@ pub enum DeviceError {
     OutOfMemory,
 }
 
-impl From<hal::device::OomOrDeviceLost> for DeviceError {
-    fn from(err: hal::device::OomOrDeviceLost) -> Self {
+impl From<hal::device::WaitError> for DeviceError {
+    fn from(err: hal::device::WaitError) -> Self {
         match err {
-            hal::device::OomOrDeviceLost::OutOfMemory(_) => Self::OutOfMemory,
-            hal::device::OomOrDeviceLost::DeviceLost(_) => Self::Lost,
+            hal::device::WaitError::OutOfMemory(_) => Self::OutOfMemory,
+            hal::device::WaitError::DeviceLost(_) => Self::Lost,
         }
     }
 }
@@ -3238,6 +3262,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
         desc: &pipeline::ShaderModuleDescriptor,
+        source: pipeline::ShaderModuleSource,
         id_in: Input<G, id::ShaderModuleId>,
     ) -> (
         id::ShaderModuleId,
@@ -3254,20 +3279,41 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
-            let (shader, spv) = match device.create_shader_module(device_id, desc) {
-                Ok(pair) => pair,
-                Err(e) => break e,
+            #[cfg(feature = "trace")]
+            let data = match device.trace {
+                Some(ref trace) => {
+                    let mut trace = trace.lock();
+                    match source {
+                        pipeline::ShaderModuleSource::SpirV(ref spv) => {
+                            trace.make_binary("spv", unsafe {
+                                std::slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)
+                            })
+                        }
+                        pipeline::ShaderModuleSource::Wgsl(ref code) => {
+                            trace.make_binary("wgsl", code.as_bytes())
+                        }
+                        pipeline::ShaderModuleSource::Naga(ref module) => {
+                            let config = ron::ser::PrettyConfig::new();
+                            let mut ron = Vec::new();
+                            ron::ser::to_writer_pretty(&mut ron, &module, config).unwrap();
+                            trace.make_binary("ron", &ron)
+                        }
+                    }
+                }
+                None => String::new(),
             };
 
+            let shader = match device.create_shader_module(device_id, desc, source) {
+                Ok(shader) => shader,
+                Err(e) => break e,
+            };
             let id = hub
                 .shader_modules
                 .register_identity(id_in, shader, &mut token);
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 let mut trace = trace.lock();
-                let data = trace.make_binary("spv", unsafe {
-                    std::slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)
-                });
                 let label = desc.label.clone();
                 trace.add(trace::Action::CreateShaderModule {
                     id: id.0,
@@ -3276,7 +3322,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let _ = spv;
             return (id.0, None);
         };
 
@@ -3859,8 +3904,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             B::get_surface_mut(surface)
                 .configure_swapchain(&device.raw, config)
                 .map_err(|err| match err {
-                    hal::window::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    hal::window::CreationError::DeviceLost(_) => DeviceError::Lost,
+                    hal::window::SwapchainError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    hal::window::SwapchainError::DeviceLost(_) => DeviceError::Lost,
                     _ => panic!("failed to configure swap chain on creation: {}", err),
                 })?;
         }

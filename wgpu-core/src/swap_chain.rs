@@ -160,9 +160,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 None,
                 match err {
                     hal::window::AcquireError::OutOfMemory(_) => Err(DeviceError::OutOfMemory)?,
-                    hal::window::AcquireError::NotReady => unreachable!(), // we always set a timeout
-                    hal::window::AcquireError::Timeout => SwapChainStatus::Timeout,
-                    hal::window::AcquireError::OutOfDate => SwapChainStatus::Outdated,
+                    hal::window::AcquireError::NotReady { .. } => SwapChainStatus::Timeout,
+                    hal::window::AcquireError::OutOfDate(_) => SwapChainStatus::Outdated,
                     hal::window::AcquireError::SurfaceLost(_) => SwapChainStatus::Lost,
                     hal::window::AcquireError::DeviceLost(_) => Err(DeviceError::Lost)?,
                 },
@@ -283,7 +282,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::window::PresentError::OutOfMemory(_) => {
                     Err(SwapChainError::Device(DeviceError::OutOfMemory))
                 }
-                hal::window::PresentError::OutOfDate => Ok(SwapChainStatus::Outdated),
+                hal::window::PresentError::OutOfDate(_) => Ok(SwapChainStatus::Outdated),
                 hal::window::PresentError::SurfaceLost(_) => Ok(SwapChainStatus::Lost),
                 hal::window::PresentError::DeviceLost(_) => {
                     Err(SwapChainError::Device(DeviceError::Lost))

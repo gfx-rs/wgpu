@@ -17,7 +17,7 @@ struct DescriptorDevice<'a, B: hal::Backend>(&'a B::Device);
 
 impl<B: hal::Backend> DescriptorAllocator<B> {
     pub fn new() -> Self {
-        DescriptorAllocator(unsafe { gpu_descriptor::DescriptorAllocator::new(0) })
+        DescriptorAllocator(gpu_descriptor::DescriptorAllocator::new(0))
     }
 
     pub fn allocate(
@@ -27,18 +27,19 @@ impl<B: hal::Backend> DescriptorAllocator<B> {
         layout_descriptor_count: &DescriptorTotalCount,
         count: u32,
     ) -> Result<Vec<DescriptorSet<B>>, DeviceError> {
-        self.0
-            .allocate(
+        unsafe {
+            self.0.allocate(
                 &DescriptorDevice::<B>(device),
                 layout,
                 gpu_descriptor::DescriptorSetLayoutCreateFlags::empty(),
                 layout_descriptor_count,
                 count,
             )
-            .map_err(|err| {
-                tracing::warn!("Descriptor set allocation failed: {}", err);
-                DeviceError::OutOfMemory
-            })
+        }
+        .map_err(|err| {
+            tracing::warn!("Descriptor set allocation failed: {}", err);
+            DeviceError::OutOfMemory
+        })
     }
 
     pub fn free(&mut self, device: &B::Device, sets: impl IntoIterator<Item = DescriptorSet<B>>) {
@@ -46,7 +47,7 @@ impl<B: hal::Backend> DescriptorAllocator<B> {
     }
 
     pub fn cleanup(&mut self, device: &B::Device) {
-        self.0.cleanup(&DescriptorDevice::<B>(device))
+        unsafe { self.0.cleanup(&DescriptorDevice::<B>(device)) }
     }
 }
 
@@ -121,7 +122,7 @@ impl<B: hal::Backend>
             self.0,
             max_sets as usize,
             ranges,
-            hal::pso::DescriptorPoolCreateFlags::from_bits_truncate(flags.bits() as u32),
+            hal::pso::DescriptorPoolCreateFlags::from_bits_truncate(flags.bits()),
         ) {
             Ok(pool) => Ok(pool),
             Err(hal::device::OutOfMemory::Host) => {

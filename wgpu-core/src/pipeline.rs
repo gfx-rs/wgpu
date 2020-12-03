@@ -7,37 +7,33 @@ use crate::{
     device::{DeviceError, RenderPassContext},
     hub::Resource,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
-    validation::StageError,
-    Label, LifeGuard, Stored,
+    validation, Label, LifeGuard, Stored,
 };
 use std::borrow::Cow;
 use thiserror::Error;
 use wgt::{BufferAddress, IndexFormat, InputStepMode};
 
 #[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum ShaderModuleSource<'a> {
     SpirV(Cow<'a, [u32]>),
     Wgsl(Cow<'a, str>),
-    // Unable to serialize with `naga::Module` in here:
-    // requires naga serialization feature.
-    //Naga(naga::Module),
+    Naga(naga::Module),
 }
 
 #[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
-    pub source: ShaderModuleSource<'a>,
+    /// If enabled, `wgpu` will attempt to operate on `Naga` representation
+    /// of the shader module for both validation and translation into the
+    /// backend shader languages, where `gfx-hal` supports this.
+    pub experimental_translation: bool,
 }
 
 #[derive(Debug)]
 pub struct ShaderModule<B: hal::Backend> {
     pub(crate) raw: B::ShaderModule,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) module: Option<naga::Module>,
+    pub(crate) interface: Option<validation::Interface>,
     #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
@@ -59,6 +55,8 @@ impl<B: hal::Backend> Resource for ShaderModule<B> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateShaderModuleError {
+    #[error("Failed to parse WGSL")]
+    Parsing,
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
@@ -113,7 +111,7 @@ pub enum CreateComputePipelineError {
     #[error("unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
     #[error(transparent)]
-    Stage(StageError),
+    Stage(validation::StageError),
 }
 
 #[derive(Debug)]
@@ -220,7 +218,7 @@ pub enum CreateRenderPipelineError {
     Stage {
         flag: wgt::ShaderStage,
         #[source]
-        error: StageError,
+        error: validation::StageError,
     },
 }
 

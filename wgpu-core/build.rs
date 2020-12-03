@@ -6,9 +6,7 @@ fn main() {
     // Setup cfg aliases
     cfg_aliases::cfg_aliases! {
         // Vendors/systems
-        ios: { target_os = "ios" },
-        macos: { target_os = "macos" },
-        apple: { any(ios, macos) },
+        apple: { any(target_os = "ios", target_os = "macos") },
 
         // Backends
         vulkan: { any(windows, all(unix, not(apple)), feature = "gfx-backend-vulkan") },

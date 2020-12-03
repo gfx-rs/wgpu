@@ -213,5 +213,12 @@ impl Corpus {
 
 #[test]
 fn test_api() {
+    wgpu_subscriber::initialize_default_subscriber(
+        std::env::var("WGPU_CHROME_TRACE")
+            .as_ref()
+            .map(Path::new)
+            .ok(),
+    );
+
     Corpus::run_from(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data/all.ron"))
 }
