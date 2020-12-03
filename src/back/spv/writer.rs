@@ -1720,15 +1720,12 @@ impl Writer {
         }
     }
 
-    pub fn write(&mut self, ir_module: &crate::Module) -> Vec<Word> {
-        let mut words: Vec<Word> = vec![];
-
+    pub fn write(&mut self, ir_module: &crate::Module, words: &mut Vec<Word>) {
         self.write_logical_layout(ir_module);
         self.write_physical_layout();
 
-        self.physical_layout.in_words(&mut words);
-        self.logical_layout.in_words(&mut words);
-        words
+        self.physical_layout.in_words(words);
+        self.logical_layout.in_words(words);
     }
 }
 

@@ -13,7 +13,7 @@ fn test_rosetta(dir_name: &str) {
 
         #[cfg(feature = "spv-out")]
         {
-            let spv = spv::Writer::new(&module.header, spv::WriterFlags::NONE).write(&module);
+            let spv = spv::write_vec(&module, spv::WriterFlags::NONE);
             assert!(spv.len() > 0);
         }
     }

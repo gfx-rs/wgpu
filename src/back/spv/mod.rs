@@ -50,3 +50,10 @@ pub(self) struct Instruction {
     result_id: Option<Word>,
     operands: Vec<Word>,
 }
+
+pub fn write_vec(module: &crate::Module, flags: WriterFlags) -> Vec<u32> {
+    let mut words = Vec::new();
+    let mut w = Writer::new(&module.header, flags);
+    w.write(module, &mut words);
+    words
+}

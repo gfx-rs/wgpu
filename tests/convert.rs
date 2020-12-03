@@ -198,13 +198,8 @@ fn convert_phong_lighting() {
 
     #[cfg(feaure = "spv-out")]
     {
-        let header = naga::Header {
-            version: (1, 0, 0),
-            generator: 1234,
-        };
-        let writer_flags = naga::back::spv::WriterFlags::empty();
-        let mut w = naga::back::spv::Writer::new(&header, writer_flags);
-        w.write(&module);
+        let flags = naga::back::spv::WriterFlags::empty();
+        let _ = naga::back::spv::write_vec(&module, flags);
     }
 }
 
