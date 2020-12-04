@@ -91,7 +91,7 @@ impl framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let mut uniform_workaround = false;
-        let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
+        let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
         let fs_source = match device.features() {
             f if f.contains(wgpu::Features::UNSIZED_BINDING_ARRAY) => {
                 wgpu::include_spirv!("unsized-non-uniform.frag.spv")
@@ -108,7 +108,7 @@ impl framework::Example for Example {
             }
             _ => unreachable!(),
         };
-        let fs_module = device.create_shader_module(fs_source);
+        let fs_module = device.create_shader_module(&fs_source);
 
         let vertex_size = std::mem::size_of::<Vertex>();
         let vertex_data = create_vertices();

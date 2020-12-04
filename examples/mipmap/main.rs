@@ -79,8 +79,8 @@ impl Example {
         texture: &wgpu::Texture,
         mip_count: u32,
     ) {
-        let vs_module = device.create_shader_module(wgpu::include_spirv!("blit.vert.spv"));
-        let fs_module = device.create_shader_module(wgpu::include_spirv!("blit.frag.spv"));
+        let vs_module = device.create_shader_module(&wgpu::include_spirv!("blit.vert.spv"));
+        let fs_module = device.create_shader_module(&wgpu::include_spirv!("blit.frag.spv"));
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("blit"),
@@ -257,8 +257,8 @@ impl framework::Example for Example {
         });
 
         // Create the render pipeline
-        let vs_module = device.create_shader_module(wgpu::include_spirv!("draw.vert.spv"));
-        let fs_module = device.create_shader_module(wgpu::include_spirv!("draw.frag.spv"));
+        let vs_module = device.create_shader_module(&wgpu::include_spirv!("draw.vert.spv"));
+        let fs_module = device.create_shader_module(&wgpu::include_spirv!("draw.frag.spv"));
 
         let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("draw"),

@@ -45,7 +45,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         .unwrap();
 
     // Loads the shader from the SPIR-V file.arrayvec
-    let cs_module = device.create_shader_module(wgpu::include_spirv!("shader.comp.spv"));
+    let cs_module = device.create_shader_module(&wgpu::include_spirv!("shader.comp.spv"));
 
     // Gets the size in bytes of the buffer.
     let slice_size = numbers.len() * std::mem::size_of::<u32>();

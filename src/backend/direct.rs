@@ -3,7 +3,7 @@ use crate::{
     BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, CommandEncoderDescriptor,
     ComputePipelineDescriptor, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleSource, SwapChainStatus, TextureDescriptor,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderSource, SwapChainStatus, TextureDescriptor,
     TextureViewDescriptor,
 };
 
@@ -725,18 +725,19 @@ impl crate::Context for Context {
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
-        source: ShaderModuleSource,
+        desc: &ShaderModuleDescriptor,
     ) -> Self::ShaderModuleId {
-        let descriptor = wgc::pipeline::ShaderModuleDescriptor {
-            label: None,
-            source: match source {
-                ShaderModuleSource::SpirV(spv) => wgc::pipeline::ShaderModuleSource::SpirV(spv),
-                ShaderModuleSource::Wgsl(code) => wgc::pipeline::ShaderModuleSource::Wgsl(code),
-            },
-        };
         let global = &self.0;
+        let descriptor = wgc::pipeline::ShaderModuleDescriptor {
+            label: desc.label.map(Borrowed),
+            experimental_translation: desc.experimental_translation,
+        };
+        let source = match desc.source {
+            ShaderSource::SpirV(ref spv) => wgc::pipeline::ShaderModuleSource::SpirV(Borrowed(spv)),
+            ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
+        };
         let (id, error) = wgc::gfx_select!(
-            device.id => global.device_create_shader_module(device.id, &descriptor, PhantomData)
+            device.id => global.device_create_shader_module(device.id, &descriptor, source, PhantomData)
         );
         if let Some(cause) = error {
             self.handle_error(
