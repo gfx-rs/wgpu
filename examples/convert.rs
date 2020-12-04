@@ -120,6 +120,9 @@ fn main() {
         }
     };
 
+    // validate the IR
+    naga::proc::Validator::new().validate(&module).unwrap();
+
     if args.len() <= 2 {
         println!("{:#?}", module);
         return;

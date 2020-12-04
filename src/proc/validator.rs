@@ -30,6 +30,8 @@ pub enum GlobalVariableError {
     InvalidBinding,
     #[error("Binding is out of range")]
     OutOfRangeBinding,
+    #[error("BuiltIn type for {0:?} is invalid")]
+    InvalidBuiltInType(crate::BuiltIn),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -110,17 +112,85 @@ impl crate::GlobalVariable {
 
     fn check_resource(&self) -> Result<(), GlobalVariableError> {
         match self.binding {
-            Some(crate::Binding::BuiltIn(_)) => {} // validated per entry point
             Some(crate::Binding::Resource { group, binding }) => {
                 if group > MAX_BIND_GROUPS || binding > MAX_BIND_INDICES {
                     return Err(GlobalVariableError::OutOfRangeBinding);
                 }
             }
-            Some(crate::Binding::Location(_)) | None => {
+            Some(crate::Binding::BuiltIn(_)) | Some(crate::Binding::Location(_)) | None => {
                 return Err(GlobalVariableError::InvalidBinding)
             }
         }
         self.forbid_interpolation()
+    }
+
+    fn check_varying(&self, types: &Arena<crate::Type>) -> Result<(), GlobalVariableError> {
+        match self.binding {
+            Some(crate::Binding::BuiltIn(built_in)) => {
+                use crate::{BuiltIn as Bi, ScalarKind as Sk, TypeInner as Ti, VectorSize as Vs};
+                // Only validate the type here. Whether or not it's legal to access
+                // this builtin is up to the entry point.
+                let width = 4;
+                let ty_inner = match built_in {
+                    Bi::BaseInstance
+                    | Bi::BaseVertex
+                    | Bi::InstanceIndex
+                    | Bi::VertexIndex
+                    | Bi::SampleIndex
+                    | Bi::LocalInvocationIndex => Ti::Scalar {
+                        kind: Sk::Uint,
+                        width,
+                    },
+                    Bi::ClipDistance | Bi::PointSize | Bi::FragDepth => Ti::Scalar {
+                        kind: Sk::Float,
+                        width,
+                    },
+                    Bi::Position | Bi::FragCoord => Ti::Vector {
+                        size: Vs::Quad,
+                        kind: Sk::Float,
+                        width,
+                    },
+                    Bi::FrontFacing => Ti::Scalar {
+                        kind: Sk::Bool,
+                        width,
+                    },
+                    Bi::GlobalInvocationId | Bi::LocalInvocationId | Bi::WorkGroupId => {
+                        Ti::Vector {
+                            size: Vs::Tri,
+                            kind: Sk::Uint,
+                            width,
+                        }
+                    }
+                };
+                if types[self.ty].inner != ty_inner {
+                    log::warn!("Wrong builtin type: {:?}", types[self.ty]);
+                    return Err(GlobalVariableError::InvalidBuiltInType(built_in));
+                }
+                self.forbid_interpolation()?
+            }
+            Some(crate::Binding::Location(loc)) => {
+                if loc > MAX_LOCATIONS {
+                    return Err(GlobalVariableError::OutOfRangeBinding);
+                }
+                match types[self.ty].inner {
+                    crate::TypeInner::Scalar { .. }
+                    | crate::TypeInner::Vector { .. }
+                    | crate::TypeInner::Matrix { .. } => {}
+                    _ => return Err(GlobalVariableError::InvalidType),
+                }
+            }
+            Some(crate::Binding::Resource { .. }) => {
+                return Err(GlobalVariableError::InvalidBinding)
+            }
+            None => {
+                match types[self.ty].inner {
+                    //TODO: check the member types
+                    crate::TypeInner::Struct { members: _ } => self.forbid_interpolation()?,
+                    _ => return Err(GlobalVariableError::InvalidType),
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -152,35 +222,7 @@ impl Validator {
         let allowed_storage_access = match var.class {
             crate::StorageClass::Function => return Err(GlobalVariableError::InvalidUsage),
             crate::StorageClass::Input | crate::StorageClass::Output => {
-                match var.binding {
-                    Some(crate::Binding::BuiltIn(_)) => {
-                        // validated per entry point
-                        var.forbid_interpolation()?
-                    }
-                    Some(crate::Binding::Location(loc)) => {
-                        if loc > MAX_LOCATIONS {
-                            return Err(GlobalVariableError::OutOfRangeBinding);
-                        }
-                        match types[var.ty].inner {
-                            crate::TypeInner::Scalar { .. }
-                            | crate::TypeInner::Vector { .. }
-                            | crate::TypeInner::Matrix { .. } => {}
-                            _ => return Err(GlobalVariableError::InvalidType),
-                        }
-                    }
-                    Some(crate::Binding::Resource { .. }) => {
-                        return Err(GlobalVariableError::InvalidBinding)
-                    }
-                    None => {
-                        match types[var.ty].inner {
-                            //TODO: check the member types
-                            crate::TypeInner::Struct { members: _ } => {
-                                var.forbid_interpolation()?
-                            }
-                            _ => return Err(GlobalVariableError::InvalidType),
-                        }
-                    }
-                }
+                var.check_varying(types)?;
                 crate::StorageAccess::empty()
             }
             crate::StorageClass::Storage => {
