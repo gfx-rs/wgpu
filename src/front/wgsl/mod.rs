@@ -1563,11 +1563,10 @@ impl Parser {
             });
         }
         // read return type
-        lexer.expect(Token::Arrow)?;
-        let return_type = if lexer.skip(Token::Word("void")) {
-            None
-        } else {
+        let return_type = if lexer.skip(Token::Arrow) && !lexer.skip(Token::Word("void")) {
             Some(self.parse_type_decl(lexer, None, &mut module.types, &mut module.constants)?)
+        } else {
+            None
         };
 
         let mut fun = crate::Function {

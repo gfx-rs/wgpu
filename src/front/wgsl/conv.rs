@@ -15,8 +15,8 @@ pub fn map_built_in(word: &str) -> Result<crate::BuiltIn, Error<'_>> {
     Ok(match word {
         // vertex
         "position" => crate::BuiltIn::Position,
-        "vertex_idx" => crate::BuiltIn::VertexIndex,
-        "instance_idx" => crate::BuiltIn::InstanceIndex,
+        "vertex_index" => crate::BuiltIn::VertexIndex,
+        "instance_index" => crate::BuiltIn::InstanceIndex,
         // fragment
         "front_facing" => crate::BuiltIn::FrontFacing,
         "frag_coord" => crate::BuiltIn::FragCoord,
@@ -24,7 +24,7 @@ pub fn map_built_in(word: &str) -> Result<crate::BuiltIn, Error<'_>> {
         // compute
         "global_invocation_id" => crate::BuiltIn::GlobalInvocationId,
         "local_invocation_id" => crate::BuiltIn::LocalInvocationId,
-        "local_invocation_idx" => crate::BuiltIn::LocalInvocationIndex,
+        "local_invocation_index" => crate::BuiltIn::LocalInvocationIndex,
         _ => return Err(Error::UnknownBuiltin(word)),
     })
 }
