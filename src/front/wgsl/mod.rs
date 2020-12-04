@@ -7,7 +7,7 @@ mod lexer;
 
 use crate::{
     arena::{Arena, Handle},
-    proc::{ResolveContext, ResolveError, Typifier},
+    proc::{ensure_block_returns, ResolveContext, ResolveError, Typifier},
     FastHashMap,
 };
 
@@ -1594,6 +1594,8 @@ impl Parser {
                 arguments: &fun.arguments,
             },
         )?;
+        // fixup the IR
+        ensure_block_returns(&mut fun.body);
         // done
         fun.fill_global_use(&module.global_variables);
         self.scopes.pop();

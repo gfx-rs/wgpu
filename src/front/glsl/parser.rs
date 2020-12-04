@@ -5,10 +5,15 @@ pomelo! {
     //%verbose;
     %include {
         use super::super::{error::ErrorKind, token::*, ast::*};
-        use crate::{proc::Typifier, Arena, BinaryOperator, Binding, Block, Constant,
-            ConstantInner, EntryPoint, Expression, FallThrough, FastHashMap, Function, GlobalVariable, Handle, Interpolation,
-            LocalVariable, MemberOrigin, SampleLevel, ScalarKind, Statement, StorageAccess,
-            StorageClass, StructMember, Type, TypeInner, UnaryOperator};
+        use crate::{
+            proc::{ensure_block_returns, Typifier},
+            Arena, BinaryOperator, Binding, Block, Constant,
+            ConstantInner, EntryPoint, Expression, FallThrough,
+            FastHashMap, Function, GlobalVariable, Handle, Interpolation,
+            LocalVariable, MemberOrigin, SampleLevel, ScalarKind,
+            Statement, StorageAccess,
+            StorageClass, StructMember, Type, TypeInner, UnaryOperator,
+        };
     }
     %token #[derive(Debug)] #[cfg_attr(test, derive(PartialEq))] pub enum Token {};
     %parser pub struct Parser<'a> {};
@@ -1117,11 +1122,7 @@ pomelo! {
         extra.context.clear_scopes();
         extra.context.lookup_global_var_exps.clear();
         extra.context.typifier = Typifier::new();
-        // make sure function ends with return
-        match cs.last() {
-            Some(Statement::Return {..}) => {}
-            _ => {cs.push(Statement::Return { value:None });}
-        }
+        ensure_block_returns(&mut cs);
         f.body = cs;
         f.fill_global_use(&extra.module.global_variables);
         f

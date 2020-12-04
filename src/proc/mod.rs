@@ -4,6 +4,7 @@
 mod call_graph;
 mod interface;
 mod namer;
+mod terminator;
 mod typifier;
 mod validator;
 
@@ -11,6 +12,7 @@ mod validator;
 pub use call_graph::{CallGraph, CallGraphBuilder};
 pub use interface::{Interface, Visitor};
 pub use namer::{EntryPointIndex, NameKey, Namer};
+pub use terminator::ensure_block_returns;
 pub use typifier::{check_constant_type, ResolveContext, ResolveError, Typifier};
 pub use validator::{ValidationError, Validator};
 
