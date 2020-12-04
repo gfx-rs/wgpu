@@ -142,6 +142,7 @@ impl crate::RenderInner<Context> for RenderPass {
     fn set_index_buffer(
         &mut self,
         buffer: &Sendable<web_sys::GpuBuffer>,
+        index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
@@ -266,6 +267,7 @@ impl crate::RenderInner<Context> for RenderBundleEncoder {
     fn set_index_buffer(
         &mut self,
         buffer: &Sendable<web_sys::GpuBuffer>,
+        index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
@@ -691,7 +693,11 @@ fn map_vertex_state_descriptor(
         .collect::<js_sys::Array>();
 
     let mut mapped = web_sys::GpuVertexStateDescriptor::new();
-    mapped.index_format(map_index_format(desc.vertex_state.index_format));
+    mapped.index_format(map_index_format(
+        desc.vertex_state
+            .index_format
+            .unwrap_or(wgt::IndexFormat::Uint16),
+    ));
     mapped.vertex_buffers(&mapped_vertex_buffers);
     mapped
 }

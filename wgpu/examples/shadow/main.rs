@@ -85,6 +85,7 @@ struct Entity {
     color: wgpu::Color,
     vertex_buf: Rc<wgpu::Buffer>,
     index_buf: Rc<wgpu::Buffer>,
+    index_format: wgpu::IndexFormat,
     index_count: usize,
     uniform_offset: wgpu::DynamicOffset,
 }
@@ -277,6 +278,8 @@ impl framework::Example for Example {
             mapped_at_creation: false,
         });
 
+        let index_format = wgpu::IndexFormat::Uint16;
+
         let mut entities = vec![{
             use cgmath::SquareMatrix;
             Entity {
@@ -285,6 +288,7 @@ impl framework::Example for Example {
                 color: wgpu::Color::WHITE,
                 vertex_buf: Rc::new(plane_vertex_buf),
                 index_buf: Rc::new(plane_index_buf),
+                index_format,
                 index_count: plane_index_data.len(),
                 uniform_offset: 0,
             }
@@ -304,6 +308,7 @@ impl framework::Example for Example {
                 color: wgpu::Color::GREEN,
                 vertex_buf: Rc::clone(&cube_vertex_buf),
                 index_buf: Rc::clone(&cube_index_buf),
+                index_format,
                 index_count: cube_index_data.len(),
                 uniform_offset: ((i + 1) * wgpu::BIND_BUFFER_ALIGNMENT as usize) as _,
             });
@@ -487,7 +492,7 @@ impl framework::Example for Example {
                     stencil: wgpu::StencilStateDescriptor::default(),
                 }),
                 vertex_state: wgpu::VertexStateDescriptor {
-                    index_format: wgpu::IndexFormat::Uint16,
+                    index_format: Some(index_format),
                     vertex_buffers: &[vb_desc.clone()],
                 },
                 sample_count: 1,
@@ -623,7 +628,7 @@ impl framework::Example for Example {
                     stencil: wgpu::StencilStateDescriptor::default(),
                 }),
                 vertex_state: wgpu::VertexStateDescriptor {
-                    index_format: wgpu::IndexFormat::Uint16,
+                    index_format: Some(index_format),
                     vertex_buffers: &[vb_desc],
                 },
                 sample_count: 1,
@@ -780,7 +785,7 @@ impl framework::Example for Example {
 
                 for entity in &self.entities {
                     pass.set_bind_group(1, &self.entity_bind_group, &[entity.uniform_offset]);
-                    pass.set_index_buffer(entity.index_buf.slice(..));
+                    pass.set_index_buffer(entity.index_buf.slice(..), entity.index_format);
                     pass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
                     pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
                 }
@@ -821,7 +826,7 @@ impl framework::Example for Example {
 
             for entity in &self.entities {
                 pass.set_bind_group(1, &self.entity_bind_group, &[entity.uniform_offset]);
-                pass.set_index_buffer(entity.index_buf.slice(..));
+                pass.set_index_buffer(entity.index_buf.slice(..), entity.index_format);
                 pass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
                 pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
             }

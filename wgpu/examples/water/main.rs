@@ -557,7 +557,7 @@ impl framework::Example for Example {
                 // We don't actually use indices, since it's unnecessary
                 // because we duplicate all the data anyway. This is
                 // necessary to achieve the low-poly effect.
-                index_format: wgpu::IndexFormat::Uint16,
+                index_format: None,
                 vertex_buffers: &[wgpu::VertexBufferDescriptor {
                     stride: water_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
@@ -595,7 +595,7 @@ impl framework::Example for Example {
                 stencil: wgpu::StencilStateDescriptor::default(),
             }),
             vertex_state: wgpu::VertexStateDescriptor {
-                index_format: wgpu::IndexFormat::Uint16,
+                index_format: None,
                 vertex_buffers: &[wgpu::VertexBufferDescriptor {
                     stride: terrain_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,

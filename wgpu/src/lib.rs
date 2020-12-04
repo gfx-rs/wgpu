@@ -79,6 +79,7 @@ trait RenderInner<Ctx: Context> {
     fn set_index_buffer(
         &mut self,
         buffer: &Ctx::BufferId,
+        index_format: IndexFormat,
         offset: BufferAddress,
         size: Option<BufferSize>,
     );
@@ -1190,7 +1191,7 @@ pub struct VertexBufferDescriptor<'a> {
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct VertexStateDescriptor<'a> {
     /// The format of any index buffers used with this pipeline.
-    pub index_format: IndexFormat,
+    pub index_format: Option<IndexFormat>,
     /// The format of any vertex buffers used with this pipeline.
     pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
 }
@@ -1984,10 +1985,11 @@ impl<'a> RenderPass<'a> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>) {
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) {
         RenderInner::set_index_buffer(
             &mut self.id,
             &buffer_slice.buffer.id,
+            index_format,
             buffer_slice.offset,
             buffer_slice.size,
         )
@@ -2432,10 +2434,11 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderBundleEncoder::draw_indexed) on this [`RenderBundleEncoder`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>) {
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) {
         RenderInner::set_index_buffer(
             &mut self.id,
             &buffer_slice.buffer.id,
+            index_format,
             buffer_slice.offset,
             buffer_slice.size,
         )

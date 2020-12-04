@@ -65,6 +65,7 @@ struct Example {
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    index_format: wgpu::IndexFormat,
     uniform_workaround: bool,
 }
 
@@ -247,6 +248,8 @@ impl framework::Example for Example {
             },
         });
 
+        let index_format = wgpu::IndexFormat::Uint16;
+
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
@@ -267,7 +270,7 @@ impl framework::Example for Example {
             color_states: &[sc_desc.format.into()],
             depth_stencil_state: None,
             vertex_state: wgpu::VertexStateDescriptor {
-                index_format: wgpu::IndexFormat::Uint16,
+                index_format: Some(index_format),
                 vertex_buffers: &[wgpu::VertexBufferDescriptor {
                     stride: vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
@@ -282,6 +285,7 @@ impl framework::Example for Example {
         Self {
             vertex_buffer,
             index_buffer,
+            index_format,
             bind_group,
             pipeline,
             uniform_workaround,
@@ -324,7 +328,7 @@ impl framework::Example for Example {
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.bind_group, &[]);
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        rpass.set_index_buffer(self.index_buffer.slice(..));
+        rpass.set_index_buffer(self.index_buffer.slice(..), self.index_format);
         if self.uniform_workaround {
             rpass.set_push_constants(wgpu::ShaderStage::FRAGMENT, 0, bytemuck::cast_slice(&[0]));
             rpass.draw_indexed(0..6, 0, 0..1);

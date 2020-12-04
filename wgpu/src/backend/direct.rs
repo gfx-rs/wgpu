@@ -221,10 +221,11 @@ mod pass_impl {
         fn set_index_buffer(
             &mut self,
             buffer: &super::Buffer,
+            index_format: wgt::IndexFormat,
             offset: wgt::BufferAddress,
             size: Option<wgt::BufferSize>,
         ) {
-            wgpu_render_pass_set_index_buffer(self, buffer.id, offset, size)
+            wgpu_render_pass_set_index_buffer(self, buffer.id, index_format, offset, size)
         }
         fn set_vertex_buffer(
             &mut self,
@@ -415,10 +416,11 @@ mod pass_impl {
         fn set_index_buffer(
             &mut self,
             buffer: &super::Buffer,
+            index_format: wgt::IndexFormat,
             offset: wgt::BufferAddress,
             size: Option<wgt::BufferSize>,
         ) {
-            wgpu_render_bundle_set_index_buffer(self, buffer.id, offset, size)
+            wgpu_render_bundle_set_index_buffer(self, buffer.id, index_format, offset, size)
         }
         fn set_vertex_buffer(
             &mut self,

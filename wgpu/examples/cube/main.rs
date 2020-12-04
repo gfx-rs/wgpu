@@ -90,6 +90,7 @@ fn create_texels(size: usize) -> Vec<u8> {
 struct Example {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
+    index_format: wgpu::IndexFormat,
     index_count: usize,
     bind_group: wgpu::BindGroup,
     uniform_buf: wgpu::Buffer,
@@ -250,9 +251,10 @@ impl framework::Example for Example {
             label: None,
         });
 
+        let index_format = wgpu::IndexFormat::Uint16;
         // Create the render pipeline
         let vertex_state = wgpu::VertexStateDescriptor {
-            index_format: wgpu::IndexFormat::Uint16,
+            index_format: Some(index_format),
             vertex_buffers: &[wgpu::VertexBufferDescriptor {
                 stride: vertex_size as wgpu::BufferAddress,
                 step_mode: wgpu::InputStepMode::Vertex,
@@ -352,6 +354,7 @@ impl framework::Example for Example {
         Example {
             vertex_buf,
             index_buf,
+            index_format,
             index_count: index_data.len(),
             bind_group,
             uniform_buf,
@@ -404,7 +407,7 @@ impl framework::Example for Example {
             rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.set_index_buffer(self.index_buf.slice(..));
+            rpass.set_index_buffer(self.index_buf.slice(..), self.index_format);
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
             rpass.pop_debug_group();
             rpass.insert_debug_marker("Draw!");

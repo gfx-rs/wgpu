@@ -58,7 +58,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
         color_states: &[swapchain_format.into()],
         depth_stencil_state: None,
         vertex_state: wgpu::VertexStateDescriptor {
-            index_format: wgpu::IndexFormat::Uint16,
+            index_format: None,
             vertex_buffers: &[],
         },
         sample_count: 1,
