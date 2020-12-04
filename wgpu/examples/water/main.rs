@@ -486,13 +486,13 @@ impl framework::Example for Example {
 
         // Upload/compile them to GPU code.
         let water_vs_module =
-            device.create_shader_module(wgpu::include_spirv!("water_shader.vert.spv"));
+            device.create_shader_module(&wgpu::include_spirv!("water_shader.vert.spv"));
         let water_fs_module =
-            device.create_shader_module(wgpu::include_spirv!("water_shader.frag.spv"));
+            device.create_shader_module(&wgpu::include_spirv!("water_shader.frag.spv"));
         let terrain_vs_module =
-            device.create_shader_module(wgpu::include_spirv!("terrain_shader.vert.spv"));
+            device.create_shader_module(&wgpu::include_spirv!("terrain_shader.vert.spv"));
         let terrain_fs_module =
-            device.create_shader_module(wgpu::include_spirv!("terrain_shader.frag.spv"));
+            device.create_shader_module(&wgpu::include_spirv!("terrain_shader.frag.spv"));
 
         // Create the render pipelines. These describe how the data will flow through the GPU, and what
         // constraints and modifiers it will have.
