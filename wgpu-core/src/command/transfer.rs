@@ -166,7 +166,7 @@ pub(crate) fn validate_linear_texture_data(
     let rows_per_image = layout.rows_per_image as BufferAddress;
     let bytes_per_row = layout.bytes_per_row as BufferAddress;
 
-    let (block_width, block_height) = conv::texture_block_size(format);
+    let (block_width, block_height) = format.describe().block_dimensions;
     let block_width = block_width as BufferAddress;
     let block_height = block_height as BufferAddress;
     let block_size = bytes_per_block;
@@ -228,7 +228,9 @@ pub(crate) fn validate_texture_copy_range(
     texture_side: CopySide,
     copy_size: &Extent3d,
 ) -> Result<(), TransferError> {
-    let (block_width, block_height) = conv::texture_block_size(texture_format);
+    let (block_width, block_height) = texture_format.describe().block_dimensions;
+    let block_width = block_width as u32;
+    let block_height = block_height as u32;
 
     let mut extent = texture_dimension.level_extent(texture_copy_view.mip_level as u8);
     match texture_dimension {
@@ -503,14 +505,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let (block_width, _) = conv::texture_block_size(dst_texture.format);
+        let (block_width, _) = dst_texture.format.describe().block_dimensions;
         if !conv::is_valid_copy_dst_texture_format(dst_texture.format) {
             Err(TransferError::CopyToForbiddenTextureFormat(
                 dst_texture.format,
             ))?
         }
 
-        let buffer_width = (source.layout.bytes_per_row / bytes_per_block) * block_width;
+        let buffer_width = (source.layout.bytes_per_row / bytes_per_block) * block_width as u32;
         let region = hal::command::BufferImageCopy {
             buffer_offset: source.layout.offset,
             buffer_width,
@@ -632,14 +634,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let (block_width, _) = conv::texture_block_size(src_texture.format);
+        let (block_width, _) = src_texture.format.describe().block_dimensions;
         if !conv::is_valid_copy_src_texture_format(src_texture.format) {
             Err(TransferError::CopyFromForbiddenTextureFormat(
                 src_texture.format,
             ))?
         }
 
-        let buffer_width = (destination.layout.bytes_per_row / bytes_per_block) * block_width;
+        let buffer_width =
+            (destination.layout.bytes_per_row / bytes_per_block) * block_width as u32;
         let region = hal::command::BufferImageCopy {
             buffer_offset: destination.layout.offset,
             buffer_width,

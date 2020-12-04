@@ -506,7 +506,7 @@ impl<B: GfxBackend> Device<B> {
     ) -> Result<resource::Texture<B>, resource::CreateTextureError> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
-        let features = conv::texture_features(desc.format);
+        let features = desc.format.describe().features;
         if !self.features.contains(features) {
             return Err(resource::CreateTextureError::MissingFeature(
                 features,

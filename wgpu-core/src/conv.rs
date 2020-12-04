@@ -396,124 +396,48 @@ pub(crate) fn map_texture_format(
         Tf::Bc6hRgbUfloat => H::Bc6hUfloat,
         Tf::Bc7RgbaUnorm => H::Bc7Unorm,
         Tf::Bc7RgbaUnormSrgb => H::Bc7Srgb,
-    }
-}
 
-pub fn texture_block_size(format: wgt::TextureFormat) -> (u32, u32) {
-    use wgt::TextureFormat as Tf;
-    match format {
-        Tf::R8Unorm
-        | Tf::R8Snorm
-        | Tf::R8Uint
-        | Tf::R8Sint
-        | Tf::R16Uint
-        | Tf::R16Sint
-        | Tf::R16Float
-        | Tf::Rg8Unorm
-        | Tf::Rg8Snorm
-        | Tf::Rg8Uint
-        | Tf::Rg8Sint
-        | Tf::R32Uint
-        | Tf::R32Sint
-        | Tf::R32Float
-        | Tf::Rg16Uint
-        | Tf::Rg16Sint
-        | Tf::Rg16Float
-        | Tf::Rgba8Unorm
-        | Tf::Rgba8UnormSrgb
-        | Tf::Rgba8Snorm
-        | Tf::Rgba8Uint
-        | Tf::Rgba8Sint
-        | Tf::Bgra8Unorm
-        | Tf::Bgra8UnormSrgb
-        | Tf::Rgb10a2Unorm
-        | Tf::Rg11b10Float
-        | Tf::Rg32Uint
-        | Tf::Rg32Sint
-        | Tf::Rg32Float
-        | Tf::Rgba16Uint
-        | Tf::Rgba16Sint
-        | Tf::Rgba16Float
-        | Tf::Rgba32Uint
-        | Tf::Rgba32Sint
-        | Tf::Rgba32Float
-        | Tf::Depth32Float
-        | Tf::Depth24Plus
-        | Tf::Depth24PlusStencil8 => (1, 1),
+        // ETC compressed formats
+        Tf::Etc2RgbUnorm => H::Etc2R8g8b8Unorm,
+        Tf::Etc2RgbUnormSrgb => H::Etc2R8g8b8Srgb,
+        Tf::Etc2RgbA1Unorm => H::Etc2R8g8b8a1Unorm,
+        Tf::Etc2RgbA1UnormSrgb => H::Etc2R8g8b8a1Srgb,
+        Tf::Etc2RgbA8Unorm => H::Etc2R8g8b8a8Unorm,
+        Tf::Etc2RgbA8UnormSrgb => H::Etc2R8g8b8a8Unorm,
+        Tf::EacRUnorm => H::EacR11Unorm,
+        Tf::EacRSnorm => H::EacR11Snorm,
+        Tf::EtcRgUnorm => H::EacR11g11Unorm,
+        Tf::EtcRgSnorm => H::EacR11g11Snorm,
 
-        Tf::Bc1RgbaUnorm
-        | Tf::Bc1RgbaUnormSrgb
-        | Tf::Bc2RgbaUnorm
-        | Tf::Bc2RgbaUnormSrgb
-        | Tf::Bc3RgbaUnorm
-        | Tf::Bc3RgbaUnormSrgb
-        | Tf::Bc4RUnorm
-        | Tf::Bc4RSnorm
-        | Tf::Bc5RgUnorm
-        | Tf::Bc5RgSnorm
-        | Tf::Bc6hRgbUfloat
-        | Tf::Bc6hRgbSfloat
-        | Tf::Bc7RgbaUnorm
-        | Tf::Bc7RgbaUnormSrgb => (4, 4),
-    }
-}
-
-pub fn texture_features(format: wgt::TextureFormat) -> wgt::Features {
-    use wgt::TextureFormat as Tf;
-    match format {
-        Tf::R8Unorm
-        | Tf::R8Snorm
-        | Tf::R8Uint
-        | Tf::R8Sint
-        | Tf::R16Uint
-        | Tf::R16Sint
-        | Tf::R16Float
-        | Tf::Rg8Unorm
-        | Tf::Rg8Snorm
-        | Tf::Rg8Uint
-        | Tf::Rg8Sint
-        | Tf::R32Uint
-        | Tf::R32Sint
-        | Tf::R32Float
-        | Tf::Rg16Uint
-        | Tf::Rg16Sint
-        | Tf::Rg16Float
-        | Tf::Rgba8Unorm
-        | Tf::Rgba8UnormSrgb
-        | Tf::Rgba8Snorm
-        | Tf::Rgba8Uint
-        | Tf::Rgba8Sint
-        | Tf::Bgra8Unorm
-        | Tf::Bgra8UnormSrgb
-        | Tf::Rgb10a2Unorm
-        | Tf::Rg11b10Float
-        | Tf::Rg32Uint
-        | Tf::Rg32Sint
-        | Tf::Rg32Float
-        | Tf::Rgba16Uint
-        | Tf::Rgba16Sint
-        | Tf::Rgba16Float
-        | Tf::Rgba32Uint
-        | Tf::Rgba32Sint
-        | Tf::Rgba32Float
-        | Tf::Depth32Float
-        | Tf::Depth24Plus
-        | Tf::Depth24PlusStencil8 => wgt::Features::empty(),
-
-        Tf::Bc1RgbaUnorm
-        | Tf::Bc1RgbaUnormSrgb
-        | Tf::Bc2RgbaUnorm
-        | Tf::Bc2RgbaUnormSrgb
-        | Tf::Bc3RgbaUnorm
-        | Tf::Bc3RgbaUnormSrgb
-        | Tf::Bc4RUnorm
-        | Tf::Bc4RSnorm
-        | Tf::Bc5RgUnorm
-        | Tf::Bc5RgSnorm
-        | Tf::Bc6hRgbUfloat
-        | Tf::Bc6hRgbSfloat
-        | Tf::Bc7RgbaUnorm
-        | Tf::Bc7RgbaUnormSrgb => wgt::Features::TEXTURE_COMPRESSION_BC,
+        // ASTC compressed formats
+        Tf::Astc4x4RgbaUnorm => H::Astc4x4Srgb,
+        Tf::Astc4x4RgbaUnormSrgb => H::Astc4x4Srgb,
+        Tf::Astc5x4RgbaUnorm => H::Astc5x4Unorm,
+        Tf::Astc5x4RgbaUnormSrgb => H::Astc5x4Srgb,
+        Tf::Astc5x5RgbaUnorm => H::Astc5x5Unorm,
+        Tf::Astc5x5RgbaUnormSrgb => H::Astc5x5Srgb,
+        Tf::Astc6x5RgbaUnorm => H::Astc6x5Unorm,
+        Tf::Astc6x5RgbaUnormSrgb => H::Astc6x5Srgb,
+        Tf::Astc6x6RgbaUnorm => H::Astc6x6Unorm,
+        Tf::Astc6x6RgbaUnormSrgb => H::Astc6x6Srgb,
+        Tf::Astc8x5RgbaUnorm => H::Astc8x5Unorm,
+        Tf::Astc8x5RgbaUnormSrgb => H::Astc8x5Srgb,
+        Tf::Astc8x6RgbaUnorm => H::Astc8x6Unorm,
+        Tf::Astc8x6RgbaUnormSrgb => H::Astc8x6Srgb,
+        Tf::Astc10x5RgbaUnorm => H::Astc10x5Unorm,
+        Tf::Astc10x5RgbaUnormSrgb => H::Astc10x5Srgb,
+        Tf::Astc10x6RgbaUnorm => H::Astc10x6Unorm,
+        Tf::Astc10x6RgbaUnormSrgb => H::Astc10x6Srgb,
+        Tf::Astc8x8RgbaUnorm => H::Astc8x8Unorm,
+        Tf::Astc8x8RgbaUnormSrgb => H::Astc8x8Srgb,
+        Tf::Astc10x8RgbaUnorm => H::Astc10x8Unorm,
+        Tf::Astc10x8RgbaUnormSrgb => H::Astc10x8Srgb,
+        Tf::Astc10x10RgbaUnorm => H::Astc10x10Unorm,
+        Tf::Astc10x10RgbaUnormSrgb => H::Astc10x10Srgb,
+        Tf::Astc12x10RgbaUnorm => H::Astc12x10Unorm,
+        Tf::Astc12x10RgbaUnormSrgb => H::Astc12x10Srgb,
+        Tf::Astc12x12RgbaUnorm => H::Astc12x12Unorm,
+        Tf::Astc12x12RgbaUnormSrgb => H::Astc12x12Srgb,
     }
 }
 

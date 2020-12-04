@@ -324,7 +324,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             bytes_per_block as wgt::BufferAddress,
             size,
         )?;
-        let (block_width, block_height) = conv::texture_block_size(texture_format);
+
+        let (block_width, block_height) = texture_format.describe().block_dimensions;
+        let block_width = block_width as u32;
+        let block_height = block_height as u32;
+
         if !conv::is_valid_copy_dst_texture_format(texture_format) {
             Err(TransferError::CopyToForbiddenTextureFormat(texture_format))?
         }
