@@ -11,11 +11,7 @@
     actions: [
         CreateShaderModule(
             id: Id(0, 1, Empty),
-            data: "quad.vert.spv",
-        ),
-        CreateShaderModule(
-            id: Id(1, 1, Empty),
-            data: "quad.frag.spv",
+            data: "quad.wgsl",
         ),
         CreateTexture(Id(0, 1, Empty), (
             label: Some("Output Texture"),
@@ -58,11 +54,11 @@
             layout: Some(Id(0, 1, Empty)),
             vertex_stage: (
                 module: Id(0, 1, Empty),
-                entry_point: "main",
+                entry_point: "vs_main",
             ),
             fragment_stage: Some((
-                module: Id(1, 1, Empty),
-                entry_point: "main",
+                module: Id(0, 1, Empty),
+                entry_point: "fs_main",
             )),
             rasterization_state: None,
             primitive_topology: TriangleList,

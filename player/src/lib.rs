@@ -218,7 +218,8 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     let code = fs::read_to_string(dir.join(data)).unwrap();
                     wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code))
                 } else {
-                    let byte_vec = fs::read(dir.join(data)).unwrap();
+                    let byte_vec = fs::read(dir.join(&data))
+                        .unwrap_or_else(|e| panic!("Unable to open '{}': {:?}", data, e));
                     let spv = byte_vec
                         .chunks(4)
                         .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))

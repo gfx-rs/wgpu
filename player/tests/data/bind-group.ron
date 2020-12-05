@@ -10,7 +10,7 @@
         CreateShaderModule(
             id: Id(0, 1, Empty),
             label: None,
-            data: "empty.comp.spv",
+            data: "empty.wgsl",
         ),
         CreateComputePipeline(Id(0, 1, Empty), (
             label: None,
