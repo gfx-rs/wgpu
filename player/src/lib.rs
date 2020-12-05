@@ -209,22 +209,23 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyBindGroup(id) => {
                 self.bind_group_drop::<B>(id);
             }
-            A::CreateShaderModule { id, data, label } => {
+            A::CreateShaderModule { id, label, data } => {
                 let desc = wgc::pipeline::ShaderModuleDescriptor {
-                    source: if data.ends_with(".wgsl") {
-                        let code = fs::read_to_string(dir.join(data)).unwrap();
-                        wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code))
-                    } else {
-                        let byte_vec = fs::read(dir.join(data)).unwrap();
-                        let spv = byte_vec
-                            .chunks(4)
-                            .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-                            .collect::<Vec<_>>();
-                        wgc::pipeline::ShaderModuleSource::SpirV(Cow::Owned(spv))
-                    },
                     label,
+                    experimental_translation: false,
                 };
-                let (_, error) = self.device_create_shader_module::<B>(device, &desc, id);
+                let source = if data.ends_with(".wgsl") {
+                    let code = fs::read_to_string(dir.join(data)).unwrap();
+                    wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code))
+                } else {
+                    let byte_vec = fs::read(dir.join(data)).unwrap();
+                    let spv = byte_vec
+                        .chunks(4)
+                        .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                        .collect::<Vec<_>>();
+                    wgc::pipeline::ShaderModuleSource::SpirV(Cow::Owned(spv))
+                };
+                let (_, error) = self.device_create_shader_module::<B>(device, &desc, source, id);
                 if let Some(e) = error {
                     panic!("{:?}", e);
                 }

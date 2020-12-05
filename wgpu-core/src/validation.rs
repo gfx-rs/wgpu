@@ -2,11 +2,73 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{binding_model::BindEntryMap, FastHashMap, MAX_BIND_GROUPS};
-use arrayvec::ArrayVec;
+use crate::{binding_model::BindEntryMap, FastHashMap};
 use std::collections::hash_map::Entry;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
+
+#[derive(Debug)]
+enum ResourceType {
+    Buffer {
+        size: wgt::BufferSize,
+    },
+    Texture {
+        dim: naga::ImageDimension,
+        arrayed: bool,
+        class: naga::ImageClass,
+    },
+    Sampler {
+        comparison: bool,
+    },
+}
+
+#[derive(Debug)]
+struct Resource {
+    group: u32,
+    binding: u32,
+    ty: ResourceType,
+    class: naga::StorageClass,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum NumericDimension {
+    Scalar,
+    Vector(naga::VectorSize),
+    Matrix(naga::VectorSize, naga::VectorSize),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct NumericType {
+    dim: NumericDimension,
+    kind: naga::ScalarKind,
+    width: naga::Bytes,
+}
+
+#[derive(Debug)]
+enum Varying {
+    Local { location: u32, ty: NumericType },
+    BuiltIn(naga::BuiltIn),
+}
+
+#[derive(Debug)]
+struct SpecializationConstant {
+    id: u32,
+    ty: NumericType,
+}
+
+#[derive(Debug, Default)]
+struct EntryPoint {
+    inputs: Vec<Varying>,
+    outputs: Vec<Varying>,
+    resources: Vec<(naga::Handle<Resource>, naga::GlobalUse)>,
+    spec_constants: Vec<SpecializationConstant>,
+}
+
+#[derive(Debug)]
+pub struct Interface {
+    resources: naga::Arena<Resource>,
+    entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
+}
 
 #[derive(Clone, Debug, Error)]
 #[error("buffer usage is {actual:?} which does not contain required usage {expected:?}")]
@@ -59,7 +121,7 @@ pub enum BindingError {
     #[error("type on the shader side does not match the pipeline binding")]
     WrongType,
     #[error("buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
-    WrongBufferSize(wgt::BufferAddress),
+    WrongBufferSize(wgt::BufferSize),
     #[error("view dimension {dim:?} (is array: {is_array}) doesn't match the shader")]
     WrongTextureViewDimension {
         dim: naga::ImageDimension,
@@ -232,723 +294,527 @@ fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureForm
     }
 }
 
-fn check_binding_use(
-    module: &naga::Module,
-    var: &naga::GlobalVariable,
-    entry: &BindGroupLayoutEntry,
-) -> Result<naga::GlobalUse, BindingError> {
-    match module.types[var.ty].inner {
-        naga::TypeInner::Struct { ref members } => {
-            let (allowed_usage, min_size) = match entry.ty {
-                BindingType::Buffer {
-                    ty,
-                    has_dynamic_offset: _,
-                    min_binding_size,
+impl Resource {
+    fn check_binding_use(
+        &self,
+        entry: &BindGroupLayoutEntry,
+        shader_usage: naga::GlobalUse,
+    ) -> Result<(), BindingError> {
+        let allowed_usage = match self.ty {
+            ResourceType::Buffer { size } => {
+                let (allowed_usage, min_size) = match entry.ty {
+                    BindingType::Buffer {
+                        ty,
+                        has_dynamic_offset: _,
+                        min_binding_size,
+                    } => {
+                        let global_use = match ty {
+                            wgt::BufferBindingType::Uniform
+                            | wgt::BufferBindingType::Storage { read_only: true } => {
+                                naga::GlobalUse::LOAD
+                            }
+                            wgt::BufferBindingType::Storage { read_only: _ } => {
+                                naga::GlobalUse::all()
+                            }
+                        };
+                        (global_use, min_binding_size)
+                    }
+                    _ => return Err(BindingError::WrongType),
+                };
+                match min_size {
+                    Some(non_zero) if non_zero < size => {
+                        return Err(BindingError::WrongBufferSize(size))
+                    }
+                    _ => (),
+                }
+                allowed_usage
+            }
+            ResourceType::Sampler { comparison } => match entry.ty {
+                BindingType::Sampler {
+                    filtering: _,
+                    comparison: cmp,
                 } => {
-                    let global_use = match ty {
-                        wgt::BufferBindingType::Uniform
-                        | wgt::BufferBindingType::Storage { read_only: true } => {
-                            naga::GlobalUse::LOAD
-                        }
-                        wgt::BufferBindingType::Storage { read_only: _ } => naga::GlobalUse::all(),
-                    };
-                    (global_use, min_binding_size)
+                    if cmp == comparison {
+                        naga::GlobalUse::LOAD
+                    } else {
+                        return Err(BindingError::WrongSamplerComparison);
+                    }
                 }
                 _ => return Err(BindingError::WrongType),
-            };
-            let mut actual_size = 0;
-            for (i, member) in members.iter().enumerate() {
-                actual_size += get_aligned_type_size(module, member.ty, i + 1 == members.len());
-            }
-            match min_size {
-                Some(non_zero) if non_zero.get() < actual_size => {
-                    return Err(BindingError::WrongBufferSize(actual_size))
-                }
-                _ => (),
-            }
-            Ok(allowed_usage)
-        }
-        naga::TypeInner::Sampler { comparison } => match entry.ty {
-            BindingType::Sampler {
-                filtering: _,
-                comparison: cmp,
+            },
+            ResourceType::Texture {
+                dim,
+                arrayed,
+                class,
             } => {
-                if cmp == comparison {
-                    Ok(naga::GlobalUse::LOAD)
-                } else {
-                    Err(BindingError::WrongSamplerComparison)
-                }
-            }
-            _ => Err(BindingError::WrongType),
-        },
-        naga::TypeInner::Image {
-            dim,
-            arrayed,
-            class,
-        } => {
-            let view_dimension = match entry.ty {
-                BindingType::Texture { view_dimension, .. }
-                | BindingType::StorageTexture { view_dimension, .. } => view_dimension,
-                _ => {
-                    return Err(BindingError::WrongTextureViewDimension {
-                        dim,
-                        is_array: true,
-                    })
-                }
-            };
-            if arrayed {
-                match (dim, view_dimension) {
-                    (naga::ImageDimension::D2, wgt::TextureViewDimension::D2Array) => (),
-                    (naga::ImageDimension::Cube, wgt::TextureViewDimension::CubeArray) => (),
+                let view_dimension = match entry.ty {
+                    BindingType::Texture { view_dimension, .. }
+                    | BindingType::StorageTexture { view_dimension, .. } => view_dimension,
                     _ => {
                         return Err(BindingError::WrongTextureViewDimension {
                             dim,
                             is_array: true,
                         })
                     }
-                }
-            } else {
-                match (dim, view_dimension) {
-                    (naga::ImageDimension::D1, wgt::TextureViewDimension::D1) => (),
-                    (naga::ImageDimension::D2, wgt::TextureViewDimension::D2) => (),
-                    (naga::ImageDimension::D3, wgt::TextureViewDimension::D3) => (),
-                    (naga::ImageDimension::Cube, wgt::TextureViewDimension::Cube) => (),
-                    _ => {
-                        return Err(BindingError::WrongTextureViewDimension {
-                            dim,
-                            is_array: false,
-                        })
+                };
+                if arrayed {
+                    match (dim, view_dimension) {
+                        (naga::ImageDimension::D2, wgt::TextureViewDimension::D2Array) => (),
+                        (naga::ImageDimension::Cube, wgt::TextureViewDimension::CubeArray) => (),
+                        _ => {
+                            return Err(BindingError::WrongTextureViewDimension {
+                                dim,
+                                is_array: true,
+                            })
+                        }
+                    }
+                } else {
+                    match (dim, view_dimension) {
+                        (naga::ImageDimension::D1, wgt::TextureViewDimension::D1) => (),
+                        (naga::ImageDimension::D2, wgt::TextureViewDimension::D2) => (),
+                        (naga::ImageDimension::D3, wgt::TextureViewDimension::D3) => (),
+                        (naga::ImageDimension::Cube, wgt::TextureViewDimension::Cube) => (),
+                        _ => {
+                            return Err(BindingError::WrongTextureViewDimension {
+                                dim,
+                                is_array: false,
+                            })
+                        }
                     }
                 }
-            }
-            let (expected_class, usage) = match entry.ty {
-                BindingType::Texture {
-                    sample_type,
-                    view_dimension: _,
-                    multisampled: multi,
-                } => {
-                    let class = match sample_type {
-                        wgt::TextureSampleType::Float { .. } => naga::ImageClass::Sampled {
-                            kind: naga::ScalarKind::Float,
-                            multi,
-                        },
-                        wgt::TextureSampleType::Sint => naga::ImageClass::Sampled {
-                            kind: naga::ScalarKind::Sint,
-                            multi,
-                        },
-                        wgt::TextureSampleType::Uint => naga::ImageClass::Sampled {
-                            kind: naga::ScalarKind::Uint,
-                            multi,
-                        },
-                        wgt::TextureSampleType::Depth => naga::ImageClass::Depth,
-                    };
-                    (class, naga::GlobalUse::LOAD)
+                let (expected_class, usage) = match entry.ty {
+                    BindingType::Texture {
+                        sample_type,
+                        view_dimension: _,
+                        multisampled: multi,
+                    } => {
+                        let class = match sample_type {
+                            wgt::TextureSampleType::Float { .. } => naga::ImageClass::Sampled {
+                                kind: naga::ScalarKind::Float,
+                                multi,
+                            },
+                            wgt::TextureSampleType::Sint => naga::ImageClass::Sampled {
+                                kind: naga::ScalarKind::Sint,
+                                multi,
+                            },
+                            wgt::TextureSampleType::Uint => naga::ImageClass::Sampled {
+                                kind: naga::ScalarKind::Uint,
+                                multi,
+                            },
+                            wgt::TextureSampleType::Depth => naga::ImageClass::Depth,
+                        };
+                        (class, naga::GlobalUse::LOAD)
+                    }
+                    BindingType::StorageTexture {
+                        access,
+                        format,
+                        view_dimension: _,
+                    } => {
+                        let naga_format = map_storage_format_to_naga(format)
+                            .ok_or(BindingError::BadStorageFormat(format))?;
+                        let usage = match access {
+                            wgt::StorageTextureAccess::ReadOnly => naga::GlobalUse::LOAD,
+                            wgt::StorageTextureAccess::WriteOnly => naga::GlobalUse::STORE,
+                        };
+                        (naga::ImageClass::Storage(naga_format), usage)
+                    }
+                    _ => return Err(BindingError::WrongType),
+                };
+                if class != expected_class {
+                    return Err(BindingError::WrongTextureClass {
+                        binding: expected_class,
+                        shader: class,
+                    });
                 }
-                BindingType::StorageTexture {
-                    access,
-                    format,
-                    view_dimension: _,
-                } => {
-                    let naga_format = map_storage_format_to_naga(format)
-                        .ok_or(BindingError::BadStorageFormat(format))?;
-                    let usage = match access {
-                        wgt::StorageTextureAccess::ReadOnly => naga::GlobalUse::LOAD,
-                        wgt::StorageTextureAccess::WriteOnly => naga::GlobalUse::STORE,
-                    };
-                    (naga::ImageClass::Storage(naga_format), usage)
-                }
-                _ => return Err(BindingError::WrongType),
-            };
-            if class != expected_class {
-                return Err(BindingError::WrongTextureClass {
-                    binding: expected_class,
-                    shader: class,
-                });
+                usage
             }
-            Ok(usage)
-        }
-        _ => Err(BindingError::WrongType),
-    }
-}
+        };
 
-fn is_sub_type(sub: &naga::TypeInner, provided: &naga::TypeInner) -> bool {
-    use naga::TypeInner as Ti;
-
-    match (sub, provided) {
-        (
-            &Ti::Scalar {
-                kind: k0,
-                width: w0,
-            },
-            &Ti::Scalar {
-                kind: k1,
-                width: w1,
-            },
-        ) => k0 == k1 && w0 <= w1,
-        (
-            &Ti::Scalar {
-                kind: k0,
-                width: w0,
-            },
-            &Ti::Vector {
-                size: _,
-                kind: k1,
-                width: w1,
-            },
-        ) => k0 == k1 && w0 <= w1,
-        (
-            &Ti::Vector {
-                size: s0,
-                kind: k0,
-                width: w0,
-            },
-            &Ti::Vector {
-                size: s1,
-                kind: k1,
-                width: w1,
-            },
-        ) => s0 as u8 <= s1 as u8 && k0 == k1 && w0 <= w1,
-        (
-            &Ti::Matrix {
-                columns: c0,
-                rows: r0,
-                width: w0,
-            },
-            &Ti::Matrix {
-                columns: c1,
-                rows: r1,
-                width: w1,
-            },
-        ) => c0 == c1 && r0 == r1 && w0 <= w1,
-        (&Ti::Struct { members: ref m0 }, &Ti::Struct { members: ref m1 }) => m0 == m1,
-        _ => false,
-    }
-}
-
-pub enum MaybeOwned<'a, T> {
-    Owned(T),
-    Borrowed(&'a T),
-}
-
-impl<'a, T> std::ops::Deref for MaybeOwned<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        match *self {
-            MaybeOwned::Owned(ref value) => value,
-            MaybeOwned::Borrowed(value) => value,
+        if allowed_usage.contains(shader_usage) {
+            Ok(())
+        } else {
+            Err(BindingError::WrongUsage(shader_usage))
         }
     }
-}
 
-pub fn map_vertex_format(format: wgt::VertexFormat) -> naga::TypeInner {
-    use naga::TypeInner as Ti;
-    use wgt::VertexFormat as Vf;
-
-    //Note: Shader always sees data as int, uint, or float.
-    // It doesn't know if the original is normalized in a tighter form.
-    let width = 4;
-    match format {
-        Vf::Uchar2 => Ti::Vector {
-            size: naga::VectorSize::Bi,
-            kind: naga::ScalarKind::Uint,
-            width,
-        },
-        Vf::Uchar4 => Ti::Vector {
-            size: naga::VectorSize::Quad,
-            kind: naga::ScalarKind::Uint,
-            width,
-        },
-        Vf::Char2 => Ti::Vector {
-            size: naga::VectorSize::Bi,
-            kind: naga::ScalarKind::Sint,
-            width,
-        },
-        Vf::Char4 => Ti::Vector {
-            size: naga::VectorSize::Quad,
-            kind: naga::ScalarKind::Sint,
-            width,
-        },
-        Vf::Uchar2Norm => Ti::Vector {
-            size: naga::VectorSize::Bi,
-            kind: naga::ScalarKind::Float,
-            width,
-        },
-        Vf::Uchar4Norm => Ti::Vector {
-            size: naga::VectorSize::Quad,
-            kind: naga::ScalarKind::Float,
-            width,
-        },
-        Vf::Char2Norm => Ti::Vector {
-            size: naga::VectorSize::Bi,
-            kind: naga::ScalarKind::Float,
-            width,
-        },
-        Vf::Char4Norm => Ti::Vector {
-            size: naga::VectorSize::Quad,
-            kind: naga::ScalarKind::Float,
-            width,
-        },
-        Vf::Ushort2 => Ti::Vector {
-            size: naga::VectorSize::Bi,
-            kind: naga::ScalarKind::Uint,
-            width,
-        },
-        Vf::Ushort4 => Ti::Vector {
-            size: naga::VectorSize::Quad,
-            kind: naga::ScalarKind::Uint,
-            width,
-        },
-        Vf::Short2 => Ti::Vector {
-            size: naga::VectorSize::Bi,
-            kind: naga::ScalarKind::Sint,
-            width,
-        },
-        Vf::Short4 => Ti::Vector {
-            size: naga::VectorSize::Quad,
-            kind: naga::ScalarKind::Sint,
-            width,
-        },
-        Vf::Ushort2Norm | Vf::Short2Norm | Vf::Half2 => Ti::Vector {
-            size: naga::VectorSize::Bi,
-            kind: naga::ScalarKind::Float,
-            width,
-        },
-        Vf::Ushort4Norm | Vf::Short4Norm | Vf::Half4 => Ti::Vector {
-            size: naga::VectorSize::Quad,
-            kind: naga::ScalarKind::Float,
-            width,
-        },
-        Vf::Float => Ti::Scalar {
-            kind: naga::ScalarKind::Float,
-            width,
-        },
-        Vf::Float2 => Ti::Vector {
-            size: naga::VectorSize::Bi,
-            kind: naga::ScalarKind::Float,
-            width,
-        },
-        Vf::Float3 => Ti::Vector {
-            size: naga::VectorSize::Tri,
-            kind: naga::ScalarKind::Float,
-            width,
-        },
-        Vf::Float4 => Ti::Vector {
-            size: naga::VectorSize::Quad,
-            kind: naga::ScalarKind::Float,
-            width,
-        },
-        Vf::Uint => Ti::Scalar {
-            kind: naga::ScalarKind::Uint,
-            width,
-        },
-        Vf::Uint2 => Ti::Vector {
-            size: naga::VectorSize::Bi,
-            kind: naga::ScalarKind::Uint,
-            width,
-        },
-        Vf::Uint3 => Ti::Vector {
-            size: naga::VectorSize::Tri,
-            kind: naga::ScalarKind::Uint,
-            width,
-        },
-        Vf::Uint4 => Ti::Vector {
-            size: naga::VectorSize::Quad,
-            kind: naga::ScalarKind::Uint,
-            width,
-        },
-        Vf::Int => Ti::Scalar {
-            kind: naga::ScalarKind::Sint,
-            width,
-        },
-        Vf::Int2 => Ti::Vector {
-            size: naga::VectorSize::Bi,
-            kind: naga::ScalarKind::Sint,
-            width,
-        },
-        Vf::Int3 => Ti::Vector {
-            size: naga::VectorSize::Tri,
-            kind: naga::ScalarKind::Sint,
-            width,
-        },
-        Vf::Int4 => Ti::Vector {
-            size: naga::VectorSize::Quad,
-            kind: naga::ScalarKind::Sint,
-            width,
-        },
+    fn derive_binding_type(
+        &self,
+        shader_usage: naga::GlobalUse,
+    ) -> Result<BindingType, BindingError> {
+        Ok(match self.ty {
+            ResourceType::Buffer { size } => BindingType::Buffer {
+                ty: match self.class {
+                    naga::StorageClass::Uniform => wgt::BufferBindingType::Uniform,
+                    naga::StorageClass::Storage => wgt::BufferBindingType::Storage {
+                        read_only: !shader_usage.contains(naga::GlobalUse::STORE),
+                    },
+                    _ => return Err(BindingError::WrongType),
+                },
+                has_dynamic_offset: false,
+                min_binding_size: Some(size),
+            },
+            ResourceType::Sampler { comparison } => BindingType::Sampler {
+                filtering: true,
+                comparison,
+            },
+            ResourceType::Texture {
+                dim,
+                arrayed,
+                class,
+            } => {
+                let view_dimension = match dim {
+                    naga::ImageDimension::D1 => wgt::TextureViewDimension::D1,
+                    naga::ImageDimension::D2 if arrayed => wgt::TextureViewDimension::D2Array,
+                    naga::ImageDimension::D2 => wgt::TextureViewDimension::D2,
+                    naga::ImageDimension::D3 => wgt::TextureViewDimension::D3,
+                    naga::ImageDimension::Cube if arrayed => wgt::TextureViewDimension::CubeArray,
+                    naga::ImageDimension::Cube => wgt::TextureViewDimension::Cube,
+                };
+                match class {
+                    naga::ImageClass::Sampled { multi, kind } => BindingType::Texture {
+                        sample_type: match kind {
+                            naga::ScalarKind::Float => {
+                                wgt::TextureSampleType::Float { filterable: true }
+                            }
+                            naga::ScalarKind::Sint => wgt::TextureSampleType::Sint,
+                            naga::ScalarKind::Uint => wgt::TextureSampleType::Uint,
+                            naga::ScalarKind::Bool => unreachable!(),
+                        },
+                        view_dimension,
+                        multisampled: multi,
+                    },
+                    naga::ImageClass::Depth => BindingType::Texture {
+                        sample_type: wgt::TextureSampleType::Depth,
+                        view_dimension,
+                        multisampled: false,
+                    },
+                    naga::ImageClass::Storage(format) => BindingType::StorageTexture {
+                        access: if shader_usage.contains(naga::GlobalUse::STORE) {
+                            wgt::StorageTextureAccess::WriteOnly
+                        } else {
+                            wgt::StorageTextureAccess::ReadOnly
+                        },
+                        view_dimension,
+                        format: {
+                            let f = map_storage_format_from_naga(format);
+                            let original = map_storage_format_to_naga(f)
+                                .ok_or(BindingError::BadStorageFormat(f))?;
+                            debug_assert_eq!(format, original);
+                            f
+                        },
+                    },
+                }
+            }
+        })
     }
 }
 
-fn map_texture_format(format: wgt::TextureFormat) -> naga::TypeInner {
-    use naga::{ScalarKind as Sk, TypeInner as Ti, VectorSize as Vs};
-    use wgt::TextureFormat as Tf;
+impl NumericType {
+    pub fn from_vertex_format(format: wgt::VertexFormat) -> Self {
+        use naga::{ScalarKind as Sk, VectorSize as Vs};
+        use wgt::VertexFormat as Vf;
 
-    //Note: Shader always sees data as int, uint, or float.
-    // It doesn't know if the original is normalized in a tighter form.
-    let width = 4;
-    match format {
-        Tf::R8Unorm | Tf::R8Snorm => Ti::Scalar {
-            kind: Sk::Float,
-            width,
-        },
-        Tf::R8Uint => Ti::Scalar {
-            kind: Sk::Uint,
-            width,
-        },
-        Tf::R8Sint => Ti::Scalar {
-            kind: Sk::Sint,
-            width,
-        },
-        Tf::R16Uint => Ti::Scalar {
-            kind: Sk::Uint,
-            width,
-        },
-        Tf::R16Sint => Ti::Scalar {
-            kind: Sk::Sint,
-            width,
-        },
-        Tf::R16Float => Ti::Scalar {
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Rg8Unorm | Tf::Rg8Snorm => Ti::Vector {
-            size: Vs::Bi,
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Rg8Uint => Ti::Vector {
-            size: Vs::Bi,
-            kind: Sk::Uint,
-            width,
-        },
-        Tf::Rg8Sint => Ti::Vector {
-            size: Vs::Bi,
-            kind: Sk::Sint,
-            width,
-        },
-        Tf::R32Uint => Ti::Scalar {
-            kind: Sk::Uint,
-            width,
-        },
-        Tf::R32Sint => Ti::Scalar {
-            kind: Sk::Sint,
-            width,
-        },
-        Tf::R32Float => Ti::Scalar {
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Rg16Uint => Ti::Vector {
-            size: Vs::Bi,
-            kind: Sk::Uint,
-            width,
-        },
-        Tf::Rg16Sint => Ti::Vector {
-            size: Vs::Bi,
-            kind: Sk::Sint,
-            width,
-        },
-        Tf::Rg16Float => Ti::Vector {
-            size: Vs::Bi,
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Rgba8Unorm
-        | Tf::Rgba8UnormSrgb
-        | Tf::Rgba8Snorm
-        | Tf::Bgra8Unorm
-        | Tf::Bgra8UnormSrgb => Ti::Vector {
-            size: Vs::Quad,
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Rgba8Uint => Ti::Vector {
-            size: Vs::Quad,
-            kind: Sk::Uint,
-            width,
-        },
-        Tf::Rgba8Sint => Ti::Vector {
-            size: Vs::Quad,
-            kind: Sk::Sint,
-            width,
-        },
-        Tf::Rgb10a2Unorm => Ti::Vector {
-            size: Vs::Quad,
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Rg11b10Float => Ti::Vector {
-            size: Vs::Tri,
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Rg32Uint => Ti::Vector {
-            size: Vs::Bi,
-            kind: Sk::Uint,
-            width,
-        },
-        Tf::Rg32Sint => Ti::Vector {
-            size: Vs::Bi,
-            kind: Sk::Sint,
-            width,
-        },
-        Tf::Rg32Float => Ti::Vector {
-            size: Vs::Bi,
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Rgba16Uint => Ti::Vector {
-            size: Vs::Quad,
-            kind: Sk::Uint,
-            width,
-        },
-        Tf::Rgba16Sint => Ti::Vector {
-            size: Vs::Quad,
-            kind: Sk::Sint,
-            width,
-        },
-        Tf::Rgba16Float => Ti::Vector {
-            size: Vs::Quad,
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Rgba32Uint => Ti::Vector {
-            size: Vs::Quad,
-            kind: Sk::Uint,
-            width,
-        },
-        Tf::Rgba32Sint => Ti::Vector {
-            size: Vs::Quad,
-            kind: Sk::Sint,
-            width,
-        },
-        Tf::Rgba32Float => Ti::Vector {
-            size: Vs::Quad,
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
-            panic!("Unexpected depth format")
+        let (dim, kind) = match format {
+            Vf::Uchar2 | Vf::Ushort2 => (NumericDimension::Vector(Vs::Bi), Sk::Uint),
+            Vf::Uchar4 | Vf::Ushort4 => (NumericDimension::Vector(Vs::Quad), Sk::Uint),
+            Vf::Char2 | Vf::Short2 => (NumericDimension::Vector(Vs::Bi), Sk::Sint),
+            Vf::Char4 | Vf::Short4 => (NumericDimension::Vector(Vs::Quad), Sk::Sint),
+            Vf::Uchar2Norm | Vf::Char2Norm | Vf::Ushort2Norm | Vf::Short2Norm | Vf::Half2 => {
+                (NumericDimension::Vector(Vs::Bi), Sk::Float)
+            }
+            Vf::Uchar4Norm | Vf::Char4Norm | Vf::Ushort4Norm | Vf::Short4Norm | Vf::Half4 => {
+                (NumericDimension::Vector(Vs::Quad), Sk::Float)
+            }
+            Vf::Float => (NumericDimension::Scalar, Sk::Float),
+            Vf::Float2 => (NumericDimension::Vector(Vs::Bi), Sk::Float),
+            Vf::Float3 => (NumericDimension::Vector(Vs::Tri), Sk::Float),
+            Vf::Float4 => (NumericDimension::Vector(Vs::Quad), Sk::Float),
+            Vf::Uint => (NumericDimension::Scalar, Sk::Uint),
+            Vf::Uint2 => (NumericDimension::Vector(Vs::Bi), Sk::Uint),
+            Vf::Uint3 => (NumericDimension::Vector(Vs::Tri), Sk::Uint),
+            Vf::Uint4 => (NumericDimension::Vector(Vs::Quad), Sk::Uint),
+            Vf::Int => (NumericDimension::Scalar, Sk::Sint),
+            Vf::Int2 => (NumericDimension::Vector(Vs::Bi), Sk::Sint),
+            Vf::Int3 => (NumericDimension::Vector(Vs::Tri), Sk::Sint),
+            Vf::Int4 => (NumericDimension::Vector(Vs::Quad), Sk::Sint),
+        };
+
+        NumericType {
+            dim,
+            kind,
+            //Note: Shader always sees data as int, uint, or float.
+            // It doesn't know if the original is normalized in a tighter form.
+            width: 4,
         }
-        Tf::Bc1RgbaUnorm
-        | Tf::Bc1RgbaUnormSrgb
-        | Tf::Bc2RgbaUnorm
-        | Tf::Bc2RgbaUnormSrgb
-        | Tf::Bc3RgbaUnorm
-        | Tf::Bc3RgbaUnormSrgb
-        | Tf::Bc7RgbaUnorm
-        | Tf::Bc7RgbaUnormSrgb => Ti::Vector {
-            size: Vs::Quad,
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Bc4RUnorm | Tf::Bc4RSnorm => Ti::Scalar {
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Bc5RgUnorm | Tf::Bc5RgSnorm => Ti::Vector {
-            size: Vs::Bi,
-            kind: Sk::Float,
-            width,
-        },
-        Tf::Bc6hRgbUfloat | Tf::Bc6hRgbSfloat => Ti::Vector {
-            size: Vs::Tri,
-            kind: Sk::Float,
-            width,
-        },
+    }
+
+    fn from_texture_format(format: wgt::TextureFormat) -> Self {
+        use naga::{ScalarKind as Sk, VectorSize as Vs};
+        use wgt::TextureFormat as Tf;
+
+        let (dim, kind) = match format {
+            Tf::R8Unorm | Tf::R8Snorm | Tf::R16Float | Tf::R32Float => {
+                (NumericDimension::Scalar, Sk::Float)
+            }
+            Tf::R8Uint | Tf::R16Uint | Tf::R32Uint => (NumericDimension::Scalar, Sk::Uint),
+            Tf::R8Sint | Tf::R16Sint | Tf::R32Sint => (NumericDimension::Scalar, Sk::Sint),
+            Tf::Rg8Unorm | Tf::Rg8Snorm | Tf::Rg16Float | Tf::Rg32Float => {
+                (NumericDimension::Vector(Vs::Bi), Sk::Float)
+            }
+            Tf::Rg8Uint | Tf::Rg16Uint | Tf::Rg32Uint => {
+                (NumericDimension::Vector(Vs::Bi), Sk::Uint)
+            }
+            Tf::Rg8Sint | Tf::Rg16Sint | Tf::Rg32Sint => {
+                (NumericDimension::Vector(Vs::Bi), Sk::Sint)
+            }
+            Tf::Rgba8Unorm
+            | Tf::Rgba8UnormSrgb
+            | Tf::Rgba8Snorm
+            | Tf::Bgra8Unorm
+            | Tf::Bgra8UnormSrgb
+            | Tf::Rgb10a2Unorm
+            | Tf::Rgba16Float
+            | Tf::Rgba32Float => (NumericDimension::Vector(Vs::Quad), Sk::Float),
+            Tf::Rgba8Uint | Tf::Rgba16Uint | Tf::Rgba32Uint => {
+                (NumericDimension::Vector(Vs::Quad), Sk::Uint)
+            }
+            Tf::Rgba8Sint | Tf::Rgba16Sint | Tf::Rgba32Sint => {
+                (NumericDimension::Vector(Vs::Quad), Sk::Sint)
+            }
+            Tf::Rg11b10Float => (NumericDimension::Vector(Vs::Tri), Sk::Float),
+            Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
+                panic!("Unexpected depth format")
+            }
+            Tf::Bc1RgbaUnorm
+            | Tf::Bc1RgbaUnormSrgb
+            | Tf::Bc2RgbaUnorm
+            | Tf::Bc2RgbaUnormSrgb
+            | Tf::Bc3RgbaUnorm
+            | Tf::Bc3RgbaUnormSrgb
+            | Tf::Bc7RgbaUnorm
+            | Tf::Bc7RgbaUnormSrgb => (NumericDimension::Vector(Vs::Quad), Sk::Float),
+            Tf::Bc4RUnorm | Tf::Bc4RSnorm => (NumericDimension::Scalar, Sk::Float),
+            Tf::Bc5RgUnorm | Tf::Bc5RgSnorm => (NumericDimension::Vector(Vs::Bi), Sk::Float),
+            Tf::Bc6hRgbUfloat | Tf::Bc6hRgbSfloat => (NumericDimension::Vector(Vs::Tri), Sk::Float),
+        };
+
+        NumericType {
+            dim,
+            kind,
+            //Note: Shader always sees data as int, uint, or float.
+            // It doesn't know if the original is normalized in a tighter form.
+            width: 4,
+        }
+    }
+
+    fn is_subtype_of(&self, other: &NumericType) -> bool {
+        if self.width > other.width {
+            return false;
+        }
+        if self.kind != other.kind {
+            return false;
+        }
+        match (self.dim, other.dim) {
+            (NumericDimension::Scalar, NumericDimension::Scalar) => true,
+            (NumericDimension::Scalar, NumericDimension::Vector(_)) => true,
+            (NumericDimension::Vector(s0), NumericDimension::Vector(s1)) => s0 <= s1,
+            (NumericDimension::Matrix(c0, r0), NumericDimension::Matrix(c1, r1)) => {
+                c0 == c1 && r0 == r1
+            }
+            _ => false,
+        }
     }
 }
 
 /// Return true if the fragment `format` is covered by the provided `output`.
-pub fn check_texture_format(format: wgt::TextureFormat, output: &naga::TypeInner) -> bool {
-    let required = map_texture_format(format);
-    is_sub_type(&required, output)
+pub fn check_texture_format(format: wgt::TextureFormat, output: &NumericType) -> bool {
+    NumericType::from_texture_format(format).is_subtype_of(output)
 }
 
-pub type StageInterface<'a> = FastHashMap<wgt::ShaderLocation, MaybeOwned<'a, naga::TypeInner>>;
+pub type StageIo = FastHashMap<wgt::ShaderLocation, NumericType>;
 
-pub enum IntrospectionBindGroupLayouts<'a> {
-    Given(ArrayVec<[&'a BindEntryMap; MAX_BIND_GROUPS]>),
-    Derived(&'a mut [BindEntryMap]),
-}
-
-fn derive_binding_type(
-    module: &naga::Module,
-    var: &naga::GlobalVariable,
-    usage: naga::GlobalUse,
-) -> Result<BindingType, BindingError> {
-    let ty = &module.types[var.ty];
-    Ok(match ty.inner {
-        naga::TypeInner::Struct { ref members } => {
-            let has_dynamic_offset = false;
-            let mut actual_size = 0;
-            for (i, member) in members.iter().enumerate() {
-                actual_size += get_aligned_type_size(module, member.ty, i + 1 == members.len());
-            }
-            match var.class {
-                naga::StorageClass::Uniform => BindingType::Buffer {
-                    ty: wgt::BufferBindingType::Uniform,
-                    has_dynamic_offset,
-                    min_binding_size: wgt::BufferSize::new(actual_size),
-                },
-                naga::StorageClass::Storage => BindingType::Buffer {
-                    ty: wgt::BufferBindingType::Storage {
-                        read_only: !usage.contains(naga::GlobalUse::STORE),
-                    },
-                    has_dynamic_offset,
-                    min_binding_size: wgt::BufferSize::new(actual_size),
-                },
-                _ => return Err(BindingError::WrongType),
-            }
-        }
-        naga::TypeInner::Sampler { comparison } => BindingType::Sampler {
-            filtering: true,
-            comparison,
-        },
-        naga::TypeInner::Image {
-            dim,
-            arrayed,
-            class,
-        } => {
-            let view_dimension = match dim {
-                naga::ImageDimension::D1 => wgt::TextureViewDimension::D1,
-                naga::ImageDimension::D2 if arrayed => wgt::TextureViewDimension::D2Array,
-                naga::ImageDimension::D2 => wgt::TextureViewDimension::D2,
-                naga::ImageDimension::D3 => wgt::TextureViewDimension::D3,
-                naga::ImageDimension::Cube if arrayed => wgt::TextureViewDimension::CubeArray,
-                naga::ImageDimension::Cube => wgt::TextureViewDimension::Cube,
+impl Interface {
+    pub fn new(module: &naga::Module) -> Self {
+        let mut resources = naga::Arena::new();
+        let mut resource_mapping = FastHashMap::default();
+        for (var_handle, var) in module.global_variables.iter() {
+            let (group, binding) = match var.binding {
+                Some(naga::Binding::Resource { group, binding }) => (group, binding),
+                _ => continue,
             };
-            match class {
-                naga::ImageClass::Sampled { multi, kind } => BindingType::Texture {
-                    sample_type: match kind {
-                        naga::ScalarKind::Float => {
-                            wgt::TextureSampleType::Float { filterable: true }
-                        }
-                        naga::ScalarKind::Sint => wgt::TextureSampleType::Sint,
-                        naga::ScalarKind::Uint => wgt::TextureSampleType::Uint,
-                        naga::ScalarKind::Bool => unreachable!(),
-                    },
-                    view_dimension,
-                    multisampled: multi,
+            let ty = match module.types[var.ty].inner {
+                naga::TypeInner::Struct { ref members } => {
+                    let mut actual_size = 0;
+                    for (i, member) in members.iter().enumerate() {
+                        actual_size +=
+                            get_aligned_type_size(module, member.ty, i + 1 == members.len());
+                    }
+                    ResourceType::Buffer {
+                        size: wgt::BufferSize::new(actual_size).unwrap(),
+                    }
+                }
+                naga::TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class,
+                } => ResourceType::Texture {
+                    dim,
+                    arrayed,
+                    class,
                 },
-                naga::ImageClass::Depth => BindingType::Texture {
-                    sample_type: wgt::TextureSampleType::Depth,
-                    view_dimension,
-                    multisampled: false,
-                },
-                naga::ImageClass::Storage(format) => BindingType::StorageTexture {
-                    access: if usage.contains(naga::GlobalUse::STORE) {
-                        wgt::StorageTextureAccess::WriteOnly
-                    } else {
-                        wgt::StorageTextureAccess::ReadOnly
-                    },
-                    view_dimension,
-                    format: {
-                        let f = map_storage_format_from_naga(format);
-                        let original = map_storage_format_to_naga(f)
-                            .ok_or(BindingError::BadStorageFormat(f))?;
-                        debug_assert_eq!(format, original);
-                        f
-                    },
-                },
-            }
+                naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
+                ref other => panic!("Unexpected resource type: {:?}", other),
+            };
+            let handle = resources.append(Resource {
+                group,
+                binding,
+                ty,
+                class: var.class,
+            });
+            resource_mapping.insert(var_handle, handle);
         }
-        _ => return Err(BindingError::WrongType),
-    })
-}
 
-pub fn check_stage<'a>(
-    module: &'a naga::Module,
-    mut group_layouts: IntrospectionBindGroupLayouts,
-    entry_point_name: &str,
-    stage_bit: wgt::ShaderStage,
-    inputs: StageInterface<'a>,
-) -> Result<StageInterface<'a>, StageError> {
-    // Since a shader module can have multiple entry points with the same name,
-    // we need to look for one with the right execution model.
-    let shader_stage = match stage_bit {
-        wgt::ShaderStage::VERTEX => naga::ShaderStage::Vertex,
-        wgt::ShaderStage::FRAGMENT => naga::ShaderStage::Fragment,
-        wgt::ShaderStage::COMPUTE => naga::ShaderStage::Compute,
-        _ => unreachable!(),
-    };
-    let entry_point = module
-        .entry_points
-        .get(&(shader_stage, entry_point_name.to_string()))
-        .ok_or(StageError::MissingEntryPoint(stage_bit))?;
+        let mut entry_points = FastHashMap::default();
+        entry_points.reserve(module.entry_points.len());
+        for (&(stage, ref ep_name), entry_point) in module.entry_points.iter() {
+            let mut ep = EntryPoint::default();
+            for ((var_handle, var), &usage) in module
+                .global_variables
+                .iter()
+                .zip(&entry_point.function.global_usage)
+            {
+                if usage.is_empty() {
+                    continue;
+                }
 
-    let mut outputs = StageInterface::default();
-    for ((_, var), &usage) in module
-        .global_variables
-        .iter()
-        .zip(&entry_point.function.global_usage)
-    {
-        if usage.is_empty() {
-            continue;
-        }
-        match var.binding {
-            Some(naga::Binding::Resource { group, binding }) => {
-                let result = match group_layouts {
-                    IntrospectionBindGroupLayouts::Given(ref layouts) => layouts
-                        .get(group as usize)
-                        .and_then(|map| map.get(&binding))
-                        .ok_or(BindingError::Missing)
-                        .and_then(|entry| {
-                            if entry.visibility.contains(stage_bit) {
-                                Ok(entry)
-                            } else {
-                                Err(BindingError::Invisible)
-                            }
-                        })
-                        .and_then(|entry| check_binding_use(module, var, entry))
-                        .and_then(|allowed_usage| {
-                            if allowed_usage.contains(usage) {
-                                Ok(())
-                            } else {
-                                Err(BindingError::WrongUsage(usage))
-                            }
-                        }),
-                    IntrospectionBindGroupLayouts::Derived(ref mut layouts) => layouts
-                        .get_mut(group as usize)
-                        .ok_or(BindingError::Missing)
-                        .and_then(|set| {
-                            let ty = derive_binding_type(module, var, usage)?;
-                            Ok(match set.entry(binding) {
-                                Entry::Occupied(e) if e.get().ty != ty => {
-                                    return Err(BindingError::InconsistentlyDerivedType)
-                                }
-                                Entry::Occupied(e) => {
-                                    e.into_mut().visibility |= stage_bit;
-                                }
-                                Entry::Vacant(e) => {
-                                    e.insert(BindGroupLayoutEntry {
-                                        binding,
-                                        ty,
-                                        visibility: stage_bit,
-                                        count: None,
-                                    });
-                                }
-                            })
-                        }),
+                let varying = match var.binding {
+                    Some(naga::Binding::Resource { .. }) => {
+                        ep.resources.push((resource_mapping[&var_handle], usage));
+                        None
+                    }
+                    Some(naga::Binding::Location(location)) => {
+                        let ty = match module.types[var.ty].inner {
+                            naga::TypeInner::Scalar { kind, width } => NumericType {
+                                dim: NumericDimension::Scalar,
+                                kind,
+                                width,
+                            },
+                            naga::TypeInner::Vector { size, kind, width } => NumericType {
+                                dim: NumericDimension::Vector(size),
+                                kind,
+                                width,
+                            },
+                            naga::TypeInner::Matrix {
+                                columns,
+                                rows,
+                                width,
+                            } => NumericType {
+                                dim: NumericDimension::Matrix(columns, rows),
+                                kind: naga::ScalarKind::Float,
+                                width,
+                            },
+                            ref other => panic!("Unexpected varying type: {:?}", other),
+                        };
+                        Some(Varying::Local { location, ty })
+                    }
+                    Some(naga::Binding::BuiltIn(built_in)) => Some(Varying::BuiltIn(built_in)),
+                    _ => None,
                 };
-                if let Err(error) = result {
-                    return Err(StageError::Binding {
-                        group,
-                        binding,
-                        error,
-                    });
+
+                if let Some(varying) = varying {
+                    match var.class {
+                        naga::StorageClass::Input => ep.inputs.push(varying),
+                        naga::StorageClass::Output => ep.outputs.push(varying),
+                        _ => (),
+                    }
                 }
             }
-            Some(naga::Binding::Location(location)) => {
-                let ty = &module.types[var.ty].inner;
-                if usage.contains(naga::GlobalUse::STORE) {
-                    outputs.insert(location, MaybeOwned::Borrowed(ty));
-                } else {
+            entry_points.insert((stage, ep_name.clone()), ep);
+        }
+
+        Interface {
+            resources,
+            entry_points,
+        }
+    }
+
+    pub fn check_stage(
+        &self,
+        given_layouts: Option<&[&BindEntryMap]>,
+        derived_layouts: &mut [BindEntryMap],
+        entry_point_name: &str,
+        stage_bit: wgt::ShaderStage,
+        inputs: StageIo,
+    ) -> Result<StageIo, StageError> {
+        // Since a shader module can have multiple entry points with the same name,
+        // we need to look for one with the right execution model.
+        let shader_stage = match stage_bit {
+            wgt::ShaderStage::VERTEX => naga::ShaderStage::Vertex,
+            wgt::ShaderStage::FRAGMENT => naga::ShaderStage::Fragment,
+            wgt::ShaderStage::COMPUTE => naga::ShaderStage::Compute,
+            _ => unreachable!(),
+        };
+        let entry_point = self
+            .entry_points
+            .get(&(shader_stage, entry_point_name.to_string()))
+            .ok_or(StageError::MissingEntryPoint(stage_bit))?;
+
+        for &(handle, usage) in entry_point.resources.iter() {
+            let res = &self.resources[handle];
+            let result = match given_layouts {
+                Some(layouts) => layouts
+                    .get(res.group as usize)
+                    .and_then(|map| map.get(&res.binding))
+                    .ok_or(BindingError::Missing)
+                    .and_then(|entry| {
+                        if entry.visibility.contains(stage_bit) {
+                            Ok(entry)
+                        } else {
+                            Err(BindingError::Invisible)
+                        }
+                    })
+                    .and_then(|entry| res.check_binding_use(entry, usage)),
+                None => derived_layouts
+                    .get_mut(res.group as usize)
+                    .ok_or(BindingError::Missing)
+                    .and_then(|set| {
+                        let ty = res.derive_binding_type(usage)?;
+                        Ok(match set.entry(res.binding) {
+                            Entry::Occupied(e) if e.get().ty != ty => {
+                                return Err(BindingError::InconsistentlyDerivedType)
+                            }
+                            Entry::Occupied(e) => {
+                                e.into_mut().visibility |= stage_bit;
+                            }
+                            Entry::Vacant(e) => {
+                                e.insert(BindGroupLayoutEntry {
+                                    binding: res.binding,
+                                    ty,
+                                    visibility: stage_bit,
+                                    count: None,
+                                });
+                            }
+                        })
+                    }),
+            };
+            if let Err(error) = result {
+                return Err(StageError::Binding {
+                    group: res.group,
+                    binding: res.binding,
+                    error,
+                });
+            }
+        }
+
+        for input in entry_point.inputs.iter() {
+            match *input {
+                Varying::Local { location, ty } => {
                     let result =
                         inputs
                             .get(&location)
                             .ok_or(InputError::Missing)
                             .and_then(|provided| {
-                                if is_sub_type(ty, provided) {
+                                if ty.is_subtype_of(provided) {
                                     Ok(())
                                 } else {
                                     Err(InputError::WrongType)
@@ -958,9 +824,18 @@ pub fn check_stage<'a>(
                         return Err(StageError::Input { location, error });
                     }
                 }
+                Varying::BuiltIn(_) => {}
             }
-            _ => {}
         }
+
+        let outputs = entry_point
+            .outputs
+            .iter()
+            .filter_map(|output| match *output {
+                Varying::Local { location, ty } => Some((location, ty)),
+                Varying::BuiltIn(_) => None,
+            })
+            .collect();
+        Ok(outputs)
     }
-    Ok(outputs)
 }
