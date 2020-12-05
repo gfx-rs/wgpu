@@ -132,7 +132,7 @@ impl framework::Example for Example {
             color_states: &[sc_desc.format.into()],
             depth_stencil_state: None,
             vertex_state: wgpu::VertexStateDescriptor {
-                index_format: wgpu::IndexFormat::Uint16,
+                index_format: None,
                 vertex_buffers: &[
                     wgpu::VertexBufferDescriptor {
                         stride: 4 * 4,

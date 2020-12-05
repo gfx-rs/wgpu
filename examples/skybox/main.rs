@@ -121,7 +121,7 @@ impl framework::Example for Skybox {
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
             color_states: &[sc_desc.format.into()],
             vertex_state: wgpu::VertexStateDescriptor {
-                index_format: wgpu::IndexFormat::Uint16,
+                index_format: None,
                 vertex_buffers: &[],
             },
             depth_stencil_state: None,
