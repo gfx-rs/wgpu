@@ -22,9 +22,9 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
             ref mut cases,
             ref mut default,
         }) => {
-            for case in cases.values_mut() {
-                if let (ref mut b, None) = *case {
-                    ensure_block_returns(b);
+            for case in cases.iter_mut() {
+                if !case.fall_through {
+                    ensure_block_returns(&mut case.body);
                 }
             }
             ensure_block_returns(default);

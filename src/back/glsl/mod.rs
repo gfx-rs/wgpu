@@ -1023,15 +1023,15 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ") {{")?;
 
                 // Write all cases
-                for (label, (block, fallthrough)) in cases {
-                    writeln!(self.out, "{}case {}:", "\t".repeat(indent + 1), label)?;
+                for case in cases {
+                    writeln!(self.out, "{}case {}:", "\t".repeat(indent + 1), case.value)?;
 
-                    for sta in block {
+                    for sta in case.body.iter() {
                         self.write_stmt(sta, ctx, indent + 2)?;
                     }
 
                     // Write `break;` if the block isn't fallthrough
-                    if fallthrough.is_none() {
+                    if case.fall_through {
                         writeln!(self.out, "{}break;", "\t".repeat(indent + 2))?;
                     }
                 }

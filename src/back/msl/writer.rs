@@ -505,10 +505,10 @@ impl<W: Write> Writer<W> {
                     self.put_expression(selector, context)?;
                     writeln!(self.out, ") {{")?;
                     let lcase = level.next();
-                    for (&value, &(ref block, ref fall_through)) in cases.iter() {
-                        writeln!(self.out, "{}case {}: {{", lcase, value)?;
-                        self.put_block(lcase.next(), block, context, return_value)?;
-                        if fall_through.is_none() {
+                    for case in cases.iter() {
+                        writeln!(self.out, "{}case {}: {{", lcase, case.value)?;
+                        self.put_block(lcase.next(), &case.body, context, return_value)?;
+                        if case.fall_through {
                             writeln!(self.out, "{}break;", lcase.next())?;
                         }
                         writeln!(self.out, "{}}}", lcase)?;

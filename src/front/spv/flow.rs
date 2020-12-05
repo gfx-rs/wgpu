@@ -271,35 +271,29 @@ impl FlowGraph {
                 } => {
                     let merge_node_index = self.block_to_node[&node.merge.unwrap().merge_block_id];
                     let mut result = node.block.clone();
-
-                    let mut cases = FastHashMap::default();
+                    let mut cases = Vec::with_capacity(targets.len());
 
                     for i in 0..targets.len() {
                         let left_target_node_index = self.block_to_node[&targets[i].1];
 
-                        let fallthrough: Option<crate::FallThrough> = if i < targets.len() - 1 {
+                        let fall_through = if i < targets.len() - 1 {
                             let right_target_node_index = self.block_to_node[&targets[i + 1].1];
-                            if has_path_connecting(
+                            has_path_connecting(
                                 &self.flow,
                                 left_target_node_index,
                                 right_target_node_index,
                                 None,
-                            ) {
-                                Some(crate::FallThrough {})
-                            } else {
-                                None
-                            }
+                            )
                         } else {
-                            None
+                            false
                         };
 
-                        cases.insert(
-                            targets[i].0,
-                            (
-                                self.naga_traverse(left_target_node_index, Some(merge_node_index))?,
-                                fallthrough,
-                            ),
-                        );
+                        cases.push(crate::SwitchCase {
+                            value: targets[i].0,
+                            body: self
+                                .naga_traverse(left_target_node_index, Some(merge_node_index))?,
+                            fall_through,
+                        });
                     }
 
                     result.push(crate::Statement::Switch {

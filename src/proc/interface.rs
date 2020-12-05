@@ -148,8 +148,8 @@ where
                     ref default,
                 } => {
                     self.traverse_expr(selector);
-                    for &(ref case, _) in cases.values() {
-                        self.traverse(case);
+                    for case in cases.iter() {
+                        self.traverse(&case.body);
                     }
                     self.traverse(default);
                 }

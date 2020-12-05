@@ -198,7 +198,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn _next_sint_literal(&mut self) -> Result<i32, Error<'a>> {
+    pub(super) fn next_sint_literal(&mut self) -> Result<i32, Error<'a>> {
         match self.next() {
             Token::Number(word) => word.parse().map_err(|err| Error::BadInteger(word, err)),
             other => Err(Error::Unexpected(other)),

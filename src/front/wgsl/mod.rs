@@ -1460,6 +1460,63 @@ impl Parser {
                             reject,
                         }
                     }
+                    "switch" => {
+                        lexer.expect(Token::Paren('('))?;
+                        let selector =
+                            self.parse_general_expression(lexer, context.as_expression())?;
+                        lexer.expect(Token::Paren(')'))?;
+                        lexer.expect(Token::Paren('{'))?;
+                        let mut cases = Vec::new();
+                        let mut default = Vec::new();
+                        loop {
+                            match lexer.next() {
+                                Token::Word("case") => loop {
+                                    let value = lexer.next_sint_literal()?;
+                                    lexer.expect(Token::Separator(':'))?;
+                                    let mut body = Vec::new();
+                                    if lexer.skip(Token::Separator(',')) {
+                                        cases.push(crate::SwitchCase {
+                                            value,
+                                            body,
+                                            fall_through: true,
+                                        });
+                                    } else {
+                                        lexer.expect(Token::Paren('{'))?;
+                                        let fall_through = loop {
+                                            if lexer.skip(Token::Word("fallthrough")) {
+                                                lexer.expect(Token::Separator(';'))?;
+                                                lexer.expect(Token::Paren('}'))?;
+                                                break true;
+                                            }
+                                            if lexer.skip(Token::Paren('}')) {
+                                                break false;
+                                            }
+                                            let s =
+                                                self.parse_statement(lexer, context.reborrow())?;
+                                            body.push(s);
+                                        };
+                                        cases.push(crate::SwitchCase {
+                                            value,
+                                            body,
+                                            fall_through,
+                                        });
+                                        break;
+                                    }
+                                },
+                                Token::Word("default") => {
+                                    lexer.expect(Token::Separator(':'))?;
+                                    default = self.parse_block(lexer, context.reborrow())?;
+                                }
+                                Token::Paren('}') => break,
+                                other => return Err(Error::Unexpected(other)),
+                            }
+                        }
+                        crate::Statement::Switch {
+                            selector,
+                            cases,
+                            default,
+                        }
+                    }
                     "loop" => {
                         let mut body = Vec::new();
                         let mut continuing = Vec::new();

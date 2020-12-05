@@ -666,12 +666,20 @@ pub enum Expression {
 /// A code block is just a vector of statements.
 pub type Block = Vec<Statement>;
 
-/// Marker type, used for falling through in a switch statement.
+/// A case for a switch statement.
 // Clone is used only for error reporting and is not intended for end users
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-pub struct FallThrough;
+pub struct SwitchCase {
+    /// Value, upon which the case is considered true.
+    pub value: i32,
+    /// Body of the cae.
+    pub body: Block,
+    /// If true, the control flow continues to the next case in the list,
+    /// or default.
+    pub fall_through: bool,
+}
 
 /// Instructions which make up an executable block.
 // Clone is used only for error reporting and is not intended for end users
@@ -690,7 +698,7 @@ pub enum Statement {
     /// Conditionally executes one of multiple blocks, based on the value of the selector.
     Switch {
         selector: Handle<Expression>, //int
-        cases: FastHashMap<i32, (Block, Option<FallThrough>)>,
+        cases: Vec<SwitchCase>,
         default: Block,
     },
     /// Executes a block repeatedly.

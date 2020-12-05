@@ -8,11 +8,11 @@ pomelo! {
         use crate::{
             proc::{ensure_block_returns, Typifier},
             Arena, BinaryOperator, Binding, Block, Constant,
-            ConstantInner, EntryPoint, Expression, FallThrough,
-            FastHashMap, Function, GlobalVariable, Handle, Interpolation,
+            ConstantInner, EntryPoint, Expression,
+            Function, GlobalVariable, Handle, Interpolation,
             LocalVariable, MemberOrigin, SampleLevel, ScalarKind,
-            Statement, StorageAccess,
-            StorageClass, StructMember, Type, TypeInner, UnaryOperator,
+            Statement, StorageAccess, StorageClass, StructMember,
+            SwitchCase, Type, TypeInner, UnaryOperator,
         };
     }
     %token #[derive(Debug)] #[cfg_attr(test, derive(PartialEq))] pub enum Token {};
@@ -62,8 +62,8 @@ pomelo! {
     %type jump_statement Statement;
     %type iteration_statement Statement;
     %type selection_statement Statement;
-    %type switch_statement_list Vec<(Option<i32>, Block, Option<FallThrough>)>;
-    %type switch_statement (Option<i32>, Block, Option<FallThrough>);
+    %type switch_statement_list Vec<(Option<i32>, Block, bool)>;
+    %type switch_statement (Option<i32>, Block, bool);
     %type for_init_statement Statement;
     %type for_rest_statement (Option<ExpressionRule>, Option<ExpressionRule>);
     %type condition_opt Option<ExpressionRule>;
@@ -847,12 +847,16 @@ pomelo! {
 
     selection_statement ::= Switch LeftParen expression(e) RightParen LeftBrace switch_statement_list(ls) RightBrace {
         let mut default = Vec::new();
-        let mut cases = FastHashMap::default();
-        for (v, s, ft) in ls {
-            if let Some(v) = v {
-                cases.insert(v, (s, ft));
+        let mut cases = Vec::new();
+        for (v, body, fall_through) in ls {
+            if let Some(value) = v {
+                cases.push(SwitchCase {
+                    value,
+                    body,
+                    fall_through,
+                });
             } else {
-                default.extend_from_slice(&s);
+                default.extend_from_slice(&body);
             }
         }
         Statement::Switch {
@@ -870,18 +874,18 @@ pomelo! {
         ssl
     }
     switch_statement ::= Case IntConstant(v) Colon statement_list(sl) {
-        let fallthrough = match sl.last() {
-            Some(Statement::Break) => None,
-            _ => Some(FallThrough),
+        let fall_through = match sl.last() {
+            Some(&Statement::Break) => false,
+            _ => true,
         };
-        (Some(v.1 as i32), sl, fallthrough)
+        (Some(v.1 as i32), sl, fall_through)
     }
     switch_statement ::= Default Colon statement_list(sl) {
-        let fallthrough = match sl.last() {
-            Some(Statement::Break) => Some(FallThrough),
-            _ => None,
+        let fall_through = match sl.last() {
+            Some(&Statement::Break) => true,
+            _ => false,
         };
-        (None, sl, fallthrough)
+        (None, sl, fall_through)
     }
 
     iteration_statement ::= While LeftParen expression(e) RightParen compound_statement_no_new_scope(sl) {
