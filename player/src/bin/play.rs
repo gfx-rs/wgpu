@@ -139,12 +139,12 @@ fn main() {
                                 desc.width,
                                 desc.height,
                             ));
-                            gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
+                            gfx_select!(device => global.device_create_swap_chain(device, surface, &desc)).unwrap();
                         }
                         Some(trace::Action::PresentSwapChain(id)) => {
                             frame_count += 1;
                             log::debug!("Presenting frame {}", frame_count);
-                            gfx_select!(device => global.swap_chain_present(id));
+                            gfx_select!(device => global.swap_chain_present(id)).unwrap();
                             break;
                         }
                         Some(action) => {
@@ -170,7 +170,7 @@ fn main() {
                 },
                 Event::LoopDestroyed => {
                     log::info!("Closing");
-                    gfx_select!(device => global.device_poll(device, true));
+                    gfx_select!(device => global.device_poll(device, true)).unwrap();
                 }
                 _ => {}
             }
