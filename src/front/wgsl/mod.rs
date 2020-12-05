@@ -4,6 +4,8 @@
 
 mod conv;
 mod lexer;
+#[cfg(test)]
+mod tests;
 
 use crate::{
     arena::{Arena, Handle},
@@ -1385,188 +1387,198 @@ impl Parser {
         mut context: StatementContext<'a, '_, '_>,
     ) -> Result<crate::Statement, Error<'a>> {
         let backup = lexer.clone();
-        match lexer.next() {
-            Token::Separator(';') => Ok(crate::Statement::Block(Vec::new())),
-            Token::Word(word) => {
-                self.scopes.push(Scope::Statement);
-                let statement = match word {
-                    "var" => {
-                        enum Init {
-                            Empty,
-                            Constant(Handle<crate::Constant>),
-                            Variable(Handle<crate::Expression>),
-                        }
-                        let (name, ty) = self.parse_variable_ident_decl(
-                            lexer,
-                            context.types,
-                            context.constants,
-                        )?;
-                        let init = if lexer.skip(Token::Operation('=')) {
-                            let value =
-                                self.parse_general_expression(lexer, context.as_expression())?;
-                            if let crate::Expression::Constant(handle) = context.expressions[value]
-                            {
-                                Init::Constant(handle)
-                            } else {
-                                Init::Variable(value)
-                            }
-                        } else {
-                            Init::Empty
-                        };
-                        lexer.expect(Token::Separator(';'))?;
-                        let var_id = context.variables.append(crate::LocalVariable {
-                            name: Some(name.to_owned()),
-                            ty,
-                            init: match init {
-                                Init::Constant(value) => Some(value),
-                                _ => None,
-                            },
-                        });
-                        let expr_id = context
-                            .expressions
-                            .append(crate::Expression::LocalVariable(var_id));
-                        context.lookup_ident.insert(name, expr_id);
-                        match init {
-                            Init::Variable(value) => crate::Statement::Store {
-                                pointer: expr_id,
-                                value,
-                            },
-                            _ => crate::Statement::Block(Vec::new()),
-                        }
+        let word = match lexer.next() {
+            Token::Separator(';') => return Ok(crate::Statement::Block(Vec::new())),
+            Token::Word(word) => word,
+            other => return Err(Error::Unexpected(other)),
+        };
+
+        self.scopes.push(Scope::Statement);
+        let statement = match word {
+            "var" => {
+                enum Init {
+                    Empty,
+                    Constant(Handle<crate::Constant>),
+                    Variable(Handle<crate::Expression>),
+                }
+
+                let (name, ty) =
+                    self.parse_variable_ident_decl(lexer, context.types, context.constants)?;
+
+                let init = if lexer.skip(Token::Operation('=')) {
+                    let value = self.parse_general_expression(lexer, context.as_expression())?;
+                    if let crate::Expression::Constant(handle) = context.expressions[value] {
+                        Init::Constant(handle)
+                    } else {
+                        Init::Variable(value)
                     }
-                    "return" => {
-                        let value = if lexer.peek() != Token::Separator(';') {
-                            Some(self.parse_general_expression(lexer, context.as_expression())?)
-                        } else {
-                            None
-                        };
-                        lexer.expect(Token::Separator(';'))?;
-                        crate::Statement::Return { value }
-                    }
-                    "if" => {
-                        lexer.expect(Token::Paren('('))?;
-                        let condition =
-                            self.parse_general_expression(lexer, context.as_expression())?;
-                        lexer.expect(Token::Paren(')'))?;
-                        let accept = self.parse_block(lexer, context.reborrow())?;
-                        let reject = if lexer.skip(Token::Word("else")) {
-                            self.parse_block(lexer, context.reborrow())?
-                        } else {
-                            Vec::new()
-                        };
-                        crate::Statement::If {
-                            condition,
-                            accept,
-                            reject,
-                        }
-                    }
-                    "switch" => {
-                        lexer.expect(Token::Paren('('))?;
-                        let selector =
-                            self.parse_general_expression(lexer, context.as_expression())?;
-                        lexer.expect(Token::Paren(')'))?;
-                        lexer.expect(Token::Paren('{'))?;
-                        let mut cases = Vec::new();
-                        let mut default = Vec::new();
-                        loop {
-                            match lexer.next() {
-                                Token::Word("case") => loop {
-                                    let value = lexer.next_sint_literal()?;
-                                    lexer.expect(Token::Separator(':'))?;
-                                    let mut body = Vec::new();
-                                    if lexer.skip(Token::Separator(',')) {
+                } else {
+                    Init::Empty
+                };
+
+                lexer.expect(Token::Separator(';'))?;
+                let var_id = context.variables.append(crate::LocalVariable {
+                    name: Some(name.to_owned()),
+                    ty,
+                    init: match init {
+                        Init::Constant(value) => Some(value),
+                        _ => None,
+                    },
+                });
+
+                let expr_id = context
+                    .expressions
+                    .append(crate::Expression::LocalVariable(var_id));
+                context.lookup_ident.insert(name, expr_id);
+
+                match init {
+                    Init::Variable(value) => crate::Statement::Store {
+                        pointer: expr_id,
+                        value,
+                    },
+                    _ => crate::Statement::Block(Vec::new()),
+                }
+            }
+            "return" => {
+                let value = if lexer.peek() != Token::Separator(';') {
+                    Some(self.parse_general_expression(lexer, context.as_expression())?)
+                } else {
+                    None
+                };
+                lexer.expect(Token::Separator(';'))?;
+                crate::Statement::Return { value }
+            }
+            "if" => {
+                lexer.expect(Token::Paren('('))?;
+                let condition = self.parse_general_expression(lexer, context.as_expression())?;
+                lexer.expect(Token::Paren(')'))?;
+
+                let accept = self.parse_block(lexer, context.reborrow())?;
+                let reject = if lexer.skip(Token::Word("else")) {
+                    self.parse_block(lexer, context.reborrow())?
+                } else {
+                    Vec::new()
+                };
+
+                crate::Statement::If {
+                    condition,
+                    accept,
+                    reject,
+                }
+            }
+            "switch" => {
+                lexer.expect(Token::Paren('('))?;
+                let selector = self.parse_general_expression(lexer, context.as_expression())?;
+                lexer.expect(Token::Paren(')'))?;
+                lexer.expect(Token::Paren('{'))?;
+                let mut cases = Vec::new();
+                let mut default = Vec::new();
+
+                loop {
+                    // cases + default
+                    match lexer.next() {
+                        Token::Word("case") => {
+                            let value = loop {
+                                // values
+                                let value = lexer.next_sint_literal()?;
+                                match lexer.next() {
+                                    Token::Separator(',') => {
                                         cases.push(crate::SwitchCase {
                                             value,
-                                            body,
+                                            body: Vec::new(),
                                             fall_through: true,
                                         });
-                                    } else {
-                                        lexer.expect(Token::Paren('{'))?;
-                                        let fall_through = loop {
-                                            if lexer.skip(Token::Word("fallthrough")) {
-                                                lexer.expect(Token::Separator(';'))?;
-                                                lexer.expect(Token::Paren('}'))?;
-                                                break true;
-                                            }
-                                            if lexer.skip(Token::Paren('}')) {
-                                                break false;
-                                            }
-                                            let s =
-                                                self.parse_statement(lexer, context.reborrow())?;
-                                            body.push(s);
-                                        };
-                                        cases.push(crate::SwitchCase {
-                                            value,
-                                            body,
-                                            fall_through,
-                                        });
-                                        break;
                                     }
-                                },
-                                Token::Word("default") => {
-                                    lexer.expect(Token::Separator(':'))?;
-                                    default = self.parse_block(lexer, context.reborrow())?;
+                                    Token::Separator(':') => break value,
+                                    other => return Err(Error::Unexpected(other)),
                                 }
-                                Token::Paren('}') => break,
-                                other => return Err(Error::Unexpected(other)),
-                            }
-                        }
-                        crate::Statement::Switch {
-                            selector,
-                            cases,
-                            default,
-                        }
-                    }
-                    "loop" => {
-                        let mut body = Vec::new();
-                        let mut continuing = Vec::new();
-                        lexer.expect(Token::Paren('{'))?;
-                        loop {
-                            if lexer.skip(Token::Word("continuing")) {
-                                continuing = self.parse_block(lexer, context.reborrow())?;
-                                lexer.expect(Token::Paren('}'))?;
-                                break;
-                            }
-                            if lexer.skip(Token::Paren('}')) {
-                                break;
-                            }
-                            let s = self.parse_statement(lexer, context.reborrow())?;
-                            body.push(s);
-                        }
-                        crate::Statement::Loop { body, continuing }
-                    }
-                    "break" => crate::Statement::Break,
-                    "continue" => crate::Statement::Continue,
-                    ident => {
-                        // assignment
-                        if let Some(&var_expr) = context.lookup_ident.get(ident) {
-                            let left =
-                                self.parse_postfix(lexer, context.as_expression(), var_expr)?;
-                            lexer.expect(Token::Operation('='))?;
-                            let value =
-                                self.parse_general_expression(lexer, context.as_expression())?;
-                            lexer.expect(Token::Separator(';'))?;
-                            crate::Statement::Store {
-                                pointer: left,
+                            };
+
+                            let mut body = Vec::new();
+                            lexer.expect(Token::Paren('{'))?;
+                            let fall_through = loop {
+                                // default statements
+                                if lexer.skip(Token::Word("fallthrough")) {
+                                    lexer.expect(Token::Separator(';'))?;
+                                    lexer.expect(Token::Paren('}'))?;
+                                    break true;
+                                }
+                                if lexer.skip(Token::Paren('}')) {
+                                    break false;
+                                }
+                                let s = self.parse_statement(lexer, context.reborrow())?;
+                                body.push(s);
+                            };
+
+                            cases.push(crate::SwitchCase {
                                 value,
-                            }
-                        } else if let Some((expr, new_lexer)) =
-                            self.parse_function_call(&backup, context.as_expression())?
-                        {
-                            *lexer = new_lexer;
-                            context.expressions.append(expr);
-                            lexer.expect(Token::Separator(';'))?;
-                            crate::Statement::Block(Vec::new())
-                        } else {
-                            return Err(Error::UnknownIdent(ident));
+                                body,
+                                fall_through,
+                            });
                         }
+                        Token::Word("default") => {
+                            lexer.expect(Token::Separator(':'))?;
+                            default = self.parse_block(lexer, context.reborrow())?;
+                        }
+                        Token::Paren('}') => break,
+                        other => return Err(Error::Unexpected(other)),
                     }
-                };
-                self.scopes.pop();
-                Ok(statement)
+                }
+
+                crate::Statement::Switch {
+                    selector,
+                    cases,
+                    default,
+                }
             }
-            other => Err(Error::Unexpected(other)),
-        }
+            "loop" => {
+                let mut body = Vec::new();
+                let mut continuing = Vec::new();
+                lexer.expect(Token::Paren('{'))?;
+
+                loop {
+                    if lexer.skip(Token::Word("continuing")) {
+                        continuing = self.parse_block(lexer, context.reborrow())?;
+                        lexer.expect(Token::Paren('}'))?;
+                        break;
+                    }
+                    if lexer.skip(Token::Paren('}')) {
+                        break;
+                    }
+                    let s = self.parse_statement(lexer, context.reborrow())?;
+                    body.push(s);
+                }
+
+                crate::Statement::Loop { body, continuing }
+            }
+            "break" => crate::Statement::Break,
+            "continue" => crate::Statement::Continue,
+            "discard" => crate::Statement::Kill,
+            ident => {
+                // assignment
+                if let Some(&var_expr) = context.lookup_ident.get(ident) {
+                    let left = self.parse_postfix(lexer, context.as_expression(), var_expr)?;
+                    lexer.expect(Token::Operation('='))?;
+                    let value = self.parse_general_expression(lexer, context.as_expression())?;
+                    lexer.expect(Token::Separator(';'))?;
+                    crate::Statement::Store {
+                        pointer: left,
+                        value,
+                    }
+                } else if let Some((expr, new_lexer)) =
+                    self.parse_function_call(&backup, context.as_expression())?
+                {
+                    *lexer = new_lexer;
+                    context.expressions.append(expr);
+                    lexer.expect(Token::Separator(';'))?;
+                    crate::Statement::Block(Vec::new())
+                } else {
+                    return Err(Error::UnknownIdent(ident));
+                }
+            }
+        };
+        self.scopes.pop();
+        Ok(statement)
     }
 
     fn parse_block<'a>(
@@ -1899,10 +1911,4 @@ impl Parser {
 
 pub fn parse_str(source: &str) -> Result<crate::Module, ParseError> {
     Parser::new().parse(source)
-}
-
-#[test]
-fn parse_types() {
-    assert!(parse_str("const a : i32 = 2;").is_ok());
-    assert!(parse_str("const a : x32 = 2;").is_err());
 }

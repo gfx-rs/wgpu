@@ -163,6 +163,7 @@ impl<'a> Lexer<'a> {
         if token == expected {
             Ok(())
         } else {
+            log::trace!("expect {:?}, got {:?}", expected, token);
             Err(Error::Unexpected(token))
         }
     }
