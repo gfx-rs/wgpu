@@ -755,3 +755,16 @@ pub fn map_index_format(index_format: wgt::IndexFormat) -> hal::IndexType {
         wgt::IndexFormat::Uint32 => hal::IndexType::U32,
     }
 }
+
+/// Take `value` and round it up to the nearest alignment `alignment`.
+///
+/// ```text
+/// (0, 3) -> 0
+/// (1, 3) -> 3
+/// (2, 3) -> 3
+/// (3, 3) -> 3
+/// (4, 3) -> 6
+/// ...
+pub fn align_up(value: u32, alignment: u32) -> u32 {
+    ((value + alignment - 1) / alignment) * alignment
+}
