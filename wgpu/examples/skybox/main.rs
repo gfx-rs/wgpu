@@ -4,7 +4,7 @@ mod framework;
 use futures::task::{LocalSpawn, LocalSpawnExt};
 use wgpu::util::DeviceExt;
 
-const IMAGE_SIZE: u32 = 512;
+const IMAGE_SIZE: u32 = 128;
 
 type Uniform = cgmath::Matrix4<f32>;
 type Uniforms = [Uniform; 2];
@@ -40,7 +40,9 @@ impl Skybox {
 
 impl framework::Example for Skybox {
     fn optional_features() -> wgpu::Features {
-        wgpu::Features::TEXTURE_COMPRESSION_BC
+        wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR
+            | wgpu::Features::TEXTURE_COMPRESSION_ETC2
+            | wgpu::Features::TEXTURE_COMPRESSION_BC
     }
 
     fn init(
@@ -135,28 +137,37 @@ impl framework::Example for Skybox {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
+            mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
 
         let device_features = device.features();
 
-        let (skybox_format, single_file) =
-            if device_features.contains(wgt::Features::TEXTURE_COMPRESSION_BC) {
-                (wgpu::TextureFormat::Bc1RgbaUnormSrgb, true)
+        let skybox_format =
+            if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR) {
+                wgpu::TextureFormat::Astc4x4RgbaUnormSrgb
+            } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2) {
+                wgpu::TextureFormat::Etc2RgbUnormSrgb
+            } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
+                wgpu::TextureFormat::Bc1RgbaUnormSrgb
             } else {
-                (wgpu::TextureFormat::Rgba8UnormSrgb, false)
+                wgpu::TextureFormat::Bgra8UnormSrgb
             };
 
+        let size = wgpu::Extent3d {
+            width: IMAGE_SIZE,
+            height: IMAGE_SIZE,
+            depth: 6,
+        };
+
+        let layer_size = wgpu::Extent3d { depth: 1, ..size };
+        let max_mips = layer_size.max_mips();
+
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: IMAGE_SIZE,
-                height: IMAGE_SIZE,
-                depth: 6,
-            },
-            mip_level_count: 1,
+            size,
+            mip_level_count: max_mips as u32,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: skybox_format,
@@ -164,90 +175,76 @@ impl framework::Example for Skybox {
             label: None,
         });
 
-        if single_file {
-            log::debug!(
-                "Copying BC1 skybox images of size {},{},6 to gpu",
-                IMAGE_SIZE,
-                IMAGE_SIZE,
-            );
+        log::debug!(
+            "Copying {:?} skybox images of size {}, {}, 6 with {} mips to gpu",
+            skybox_format,
+            IMAGE_SIZE,
+            IMAGE_SIZE,
+            max_mips,
+        );
 
-            let bc1_path: &[u8] = &include_bytes!("images/bc1.dds")[..];
+        let bytes = match skybox_format {
+            wgpu::TextureFormat::Astc4x4RgbaUnormSrgb => &include_bytes!("images/astc.dds")[..],
+            wgpu::TextureFormat::Etc2RgbUnormSrgb => &include_bytes!("images/etc2.dds")[..],
+            wgpu::TextureFormat::Bc1RgbaUnormSrgb => &include_bytes!("images/bc1.dds")[..],
+            wgpu::TextureFormat::Bgra8UnormSrgb => &include_bytes!("images/bgra.dds")[..],
+            _ => unreachable!(),
+        };
 
-            let mut dds_cursor = std::io::Cursor::new(bc1_path);
-            let dds_file = ddsfile::Dds::read(&mut dds_cursor).unwrap();
+        let image = ddsfile::Dds::read(&mut std::io::Cursor::new(&bytes)).unwrap();
 
-            let block_width = 4;
-            let block_size = 8;
+        let format_info = skybox_format.describe();
 
-            queue.write_texture(
-                wgpu::TextureCopyView {
-                    texture: &texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                },
-                &dds_file.data,
-                wgpu::TextureDataLayout {
-                    offset: 0,
-                    bytes_per_row: block_size * ((IMAGE_SIZE + (block_width - 1)) / block_width),
-                    rows_per_image: IMAGE_SIZE,
-                },
-                wgpu::Extent3d {
-                    width: IMAGE_SIZE,
-                    height: IMAGE_SIZE,
-                    depth: 6,
-                },
-            );
-        } else {
-            let paths: [&'static [u8]; 6] = [
-                &include_bytes!("images/posx.png")[..],
-                &include_bytes!("images/negx.png")[..],
-                &include_bytes!("images/posy.png")[..],
-                &include_bytes!("images/negy.png")[..],
-                &include_bytes!("images/posz.png")[..],
-                &include_bytes!("images/negz.png")[..],
-            ];
+        let mut binary_offset = 0;
+        for layer in 0..6 {
+            for mip in 0..max_mips {
+                let mip_size = layer_size.at_mip_level(mip).unwrap();
 
-            let faces = paths
-                .iter()
-                .map(|png| {
-                    let png = std::io::Cursor::new(png);
-                    let decoder = png::Decoder::new(png);
-                    let (info, mut reader) = decoder.read_info().expect("can read info");
-                    let mut buf = vec![0; info.buffer_size()];
-                    reader.next_frame(&mut buf).expect("can read png frame");
-                    buf
-                })
-                .collect::<Vec<_>>();
+                // When uploading mips of compressed textures and the mip is supposed to be
+                // a size that isn't a multiple of the block size, the mip needs to be uploaded
+                // as it's "physical size" which is the size rounded up to the nearest block size.
+                let mip_physical = mip_size.physical_size(skybox_format);
 
-            for (i, image) in faces.iter().enumerate() {
                 log::debug!(
-                    "Copying skybox image {} of size {},{} to gpu",
-                    i,
-                    IMAGE_SIZE,
-                    IMAGE_SIZE,
+                    "Copying layer {} mip {} of virtual size ({}, {}) and physical size ({}, {})",
+                    layer,
+                    mip,
+                    mip_size.width,
+                    mip_size.height,
+                    mip_physical.width,
+                    mip_physical.height,
                 );
+
+                // All these calculations are performed on the physical size as that's the
+                // data that exists in the buffer.
+                let width_blocks = mip_physical.width / format_info.block_dimensions.0 as u32;
+                let height_blocks = mip_physical.height / format_info.block_dimensions.1 as u32;
+
+                let bytes_per_row = width_blocks * format_info.block_size as u32;
+                let data_size = bytes_per_row * height_blocks;
+
+                let end_offset = binary_offset + data_size as usize;
+
                 queue.write_texture(
                     wgpu::TextureCopyView {
                         texture: &texture,
-                        mip_level: 0,
+                        mip_level: mip as u32,
                         origin: wgpu::Origin3d {
                             x: 0,
                             y: 0,
-                            z: i as u32,
+                            z: layer,
                         },
                     },
-                    &image,
+                    &image.data[binary_offset..end_offset],
                     wgpu::TextureDataLayout {
                         offset: 0,
-                        bytes_per_row: 4 * IMAGE_SIZE,
+                        bytes_per_row,
                         rows_per_image: 0,
                     },
-                    wgpu::Extent3d {
-                        width: IMAGE_SIZE,
-                        height: IMAGE_SIZE,
-                        depth: 1,
-                    },
+                    mip_physical,
                 );
+
+                binary_offset = end_offset;
             }
         }
 
