@@ -421,11 +421,20 @@ impl Writer {
             crate::ShaderStage::Vertex => {}
             crate::ShaderStage::Fragment => {
                 let execution_mode = spirv::ExecutionMode::OriginUpperLeft;
-                self.try_add_capabilities(execution_mode.required_capabilities());
-                super::instructions::instruction_execution_mode(function_id, execution_mode)
+                //self.try_add_capabilities(execution_mode.required_capabilities());
+                super::instructions::instruction_execution_mode(function_id, execution_mode, &[])
                     .to_words(&mut self.logical_layout.execution_modes);
             }
-            crate::ShaderStage::Compute => {}
+            crate::ShaderStage::Compute => {
+                let execution_mode = spirv::ExecutionMode::LocalSize;
+                //self.try_add_capabilities(execution_mode.required_capabilities());
+                super::instructions::instruction_execution_mode(
+                    function_id,
+                    execution_mode,
+                    &entry_point.workgroup_size,
+                )
+                .to_words(&mut self.logical_layout.execution_modes);
+            }
         }
 
         if self.writer_flags.contains(WriterFlags::DEBUG) {

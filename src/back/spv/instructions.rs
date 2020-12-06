@@ -93,10 +93,14 @@ pub(super) fn instruction_entry_point(
 pub(super) fn instruction_execution_mode(
     entry_point_id: Word,
     execution_mode: spirv::ExecutionMode,
+    args: &[Word],
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::ExecutionMode);
     instruction.add_operand(entry_point_id);
     instruction.add_operand(execution_mode as u32);
+    for arg in args {
+        instruction.add_operand(*arg);
+    }
     instruction
 }
 
