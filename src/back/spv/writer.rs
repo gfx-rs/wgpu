@@ -1147,116 +1147,81 @@ impl Writer {
                 let left_dimension = get_dimension(&left_ty_inner);
                 let right_dimension = get_dimension(&right_ty_inner);
 
-                let (instruction, lookup_ty) = match op {
+                let (spirv_op, lookup_ty) = match op {
+                    crate::BinaryOperator::Add => match *left_ty_inner {
+                        crate::TypeInner::Scalar { kind, .. }
+                        | crate::TypeInner::Vector { kind, .. } => match kind {
+                            crate::ScalarKind::Float => (spirv::Op::FAdd, left_lookup_ty),
+                            _ => (spirv::Op::IAdd, left_lookup_ty),
+                        },
+                        _ => unreachable!(),
+                    },
+                    crate::BinaryOperator::Subtract => match *left_ty_inner {
+                        crate::TypeInner::Scalar { kind, .. }
+                        | crate::TypeInner::Vector { kind, .. } => match kind {
+                            crate::ScalarKind::Float => (spirv::Op::FSub, left_lookup_ty),
+                            _ => (spirv::Op::ISub, left_lookup_ty),
+                        },
+                        _ => unreachable!(),
+                    },
                     crate::BinaryOperator::Multiply => match (left_dimension, right_dimension) {
-                        (Dimension::Vector, Dimension::Scalar { .. }) => (
-                            super::instructions::instruction_vector_times_scalar(
-                                left_result_type_id,
-                                id,
-                                left_id,
-                                right_id,
-                            ),
-                            left_lookup_ty,
-                        ),
-                        (Dimension::Vector, Dimension::Matrix) => (
-                            super::instructions::instruction_vector_times_matrix(
-                                left_result_type_id,
-                                id,
-                                left_id,
-                                right_id,
-                            ),
-                            left_lookup_ty,
-                        ),
-                        (Dimension::Matrix, Dimension::Scalar { .. }) => (
-                            super::instructions::instruction_matrix_times_scalar(
-                                left_result_type_id,
-                                id,
-                                left_id,
-                                right_id,
-                            ),
-                            left_lookup_ty,
-                        ),
-                        (Dimension::Matrix, Dimension::Vector) => (
-                            super::instructions::instruction_matrix_times_vector(
-                                right_result_type_id,
-                                id,
-                                left_id,
-                                right_id,
-                            ),
-                            right_lookup_ty,
-                        ),
-                        (Dimension::Matrix, Dimension::Matrix) => (
-                            super::instructions::instruction_matrix_times_matrix(
-                                left_result_type_id,
-                                id,
-                                left_id,
-                                right_id,
-                            ),
-                            left_lookup_ty,
-                        ),
+                        (Dimension::Vector, Dimension::Scalar { .. }) => {
+                            (spirv::Op::VectorTimesScalar, left_lookup_ty)
+                        }
+                        (Dimension::Vector, Dimension::Matrix) => {
+                            (spirv::Op::VectorTimesMatrix, left_lookup_ty)
+                        }
+                        (Dimension::Matrix, Dimension::Scalar { .. }) => {
+                            (spirv::Op::MatrixTimesScalar, left_lookup_ty)
+                        }
+                        (Dimension::Matrix, Dimension::Vector) => {
+                            (spirv::Op::MatrixTimesVector, right_lookup_ty)
+                        }
+                        (Dimension::Matrix, Dimension::Matrix) => {
+                            (spirv::Op::MatrixTimesMatrix, left_lookup_ty)
+                        }
                         (Dimension::Vector, Dimension::Vector)
                         | (Dimension::Scalar, Dimension::Scalar)
                             if left_ty_inner.scalar_kind() == Some(crate::ScalarKind::Float) =>
                         {
-                            (
-                                super::instructions::instruction_f_mul(
-                                    left_result_type_id,
-                                    id,
-                                    left_id,
-                                    right_id,
-                                ),
-                                left_lookup_ty,
-                            )
+                            (spirv::Op::FMul, left_lookup_ty)
                         }
                         (Dimension::Vector, Dimension::Vector)
-                        | (Dimension::Scalar, Dimension::Scalar) => (
-                            super::instructions::instruction_i_mul(
-                                left_result_type_id,
-                                id,
-                                left_id,
-                                right_id,
-                            ),
-                            left_lookup_ty,
-                        ),
+                        | (Dimension::Scalar, Dimension::Scalar) => {
+                            (spirv::Op::IMul, left_lookup_ty)
+                        }
                         _ => unreachable!(),
                     },
-                    crate::BinaryOperator::Subtract => match *left_ty_inner {
-                        crate::TypeInner::Scalar { kind, .. } => match kind {
-                            crate::ScalarKind::Sint | crate::ScalarKind::Uint => (
-                                super::instructions::instruction_i_sub(
-                                    left_result_type_id,
-                                    id,
-                                    left_id,
-                                    right_id,
-                                ),
-                                left_lookup_ty,
-                            ),
-                            crate::ScalarKind::Float => (
-                                super::instructions::instruction_f_sub(
-                                    left_result_type_id,
-                                    id,
-                                    left_id,
-                                    right_id,
-                                ),
-                                left_lookup_ty,
-                            ),
+                    crate::BinaryOperator::Divide => match *left_ty_inner {
+                        crate::TypeInner::Scalar { kind, .. }
+                        | crate::TypeInner::Vector { kind, .. } => match kind {
+                            crate::ScalarKind::Sint => (spirv::Op::SDiv, left_lookup_ty),
+                            crate::ScalarKind::Uint => (spirv::Op::UDiv, left_lookup_ty),
                             _ => unreachable!(),
                         },
                         _ => unreachable!(),
                     },
-                    crate::BinaryOperator::And => (
-                        super::instructions::instruction_bitwise_and(
-                            left_result_type_id,
-                            id,
-                            left_id,
-                            right_id,
-                        ),
-                        left_lookup_ty,
-                    ),
+                    crate::BinaryOperator::Modulo => match *left_ty_inner {
+                        crate::TypeInner::Scalar { kind, .. }
+                        | crate::TypeInner::Vector { kind, .. } => match kind {
+                            crate::ScalarKind::Sint => (spirv::Op::SMod, left_lookup_ty),
+                            crate::ScalarKind::Uint => (spirv::Op::UMod, left_lookup_ty),
+                            crate::ScalarKind::Float => (spirv::Op::FMod, left_lookup_ty),
+                            _ => unreachable!(),
+                        },
+                        _ => unreachable!(),
+                    },
+                    crate::BinaryOperator::And => (spirv::Op::BitwiseAnd, left_lookup_ty),
                     _ => unimplemented!("{:?}", op),
                 };
 
-                block.body.push(instruction);
+                block.body.push(super::instructions::instruction_binary(
+                    spirv_op,
+                    left_result_type_id,
+                    id,
+                    left_id,
+                    right_id,
+                ));
                 Ok((id, lookup_ty))
             }
             crate::Expression::LocalVariable(variable) => {

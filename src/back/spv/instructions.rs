@@ -537,7 +537,7 @@ pub(super) fn instruction_composite_construct(
 //
 // Arithmetic Instructions
 //
-fn instruction_binary(
+pub(super) fn instruction_binary(
     op: Op,
     result_type_id: Word,
     id: Word,
@@ -552,124 +552,9 @@ fn instruction_binary(
     instruction
 }
 
-pub(super) fn instruction_i_sub(
-    result_type_id: Word,
-    id: Word,
-    operand_1: Word,
-    operand_2: Word,
-) -> Instruction {
-    instruction_binary(Op::ISub, result_type_id, id, operand_1, operand_2)
-}
-
-pub(super) fn instruction_f_sub(
-    result_type_id: Word,
-    id: Word,
-    operand_1: Word,
-    operand_2: Word,
-) -> Instruction {
-    instruction_binary(Op::FSub, result_type_id, id, operand_1, operand_2)
-}
-
-pub(super) fn instruction_i_mul(
-    result_type_id: Word,
-    id: Word,
-    operand_1: Word,
-    operand_2: Word,
-) -> Instruction {
-    instruction_binary(Op::IMul, result_type_id, id, operand_1, operand_2)
-}
-
-pub(super) fn instruction_f_mul(
-    result_type_id: Word,
-    id: Word,
-    operand_1: Word,
-    operand_2: Word,
-) -> Instruction {
-    instruction_binary(Op::FMul, result_type_id, id, operand_1, operand_2)
-}
-
-pub(super) fn instruction_vector_times_scalar(
-    result_type_id: Word,
-    id: Word,
-    vector_type_id: Word,
-    scalar_type_id: Word,
-) -> Instruction {
-    let mut instruction = Instruction::new(Op::VectorTimesScalar);
-    instruction.set_type(result_type_id);
-    instruction.set_result(id);
-    instruction.add_operand(vector_type_id);
-    instruction.add_operand(scalar_type_id);
-    instruction
-}
-
-pub(super) fn instruction_matrix_times_scalar(
-    result_type_id: Word,
-    id: Word,
-    matrix_id: Word,
-    scalar_id: Word,
-) -> Instruction {
-    let mut instruction = Instruction::new(Op::MatrixTimesScalar);
-    instruction.set_type(result_type_id);
-    instruction.set_result(id);
-    instruction.add_operand(matrix_id);
-    instruction.add_operand(scalar_id);
-    instruction
-}
-
-pub(super) fn instruction_vector_times_matrix(
-    result_type_id: Word,
-    id: Word,
-    vector_id: Word,
-    matrix_id: Word,
-) -> Instruction {
-    let mut instruction = Instruction::new(Op::VectorTimesMatrix);
-    instruction.set_type(result_type_id);
-    instruction.set_result(id);
-    instruction.add_operand(vector_id);
-    instruction.add_operand(matrix_id);
-    instruction
-}
-
-pub(super) fn instruction_matrix_times_vector(
-    result_type_id: Word,
-    id: Word,
-    matrix_id: Word,
-    vector_id: Word,
-) -> Instruction {
-    let mut instruction = Instruction::new(Op::MatrixTimesVector);
-    instruction.set_type(result_type_id);
-    instruction.set_result(id);
-    instruction.add_operand(matrix_id);
-    instruction.add_operand(vector_id);
-    instruction
-}
-
-pub(super) fn instruction_matrix_times_matrix(
-    result_type_id: Word,
-    id: Word,
-    left_matrix: Word,
-    right_matrix: Word,
-) -> Instruction {
-    let mut instruction = Instruction::new(Op::MatrixTimesMatrix);
-    instruction.set_type(result_type_id);
-    instruction.set_result(id);
-    instruction.add_operand(left_matrix);
-    instruction.add_operand(right_matrix);
-    instruction
-}
-
 //
 // Bit Instructions
 //
-
-pub(super) fn instruction_bitwise_and(
-    result_type_id: Word,
-    id: Word,
-    operand_1: Word,
-    operand_2: Word,
-) -> Instruction {
-    instruction_binary(Op::BitwiseAnd, result_type_id, id, operand_1, operand_2)
-}
 
 //
 // Relational and Logical Instructions
