@@ -71,7 +71,7 @@ pub enum Action<'a> {
     DestroyBindGroup(id::BindGroupId),
     CreateShaderModule {
         id: id::ShaderModuleId,
-        label: crate::Label<'a>,
+        desc: crate::pipeline::ShaderModuleDescriptor<'a>,
         data: FileName,
     },
     DestroyShaderModule(id::ShaderModuleId),

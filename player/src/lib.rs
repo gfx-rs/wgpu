@@ -209,11 +209,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyBindGroup(id) => {
                 self.bind_group_drop::<B>(id);
             }
-            A::CreateShaderModule { id, label, data } => {
-                let desc = wgc::pipeline::ShaderModuleDescriptor {
-                    label,
-                    experimental_translation: false,
-                };
+            A::CreateShaderModule { id, desc, data } => {
                 let source = if data.ends_with(".wgsl") {
                     let code = fs::read_to_string(dir.join(data)).unwrap();
                     wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code))

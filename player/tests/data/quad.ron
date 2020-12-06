@@ -11,6 +11,10 @@
     actions: [
         CreateShaderModule(
             id: Id(0, 1, Empty),
+            desc: (
+                label: None,
+                experimental_translation: true,
+            ),
             data: "quad.wgsl",
         ),
         CreateTexture(Id(0, 1, Empty), (
