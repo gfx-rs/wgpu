@@ -626,6 +626,17 @@ impl Parser {
                     })
                 } else {
                     match word {
+                        "min" | "max" => {
+                            lexer.expect(Token::Paren('('))?;
+                            let a = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                            lexer.expect(Token::Separator(','))?;
+                            let b = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                            lexer.expect(Token::Paren(')'))?;
+                            Some(crate::Expression::Call {
+                                origin: crate::FunctionOrigin::External(word.to_string()),
+                                arguments: vec![a, b],
+                            })
+                        }
                         "dot" => {
                             lexer.expect(Token::Paren('('))?;
                             let a = self.parse_primary_expression(lexer, ctx.reborrow())?;

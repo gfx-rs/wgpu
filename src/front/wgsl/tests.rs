@@ -7,6 +7,20 @@ fn parse_types() {
 }
 
 #[test]
+fn parse_type_cast() {
+    parse_str(
+        "
+        const a : i32 = 2;
+        fn main() {
+            var x: f32 = f32(a);
+            #x = f32(i32(a + 1) / 2); //TODO
+        }
+    ",
+    )
+    .unwrap();
+}
+
+#[test]
 fn parse_if() {
     parse_str(
         "
