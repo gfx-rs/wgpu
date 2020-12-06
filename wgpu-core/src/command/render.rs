@@ -1164,6 +1164,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     state.index.pipeline_format = pipeline.index_format;
 
+                    let vertex_strides_len = pipeline.vertex_strides.len();
+                    while state.vertex.inputs.len() < vertex_strides_len {
+                        state.vertex.inputs.push(VertexBufferState::EMPTY);
+                    }
                     // Update vertex buffer limits
                     for (vbs, &(stride, rate)) in
                         state.vertex.inputs.iter_mut().zip(&pipeline.vertex_strides)
@@ -1171,7 +1175,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         vbs.stride = stride;
                         vbs.rate = rate;
                     }
-                    let vertex_strides_len = pipeline.vertex_strides.len();
                     for vbs in state.vertex.inputs.iter_mut().skip(vertex_strides_len) {
                         vbs.stride = 0;
                         vbs.rate = InputStepMode::Vertex;
