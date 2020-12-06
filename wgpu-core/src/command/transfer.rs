@@ -166,7 +166,7 @@ pub(crate) fn validate_linear_texture_data(
     let rows_per_image = layout.rows_per_image as BufferAddress;
     let bytes_per_row = layout.bytes_per_row as BufferAddress;
 
-    let (block_width, block_height) = conv::texture_block_size(format);
+    let (block_width, block_height) = format.describe().block_dimensions;
     let block_width = block_width as BufferAddress;
     let block_height = block_height as BufferAddress;
     let block_size = bytes_per_block;
@@ -228,9 +228,18 @@ pub(crate) fn validate_texture_copy_range(
     texture_side: CopySide,
     copy_size: &Extent3d,
 ) -> Result<(), TransferError> {
-    let (block_width, block_height) = conv::texture_block_size(texture_format);
+    let (block_width, block_height) = texture_format.describe().block_dimensions;
+    let block_width = block_width as u32;
+    let block_height = block_height as u32;
 
     let mut extent = texture_dimension.level_extent(texture_copy_view.mip_level as u8);
+
+    // Adjust extent for the physical size of mips
+    if texture_copy_view.mip_level != 0 {
+        extent.width = conv::align_up(extent.width, block_width);
+        extent.height = conv::align_up(extent.height, block_height);
+    }
+
     match texture_dimension {
         hal::image::Kind::D1(..) => {
             if (copy_size.height, copy_size.depth) != (1, 1) {
@@ -503,21 +512,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let (block_width, _) = conv::texture_block_size(dst_texture.format);
+        let (block_width, _) = dst_texture.format.describe().block_dimensions;
         if !conv::is_valid_copy_dst_texture_format(dst_texture.format) {
             Err(TransferError::CopyToForbiddenTextureFormat(
                 dst_texture.format,
             ))?
         }
 
-        let buffer_width = (source.layout.bytes_per_row / bytes_per_block) * block_width;
+        // WebGPU uses the physical size of the texture for copies whereas vulkan uses
+        // the virtual size. We have passed validation, so it's safe to use the
+        // image extent data directly. We want the provided copy size to be no larger than
+        // the virtual size.
+        let max_image_extent = dst_texture.kind.level_extent(destination.mip_level as _);
+        let image_extent = Extent3d {
+            width: copy_size.width.min(max_image_extent.width),
+            height: copy_size.height.min(max_image_extent.height),
+            depth: copy_size.depth,
+        };
+
+        let buffer_width = (source.layout.bytes_per_row / bytes_per_block) * block_width as u32;
         let region = hal::command::BufferImageCopy {
             buffer_offset: source.layout.offset,
             buffer_width,
             buffer_height: source.layout.rows_per_image,
             image_layers: dst_layers,
             image_offset: dst_offset,
-            image_extent: conv::map_extent(copy_size, dst_texture.dimension),
+            image_extent: conv::map_extent(&image_extent, dst_texture.dimension),
         };
         let cmb_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {
@@ -632,21 +652,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let (block_width, _) = conv::texture_block_size(src_texture.format);
+        let (block_width, _) = src_texture.format.describe().block_dimensions;
         if !conv::is_valid_copy_src_texture_format(src_texture.format) {
             Err(TransferError::CopyFromForbiddenTextureFormat(
                 src_texture.format,
             ))?
         }
 
-        let buffer_width = (destination.layout.bytes_per_row / bytes_per_block) * block_width;
+        // WebGPU uses the physical size of the texture for copies whereas vulkan uses
+        // the virtual size. We have passed validation, so it's safe to use the
+        // image extent data directly. We want the provided copy size to be no larger than
+        // the virtual size.
+        let max_image_extent = src_texture.kind.level_extent(source.mip_level as _);
+        let image_extent = Extent3d {
+            width: copy_size.width.min(max_image_extent.width),
+            height: copy_size.height.min(max_image_extent.height),
+            depth: copy_size.depth,
+        };
+
+        let buffer_width =
+            (destination.layout.bytes_per_row / bytes_per_block) * block_width as u32;
         let region = hal::command::BufferImageCopy {
             buffer_offset: destination.layout.offset,
             buffer_width,
             buffer_height: destination.layout.rows_per_image,
             image_layers: src_layers,
             image_offset: src_offset,
-            image_extent: conv::map_extent(copy_size, src_texture.dimension),
+            image_extent: conv::map_extent(&image_extent, src_texture.dimension),
         };
         let cmb_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {
@@ -762,12 +794,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
+        // WebGPU uses the physical size of the texture for copies whereas vulkan uses
+        // the virtual size. We have passed validation, so it's safe to use the
+        // image extent data directly. We want the provided copy size to be no larger than
+        // the virtual size.
+        let max_src_image_extent = src_texture.kind.level_extent(source.mip_level as _);
+        let max_dst_image_extent = dst_texture.kind.level_extent(destination.mip_level as _);
+        let image_extent = Extent3d {
+            width: copy_size
+                .width
+                .min(max_src_image_extent.width.min(max_dst_image_extent.width)),
+            height: copy_size
+                .height
+                .min(max_src_image_extent.height.min(max_dst_image_extent.height)),
+            depth: copy_size.depth,
+        };
+
         let region = hal::command::ImageCopy {
             src_subresource: src_layers,
             src_offset,
             dst_subresource: dst_layers,
             dst_offset,
-            extent: conv::map_extent(copy_size, src_texture.dimension),
+            extent: conv::map_extent(&image_extent, src_texture.dimension),
         };
         let cmb_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {

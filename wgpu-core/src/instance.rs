@@ -145,6 +145,14 @@ impl<B: GfxBackend> Adapter<B> {
             adapter_features.contains(hal::Features::FORMAT_BC),
         );
         features.set(
+            wgt::Features::TEXTURE_COMPRESSION_ETC2,
+            adapter_features.contains(hal::Features::FORMAT_ETC2),
+        );
+        features.set(
+            wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+            adapter_features.contains(hal::Features::FORMAT_ASTC_LDR),
+        );
+        features.set(
             wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
             adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
         );
@@ -270,6 +278,21 @@ impl<B: GfxBackend> Adapter<B> {
         }
 
         // Features
+        enabled_features.set(
+            hal::Features::FORMAT_BC,
+            desc.features
+                .contains(wgt::Features::TEXTURE_COMPRESSION_BC),
+        );
+        enabled_features.set(
+            hal::Features::FORMAT_ETC2,
+            desc.features
+                .contains(wgt::Features::TEXTURE_COMPRESSION_ETC2),
+        );
+        enabled_features.set(
+            hal::Features::FORMAT_ASTC_LDR,
+            desc.features
+                .contains(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR),
+        );
         enabled_features.set(
             hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
             desc.features

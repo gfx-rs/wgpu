@@ -159,7 +159,7 @@ bitflags::bitflags! {
         /// Enables BCn family of compressed textures. All BCn textures use 4x4 pixel blocks
         /// with 8 or 16 bytes per block.
         ///
-        /// Compressed textures sacrifice some quality in exchange for signifigantly reduced
+        /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
         /// Supported Platforms:
@@ -306,6 +306,30 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const NON_FILL_POLYGON_MODE = 0x0000_0000_0200_0000;
+        /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
+        /// ETC2 RGB and RGBA1 are 8 bytes per block. RTC2 RGBA8 and EAC are 16 bytes per block.
+        ///
+        /// Compressed textures sacrifice some quality in exchange for significantly reduced
+        /// bandwidth usage.
+        ///
+        /// Supported Platforms:
+        /// - Intel/Vulkan
+        /// - Mobile (some)
+        ///
+        /// This is a native-only feature.
+        const TEXTURE_COMPRESSION_ETC2 = 0x0000_0000_0400_0000;
+        /// Enables ASTC family of compressed textures. ASTC textures use pixel blocks varying from 4x4 to 12x12.
+        /// Blocks are always 16 bytes.
+        ///
+        /// Compressed textures sacrifice some quality in exchange for significantly reduced
+        /// bandwidth usage.
+        ///
+        /// Supported Platforms:
+        /// - Intel/Vulkan
+        /// - Mobile (some)
+        ///
+        /// This is a native-only feature.
+        const TEXTURE_COMPRESSION_ASTC_LDR = 0x0000_0000_0800_0000;
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).
@@ -682,6 +706,21 @@ pub struct RasterizationStateDescriptor {
     pub depth_bias_clamp: f32,
 }
 
+/// Information about a texture format.
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub struct TextureFormatInfo {
+    /// Features required (if any) to use the texture.
+    pub features: Features,
+    /// Type of sampling that is valid for the texture.
+    pub sample_type: TextureSampleType,
+    /// Dimension of a "block" of texels. This is always (1, 1) on uncompressed textures.
+    pub block_dimensions: (u8, u8),
+    /// Size in bytes of a "block" of texels. This is the size per pixel on uncompressed textures.
+    pub block_size: u8,
+    /// Format will have colors be converted from srgb to linear on read and from linear to srgb on write.
+    pub srgb: bool,
+}
+
 /// Underlying texture data format.
 ///
 /// If there is a conversion in the format (such as srgb -> linear), The conversion listed is for
@@ -782,49 +821,49 @@ pub enum TextureFormat {
 
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
-    /// [0, 64] ([0, 1] for alpha) converted to/from float [0, 1] in shader.
+    /// [0, 63] ([0, 1] for alpha) converted to/from float [0, 1] in shader.
     ///
     /// Also known as DXT1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc1RgbaUnorm = 38,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
-    /// Srgb-color [0, 64] ([0, 16] for alpha) converted to/from linear-color float [0, 1] in shader.
+    /// Srgb-color [0, 63] ([0, 15] for alpha) converted to/from linear-color float [0, 1] in shader.
     ///
     /// Also known as DXT1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc1RgbaUnormSrgb = 39,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet. 5 bit R + 6 bit G + 5 bit B + 4 bit alpha.
-    /// [0, 64] ([0, 16] for alpha) converted to/from float [0, 1] in shader.
+    /// [0, 63] ([0, 15] for alpha) converted to/from float [0, 1] in shader.
     ///
     /// Also known as DXT3.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc2RgbaUnorm = 40,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet. 5 bit R + 6 bit G + 5 bit B + 4 bit alpha.
-    /// Srgb-color [0, 64] ([0, 256] for alpha) converted to/from linear-color float [0, 1] in shader.
+    /// Srgb-color [0, 63] ([0, 255] for alpha) converted to/from linear-color float [0, 1] in shader.
     ///
     /// Also known as DXT3.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc2RgbaUnormSrgb = 41,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet + 8 alpha pallet. 5 bit R + 6 bit G + 5 bit B + 8 bit alpha.
-    /// [0, 64] ([0, 256] for alpha) converted to/from float [0, 1] in shader.
+    /// [0, 63] ([0, 255] for alpha) converted to/from float [0, 1] in shader.
     ///
     /// Also known as DXT5.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc3RgbaUnorm = 42,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet + 8 alpha pallet. 5 bit R + 6 bit G + 5 bit B + 8 bit alpha.
-    /// Srgb-color [0, 64] ([0, 256] for alpha) converted to/from linear-color float [0, 1] in shader.
+    /// Srgb-color [0, 63] ([0, 255] for alpha) converted to/from linear-color float [0, 1] in shader.
     ///
     /// Also known as DXT5.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc3RgbaUnormSrgb = 43,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
-    /// [0, 256] converted to/from float [0, 1] in shader.
+    /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// Also known as RGTC1.
     ///
@@ -837,46 +876,380 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc4RSnorm = 45,
-    /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
-    /// [0, 256] converted to/from float [0, 1] in shader.
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
+    /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// Also known as RGTC2.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc5RgUnorm = 46,
-    /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
     ///
     /// Also known as RGTC2.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc5RgSnorm = 47,
-    /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). Variable sized pallet. 16 bit unsigned float RGB. Float in shader.
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 16 bit unsigned float RGB. Float in shader.
     ///
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc6hRgbUfloat = 48,
-    /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). Variable sized pallet. 16 bit signed float RGB. Float in shader.
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 16 bit signed float RGB. Float in shader.
     ///
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc6hRgbSfloat = 49,
-    /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). Variable sized pallet. 8 bit integer RGBA.
-    /// [0, 256] converted to/from float [0, 1] in shader.
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// Also known as BPTC (unorm).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc7RgbaUnorm = 50,
-    /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). Variable sized pallet. 8 bit integer RGBA.
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 8 bit integer RGBA.
     /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     ///
     /// Also known as BPTC (unorm).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc7RgbaUnormSrgb = 51,
+    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
+    Etc2RgbUnorm = 52,
+    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
+    Etc2RgbUnormSrgb = 53,
+    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB + 1 bit alpha.
+    /// [0, 255] ([0, 1] for alpha) converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
+    Etc2RgbA1Unorm = 54,
+    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB + 1 bit alpha.
+    /// Srgb-color [0, 255] ([0, 1] for alpha) converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
+    Etc2RgbA1UnormSrgb = 55,
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGB + 8 bit alpha.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
+    Etc2RgbA8Unorm = 56,
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGB + 8 bit alpha.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
+    Etc2RgbA8UnormSrgb = 57,
+    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer R.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
+    EacRUnorm = 58,
+    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer R.
+    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
+    EacRSnorm = 59,
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer R + 8 bit integer G.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
+    EtcRgUnorm = 60,
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer R + 8 bit integer G.
+    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
+    EtcRgSnorm = 61,
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc4x4RgbaUnorm = 62,
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc4x4RgbaUnormSrgb = 63,
+    /// 5x4 block compressed texture. 16 bytes per block (6.4 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc5x4RgbaUnorm = 64,
+    /// 5x4 block compressed texture. 16 bytes per block (6.4 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc5x4RgbaUnormSrgb = 65,
+    /// 5x5 block compressed texture. 16 bytes per block (5.12 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc5x5RgbaUnorm = 66,
+    /// 5x5 block compressed texture. 16 bytes per block (5.12 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc5x5RgbaUnormSrgb = 67,
+    /// 6x5 block compressed texture. 16 bytes per block (4.27 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc6x5RgbaUnorm = 68,
+    /// 6x5 block compressed texture. 16 bytes per block (4.27 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc6x5RgbaUnormSrgb = 69,
+    /// 6x6 block compressed texture. 16 bytes per block (3.56 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc6x6RgbaUnorm = 70,
+    /// 6x6 block compressed texture. 16 bytes per block (3.56 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc6x6RgbaUnormSrgb = 71,
+    /// 8x5 block compressed texture. 16 bytes per block (3.2 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc8x5RgbaUnorm = 72,
+    /// 8x5 block compressed texture. 16 bytes per block (3.2 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc8x5RgbaUnormSrgb = 73,
+    /// 8x6 block compressed texture. 16 bytes per block (2.67 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc8x6RgbaUnorm = 74,
+    /// 8x6 block compressed texture. 16 bytes per block (2.67 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc8x6RgbaUnormSrgb = 75,
+    /// 10x5 block compressed texture. 16 bytes per block (2.56 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc10x5RgbaUnorm = 76,
+    /// 10x5 block compressed texture. 16 bytes per block (2.56 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc10x5RgbaUnormSrgb = 77,
+    /// 10x6 block compressed texture. 16 bytes per block (2.13 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc10x6RgbaUnorm = 78,
+    /// 10x6 block compressed texture. 16 bytes per block (2.13 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc10x6RgbaUnormSrgb = 79,
+    /// 8x8 block compressed texture. 16 bytes per block (2 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc8x8RgbaUnorm = 80,
+    /// 8x8 block compressed texture. 16 bytes per block (2 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc8x8RgbaUnormSrgb = 81,
+    /// 10x8 block compressed texture. 16 bytes per block (1.6 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc10x8RgbaUnorm = 82,
+    /// 10x8 block compressed texture. 16 bytes per block (1.6 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc10x8RgbaUnormSrgb = 83,
+    /// 10x10 block compressed texture. 16 bytes per block (1.28 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc10x10RgbaUnorm = 84,
+    /// 10x10 block compressed texture. 16 bytes per block (1.28 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc10x10RgbaUnormSrgb = 85,
+    /// 12x10 block compressed texture. 16 bytes per block (1.07 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc12x10RgbaUnorm = 86,
+    /// 12x10 block compressed texture. 16 bytes per block (1.07 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc12x10RgbaUnormSrgb = 87,
+    /// 12x12 block compressed texture. 16 bytes per block (0.89 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc12x12RgbaUnorm = 88,
+    /// 12x12 block compressed texture. 16 bytes per block (0.89 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    Astc12x12RgbaUnormSrgb = 89,
+}
+
+impl TextureFormat {
+    /// Get useful information about the texture format.
+    pub fn describe(&self) -> TextureFormatInfo {
+        #![allow(bindings_with_variant_name, non_snake_case)]
+
+        // Features
+        let NATIVE = Features::empty();
+        let BC = Features::TEXTURE_COMPRESSION_BC;
+        let ETC2 = Features::TEXTURE_COMPRESSION_ETC2;
+        let ASTC_LDR = Features::TEXTURE_COMPRESSION_ASTC_LDR;
+
+        // Sample Types
+        let Uint = TextureSampleType::Uint;
+        let Sint = TextureSampleType::Sint;
+        let Nearest = TextureSampleType::Float { filterable: false };
+        let Float = TextureSampleType::Float { filterable: true };
+        let Depth = TextureSampleType::Depth;
+
+        // Color spaces
+        let Linear = false;
+        let Srgb = true;
+
+        let (features, sample_type, srgb, block_dimensions, block_size) = match self {
+            // Normal 8 bit textures
+            Self::R8Unorm => (NATIVE, Float, Linear, (1, 1), 1),
+            Self::R8Snorm => (NATIVE, Float, Linear, (1, 1), 1),
+            Self::R8Uint => (NATIVE, Uint, Linear, (1, 1), 1),
+            Self::R8Sint => (NATIVE, Sint, Linear, (1, 1), 1),
+
+            // Normal 16 bit textures
+            Self::R16Uint => (NATIVE, Uint, Linear, (1, 1), 2),
+            Self::R16Sint => (NATIVE, Sint, Linear, (1, 1), 2),
+            Self::R16Float => (NATIVE, Float, Linear, (1, 1), 2),
+            Self::Rg8Unorm => (NATIVE, Float, Linear, (1, 1), 2),
+            Self::Rg8Snorm => (NATIVE, Float, Linear, (1, 1), 2),
+            Self::Rg8Uint => (NATIVE, Uint, Linear, (1, 1), 2),
+            Self::Rg8Sint => (NATIVE, Sint, Linear, (1, 1), 2),
+
+            // Normal 32 bit textures
+            Self::R32Uint => (NATIVE, Uint, Linear, (1, 1), 4),
+            Self::R32Sint => (NATIVE, Sint, Linear, (1, 1), 4),
+            Self::R32Float => (NATIVE, Nearest, Linear, (1, 1), 4),
+            Self::Rg16Uint => (NATIVE, Uint, Linear, (1, 1), 4),
+            Self::Rg16Sint => (NATIVE, Sint, Linear, (1, 1), 4),
+            Self::Rg16Float => (NATIVE, Float, Linear, (1, 1), 4),
+            Self::Rgba8Unorm => (NATIVE, Float, Linear, (1, 1), 4),
+            Self::Rgba8UnormSrgb => (NATIVE, Float, Srgb, (1, 1), 4),
+            Self::Rgba8Snorm => (NATIVE, Float, Linear, (1, 1), 4),
+            Self::Rgba8Uint => (NATIVE, Uint, Linear, (1, 1), 4),
+            Self::Rgba8Sint => (NATIVE, Sint, Linear, (1, 1), 4),
+            Self::Bgra8Unorm => (NATIVE, Float, Linear, (1, 1), 4),
+            Self::Bgra8UnormSrgb => (NATIVE, Float, Srgb, (1, 1), 4),
+
+            // Packed 32 bit textures
+            Self::Rgb10a2Unorm => (NATIVE, Float, Linear, (1, 1), 4),
+            Self::Rg11b10Float => (NATIVE, Float, Linear, (1, 1), 4),
+
+            // Packed 32 bit textures
+            Self::Rg32Uint => (NATIVE, Uint, Linear, (1, 1), 8),
+            Self::Rg32Sint => (NATIVE, Sint, Linear, (1, 1), 8),
+            Self::Rg32Float => (NATIVE, Nearest, Linear, (1, 1), 8),
+            Self::Rgba16Uint => (NATIVE, Uint, Linear, (1, 1), 8),
+            Self::Rgba16Sint => (NATIVE, Sint, Linear, (1, 1), 8),
+            Self::Rgba16Float => (NATIVE, Float, Linear, (1, 1), 8),
+
+            // Packed 32 bit textures
+            Self::Rgba32Uint => (NATIVE, Uint, Linear, (1, 1), 16),
+            Self::Rgba32Sint => (NATIVE, Sint, Linear, (1, 1), 16),
+            Self::Rgba32Float => (NATIVE, Nearest, Linear, (1, 1), 16),
+
+            // Depth-stencil textures
+            Self::Depth32Float => (NATIVE, Depth, Linear, (1, 1), 4),
+            Self::Depth24Plus => (NATIVE, Depth, Linear, (1, 1), 4),
+            Self::Depth24PlusStencil8 => (NATIVE, Depth, Linear, (1, 1), 4),
+
+            // BCn compressed textures
+            Self::Bc1RgbaUnorm => (BC, Float, Linear, (4, 4), 8),
+            Self::Bc1RgbaUnormSrgb => (BC, Float, Srgb, (4, 4), 8),
+            Self::Bc2RgbaUnorm => (BC, Float, Linear, (4, 4), 16),
+            Self::Bc2RgbaUnormSrgb => (BC, Float, Srgb, (4, 4), 16),
+            Self::Bc3RgbaUnorm => (BC, Float, Linear, (4, 4), 16),
+            Self::Bc3RgbaUnormSrgb => (BC, Float, Srgb, (4, 4), 16),
+            Self::Bc4RUnorm => (BC, Float, Linear, (4, 4), 8),
+            Self::Bc4RSnorm => (BC, Float, Linear, (4, 4), 8),
+            Self::Bc5RgUnorm => (BC, Float, Linear, (4, 4), 16),
+            Self::Bc5RgSnorm => (BC, Float, Linear, (4, 4), 16),
+            Self::Bc6hRgbUfloat => (BC, Float, Linear, (4, 4), 16),
+            Self::Bc6hRgbSfloat => (BC, Float, Linear, (4, 4), 16),
+            Self::Bc7RgbaUnorm => (BC, Float, Linear, (4, 4), 16),
+            Self::Bc7RgbaUnormSrgb => (BC, Float, Srgb, (4, 4), 16),
+
+            // ETC compressed textures
+            Self::Etc2RgbUnorm => (ETC2, Float, Linear, (4, 4), 8),
+            Self::Etc2RgbUnormSrgb => (ETC2, Float, Srgb, (4, 4), 8),
+            Self::Etc2RgbA1Unorm => (ETC2, Float, Linear, (4, 4), 8),
+            Self::Etc2RgbA1UnormSrgb => (ETC2, Float, Srgb, (4, 4), 8),
+            Self::Etc2RgbA8Unorm => (ETC2, Float, Linear, (4, 4), 16),
+            Self::Etc2RgbA8UnormSrgb => (ETC2, Float, Srgb, (4, 4), 16),
+            Self::EacRUnorm => (ETC2, Float, Linear, (4, 4), 8),
+            Self::EacRSnorm => (ETC2, Float, Linear, (4, 4), 8),
+            Self::EtcRgUnorm => (ETC2, Float, Linear, (4, 4), 16),
+            Self::EtcRgSnorm => (ETC2, Float, Linear, (4, 4), 16),
+
+            // ASTC compressed textures
+            Self::Astc4x4RgbaUnorm => (ASTC_LDR, Float, Linear, (4, 4), 16),
+            Self::Astc4x4RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (4, 4), 16),
+            Self::Astc5x4RgbaUnorm => (ASTC_LDR, Float, Linear, (5, 4), 16),
+            Self::Astc5x4RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (5, 4), 16),
+            Self::Astc5x5RgbaUnorm => (ASTC_LDR, Float, Linear, (5, 5), 16),
+            Self::Astc5x5RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (5, 5), 16),
+            Self::Astc6x5RgbaUnorm => (ASTC_LDR, Float, Linear, (6, 5), 16),
+            Self::Astc6x5RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (6, 5), 16),
+            Self::Astc6x6RgbaUnorm => (ASTC_LDR, Float, Linear, (6, 6), 16),
+            Self::Astc6x6RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (6, 6), 16),
+            Self::Astc8x5RgbaUnorm => (ASTC_LDR, Float, Linear, (8, 5), 16),
+            Self::Astc8x5RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (8, 5), 16),
+            Self::Astc8x6RgbaUnorm => (ASTC_LDR, Float, Linear, (8, 6), 16),
+            Self::Astc8x6RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (8, 6), 16),
+            Self::Astc10x5RgbaUnorm => (ASTC_LDR, Float, Linear, (10, 5), 16),
+            Self::Astc10x5RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (10, 5), 16),
+            Self::Astc10x6RgbaUnorm => (ASTC_LDR, Float, Linear, (10, 6), 16),
+            Self::Astc10x6RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (10, 6), 16),
+            Self::Astc8x8RgbaUnorm => (ASTC_LDR, Float, Linear, (8, 8), 16),
+            Self::Astc8x8RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (8, 8), 16),
+            Self::Astc10x8RgbaUnorm => (ASTC_LDR, Float, Linear, (10, 8), 16),
+            Self::Astc10x8RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (10, 8), 16),
+            Self::Astc10x10RgbaUnorm => (ASTC_LDR, Float, Linear, (10, 10), 16),
+            Self::Astc10x10RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (10, 10), 16),
+            Self::Astc12x10RgbaUnorm => (ASTC_LDR, Float, Linear, (12, 10), 16),
+            Self::Astc12x10RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (12, 10), 16),
+            Self::Astc12x12RgbaUnorm => (ASTC_LDR, Float, Linear, (12, 12), 16),
+            Self::Astc12x12RgbaUnormSrgb => (ASTC_LDR, Float, Srgb, (12, 12), 16),
+        };
+
+        TextureFormatInfo {
+            features,
+            sample_type,
+            block_dimensions,
+            block_size,
+            srgb,
+        }
+    }
 }
 
 bitflags::bitflags! {
@@ -1477,6 +1850,100 @@ impl Default for Extent3d {
     }
 }
 
+impl Extent3d {
+    /// Calculates the [physical size] is backing an texture of the given format and extent.
+    /// This includes padding to the block width and height of the format.
+    ///
+    /// This is the texture extent that you must upload at when uploading to _mipmaps_ of compressed textures.
+    ///  
+    /// ```rust
+    /// # use wgpu_types as wgpu;
+    /// let format = wgpu::TextureFormat::Bc1RgbaUnormSrgb; // 4x4 blocks
+    /// assert_eq!(
+    ///     wgpu::Extent3d { width: 7, height: 7, depth: 1 }.physical_size(format),
+    ///     wgpu::Extent3d { width: 8, height: 8, depth: 1 }
+    /// );
+    /// // Doesn't change, already aligned
+    /// assert_eq!(
+    ///     wgpu::Extent3d { width: 8, height: 8, depth: 1 }.physical_size(format),
+    ///     wgpu::Extent3d { width: 8, height: 8, depth: 1 }
+    /// );
+    /// let format = wgpu::TextureFormat::Astc8x5RgbaUnorm; // 8x5 blocks
+    /// assert_eq!(
+    ///     wgpu::Extent3d { width: 7, height: 7, depth: 1 }.physical_size(format),
+    ///     wgpu::Extent3d { width: 8, height: 10, depth: 1 }
+    /// );
+    /// ```
+    ///
+    /// [physical size]: https://gpuweb.github.io/gpuweb/#physical-size
+    pub fn physical_size(&self, format: TextureFormat) -> Self {
+        let (block_width, block_height) = format.describe().block_dimensions;
+        let block_width = block_width as u32;
+        let block_height = block_height as u32;
+
+        let width = ((self.width + block_width - 1) / block_width) * block_width;
+        let height = ((self.height + block_height - 1) / block_height) * block_height;
+
+        Self {
+            width,
+            height,
+            depth: self.depth,
+        }
+    }
+
+    /// Calculates the maximum possible count of mipmaps.
+    ///
+    /// Treats the depth as part of the mipmaps. If calculating
+    /// for a 2DArray texture, which does not mipmap depth, set depth to 1.
+    ///
+    /// ```rust
+    /// # use wgpu_types as wgpu;
+    /// assert_eq!(wgpu::Extent3d { width: 1, height: 1, depth: 1 }.max_mips(), 1);
+    /// assert_eq!(wgpu::Extent3d { width: 60, height: 60, depth: 1 }.max_mips(), 6);
+    /// assert_eq!(wgpu::Extent3d { width: 240, height: 1, depth: 1 }.max_mips(), 8);
+    /// ```
+    pub fn max_mips(&self) -> u8 {
+        let max_dim = self.width.max(self.height.max(self.depth));
+        let max_levels = 32 - max_dim.leading_zeros();
+
+        max_levels as u8
+    }
+
+    /// Calculates the extent at a given mip level.
+    ///
+    /// If the given mip level is larger than possible, returns None.
+    ///
+    /// Treats the depth as part of the mipmaps. If calculating
+    /// for a 2DArray texture, which does not mipmap depth, set depth to 1.
+    ///
+    /// ```rust
+    /// # use wgpu_types as wgpu;
+    /// let extent = wgpu::Extent3d { width: 100, height: 60, depth: 1 };
+    ///
+    /// assert_eq!(extent.at_mip_level(0), Some(wgpu::Extent3d { width: 100, height: 60, depth: 1 }));
+    /// assert_eq!(extent.at_mip_level(1), Some(wgpu::Extent3d { width: 50, height: 30, depth: 1 }));
+    /// assert_eq!(extent.at_mip_level(2), Some(wgpu::Extent3d { width: 25, height: 15, depth: 1 }));
+    /// assert_eq!(extent.at_mip_level(3), Some(wgpu::Extent3d { width: 12, height: 7, depth: 1 }));
+    /// assert_eq!(extent.at_mip_level(4), Some(wgpu::Extent3d { width: 6, height: 3, depth: 1 }));
+    /// assert_eq!(extent.at_mip_level(5), Some(wgpu::Extent3d { width: 3, height: 1, depth: 1 }));
+    /// assert_eq!(extent.at_mip_level(6), Some(wgpu::Extent3d { width: 1, height: 1, depth: 1 }));
+    /// assert_eq!(extent.at_mip_level(7), None);
+    /// ```
+    pub fn at_mip_level(&self, level: u8) -> Option<Self> {
+        let mip_count = self.max_mips();
+
+        if level >= mip_count {
+            return None;
+        }
+
+        Some(Extent3d {
+            width: u32::max(1, self.width >> level as u32),
+            height: u32::max(1, self.height >> level as u32),
+            depth: u32::max(1, self.depth >> level as u32),
+        })
+    }
+}
+
 /// Describes a [`Texture`].
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1762,69 +2229,6 @@ pub enum TextureSampleType {
 impl Default for TextureSampleType {
     fn default() -> Self {
         Self::Float { filterable: true }
-    }
-}
-
-impl From<TextureFormat> for TextureSampleType {
-    fn from(format: TextureFormat) -> Self {
-        match format {
-            TextureFormat::R8Uint
-            | TextureFormat::R16Uint
-            | TextureFormat::Rg8Uint
-            | TextureFormat::R32Uint
-            | TextureFormat::Rg16Uint
-            | TextureFormat::Rgba8Uint
-            | TextureFormat::Rg32Uint
-            | TextureFormat::Rgba16Uint
-            | TextureFormat::Rgba32Uint => Self::Uint,
-
-            TextureFormat::R8Sint
-            | TextureFormat::R16Sint
-            | TextureFormat::Rg8Sint
-            | TextureFormat::R32Sint
-            | TextureFormat::Rg16Sint
-            | TextureFormat::Rgba8Sint
-            | TextureFormat::Rg32Sint
-            | TextureFormat::Rgba16Sint
-            | TextureFormat::Rgba32Sint => Self::Sint,
-
-            TextureFormat::R32Float | TextureFormat::Rg32Float | TextureFormat::Rgba32Float => {
-                Self::Float { filterable: false }
-            }
-
-            TextureFormat::R8Unorm
-            | TextureFormat::R8Snorm
-            | TextureFormat::R16Float
-            | TextureFormat::Rg8Unorm
-            | TextureFormat::Rg8Snorm
-            | TextureFormat::Rg16Float
-            | TextureFormat::Rg11b10Float
-            | TextureFormat::Rgba8Snorm
-            | TextureFormat::Rgba16Float
-            | TextureFormat::Rgba8Unorm
-            | TextureFormat::Rgba8UnormSrgb
-            | TextureFormat::Bgra8Unorm
-            | TextureFormat::Bgra8UnormSrgb
-            | TextureFormat::Rgb10a2Unorm
-            | TextureFormat::Bc1RgbaUnorm
-            | TextureFormat::Bc1RgbaUnormSrgb
-            | TextureFormat::Bc2RgbaUnorm
-            | TextureFormat::Bc2RgbaUnormSrgb
-            | TextureFormat::Bc3RgbaUnorm
-            | TextureFormat::Bc3RgbaUnormSrgb
-            | TextureFormat::Bc4RUnorm
-            | TextureFormat::Bc4RSnorm
-            | TextureFormat::Bc5RgUnorm
-            | TextureFormat::Bc5RgSnorm
-            | TextureFormat::Bc6hRgbSfloat
-            | TextureFormat::Bc6hRgbUfloat
-            | TextureFormat::Bc7RgbaUnorm
-            | TextureFormat::Bc7RgbaUnormSrgb => Self::Float { filterable: true },
-
-            TextureFormat::Depth32Float
-            | TextureFormat::Depth24Plus
-            | TextureFormat::Depth24PlusStencil8 => Self::Depth,
-        }
     }
 }
 

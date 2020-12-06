@@ -324,7 +324,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             bytes_per_block as wgt::BufferAddress,
             size,
         )?;
-        let (block_width, block_height) = conv::texture_block_size(texture_format);
+
+        let (block_width, block_height) = texture_format.describe().block_dimensions;
+        let block_width = block_width as u32;
+        let block_height = block_height as u32;
+
         if !conv::is_valid_copy_dst_texture_format(texture_format) {
             Err(TransferError::CopyToForbiddenTextureFormat(texture_format))?
         }
@@ -405,13 +409,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             stage.memory.flush_range(&device.raw, 0, None)?;
         }
 
+        // WebGPU uses the physical size of the texture for copies whereas vulkan uses
+        // the virtual size. We have passed validation, so it's safe to use the
+        // image extent data directly. We want the provided copy size to be no larger than
+        // the virtual size.
+        let max_image_extent = dst.kind.level_extent(destination.mip_level as _);
+        let image_extent = wgt::Extent3d {
+            width: size.width.min(max_image_extent.width),
+            height: size.height.min(max_image_extent.height),
+            depth: size.depth,
+        };
+
         let region = hal::command::BufferImageCopy {
             buffer_offset: 0,
             buffer_width: (stage_bytes_per_row / bytes_per_block) * block_width,
             buffer_height: texel_rows_per_image,
             image_layers,
             image_offset,
-            image_extent: conv::map_extent(size, dst.dimension),
+            image_extent: conv::map_extent(&image_extent, dst.dimension),
         };
         unsafe {
             stage.cmdbuf.pipeline_barrier(
