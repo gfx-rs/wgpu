@@ -436,6 +436,22 @@ impl RenderBundleEncoder {
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
     }
+
+    pub fn set_index_buffer(
+        &mut self,
+        buffer_id: id::BufferId,
+        index_format: wgt::IndexFormat,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
+    ) {
+        span!(_guard, DEBUG, "RenderBundle::set_index_buffer");
+        self.base.commands.push(RenderCommand::SetIndexBuffer {
+            buffer_id,
+            index_format,
+            offset,
+            size,
+        });
+    }
 }
 
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
@@ -1074,23 +1090,6 @@ pub mod bundle_ffi {
             .base
             .commands
             .push(RenderCommand::SetPipeline(pipeline_id));
-    }
-
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_bundle_set_index_buffer(
-        bundle: &mut RenderBundleEncoder,
-        buffer_id: id::BufferId,
-        index_format: wgt::IndexFormat,
-        offset: BufferAddress,
-        size: Option<BufferSize>,
-    ) {
-        span!(_guard, DEBUG, "RenderBundle::set_index_buffer");
-        bundle.base.commands.push(RenderCommand::SetIndexBuffer {
-            buffer_id,
-            index_format,
-            offset,
-            size,
-        });
     }
 
     #[no_mangle]
