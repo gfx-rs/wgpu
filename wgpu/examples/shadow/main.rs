@@ -464,7 +464,7 @@ impl framework::Example for Example {
             });
 
             // Create the render pipeline
-            let vs_module = device.create_shader_module(wgpu::include_spirv!("bake.vert.spv"));
+            let vs_module = device.create_shader_module(&wgpu::include_spirv!("bake.vert.spv"));
 
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("shadow"),
@@ -600,8 +600,8 @@ impl framework::Example for Example {
             });
 
             // Create the render pipeline
-            let vs_module = device.create_shader_module(wgpu::include_spirv!("forward.vert.spv"));
-            let fs_module = device.create_shader_module(wgpu::include_spirv!("forward.frag.spv"));
+            let vs_module = device.create_shader_module(&wgpu::include_spirv!("forward.vert.spv"));
+            let fs_module = device.create_shader_module(&wgpu::include_spirv!("forward.frag.spv"));
 
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("main"),

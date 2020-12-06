@@ -34,9 +34,9 @@ impl framework::Example for Example {
     ) -> Self {
         // load (and compile) shaders and create shader modules
 
-        let boids_module = device.create_shader_module(wgpu::include_spirv!("boids.comp.spv"));
-        let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
-        let fs_module = device.create_shader_module(wgpu::include_spirv!("shader.frag.spv"));
+        let boids_module = device.create_shader_module(&wgpu::include_spirv!("boids.comp.spv"));
+        let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
+        let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
 
         // buffer for simulation parameters uniform
 

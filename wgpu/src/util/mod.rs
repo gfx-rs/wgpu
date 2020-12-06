@@ -19,7 +19,7 @@ pub use belt::StagingBelt;
 /// - Input length isn't multiple of 4
 /// - Input is longer than [`usize::max_value`]
 /// - SPIR-V magic number is missing from beginning of stream
-pub fn make_spirv<'a>(data: &'a [u8]) -> super::ShaderModuleSource<'a> {
+pub fn make_spirv<'a>(data: &'a [u8]) -> super::ShaderSource<'a> {
     const MAGIC_NUMBER: u32 = 0x0723_0203;
 
     assert_eq!(
@@ -48,7 +48,7 @@ pub fn make_spirv<'a>(data: &'a [u8]) -> super::ShaderModuleSource<'a> {
         "wrong magic word {:x}. Make sure you are using a binary SPIRV file.",
         words[0]
     );
-    super::ShaderModuleSource::SpirV(words)
+    super::ShaderSource::SpirV(words)
 }
 
 /// Utility methods not meant to be in the main API.

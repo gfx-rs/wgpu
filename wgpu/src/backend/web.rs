@@ -2,8 +2,9 @@ use crate::{
     BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BindingType,
     BufferBindingType, BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor,
     LoadOp, PipelineLayoutDescriptor, ProgrammableStageDescriptor, RenderBundleEncoderDescriptor,
-    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleSource, StorageTextureAccess,
-    SwapChainStatus, TextureDescriptor, TextureViewDescriptor, TextureViewDimension,
+    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor, ShaderSource,
+    StorageTextureAccess, SwapChainStatus, TextureDescriptor, TextureViewDescriptor,
+    TextureViewDimension,
 };
 
 use futures::FutureExt;
@@ -965,18 +966,20 @@ impl crate::Context for Context {
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
-        source: ShaderModuleSource,
+        desc: &ShaderModuleDescriptor,
     ) -> Self::ShaderModuleId {
-        let desc = match source {
-            ShaderModuleSource::SpirV(spv) => {
-                web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&*spv))
+        let mut descriptor = match desc.source {
+            ShaderSource::SpirV(ref spv) => {
+                web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&**spv))
             }
-            ShaderModuleSource::Wgsl(_code) => {
+            ShaderSource::Wgsl(_) => {
                 panic!("WGSL is not yet supported by the Web backend")
             }
         };
-        // TODO: label
-        Sendable(device.0.create_shader_module(&desc))
+        if let Some(ref label) = desc.label {
+            descriptor.label(label);
+        }
+        Sendable(device.0.create_shader_module(&descriptor))
     }
 
     fn device_create_bind_group_layout(

@@ -49,7 +49,11 @@ macro_rules! include_spirv {
     ($($token:tt)*) => {
         {
             //log::info!("including '{}'", $($token)*);
-            $crate::util::make_spirv(include_bytes!($($token)*))
+            $crate::ShaderModuleDescriptor {
+                label: Some($($token)*),
+                source: $crate::util::make_spirv(include_bytes!($($token)*)),
+                experimental_translation: false,
+            }
         }
     };
 }
