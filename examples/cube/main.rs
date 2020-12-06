@@ -273,8 +273,8 @@ impl framework::Example for Example {
             }],
         };
 
-        let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
-        let fs_module = device.create_shader_module(wgpu::include_spirv!("shader.frag.spv"));
+        let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
+        let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -310,7 +310,8 @@ impl framework::Example for Example {
             .features()
             .contains(wgt::Features::NON_FILL_POLYGON_MODE)
         {
-            let fs_wire_module = device.create_shader_module(wgpu::include_spirv!("wire.frag.spv"));
+            let fs_wire_module =
+                device.create_shader_module(&wgpu::include_spirv!("wire.frag.spv"));
             let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),

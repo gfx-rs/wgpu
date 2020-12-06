@@ -210,7 +210,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
-        source: ShaderModuleSource,
+        desc: &ShaderModuleDescriptor,
     ) -> Self::ShaderModuleId;
     fn device_create_bind_group_layout(
         &self,
@@ -672,7 +672,7 @@ impl Drop for ShaderModule {
 }
 
 /// Source of a shader module.
-pub enum ShaderModuleSource<'a> {
+pub enum ShaderSource<'a> {
     /// SPIR-V module represented as a slice of words.
     ///
     /// wgpu will attempt to parse and validate it, but the original binary
@@ -685,6 +685,16 @@ pub enum ShaderModuleSource<'a> {
     ///
     /// Note: WGSL is not yet supported on the Web.
     Wgsl(Cow<'a, str>),
+}
+
+/// Descriptor for a shader module.
+pub struct ShaderModuleDescriptor<'a> {
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// Source code for the shader.
+    pub source: ShaderSource<'a>,
+    /// Experimental translation path attempts to avoid SPIR-V and work with Naga IR directly.
+    pub experimental_translation: bool,
 }
 
 /// Handle to a pipeline layout.
@@ -1415,10 +1425,10 @@ impl Device {
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.
-    pub fn create_shader_module(&self, source: ShaderModuleSource) -> ShaderModule {
+    pub fn create_shader_module(&self, desc: &ShaderModuleDescriptor) -> ShaderModule {
         ShaderModule {
             context: Arc::clone(&self.context),
-            id: Context::device_create_shader_module(&*self.context, &self.id, source),
+            id: Context::device_create_shader_module(&*self.context, &self.id, desc),
         }
     }
 
