@@ -107,11 +107,20 @@ pub fn get_intrinsic(word: &str) -> Option<crate::IntrinsicFunction> {
         _ => None,
     }
 }
+
 pub fn get_derivative(word: &str) -> Option<crate::DerivativeAxis> {
     match word {
         "dpdx" => Some(crate::DerivativeAxis::X),
         "dpdy" => Some(crate::DerivativeAxis::Y),
         "dwidth" => Some(crate::DerivativeAxis::Width),
+        _ => None,
+    }
+}
+
+// Returns argument count on success
+pub fn get_standard_fun(word: &str) -> Option<usize> {
+    match word {
+        "min" | "max" => Some(2),
         _ => None,
     }
 }

@@ -13,7 +13,19 @@ fn parse_type_cast() {
         const a : i32 = 2;
         fn main() {
             var x: f32 = f32(a);
-            #x = f32(i32(a + 1) / 2); //TODO
+            x = f32(i32(a + 1) / 2);
+        }
+    ",
+    )
+    .unwrap();
+}
+
+#[test]
+fn parse_standard_fun() {
+    parse_str(
+        "
+        fn main() {
+            var x: i32 = min(max(1, 2), 3);
         }
     ",
     )
