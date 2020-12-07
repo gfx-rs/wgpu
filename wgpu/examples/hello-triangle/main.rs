@@ -3,6 +3,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
+use std::borrow::Cow;
 
 async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::TextureFormat) {
     let size = window.inner_size();
@@ -32,8 +33,11 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
         .expect("Failed to create device");
 
     // Load the shaders from disk
-    let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
-    let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
+    let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+        experimental_translation: true,
+    });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
@@ -45,12 +49,12 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
         label: None,
         layout: Some(&pipeline_layout),
         vertex_stage: wgpu::ProgrammableStageDescriptor {
-            module: &vs_module,
-            entry_point: "main",
+            module: &shader,
+            entry_point: "vs_main",
         },
         fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
-            module: &fs_module,
-            entry_point: "main",
+            module: &shader,
+            entry_point: "fs_main",
         }),
         // Use the default rasterizer state: no culling, no depth bias
         rasterization_state: None,
@@ -83,8 +87,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
         let _ = (
             &instance,
             &adapter,
-            &vs_module,
-            &fs_module,
+            &shader,
             &pipeline_layout,
         );
 
