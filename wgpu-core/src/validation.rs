@@ -154,7 +154,7 @@ pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,
     #[error("unable to find an entry point at {0:?} stage")]
-    MissingEntryPoint(wgt::ShaderStage),
+    MissingEntryPoint(String),
     #[error("error matching global binding at index {binding} in group {group} against the pipeline layout: {error}")]
     Binding {
         group: u32,
@@ -792,10 +792,11 @@ impl Interface {
             wgt::ShaderStage::COMPUTE => naga::ShaderStage::Compute,
             _ => unreachable!(),
         };
+        let pair = (shader_stage, entry_point_name.to_string());
         let entry_point = self
             .entry_points
-            .get(&(shader_stage, entry_point_name.to_string()))
-            .ok_or(StageError::MissingEntryPoint(stage_bit))?;
+            .get(&pair)
+            .ok_or(StageError::MissingEntryPoint(pair.1))?;
 
         for &(handle, usage) in entry_point.resources.iter() {
             let res = &self.resources[handle];

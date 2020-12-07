@@ -9,8 +9,11 @@
         )),
         CreateShaderModule(
             id: Id(0, 1, Empty),
-            label: None,
-            data: "empty.comp.spv",
+            desc: (
+                label: None,
+                experimental_translation: true,
+            ),
+            data: "empty.wgsl",
         ),
         CreateComputePipeline(Id(0, 1, Empty), (
             label: None,

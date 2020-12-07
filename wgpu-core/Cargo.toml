@@ -35,25 +35,25 @@ thiserror = "1"
 gpu-alloc = { git = "https://github.com/zakarumych/gpu-alloc", rev = "d07be73f9439a37c89f5b72f2500cbf0eb4ff613" }
 gpu-descriptor = { git = "https://github.com/zakarumych/gpu-descriptor", rev = "df74fd8c7bea03149058a41aab0e4fe04077b266"}
 
-hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx", rev = "654ad48ee39ce2a341407ae2857ddf4db639ea54" }
-gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "654ad48ee39ce2a341407ae2857ddf4db639ea54" }
+hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx", rev = "f1398d29c7ad726968723a37187bd3932c539783" }
+gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "f1398d29c7ad726968723a37187bd3932c539783" }
 
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "654ad48ee39ce2a341407ae2857ddf4db639ea54" }
-gfx-backend-gl = { git = "https://github.com/gfx-rs/gfx", rev = "654ad48ee39ce2a341407ae2857ddf4db639ea54" }
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "f1398d29c7ad726968723a37187bd3932c539783" }
+gfx-backend-gl = { git = "https://github.com/gfx-rs/gfx", rev = "f1398d29c7ad726968723a37187bd3932c539783" }
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
-gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", rev = "654ad48ee39ce2a341407ae2857ddf4db639ea54", features = ["naga"] }
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "654ad48ee39ce2a341407ae2857ddf4db639ea54", optional = true }
+gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", rev = "f1398d29c7ad726968723a37187bd3932c539783", features = ["naga"] }
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "f1398d29c7ad726968723a37187bd3932c539783", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", rev = "654ad48ee39ce2a341407ae2857ddf4db639ea54" }
-gfx-backend-dx11 = { git = "https://github.com/gfx-rs/gfx", rev = "654ad48ee39ce2a341407ae2857ddf4db639ea54" }
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "654ad48ee39ce2a341407ae2857ddf4db639ea54" }
+gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", rev = "f1398d29c7ad726968723a37187bd3932c539783" }
+gfx-backend-dx11 = { git = "https://github.com/gfx-rs/gfx", rev = "f1398d29c7ad726968723a37187bd3932c539783" }
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "f1398d29c7ad726968723a37187bd3932c539783" }
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-2"
+tag = "gfx-4"
 features = ["spv-in", "spv-out", "wgsl-in"]
 
 [dependencies.wgt]

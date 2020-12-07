@@ -3314,11 +3314,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 let mut trace = trace.lock();
-                let label = desc.label.clone();
                 trace.add(trace::Action::CreateShaderModule {
                     id: id.0,
+                    desc: desc.clone(),
                     data,
-                    label,
                 });
             }
 

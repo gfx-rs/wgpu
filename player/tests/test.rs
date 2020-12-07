@@ -144,7 +144,9 @@ impl Test<'_> {
                 }
             };
 
-            assert_eq!(&expected_data[..], contents);
+            if &expected_data[..] != contents {
+                panic!("Test expectation is not met!");
+            }
         }
 
         wgc::gfx_select!(device => global.clear_backend(()));
