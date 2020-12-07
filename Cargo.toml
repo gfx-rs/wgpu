@@ -24,16 +24,14 @@ vulkan-portability = ["wgc/gfx-backend-vulkan"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
-#version = "0.6"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "7b886f4b1ed9a739fd0f83b8f0971bf3968d7f67"
+rev = "4846e41eb0ffcaafe148833bc25c3a18abce1b26"
 features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
-#version = "0.6"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "7b886f4b1ed9a739fd0f83b8f0971bf3968d7f67"
+rev = "4846e41eb0ffcaafe148833bc25c3a18abce1b26"
 
 [dependencies]
 arrayvec = "0.5"
@@ -50,7 +48,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 # want to opt into X11 explicitly.
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies.gfx-backend-gl]
 git = "https://github.com/gfx-rs/gfx"
-rev = "654ad48ee39ce2a341407ae2857ddf4db639ea54"
+rev = "f1398d29c7ad726968723a37187bd3932c539783"
 features = ["x11"]
 
 [dev-dependencies]
