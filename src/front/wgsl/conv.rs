@@ -120,7 +120,13 @@ pub fn get_derivative(word: &str) -> Option<crate::DerivativeAxis> {
 // Returns argument count on success
 pub fn get_standard_fun(word: &str) -> Option<usize> {
     match word {
-        "min" | "max" => Some(2),
+        "abs" | "acos" | "asin" | "atan" | "ceil" | "cos" | "cosh" | "exp" | "exp2" | "floor"
+        | "fract" | "inverseSqrt" | "length" | "log" | "log2" | "normalize" | "round" | "sign"
+        | "sin" | "sinh" | "sqrt" | "tan" | "tanh" | "trunc" => Some(1),
+        "countOneBits" | "reverseBits" | "determinant" => Some(1),
+        "atan2" | "distance" | "frexp" | "ldexp" | "max" | "min" | "outerProduct" | "pow"
+        | "reflect" | "step" => Some(2),
+        "clamp" | "faceForward" | "fma" | "smoothStep" => Some(3),
         _ => None,
     }
 }
