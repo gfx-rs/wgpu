@@ -10,51 +10,31 @@ const BITS_PER_BYTE: crate::Bytes = 8;
 pub enum Error {
     #[error("one of the required capabilities {0:?} is missing")]
     MissingCapabilities(Vec<spirv::Capability>),
-    #[error("can't find local variable: {0:?}")]
-    UnknownLocalVariable(crate::LocalVariable),
     #[error("unimplemented {0:}")]
     FeatureNotImplemented(&'static str),
 }
 
+#[derive(Default)]
 struct Block {
     label: Option<Instruction>,
     body: Vec<Instruction>,
     termination: Option<Instruction>,
 }
 
-impl Block {
-    pub fn new() -> Self {
-        Block {
-            label: None,
-            body: vec![],
-            termination: None,
-        }
-    }
-}
-
 struct LocalVariable {
     id: Word,
-    name: Option<String>,
     instruction: Instruction,
 }
 
+#[derive(Default)]
 struct Function {
     signature: Option<Instruction>,
     parameters: Vec<Instruction>,
-    variables: Vec<LocalVariable>,
+    variables: crate::FastHashMap<crate::Handle<crate::LocalVariable>, LocalVariable>,
     blocks: Vec<Block>,
 }
 
 impl Function {
-    pub fn new() -> Self {
-        Function {
-            signature: None,
-            parameters: vec![],
-            variables: vec![],
-            blocks: vec![],
-        }
-    }
-
     fn to_words(&self, sink: &mut impl Extend<Word>) {
         self.signature.as_ref().unwrap().to_words(sink);
         for instruction in self.parameters.iter() {
@@ -63,7 +43,7 @@ impl Function {
         for (index, block) in self.blocks.iter().enumerate() {
             block.label.as_ref().unwrap().to_words(sink);
             if index == 0 {
-                for local_var in self.variables.iter() {
+                for local_var in self.variables.values() {
                     local_var.instruction.to_words(sink);
                 }
             }
@@ -328,9 +308,9 @@ impl Writer {
         ir_function: &crate::Function,
         ir_module: &crate::Module,
     ) -> Result<spirv::Word, Error> {
-        let mut function = Function::new();
+        let mut function = Function::default();
 
-        for (_, variable) in ir_function.local_variables.iter() {
+        for (handle, variable) in ir_function.local_variables.iter() {
             let id = self.generate_id();
 
             let init_word = variable
@@ -339,16 +319,15 @@ impl Writer {
                 .transpose()?;
             let pointer_id =
                 self.get_pointer_id(&ir_module.types, variable.ty, crate::StorageClass::Function)?;
-            function.variables.push(LocalVariable {
+            let instruction = super::instructions::instruction_variable(
+                pointer_id,
                 id,
-                name: variable.name.clone(),
-                instruction: super::instructions::instruction_variable(
-                    pointer_id,
-                    id,
-                    spirv::StorageClass::Function,
-                    init_word,
-                ),
-            });
+                spirv::StorageClass::Function,
+                init_word,
+            );
+            function
+                .variables
+                .insert(handle, LocalVariable { id, instruction });
         }
 
         let return_type_id =
@@ -1246,12 +1225,8 @@ impl Writer {
             }
             crate::Expression::LocalVariable(variable) => {
                 let var = &ir_function.local_variables[variable];
-                function
-                    .variables
-                    .iter()
-                    .find(|&v| v.name.as_ref().unwrap() == var.name.as_ref().unwrap())
-                    .map(|local_var| (local_var.id, LookupType::Handle(var.ty)))
-                    .ok_or_else(|| Error::UnknownLocalVariable(var.clone()))
+                let local_var = &function.variables[&variable];
+                Ok((local_var.id, LookupType::Handle(var.ty)))
             }
             crate::Expression::FunctionArgument(index) => {
                 let handle = ir_function.arguments[index as usize].ty;
@@ -1277,46 +1252,14 @@ impl Writer {
 
                     for argument in arguments {
                         let expression = &ir_function.expressions[*argument];
-                        let (id, lookup_ty) = self.write_expression(
+                        let (arg_id, _) = self.write_expression(
                             ir_module,
                             ir_function,
                             expression,
                             block,
                             function,
                         )?;
-
-                        // Create variable - OpVariable
-                        // Store value to variable - OpStore
-                        // Use id of variable
-
-                        let handle = match lookup_ty {
-                            LookupType::Handle(handle) => handle,
-                            LookupType::Local(_) => unreachable!(),
-                        };
-
-                        let pointer_id = self.get_pointer_id(
-                            &ir_module.types,
-                            handle,
-                            crate::StorageClass::Function,
-                        )?;
-
-                        let variable_id = self.generate_id();
-                        function.variables.push(LocalVariable {
-                            id: variable_id,
-                            name: None,
-                            instruction: super::instructions::instruction_variable(
-                                pointer_id,
-                                variable_id,
-                                spirv::StorageClass::Function,
-                                None,
-                            ),
-                        });
-                        block.body.push(super::instructions::instruction_store(
-                            variable_id,
-                            id,
-                            None,
-                        ));
-                        argument_ids.push(variable_id);
+                        argument_ids.push(arg_id);
                     }
 
                     let return_type_id = self
@@ -1567,7 +1510,7 @@ impl Writer {
         ir_function: &crate::Function,
         function: &mut Function,
     ) -> Result<spirv::Word, Error> {
-        let mut block = Block::new();
+        let mut block = Block::default();
         let id = self.generate_id();
         block.label = Some(super::instructions::instruction_label(id));
 
