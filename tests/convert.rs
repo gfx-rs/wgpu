@@ -71,6 +71,26 @@ fn convert_quad() {
         let capabilities = Some(spirv::Capability::Shader).into_iter().collect();
         spv::write_vec(&module, spv::WriterFlags::empty(), capabilities).unwrap();
     }
+    #[cfg(feature = "glsl-out")]
+    {
+        use naga::back::glsl;
+        let mut options = glsl::Options {
+            version: glsl::Version::Embedded(310),
+            entry_point: (naga::ShaderStage::Compute, String::from("main")),
+        };
+
+        let mut output = Vec::new();
+        {
+            options.entry_point.0 = naga::ShaderStage::Vertex;
+            let mut writer = glsl::Writer::new(&mut output, &module, &options).unwrap();
+            writer.write().unwrap();
+        }
+        {
+            options.entry_point.0 = naga::ShaderStage::Fragment;
+            let mut writer = glsl::Writer::new(&mut output, &module, &options).unwrap();
+            writer.write().unwrap();
+        }
+    }
 }
 
 #[cfg(feature = "wgsl-in")]
@@ -136,6 +156,18 @@ fn convert_boids() {
             //TODO: panic here when `spv-out` supports it
             println!("Quad SPIR-V error {:?}", e);
         }
+    }
+    #[cfg(feature = "glsl-out")]
+    {
+        use naga::back::glsl;
+        let options = glsl::Options {
+            version: glsl::Version::Embedded(310),
+            entry_point: (naga::ShaderStage::Compute, String::from("main")),
+        };
+
+        let mut output = Vec::new();
+        let mut writer = glsl::Writer::new(&mut output, &module, &options).unwrap();
+        writer.write().unwrap();
     }
 }
 

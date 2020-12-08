@@ -17,19 +17,23 @@ struct BindSource {
 #[derive(serde::Deserialize)]
 struct BindTarget {
     #[serde(default)]
+    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     buffer: Option<u8>,
     #[serde(default)]
+    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     texture: Option<u8>,
     #[serde(default)]
+    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     sampler: Option<u8>,
     #[serde(default)]
+    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     mutable: bool,
 }
 
 #[derive(Default, serde::Deserialize)]
 struct Parameters {
     #[serde(default)]
-    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+    #[cfg_attr(not(feature = "spv-in"), allow(dead_code))]
     spv_flow_dump_prefix: String,
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_capabilities: naga::FastHashSet<spirv::Capability>,
@@ -41,7 +45,6 @@ fn main() {
     env_logger::init();
 
     let args = env::args().collect::<Vec<_>>();
-
     if args.len() <= 1 {
         println!("Call with <input> <output>");
         return;
