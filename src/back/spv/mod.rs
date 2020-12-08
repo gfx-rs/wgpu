@@ -9,9 +9,10 @@ mod test_framework;
 #[cfg(test)]
 mod layout_tests;
 
-pub use writer::Writer;
+pub use spirv::Capability;
+pub use writer::{Error, Writer};
 
-use spirv::*;
+use spirv::Word;
 
 bitflags::bitflags! {
     pub struct WriterFlags: u32 {
@@ -44,16 +45,20 @@ struct LogicalLayout {
 }
 
 pub(self) struct Instruction {
-    op: Op,
+    op: spirv::Op,
     wc: u32,
     type_id: Option<Word>,
     result_id: Option<Word>,
     operands: Vec<Word>,
 }
 
-pub fn write_vec(module: &crate::Module, flags: WriterFlags) -> Vec<u32> {
+pub fn write_vec(
+    module: &crate::Module,
+    flags: WriterFlags,
+    capabilities: crate::FastHashSet<spirv::Capability>,
+) -> Result<Vec<u32>, Error> {
     let mut words = Vec::new();
-    let mut w = Writer::new(&module.header, flags);
-    w.write(module, &mut words);
-    words
+    let mut w = Writer::new(&module.header, flags, capabilities);
+    w.write(module, &mut words)?;
+    Ok(words)
 }

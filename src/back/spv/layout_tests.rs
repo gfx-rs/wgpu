@@ -1,6 +1,7 @@
-use crate::back::spv::test_framework::*;
-use crate::back::spv::{helpers, Instruction, LogicalLayout, PhysicalLayout};
-use crate::Header;
+use crate::{
+    back::spv::{helpers, test_framework::*, Instruction, LogicalLayout, PhysicalLayout},
+    Header,
+};
 use spirv::*;
 
 #[test]

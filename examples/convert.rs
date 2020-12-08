@@ -177,7 +177,8 @@ fn main() {
                 }
             });
 
-            let spv = spv::write_vec(&module, debug_flag);
+            let capabilities = Default::default(); //TODO
+            let spv = spv::write_vec(&module, debug_flag, capabilities).unwrap();
 
             let bytes = spv
                 .iter()
