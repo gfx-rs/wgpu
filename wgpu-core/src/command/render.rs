@@ -29,7 +29,9 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
 use thiserror::Error;
-use wgt::{BufferAddress, BufferUsage, Color, IndexFormat, InputStepMode, TextureUsage};
+use wgt::{
+    BufferAddress, BufferSize, BufferUsage, Color, IndexFormat, InputStepMode, TextureUsage,
+};
 
 #[cfg(any(feature = "serial-pass", feature = "replay"))]
 use serde::Deserialize;
@@ -171,6 +173,22 @@ impl RenderPass {
             target_colors: self.color_targets.into_iter().collect(),
             target_depth_stencil: self.depth_stencil_target,
         }
+    }
+
+    pub fn set_index_buffer(
+        &mut self,
+        buffer_id: id::BufferId,
+        index_format: IndexFormat,
+        offset: BufferAddress,
+        size: Option<BufferSize>,
+    ) {
+        span!(_guard, DEBUG, "RenderPass::set_index_buffer");
+        self.base.commands.push(RenderCommand::SetIndexBuffer {
+            buffer_id,
+            index_format,
+            offset,
+            size,
+        });
     }
 }
 
@@ -1754,23 +1772,6 @@ pub mod render_ffi {
         pass.base
             .commands
             .push(RenderCommand::SetPipeline(pipeline_id));
-    }
-
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_index_buffer(
-        pass: &mut RenderPass,
-        buffer_id: id::BufferId,
-        index_format: wgt::IndexFormat,
-        offset: BufferAddress,
-        size: Option<BufferSize>,
-    ) {
-        span!(_guard, DEBUG, "RenderPass::set_index_buffer");
-        pass.base.commands.push(RenderCommand::SetIndexBuffer {
-            buffer_id,
-            index_format,
-            offset,
-            size,
-        });
     }
 
     #[no_mangle]
