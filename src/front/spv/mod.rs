@@ -2367,11 +2367,40 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             crate::StorageAccess::empty()
         };
 
+        let ty = match binding {
+            // SPIR-V only cares about some of the built-in types being integer.
+            // Naga requires them to be strictly unsigned, so we have to patch it.
+            Some(crate::Binding::BuiltIn(built_in)) => {
+                let scalar_kind = module.types[lookup_type.handle].inner.scalar_kind();
+                let needs_uint = match built_in {
+                    crate::BuiltIn::BaseInstance
+                    | crate::BuiltIn::BaseVertex
+                    | crate::BuiltIn::InstanceIndex
+                    | crate::BuiltIn::SampleIndex
+                    | crate::BuiltIn::VertexIndex => true,
+                    _ => false,
+                };
+                if needs_uint && scalar_kind == Some(crate::ScalarKind::Sint) {
+                    log::warn!("Treating {:?} as unsigned", built_in);
+                    module.types.fetch_or_append(crate::Type {
+                        name: None,
+                        inner: crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Uint,
+                            width: 4,
+                        },
+                    })
+                } else {
+                    lookup_type.handle
+                }
+            }
+            _ => lookup_type.handle,
+        };
+
         let var = crate::GlobalVariable {
             name: dec.name,
             class,
             binding,
-            ty: lookup_type.handle,
+            ty,
             init,
             interpolation: dec.interpolation,
             storage_access,

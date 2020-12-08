@@ -173,7 +173,7 @@ fn convert_boids() {
 
 #[cfg(feature = "spv-in")]
 #[test]
-fn convert_cube() {
+fn convert_cube_spv() {
     let mut validator = naga::proc::Validator::new();
     let vs = load_spv("cube.vert.spv");
     validator.validate(&vs).unwrap();
@@ -229,6 +229,25 @@ fn convert_cube() {
         };
         msl::write_string(&vs, &options).unwrap();
         msl::write_string(&fs, &options).unwrap();
+    }
+}
+
+#[cfg(feature = "spv-in")]
+#[test]
+fn convert_quad_spv() {
+    let mut validator = naga::proc::Validator::new();
+    // check that integer `gl_VertexIndex` is treated as unsigned
+    let vs = load_spv("quad.vert.spv");
+    validator.validate(&vs).unwrap();
+    #[cfg(feature = "msl-out")]
+    {
+        use naga::back::msl;
+        let options = msl::Options {
+            lang_version: (1, 0),
+            spirv_cross_compatibility: false,
+            binding_map: msl::BindingMap::default(),
+        };
+        msl::write_string(&vs, &options).unwrap();
     }
 }
 
