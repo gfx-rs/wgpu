@@ -112,6 +112,7 @@ impl<'a, T> ops::Deref for MaybeOwned<'a, T> {
     }
 }
 
+#[derive(Debug)]
 enum Dimension {
     Scalar,
     Vector,
@@ -1101,14 +1102,10 @@ impl Writer {
                     function,
                 )?;
 
-                let left_lookup_ty = left_lookup_ty;
-                let right_lookup_ty = right_lookup_ty;
-
                 let left_ty_inner = self.get_type_inner(&ir_module.types, left_lookup_ty);
                 let right_ty_inner = self.get_type_inner(&ir_module.types, right_lookup_ty);
 
                 let left_result_type_id = self.get_type_id(&ir_module.types, left_lookup_ty)?;
-
                 let right_result_type_id = self.get_type_id(&ir_module.types, right_lookup_ty)?;
 
                 let left_id = match *left_expression {
@@ -1143,56 +1140,63 @@ impl Writer {
                 let left_dimension = get_dimension(&left_ty_inner);
                 let right_dimension = get_dimension(&right_ty_inner);
 
-                let (spirv_op, lookup_ty) = match op {
+                let mut result_side_left = true;
+                let mut preserve_order = true;
+
+                let spirv_op = match op {
                     crate::BinaryOperator::Add => match *left_ty_inner {
                         crate::TypeInner::Scalar { kind, .. }
                         | crate::TypeInner::Vector { kind, .. } => match kind {
-                            crate::ScalarKind::Float => (spirv::Op::FAdd, left_lookup_ty),
-                            _ => (spirv::Op::IAdd, left_lookup_ty),
+                            crate::ScalarKind::Float => spirv::Op::FAdd,
+                            _ => spirv::Op::IAdd,
                         },
                         _ => unreachable!(),
                     },
                     crate::BinaryOperator::Subtract => match *left_ty_inner {
                         crate::TypeInner::Scalar { kind, .. }
                         | crate::TypeInner::Vector { kind, .. } => match kind {
-                            crate::ScalarKind::Float => (spirv::Op::FSub, left_lookup_ty),
-                            _ => (spirv::Op::ISub, left_lookup_ty),
+                            crate::ScalarKind::Float => spirv::Op::FSub,
+                            _ => spirv::Op::ISub,
                         },
                         _ => unreachable!(),
                     },
-                    crate::BinaryOperator::Multiply => match (left_dimension, right_dimension) {
-                        (Dimension::Vector, Dimension::Scalar { .. }) => {
-                            (spirv::Op::VectorTimesScalar, left_lookup_ty)
+                    crate::BinaryOperator::Multiply => {
+                        // whenever there is a vector on the right,
+                        // the result type is a vector.
+                        if let Dimension::Vector = right_dimension {
+                            result_side_left = false;
                         }
-                        (Dimension::Vector, Dimension::Matrix) => {
-                            (spirv::Op::VectorTimesMatrix, left_lookup_ty)
+                        match (left_dimension, right_dimension) {
+                            (Dimension::Scalar, Dimension::Vector { .. }) => {
+                                preserve_order = false;
+                                spirv::Op::VectorTimesScalar
+                            }
+                            (Dimension::Vector, Dimension::Scalar { .. }) => {
+                                spirv::Op::VectorTimesScalar
+                            }
+                            (Dimension::Vector, Dimension::Matrix) => spirv::Op::VectorTimesMatrix,
+                            (Dimension::Matrix, Dimension::Scalar { .. }) => {
+                                spirv::Op::MatrixTimesScalar
+                            }
+                            (Dimension::Matrix, Dimension::Vector) => spirv::Op::MatrixTimesVector,
+                            (Dimension::Matrix, Dimension::Matrix) => spirv::Op::MatrixTimesMatrix,
+                            (Dimension::Vector, Dimension::Vector)
+                            | (Dimension::Scalar, Dimension::Scalar)
+                                if left_ty_inner.scalar_kind()
+                                    == Some(crate::ScalarKind::Float) =>
+                            {
+                                spirv::Op::FMul
+                            }
+                            (Dimension::Vector, Dimension::Vector)
+                            | (Dimension::Scalar, Dimension::Scalar) => spirv::Op::IMul,
+                            other => unreachable!("Mul {:?}", other),
                         }
-                        (Dimension::Matrix, Dimension::Scalar { .. }) => {
-                            (spirv::Op::MatrixTimesScalar, left_lookup_ty)
-                        }
-                        (Dimension::Matrix, Dimension::Vector) => {
-                            (spirv::Op::MatrixTimesVector, right_lookup_ty)
-                        }
-                        (Dimension::Matrix, Dimension::Matrix) => {
-                            (spirv::Op::MatrixTimesMatrix, left_lookup_ty)
-                        }
-                        (Dimension::Vector, Dimension::Vector)
-                        | (Dimension::Scalar, Dimension::Scalar)
-                            if left_ty_inner.scalar_kind() == Some(crate::ScalarKind::Float) =>
-                        {
-                            (spirv::Op::FMul, left_lookup_ty)
-                        }
-                        (Dimension::Vector, Dimension::Vector)
-                        | (Dimension::Scalar, Dimension::Scalar) => {
-                            (spirv::Op::IMul, left_lookup_ty)
-                        }
-                        _ => unreachable!(),
-                    },
+                    }
                     crate::BinaryOperator::Divide => match *left_ty_inner {
                         crate::TypeInner::Scalar { kind, .. }
                         | crate::TypeInner::Vector { kind, .. } => match kind {
-                            crate::ScalarKind::Sint => (spirv::Op::SDiv, left_lookup_ty),
-                            crate::ScalarKind::Uint => (spirv::Op::UDiv, left_lookup_ty),
+                            crate::ScalarKind::Sint => spirv::Op::SDiv,
+                            crate::ScalarKind::Uint => spirv::Op::UDiv,
                             _ => unreachable!(),
                         },
                         _ => unreachable!(),
@@ -1200,28 +1204,33 @@ impl Writer {
                     crate::BinaryOperator::Modulo => match *left_ty_inner {
                         crate::TypeInner::Scalar { kind, .. }
                         | crate::TypeInner::Vector { kind, .. } => match kind {
-                            crate::ScalarKind::Sint => (spirv::Op::SMod, left_lookup_ty),
-                            crate::ScalarKind::Uint => (spirv::Op::UMod, left_lookup_ty),
-                            crate::ScalarKind::Float => (spirv::Op::FMod, left_lookup_ty),
+                            crate::ScalarKind::Sint => spirv::Op::SMod,
+                            crate::ScalarKind::Uint => spirv::Op::UMod,
+                            crate::ScalarKind::Float => spirv::Op::FMod,
                             _ => unreachable!(),
                         },
                         _ => unreachable!(),
                     },
-                    crate::BinaryOperator::And => (spirv::Op::BitwiseAnd, left_lookup_ty),
+                    crate::BinaryOperator::And => spirv::Op::BitwiseAnd,
                     _ => {
                         log::error!("unimplemented {:?}", op);
                         return Err(Error::FeatureNotImplemented("binary operator"));
                     }
                 };
 
+                let (result_type_id, result_lookup_ty) = if result_side_left {
+                    (left_result_type_id, left_lookup_ty)
+                } else {
+                    (right_result_type_id, right_lookup_ty)
+                };
                 block.body.push(super::instructions::instruction_binary(
                     spirv_op,
-                    left_result_type_id,
+                    result_type_id,
                     id,
-                    left_id,
-                    right_id,
+                    if preserve_order { left_id } else { right_id },
+                    if preserve_order { right_id } else { left_id },
                 ));
-                Ok((id, lookup_ty))
+                Ok((id, result_lookup_ty))
             }
             crate::Expression::LocalVariable(variable) => {
                 let var = &ir_function.local_variables[variable];

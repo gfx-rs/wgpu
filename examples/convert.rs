@@ -1,21 +1,20 @@
-use serde::{Deserialize, Serialize};
 use std::{env, fs, path::Path};
 
-#[derive(Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Hash, PartialEq, Eq, serde::Deserialize)]
 enum Stage {
     Vertex,
     Fragment,
     Compute,
 }
 
-#[derive(Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Hash, PartialEq, Eq, serde::Deserialize)]
 struct BindSource {
     stage: Stage,
     group: u32,
     binding: u32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Deserialize)]
 struct BindTarget {
     #[serde(default)]
     buffer: Option<u8>,
@@ -27,11 +26,15 @@ struct BindTarget {
     mutable: bool,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, serde::Deserialize)]
 struct Parameters {
     #[serde(default)]
+    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_flow_dump_prefix: String,
-    metal_bindings: naga::FastHashMap<BindSource, BindTarget>,
+    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+    spv_capabilities: naga::FastHashSet<spirv::Capability>,
+    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
+    mtl_bindings: naga::FastHashMap<BindSource, BindTarget>,
 }
 
 fn main() {
@@ -138,7 +141,7 @@ fn main() {
         "metal" => {
             use naga::back::msl;
             let mut binding_map = msl::BindingMap::default();
-            for (key, value) in params.metal_bindings {
+            for (key, value) in params.mtl_bindings {
                 binding_map.insert(
                     msl::BindSource {
                         stage: match key.stage {
@@ -177,8 +180,7 @@ fn main() {
                 }
             });
 
-            let capabilities = Default::default(); //TODO
-            let spv = spv::write_vec(&module, debug_flag, capabilities).unwrap();
+            let spv = spv::write_vec(&module, debug_flag, params.spv_capabilities).unwrap();
 
             let bytes = spv
                 .iter()

@@ -65,6 +65,12 @@ fn convert_quad() {
         };
         msl::write_string(&module, &options).unwrap();
     }
+    #[cfg(feature = "spv-out")]
+    {
+        use naga::back::spv;
+        let capabilities = Some(spirv::Capability::Shader).into_iter().collect();
+        spv::write_vec(&module, spv::WriterFlags::empty(), capabilities).unwrap();
+    }
 }
 
 #[cfg(feature = "wgsl-in")]
@@ -121,6 +127,15 @@ fn convert_boids() {
             binding_map,
         };
         msl::write_string(&module, &options).unwrap();
+    }
+    #[cfg(feature = "spv-out")]
+    {
+        use naga::back::spv;
+        let capabilities = Some(spirv::Capability::Shader).into_iter().collect();
+        if let Err(e) = spv::write_vec(&module, spv::WriterFlags::empty(), capabilities) {
+            //TODO: panic here when `spv-out` supports it
+            println!("Quad SPIR-V error {:?}", e);
+        }
     }
 }
 
