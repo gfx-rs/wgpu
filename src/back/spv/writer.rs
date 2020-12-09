@@ -1232,6 +1232,10 @@ impl Writer {
                 ));
                 Ok((id, result_lookup_ty))
             }
+            crate::Expression::Math { fun, .. } => {
+                log::error!("unimplemented math function {:?}", fun);
+                Err(Error::FeatureNotImplemented("math function"))
+            }
             crate::Expression::LocalVariable(variable) => {
                 let var = &ir_function.local_variables[variable];
                 let local_var = &function.variables[&variable];
@@ -1251,49 +1255,38 @@ impl Writer {
                 Ok((load_id, LookupType::Handle(handle)))
             }
             crate::Expression::Call {
-                ref origin,
+                function: local_function,
                 ref arguments,
-            } => match *origin {
-                crate::FunctionOrigin::Local(local_function) => {
-                    let origin_function = &ir_module.functions[local_function];
-                    let id = self.generate_id();
-                    let mut argument_ids = vec![];
+            } => {
+                let target_function = &ir_module.functions[local_function];
+                let id = self.generate_id();
+                let mut argument_ids = vec![];
 
-                    for argument in arguments {
-                        let expression = &ir_function.expressions[*argument];
-                        let (arg_id, _) = self.write_expression(
-                            ir_module,
-                            ir_function,
-                            expression,
-                            block,
-                            function,
-                        )?;
-                        argument_ids.push(arg_id);
-                    }
-
-                    let return_type_id = self
-                        .get_function_return_type(origin_function.return_type, &ir_module.types)?;
-
-                    block
-                        .body
-                        .push(super::instructions::instruction_function_call(
-                            return_type_id,
-                            id,
-                            *self.lookup_function.get(&local_function).unwrap(),
-                            argument_ids.as_slice(),
-                        ));
-
-                    let result_type = match origin_function.return_type {
-                        Some(ty_handle) => LookupType::Handle(ty_handle),
-                        None => LookupType::Local(LocalType::Void),
-                    };
-                    Ok((id, result_type))
+                for argument in arguments {
+                    let expression = &ir_function.expressions[*argument];
+                    let (arg_id, _) =
+                        self.write_expression(ir_module, ir_function, expression, block, function)?;
+                    argument_ids.push(arg_id);
                 }
-                crate::FunctionOrigin::External(ref string) => {
-                    log::error!("unimplemented stdlib function {}", string);
-                    Err(Error::FeatureNotImplemented("stdlib function"))
-                }
-            },
+
+                let return_type_id =
+                    self.get_function_return_type(target_function.return_type, &ir_module.types)?;
+
+                block
+                    .body
+                    .push(super::instructions::instruction_function_call(
+                        return_type_id,
+                        id,
+                        *self.lookup_function.get(&local_function).unwrap(),
+                        argument_ids.as_slice(),
+                    ));
+
+                let result_type = match target_function.return_type {
+                    Some(ty_handle) => LookupType::Handle(ty_handle),
+                    None => LookupType::Local(LocalType::Void),
+                };
+                Ok((id, result_type))
+            }
             crate::Expression::As {
                 expr,
                 kind,

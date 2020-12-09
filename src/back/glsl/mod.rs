@@ -49,10 +49,9 @@ use crate::{
         Typifier, Visitor,
     },
     Arena, ArraySize, BinaryOperator, BuiltIn, Bytes, ConservativeDepth, Constant, ConstantInner,
-    DerivativeAxis, Expression, FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle,
-    ImageClass, Interpolation, IntrinsicFunction, LocalVariable, Module, ScalarKind, ShaderStage,
-    Statement, StorageAccess, StorageClass, StorageFormat, StructMember, Type, TypeInner,
-    UnaryOperator,
+    DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle, ImageClass,
+    Interpolation, LocalVariable, Module, RelationalFunction, ScalarKind, ShaderStage, Statement,
+    StorageAccess, StorageClass, StorageFormat, StructMember, Type, TypeInner, UnaryOperator,
 };
 use features::FeaturesManager;
 use std::{
@@ -1371,47 +1370,117 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(reject, ctx)?;
                 write!(self.out, ")")?
             }
-            // `Intrinsic` is a normal function call to some glsl provided functions
-            Expression::Intrinsic { fun, argument } => {
+            // `Derivative` is a function call to a glsl provided function
+            Expression::Derivative { axis, expr } => {
                 write!(
                     self.out,
                     "{}(",
-                    match fun {
-                        // There's no specific function for this but we can invert the result of `isinf`
-                        IntrinsicFunction::IsFinite => "!isinf",
-                        IntrinsicFunction::IsInf => "isinf",
-                        IntrinsicFunction::IsNan => "isnan",
-                        // There's also no function for this but we can invert `isnan`
-                        IntrinsicFunction::IsNormal => "!isnan",
-                        IntrinsicFunction::All => "all",
-                        IntrinsicFunction::Any => "any",
+                    match axis {
+                        DerivativeAxis::X => "dFdx",
+                        DerivativeAxis::Y => "dFdy",
+                        DerivativeAxis::Width => "fwidth",
                     }
                 )?;
+                self.write_expr(expr, ctx)?;
+                write!(self.out, ")")?
+            }
+            // `Relational` is a normal function call to some glsl provided functions
+            Expression::Relational { fun, argument } => {
+                let fun_name = match fun {
+                    // There's no specific function for this but we can invert the result of `isinf`
+                    RelationalFunction::IsFinite => "!isinf",
+                    RelationalFunction::IsInf => "isinf",
+                    RelationalFunction::IsNan => "isnan",
+                    // There's also no function for this but we can invert `isnan`
+                    RelationalFunction::IsNormal => "!isnan",
+                    RelationalFunction::All => "all",
+                    RelationalFunction::Any => "any",
+                };
+                write!(self.out, "{}(", fun_name)?;
 
                 self.write_expr(argument, ctx)?;
 
+                write!(self.out, ")")?
+            }
+            Expression::Math {
+                fun,
+                arg,
+                arg1,
+                arg2,
+            } => {
+                use crate::MathFunction as Mf;
+
+                let fun_name = match fun {
+                    // comparison
+                    Mf::Abs => "abs",
+                    Mf::Min => "min",
+                    Mf::Max => "max",
+                    Mf::Clamp => "clamp",
+                    // trigonometry
+                    Mf::Cos => "cos",
+                    Mf::Cosh => "cosh",
+                    Mf::Sin => "sin",
+                    Mf::Sinh => "sinh",
+                    Mf::Tan => "tan",
+                    Mf::Tanh => "tanh",
+                    Mf::Acos => "acos",
+                    Mf::Asin => "asin",
+                    Mf::Atan => "atan",
+                    Mf::Atan2 => "atan2",
+                    // decomposition
+                    Mf::Ceil => "ceil",
+                    Mf::Floor => "floor",
+                    Mf::Round => "round",
+                    Mf::Fract => "fract",
+                    Mf::Trunc => "trunc",
+                    Mf::Modf => "modf",
+                    Mf::Frexp => "frexp",
+                    Mf::Ldexp => "ldexp",
+                    // exponent
+                    Mf::Exp => "exp",
+                    Mf::Exp2 => "exp2",
+                    Mf::Log => "log",
+                    Mf::Log2 => "log2",
+                    Mf::Pow => "pow",
+                    // geometry
+                    Mf::Dot => "dot",
+                    Mf::Outer => "outerProduct",
+                    Mf::Cross => "cross",
+                    Mf::Distance => "distance",
+                    Mf::Length => "length",
+                    Mf::Normalize => "normalize",
+                    Mf::FaceForward => "faceforward",
+                    Mf::Reflect => "reflect",
+                    // computational
+                    Mf::Sign => "sign",
+                    Mf::Fma => "fma",
+                    Mf::Mix => "mix",
+                    Mf::Step => "step",
+                    Mf::SmoothStep => "smoothstep",
+                    Mf::Sqrt => "sqrt",
+                    Mf::InverseSqrt => "inversesqrt",
+                    Mf::Determinant => "determinant",
+                    // bits
+                    Mf::CountOneBits => "bitCount",
+                    Mf::ReverseBits => "bitfieldReverse",
+                };
+
+                write!(self.out, "{}(", fun_name)?;
+                self.write_expr(arg, ctx)?;
+                if let Some(arg) = arg1 {
+                    write!(self.out, ", ")?;
+                    self.write_expr(arg, ctx)?;
+                }
+                if let Some(arg) = arg2 {
+                    write!(self.out, ", ")?;
+                    self.write_expr(arg, ctx)?;
+                }
                 write!(self.out, ")")?
             }
             // `Transpose` is a call to the glsl function `transpose`
             Expression::Transpose(matrix) => {
                 write!(self.out, "transpose(")?;
                 self.write_expr(matrix, ctx)?;
-                write!(self.out, ")")?
-            }
-            // Both `Dot` and `Cross` products are a call to a glsl provide functions with `left`
-            // and `right` as arguments
-            Expression::DotProduct(left, right) => {
-                write!(self.out, "dot(")?;
-                self.write_expr(left, ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(right, ctx)?;
-                write!(self.out, ")")?
-            }
-            Expression::CrossProduct(left, right) => {
-                write!(self.out, "cross(")?;
-                self.write_expr(left, ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(right, ctx)?;
                 write!(self.out, ")")?
             }
             // `As` is always a call.
@@ -1457,55 +1526,15 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(expr, ctx)?;
                 write!(self.out, ")")?
             }
-            // `Derivative` is a function call to a glsl provided function
-            Expression::Derivative { axis, expr } => {
-                write!(
-                    self.out,
-                    "{}(",
-                    match axis {
-                        DerivativeAxis::X => "dFdx",
-                        DerivativeAxis::Y => "dFdy",
-                        DerivativeAxis::Width => "fwidth",
-                    }
-                )?;
-                self.write_expr(expr, ctx)?;
-                write!(self.out, ")")?
-            }
             // A `Call` is written `name(arguments)` where `arguments` is a comma separated expressions list
             Expression::Call {
-                origin: FunctionOrigin::Local(ref function),
+                function,
                 ref arguments,
             } => {
-                write!(self.out, "{}(", &self.names[&NameKey::Function(*function)])?;
+                write!(self.out, "{}(", &self.names[&NameKey::Function(function)])?;
                 self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
                 write!(self.out, ")")?
             }
-            Expression::Call {
-                origin: crate::FunctionOrigin::External(ref name),
-                ref arguments,
-            } => match name.as_str() {
-                "cos" | "normalize" | "sin" | "length" | "abs" | "floor" | "inverse"
-                | "distance" | "dot" | "min" | "max" | "reflect" | "pow" | "step" | "cross"
-                | "fclamp" | "clamp" | "mix" | "smoothstep" => {
-                    let name = match name.as_str() {
-                        "fclamp" => "clamp",
-                        name => name,
-                    };
-
-                    write!(self.out, "{}(", name)?;
-                    self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
-                    write!(self.out, ")")?
-                }
-                // `atan2` is implemented as `atan(y,x)` so we must handle it separately
-                "atan2" => {
-                    write!(self.out, "atan(")?;
-                    self.write_expr(arguments[1], ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(arguments[0], ctx)?;
-                    write!(self.out, ")")?
-                }
-                _ => return Err(Error::UnsupportedExternal(name.clone())),
-            },
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {
                 write!(self.out, "uint(")?;

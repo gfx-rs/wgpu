@@ -336,40 +336,54 @@ impl Parser {
     ) -> Result<Option<(crate::Expression, Lexer<'a>)>, Error<'a>> {
         let mut lexer = lexer.clone();
 
-        let external_function = if let Some(std_namespaces) = self.std_namespace.as_deref() {
-            std_namespaces.iter().all(|namespace| {
-                lexer.skip(Token::Word(namespace)) && lexer.skip(Token::DoubleColon)
-            })
-        } else {
-            false
-        };
-
-        let origin = if external_function {
-            let function = lexer.next_ident()?;
-            crate::FunctionOrigin::External(function.to_string())
-        } else if let Ok(function) = lexer.next_ident() {
-            if let Some(&function) = self.function_lookup.get(function) {
-                crate::FunctionOrigin::Local(function)
+        let name = lexer.next_ident()?;
+        //TODO: avoid code duplication with `parse_singular_expression`
+        Ok(if let Some(fun) = conv::map_standard_fun(name) {
+            lexer.expect(Token::Paren('('))?;
+            let arg_count = fun.argument_count();
+            let arg = self.parse_general_expression(&mut lexer, ctx.reborrow())?;
+            let arg1 = if arg_count > 1 {
+                lexer.expect(Token::Separator(','))?;
+                Some(self.parse_general_expression(&mut lexer, ctx.reborrow())?)
             } else {
+                None
+            };
+            let arg2 = if arg_count > 1 {
+                lexer.expect(Token::Separator(','))?;
+                Some(self.parse_general_expression(&mut lexer, ctx.reborrow())?)
+            } else {
+                None
+            };
+            lexer.expect(Token::Paren(')'))?;
+            let expr = crate::Expression::Math {
+                fun,
+                arg,
+                arg1,
+                arg2,
+            };
+            Some((expr, lexer))
+        } else if let Some(&function) = self.function_lookup.get(name) {
+            if !lexer.skip(Token::Paren('(')) {
                 return Ok(None);
             }
-        } else {
-            return Ok(None);
-        };
 
-        if !lexer.skip(Token::Paren('(')) {
-            return Ok(None);
-        }
-
-        let mut arguments = Vec::new();
-        while !lexer.skip(Token::Paren(')')) {
-            if !arguments.is_empty() {
-                lexer.expect(Token::Separator(','))?;
+            let mut arguments = Vec::new();
+            while !lexer.skip(Token::Paren(')')) {
+                if !arguments.is_empty() {
+                    lexer.expect(Token::Separator(','))?;
+                }
+                let arg = self.parse_general_expression(&mut lexer, ctx.reborrow())?;
+                arguments.push(arg);
             }
-            let arg = self.parse_general_expression(&mut lexer, ctx.reborrow())?;
-            arguments.push(arg);
-        }
-        Ok(Some((crate::Expression::Call { origin, arguments }, lexer)))
+
+            let expr = crate::Expression::Call {
+                function,
+                arguments,
+            };
+            Some((expr, lexer))
+        } else {
+            None
+        })
     }
 
     fn parse_const_expression<'a>(
@@ -605,12 +619,12 @@ impl Parser {
                 expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
             }),
             Token::Word(word) => {
-                if let Some(fun) = conv::get_intrinsic(word) {
+                if let Some(fun) = conv::map_relational_fun(word) {
                     lexer.expect(Token::Paren('('))?;
                     let argument = self.parse_general_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::Intrinsic { fun, argument })
-                } else if let Some(axis) = conv::get_derivative(word) {
+                    Some(crate::Expression::Relational { fun, argument })
+                } else if let Some(axis) = conv::map_derivative_axis(word) {
                     lexer.expect(Token::Paren('('))?;
                     let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Paren(')'))?;
@@ -624,40 +638,32 @@ impl Parser {
                         kind,
                         convert: true,
                     })
-                } else if let Some(arg_count) = conv::get_standard_fun(word) {
+                } else if let Some(fun) = conv::map_standard_fun(word) {
                     lexer.expect(Token::Paren('('))?;
-                    let mut arguments = Vec::with_capacity(arg_count);
-                    for i in 0..arg_count {
-                        let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
-                        arguments.push(arg);
-                        lexer.expect(if i + 1 == arg_count {
-                            Token::Paren(')')
-                        } else {
-                            Token::Separator(',')
-                        })?;
-                    }
-                    Some(crate::Expression::Call {
-                        origin: crate::FunctionOrigin::External(word.to_string()),
-                        arguments,
+                    let arg_count = fun.argument_count();
+                    let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let arg1 = if arg_count > 1 {
+                        lexer.expect(Token::Separator(','))?;
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
+                    };
+                    let arg2 = if arg_count > 2 {
+                        lexer.expect(Token::Separator(','))?;
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
+                    };
+                    lexer.expect(Token::Paren(')'))?;
+                    Some(crate::Expression::Math {
+                        fun,
+                        arg,
+                        arg1,
+                        arg2,
                     })
                 } else {
+                    // texture sampling
                     match word {
-                        "dot" => {
-                            lexer.expect(Token::Paren('('))?;
-                            let a = self.parse_general_expression(lexer, ctx.reborrow())?;
-                            lexer.expect(Token::Separator(','))?;
-                            let b = self.parse_general_expression(lexer, ctx.reborrow())?;
-                            lexer.expect(Token::Paren(')'))?;
-                            Some(crate::Expression::DotProduct(a, b))
-                        }
-                        "cross" => {
-                            lexer.expect(Token::Paren('('))?;
-                            let a = self.parse_general_expression(lexer, ctx.reborrow())?;
-                            lexer.expect(Token::Separator(','))?;
-                            let b = self.parse_general_expression(lexer, ctx.reborrow())?;
-                            lexer.expect(Token::Paren(')'))?;
-                            Some(crate::Expression::CrossProduct(a, b))
-                        }
                         "textureSample" => {
                             lexer.expect(Token::Paren('('))?;
                             let image_name = lexer.next_ident()?;

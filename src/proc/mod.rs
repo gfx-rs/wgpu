@@ -67,3 +67,62 @@ impl crate::TypeInner {
         }
     }
 }
+
+impl crate::MathFunction {
+    pub fn argument_count(&self) -> usize {
+        match *self {
+            // comparison
+            Self::Abs => 1,
+            Self::Min => 2,
+            Self::Max => 2,
+            Self::Clamp => 3,
+            // trigonometry
+            Self::Cos => 1,
+            Self::Cosh => 1,
+            Self::Sin => 1,
+            Self::Sinh => 1,
+            Self::Tan => 1,
+            Self::Tanh => 1,
+            Self::Acos => 1,
+            Self::Asin => 1,
+            Self::Atan => 1,
+            Self::Atan2 => 2,
+            // decomposition
+            Self::Ceil => 1,
+            Self::Floor => 1,
+            Self::Round => 1,
+            Self::Fract => 1,
+            Self::Trunc => 1,
+            Self::Modf => 2,
+            Self::Frexp => 2,
+            Self::Ldexp => 2,
+            // exponent
+            Self::Exp => 1,
+            Self::Exp2 => 1,
+            Self::Log => 1,
+            Self::Log2 => 1,
+            Self::Pow => 2,
+            // geometry
+            Self::Dot => 2,
+            Self::Outer => 2,
+            Self::Cross => 2,
+            Self::Distance => 2,
+            Self::Length => 1,
+            Self::Normalize => 1,
+            Self::FaceForward => 3,
+            Self::Reflect => 2,
+            // computational
+            Self::Sign => 1,
+            Self::Fma => 3,
+            Self::Mix => 3,
+            Self::Step => 2,
+            Self::SmoothStep => 3,
+            Self::Sqrt => 1,
+            Self::InverseSqrt => 1,
+            Self::Determinant => 1,
+            // bits
+            Self::CountOneBits => 1,
+            Self::ReverseBits => 1,
+        }
+    }
+}

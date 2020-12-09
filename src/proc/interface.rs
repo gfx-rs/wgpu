@@ -88,36 +88,37 @@ where
                 self.traverse_expr(accept);
                 self.traverse_expr(reject);
             }
-            E::Intrinsic { argument, .. } => {
+            E::Derivative { expr, .. } => {
+                self.traverse_expr(expr);
+            }
+            E::Relational { argument, .. } => {
                 self.traverse_expr(argument);
+            }
+            E::Math {
+                arg, arg1, arg2, ..
+            } => {
+                self.traverse_expr(arg);
+                if let Some(arg) = arg1 {
+                    self.traverse_expr(arg);
+                }
+                if let Some(arg) = arg2 {
+                    self.traverse_expr(arg);
+                }
             }
             E::Transpose(matrix) => {
                 self.traverse_expr(matrix);
             }
-            E::DotProduct(left, right) => {
-                self.traverse_expr(left);
-                self.traverse_expr(right);
-            }
-            E::CrossProduct(left, right) => {
-                self.traverse_expr(left);
-                self.traverse_expr(right);
-            }
             E::As { expr, .. } => {
                 self.traverse_expr(expr);
             }
-            E::Derivative { expr, .. } => {
-                self.traverse_expr(expr);
-            }
             E::Call {
-                ref origin,
+                function,
                 ref arguments,
             } => {
                 for &argument in arguments {
                     self.traverse_expr(argument);
                 }
-                if let crate::FunctionOrigin::Local(fun) = *origin {
-                    self.visitor.visit_fun(fun);
-                }
+                self.visitor.visit_fun(function);
             }
             E::ArrayLength(expr) => {
                 self.traverse_expr(expr);

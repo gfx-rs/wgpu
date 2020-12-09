@@ -346,25 +346,102 @@ impl<W: Write> Writer<W> {
                 self.put_expression(reject, context)?;
                 write!(self.out, ")")?;
             }
-            crate::Expression::Intrinsic { fun, argument } => {
+            crate::Expression::Derivative { axis, expr } => {
+                let op = match axis {
+                    crate::DerivativeAxis::X => "dfdx",
+                    crate::DerivativeAxis::Y => "dfdy",
+                    crate::DerivativeAxis::Width => "fwidth",
+                };
+                self.put_call(op, &[expr], context)?;
+            }
+            crate::Expression::Relational { fun, argument } => {
                 let op = match fun {
-                    crate::IntrinsicFunction::Any => "any",
-                    crate::IntrinsicFunction::All => "all",
-                    crate::IntrinsicFunction::IsNan => "",
-                    crate::IntrinsicFunction::IsInf => "",
-                    crate::IntrinsicFunction::IsFinite => "",
-                    crate::IntrinsicFunction::IsNormal => "",
+                    crate::RelationalFunction::Any => "any",
+                    crate::RelationalFunction::All => "all",
+                    crate::RelationalFunction::IsNan => "isnan",
+                    crate::RelationalFunction::IsInf => "isinf",
+                    crate::RelationalFunction::IsFinite => "isfinite",
+                    crate::RelationalFunction::IsNormal => "isnormal",
                 };
                 self.put_call(op, &[argument], context)?;
             }
+            crate::Expression::Math {
+                fun,
+                arg,
+                arg1,
+                arg2,
+            } => {
+                use crate::MathFunction as Mf;
+
+                let fun_name = match fun {
+                    // comparison
+                    Mf::Abs => "abs",
+                    Mf::Min => "min",
+                    Mf::Max => "max",
+                    Mf::Clamp => "clamp",
+                    // trigonometry
+                    Mf::Cos => "cos",
+                    Mf::Cosh => "cosh",
+                    Mf::Sin => "sin",
+                    Mf::Sinh => "sinh",
+                    Mf::Tan => "tan",
+                    Mf::Tanh => "tanh",
+                    Mf::Acos => "acos",
+                    Mf::Asin => "asin",
+                    Mf::Atan => "atan",
+                    Mf::Atan2 => "atan2",
+                    // decomposition
+                    Mf::Ceil => "ceil",
+                    Mf::Floor => "floor",
+                    Mf::Round => "round",
+                    Mf::Fract => "fract",
+                    Mf::Trunc => "trunc",
+                    Mf::Modf => "modf",
+                    Mf::Frexp => "frexp",
+                    Mf::Ldexp => "ldexp",
+                    // exponent
+                    Mf::Exp => "exp",
+                    Mf::Exp2 => "exp2",
+                    Mf::Log => "log",
+                    Mf::Log2 => "log2",
+                    Mf::Pow => "pow",
+                    // geometry
+                    Mf::Dot => "dot",
+                    Mf::Outer => return Err(Error::UnsupportedCall(format!("{:?}", fun))),
+                    Mf::Cross => "cross",
+                    Mf::Distance => "distance",
+                    Mf::Length => "length",
+                    Mf::Normalize => "normalize",
+                    Mf::FaceForward => "faceforward",
+                    Mf::Reflect => "reflect",
+                    // computational
+                    Mf::Sign => "sign",
+                    Mf::Fma => "fma",
+                    Mf::Mix => "mix",
+                    Mf::Step => "step",
+                    Mf::SmoothStep => "smoothstep",
+                    Mf::Sqrt => "sqrt",
+                    Mf::InverseSqrt => "rsqrt",
+                    Mf::Determinant => "determinant",
+                    // bits
+                    Mf::CountOneBits => "popcount",
+                    Mf::ReverseBits => "reverse_bits",
+                };
+
+                write!(self.out, "metal::{}(", fun_name)?;
+                self.put_expression(arg, context)?;
+                if let Some(arg) = arg1 {
+                    write!(self.out, ", ")?;
+                    self.put_expression(arg, context)?;
+                }
+                if let Some(arg) = arg2 {
+                    write!(self.out, ", ")?;
+                    self.put_expression(arg, context)?;
+                }
+                write!(self.out, ")")?;
+            }
             crate::Expression::Transpose(expr) => {
                 self.put_call("transpose", &[expr], context)?;
-            }
-            crate::Expression::DotProduct(a, b) => {
-                self.put_call("dot", &[a, b], context)?;
-            }
-            crate::Expression::CrossProduct(a, b) => {
-                self.put_call("cross", &[a, b], context)?;
             }
             crate::Expression::As {
                 expr,
@@ -382,34 +459,14 @@ impl<W: Write> Writer<W> {
                 self.put_expression(expr, context)?;
                 write!(self.out, ")")?;
             }
-            crate::Expression::Derivative { axis, expr } => {
-                let op = match axis {
-                    crate::DerivativeAxis::X => "dfdx",
-                    crate::DerivativeAxis::Y => "dfdy",
-                    crate::DerivativeAxis::Width => "fwidth",
-                };
-                self.put_call(op, &[expr], context)?;
-            }
             crate::Expression::Call {
-                origin: crate::FunctionOrigin::Local(handle),
+                function,
                 ref arguments,
             } => {
-                let name = &self.names[&NameKey::Function(handle)];
+                let name = &self.names[&NameKey::Function(function)];
                 write!(self.out, "{}", name)?;
                 self.put_call("", arguments, context)?;
             }
-            crate::Expression::Call {
-                origin: crate::FunctionOrigin::External(ref name),
-                ref arguments,
-            } => match name.as_str() {
-                "atan2" | "cos" | "distance" | "length" | "mix" | "normalize" | "sin" => {
-                    self.put_call(name, arguments, context)?;
-                }
-                "fclamp" => {
-                    self.put_call("clamp", arguments, context)?;
-                }
-                other => return Err(Error::UnsupportedCall(other.to_owned())),
-            },
             crate::Expression::ArrayLength(expr) => match *self
                 .typifier
                 .get(expr, &context.module.types)

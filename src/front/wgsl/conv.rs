@@ -97,18 +97,7 @@ pub fn get_scalar_type(word: &str) -> Option<(crate::ScalarKind, crate::Bytes)> 
     }
 }
 
-pub fn get_intrinsic(word: &str) -> Option<crate::IntrinsicFunction> {
-    match word {
-        "any" => Some(crate::IntrinsicFunction::Any),
-        "all" => Some(crate::IntrinsicFunction::All),
-        "is_nan" => Some(crate::IntrinsicFunction::IsNan),
-        "is_inf" => Some(crate::IntrinsicFunction::IsInf),
-        "is_normal" => Some(crate::IntrinsicFunction::IsNormal),
-        _ => None,
-    }
-}
-
-pub fn get_derivative(word: &str) -> Option<crate::DerivativeAxis> {
+pub fn map_derivative_axis(word: &str) -> Option<crate::DerivativeAxis> {
     match word {
         "dpdx" => Some(crate::DerivativeAxis::X),
         "dpdy" => Some(crate::DerivativeAxis::Y),
@@ -117,16 +106,73 @@ pub fn get_derivative(word: &str) -> Option<crate::DerivativeAxis> {
     }
 }
 
-// Returns argument count on success
-pub fn get_standard_fun(word: &str) -> Option<usize> {
+pub fn map_relational_fun(word: &str) -> Option<crate::RelationalFunction> {
     match word {
-        "abs" | "acos" | "asin" | "atan" | "ceil" | "cos" | "cosh" | "exp" | "exp2" | "floor"
-        | "fract" | "inverseSqrt" | "length" | "log" | "log2" | "normalize" | "round" | "sign"
-        | "sin" | "sinh" | "sqrt" | "tan" | "tanh" | "trunc" => Some(1),
-        "countOneBits" | "reverseBits" | "determinant" => Some(1),
-        "atan2" | "distance" | "frexp" | "ldexp" | "max" | "min" | "outerProduct" | "pow"
-        | "reflect" | "step" => Some(2),
-        "clamp" | "faceForward" | "fma" | "smoothStep" => Some(3),
+        "any" => Some(crate::RelationalFunction::Any),
+        "all" => Some(crate::RelationalFunction::All),
+        "isFinite" => Some(crate::RelationalFunction::IsFinite),
+        "isInf" => Some(crate::RelationalFunction::IsInf),
+        "isNan" => Some(crate::RelationalFunction::IsNan),
+        "isNormal" => Some(crate::RelationalFunction::IsNormal),
         _ => None,
     }
+}
+
+pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
+    use crate::MathFunction as Mf;
+    Some(match word {
+        // comparison
+        "abs" => Mf::Abs,
+        "min" => Mf::Min,
+        "max" => Mf::Max,
+        "clamp" => Mf::Clamp,
+        // trigonometry
+        "cos" => Mf::Cos,
+        "cosh" => Mf::Cosh,
+        "sin" => Mf::Sin,
+        "sinh" => Mf::Sinh,
+        "tan" => Mf::Tan,
+        "tanh" => Mf::Tanh,
+        "acos" => Mf::Acos,
+        "asin" => Mf::Asin,
+        "atan" => Mf::Atan,
+        "atan2" => Mf::Atan2,
+        // decomposition
+        "ceil" => Mf::Ceil,
+        "floor" => Mf::Floor,
+        "round" => Mf::Round,
+        "fract" => Mf::Fract,
+        "trunc" => Mf::Trunc,
+        "modf" => Mf::Modf,
+        "frexp" => Mf::Frexp,
+        "ldexp" => Mf::Ldexp,
+        // exponent
+        "exp" => Mf::Exp,
+        "exp2" => Mf::Exp2,
+        "log" => Mf::Log,
+        "log2" => Mf::Log2,
+        "pow" => Mf::Pow,
+        // geometry
+        "dot" => Mf::Dot,
+        "outerProduct" => Mf::Outer,
+        "cross" => Mf::Cross,
+        "distance" => Mf::Distance,
+        "length" => Mf::Length,
+        "normalize" => Mf::Normalize,
+        "faceForward" => Mf::FaceForward,
+        "reflect" => Mf::Reflect,
+        // computational
+        "sign" => Mf::Sign,
+        "fma" => Mf::Fma,
+        "mix" => Mf::Mix,
+        "step" => Mf::Step,
+        "smoothStep" => Mf::SmoothStep,
+        "sqrt" => Mf::Sqrt,
+        "inverseSqrt" => Mf::InverseSqrt,
+        "determinant" => Mf::Determinant,
+        // bits
+        "countOneBits" => Mf::CountOneBits,
+        "reverseBits" => Mf::ReverseBits,
+        _ => return None,
+    })
 }

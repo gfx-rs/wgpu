@@ -289,6 +289,7 @@ struct LookupSampledImage {
 }
 #[derive(Clone, Debug)]
 enum DeferredSource {
+    Undefined,
     EntryPoint(crate::ShaderStage, String),
     Function(Handle<crate::Function>),
 }
@@ -296,6 +297,7 @@ struct DeferredFunctionCall {
     source: DeferredSource,
     expr_handle: Handle<crate::Expression>,
     dst_id: spirv::Word,
+    arguments: Vec<Handle<crate::Expression>>,
 }
 
 #[derive(Clone, Debug)]
@@ -530,7 +532,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         type_arena: &Arena<crate::Type>,
         const_arena: &Arena<crate::Constant>,
         global_arena: &Arena<crate::GlobalVariable>,
-        local_function_calls: &mut FastHashMap<Handle<crate::Expression>, spirv::Word>,
     ) -> Result<ControlFlowNode, Error> {
         let mut assignments = Vec::new();
         let mut phis = Vec::new();
@@ -850,7 +851,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let right_id = self.next()?;
                     let left_lexp = self.lookup_expression.lookup(left_id)?;
                     let right_lexp = self.lookup_expression.lookup(right_id)?;
-                    let expr = crate::Expression::DotProduct(left_lexp.handle, right_lexp.handle);
+                    let expr = crate::Expression::Math {
+                        fun: crate::MathFunction::Dot,
+                        arg: left_lexp.handle,
+                        arg1: Some(right_lexp.handle),
+                        arg2: None,
+                    };
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
@@ -1185,13 +1191,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let arg_id = self.next()?;
                         arguments.push(self.lookup_expression.lookup(arg_id)?.handle);
                     }
-                    let expr = crate::Expression::Call {
-                        // will be replaced by `Local()` after all the functions are parsed
-                        origin: crate::FunctionOrigin::External(String::new()),
-                        arguments,
-                    };
+                    // will be replaced by the actual expression
+                    let expr = crate::Expression::FunctionArgument(!0);
                     let expr_handle = expressions.append(expr);
-                    local_function_calls.insert(expr_handle, func_id);
+                    self.deferred_function_calls.push(DeferredFunctionCall {
+                        source: DeferredSource::Undefined,
+                        expr_handle,
+                        dst_id: func_id,
+                        arguments,
+                    });
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
@@ -1201,6 +1209,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     );
                 }
                 Op::ExtInst => {
+                    use crate::MathFunction as Mf;
+                    use spirv::GLOp as Glo;
+
                     let base_wc = 5;
                     inst.expect_at_least(base_wc)?;
                     let result_type_id = self.next()?;
@@ -1210,106 +1221,76 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         return Err(Error::UnsupportedExtInstSet(set_id));
                     }
                     let inst_id = self.next()?;
-                    let name = match spirv::GLOp::from_u32(inst_id) {
-                        Some(spirv::GLOp::FAbs) | Some(spirv::GLOp::SAbs) => {
-                            inst.expect(base_wc + 1)?;
-                            "abs"
-                        }
-                        Some(spirv::GLOp::FSign) | Some(spirv::GLOp::SSign) => {
-                            inst.expect(base_wc + 1)?;
-                            "sign"
-                        }
-                        Some(spirv::GLOp::Floor) => {
-                            inst.expect(base_wc + 1)?;
-                            "floor"
-                        }
-                        Some(spirv::GLOp::Ceil) => {
-                            inst.expect(base_wc + 1)?;
-                            "ceil"
-                        }
-                        Some(spirv::GLOp::Fract) => {
-                            inst.expect(base_wc + 1)?;
-                            "fract"
-                        }
-                        Some(spirv::GLOp::Sin) => {
-                            inst.expect(base_wc + 1)?;
-                            "sin"
-                        }
-                        Some(spirv::GLOp::Cos) => {
-                            inst.expect(base_wc + 1)?;
-                            "cos"
-                        }
-                        Some(spirv::GLOp::Tan) => {
-                            inst.expect(base_wc + 1)?;
-                            "tan"
-                        }
-                        Some(spirv::GLOp::Atan2) => {
-                            inst.expect(base_wc + 2)?;
-                            "atan2"
-                        }
-                        Some(spirv::GLOp::Pow) => {
-                            inst.expect(base_wc + 2)?;
-                            "pow"
-                        }
-                        Some(spirv::GLOp::MatrixInverse) => {
-                            inst.expect(base_wc + 1)?;
-                            "inverse"
-                        }
-                        Some(spirv::GLOp::FMix) => {
-                            inst.expect(base_wc + 3)?;
-                            "mix"
-                        }
-                        Some(spirv::GLOp::Step) => {
-                            inst.expect(base_wc + 2)?;
-                            "step"
-                        }
-                        Some(spirv::GLOp::SmoothStep) => {
-                            inst.expect(base_wc + 3)?;
-                            "smoothstep"
-                        }
-                        Some(spirv::GLOp::FMin) => {
-                            inst.expect(base_wc + 2)?;
-                            "min"
-                        }
-                        Some(spirv::GLOp::FMax) => {
-                            inst.expect(base_wc + 2)?;
-                            "max"
-                        }
-                        Some(spirv::GLOp::FClamp) => {
-                            inst.expect(base_wc + 3)?;
-                            "clamp"
-                        }
-                        Some(spirv::GLOp::Length) => {
-                            inst.expect(base_wc + 1)?;
-                            "length"
-                        }
-                        Some(spirv::GLOp::Distance) => {
-                            inst.expect(base_wc + 2)?;
-                            "distance"
-                        }
-                        Some(spirv::GLOp::Cross) => {
-                            inst.expect(base_wc + 2)?;
-                            "cross"
-                        }
-                        Some(spirv::GLOp::Normalize) => {
-                            inst.expect(base_wc + 1)?;
-                            "normalize"
-                        }
-                        Some(spirv::GLOp::Reflect) => {
-                            inst.expect(base_wc + 2)?;
-                            "reflect"
-                        }
+                    let gl_op = Glo::from_u32(inst_id).ok_or(Error::UnsupportedExtInst(inst_id))?;
+                    let fun = match gl_op {
+                        Glo::Round => Mf::Round,
+                        Glo::Trunc => Mf::Trunc,
+                        Glo::FAbs | Glo::SAbs => Mf::Abs,
+                        Glo::FSign | Glo::SSign => Mf::Sign,
+                        Glo::Floor => Mf::Floor,
+                        Glo::Ceil => Mf::Ceil,
+                        Glo::Fract => Mf::Fract,
+                        Glo::Sin => Mf::Sin,
+                        Glo::Cos => Mf::Cos,
+                        Glo::Tan => Mf::Tan,
+                        Glo::Asin => Mf::Asin,
+                        Glo::Acos => Mf::Acos,
+                        Glo::Atan => Mf::Atan,
+                        Glo::Sinh => Mf::Sinh,
+                        Glo::Cosh => Mf::Cosh,
+                        Glo::Tanh => Mf::Tanh,
+                        Glo::Atan2 => Mf::Atan2,
+                        Glo::Pow => Mf::Pow,
+                        Glo::Exp => Mf::Exp,
+                        Glo::Log => Mf::Log,
+                        Glo::Exp2 => Mf::Exp2,
+                        Glo::Log2 => Mf::Log2,
+                        Glo::Sqrt => Mf::Sqrt,
+                        Glo::InverseSqrt => Mf::InverseSqrt,
+                        Glo::Determinant => Mf::Determinant,
+                        Glo::Modf => Mf::Modf,
+                        Glo::FMin | Glo::UMin | Glo::SMin | Glo::NMin => Mf::Min,
+                        Glo::FMax | Glo::UMax | Glo::SMax | Glo::NMax => Mf::Max,
+                        Glo::FClamp | Glo::UClamp | Glo::SClamp | Glo::NClamp => Mf::Clamp,
+                        Glo::FMix => Mf::Mix,
+                        Glo::Step => Mf::Step,
+                        Glo::SmoothStep => Mf::SmoothStep,
+                        Glo::Fma => Mf::Fma,
+                        Glo::Frexp => Mf::Frexp, //TODO: FrexpStruct?
+                        Glo::Ldexp => Mf::Ldexp,
+                        Glo::Length => Mf::Length,
+                        Glo::Distance => Mf::Distance,
+                        Glo::Cross => Mf::Cross,
+                        Glo::Normalize => Mf::Normalize,
+                        Glo::FaceForward => Mf::FaceForward,
+                        Glo::Reflect => Mf::Reflect,
                         _ => return Err(Error::UnsupportedExtInst(inst_id)),
                     };
 
-                    let mut arguments = Vec::with_capacity((inst.wc - base_wc) as usize);
-                    for _ in 0..arguments.capacity() {
+                    let arg_count = fun.argument_count();
+                    inst.expect(base_wc + arg_count as u16)?;
+                    let arg = {
                         let arg_id = self.next()?;
-                        arguments.push(self.lookup_expression.lookup(arg_id)?.handle);
-                    }
-                    let expr = crate::Expression::Call {
-                        origin: crate::FunctionOrigin::External(name.to_string()),
-                        arguments,
+                        self.lookup_expression.lookup(arg_id)?.handle
+                    };
+                    let arg1 = if arg_count > 1 {
+                        let arg_id = self.next()?;
+                        Some(self.lookup_expression.lookup(arg_id)?.handle)
+                    } else {
+                        None
+                    };
+                    let arg2 = if arg_count > 2 {
+                        let arg_id = self.next()?;
+                        Some(self.lookup_expression.lookup(arg_id)?.handle)
+                    } else {
+                        None
+                    };
+
+                    let expr = crate::Expression::Math {
+                        fun,
+                        arg,
+                        arg1,
+                        arg2,
                     };
                     self.lookup_expression.insert(
                         result_id,
@@ -1553,6 +1534,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         for dfc in self.deferred_function_calls.drain(..) {
             let dst_handle = *self.lookup_function.lookup(dfc.dst_id)?;
             let fun = match dfc.source {
+                DeferredSource::Undefined => unreachable!(),
                 DeferredSource::Function(fun_handle) => module.functions.get_mut(fun_handle),
                 DeferredSource::EntryPoint(stage, name) => {
                     &mut module
@@ -1562,13 +1544,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         .function
                 }
             };
-            match *fun.expressions.get_mut(dfc.expr_handle) {
-                crate::Expression::Call {
-                    ref mut origin,
-                    arguments: _,
-                } => *origin = crate::FunctionOrigin::Local(dst_handle),
-                _ => unreachable!(),
-            }
+            *fun.expressions.get_mut(dfc.expr_handle) = crate::Expression::Call {
+                function: dst_handle,
+                arguments: dfc.arguments,
+            };
         }
 
         if !self.future_decor.is_empty() {

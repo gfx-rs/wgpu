@@ -516,19 +516,6 @@ pub enum BinaryOperator {
     ShiftRight,
 }
 
-/// Built-in shader function.
-#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-pub enum IntrinsicFunction {
-    Any,
-    All,
-    IsNan,
-    IsInf,
-    IsFinite,
-    IsNormal,
-}
-
 /// Axis on which to compute a derivative.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -539,17 +526,76 @@ pub enum DerivativeAxis {
     Width,
 }
 
-/// Origin of a function to call.
-#[derive(Clone, Debug, PartialEq)]
+/// Built-in shader function for testing relation between values.
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-pub enum FunctionOrigin {
-    Local(Handle<Function>),
-    // External {
-    //     namespace: String, // Maybe this should be a handle to a namespace Arena?
-    //     function: String,
-    // },
-    External(String),
+pub enum RelationalFunction {
+    All,
+    Any,
+    IsNan,
+    IsInf,
+    IsFinite,
+    IsNormal,
+}
+
+/// Built-in shader function for math.
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum MathFunction {
+    // comparison
+    Abs,
+    Min,
+    Max,
+    Clamp,
+    // trigonometry
+    Cos,
+    Cosh,
+    Sin,
+    Sinh,
+    Tan,
+    Tanh,
+    Acos,
+    Asin,
+    Atan,
+    Atan2,
+    // decomposition
+    Ceil,
+    Floor,
+    Round,
+    Fract,
+    Trunc,
+    Modf,
+    Frexp,
+    Ldexp,
+    // exponent
+    Exp,
+    Exp2,
+    Log,
+    Log2,
+    Pow,
+    // geometry
+    Dot,
+    Outer,
+    Cross,
+    Distance,
+    Length,
+    Normalize,
+    FaceForward,
+    Reflect,
+    // computational
+    Sign,
+    Fma,
+    Mix,
+    Step,
+    SmoothStep,
+    Sqrt,
+    InverseSqrt,
+    Determinant,
+    // bits
+    CountOneBits,
+    ReverseBits,
 }
 
 /// Sampling modifier to control the level of detail.
@@ -628,17 +674,26 @@ pub enum Expression {
         accept: Handle<Expression>,
         reject: Handle<Expression>,
     },
-    /// Call an intrinsic function.
-    Intrinsic {
-        fun: IntrinsicFunction,
+    /// Compute the derivative on an axis.
+    Derivative {
+        axis: DerivativeAxis,
+        //modifier,
+        expr: Handle<Expression>,
+    },
+    /// Call a relational function.
+    Relational {
+        fun: RelationalFunction,
         argument: Handle<Expression>,
+    },
+    /// Call a math function
+    Math {
+        fun: MathFunction,
+        arg: Handle<Expression>,
+        arg1: Option<Handle<Expression>>,
+        arg2: Option<Handle<Expression>>,
     },
     /// Transpose of a matrix.
     Transpose(Handle<Expression>),
-    /// Dot product between two vectors.
-    DotProduct(Handle<Expression>, Handle<Expression>),
-    /// Cross product between two vectors.
-    CrossProduct(Handle<Expression>, Handle<Expression>),
     /// Cast a simply type to another kind.
     As {
         /// Source expression, which can only be a scalar or a vector.
@@ -648,15 +703,9 @@ pub enum Expression {
         /// True = conversion needs to take place; False = bitcast.
         convert: bool,
     },
-    /// Compute the derivative on an axis.
-    Derivative {
-        axis: DerivativeAxis,
-        //modifier,
-        expr: Handle<Expression>,
-    },
     /// Call another function.
     Call {
-        origin: FunctionOrigin,
+        function: Handle<Function>,
         arguments: Vec<Handle<Expression>>,
     },
     /// Get the length of an array.

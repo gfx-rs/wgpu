@@ -115,8 +115,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         }
 
         // Read body
-        let mut local_function_calls = FastHashMap::default();
         let mut flow_graph = FlowGraph::new();
+        let base_deferred_call_index = self.deferred_function_calls.len();
 
         // Scan the blocks and add them as nodes
         loop {
@@ -135,7 +135,6 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         &module.types,
                         &module.constants,
                         &module.global_variables,
-                        &mut local_function_calls,
                     )?;
 
                     flow_graph.add_node(node);
@@ -176,23 +175,20 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             }
         };
 
+        for dfc in self.deferred_function_calls[base_deferred_call_index..].iter_mut() {
+            dfc.source = source.clone();
+        }
+
         if let Some(ref prefix) = self.options.flow_graph_dump_prefix {
             let dump = flow_graph.to_graphviz().unwrap_or_default();
             let suffix = match source {
+                DeferredSource::Undefined => unreachable!(),
                 DeferredSource::EntryPoint(stage, ref name) => {
                     format!("flow.{:?}-{}.dot", stage, name)
                 }
                 DeferredSource::Function(handle) => format!("flow.Fun-{}.dot", handle.index()),
             };
             let _ = std::fs::write(prefix.join(suffix), dump);
-        }
-
-        for (expr_handle, dst_id) in local_function_calls {
-            self.deferred_function_calls.push(DeferredFunctionCall {
-                source: source.clone(),
-                expr_handle,
-                dst_id,
-            });
         }
 
         self.lookup_expression.clear();

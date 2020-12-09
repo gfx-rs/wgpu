@@ -246,7 +246,122 @@ impl Typifier {
                 | crate::BinaryOperator::ShiftRight => self.resolutions[left.index()].clone(),
             },
             crate::Expression::Select { accept, .. } => self.resolutions[accept.index()].clone(),
-            crate::Expression::Intrinsic { .. } => unimplemented!(),
+            crate::Expression::Derivative { axis: _, expr } => {
+                self.resolutions[expr.index()].clone()
+            }
+            crate::Expression::Relational { .. } => Resolution::Value(crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Bool,
+                width: 4,
+            }),
+            crate::Expression::Math {
+                fun,
+                arg,
+                arg1,
+                arg2: _,
+            } => {
+                use crate::MathFunction as Mf;
+                match fun {
+                    // comparison
+                    Mf::Abs |
+                    Mf::Min |
+                    Mf::Max |
+                    Mf::Clamp |
+                    // trigonometry
+                    Mf::Cos |
+                    Mf::Cosh |
+                    Mf::Sin |
+                    Mf::Sinh |
+                    Mf::Tan |
+                    Mf::Tanh |
+                    Mf::Acos |
+                    Mf::Asin |
+                    Mf::Atan |
+                    Mf::Atan2 |
+                    // decomposition
+                    Mf::Ceil |
+                    Mf::Floor |
+                    Mf::Round |
+                    Mf::Fract |
+                    Mf::Trunc |
+                    Mf::Modf |
+                    Mf::Frexp |
+                    Mf::Ldexp |
+                    // exponent
+                    Mf::Exp |
+                    Mf::Exp2 |
+                    Mf::Log |
+                    Mf::Log2 |
+                    Mf::Pow => self.resolutions[arg.index()].clone(),
+                    // geometry
+                    Mf::Dot => match *self.get(arg, types) {
+                        crate::TypeInner::Vector {
+                            kind,
+                            size: _,
+                            width,
+                        } => Resolution::Value(crate::TypeInner::Scalar { kind, width }),
+                        ref other => {
+                            return Err(ResolveError::IncompatibleOperand {
+                                op: "dot product".to_string(),
+                                operand: format!("{:?}", other),
+                            })
+                        }
+                    },
+                    Mf::Outer => {
+                        let arg1 = arg1.ok_or_else(|| ResolveError::IncompatibleOperand {
+                            op: "outer product".to_string(),
+                            operand: "".to_string(),
+                        })?;
+                        match (self.get(arg, types), self.get(arg1,types)) {
+                            (&crate::TypeInner::Vector {kind: _, size: columns,width}, &crate::TypeInner::Vector{ size: rows, .. }) => Resolution::Value(crate::TypeInner::Matrix { columns, rows, width }),
+                            (left, right) => {
+                                return Err(ResolveError::IncompatibleOperands {
+                                    op: "outer product".to_string(),
+                                    left: format!("{:?}", left),
+                                    right: format!("{:?}", right),
+                                })
+                            }
+                        }
+                    },
+                    Mf::Cross => self.resolutions[arg.index()].clone(),
+                    Mf::Distance |
+                    Mf::Length => match *self.get(arg, types) {
+                        crate::TypeInner::Scalar {width,kind} |
+                        crate::TypeInner::Vector {width,kind,size:_} => Resolution::Value(crate::TypeInner::Scalar { kind, width }),
+                        ref other => {
+                            return Err(ResolveError::IncompatibleOperand {
+                                op: format!("{:?}", fun),
+                                operand: format!("{:?}", other),
+                            })
+                        }
+                    },
+                    Mf::Normalize |
+                    Mf::FaceForward |
+                    Mf::Reflect => self.resolutions[arg.index()].clone(),
+                    // computational
+                    Mf::Sign |
+                    Mf::Fma |
+                    Mf::Mix |
+                    Mf::Step |
+                    Mf::SmoothStep |
+                    Mf::Sqrt |
+                    Mf::InverseSqrt => self.resolutions[arg.index()].clone(),
+                    Mf::Determinant => match *self.get(arg, types) {
+                        crate::TypeInner::Matrix {
+                            width,
+                            ..
+                        } => Resolution::Value(crate::TypeInner::Scalar { kind: crate::ScalarKind::Float, width }),
+                        ref other => {
+                            return Err(ResolveError::IncompatibleOperand {
+                                op: "determinant".to_string(),
+                                operand: format!("{:?}", other),
+                            })
+                        }
+                    },
+                    // bits
+                    Mf::CountOneBits |
+                    Mf::ReverseBits => self.resolutions[arg.index()].clone(),
+                }
+            }
             crate::Expression::Transpose(expr) => match *self.get(expr, types) {
                 crate::TypeInner::Matrix {
                     columns,
@@ -264,20 +379,6 @@ impl Typifier {
                     })
                 }
             },
-            crate::Expression::DotProduct(left_expr, _) => match *self.get(left_expr, types) {
-                crate::TypeInner::Vector {
-                    kind,
-                    size: _,
-                    width,
-                } => Resolution::Value(crate::TypeInner::Scalar { kind, width }),
-                ref other => {
-                    return Err(ResolveError::IncompatibleOperand {
-                        op: "dot product".to_string(),
-                        operand: format!("{:?}", other),
-                    })
-                }
-            },
-            crate::Expression::CrossProduct(_, _) => unimplemented!(),
             crate::Expression::As {
                 expr,
                 kind,
@@ -298,45 +399,11 @@ impl Typifier {
                     })
                 }
             },
-            crate::Expression::Derivative { .. } => unimplemented!(),
             crate::Expression::Call {
-                origin: crate::FunctionOrigin::External(ref name),
-                ref arguments,
-            } => match name.as_str() {
-                "distance" | "length" => match *self.get(arguments[0], types) {
-                    crate::TypeInner::Vector { kind, width, .. }
-                    | crate::TypeInner::Scalar { kind, width } => {
-                        Resolution::Value(crate::TypeInner::Scalar { kind, width })
-                    }
-                    ref other => {
-                        return Err(ResolveError::IncompatibleOperand {
-                            op: name.clone(),
-                            operand: format!("{:?}", other),
-                        })
-                    }
-                },
-                "dot" => match *self.get(arguments[0], types) {
-                    crate::TypeInner::Vector { kind, width, .. } => {
-                        Resolution::Value(crate::TypeInner::Scalar { kind, width })
-                    }
-                    ref other => {
-                        return Err(ResolveError::IncompatibleOperand {
-                            op: name.clone(),
-                            operand: format!("{:?}", other),
-                        })
-                    }
-                },
-                //Note: `cross` is here too, we still need to figure out what to do with it
-                "abs" | "atan2" | "cos" | "sin" | "floor" | "inverse" | "normalize" | "min"
-                | "max" | "reflect" | "pow" | "clamp" | "fclamp" | "mix" | "step"
-                | "smoothstep" | "cross" => self.resolutions[arguments[0].index()].clone(),
-                _ => return Err(ResolveError::FunctionNotDefined { name: name.clone() }),
-            },
-            crate::Expression::Call {
-                origin: crate::FunctionOrigin::Local(handle),
+                function,
                 arguments: _,
             } => {
-                let ty = ctx.functions[handle]
+                let ty = ctx.functions[function]
                     .return_type
                     .ok_or(ResolveError::FunctionReturnsVoid)?;
                 Resolution::Handle(ty)
