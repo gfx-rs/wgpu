@@ -116,3 +116,9 @@ fn converts_wgsl_quad() {
 fn converts_wgsl_simple() {
     convert_wgsl("simple");
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn converts_wgsl_function() {
+    convert_wgsl("function");
+}

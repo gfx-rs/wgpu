@@ -1,0 +1,27 @@
+---
+source: tests/snapshots.rs
+expression: msl
+---
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+typedef float type;
+
+type test_function(
+	type test
+) {
+	return test;
+}
+struct main1Input {
+};
+struct main1Output {
+};
+vertex main1Output main1(
+	main1Input input [[stage_in]]
+) {
+	main1Output output;
+	type test1;
+	test1 = test_function(1.0);
+	return output;
+}
+

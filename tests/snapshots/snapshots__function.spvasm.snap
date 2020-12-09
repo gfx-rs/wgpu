@@ -1,0 +1,31 @@
+---
+source: tests/snapshots.rs
+expression: dis
+---
+; SPIR-V
+; Version: 1.0
+; Generator: rspirv
+; Bound: 16
+OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Vertex %11 "main"
+%2 = OpTypeFloat 32
+%4 = OpTypePointer Function %2
+%6 = OpTypeFunction %2 %4
+%10 = OpTypeVoid
+%12 = OpTypeFunction %10
+%15 = OpConstant  %2  1.0
+%5 = OpFunction  %2  None %6
+%3 = OpFunctionParameter  %4
+%7 = OpLabel
+%8 = OpLoad  %2  %3
+OpReturnValue %8
+OpFunctionEnd
+%11 = OpFunction  %10  None %12
+%13 = OpLabel
+%9 = OpVariable  %4  Function
+%14 = OpFunctionCall  %2  %5 %15
+OpStore %9 %14
+OpReturn
+OpFunctionEnd
