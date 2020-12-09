@@ -744,7 +744,7 @@ impl crate::Context for Context {
                 &device.error_sink,
                 cause,
                 LABEL,
-                None,
+                desc.label,
                 "Device::create_shader_module",
             );
         }
