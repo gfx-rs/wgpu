@@ -1,0 +1,5 @@
+(
+	spv_capabilities: [ Shader ],
+	mtl_bindings: {
+	}
+)

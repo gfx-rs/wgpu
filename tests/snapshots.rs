@@ -110,3 +110,9 @@ fn convert_wgsl(name: &str) {
 fn converts_wgsl_quad() {
     convert_wgsl("quad");
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn converts_wgsl_simple() {
+    convert_wgsl("simple");
+}
