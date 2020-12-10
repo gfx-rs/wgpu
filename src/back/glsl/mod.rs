@@ -1643,6 +1643,7 @@ fn glsl_built_in(built_in: BuiltIn) -> &'static str {
         BuiltIn::LocalInvocationId => "gl_LocalInvocationID",
         BuiltIn::LocalInvocationIndex => "gl_LocalInvocationIndex",
         BuiltIn::WorkGroupId => "gl_WorkGroupID",
+        BuiltIn::WorkGroupSize => "gl_WorkGroupSize",
     }
 }
 

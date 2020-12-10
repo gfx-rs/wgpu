@@ -86,6 +86,41 @@ impl Program {
 
                 expression = Some(exp);
             }
+            "gl_InstanceIndex" => {
+                #[cfg(feature = "glsl-validate")]
+                match self.shader_stage {
+                    ShaderStage::Vertex => {}
+                    _ => {
+                        return Err(ErrorKind::VariableNotAvailable(name.into()));
+                    }
+                };
+                let h = self
+                    .module
+                    .global_variables
+                    .fetch_or_append(GlobalVariable {
+                        name: Some(name.into()),
+                        class: StorageClass::Input,
+                        binding: Some(Binding::BuiltIn(BuiltIn::InstanceIndex)),
+                        ty: self.module.types.fetch_or_append(Type {
+                            name: None,
+                            inner: TypeInner::Scalar {
+                                kind: ScalarKind::Uint,
+                                width: 4,
+                            },
+                        }),
+                        init: None,
+                        interpolation: None,
+                        storage_access: StorageAccess::empty(),
+                    });
+                self.lookup_global_variables.insert(name.into(), h);
+                let exp = self
+                    .context
+                    .expressions
+                    .append(Expression::GlobalVariable(h));
+                self.context.lookup_global_var_exps.insert(name.into(), exp);
+
+                expression = Some(exp);
+            }
             _ => {}
         }
 

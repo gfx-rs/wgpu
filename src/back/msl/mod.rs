@@ -173,6 +173,7 @@ impl ResolvedBinding {
                     Bi::LocalInvocationId => "thread_position_in_threadgroup",
                     Bi::LocalInvocationIndex => "thread_index_in_threadgroup",
                     Bi::WorkGroupId => "threadgroup_position_in_grid",
+                    Bi::WorkGroupSize => "dispatch_threads_per_threadgroup",
                 };
                 Ok(write!(out, "{}", name)?)
             }

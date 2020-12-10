@@ -791,6 +791,7 @@ impl Writer {
                     crate::BuiltIn::LocalInvocationId => spirv::BuiltIn::LocalInvocationId,
                     crate::BuiltIn::LocalInvocationIndex => spirv::BuiltIn::LocalInvocationIndex,
                     crate::BuiltIn::WorkGroupId => spirv::BuiltIn::WorkgroupId,
+                    crate::BuiltIn::WorkGroupSize => spirv::BuiltIn::WorkgroupSize,
                 };
 
                 self.annotations

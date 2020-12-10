@@ -153,6 +153,7 @@ pub enum BuiltIn {
     LocalInvocationId,
     LocalInvocationIndex,
     WorkGroupId,
+    WorkGroupSize,
 }
 
 /// Number of bytes.

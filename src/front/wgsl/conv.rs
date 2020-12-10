@@ -25,6 +25,8 @@ pub fn map_built_in(word: &str) -> Result<crate::BuiltIn, Error<'_>> {
         "global_invocation_id" => crate::BuiltIn::GlobalInvocationId,
         "local_invocation_id" => crate::BuiltIn::LocalInvocationId,
         "local_invocation_index" => crate::BuiltIn::LocalInvocationIndex,
+        "workgroup_id" => crate::BuiltIn::WorkGroupId,
+        "workgroup_size" => crate::BuiltIn::WorkGroupSize,
         _ => return Err(Error::UnknownBuiltin(word)),
     })
 }

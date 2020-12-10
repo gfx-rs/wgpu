@@ -154,13 +154,14 @@ impl crate::GlobalVariable {
                         kind: Sk::Bool,
                         width,
                     },
-                    Bi::GlobalInvocationId | Bi::LocalInvocationId | Bi::WorkGroupId => {
-                        Ti::Vector {
-                            size: Vs::Tri,
-                            kind: Sk::Uint,
-                            width,
-                        }
-                    }
+                    Bi::GlobalInvocationId
+                    | Bi::LocalInvocationId
+                    | Bi::WorkGroupId
+                    | Bi::WorkGroupSize => Ti::Vector {
+                        size: Vs::Tri,
+                        kind: Sk::Uint,
+                        width,
+                    },
                 };
                 if types[self.ty].inner != ty_inner {
                     log::warn!("Wrong builtin type: {:?}", types[self.ty]);
@@ -375,7 +376,8 @@ impl Validator {
                             | (crate::ShaderStage::Compute, crate::BuiltIn::GlobalInvocationId)
                             | (crate::ShaderStage::Compute, crate::BuiltIn::LocalInvocationId)
                             | (crate::ShaderStage::Compute, crate::BuiltIn::LocalInvocationIndex)
-                            | (crate::ShaderStage::Compute, crate::BuiltIn::WorkGroupId) => 0,
+                            | (crate::ShaderStage::Compute, crate::BuiltIn::WorkGroupId)
+                            | (crate::ShaderStage::Compute, crate::BuiltIn::WorkGroupSize) => 0,
                             _ => return Err(EntryPointError::InvalidBuiltIn(built_in)),
                         },
                         Some(crate::Binding::Location(loc)) => 1 << loc,
