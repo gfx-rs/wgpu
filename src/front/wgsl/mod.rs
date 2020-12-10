@@ -34,6 +34,13 @@ pub enum Token<'a> {
     End,
 }
 
+impl<'a> Token<'a> {
+    fn unexpected<T, E: std::fmt::Debug>(self, expected: E) -> Result<T, Error<'a>> {
+        log::error!("Unmet expectation for {:?}", expected);
+        Err(Error::Unexpected(self))
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum Error<'a> {
     #[error("unexpected token: {0:?}")]
@@ -278,8 +285,7 @@ pub struct ParseError<'a> {
 pub struct Parser {
     scopes: Vec<Scope>,
     lookup_type: FastHashMap<String, Handle<crate::Type>>,
-    function_lookup: FastHashMap<String, Handle<crate::Function>>,
-    std_namespace: Option<Vec<String>>,
+    lookup_function: FastHashMap<String, Handle<crate::Function>>,
 }
 
 impl Parser {
@@ -287,8 +293,7 @@ impl Parser {
         Parser {
             scopes: Vec::new(),
             lookup_type: FastHashMap::default(),
-            function_lookup: FastHashMap::default(),
-            std_namespace: None,
+            lookup_function: FastHashMap::default(),
         }
     }
 
@@ -477,7 +482,28 @@ impl Parser {
                         index,
                     })
                 }
-                _ => None,
+                _ => match self.lookup_function.get(name) {
+                    Some(&function) => {
+                        let mut arguments = Vec::new();
+                        lexer.expect(Token::Paren('('))?;
+                        if !lexer.skip(Token::Paren(')')) {
+                            loop {
+                                let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
+                                arguments.push(arg);
+                                match lexer.next() {
+                                    Token::Paren(')') => break,
+                                    Token::Separator(',') => (),
+                                    other => return other.unexpected("argument list separator"),
+                                }
+                            }
+                        }
+                        Some(crate::Expression::Call {
+                            function,
+                            arguments,
+                        })
+                    }
+                    None => None,
+                },
             }
         })
     }
@@ -615,7 +641,7 @@ impl Parser {
                     crate::Expression::Compose { ty, components }
                 }
             }
-            other => return Err(Error::Unexpected(other)),
+            other => return other.unexpected("primary expression"),
         };
         self.scopes.pop();
         Ok(ctx.expressions.append(expression))
@@ -958,7 +984,7 @@ impl Parser {
                             lexer.expect(Token::Paren(')'))?;
                             ready = false;
                         }
-                        other => return Err(Error::Unexpected(other)),
+                        other => return other.unexpected("decoration separator"),
                     }
                 }
                 self.scopes.pop();
@@ -966,7 +992,7 @@ impl Parser {
             let name = match lexer.next() {
                 Token::Word(word) => word,
                 Token::Paren('}') => return Ok(members),
-                other => return Err(Error::Unexpected(other)),
+                other => return other.unexpected("field name"),
             };
             if offset == !0 {
                 return Err(Error::MissingMemberOffset(name));
@@ -1129,7 +1155,7 @@ impl Parser {
                         crate::ArraySize::Constant(const_handle)
                     }
                     Token::Paren('>') => crate::ArraySize::Dynamic,
-                    other => return Err(Error::Unexpected(other)),
+                    other => return other.unexpected("generic separator"),
                 };
 
                 let mut stride = None;
@@ -1145,7 +1171,7 @@ impl Parser {
                                 );
                             }
                             Token::End => break,
-                            other => return Err(Error::Unexpected(other)),
+                            other => return other.unexpected("stride decoration"),
                         }
                     }
                     self.scopes.pop();
@@ -1371,7 +1397,7 @@ impl Parser {
         let word = match lexer.next() {
             Token::Separator(';') => return Ok(None),
             Token::Word(word) => word,
-            other => return Err(Error::Unexpected(other)),
+            other => return other.unexpected("statement"),
         };
 
         self.scopes.push(Scope::Statement);
@@ -1480,7 +1506,7 @@ impl Parser {
                                         });
                                     }
                                     Token::Separator(':') => break value,
-                                    other => return Err(Error::Unexpected(other)),
+                                    other => return other.unexpected("case separator"),
                                 }
                             };
 
@@ -1511,7 +1537,7 @@ impl Parser {
                             default = self.parse_block(lexer, context.reborrow())?;
                         }
                         Token::Paren('}') => break,
-                        other => return Err(Error::Unexpected(other)),
+                        other => return other.unexpected("switch item"),
                     }
                 }
 
@@ -1718,7 +1744,7 @@ impl Parser {
                             match lexer.next() {
                                 Token::Paren(')') => break,
                                 Token::Separator(',') if i != 2 => (),
-                                other => return Err(Error::Unexpected(other)),
+                                other => return other.unexpected("workgroup size separator"),
                             }
                         }
                         for size in workgroup_size.iter_mut() {
@@ -1734,7 +1760,7 @@ impl Parser {
                         break;
                     }
                     Token::Separator(',') => {}
-                    other => return Err(Error::Unexpected(other)),
+                    other => return other.unexpected("decoration separator"),
                 }
             }
             if let (Some(group), Some(index)) = (bind_group, bind_index) {
@@ -1748,27 +1774,6 @@ impl Parser {
         // read items
         match lexer.next() {
             Token::Separator(';') => {}
-            Token::Word("import") => {
-                self.scopes.push(Scope::ImportDecl);
-                let path = match lexer.next() {
-                    Token::String(path) => path,
-                    other => return Err(Error::Unexpected(other)),
-                };
-                lexer.expect(Token::Word("as"))?;
-                let mut namespaces = Vec::new();
-                loop {
-                    namespaces.push(lexer.next_ident()?.to_owned());
-                    if lexer.skip(Token::Separator(';')) {
-                        break;
-                    }
-                    lexer.expect(Token::DoubleColon)?;
-                }
-                match path {
-                    "GLSL.std.450" => self.std_namespace = Some(namespaces),
-                    _ => return Err(Error::UnknownImport(path)),
-                }
-                self.scopes.pop();
-            }
             Token::Word("type") => {
                 let name = lexer.next_ident()?;
                 lexer.expect(Token::Operation('='))?;
@@ -1840,7 +1845,7 @@ impl Parser {
                         .is_some(),
                     None => {
                         let fun_handle = module.functions.append(function);
-                        self.function_lookup
+                        self.lookup_function
                             .insert(name.to_string(), fun_handle)
                             .is_some()
                     }
@@ -1850,7 +1855,7 @@ impl Parser {
                 }
             }
             Token::End => return Ok(false),
-            token => return Err(Error::Unexpected(token)),
+            other => return other.unexpected("global item"),
         }
         match binding {
             None => Ok(true),
@@ -1862,7 +1867,6 @@ impl Parser {
     pub fn parse<'a>(&mut self, source: &'a str) -> Result<crate::Module, ParseError<'a>> {
         self.scopes.clear();
         self.lookup_type.clear();
-        self.std_namespace = None;
 
         let mut module = crate::Module::generate_empty();
         let mut lexer = Lexer::new(source);

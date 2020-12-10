@@ -163,8 +163,7 @@ impl<'a> Lexer<'a> {
         if token == expected {
             Ok(())
         } else {
-            log::trace!("expect {:?}, got {:?}", expected, token);
-            Err(Error::Unexpected(token))
+            token.unexpected(expected)
         }
     }
 
@@ -181,28 +180,28 @@ impl<'a> Lexer<'a> {
     pub(super) fn next_ident(&mut self) -> Result<&'a str, Error<'a>> {
         match self.next() {
             Token::Word(word) => Ok(word),
-            other => Err(Error::Unexpected(other)),
+            other => other.unexpected("ident"),
         }
     }
 
     fn _next_float_literal(&mut self) -> Result<f32, Error<'a>> {
         match self.next() {
             Token::Number(word) => word.parse().map_err(|err| Error::BadFloat(word, err)),
-            other => Err(Error::Unexpected(other)),
+            other => other.unexpected("float literal"),
         }
     }
 
     pub(super) fn next_uint_literal(&mut self) -> Result<u32, Error<'a>> {
         match self.next() {
             Token::Number(word) => word.parse().map_err(|err| Error::BadInteger(word, err)),
-            other => Err(Error::Unexpected(other)),
+            other => other.unexpected("uint literal"),
         }
     }
 
     pub(super) fn next_sint_literal(&mut self) -> Result<i32, Error<'a>> {
         match self.next() {
             Token::Number(word) => word.parse().map_err(|err| Error::BadInteger(word, err)),
-            other => Err(Error::Unexpected(other)),
+            other => other.unexpected("sint literal"),
         }
     }
 

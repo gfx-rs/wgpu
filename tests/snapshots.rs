@@ -29,6 +29,7 @@ struct BindTarget {
 #[derive(Default, Deserialize)]
 struct Parameters {
     #[serde(default)]
+    #[allow(dead_code)]
     spv_flow_dump_prefix: String,
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_capabilities: naga::FastHashSet<spirv::Capability>,
