@@ -1167,7 +1167,7 @@ impl<B: GfxBackend> Device<B> {
                             if read_only {
                                 resource::BufferUse::STORAGE_LOAD
                             } else {
-                                resource::BufferUse::STORAGE_STORE
+                                resource::BufferUse::STORAGE_LOAD | resource::BufferUse::STORAGE_STORE
                             },
                         ),
                     };
