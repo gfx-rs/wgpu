@@ -656,9 +656,38 @@ pub(super) fn instruction_binary(
 // Control-Flow Instructions
 //
 
+pub(super) fn instruction_selection_merge(
+    id: Word,
+    selection_control: spirv::SelectionControl,
+) -> Instruction {
+    let mut instruction = Instruction::new(Op::SelectionMerge);
+    instruction.add_operand(id);
+    instruction.add_operand(selection_control.bits());
+    instruction
+}
+
 pub(super) fn instruction_label(id: Word) -> Instruction {
     let mut instruction = Instruction::new(Op::Label);
     instruction.set_result(id);
+    instruction
+}
+
+pub(super) fn instruction_branch(id: Word) -> Instruction {
+    let mut instruction = Instruction::new(Op::Branch);
+    instruction.add_operand(id);
+    instruction
+}
+
+// TODO Branch Weights not implemented.
+pub(super) fn instruction_branch_conditional(
+    condition_id: Word,
+    true_label: Word,
+    false_label: Word,
+) -> Instruction {
+    let mut instruction = Instruction::new(Op::BranchConditional);
+    instruction.add_operand(condition_id);
+    instruction.add_operand(true_label);
+    instruction.add_operand(false_label);
     instruction
 }
 

@@ -17,6 +17,7 @@ pub enum Error {
 
 #[derive(Default)]
 struct Block {
+    label_id: Option<spirv::Word>,
     label: Option<Instruction>,
     body: Vec<Instruction>,
     termination: Option<Instruction>,
@@ -409,7 +410,14 @@ impl Writer {
             function_type,
         ));
 
-        self.write_block(&ir_function.body, ir_module, ir_function, &mut function)?;
+        let block = self.write_block(
+            &ir_function.body,
+            ir_module,
+            ir_function,
+            &mut function,
+            None,
+        )?;
+        function.blocks.push(block);
 
         function.to_words(&mut self.logical_layout.function_definitions);
         super::instructions::instruction_function_end()
@@ -1377,11 +1385,29 @@ impl Writer {
                     }
                 };
 
-                let (result_type_id, result_lookup_ty) = if result_side_left {
+                let is_comparison = match op {
+                    crate::BinaryOperator::Equal
+                    | crate::BinaryOperator::NotEqual
+                    | crate::BinaryOperator::Less
+                    | crate::BinaryOperator::LessEqual
+                    | crate::BinaryOperator::Greater
+                    | crate::BinaryOperator::GreaterEqual => true,
+                    _ => false,
+                };
+
+                let (result_type_id, result_lookup_ty) = if is_comparison {
+                    let local_ty = LookupType::Local(LocalType::Scalar {
+                        kind: crate::ScalarKind::Bool,
+                        width: 1,
+                    });
+                    let result_ty_id = self.get_type_id(&ir_module.types, local_ty)?;
+                    (result_ty_id, local_ty)
+                } else if result_side_left {
                     (left_result_type_id, left_lookup_ty)
                 } else {
                     (right_result_type_id, right_lookup_ty)
                 };
+
                 block.body.push(super::instructions::instruction_binary(
                     spirv_op,
                     result_type_id,
@@ -1812,24 +1838,85 @@ impl Writer {
         }
     }
 
+    fn create_block(&mut self) -> Block {
+        let mut block = Block::default();
+        let label_id = self.generate_id();
+        let label_instruction = super::instructions::instruction_label(label_id);
+        block.label_id = Some(label_id);
+        block.label = Some(label_instruction);
+        block
+    }
+
     fn write_block(
         &mut self,
-        statements: &[crate::Statement],
+        statements: &crate::Block,
         ir_module: &crate::Module,
         ir_function: &crate::Function,
         function: &mut Function,
-    ) -> Result<spirv::Word, Error> {
-        let mut block = Block::default();
-        let id = self.generate_id();
-        block.label = Some(super::instructions::instruction_label(id));
+        merge_id: Option<spirv::Word>,
+    ) -> Result<Block, Error> {
+        let mut block = self.create_block();
 
         for statement in statements {
             match *statement {
-                crate::Statement::Block(ref ir_block) => {
-                    if !ir_block.is_empty() {
-                        //TODO: link the block with `OpBranch`
-                        self.write_block(ir_block, ir_module, ir_function, function)?;
-                    }
+                crate::Statement::Block(ref block_statements) => {
+                    let scope_block = self.write_block(
+                        block_statements,
+                        ir_module,
+                        ir_function,
+                        function,
+                        block.label_id,
+                    )?;
+                    function.blocks.push(scope_block);
+                }
+                crate::Statement::If {
+                    ref condition,
+                    ref accept,
+                    ref reject,
+                } => {
+                    let (condition_id, _) = self.write_expression(
+                        ir_module,
+                        ir_function,
+                        *condition,
+                        &mut block,
+                        function,
+                    )?;
+
+                    let pdom_block = self.create_block();
+
+                    block
+                        .body
+                        .push(super::instructions::instruction_selection_merge(
+                            pdom_block.label_id.unwrap(),
+                            spirv::SelectionControl::NONE,
+                        ));
+
+                    let accept_block = self.write_block(
+                        accept,
+                        ir_module,
+                        ir_function,
+                        function,
+                        pdom_block.label_id,
+                    )?;
+                    let reject_block = self.write_block(
+                        reject,
+                        ir_module,
+                        ir_function,
+                        function,
+                        pdom_block.label_id,
+                    )?;
+
+                    block.termination = Some(super::instructions::instruction_branch_conditional(
+                        condition_id,
+                        accept_block.label_id.unwrap(),
+                        reject_block.label_id.unwrap(),
+                    ));
+                    function.blocks.push(block);
+                    function.blocks.push(accept_block);
+                    function.blocks.push(reject_block);
+
+
+                    block = pdom_block;
                 }
                 crate::Statement::Return { value } => {
                     block.termination = Some(match ir_function.return_type {
@@ -1868,8 +1955,11 @@ impl Writer {
             }
         }
 
-        function.blocks.push(block);
-        Ok(id)
+        if block.termination.is_none() {
+            block.termination = Some(super::instructions::instruction_branch(merge_id.unwrap()));
+        }
+
+        Ok(block)
     }
 
     fn write_physical_layout(&mut self) {
