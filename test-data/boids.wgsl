@@ -23,12 +23,11 @@ import "GLSL.std.450" as std;
 
 [[stage(vertex)]]
 fn main() -> void {
-  var angle : f32 = -atan2(a_particleVel.x, a_particleVel.y);
-  var pos : vec2<f32> = vec2<f32>(
+  const angle : f32 = -atan2(a_particleVel.x, a_particleVel.y);
+  const pos : vec2<f32> = vec2<f32>(
       (a_pos.x * cos(angle)) - (a_pos.y * sin(angle)),
       (a_pos.x * sin(angle)) + (a_pos.y * cos(angle)));
   gl_Position = vec4<f32>(pos + a_particlePos, 0.0, 1.0);
-  return;
 }
 
 # fragment shader
@@ -37,7 +36,6 @@ fn main() -> void {
 [[stage(fragment)]]
 fn main() -> void {
   fragColor = vec4<f32>(1.0, 1.0, 1.0, 1.0);
-  return;
 }
 
 # compute shader
@@ -69,7 +67,7 @@ type Particles = struct {
 # https://github.com/austinEng/Project6-Vulkan-Flocking/blob/master/data/shaders/computeparticles/particle.comp
 [[stage(compute), workgroup_size(1)]]
 fn main() -> void {
-  var index : u32 = gl_GlobalInvocationID.x;
+  const index : u32 = gl_GlobalInvocationID.x;
   if (index >= u32(5)) {
     return;
   }
@@ -146,6 +144,4 @@ fn main() -> void {
   # Write back
   particlesB.particles[index].pos = vPos;
   particlesB.particles[index].vel = vVel;
-
-  return;
 }

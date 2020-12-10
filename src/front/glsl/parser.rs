@@ -981,7 +981,11 @@ pomelo! {
     }
 
     statement_list ::= statement(s) {
-        vec![s]
+        //TODO: catch this earlier and don't populate the statements
+        match s {
+            Statement::Block(ref block) if block.is_empty() => vec![],
+            _ => vec![s],
+        }
     }
     statement_list ::= statement_list(mut ss) statement(s) { ss.push(s); ss }
 

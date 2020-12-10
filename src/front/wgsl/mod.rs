@@ -1407,16 +1407,25 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         mut context: StatementContext<'a, '_, '_>,
-    ) -> Result<crate::Statement, Error<'a>> {
+    ) -> Result<Option<crate::Statement>, Error<'a>> {
         let backup = lexer.clone();
         let word = match lexer.next() {
-            Token::Separator(';') => return Ok(crate::Statement::Block(Vec::new())),
+            Token::Separator(';') => return Ok(None),
             Token::Word(word) => word,
             other => return Err(Error::Unexpected(other)),
         };
 
         self.scopes.push(Scope::Statement);
         let statement = match word {
+            "const" => {
+                let (name, _ty) =
+                    self.parse_variable_ident_decl(lexer, context.types, context.constants)?;
+                lexer.expect(Token::Operation('='))?;
+                let expr_id = self.parse_general_expression(lexer, context.as_expression())?;
+                lexer.expect(Token::Separator(';'))?;
+                context.lookup_ident.insert(name, expr_id);
+                None
+            }
             "var" => {
                 enum Init {
                     Empty,
@@ -1454,11 +1463,11 @@ impl Parser {
                 context.lookup_ident.insert(name, expr_id);
 
                 match init {
-                    Init::Variable(value) => crate::Statement::Store {
+                    Init::Variable(value) => Some(crate::Statement::Store {
                         pointer: expr_id,
                         value,
-                    },
-                    _ => crate::Statement::Block(Vec::new()),
+                    }),
+                    _ => None,
                 }
             }
             "return" => {
@@ -1468,7 +1477,7 @@ impl Parser {
                     None
                 };
                 lexer.expect(Token::Separator(';'))?;
-                crate::Statement::Return { value }
+                Some(crate::Statement::Return { value })
             }
             "if" => {
                 lexer.expect(Token::Paren('('))?;
@@ -1482,11 +1491,11 @@ impl Parser {
                     Vec::new()
                 };
 
-                crate::Statement::If {
+                Some(crate::Statement::If {
                     condition,
                     accept,
                     reject,
-                }
+                })
             }
             "switch" => {
                 lexer.expect(Token::Paren('('))?;
@@ -1529,7 +1538,7 @@ impl Parser {
                                     break false;
                                 }
                                 let s = self.parse_statement(lexer, context.reborrow())?;
-                                body.push(s);
+                                body.extend(s);
                             };
 
                             cases.push(crate::SwitchCase {
@@ -1547,11 +1556,11 @@ impl Parser {
                     }
                 }
 
-                crate::Statement::Switch {
+                Some(crate::Statement::Switch {
                     selector,
                     cases,
                     default,
-                }
+                })
             }
             "loop" => {
                 let mut body = Vec::new();
@@ -1568,14 +1577,14 @@ impl Parser {
                         break;
                     }
                     let s = self.parse_statement(lexer, context.reborrow())?;
-                    body.push(s);
+                    body.extend(s);
                 }
 
-                crate::Statement::Loop { body, continuing }
+                Some(crate::Statement::Loop { body, continuing })
             }
-            "break" => crate::Statement::Break,
-            "continue" => crate::Statement::Continue,
-            "discard" => crate::Statement::Kill,
+            "break" => Some(crate::Statement::Break),
+            "continue" => Some(crate::Statement::Continue),
+            "discard" => Some(crate::Statement::Kill),
             ident => {
                 // assignment
                 if let Some(&var_expr) = context.lookup_ident.get(ident) {
@@ -1583,17 +1592,17 @@ impl Parser {
                     lexer.expect(Token::Operation('='))?;
                     let value = self.parse_general_expression(lexer, context.as_expression())?;
                     lexer.expect(Token::Separator(';'))?;
-                    crate::Statement::Store {
+                    Some(crate::Statement::Store {
                         pointer: left,
                         value,
-                    }
+                    })
                 } else if let Some((expr, new_lexer)) =
                     self.parse_function_call(&backup, context.as_expression())?
                 {
                     *lexer = new_lexer;
                     context.expressions.append(expr);
                     lexer.expect(Token::Separator(';'))?;
-                    crate::Statement::Block(Vec::new())
+                    None
                 } else {
                     return Err(Error::UnknownIdent(ident));
                 }
@@ -1613,7 +1622,7 @@ impl Parser {
         let mut statements = Vec::new();
         while !lexer.skip(Token::Paren('}')) {
             let s = self.parse_statement(lexer, context.reborrow())?;
-            statements.push(s);
+            statements.extend(s);
         }
         self.scopes.pop();
         Ok(statements)
