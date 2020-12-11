@@ -541,14 +541,16 @@ pomelo! {
         if i.1 == "gl_PerVertex" {
             None
         } else {
+            let block = !t.is_empty();
             Some(VarDeclaration {
                 type_qualifiers: t,
                 ids_initializers: vec![(None, None)],
                 ty: extra.module.types.fetch_or_append(Type{
                     name: Some(i.1),
                     inner: TypeInner::Struct {
-                        members: sdl
-                    }
+                        block,
+                        members: sdl,
+                    },
                 }),
             })
         }
@@ -556,14 +558,16 @@ pomelo! {
 
     declaration ::= type_qualifier(t) Identifier(i1) LeftBrace
         struct_declaration_list(sdl) RightBrace Identifier(i2) Semicolon {
+        let block = !t.is_empty();
         Some(VarDeclaration {
             type_qualifiers: t,
             ids_initializers: vec![(Some(i2.1), None)],
             ty: extra.module.types.fetch_or_append(Type{
                 name: Some(i1.1),
                 inner: TypeInner::Struct {
-                    members: sdl
-                }
+                    block,
+                    members: sdl,
+                },
             }),
         })
     }
@@ -720,7 +724,8 @@ pomelo! {
         Type{
             name: Some(i.1),
             inner: TypeInner::Struct {
-                members: vec![]
+                block: false,
+                members: vec![],
             }
         }
     }
@@ -1013,7 +1018,7 @@ pomelo! {
             } else {
                 let ty = &extra.module.types[var.ty];
                 // anonymous structs
-                if let TypeInner::Struct { members } = &ty.inner {
+                if let TypeInner::Struct { block: _, ref members } = ty.inner {
                     let base = extra.context.expressions.append(
                         Expression::GlobalVariable(var_handle)
                     );

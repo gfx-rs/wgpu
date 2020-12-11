@@ -120,6 +120,6 @@ fn converts_wgsl_simple() {
 
 #[cfg(feature = "wgsl-in")]
 #[test]
-fn converts_wgsl_function() {
-    convert_wgsl("function");
+fn converts_wgsl_boids() {
+    convert_wgsl("boids");
 }

@@ -386,7 +386,10 @@ pub enum TypeInner {
         stride: Option<NonZeroU32>,
     },
     /// User-defined structure.
-    Struct { members: Vec<StructMember> },
+    Struct {
+        block: bool,
+        members: Vec<StructMember>,
+    },
     /// Possibly multidimensional array of texels.
     Image {
         dim: ImageDimension,

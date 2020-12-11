@@ -142,7 +142,7 @@ fn check_sample_coordinates(
 
 type MemberIndex = u32;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 struct Block {
     buffer: bool,
 }
@@ -2014,12 +2014,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect_at_least(2)?;
         let id = self.next()?;
         let parent_decor = self.future_decor.remove(&id);
-        let is_buffer_block = parent_decor
-            .as_ref()
-            .map_or(false, |decor| match decor.block {
-                Some(Block { buffer }) => buffer,
-                _ => false,
-            });
 
         let mut members = Vec::with_capacity(inst.wc as usize - 2);
         let mut member_type_ids = Vec::with_capacity(members.capacity());
@@ -2038,13 +2032,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 ty,
             });
         }
-        let inner = crate::TypeInner::Struct { members };
+
+        let block_decor = parent_decor.as_ref().and_then(|decor| decor.block.clone());
+        let inner = crate::TypeInner::Struct {
+            block: block_decor.is_some(),
+            members,
+        };
         let ty_handle = module.types.append(crate::Type {
             name: parent_decor.and_then(|dec| dec.name),
             inner,
         });
 
-        if is_buffer_block {
+        if block_decor == Some(Block { buffer: true }) {
             self.lookup_storage_buffer_types.insert(ty_handle);
         }
         for (i, type_id) in member_type_ids.into_iter().enumerate() {

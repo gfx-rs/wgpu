@@ -142,6 +142,7 @@ pub struct Writer {
     lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
     lookup_constant: crate::FastHashMap<crate::Handle<crate::Constant>, Word>,
     lookup_global_variable: crate::FastHashMap<crate::Handle<crate::GlobalVariable>, Word>,
+    storage_type_handles: crate::FastHashSet<crate::Handle<crate::Type>>,
 }
 
 // type alias, for success return of write_expression
@@ -167,6 +168,7 @@ impl Writer {
             lookup_function_type: crate::FastHashMap::default(),
             lookup_constant: crate::FastHashMap::default(),
             lookup_global_variable: crate::FastHashMap::default(),
+            storage_type_handles: crate::FastHashSet::default(),
         }
     }
 
@@ -588,7 +590,20 @@ impl Writer {
                     }
                 }
             }
-            crate::TypeInner::Struct { ref members } => {
+            crate::TypeInner::Struct { block, ref members } => {
+                if block {
+                    let decoration = if self.storage_type_handles.contains(&handle) {
+                        spirv::Decoration::BufferBlock
+                    } else {
+                        spirv::Decoration::Block
+                    };
+                    self.annotations
+                        .push(super::instructions::instruction_decorate(
+                            id,
+                            decoration,
+                            &[],
+                        ));
+                }
                 let mut member_ids = Vec::with_capacity(members.len());
                 for member in members {
                     let member_id = self.get_type_id(arena, LookupType::Handle(member.ty))?;
@@ -956,7 +971,10 @@ impl Writer {
                             LookupType::Local(LocalType::Scalar { kind, width }),
                         )
                     }
-                    crate::TypeInner::Struct { ref members } => {
+                    crate::TypeInner::Struct {
+                        block: _,
+                        ref members,
+                    } => {
                         let member = &members[index as usize];
                         let type_id =
                             self.get_type_id(&ir_module.types, LookupType::Handle(member.ty))?;
@@ -1623,6 +1641,12 @@ impl Writer {
                 spirv::SourceLanguage::GLSL,
                 450,
             ));
+        }
+
+        for (_, var) in ir_module.global_variables.iter() {
+            if !var.storage_access.is_empty() {
+                self.storage_type_handles.insert(var.ty);
+            }
         }
 
         for (handle, ir_function) in ir_module.functions.iter() {

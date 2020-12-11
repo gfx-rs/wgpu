@@ -153,7 +153,10 @@ impl Typifier {
                     })
                 }
                 crate::TypeInner::Array { base, .. } => Resolution::Handle(base),
-                crate::TypeInner::Struct { ref members } => {
+                crate::TypeInner::Struct {
+                    block: _,
+                    ref members,
+                } => {
                     let member = members
                         .get(index as usize)
                         .ok_or(ResolveError::InvalidAccessIndex)?;

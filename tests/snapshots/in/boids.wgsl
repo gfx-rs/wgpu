@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import "GLSL.std.450" as std;
-
 # vertex shader
 
 [[location(0)]] var<in> a_particlePos : vec2<f32>;
@@ -22,7 +20,7 @@ import "GLSL.std.450" as std;
 [[builtin(position)]] var gl_Position : vec4<f32>;
 
 [[stage(vertex)]]
-fn main() -> void {
+fn main() {
   const angle : f32 = -atan2(a_particleVel.x, a_particleVel.y);
   const pos : vec2<f32> = vec2<f32>(
       (a_pos.x * cos(angle)) - (a_pos.y * sin(angle)),
@@ -34,17 +32,19 @@ fn main() -> void {
 [[location(0)]] var<out> fragColor : vec4<f32>;
 
 [[stage(fragment)]]
-fn main() -> void {
+fn main() {
   fragColor = vec4<f32>(1.0, 1.0, 1.0, 1.0);
 }
 
 # compute shader
-type Particle = struct {
+[[block]]
+struct Particle {
   [[offset(0)]] pos : vec2<f32>;
   [[offset(8)]] vel : vec2<f32>;
 };
 
-type SimParams = struct {
+[[block]]
+struct SimParams {
   [[offset(0)]] deltaT : f32;
   [[offset(4)]] rule1Distance : f32;
   [[offset(8)]] rule2Distance : f32;
@@ -54,7 +54,8 @@ type SimParams = struct {
   [[offset(24)]] rule3Scale : f32;
 };
 
-type Particles = struct {
+[[block]]
+struct Particles {
   [[offset(0)]] particles : [[stride 16]] array<Particle, 5>;
 };
 
@@ -66,7 +67,7 @@ type Particles = struct {
 
 # https://github.com/austinEng/Project6-Vulkan-Flocking/blob/master/data/shaders/computeparticles/particle.comp
 [[stage(compute), workgroup_size(1)]]
-fn main() -> void {
+fn main() {
   const index : u32 = gl_GlobalInvocationID.x;
   if (index >= u32(5)) {
     return;

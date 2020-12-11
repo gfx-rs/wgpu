@@ -315,7 +315,7 @@ impl Parser {
                 Ok(type_arena.fetch_or_append(crate::Type { name: None, inner }))
             }
             crate::TypeInner::Array { base, .. } => Ok(base),
-            crate::TypeInner::Struct { ref members } => Ok(members[index].ty),
+            crate::TypeInner::Struct { ref members, .. } => Ok(members[index].ty),
             _ => Err(Error::NotCompositeType(ty)),
         }
     }
@@ -659,7 +659,7 @@ impl Parser {
                     let _ = lexer.next();
                     let name = lexer.next_ident()?;
                     let expression = match *ctx.resolve_type(handle)? {
-                        crate::TypeInner::Struct { ref members } => {
+                        crate::TypeInner::Struct { ref members, .. } => {
                             let index = members
                                 .iter()
                                 .position(|m| m.name.as_deref() == Some(name))
@@ -1179,10 +1179,6 @@ impl Parser {
 
                 crate::TypeInner::Array { base, size, stride }
             }
-            "struct" => {
-                let members = self.parse_struct_body(lexer, type_arena, const_arena)?;
-                crate::TypeInner::Struct { members }
-            }
             "sampler" => crate::TypeInner::Sampler { comparison: false },
             "sampler_comparison" => crate::TypeInner::Sampler { comparison: true },
             "texture_sampled_1d" => {
@@ -1698,6 +1694,7 @@ impl Parser {
         // Perspective is the default qualifier.
         let mut interpolation = None;
         let mut stage = None;
+        let mut is_block = false;
         let mut workgroup_size = [0u32; 3];
 
         if lexer.skip(Token::DoubleParen('[')) {
@@ -1721,6 +1718,9 @@ impl Parser {
                         lexer.expect(Token::Paren('('))?;
                         bind_index = Some(lexer.next_uint_literal()?);
                         lexer.expect(Token::Paren(')'))?;
+                    }
+                    "block" => {
+                        is_block = true;
                     }
                     "group" => {
                         lexer.expect(Token::Paren('('))?;
@@ -1771,9 +1771,24 @@ impl Parser {
             }
             self.scopes.pop();
         }
+
         // read items
         match lexer.next() {
             Token::Separator(';') => {}
+            Token::Word("struct") => {
+                let name = lexer.next_ident()?;
+                let members =
+                    self.parse_struct_body(lexer, &mut module.types, &mut module.constants)?;
+                let ty = module.types.fetch_or_append(crate::Type {
+                    name: Some(name.to_string()),
+                    inner: crate::TypeInner::Struct {
+                        block: is_block,
+                        members,
+                    },
+                });
+                self.lookup_type.insert(name.to_owned(), ty);
+                lexer.expect(Token::Separator(';'))?;
+            }
             Token::Word("type") => {
                 let name = lexer.next_ident()?;
                 lexer.expect(Token::Operation('='))?;
@@ -1857,6 +1872,7 @@ impl Parser {
             Token::End => return Ok(false),
             other => return other.unexpected("global item"),
         }
+
         match binding {
             None => Ok(true),
             // we had the decoration but no var?

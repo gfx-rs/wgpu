@@ -694,7 +694,10 @@ impl<W: Write> Writer<W> {
                         crate::ArraySize::Dynamic => write!(self.out, "1]")?,
                     }
                 }
-                crate::TypeInner::Struct { ref members } => {
+                crate::TypeInner::Struct {
+                    block: _,
+                    ref members,
+                } => {
                     writeln!(self.out, "struct {} {{", name)?;
                     for (index, member) in members.iter().enumerate() {
                         let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
@@ -893,7 +896,10 @@ impl<W: Write> Writer<W> {
                             continue;
                         }
                         // if it's a struct, lift all the built-in contents up to the root
-                        if let crate::TypeInner::Struct { ref members } = module.types[var.ty].inner
+                        if let crate::TypeInner::Struct {
+                            block: _,
+                            ref members,
+                        } = module.types[var.ty].inner
                         {
                             for (index, member) in members.iter().enumerate() {
                                 if let crate::MemberOrigin::BuiltIn(built_in) = member.origin {
@@ -932,7 +938,10 @@ impl<W: Write> Writer<W> {
                             continue;
                         }
                         // if it's a struct, lift all the built-in contents up to the root
-                        if let crate::TypeInner::Struct { ref members } = module.types[var.ty].inner
+                        if let crate::TypeInner::Struct {
+                            block: _,
+                            ref members,
+                        } = module.types[var.ty].inner
                         {
                             for (index, member) in members.iter().enumerate() {
                                 let name =

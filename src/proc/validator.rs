@@ -186,7 +186,10 @@ impl crate::GlobalVariable {
             None => {
                 match types[self.ty].inner {
                     //TODO: check the member types
-                    crate::TypeInner::Struct { members: _ } => self.forbid_interpolation()?,
+                    crate::TypeInner::Struct {
+                        block: _,
+                        members: _,
+                    } => self.forbid_interpolation()?,
                     _ => return Err(GlobalVariableError::InvalidType),
                 }
             }
@@ -492,8 +495,11 @@ impl Validator {
                         }
                     }
                 }
-                Ti::Struct { ref members } => {
-                    //TODO: check that offsets are not intersecting?
+                Ti::Struct {
+                    block: _,
+                    ref members,
+                } => {
+                    //TODO: check the offsets
                     for member in members {
                         if member.ty >= handle {
                             return Err(ValidationError::UnresolvedType(member.ty));

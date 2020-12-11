@@ -385,7 +385,11 @@ impl<'a, W: Write> Writer<'a, W> {
         // This are always ordered because of the IR is structured in a way that you can't make a
         // struct without adding all of it's members first
         for (handle, ty) in self.module.types.iter() {
-            if let TypeInner::Struct { ref members } = ty.inner {
+            if let TypeInner::Struct {
+                block: _,
+                ref members,
+            } = ty.inner
+            {
                 self.write_struct(handle, members)?
             }
         }
@@ -513,7 +517,7 @@ impl<'a, W: Write> Writer<'a, W> {
     /// - If type is either a image or sampler
     /// - If it's an Array with a [`ArraySize::Constant`](crate::ArraySize::Constant) with a
     /// constant that isn't [`Uint`](crate::ConstantInner::Uint)
-    fn write_type(&mut self, ty: Handle<Type>, block: bool) -> BackendResult {
+    fn write_type(&mut self, ty: Handle<Type>) -> BackendResult {
         match self.module.types[ty].inner {
             // Scalars are simple we just get the full name from `glsl_scalar`
             TypeInner::Scalar { kind, width } => {
@@ -543,10 +547,10 @@ impl<'a, W: Write> Writer<'a, W> {
                 rows as u8
             )?,
             // glsl has no pointer types so just write types as normal and loads are skipped
-            TypeInner::Pointer { base, .. } => self.write_type(base, false)?,
+            TypeInner::Pointer { base, .. } => self.write_type(base)?,
             // Arrays are written as `base[size]`
             TypeInner::Array { base, size, .. } => {
-                self.write_type(base, false)?;
+                self.write_type(base)?;
 
                 write!(self.out, "[")?;
 
@@ -570,7 +574,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // If it's a block we need to write `block_name { members }` where `block_name` must be
             // unique between blocks and structs so we add `_block_ID` where `ID` is a `IdGenerator`
             // generated number so it's unique and `members` are the same as in a struct
-            TypeInner::Struct { ref members } => {
+            TypeInner::Struct { block, ref members } => {
                 // Get the struct name
                 let name = &self.names[&NameKey::Type(ty)];
 
@@ -583,7 +587,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         // Add a tab for identation (readability only)
                         writeln!(self.out, "\t")?;
                         // Write the member type
-                        self.write_type(member.ty, false)?;
+                        self.write_type(member.ty)?;
 
                         // Finish the member with the name, a semicolon and a newline
                         // The leading space is important
@@ -694,20 +698,13 @@ impl<'a, W: Write> Writer<'a, W> {
             };
         }
 
-        // glsl doesn't allow structures as types in `buffer` and `uniform` instead blocks must be
-        // used so we set block to true in `write_type`
-        let block = match global.class {
-            StorageClass::Storage | StorageClass::Uniform => true,
-            _ => false,
-        };
-
         // Write the storage class
         // Trailing space is important
         write!(self.out, "{} ", glsl_storage_class(global.class))?;
 
         // Write the type
         // `write_type` adds no leading or trailing spaces
-        self.write_type(global.ty, block)?;
+        self.write_type(global.ty)?;
 
         // Finally write the global name and end the global with a `;` and a newline
         // Leading space is important
@@ -762,7 +759,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // This is the only place where `void` is a valid type
         // (though it's more a keyword than a type)
         if let Some(ty) = func.return_type {
-            self.write_type(ty, false)?;
+            self.write_type(ty)?;
         } else {
             write!(self.out, "void")?;
         }
@@ -777,7 +774,7 @@ impl<'a, W: Write> Writer<'a, W> {
         self.write_slice(&func.arguments, |this, i, arg| {
             // Write the argument type
             // `write_type` adds no trailing spaces
-            this.write_type(arg.ty, false)?;
+            this.write_type(arg.ty)?;
 
             // Write the argument name
             // The leading space is important
@@ -797,7 +794,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // Write identation (only for readability) and the type
             // `write_type` adds no trailing space
             write!(self.out, "\t")?;
-            self.write_type(local.ty, false)?;
+            self.write_type(local.ty)?;
 
             // Write the local name
             // The leading space is important
@@ -883,7 +880,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // Composite constant are created using the same syntax as compose
             // `type(components)` where `components` is a comma separated list of constants
             ConstantInner::Composite(ref components) => {
-                self.write_type(constant.ty, false)?;
+                self.write_type(constant.ty)?;
                 write!(self.out, "(")?;
 
                 // Write the comma separated constants
@@ -919,7 +916,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
             // Write the member type
             // Adds no trailing space
-            self.write_type(member.ty, false)?;
+            self.write_type(member.ty)?;
 
             // Write the member name and put a semicolon
             // The leading space is important
@@ -1139,7 +1136,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // `Compose` is pretty simple we just write `type(components)` where `components` is a
             // comma separated list of expressions
             Expression::Compose { ty, ref components } => {
-                self.write_type(ty, false)?;
+                self.write_type(ty)?;
 
                 write!(self.out, "(")?;
                 self.write_slice(components, |this, _, arg| this.write_expr(*arg, ctx))?;
@@ -1492,7 +1489,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 convert,
             } => {
                 if convert {
-                    self.write_type(ctx.typifier.get_handle(expr).unwrap(), false)?;
+                    self.write_type(ctx.typifier.get_handle(expr).unwrap())?;
                 } else {
                     let source_kind = match *ctx.typifier.get(expr, &self.module.types) {
                         TypeInner::Scalar {

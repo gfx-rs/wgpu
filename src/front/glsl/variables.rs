@@ -142,7 +142,10 @@ impl Program {
         meta: TokenMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
         match *self.resolve_type(expression)? {
-            TypeInner::Struct { ref members } => {
+            TypeInner::Struct {
+                block: _,
+                ref members,
+            } => {
                 let index = members
                     .iter()
                     .position(|m| m.name == Some(name.into()))

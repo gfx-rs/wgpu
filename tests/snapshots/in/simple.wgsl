@@ -2,7 +2,6 @@
 [[builtin(position)]] var<out> o_position : vec4<f32>;
 
 [[stage(vertex)]]
-fn main() -> void {
+fn main() {
   o_position = vec4<f32>(1);
-  return;
 }
