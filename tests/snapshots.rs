@@ -1,20 +1,18 @@
-use serde::Deserialize;
-
-#[derive(Hash, PartialEq, Eq, Deserialize)]
+#[derive(Hash, PartialEq, Eq, serde::Deserialize)]
 enum Stage {
     Vertex,
     Fragment,
     Compute,
 }
 
-#[derive(Hash, PartialEq, Eq, Deserialize)]
+#[derive(Hash, PartialEq, Eq, serde::Deserialize)]
 struct BindSource {
     stage: Stage,
     group: u32,
     binding: u32,
 }
 
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 struct BindTarget {
     #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     #[serde(default)]
@@ -30,7 +28,7 @@ struct BindTarget {
     mutable: bool,
 }
 
-#[derive(Default, Deserialize)]
+#[derive(Default, serde::Deserialize)]
 struct Parameters {
     #[serde(default)]
     #[allow(dead_code)]
