@@ -119,6 +119,7 @@ impl crate::MathFunction {
             Self::SmoothStep => 3,
             Self::Sqrt => 1,
             Self::InverseSqrt => 1,
+            Self::Transpose => 1,
             Self::Determinant => 1,
             // bits
             Self::CountOneBits => 1,

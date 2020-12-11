@@ -597,6 +597,7 @@ pub enum MathFunction {
     SmoothStep,
     Sqrt,
     InverseSqrt,
+    Transpose,
     Determinant,
     // bits
     CountOneBits,
@@ -704,8 +705,6 @@ pub enum Expression {
         arg1: Option<Handle<Expression>>,
         arg2: Option<Handle<Expression>>,
     },
-    /// Transpose of a matrix.
-    Transpose(Handle<Expression>),
     /// Cast a simply type to another kind.
     As {
         /// Source expression, which can only be a scalar or a vector.

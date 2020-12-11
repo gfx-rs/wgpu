@@ -1488,6 +1488,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::SmoothStep => "smoothstep",
                     Mf::Sqrt => "sqrt",
                     Mf::InverseSqrt => "inversesqrt",
+                    Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
                     // bits
                     Mf::CountOneBits => "bitCount",
@@ -1504,12 +1505,6 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(self.out, ", ")?;
                     self.write_expr(arg, ctx)?;
                 }
-                write!(self.out, ")")?
-            }
-            // `Transpose` is a call to the glsl function `transpose`
-            Expression::Transpose(matrix) => {
-                write!(self.out, "transpose(")?;
-                self.write_expr(matrix, ctx)?;
                 write!(self.out, ")")?
             }
             // `As` is always a call.

@@ -442,6 +442,7 @@ impl<W: Write> Writer<W> {
                     Mf::SmoothStep => "smoothstep",
                     Mf::Sqrt => "sqrt",
                     Mf::InverseSqrt => "rsqrt",
+                    Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
                     // bits
                     Mf::CountOneBits => "popcount",
@@ -459,9 +460,6 @@ impl<W: Write> Writer<W> {
                     self.put_expression(arg, context)?;
                 }
                 write!(self.out, ")")?;
-            }
-            crate::Expression::Transpose(expr) => {
-                self.put_call("transpose", &[expr], context)?;
             }
             crate::Expression::As {
                 expr,

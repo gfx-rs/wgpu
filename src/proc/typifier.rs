@@ -348,6 +348,23 @@ impl Typifier {
                     Mf::SmoothStep |
                     Mf::Sqrt |
                     Mf::InverseSqrt => self.resolutions[arg.index()].clone(),
+                    Mf::Transpose => match *self.get(arg, types) {
+                        crate::TypeInner::Matrix {
+                            columns,
+                            rows,
+                            width,
+                        } => Resolution::Value(crate::TypeInner::Matrix {
+                            columns: rows,
+                            rows: columns,
+                            width,
+                        }),
+                        ref other => {
+                            return Err(ResolveError::IncompatibleOperand {
+                                op: "transpose".to_string(),
+                                operand: format!("{:?}", other),
+                            })
+                        }
+                    },
                     Mf::Determinant => match *self.get(arg, types) {
                         crate::TypeInner::Matrix {
                             width,
@@ -365,23 +382,6 @@ impl Typifier {
                     Mf::ReverseBits => self.resolutions[arg.index()].clone(),
                 }
             }
-            crate::Expression::Transpose(expr) => match *self.get(expr, types) {
-                crate::TypeInner::Matrix {
-                    columns,
-                    rows,
-                    width,
-                } => Resolution::Value(crate::TypeInner::Matrix {
-                    columns: rows,
-                    rows: columns,
-                    width,
-                }),
-                ref other => {
-                    return Err(ResolveError::IncompatibleOperand {
-                        op: "transpose".to_string(),
-                        operand: format!("{:?}", other),
-                    })
-                }
-            },
             crate::Expression::As {
                 expr,
                 kind,

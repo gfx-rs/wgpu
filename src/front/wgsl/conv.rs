@@ -171,6 +171,7 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "smoothStep" => Mf::SmoothStep,
         "sqrt" => Mf::Sqrt,
         "inverseSqrt" => Mf::InverseSqrt,
+        "transpose" => Mf::Transpose,
         "determinant" => Mf::Determinant,
         // bits
         "countOneBits" => Mf::CountOneBits,

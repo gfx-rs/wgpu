@@ -834,7 +834,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result_id = self.next()?;
                     let matrix_id = self.next()?;
                     let matrix_lexp = self.lookup_expression.lookup(matrix_id)?;
-                    let expr = crate::Expression::Transpose(matrix_lexp.handle);
+                    let expr = crate::Expression::Math {
+                        fun: crate::MathFunction::Transpose,
+                        arg: matrix_lexp.handle,
+                        arg1: None,
+                        arg2: None,
+                    };
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {

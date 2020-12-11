@@ -118,9 +118,6 @@ where
                     self.traverse_expr(arg);
                 }
             }
-            E::Transpose(matrix) => {
-                self.traverse_expr(matrix);
-            }
             E::As { expr, .. } => {
                 self.traverse_expr(expr);
             }
