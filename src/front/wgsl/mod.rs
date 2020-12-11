@@ -1960,7 +1960,16 @@ impl Parser {
                             crate::BuiltIn::Position => crate::StorageClass::Output,
                             _ => unimplemented!(),
                         },
-                        _ => crate::StorageClass::Handle,
+                        Some(crate::Binding::Resource { .. }) => {
+                            match module.types[pvar.ty].inner {
+                                crate::TypeInner::Struct { .. } if pvar.access.is_empty() => {
+                                    crate::StorageClass::Uniform
+                                }
+                                crate::TypeInner::Struct { .. } => crate::StorageClass::Storage,
+                                _ => crate::StorageClass::Handle,
+                            }
+                        }
+                        _ => crate::StorageClass::Private,
                     },
                 };
                 let var_handle = module.global_variables.append(crate::GlobalVariable {

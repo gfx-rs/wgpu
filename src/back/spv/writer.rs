@@ -390,15 +390,16 @@ impl Writer {
         let function_id = self.write_function(&entry_point.function, ir_module)?;
 
         let mut interface_ids = vec![];
-        for ((handle, _), &usage) in ir_module
+        for ((handle, var), &usage) in ir_module
             .global_variables
             .iter()
-            .filter(|&(_, var)| {
-                var.class == crate::StorageClass::Input || var.class == crate::StorageClass::Output
-            })
             .zip(&entry_point.function.global_usage)
         {
-            if usage.contains(crate::GlobalUse::STORE) || usage.contains(crate::GlobalUse::LOAD) {
+            let is_io = match var.class {
+                crate::StorageClass::Input | crate::StorageClass::Output => !usage.is_empty(),
+                _ => false,
+            };
+            if is_io {
                 let id = self.get_global_variable_id(ir_module, handle)?;
                 interface_ids.push(id);
             }
