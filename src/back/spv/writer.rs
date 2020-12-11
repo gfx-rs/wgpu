@@ -1379,7 +1379,9 @@ impl Writer {
                 image,
                 sampler,
                 coordinate,
-                level: _,
+                array_index: _, //TODO
+                offset: _,      //TODO
+                level,
                 depth_ref: _,
             } => {
                 // image
@@ -1507,14 +1509,20 @@ impl Writer {
                 let id = self.generate_id();
                 let image_sample_result_type_id =
                     self.get_type_id(&ir_module.types, image_sample_result_type)?;
-                block
-                    .body
-                    .push(super::instructions::instruction_image_sample_implicit_lod(
-                        image_sample_result_type_id,
-                        id,
-                        sampled_image_id,
-                        coordinate_id,
-                    ));
+
+                let main_instruction = match level {
+                    crate::SampleLevel::Auto => {
+                        super::instructions::instruction_image_sample_implicit_lod(
+                            image_sample_result_type_id,
+                            id,
+                            sampled_image_id,
+                            coordinate_id,
+                        )
+                    }
+                    _ => return Err(Error::FeatureNotImplemented("sample level")),
+                };
+
+                block.body.push(main_instruction);
                 Ok((id, image_sample_result_type))
             }
             _ => {

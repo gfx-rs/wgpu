@@ -1181,22 +1181,22 @@ impl<'a, W: Write> Writer<'a, W> {
             // Furthermore if `depth_ref` is some we need to append it to the coordinate vector
             Expression::ImageSample {
                 image,
+                sampler: _, //TODO
                 coordinate,
+                array_index,
+                offset: _, //TODO
                 level,
                 depth_ref,
-                ..
             } => {
                 //TODO: handle MS
 
                 //Write the function to be used depending on the sample level
-                write!(
-                    self.out,
-                    "{}(",
-                    match level {
-                        crate::SampleLevel::Auto | crate::SampleLevel::Bias(_) => "texture",
-                        crate::SampleLevel::Zero | crate::SampleLevel::Exact(_) => "textureLod",
-                    }
-                )?;
+                let fun_name = match level {
+                    crate::SampleLevel::Auto | crate::SampleLevel::Bias(_) => "texture",
+                    crate::SampleLevel::Zero | crate::SampleLevel::Exact(_) => "textureLod",
+                    crate::SampleLevel::Gradient { .. } => "textureGrad",
+                };
+                write!(self.out, "{}(", fun_name)?;
 
                 // Write the image that will be used
                 self.write_expr(image, ctx)?;
@@ -1210,18 +1210,26 @@ impl<'a, W: Write> Writer<'a, W> {
                     _ => unreachable!(),
                 };
 
-                if let Some(depth_ref) = depth_ref {
-                    // Compose a new vector with the coordinates and `depth_ref`
-                    write!(self.out, "vec{}(", size as u8 + 1)?;
-                    self.write_expr(coordinate, ctx)?;
-                    // The space here isn't required but it helps with readability
-                    write!(self.out, ", ")?;
-                    self.write_expr(depth_ref, ctx)?;
-                    write!(self.out, ")")?
-                } else {
-                    // There's no `depth_ref` so just write the coordinate expression
-                    self.write_expr(coordinate, ctx)?
+                let mut coord_dim = size as u8;
+                if array_index.is_some() {
+                    coord_dim += 1;
                 }
+                if depth_ref.is_some() {
+                    coord_dim += 1;
+                }
+
+                // Compose a new texture coordinates vector
+                write!(self.out, "vec{}(", coord_dim)?;
+                self.write_expr(coordinate, ctx)?;
+                if let Some(expr) = array_index {
+                    write!(self.out, ", ")?;
+                    self.write_expr(expr, ctx)?;
+                }
+                if let Some(expr) = depth_ref {
+                    write!(self.out, ", ")?;
+                    self.write_expr(expr, ctx)?;
+                }
+                write!(self.out, ")")?;
 
                 match level {
                     // Auto needs no more arguments
@@ -1232,6 +1240,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::SampleLevel::Exact(expr) | crate::SampleLevel::Bias(expr) => {
                         write!(self.out, ", ")?;
                         self.write_expr(expr, ctx)?;
+                    }
+                    crate::SampleLevel::Gradient { x, y } => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(x, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(y, ctx)?;
                     }
                 }
 
@@ -1249,35 +1263,53 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::ImageLoad {
                 image,
                 coordinate,
+                array_index,
                 index,
             } => {
                 // This will only panic if the module is invalid
-                let class = match ctx.typifier.get(image, &self.module.types) {
-                    TypeInner::Image { class, .. } => class,
+                let (dim, class) = match ctx.typifier.get(image, &self.module.types) {
+                    TypeInner::Image {
+                        dim,
+                        arrayed: _,
+                        class,
+                    } => (dim, class),
                     _ => unreachable!(),
                 };
 
-                match class {
-                    ImageClass::Sampled { .. } => write!(self.out, "texelFetch(")?,
-                    ImageClass::Storage(_) => write!(self.out, "imageLoad(")?,
+                let fun_name = match class {
+                    ImageClass::Sampled { .. } => "texelFetch",
+                    ImageClass::Storage(_) => "imageLoad",
                     // TODO: Is there even a function for this?
                     ImageClass::Depth => todo!(),
-                }
+                };
 
+                write!(self.out, "{}(", fun_name)?;
                 self.write_expr(image, ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(coordinate, ctx)?;
-
-                match class {
-                    ImageClass::Sampled { .. } => {
+                match array_index {
+                    Some(layer_expr) => {
+                        let tex_coord_type = match dim {
+                            crate::ImageDimension::D1 => "ivec2",
+                            crate::ImageDimension::D2 => "ivec3",
+                            crate::ImageDimension::D3 => "ivec4",
+                            crate::ImageDimension::Cube => "ivec4",
+                        };
+                        write!(self.out, ", {}(", tex_coord_type)?;
+                        self.write_expr(coordinate, ctx)?;
                         write!(self.out, ", ")?;
-                        // This will only panic if the module is invalid
-                        self.write_expr(index.unwrap(), ctx)?;
-                        write!(self.out, ")")?
+                        self.write_expr(layer_expr, ctx)?;
+                        write!(self.out, ")")?;
                     }
-                    ImageClass::Storage(_) => write!(self.out, ")")?,
-                    ImageClass::Depth => todo!(),
+                    None => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(coordinate, ctx)?;
+                    }
                 }
+
+                if let Some(index_expr) = index {
+                    write!(self.out, ", ")?;
+                    self.write_expr(index_expr, ctx)?;
+                }
+                write!(self.out, ")")?;
             }
             // `Unary` is pretty straightforward
             // "-" - for `Negate`

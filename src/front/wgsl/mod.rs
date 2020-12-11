@@ -52,6 +52,10 @@ pub enum Error<'a> {
     BadFloat(&'a str, std::num::ParseFloatError),
     #[error("bad field accessor `{0}`")]
     BadAccessor(&'a str),
+    #[error("bad texture {0}`")]
+    BadTexture(&'a str),
+    #[error("bad texture coordinate")]
+    BadCoordinate,
     #[error(transparent)]
     InvalidResolve(ResolveError),
     #[error("unknown import: `{0}`")]
@@ -140,6 +144,12 @@ impl<'a> StatementContext<'a, '_, '_> {
     }
 }
 
+struct SamplingContext {
+    image: Handle<crate::Expression>,
+    arrayed: bool,
+    offset_type: Handle<crate::Type>,
+}
+
 struct ExpressionContext<'input, 'temp, 'out> {
     lookup_ident: &'temp FastHashMap<&'input str, Handle<crate::Expression>>,
     typifier: &'temp mut Typifier,
@@ -184,6 +194,38 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             Err(e) => Err(Error::InvalidResolve(e)),
             Ok(()) => Ok(self.typifier.get(handle, self.types)),
         }
+    }
+
+    fn prepare_sampling(
+        &mut self,
+        image_name: &'a str,
+        coordinate: Handle<crate::Expression>,
+    ) -> Result<SamplingContext, Error<'a>> {
+        let image = self.lookup_ident.lookup(image_name)?;
+        let kind = crate::ScalarKind::Sint;
+        let offset_inner = match *self.resolve_type(coordinate)? {
+            crate::TypeInner::Scalar { width, kind: _ } => crate::TypeInner::Scalar { width, kind },
+            crate::TypeInner::Vector {
+                size,
+                width,
+                kind: _,
+            } => crate::TypeInner::Vector { size, width, kind },
+            ref other => {
+                log::error!("Unexpected coordinate type {:?}", other);
+                return Err(Error::BadCoordinate);
+            }
+        };
+        Ok(SamplingContext {
+            image,
+            arrayed: match *self.resolve_type(image)? {
+                crate::TypeInner::Image { arrayed, .. } => arrayed,
+                _ => return Err(Error::BadTexture(image_name)),
+            },
+            offset_type: self.types.fetch_or_append(crate::Type {
+                name: None,
+                inner: offset_inner,
+            }),
+        })
     }
 
     fn parse_binary_op(
@@ -401,11 +443,30 @@ impl Parser {
                     let sampler_name = lexer.next_ident()?;
                     lexer.expect(Token::Separator(','))?;
                     let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let sc = ctx.prepare_sampling(image_name, coordinate)?;
+                    let array_index = if sc.arrayed {
+                        lexer.expect(Token::Separator(','))?;
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
+                    };
+                    let offset = if lexer.skip(Token::Separator(',')) {
+                        Some(self.parse_const_expression(
+                            lexer,
+                            sc.offset_type,
+                            ctx.types,
+                            ctx.constants,
+                        )?)
+                    } else {
+                        None
+                    };
                     lexer.expect(Token::Paren(')'))?;
                     Some(crate::Expression::ImageSample {
-                        image: ctx.lookup_ident.lookup(image_name)?,
+                        image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name)?,
                         coordinate,
+                        array_index,
+                        offset,
                         level: crate::SampleLevel::Auto,
                         depth_ref: None,
                     })
@@ -417,13 +478,32 @@ impl Parser {
                     let sampler_name = lexer.next_ident()?;
                     lexer.expect(Token::Separator(','))?;
                     let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let sc = ctx.prepare_sampling(image_name, coordinate)?;
+                    let array_index = if sc.arrayed {
+                        lexer.expect(Token::Separator(','))?;
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
+                    };
                     lexer.expect(Token::Separator(','))?;
                     let level = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let offset = if lexer.skip(Token::Separator(',')) {
+                        Some(self.parse_const_expression(
+                            lexer,
+                            sc.offset_type,
+                            ctx.types,
+                            ctx.constants,
+                        )?)
+                    } else {
+                        None
+                    };
                     lexer.expect(Token::Paren(')'))?;
                     Some(crate::Expression::ImageSample {
-                        image: ctx.lookup_ident.lookup(image_name)?,
+                        image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name)?,
                         coordinate,
+                        array_index,
+                        offset,
                         level: crate::SampleLevel::Exact(level),
                         depth_ref: None,
                     })
@@ -435,14 +515,72 @@ impl Parser {
                     let sampler_name = lexer.next_ident()?;
                     lexer.expect(Token::Separator(','))?;
                     let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let sc = ctx.prepare_sampling(image_name, coordinate)?;
+                    let array_index = if sc.arrayed {
+                        lexer.expect(Token::Separator(','))?;
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
+                    };
                     lexer.expect(Token::Separator(','))?;
                     let bias = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let offset = if lexer.skip(Token::Separator(',')) {
+                        Some(self.parse_const_expression(
+                            lexer,
+                            sc.offset_type,
+                            ctx.types,
+                            ctx.constants,
+                        )?)
+                    } else {
+                        None
+                    };
                     lexer.expect(Token::Paren(')'))?;
                     Some(crate::Expression::ImageSample {
-                        image: ctx.lookup_ident.lookup(image_name)?,
+                        image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name)?,
                         coordinate,
+                        array_index,
+                        offset,
                         level: crate::SampleLevel::Bias(bias),
+                        depth_ref: None,
+                    })
+                }
+                "textureSampleGrad" => {
+                    lexer.expect(Token::Paren('('))?;
+                    let image_name = lexer.next_ident()?;
+                    lexer.expect(Token::Separator(','))?;
+                    let sampler_name = lexer.next_ident()?;
+                    lexer.expect(Token::Separator(','))?;
+                    let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let sc = ctx.prepare_sampling(image_name, coordinate)?;
+                    let array_index = if sc.arrayed {
+                        lexer.expect(Token::Separator(','))?;
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
+                    };
+                    lexer.expect(Token::Separator(','))?;
+                    let x = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    lexer.expect(Token::Separator(','))?;
+                    let y = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let offset = if lexer.skip(Token::Separator(',')) {
+                        Some(self.parse_const_expression(
+                            lexer,
+                            sc.offset_type,
+                            ctx.types,
+                            ctx.constants,
+                        )?)
+                    } else {
+                        None
+                    };
+                    lexer.expect(Token::Paren(')'))?;
+                    Some(crate::Expression::ImageSample {
+                        image: sc.image,
+                        sampler: ctx.lookup_ident.lookup(sampler_name)?,
+                        coordinate,
+                        array_index,
+                        offset,
+                        level: crate::SampleLevel::Gradient { x, y },
                         depth_ref: None,
                     })
                 }
@@ -453,13 +591,32 @@ impl Parser {
                     let sampler_name = lexer.next_ident()?;
                     lexer.expect(Token::Separator(','))?;
                     let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let sc = ctx.prepare_sampling(image_name, coordinate)?;
+                    let array_index = if sc.arrayed {
+                        lexer.expect(Token::Separator(','))?;
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
+                    };
                     lexer.expect(Token::Separator(','))?;
                     let reference = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let offset = if lexer.skip(Token::Separator(',')) {
+                        Some(self.parse_const_expression(
+                            lexer,
+                            sc.offset_type,
+                            ctx.types,
+                            ctx.constants,
+                        )?)
+                    } else {
+                        None
+                    };
                     lexer.expect(Token::Paren(')'))?;
                     Some(crate::Expression::ImageSample {
-                        image: ctx.lookup_ident.lookup(image_name)?,
+                        image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name)?,
                         coordinate,
+                        array_index,
+                        offset,
                         level: crate::SampleLevel::Zero,
                         depth_ref: Some(reference),
                     })
@@ -470,24 +627,29 @@ impl Parser {
                     let image = ctx.lookup_ident.lookup(image_name)?;
                     lexer.expect(Token::Separator(','))?;
                     let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
-                    let is_storage = match *ctx.resolve_type(image)? {
-                        crate::TypeInner::Image {
-                            class: crate::ImageClass::Storage(_),
-                            ..
-                        } => true,
-                        _ => false,
+                    let (class, arrayed) = match *ctx.resolve_type(image)? {
+                        crate::TypeInner::Image { class, arrayed, .. } => (class, arrayed),
+                        _ => return Err(Error::BadTexture(image_name)),
                     };
-                    let index = if is_storage {
-                        None
-                    } else {
+                    let array_index = if arrayed {
                         lexer.expect(Token::Separator(','))?;
-                        let index_name = lexer.next_ident()?;
-                        Some(ctx.lookup_ident.lookup(index_name)?)
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
+                    };
+                    let index = match class {
+                        crate::ImageClass::Storage(_) => {
+                            lexer.expect(Token::Separator(','))?;
+                            let index_name = lexer.next_ident()?;
+                            Some(ctx.lookup_ident.lookup(index_name)?)
+                        }
+                        crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth => None,
                     };
                     lexer.expect(Token::Paren(')'))?;
                     Some(crate::Expression::ImageLoad {
                         image,
                         coordinate,
+                        array_index,
                         index,
                     })
                 }
@@ -744,6 +906,7 @@ impl Parser {
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         self.scopes.push(Scope::SingularExpr);
+        //TODO: refactor this to avoid backing up
         let backup = lexer.clone();
         let expression = match lexer.next() {
             Token::Operation('-') => Some(crate::Expression::Unary {

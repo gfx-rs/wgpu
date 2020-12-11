@@ -612,6 +612,10 @@ pub enum SampleLevel {
     Zero,
     Exact(Handle<Expression>),
     Bias(Handle<Expression>),
+    Gradient {
+        x: Handle<Expression>,
+        y: Handle<Expression>,
+    },
 }
 
 /// An expression that can be evaluated to obtain a value.
@@ -649,6 +653,8 @@ pub enum Expression {
         image: Handle<Expression>,
         sampler: Handle<Expression>,
         coordinate: Handle<Expression>,
+        array_index: Option<Handle<Expression>>,
+        offset: Option<Handle<Constant>>,
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
     },
@@ -656,6 +662,7 @@ pub enum Expression {
     ImageLoad {
         image: Handle<Expression>,
         coordinate: Handle<Expression>,
+        array_index: Option<Handle<Expression>>,
         /// For storage images, this is None.
         /// For sampled images, this is the Some(Level).
         /// For multisampled images, this is Some(Sample).

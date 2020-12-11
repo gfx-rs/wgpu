@@ -240,6 +240,8 @@ impl<W: Write> Writer<W> {
                 image,
                 sampler,
                 coordinate,
+                array_index,
+                offset,
                 level,
                 depth_ref,
             } => {
@@ -247,12 +249,15 @@ impl<W: Write> Writer<W> {
                     Some(_) => "sample_compare",
                     None => "sample",
                 };
-                //TODO: handle arrayed images
                 self.put_expression(image, context)?;
                 write!(self.out, ".{}(", op)?;
                 self.put_expression(sampler, context)?;
                 write!(self.out, ", ")?;
                 self.put_expression(coordinate, context)?;
+                if let Some(expr) = array_index {
+                    write!(self.out, ", ")?;
+                    self.put_expression(expr, context)?;
+                }
                 if let Some(dref) = depth_ref {
                     write!(self.out, ", ")?;
                     self.put_expression(dref, context)?;
@@ -272,18 +277,33 @@ impl<W: Write> Writer<W> {
                         self.put_expression(h, context)?;
                         write!(self.out, ")")?;
                     }
+                    crate::SampleLevel::Gradient { x, y } => {
+                        write!(self.out, ", gradient(")?;
+                        self.put_expression(x, context)?;
+                        write!(self.out, ", ")?;
+                        self.put_expression(y, context)?;
+                        write!(self.out, ")")?;
+                    }
+                }
+                if let Some(constant) = offset {
+                    write!(self.out, ", ")?;
+                    self.put_constant(constant, context.module)?;
                 }
                 write!(self.out, ")")?;
             }
             crate::Expression::ImageLoad {
                 image,
                 coordinate,
+                array_index,
                 index,
             } => {
-                //TODO: handle arrayed images
                 self.put_expression(image, context)?;
                 write!(self.out, ".read(")?;
                 self.put_expression(coordinate, context)?;
+                if let Some(expr) = array_index {
+                    write!(self.out, ", ")?;
+                    self.put_expression(expr, context)?;
+                }
                 if let Some(index) = index {
                     write!(self.out, ", ")?;
                     self.put_expression(index, context)?;

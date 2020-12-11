@@ -10,6 +10,7 @@ typedef float2 type1;
 typedef float4 type2;
 typedef texture2d<float, access::sample> type3;
 typedef sampler type4;
+typedef int2 type5;
 
 struct main1Input {
 	type1 a_pos [[attribute(0)]];

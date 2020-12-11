@@ -943,6 +943,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         crate::TypeInner::Sampler { comparison: false } => (),
                         _ => return Err(Error::InvalidSampleSampler(sampler_type_handle)),
                     };
+
                     match type_arena[image_type_handle].inner {
                         //TODO: compare the result type
                         crate::TypeInner::Image {
@@ -968,31 +969,41 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     let mut level = crate::SampleLevel::Auto;
                     let mut base_wc = 5;
-                    if base_wc < inst.wc {
+                    while base_wc < inst.wc {
                         let image_ops = self.next()?;
                         base_wc += 1;
-                        let mask = spirv::ImageOperands::from_bits_truncate(image_ops);
-                        if mask.contains(spirv::ImageOperands::BIAS) {
-                            let bias_expr = self.next()?;
-                            let bias_handle = self.lookup_expression.lookup(bias_expr)?.handle;
-                            level = crate::SampleLevel::Bias(bias_handle);
-                            base_wc += 1;
-                        }
-                        if mask.contains(spirv::ImageOperands::LOD) {
-                            let lod_expr = self.next()?;
-                            let lod_handle = self.lookup_expression.lookup(lod_expr)?.handle;
-                            level = crate::SampleLevel::Exact(lod_handle);
-                            base_wc += 1;
-                        }
-                        for _ in base_wc..inst.wc {
-                            self.next()?;
+                        match spirv::ImageOperands::from_bits_truncate(image_ops) {
+                            spirv::ImageOperands::BIAS => {
+                                let bias_expr = self.next()?;
+                                let bias_handle = self.lookup_expression.lookup(bias_expr)?.handle;
+                                level = crate::SampleLevel::Bias(bias_handle);
+                                base_wc += 1;
+                            }
+                            spirv::ImageOperands::LOD => {
+                                let lod_expr = self.next()?;
+                                let lod_handle = self.lookup_expression.lookup(lod_expr)?.handle;
+                                level = crate::SampleLevel::Exact(lod_handle);
+                                base_wc += 1;
+                            }
+                            other => {
+                                log::warn!("Skipping {:?}", other);
+                                for _ in base_wc..inst.wc {
+                                    self.next()?;
+                                }
+                                break;
+                            }
                         }
                     }
+
+                    //TODO: disassemble `coordinate_id` into the part responsible for
+                    // texture coordinates, and the array index.
 
                     let expr = crate::Expression::ImageSample {
                         image: si_lexp.image,
                         sampler: si_lexp.sampler,
                         coordinate: coord_lexp.handle,
+                        array_index: None, //TODO
+                        offset: None,      //TODO
                         level,
                         depth_ref: None,
                     };
@@ -1062,6 +1073,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         image: si_lexp.image,
                         sampler: si_lexp.sampler,
                         coordinate: coord_lexp.handle,
+                        array_index: None, //TODO
+                        offset: None,      //TODO
                         level: crate::SampleLevel::Auto,
                         depth_ref: Some(dref_lexp.handle),
                     };
@@ -1519,10 +1532,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             let ty = module.types.get_mut(handle);
             match ty.inner {
                 crate::TypeInner::Sampler { ref mut comparison } => {
-                    #[allow(clippy::panic)]
-                    {
-                        assert!(!*comparison)
-                    };
                     *comparison = true;
                 }
                 _ => {

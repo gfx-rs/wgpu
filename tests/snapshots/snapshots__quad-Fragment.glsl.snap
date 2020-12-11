@@ -14,7 +14,7 @@ out vec4 o_color;
 
 void main() {
 
-	o_color = texture(u_texture, v_uv1);
+	o_color = texture(u_texture, vec2(v_uv1));
 	return;
 }
 

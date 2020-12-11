@@ -45,16 +45,25 @@ where
                 image,
                 sampler,
                 coordinate,
+                array_index,
+                offset: _,
                 level,
                 depth_ref,
             } => {
                 self.traverse_expr(image);
                 self.traverse_expr(sampler);
                 self.traverse_expr(coordinate);
+                if let Some(layer) = array_index {
+                    self.traverse_expr(layer);
+                }
                 match level {
                     crate::SampleLevel::Auto | crate::SampleLevel::Zero => (),
                     crate::SampleLevel::Exact(h) | crate::SampleLevel::Bias(h) => {
-                        self.traverse_expr(h)
+                        self.traverse_expr(h);
+                    }
+                    crate::SampleLevel::Gradient { x, y } => {
+                        self.traverse_expr(x);
+                        self.traverse_expr(y);
                     }
                 }
                 if let Some(dref) = depth_ref {
@@ -64,10 +73,14 @@ where
             E::ImageLoad {
                 image,
                 coordinate,
+                array_index,
                 index,
             } => {
                 self.traverse_expr(image);
                 self.traverse_expr(coordinate);
+                if let Some(layer) = array_index {
+                    self.traverse_expr(layer);
+                }
                 if let Some(index) = index {
                     self.traverse_expr(index);
                 }

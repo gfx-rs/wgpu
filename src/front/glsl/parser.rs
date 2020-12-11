@@ -288,6 +288,8 @@ pomelo! {
                                     image: fc.args[0].expression,
                                     sampler,
                                     coordinate: fc.args[1].expression,
+                                    array_index: None, //TODO
+                                    offset: None, //TODO
                                     level: SampleLevel::Auto,
                                     depth_ref: None,
                                 }),
