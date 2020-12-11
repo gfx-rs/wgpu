@@ -1,0 +1,17 @@
+---
+source: tests/snapshots.rs
+expression: string
+---
+#version 310 es
+
+precision highp float;
+
+
+
+
+void main() {
+
+	gl_Position = vec4(1);
+	return;
+}
+

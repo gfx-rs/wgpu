@@ -16,12 +16,16 @@ struct BindSource {
 
 #[derive(Deserialize)]
 struct BindTarget {
+    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     #[serde(default)]
     buffer: Option<u8>,
+    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     #[serde(default)]
     texture: Option<u8>,
+    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     #[serde(default)]
     sampler: Option<u8>,
+    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     #[serde(default)]
     mutable: bool,
 }
@@ -37,9 +41,36 @@ struct Parameters {
     mtl_bindings: naga::FastHashMap<BindSource, BindTarget>,
 }
 
+bitflags::bitflags! {
+    struct Language: u32 {
+        const SPIRV = 0x1;
+        const METAL = 0x2;
+        const GLSL = 0x4;
+    }
+}
+
+#[cfg(feature = "spv-out")]
+fn check_output_spv(module: &naga::Module, name: &str, params: &Parameters) {
+    use naga::back::spv;
+    use rspirv::binary::Disassemble;
+
+    let spv = spv::write_vec(
+        &module,
+        spv::WriterFlags::NONE,
+        params.spv_capabilities.clone(),
+    )
+    .unwrap();
+
+    let dis = rspirv::dr::load_words(spv)
+        .expect("Produced invalid SPIR-V")
+        .disassemble();
+    insta::assert_snapshot!(format!("{}.spvasm", name), dis);
+}
+
 #[cfg(feature = "msl-out")]
 fn check_output_msl(module: &naga::Module, name: &str, params: &Parameters) {
     use naga::back::msl;
+
     let mut binding_map = msl::BindingMap::default();
     for (key, value) in params.mtl_bindings.iter() {
         binding_map.insert(
@@ -65,28 +96,30 @@ fn check_output_msl(module: &naga::Module, name: &str, params: &Parameters) {
         spirv_cross_compatibility: false,
         binding_map,
     };
+
     let (msl, _) = msl::write_string(&module, &options).unwrap();
-    insta::assert_snapshot!(format!("{}{}", name, ".msl"), msl);
+    insta::assert_snapshot!(format!("{}.msl", name), msl);
 }
 
-#[cfg(feature = "spv-out")]
-fn check_output_spv(module: &naga::Module, name: &str, params: &Parameters) {
-    use naga::back::spv;
-    use rspirv::binary::Disassemble;
-    let spv = spv::write_vec(
-        &module,
-        spv::WriterFlags::NONE,
-        params.spv_capabilities.clone(),
-    )
-    .unwrap();
-    let dis = rspirv::dr::load_words(spv)
-        .expect("Produced invalid SPIR-V")
-        .disassemble();
-    insta::assert_snapshot!(format!("{}{}", name, ".spvasm"), dis);
+#[cfg(feature = "glsl-out")]
+fn check_output_glsl(module: &naga::Module, name: &str, stage: naga::ShaderStage, ep_name: &str) {
+    use naga::back::glsl;
+
+    let options = glsl::Options {
+        version: glsl::Version::Embedded(310),
+        entry_point: (stage, ep_name.to_string()),
+    };
+
+    let mut buffer = Vec::new();
+    let mut writer = glsl::Writer::new(&mut buffer, &module, &options).unwrap();
+    writer.write().unwrap();
+
+    let string = String::from_utf8(buffer).unwrap();
+    insta::assert_snapshot!(format!("{}-{:?}.glsl", name, stage), string);
 }
 
 #[cfg(feature = "wgsl-in")]
-fn convert_wgsl(name: &str) {
+fn convert_wgsl(name: &str, language: Language) {
     let params =
         match std::fs::read_to_string(format!("tests/snapshots/in/{}{}", name, ".param.ron")) {
             Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
@@ -100,26 +133,42 @@ fn convert_wgsl(name: &str) {
     .unwrap();
     naga::proc::Validator::new().validate(&module).unwrap();
 
-    #[cfg(feature = "msl-out")]
-    check_output_msl(&module, name, &params);
     #[cfg(feature = "spv-out")]
-    check_output_spv(&module, name, &params);
+    {
+        if language.contains(Language::SPIRV) {
+            check_output_spv(&module, name, &params);
+        }
+    }
+    #[cfg(feature = "msl-out")]
+    {
+        if language.contains(Language::METAL) {
+            check_output_msl(&module, name, &params);
+        }
+    }
+    #[cfg(feature = "glsl-out")]
+    {
+        if language.contains(Language::GLSL) {
+            for &(stage, ref ep_name) in module.entry_points.keys() {
+                check_output_glsl(&module, name, stage, ep_name);
+            }
+        }
+    }
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn converts_wgsl_quad() {
-    convert_wgsl("quad");
+    convert_wgsl("quad", Language::all());
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn converts_wgsl_simple() {
-    convert_wgsl("simple");
+    convert_wgsl("simple", Language::all());
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn converts_wgsl_boids() {
-    convert_wgsl("boids");
+    convert_wgsl("boids", Language::METAL);
 }

@@ -222,22 +222,6 @@ impl<'a> Lexer<'a> {
         Ok(format)
     }
 
-    pub(super) fn take_until(&mut self, what: Token<'_>) -> Result<Lexer<'a>, Error<'a>> {
-        let original_input = self.input;
-        let initial_len = self.input.len();
-        let mut used_len = 0;
-        loop {
-            if self.next() == what {
-                break;
-            }
-            used_len = initial_len - self.input.len();
-        }
-
-        Ok(Lexer {
-            input: &original_input[..used_len],
-        })
-    }
-
     pub(super) fn offset_from(&self, source: &'a str) -> usize {
         source.len() - self.input.len()
     }

@@ -4,6 +4,18 @@ use super::parse_str;
 fn parse_types() {
     parse_str("const a : i32 = 2;").unwrap();
     assert!(parse_str("const a : x32 = 2;").is_err());
+    parse_str("var t: texture_2d<f32>;").unwrap();
+    parse_str("var t: texture_cube_array<i32>;").unwrap();
+    parse_str("var t: texture_multisampled_2d<u32>;").unwrap();
+    parse_str("var t: [[access(write)]] texture_storage_1d<rgba8uint>;").unwrap();
+    parse_str("var t: [[access(read)]] texture_storage_3d<r32float>;").unwrap();
+    parse_str(
+        "
+        [[block]] struct Foo { [[offset(0)]] x: i32; };
+        var s: [[access(read_write)]] Foo;
+    ",
+    )
+    .unwrap();
 }
 
 #[test]

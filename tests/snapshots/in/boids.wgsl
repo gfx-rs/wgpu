@@ -56,12 +56,12 @@ struct SimParams {
 
 [[block]]
 struct Particles {
-  [[offset(0)]] particles : [[stride 16]] array<Particle, 5>;
+  [[offset(0)]] particles : [[stride(16)]] array<Particle, 5>;
 };
 
 [[group(0), binding(0)]] var<uniform> params : SimParams;
-[[group(0), binding(1)]] var<storage> particlesA : Particles;
-[[group(0), binding(2)]] var<storage> particlesB : Particles;
+[[group(0), binding(1)]] var<storage> particlesA : [[access(read_write)]] Particles;
+[[group(0), binding(2)]] var<storage> particlesB : [[access(read_write)]] Particles;
 
 [[builtin(global_invocation_id)]] var gl_GlobalInvocationID : vec3<u32>;
 
