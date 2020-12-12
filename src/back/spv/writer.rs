@@ -1130,48 +1130,8 @@ impl Writer {
                     )?;
                     constituent_ids.push(component_id);
                 }
-                let constituent_ids_slice = constituent_ids.as_slice();
 
-                let id = match ir_module.types[ty].inner {
-                    crate::TypeInner::Vector { .. } => {
-                        self.write_composite_construct(base_type_id, constituent_ids_slice, block)
-                    }
-                    crate::TypeInner::Matrix {
-                        rows,
-                        columns,
-                        width,
-                    } => {
-                        let vector_type_id = self.get_type_id(
-                            &ir_module.types,
-                            LookupType::Local(LocalType::Vector {
-                                width,
-                                kind: crate::ScalarKind::Float,
-                                size: columns,
-                            }),
-                        )?;
-
-                        let capacity = match rows {
-                            crate::VectorSize::Bi => 2,
-                            crate::VectorSize::Tri => 3,
-                            crate::VectorSize::Quad => 4,
-                        };
-
-                        let mut vector_ids = Vec::with_capacity(capacity);
-
-                        for _ in 0..capacity {
-                            let vector_id = self.write_composite_construct(
-                                vector_type_id,
-                                constituent_ids_slice,
-                                block,
-                            );
-                            vector_ids.push(vector_id);
-                        }
-
-                        self.write_composite_construct(base_type_id, vector_ids.as_slice(), block)
-                    }
-                    _ => unreachable!(),
-                };
-
+                let id = self.write_composite_construct(base_type_id, &constituent_ids, block);
                 Ok((RawExpression::Value(id), LookupType::Handle(ty)))
             }
             crate::Expression::Binary { op, left, right } => {
