@@ -28,7 +28,7 @@ struct LocalVariable {
 
 enum RawExpression {
     Value(Word),
-    Pointer(Word),
+    Pointer(Word, spirv::StorageClass),
 }
 
 #[derive(Default)]
@@ -157,12 +157,14 @@ pub struct Writer {
     lookup_function: crate::FastHashMap<crate::Handle<crate::Function>, Word>,
     lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
     lookup_constant: crate::FastHashMap<crate::Handle<crate::Constant>, Word>,
-    lookup_global_variable: crate::FastHashMap<crate::Handle<crate::GlobalVariable>, Word>,
+    lookup_global_variable:
+        crate::FastHashMap<crate::Handle<crate::GlobalVariable>, (Word, spirv::StorageClass)>,
     storage_type_handles: crate::FastHashSet<crate::Handle<crate::Type>>,
 }
 
 // type alias, for success return of write_expression
 type WriteExpressionOutput = (Word, LookupType);
+type WritePointerExpressionOutput = (Word, LookupType, spirv::StorageClass);
 
 impl Writer {
     pub fn new(
@@ -246,13 +248,14 @@ impl Writer {
         &mut self,
         ir_module: &crate::Module,
         handle: crate::Handle<crate::GlobalVariable>,
-    ) -> Result<Word, Error> {
+    ) -> Result<(Word, spirv::StorageClass), Error> {
         Ok(match self.lookup_global_variable.entry(handle) {
             Entry::Occupied(e) => *e.get(),
+            //Note: this intentionally frees `self` from borrowing
             Entry::Vacant(_) => {
-                let (instruction, id) = self.write_global_variable(ir_module, handle)?;
+                let (instruction, id, class) = self.write_global_variable(ir_module, handle)?;
                 instruction.to_words(&mut self.logical_layout.declarations);
-                id
+                (id, class)
             }
         })
     }
@@ -429,7 +432,7 @@ impl Writer {
                 _ => false,
             };
             if is_io {
-                let id = self.get_global_variable_id(ir_module, handle)?;
+                let (id, _) = self.get_global_variable_id(ir_module, handle)?;
                 interface_ids.push(id);
             }
         }
@@ -777,7 +780,7 @@ impl Writer {
         &mut self,
         ir_module: &crate::Module,
         handle: crate::Handle<crate::GlobalVariable>,
-    ) -> Result<(Instruction, Word), Error> {
+    ) -> Result<(Instruction, Word, spirv::StorageClass), Error> {
         let global_variable = &ir_module.global_variables[handle];
         let id = self.generate_id();
 
@@ -873,8 +876,8 @@ impl Writer {
 
         // TODO Initializer is optional and not (yet) included in the IR
 
-        self.lookup_global_variable.insert(handle, id);
-        Ok((instruction, id))
+        self.lookup_global_variable.insert(handle, (id, class));
+        Ok((instruction, id, class))
     }
 
     fn get_function_type(
@@ -962,7 +965,7 @@ impl Writer {
             self.write_expression_raw(ir_module, ir_function, handle, block, function)?;
         Ok(match raw_expression {
             RawExpression::Value(id) => (id, lookup_ty),
-            RawExpression::Pointer(id) => {
+            RawExpression::Pointer(id, _) => {
                 let load_id = self.generate_id();
                 let type_id = self.get_type_id(&ir_module.types, lookup_ty)?;
                 block.body.push(super::instructions::instruction_load(
@@ -981,15 +984,16 @@ impl Writer {
         handle: crate::Handle<crate::Expression>,
         block: &mut Block,
         function: &mut Function,
-    ) -> Result<WriteExpressionOutput, Error> {
+    ) -> Result<WritePointerExpressionOutput, Error> {
         let (raw_expression, lookup_ty) =
             self.write_expression_raw(ir_module, ir_function, handle, block, function)?;
         Ok(match raw_expression {
             RawExpression::Value(_id) => {
                 //TODO: create a local variable?
+                log::error!("Pointer expression {:?}", ir_function.expressions[handle]);
                 return Err(Error::FeatureNotImplemented("getting pointer of a value"));
             }
-            RawExpression::Pointer(id) => (id, lookup_ty),
+            RawExpression::Pointer(id, class) => (id, lookup_ty, class),
         })
     }
 
@@ -1006,16 +1010,16 @@ impl Writer {
             crate::Expression::Access { base, index } => {
                 let id = self.generate_id();
 
-                let (base_id, base_lookup_ty) =
+                let (base_id, base_lookup_ty, class) =
                     self.write_expression_pointer(ir_module, ir_function, base, block, function)?;
                 let (index_id, _) =
                     self.write_expression(ir_module, ir_function, index, block, function)?;
 
                 let base_ty_inner = self.get_type_inner(&ir_module.types, base_lookup_ty);
-                let (pointer_id, lookup_ty) = match *base_ty_inner {
+                let (pointer_type_id, lookup_ty) = match *base_ty_inner {
                     crate::TypeInner::Vector { kind, width, .. } => self.create_pointer_type(
                         LocalType::Scalar { kind, width }.into(),
-                        spirv::StorageClass::Function,
+                        class,
                         &ir_module.types,
                     )?,
                     _ => return Err(Error::FeatureNotImplemented("accessing of non-vector")),
@@ -1024,28 +1028,28 @@ impl Writer {
                 block
                     .body
                     .push(super::instructions::instruction_access_chain(
-                        pointer_id,
+                        pointer_type_id,
                         id,
                         base_id,
                         &[index_id],
                     ));
 
-                Ok((RawExpression::Pointer(id), lookup_ty))
+                Ok((RawExpression::Pointer(id, class), lookup_ty))
             }
             crate::Expression::AccessIndex { base, index } => {
                 let id = self.generate_id();
-                let (base_id, base_lookup_ty) =
+                let (base_id, base_lookup_ty, class) =
                     self.write_expression_pointer(ir_module, ir_function, base, block, function)?;
 
                 let base_ty_inner = self.get_type_inner(&ir_module.types, base_lookup_ty);
-                let (pointer_id, lookup_ty) = match *base_ty_inner {
+                let (pointer_type_id, lookup_ty) = match *base_ty_inner {
                     crate::TypeInner::Vector {
                         size: _,
                         kind,
                         width,
                     } => self.create_pointer_type(
                         LocalType::Scalar { kind, width }.into(),
-                        spirv::StorageClass::Function,
+                        class,
                         &ir_module.types,
                     )?,
                     crate::TypeInner::Matrix {
@@ -1058,11 +1062,7 @@ impl Writer {
                             kind: crate::ScalarKind::Float,
                             width,
                         };
-                        self.create_pointer_type(
-                            local_type.into(),
-                            spirv::StorageClass::Function,
-                            &ir_module.types,
-                        )?
+                        self.create_pointer_type(local_type.into(), class, &ir_module.types)?
                     }
                     crate::TypeInner::Struct {
                         block: _,
@@ -1071,7 +1071,7 @@ impl Writer {
                         let member = &members[index as usize];
                         self.create_pointer_type(
                             LookupType::Handle(member.ty),
-                            spirv::StorageClass::Uniform,
+                            class,
                             &ir_module.types,
                         )?
                     }
@@ -1094,19 +1094,22 @@ impl Writer {
                 block
                     .body
                     .push(super::instructions::instruction_access_chain(
-                        pointer_id,
+                        pointer_type_id,
                         id,
                         base_id,
                         &[const_id],
                     ));
 
-                Ok((RawExpression::Pointer(id), lookup_ty))
+                Ok((RawExpression::Pointer(id, class), lookup_ty))
             }
             crate::Expression::GlobalVariable(handle) => {
                 let var = &ir_module.global_variables[handle];
-                let id = self.get_global_variable_id(&ir_module, handle)?;
+                let (id, class) = self.get_global_variable_id(&ir_module, handle)?;
 
-                Ok((RawExpression::Pointer(id), LookupType::Handle(var.ty)))
+                Ok((
+                    RawExpression::Pointer(id, class),
+                    LookupType::Handle(var.ty),
+                ))
             }
             crate::Expression::Constant(handle) => {
                 let var = &ir_module.constants[handle];
@@ -1322,14 +1325,17 @@ impl Writer {
                 let var = &ir_function.local_variables[variable];
                 let local_var = &function.variables[&variable];
                 Ok((
-                    RawExpression::Pointer(local_var.id),
+                    RawExpression::Pointer(local_var.id, spirv::StorageClass::Function),
                     LookupType::Handle(var.ty),
                 ))
             }
             crate::Expression::FunctionArgument(index) => {
                 let handle = ir_function.arguments[index as usize].ty;
                 let id = function.parameters[index as usize].result_id.unwrap();
-                Ok((RawExpression::Pointer(id), LookupType::Handle(handle)))
+                Ok((
+                    RawExpression::Pointer(id, spirv::StorageClass::Function),
+                    LookupType::Handle(handle),
+                ))
             }
             crate::Expression::Call {
                 function: local_function,
@@ -1537,7 +1543,7 @@ impl Writer {
                     });
                 }
                 crate::Statement::Store { pointer, value } => {
-                    let (pointer_id, _) = self.write_expression_pointer(
+                    let (pointer_id, _, _) = self.write_expression_pointer(
                         ir_module,
                         ir_function,
                         pointer,
