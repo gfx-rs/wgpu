@@ -375,13 +375,13 @@ pub(super) fn instruction_variable(
 pub(super) fn instruction_load(
     result_type_id: Word,
     id: Word,
-    pointer_type_id: Word,
+    pointer_id: Word,
     memory_access: Option<spirv::MemoryAccess>,
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::Load);
     instruction.set_type(result_type_id);
     instruction.set_result(id);
-    instruction.add_operand(pointer_type_id);
+    instruction.add_operand(pointer_id);
 
     if let Some(memory_access) = memory_access {
         instruction.add_operand(memory_access.bits());
