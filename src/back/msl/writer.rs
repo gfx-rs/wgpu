@@ -9,6 +9,8 @@ use std::{
     io::Write,
 };
 
+const NAMESPACE: &str = "metal";
+
 struct Level(usize);
 impl Level {
     fn next(&self) -> Self {
@@ -161,8 +163,11 @@ impl<W: Write> Writer<W> {
                         let name = &self.names[&NameKey::StructMember(base_ty, index)];
                         write!(self.out, ".{}", name)?;
                     }
-                    crate::TypeInner::Matrix { .. } | crate::TypeInner::Vector { .. } => {
+                    crate::TypeInner::Vector { .. } => {
                         write!(self.out, ".{}", COMPONENTS[index as usize])?;
+                    }
+                    crate::TypeInner::Matrix { .. } => {
+                        write!(self.out, "[{}]", index)?;
                     }
                     crate::TypeInner::Array { .. } => {
                         write!(self.out, "[{}]", index)?;
@@ -176,17 +181,30 @@ impl<W: Write> Writer<W> {
             crate::Expression::Compose { ty, ref components } => {
                 let inner = &context.module.types[ty].inner;
                 match *inner {
+                    crate::TypeInner::Scalar { width: 4, kind } if components.len() == 1 => {
+                        write!(self.out, "{}", scalar_kind_string(kind),)?;
+                        self.put_call("", components, context)?;
+                    }
                     crate::TypeInner::Vector { size, kind, .. } => {
                         write!(
                             self.out,
-                            "{}{}",
+                            "{}::{}{}",
+                            NAMESPACE,
                             scalar_kind_string(kind),
                             vector_size_string(size)
                         )?;
                         self.put_call("", components, context)?;
                     }
-                    crate::TypeInner::Scalar { width: 4, kind } if components.len() == 1 => {
-                        write!(self.out, "{}", scalar_kind_string(kind),)?;
+                    crate::TypeInner::Matrix { columns, rows, .. } => {
+                        let kind = crate::ScalarKind::Float;
+                        write!(
+                            self.out,
+                            "{}::{}{}x{}",
+                            NAMESPACE,
+                            scalar_kind_string(kind),
+                            vector_size_string(columns),
+                            vector_size_string(rows)
+                        )?;
                         self.put_call("", components, context)?;
                     }
                     _ => return Err(Error::UnsupportedCompose(ty)),
@@ -666,7 +684,8 @@ impl<W: Write> Writer<W> {
                 crate::TypeInner::Vector { size, kind, .. } => {
                     write!(
                         self.out,
-                        "typedef {}{} {}",
+                        "typedef {}::{}{} {}",
+                        NAMESPACE,
                         scalar_kind_string(kind),
                         vector_size_string(size),
                         name
@@ -675,7 +694,8 @@ impl<W: Write> Writer<W> {
                 crate::TypeInner::Matrix { columns, rows, .. } => {
                     write!(
                         self.out,
-                        "typedef {}{}x{} {}",
+                        "typedef {}::{}{}x{} {}",
+                        NAMESPACE,
                         scalar_kind_string(crate::ScalarKind::Float),
                         vector_size_string(columns),
                         vector_size_string(rows),
@@ -744,7 +764,7 @@ impl<W: Write> Writer<W> {
                         crate::ImageDimension::D1 => "1d",
                         crate::ImageDimension::D2 => "2d",
                         crate::ImageDimension::D3 => "3d",
-                        crate::ImageDimension::Cube => "Cube",
+                        crate::ImageDimension::Cube => "cube",
                     };
                     let (texture_str, msaa_str, kind, access) = match class {
                         crate::ImageClass::Sampled { kind, multi } => {
@@ -778,12 +798,20 @@ impl<W: Write> Writer<W> {
                     let array_str = if arrayed { "_array" } else { "" };
                     write!(
                         self.out,
-                        "typedef {}{}{}{}<{}, access::{}> {}",
-                        texture_str, dim_str, msaa_str, array_str, base_name, access, name
+                        "typedef {}::{}{}{}{}<{}, {}::access::{}> {}",
+                        NAMESPACE,
+                        texture_str,
+                        dim_str,
+                        msaa_str,
+                        array_str,
+                        base_name,
+                        NAMESPACE,
+                        access,
+                        name
                     )?;
                 }
                 crate::TypeInner::Sampler { comparison: _ } => {
-                    write!(self.out, "typedef sampler {}", name)?;
+                    write!(self.out, "typedef {}::sampler {}", NAMESPACE, name)?;
                 }
             }
             writeln!(self.out, ";")?;
