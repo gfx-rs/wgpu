@@ -196,32 +196,29 @@ fn main() {
         }
         #[cfg(feature = "glsl-out")]
         stage @ "vert" | stage @ "frag" | stage @ "comp" => {
-            use naga::{
-                back::glsl::{self, Options, Version},
-                ShaderStage,
-            };
+            use naga::back::glsl;
 
-            let version = match args.get(3).map(|p| p.as_str()) {
-                Some("core") => {
-                    Version::Desktop(args.get(4).and_then(|v| v.parse().ok()).unwrap_or(330))
+            let version = {
+                let arg = args.get(3).map_or("es", |p| p.as_str());
+                if arg.starts_with("core") {
+                    glsl::Version::Desktop(arg[4..].parse().unwrap_or(330))
+                } else if arg.starts_with("es") {
+                    glsl::Version::Embedded(arg[2..].parse().unwrap_or(310))
+                } else {
+                    panic!("Unknown profile: {}", arg)
                 }
-                Some("es") => {
-                    Version::Embedded(args.get(4).and_then(|v| v.parse().ok()).unwrap_or(310))
-                }
-                Some(_) => panic!("Unknown profile"),
-                _ => Version::Embedded(310),
             };
-
-            let options = Options {
+            let name = args.get(4).map_or("main", |p| p.as_str()).to_string();
+            let options = glsl::Options {
                 version,
                 entry_point: (
                     match stage {
-                        "vert" => ShaderStage::Vertex,
-                        "frag" => ShaderStage::Fragment,
-                        "comp" => ShaderStage::Compute,
+                        "vert" => naga::ShaderStage::Vertex,
+                        "frag" => naga::ShaderStage::Fragment,
+                        "comp" => naga::ShaderStage::Compute,
                         _ => unreachable!(),
                     },
-                    String::from("main"),
+                    name,
                 ),
             };
 
