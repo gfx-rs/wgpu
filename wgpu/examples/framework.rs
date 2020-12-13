@@ -168,7 +168,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
                 label: None,
                 features: (optional_features & adapter_features) | required_features,
                 limits: needed_limits,
-                shader_validation: true,
+                shader_validation: false,
             },
             trace_dir.ok().as_ref().map(std::path::Path::new),
         )

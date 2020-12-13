@@ -165,16 +165,6 @@ impl framework::Example for Skybox {
         let layer_size = wgpu::Extent3d { depth: 1, ..size };
         let max_mips = layer_size.max_mips();
 
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size,
-            mip_level_count: max_mips as u32,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: skybox_format,
-            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
-            label: None,
-        });
-
         log::debug!(
             "Copying {:?} skybox images of size {}, {}, 6 with {} mips to gpu",
             skybox_format,
@@ -193,60 +183,19 @@ impl framework::Example for Skybox {
 
         let image = ddsfile::Dds::read(&mut std::io::Cursor::new(&bytes)).unwrap();
 
-        let format_info = skybox_format.describe();
-
-        let mut binary_offset = 0;
-        for layer in 0..6 {
-            for mip in 0..max_mips {
-                let mip_size = layer_size.at_mip_level(mip).unwrap();
-
-                // When uploading mips of compressed textures and the mip is supposed to be
-                // a size that isn't a multiple of the block size, the mip needs to be uploaded
-                // as it's "physical size" which is the size rounded up to the nearest block size.
-                let mip_physical = mip_size.physical_size(skybox_format);
-
-                log::debug!(
-                    "Copying layer {} mip {} of virtual size ({}, {}) and physical size ({}, {})",
-                    layer,
-                    mip,
-                    mip_size.width,
-                    mip_size.height,
-                    mip_physical.width,
-                    mip_physical.height,
-                );
-
-                // All these calculations are performed on the physical size as that's the
-                // data that exists in the buffer.
-                let width_blocks = mip_physical.width / format_info.block_dimensions.0 as u32;
-                let height_blocks = mip_physical.height / format_info.block_dimensions.1 as u32;
-
-                let bytes_per_row = width_blocks * format_info.block_size as u32;
-                let data_size = bytes_per_row * height_blocks;
-
-                let end_offset = binary_offset + data_size as usize;
-
-                queue.write_texture(
-                    wgpu::TextureCopyView {
-                        texture: &texture,
-                        mip_level: mip as u32,
-                        origin: wgpu::Origin3d {
-                            x: 0,
-                            y: 0,
-                            z: layer,
-                        },
-                    },
-                    &image.data[binary_offset..end_offset],
-                    wgpu::TextureDataLayout {
-                        offset: 0,
-                        bytes_per_row,
-                        rows_per_image: 0,
-                    },
-                    mip_physical,
-                );
-
-                binary_offset = end_offset;
-            }
-        }
+        let texture = device.create_texture_with_data(
+            &queue,
+            &wgpu::TextureDescriptor {
+                size,
+                mip_level_count: max_mips as u32,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: skybox_format,
+                usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+                label: None,
+            },
+            &image.data,
+        );
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,
