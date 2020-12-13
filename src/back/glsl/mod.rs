@@ -1515,19 +1515,27 @@ impl<'a, W: Write> Writer<'a, W> {
                 kind,
                 convert,
             } => {
+                let inner = ctx.typifier.get(expr, &self.module.types);
                 if convert {
-                    self.write_type(ctx.typifier.get_handle(expr).unwrap())?;
-                } else {
-                    let source_kind = match *ctx.typifier.get(expr, &self.module.types) {
-                        TypeInner::Scalar {
-                            kind: source_kind, ..
-                        } => source_kind,
+                    // this is similar to `write_type`, but with the target kind
+                    match *inner {
+                        TypeInner::Scalar { kind: _, width } => {
+                            write!(self.out, "{}", glsl_scalar(kind, width)?.full)?
+                        }
                         TypeInner::Vector {
-                            kind: source_kind, ..
-                        } => source_kind,
-                        _ => unreachable!(),
-                    };
-
+                            size,
+                            kind: _,
+                            width,
+                        } => write!(
+                            self.out,
+                            "{}vec{}",
+                            glsl_scalar(kind, width)?.prefix,
+                            size as u8
+                        )?,
+                        ref other => unreachable!("unexpected cast of {:?}", other),
+                    }
+                } else {
+                    let source_kind = inner.scalar_kind().unwrap();
                     write!(
                         self.out,
                         "{}",
@@ -1657,8 +1665,8 @@ fn glsl_built_in(built_in: BuiltIn) -> &'static str {
         BuiltIn::BaseInstance => "gl_BaseInstance",
         BuiltIn::BaseVertex => "gl_BaseVertex",
         BuiltIn::ClipDistance => "gl_ClipDistance",
-        BuiltIn::InstanceIndex => "gl_InstanceIndex",
-        BuiltIn::VertexIndex => "gl_VertexIndex",
+        BuiltIn::InstanceIndex => "gl_InstanceID",
+        BuiltIn::VertexIndex => "gl_VertexID",
         BuiltIn::PointSize => "gl_PointSize",
         BuiltIn::FragCoord => "gl_FragCoord",
         BuiltIn::FrontFacing => "gl_FrontFacing",
