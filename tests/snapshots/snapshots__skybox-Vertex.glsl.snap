@@ -1,0 +1,30 @@
+---
+source: tests/snapshots.rs
+expression: string
+---
+#version 310 es
+
+precision highp float;
+
+
+struct Data {
+	mat4x4 proj_inv;
+	mat4x4 view;
+};
+
+out vec3 out_uv;
+uniform Data r_data;
+
+void main() {
+	int tmp1_;
+	int tmp2_;
+	vec4 unprojected;
+
+	tmp1_ = (int(gl_VertexID) / 2);
+	tmp2_ = (int(gl_VertexID) & 1);
+	unprojected = (r_data.proj_inv * vec4(((float(tmp1_) * 4.0) - 1.0), ((float(tmp2_) * 4.0) - 1.0), 0.0, 1.0));
+	out_uv = (transpose(mat3x3(vec3(r_data.view[0][0], r_data.view[0][1], r_data.view[0][2]), vec3(r_data.view[1][0], r_data.view[1][1], r_data.view[1][2]), vec3(r_data.view[2][0], r_data.view[2][1], r_data.view[2][2]))) * vec3(unprojected[0], unprojected[1], unprojected[2]));
+	gl_Position = vec4(((float(tmp1_) * 4.0) - 1.0), ((float(tmp2_) * 4.0) - 1.0), 0.0, 1.0);
+	return;
+}
+

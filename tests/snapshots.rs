@@ -1,3 +1,11 @@
+bitflags::bitflags! {
+    struct Language: u32 {
+        const SPIRV = 0x1;
+        const METAL = 0x2;
+        const GLSL = 0x4;
+    }
+}
+
 #[derive(Hash, PartialEq, Eq, serde::Deserialize)]
 enum Stage {
     Vertex,
@@ -37,14 +45,6 @@ struct Parameters {
     spv_capabilities: naga::FastHashSet<spirv::Capability>,
     #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     mtl_bindings: naga::FastHashMap<BindSource, BindTarget>,
-}
-
-bitflags::bitflags! {
-    struct Language: u32 {
-        const SPIRV = 0x1;
-        const METAL = 0x2;
-        const GLSL = 0x4;
-    }
 }
 
 #[cfg(feature = "spv-out")]
@@ -169,4 +169,10 @@ fn converts_wgsl_simple() {
 #[test]
 fn converts_wgsl_boids() {
     convert_wgsl("boids", Language::METAL);
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn converts_wgsl_skybox() {
+    convert_wgsl("skybox", Language::all());
 }

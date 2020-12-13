@@ -1,0 +1,9 @@
+(
+	spv_flow_dump_prefix: "",
+	spv_capabilities: [ Shader ],
+	mtl_bindings: {
+		(stage: Vertex, group: 0, binding: 0): (buffer: Some(0)),
+		(stage: Fragment, group: 0, binding: 1): (texture: Some(0)),
+		(stage: Fragment, group: 0, binding: 2): (sampler: Some(1)),
+	}
+)

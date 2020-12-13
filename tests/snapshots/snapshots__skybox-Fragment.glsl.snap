@@ -1,0 +1,24 @@
+---
+source: tests/snapshots.rs
+expression: string
+---
+#version 310 es
+
+precision highp float;
+
+
+struct Data {
+	mat4x4 proj_inv;
+	mat4x4 view;
+};
+
+uniform samplerCube r_texture;
+in vec3 in_uv;
+out vec4 out_color;
+
+void main() {
+
+	out_color = texture(r_texture, vec3(in_uv));
+	return;
+}
+
