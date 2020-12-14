@@ -6,11 +6,10 @@ pomelo! {
     %include {
         use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{
-            proc::{ensure_block_returns, Typifier},
             Arena, BinaryOperator, Binding, Block, Constant,
             ConstantInner, EntryPoint, Expression,
             Function, GlobalVariable, Handle, Interpolation,
-            LocalVariable, SampleLevel, ScalarValue,
+            LocalVariable, ScalarValue,
             Statement, StorageAccess, StorageClass, StructMember,
             SwitchCase, Type, TypeInner, UnaryOperator,
         };
@@ -232,63 +231,7 @@ pomelo! {
     integer_expression ::= expression;
 
     function_call ::= function_call_or_method(fc) {
-        match fc.kind {
-            FunctionCallKind::TypeConstructor(ty) => {
-                let h = if fc.args.len() == 1 {
-                    let kind = extra.module.types[ty].inner
-                        .scalar_kind()
-                        .ok_or(ErrorKind::SemanticError("Can only cast to scalar or vector"))?;
-                    extra.context.expressions.append(Expression::As {
-                        kind,
-                        expr: fc.args[0].expression,
-                        convert: true,
-                    })
-                } else {
-                    extra.context.expressions.append(Expression::Compose {
-                        ty,
-                        components: fc.args.iter().map(|a| a.expression).collect(),
-                    })
-                };
-                ExpressionRule {
-                    expression: h,
-                    statements: fc.args.into_iter().map(|a| a.statements).flatten().collect(),
-                    sampler: None
-                }
-            }
-            FunctionCallKind::Function(name) => {
-                match name.as_str() {
-                    "sampler2D" => {
-                        //TODO: check args len
-                        ExpressionRule{
-                            expression: fc.args[0].expression,
-                            sampler: Some(fc.args[1].expression),
-                            statements: fc.args.into_iter().map(|a| a.statements).flatten().collect(),
-                        }
-                    }
-                    "texture" => {
-                        //TODO: check args len
-                        if let Some(sampler) = fc.args[0].sampler {
-                            ExpressionRule{
-                                expression: extra.context.expressions.append(Expression::ImageSample {
-                                    image: fc.args[0].expression,
-                                    sampler,
-                                    coordinate: fc.args[1].expression,
-                                    array_index: None, //TODO
-                                    offset: None, //TODO
-                                    level: SampleLevel::Auto,
-                                    depth_ref: None,
-                                }),
-                                sampler: None,
-                                statements: fc.args.into_iter().map(|a| a.statements).flatten().collect(),
-                            }
-                        } else {
-                            return Err(ErrorKind::SemanticError("Bad call to texture"));
-                        }
-                    }
-                    _ => { return Err(ErrorKind::NotImplemented("Function call")); }
-                }
-            }
-        }
+       extra.function_call(fc)?
     }
     function_call_or_method ::= function_call_generic;
     function_call_generic ::= function_call_header_with_parameters(h) RightParen {
@@ -995,34 +938,7 @@ pomelo! {
 
     // function
     function_prototype ::= function_declarator(f) RightParen {
-        // prelude, add global var expressions
-        for (var_handle, var) in extra.module.global_variables.iter() {
-            if let Some(name) = var.name.as_ref() {
-                let exp = extra.context.expressions.append(
-                    Expression::GlobalVariable(var_handle)
-                );
-                extra.context.lookup_global_var_exps.insert(name.clone(), exp);
-            } else {
-                let ty = &extra.module.types[var.ty];
-                // anonymous structs
-                if let TypeInner::Struct { block: _, ref members } = ty.inner {
-                    let base = extra.context.expressions.append(
-                        Expression::GlobalVariable(var_handle)
-                    );
-                    for (idx, member) in members.iter().enumerate() {
-                        if let Some(name) = member.name.as_ref() {
-                            let exp = extra.context.expressions.append(
-                                Expression::AccessIndex{
-                                    base,
-                                    index: idx as u32,
-                                }
-                            );
-                            extra.context.lookup_global_var_exps.insert(name.clone(), exp);
-                        }
-                    }
-                }
-            }
-        }
+        extra.add_function_prelude();
         f
     }
     function_declarator ::= function_header;
@@ -1116,16 +1032,8 @@ pomelo! {
         }
     }
 
-    function_definition ::= function_prototype(mut f) compound_statement_no_new_scope(mut cs) {
-        std::mem::swap(&mut f.expressions, &mut extra.context.expressions);
-        std::mem::swap(&mut f.local_variables, &mut extra.context.local_variables);
-        extra.context.clear_scopes();
-        extra.context.lookup_global_var_exps.clear();
-        extra.context.typifier = Typifier::new();
-        ensure_block_returns(&mut cs);
-        f.body = cs;
-        f.fill_global_use(&extra.module.global_variables);
-        f
+    function_definition ::= function_prototype(f) compound_statement_no_new_scope(cs) {
+        extra.function_definition(f, cs)
     };
 }
 
