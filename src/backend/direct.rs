@@ -225,7 +225,7 @@ mod pass_impl {
             offset: wgt::BufferAddress,
             size: Option<wgt::BufferSize>,
         ) {
-            wgpu_render_pass_set_index_buffer(self, buffer.id, index_format, offset, size)
+            self.set_index_buffer(buffer.id, index_format, offset, size)
         }
         fn set_vertex_buffer(
             &mut self,
@@ -420,7 +420,7 @@ mod pass_impl {
             offset: wgt::BufferAddress,
             size: Option<wgt::BufferSize>,
         ) {
-            wgpu_render_bundle_set_index_buffer(self, buffer.id, index_format, offset, size)
+            self.set_index_buffer(buffer.id, index_format, offset, size)
         }
         fn set_vertex_buffer(
             &mut self,
