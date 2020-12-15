@@ -81,6 +81,7 @@ async fn create_red_image_with_dimensions(
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                 attachment: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                 resolve_target: None,
