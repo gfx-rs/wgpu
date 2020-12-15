@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fmt,
     future::Future,
     marker::PhantomData,
@@ -1045,7 +1046,14 @@ impl crate::Context for Context {
             crate::ShaderSource::SpirV(ref spv) => {
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&**spv))
             }
-            crate::ShaderSource::Wgsl(_) => panic!("WGSL is not yet supported by the Web backend"),
+            crate::ShaderSource::Wgsl(ref code) => {
+                use naga::{back::spv, front::wgsl};
+                let module = wgsl::parse_str(code).unwrap();
+                let mut capabilities = HashSet::default();
+                capabilities.insert(spv::Capability::Shader);
+                let words = spv::write_vec(&module, spv::WriterFlags::NONE, capabilities).unwrap();
+                web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&words[..]))
+            }
         };
         if let Some(ref label) = desc.label {
             descriptor.label(label);

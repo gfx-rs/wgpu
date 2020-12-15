@@ -1,6 +1,7 @@
 #[path = "../framework.rs"]
 mod framework;
 
+use std::borrow::Cow;
 use wgpu::util::DeviceExt;
 
 const IMAGE_SIZE: u32 = 128;
@@ -26,6 +27,8 @@ pub struct Skybox {
 
 impl Skybox {
     fn generate_uniforms(aspect_ratio: f32) -> Uniforms {
+        use cgmath::SquareMatrix;
+
         let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 10.0);
         let mx_view = cgmath::Matrix4::look_at_rh(
             cgmath::Point3::new(1.5f32, -5.0, 3.0),
@@ -33,7 +36,8 @@ impl Skybox {
             cgmath::Vector3::unit_z(),
         );
         let mx_correction = framework::OPENGL_TO_WGPU_MATRIX;
-        [mx_correction * mx_projection, mx_correction * mx_view]
+        let proj_inv = (mx_correction * mx_projection).invert().unwrap();
+        [proj_inv, mx_correction * mx_view]
     }
 }
 
@@ -46,7 +50,7 @@ impl framework::Example for Skybox {
 
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        _adapter: &wgpu::Adapter,
+        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -86,13 +90,23 @@ impl framework::Example for Skybox {
         });
 
         // Create the render pipeline
-        let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
-        let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
+        let mut flags = wgpu::ShaderFlags::VALIDATION;
+        match adapter.get_info().backend {
+            wgpu::Backend::Metal | wgpu::Backend::Vulkan => {
+                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION
+            }
+            _ => (), //TODO
+        }
+        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            flags,
+        });
 
         let aspect = sc_desc.width as f32 / sc_desc.height as f32;
         let uniforms = Self::generate_uniforms(aspect);
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("  Buffer"),
+            label: Some("Buffer"),
             contents: bytemuck::cast_slice(&raw_uniforms(&uniforms)),
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         });
@@ -108,13 +122,13 @@ impl framework::Example for Skybox {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &vs_module,
-                entry_point: "main",
+                module: &shader,
+                entry_point: "vs_main",
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &fs_module,
-                entry_point: "main",
+                module: &shader,
+                entry_point: "fs_main",
                 targets: &[sc_desc.format.into()],
             }),
             primitive: wgpu::PrimitiveState {

@@ -1,4 +1,4 @@
-use std::{convert::TryInto, str::FromStr};
+use std::{borrow::Cow, convert::TryInto, str::FromStr};
 use wgpu::util::DeviceExt;
 
 async fn run() {
@@ -44,7 +44,18 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         .unwrap();
 
     // Loads the shader from the SPIR-V file.arrayvec
-    let cs_module = device.create_shader_module(&wgpu::include_spirv!("shader.comp.spv"));
+    let mut flags = wgpu::ShaderFlags::VALIDATION;
+    match adapter.get_info().backend {
+        wgpu::Backend::Vulkan | wgpu::Backend::Metal => {
+            flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION;
+        }
+        _ => {}
+    }
+    let cs_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+        flags,
+    });
 
     // Gets the size in bytes of the buffer.
     let slice_size = numbers.len() * std::mem::size_of::<u32>();
