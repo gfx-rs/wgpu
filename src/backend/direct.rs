@@ -730,7 +730,7 @@ impl crate::Context for Context {
         let global = &self.0;
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
             label: desc.label.map(Borrowed),
-            experimental_translation: desc.experimental_translation,
+            flags: desc.flags,
         };
         let source = match desc.source {
             ShaderSource::SpirV(ref spv) => wgc::pipeline::ShaderModuleSource::SpirV(Borrowed(spv)),

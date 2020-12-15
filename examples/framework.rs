@@ -142,7 +142,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
             compatible_surface: Some(&surface),
         })
         .await
-        .unwrap();
+        .expect("No suitable GPU adapters found on the system!");
 
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -168,12 +168,11 @@ async fn setup<E: Example>(title: &str) -> Setup {
                 label: None,
                 features: (optional_features & adapter_features) | required_features,
                 limits: needed_limits,
-                shader_validation: false,
             },
             trace_dir.ok().as_ref().map(std::path::Path::new),
         )
         .await
-        .unwrap();
+        .expect("Unable to find a suitable GPU adapter!");
 
     Setup {
         window,
