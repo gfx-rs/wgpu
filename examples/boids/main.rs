@@ -274,6 +274,7 @@ impl framework::Example for Example {
             },
         }];
         let render_pass_descriptor = wgpu::RenderPassDescriptor {
+            label: None,
             color_attachments: &color_attachments,
             depth_stencil_attachment: None,
         };
@@ -285,7 +286,8 @@ impl framework::Example for Example {
         command_encoder.push_debug_group("compute boid movement");
         {
             // compute pass
-            let mut cpass = command_encoder.begin_compute_pass();
+            let mut cpass =
+                command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
             cpass.set_pipeline(&self.compute_pipeline);
             cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]);
             cpass.dispatch(self.work_group_count, 1, 1);

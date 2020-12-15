@@ -1,8 +1,8 @@
 use crate::{
     backend::{error::ContextError, native_gpu_future},
     BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, CommandEncoderDescriptor,
-    ComputePipelineDescriptor, Features, Label, Limits, LoadOp, MapMode, Operations,
-    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
+    ComputePassDescriptor, ComputePipelineDescriptor, Features, Label, Limits, LoadOp, MapMode,
+    Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderSource, SwapChainStatus, TextureDescriptor,
     TextureViewDescriptor,
 };
@@ -1503,8 +1503,14 @@ impl crate::Context for Context {
     fn command_encoder_begin_compute_pass(
         &self,
         encoder: &Self::CommandEncoderId,
+        desc: &ComputePassDescriptor,
     ) -> Self::ComputePassId {
-        wgc::command::ComputePass::new(encoder.id)
+        wgc::command::ComputePass::new(
+            encoder.id,
+            &wgc::command::ComputePassDescriptor {
+                label: desc.label.map(Borrowed),
+            },
+        )
     }
 
     fn command_encoder_end_compute_pass(
@@ -1553,7 +1559,8 @@ impl crate::Context for Context {
 
         wgc::command::RenderPass::new(
             encoder.id,
-            wgc::command::RenderPassDescriptor {
+            &wgc::command::RenderPassDescriptor {
+                label: desc.label.map(Borrowed),
                 color_attachments: Borrowed(&colors),
                 depth_stencil_attachment: depth_stencil.as_ref(),
             },

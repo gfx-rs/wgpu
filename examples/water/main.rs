@@ -710,6 +710,7 @@ impl framework::Example for Example {
         // First pass: render the reflection.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &self.reflect_view,
                     resolve_target: None,
@@ -738,6 +739,7 @@ impl framework::Example for Example {
         // depth values, so we must use StoreOp::Store.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
@@ -764,6 +766,7 @@ impl framework::Example for Example {
         // to it, so it cannot be in the same render pass.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
