@@ -67,9 +67,9 @@ mod features;
 mod keywords;
 
 /// List of supported core glsl versions
-const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450];
+pub const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450];
 /// List of supported es glsl versions
-const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310];
+pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
 
 /// glsl version
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -287,6 +287,7 @@ impl<'a, W: Write> Writer<'a, W> {
     pub fn new(out: W, module: &'a Module, options: &'a Options) -> Result<Self, Error> {
         // Check if the requested version is supported
         if !options.version.is_supported() {
+            log::error!("Version {}", options.version);
             return Err(Error::VersionNotSupported);
         }
 

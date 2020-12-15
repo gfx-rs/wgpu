@@ -822,8 +822,8 @@ impl Writer {
             }
         }
 
-        match global_variable.binding.clone().unwrap() {
-            crate::Binding::Location(location) => {
+        match global_variable.binding {
+            Some(crate::Binding::Location(location)) => {
                 self.annotations
                     .push(super::instructions::instruction_decorate(
                         id,
@@ -831,7 +831,7 @@ impl Writer {
                         &[location],
                     ));
             }
-            crate::Binding::Resource { group, binding } => {
+            Some(crate::Binding::Resource { group, binding }) => {
                 self.annotations
                     .push(super::instructions::instruction_decorate(
                         id,
@@ -845,7 +845,7 @@ impl Writer {
                         &[binding],
                     ));
             }
-            crate::Binding::BuiltIn(built_in) => {
+            Some(crate::Binding::BuiltIn(built_in)) => {
                 let built_in = match built_in {
                     crate::BuiltIn::BaseInstance => spirv::BuiltIn::BaseInstance,
                     crate::BuiltIn::BaseVertex => spirv::BuiltIn::BaseVertex,
@@ -872,6 +872,7 @@ impl Writer {
                         &[built_in as u32],
                     ));
             }
+            None => {}
         }
 
         // TODO Initializer is optional and not (yet) included in the IR

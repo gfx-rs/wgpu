@@ -193,7 +193,9 @@ impl<'a, W> Writer<'a, W> {
             match ty.inner {
                 TypeInner::Scalar { kind, width } => self.scalar_required_features(kind, width),
                 TypeInner::Vector { kind, width, .. } => self.scalar_required_features(kind, width),
-                TypeInner::Matrix { width, .. } => self.scalar_required_features(ScalarKind::Float, width),
+                TypeInner::Matrix { width, .. } => {
+                    self.scalar_required_features(ScalarKind::Float, width)
+                }
                 TypeInner::Array { base, .. } => {
                     if let TypeInner::Array { .. } = self.module.types[base].inner {
                         self.features.request(Features::ARRAY_OF_ARRAYS)
