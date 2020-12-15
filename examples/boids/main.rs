@@ -1,6 +1,7 @@
 // Flocking boids example with gpu compute update pass
 // adapted from https://github.com/austinEng/webgpu-samples/blob/master/src/examples/computeBoids.ts
 
+use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 
 #[path = "../framework.rs"]
@@ -29,15 +30,28 @@ impl framework::Example for Example {
     /// constructs initial instance of Example struct
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        _adapter: &wgpu::Adapter,
+        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        // load (and compile) shaders and create shader modules
-
-        let boids_module = device.create_shader_module(&wgpu::include_spirv!("boids.comp.spv"));
-        let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
-        let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
+        // load and compile the shader
+        let mut flags = wgpu::ShaderFlags::VALIDATION;
+        match adapter.get_info().backend {
+            wgt::Backend::Vulkan => {
+                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION;
+            }
+            _ => {} //TODO
+        }
+        let compute_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("compute.wgsl"))),
+            flags,
+        });
+        let draw_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
+            flags,
+        });
 
         // buffer for simulation parameters uniform
 
@@ -69,7 +83,7 @@ impl framework::Example for Example {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: wgpu::BufferSize::new(
-                                (sim_param_data.len() * std::mem::size_of::<f32>()) as _,
+                                (sim_param_data.len() * mem::size_of::<f32>()) as _,
                             ),
                         },
                         count: None,
@@ -78,7 +92,7 @@ impl framework::Example for Example {
                         binding: 1,
                         visibility: wgpu::ShaderStage::COMPUTE,
                         ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,
                             min_binding_size: wgpu::BufferSize::new((NUM_PARTICLES * 16) as _),
                         },
@@ -117,7 +131,7 @@ impl framework::Example for Example {
             label: None,
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &vs_module,
+                module: &draw_shader,
                 entry_point: "main",
                 buffers: &[
                     wgpu::VertexBufferLayout {
@@ -133,7 +147,7 @@ impl framework::Example for Example {
                 ],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &fs_module,
+                module: &draw_shader,
                 entry_point: "main",
                 targets: &[sc_desc.format.into()],
             }),
@@ -147,7 +161,7 @@ impl framework::Example for Example {
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Compute pipeline"),
             layout: Some(&compute_pipeline_layout),
-            module: &boids_module,
+            module: &compute_shader,
             entry_point: "main",
         });
 

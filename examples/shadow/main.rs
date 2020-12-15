@@ -1,4 +1,4 @@
-use std::{iter, mem, num::NonZeroU32, ops::Range, rc::Rc};
+use std::{borrow::Cow, iter, mem, num::NonZeroU32, ops::Range, rc::Rc};
 
 #[path = "../framework.rs"]
 mod framework;
@@ -135,7 +135,7 @@ impl Light {
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
-struct ForwardUniforms {
+struct GlobalUniforms {
     proj: [[f32; 4]; 4],
     num_lights: [u32; 4],
 }
@@ -145,11 +145,6 @@ struct ForwardUniforms {
 struct EntityUniforms {
     model: [[f32; 4]; 4],
     color: [f32; 4],
-}
-
-#[repr(C)]
-struct ShadowUniforms {
-    proj: [[f32; 4]; 4],
 }
 
 struct Pass {
@@ -166,7 +161,7 @@ struct Example {
     forward_pass: Pass,
     forward_depth: wgpu::TextureView,
     entity_bind_group: wgpu::BindGroup,
-    light_uniform_buf: wgpu::Buffer,
+    light_storage_buf: wgpu::Buffer,
     entity_uniform_buf: wgpu::Buffer,
 }
 
@@ -199,7 +194,7 @@ impl framework::Example for Example {
 
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        _adapter: &wgpu::Adapter,
+        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
@@ -408,10 +403,10 @@ impl framework::Example for Example {
         ];
         let light_uniform_size =
             (Self::MAX_LIGHTS * mem::size_of::<LightRaw>()) as wgpu::BufferAddress;
-        let light_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        let light_storage_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: light_uniform_size,
-            usage: wgpu::BufferUsage::UNIFORM
+            usage: wgpu::BufferUsage::STORAGE
                 | wgpu::BufferUsage::COPY_SRC
                 | wgpu::BufferUsage::COPY_DST,
             mapped_at_creation: false,
@@ -424,8 +419,21 @@ impl framework::Example for Example {
             attributes: &vertex_attr,
         };
 
+        let mut flags = wgpu::ShaderFlags::VALIDATION;
+        match adapter.get_info().backend {
+            wgpu::Backend::Vulkan => {
+                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION;
+            }
+            _ => (), //TODO
+        }
+        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            flags,
+        });
+
         let shadow_pass = {
-            let uniform_size = mem::size_of::<ShadowUniforms>() as wgpu::BufferAddress;
+            let uniform_size = mem::size_of::<GlobalUniforms>() as wgpu::BufferAddress;
             // Create pipeline layout
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -465,14 +473,12 @@ impl framework::Example for Example {
             });
 
             // Create the render pipeline
-            let vs_module = device.create_shader_module(&wgpu::include_spirv!("bake.vert.spv"));
-
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("shadow"),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
-                    module: &vs_module,
-                    entry_point: "main",
+                    module: &shader,
+                    entry_point: "vs_bake",
                     buffers: &[vb_desc.clone()],
                 },
                 fragment: None,
@@ -515,11 +521,9 @@ impl framework::Example for Example {
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Uniform,
                                 has_dynamic_offset: false,
-                                min_binding_size: wgpu::BufferSize::new(mem::size_of::<
-                                    ForwardUniforms,
-                                >(
-                                )
-                                    as _),
+                                min_binding_size: wgpu::BufferSize::new(
+                                    mem::size_of::<GlobalUniforms>() as _,
+                                ),
                             },
                             count: None,
                         },
@@ -527,7 +531,7 @@ impl framework::Example for Example {
                             binding: 1, // lights
                             visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Uniform,
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
                                 has_dynamic_offset: false,
                                 min_binding_size: wgpu::BufferSize::new(light_uniform_size),
                             },
@@ -562,7 +566,7 @@ impl framework::Example for Example {
             });
 
             let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
-            let forward_uniforms = ForwardUniforms {
+            let forward_uniforms = GlobalUniforms {
                 proj: *mx_total.as_ref(),
                 num_lights: [lights.len() as u32, 0, 0, 0],
             };
@@ -582,7 +586,7 @@ impl framework::Example for Example {
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: light_uniform_buf.as_entire_binding(),
+                        resource: light_storage_buf.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
@@ -597,20 +601,17 @@ impl framework::Example for Example {
             });
 
             // Create the render pipeline
-            let vs_module = device.create_shader_module(&wgpu::include_spirv!("forward.vert.spv"));
-            let fs_module = device.create_shader_module(&wgpu::include_spirv!("forward.frag.spv"));
-
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("main"),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
-                    module: &vs_module,
-                    entry_point: "main",
+                    module: &shader,
+                    entry_point: "vs_main",
                     buffers: &[vb_desc],
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &fs_module,
-                    entry_point: "main",
+                    module: &shader,
+                    entry_point: "fs_main",
                     targets: &[sc_desc.format.into()],
                 }),
                 primitive: wgpu::PrimitiveState {
@@ -657,7 +658,7 @@ impl framework::Example for Example {
             shadow_pass,
             forward_pass,
             forward_depth: depth_texture.create_view(&wgpu::TextureViewDescriptor::default()),
-            light_uniform_buf,
+            light_storage_buf,
             entity_uniform_buf,
             entity_bind_group,
         }
@@ -731,7 +732,7 @@ impl framework::Example for Example {
             self.lights_are_dirty = false;
             for (i, light) in self.lights.iter().enumerate() {
                 queue.write_buffer(
-                    &self.light_uniform_buf,
+                    &self.light_storage_buf,
                     (i * mem::size_of::<LightRaw>()) as wgpu::BufferAddress,
                     bytemuck::bytes_of(&light.to_raw()),
                 );
@@ -751,7 +752,7 @@ impl framework::Example for Example {
             // The light uniform buffer already has the projection,
             // let's just copy it over to the shadow uniform buffer.
             encoder.copy_buffer_to_buffer(
-                &self.light_uniform_buf,
+                &self.light_storage_buf,
                 (i * mem::size_of::<LightRaw>()) as wgpu::BufferAddress,
                 &self.shadow_pass.uniform_buf,
                 0,

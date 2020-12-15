@@ -50,21 +50,25 @@ tracing = { version = "0.1", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
-cgmath = "0.18"
-log = "0.4"
-png = "0.16"
-winit = { version = "0.24.0", features = ["web-sys"] }
-rand = { version = "0.7.2", features = ["wasm-bindgen"] }
 bytemuck = { version = "1.4", features = ["derive"] }
-noise = "0.7"
+cgmath = "0.18"
 ddsfile = "0.4"
+log = "0.4"
+naga = { git = "https://github.com/gfx-rs/naga", tag = "gfx-8", features = ["wgsl-in"] }
+noise = "0.7"
+png = "0.16"
+rand = { version = "0.7.2", features = ["wasm-bindgen"] }
+winit = { version = "0.24.0", features = ["web-sys"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 async-executor = "1.0"
 pollster = "0.2"
+wgpu-subscriber = "0.1"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.wgpu-subscriber]
-version = "0.1"
+[target.'cfg(target_arch = "wasm32")'.dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-8"
+features = ["wgsl-in", "spv-out"]
 
 [[example]]
 name="hello-compute"
