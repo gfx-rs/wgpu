@@ -39,7 +39,6 @@ async fn create_red_image_with_dimensions(
                 label: None,
                 features: wgpu::Features::empty(),
                 limits: wgpu::Limits::default(),
-                shader_validation: true,
             },
             None,
         )

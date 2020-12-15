@@ -25,13 +25,13 @@ vulkan-portability = ["wgc/gfx-backend-vulkan"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "42a8dc5b343b1c882d7c5bb03b0718602ea03915"
+rev = "89e585af615c5ed2050a1cab7225f6e92a26b3ba"
 features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "42a8dc5b343b1c882d7c5bb03b0718602ea03915"
+rev = "89e585af615c5ed2050a1cab7225f6e92a26b3ba"
 
 [dependencies]
 arrayvec = "0.5"
@@ -42,14 +42,6 @@ smallvec = "1"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 typed-arena = "2.0.1"
 serde = { version = "1", features = ["derive"], optional = true }
-
-# Enable X11 support for GL
-# Note: we may consider switching this to "dev-dependencies" if users
-# want to opt into X11 explicitly.
-[target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies.gfx-backend-gl]
-git = "https://github.com/gfx-rs/gfx"
-rev = "f1398d29c7ad726968723a37187bd3932c539783"
-features = ["x11"]
 
 [dev-dependencies]
 cgmath = "0.17"

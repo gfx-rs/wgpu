@@ -37,7 +37,6 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
                 label: None,
                 features: wgpu::Features::empty(),
                 limits: wgpu::Limits::default(),
-                shader_validation: true,
             },
             None,
         )
