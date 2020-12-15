@@ -359,6 +359,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn command_encoder_begin_compute_pass(
         &self,
         encoder: &Self::CommandEncoderId,
+        desc: &ComputePassDescriptor,
     ) -> Self::ComputePassId;
     fn command_encoder_end_compute_pass(
         &self,
@@ -1115,6 +1116,8 @@ pub struct ProgrammableStageDescriptor<'a> {
 /// Describes the attachments of a render pass.
 #[derive(Clone, Debug, Default)]
 pub struct RenderPassDescriptor<'a, 'b> {
+    /// Debug label of the render pass. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
     /// The color attachments of the render pass.
     pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],
     /// The depth and stencil attachment of the render pass, if any.
@@ -1155,6 +1158,13 @@ pub struct RenderPipelineDescriptor<'a> {
     /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
     /// is guaranteed to be all 1-s.
     pub alpha_to_coverage_enabled: bool,
+}
+
+/// Describes the attachments of a compute pass.
+#[derive(Clone, Debug, Default)]
+pub struct ComputePassDescriptor<'a> {
+    /// Debug label of the compute pass. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
 }
 
 /// Describes a compute pipeline.
@@ -1848,9 +1858,9 @@ impl CommandEncoder {
     /// Begins recording of a compute pass.
     ///
     /// This function returns a [`ComputePass`] object which records a single compute pass.
-    pub fn begin_compute_pass(&mut self) -> ComputePass {
+    pub fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor) -> ComputePass {
         ComputePass {
-            id: Context::command_encoder_begin_compute_pass(&*self.context, &self.id),
+            id: Context::command_encoder_begin_compute_pass(&*self.context, &self.id, desc),
             parent: self,
         }
     }

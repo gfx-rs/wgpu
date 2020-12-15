@@ -270,6 +270,7 @@ impl framework::Example for Example {
 
             encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
                     color_attachments: &[rpass_color_attachment],
                     depth_stencil_attachment: None,
                 })

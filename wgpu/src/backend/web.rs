@@ -1,10 +1,10 @@
 use crate::{
     BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BindingType,
-    BufferBindingType, BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor,
-    LoadOp, PipelineLayoutDescriptor, ProgrammableStageDescriptor, RenderBundleEncoderDescriptor,
-    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor, ShaderSource,
-    StorageTextureAccess, SwapChainStatus, TextureDescriptor, TextureViewDescriptor,
-    TextureViewDimension,
+    BufferBindingType, BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor,
+    ComputePipelineDescriptor, LoadOp, PipelineLayoutDescriptor, ProgrammableStageDescriptor,
+    RenderBundleEncoderDescriptor, RenderPipelineDescriptor, SamplerDescriptor,
+    ShaderModuleDescriptor, ShaderSource, StorageTextureAccess, SwapChainStatus, TextureDescriptor,
+    TextureViewDescriptor, TextureViewDimension,
 };
 
 use futures::FutureExt;
@@ -972,9 +972,7 @@ impl crate::Context for Context {
             ShaderSource::SpirV(ref spv) => {
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&**spv))
             }
-            ShaderSource::Wgsl(_) => {
-                panic!("WGSL is not yet supported by the Web backend")
-            }
+            ShaderSource::Wgsl(_) => panic!("WGSL is not yet supported by the Web backend"),
         };
         if let Some(ref label) = desc.label {
             descriptor.label(label);
@@ -1546,9 +1544,10 @@ impl crate::Context for Context {
     fn command_encoder_begin_compute_pass(
         &self,
         encoder: &Self::CommandEncoderId,
+        desc: &ComputePassDescriptor,
     ) -> Self::ComputePassId {
         let mut mapped_desc = web_sys::GpuComputePassDescriptor::new();
-        if let Some(ref label) = encoder.label() {
+        if let Some(ref label) = desc.label {
             mapped_desc.label(label);
         }
         ComputePass(encoder.begin_compute_pass_with_descriptor(&mapped_desc))
