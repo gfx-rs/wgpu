@@ -93,7 +93,6 @@ impl Test<'_> {
                 label: None,
                 features: self.features | wgt::Features::MAPPABLE_PRIMARY_BUFFERS,
                 limits: wgt::Limits::default(),
-                shader_validation: true,
             },
             None,
             device

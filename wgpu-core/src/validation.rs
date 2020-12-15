@@ -215,7 +215,10 @@ fn get_aligned_type_size(
             Some(stride) => stride.get() as wgt::BufferAddress,
             None => get_aligned_type_size(module, base, false),
         },
-        Ti::Struct { ref members } => members.last().map_or(0, |member| {
+        Ti::Struct {
+            block: _,
+            ref members,
+        } => members.last().map_or(0, |member| {
             let offset = match member.origin {
                 naga::MemberOrigin::Empty => 0,
                 naga::MemberOrigin::BuiltIn(_) => {
@@ -681,7 +684,10 @@ impl Interface {
                 _ => continue,
             };
             let ty = match module.types[var.ty].inner {
-                naga::TypeInner::Struct { ref members } => {
+                naga::TypeInner::Struct {
+                    block: true,
+                    ref members,
+                } => {
                     let mut actual_size = 0;
                     for (i, member) in members.iter().enumerate() {
                         actual_size +=

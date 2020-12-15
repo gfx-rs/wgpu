@@ -11,8 +11,8 @@ use crate::{
     id, pipeline, resource, span, swap_chain,
     track::{BufferState, TextureSelector, TextureState, TrackerSet},
     validation::{self, check_buffer_usage, check_texture_usage},
-    FastHashMap, Label, LabelHelpers, LifeGuard, MultiRefCount, PrivateFeatures, Stored,
-    SubmissionIndex, MAX_BIND_GROUPS,
+    FastHashMap, FastHashSet, Label, LabelHelpers, LifeGuard, MultiRefCount, PrivateFeatures,
+    Stored, SubmissionIndex, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -232,6 +232,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) private_features: PrivateFeatures,
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
+    spirv_capabilities: FastHashSet<naga::back::spv::Capability>,
     //TODO: move this behind another mutex. This would allow several methods to switch
     // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
     pending_writes: queue::PendingWrites<B>,
@@ -256,6 +257,8 @@ impl<B: GfxBackend> Device<B> {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Self, CreateDeviceError> {
+        use naga::back::spv::Capability as C;
+
         let cmd_allocator = command::CommandAllocator::new(queue_group.family, &raw)
             .or(Err(CreateDeviceError::OutOfMemory))?;
 
@@ -266,6 +269,12 @@ impl<B: GfxBackend> Device<B> {
             Some(_) => tracing::error!("Feature 'trace' is not enabled"),
             None => (),
         }
+
+        let mut spirv_capabilities = FastHashSet::default();
+        spirv_capabilities.insert(C::Shader);
+        spirv_capabilities.insert(C::Matrix);
+        spirv_capabilities.insert(C::Sampled1D);
+        spirv_capabilities.insert(C::Image1D);
 
         Ok(Self {
             raw,
@@ -299,6 +308,7 @@ impl<B: GfxBackend> Device<B> {
             private_features,
             limits: desc.limits.clone(),
             features: desc.features.clone(),
+            spirv_capabilities,
             pending_writes: queue::PendingWrites::new(),
         })
     }
@@ -876,10 +886,13 @@ impl<B: GfxBackend> Device<B> {
         let naga_result = match module {
             // If succeeded, then validate it and attempt to give it to gfx-hal directly.
             Some(module) => {
-                if self.private_features.shader_validation {
+                if desc.flags.contains(wgt::ShaderFlags::VALIDATION) {
                     naga::proc::Validator::new().validate(&module)?;
                 }
-                if desc.experimental_translation {
+                if desc
+                    .flags
+                    .contains(wgt::ShaderFlags::EXPERIMENTAL_TRANSLATION)
+                {
                     match unsafe { self.raw.create_shader_module_from_naga(module) } {
                         Ok(raw) => Ok(raw),
                         Err((hal::device::ShaderError::CompilationFailed(msg), module)) => {
@@ -900,7 +913,7 @@ impl<B: GfxBackend> Device<B> {
             Ok(raw) => Ok(raw),
             Err(maybe_module) => {
                 let spv = match spv {
-                    Some(data) => data,
+                    Some(data) => Ok(data),
                     None => {
                         // Produce a SPIR-V from the Naga module
                         let module = maybe_module.unwrap();
@@ -908,11 +921,17 @@ impl<B: GfxBackend> Device<B> {
                         if cfg!(debug_assertions) {
                             flags |= naga::back::spv::WriterFlags::DEBUG;
                         }
-                        let data = naga::back::spv::write_vec(&module, flags);
-                        Cow::Owned(data)
+                        naga::back::spv::write_vec(&module, flags, self.spirv_capabilities.clone())
+                            .map(Cow::Owned)
                     }
                 };
-                unsafe { self.raw.create_shader_module(&spv) }
+                match spv {
+                    Ok(data) => unsafe { self.raw.create_shader_module(&data) },
+                    Err(e) => Err(hal::device::ShaderError::CompilationFailed(format!(
+                        "{}",
+                        e
+                    ))),
+                }
             }
         };
 
@@ -1719,13 +1738,14 @@ impl<B: GfxBackend> Device<B> {
             .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
 
         let pipeline_desc = hal::pso::ComputePipelineDesc {
+            label: desc.label.as_ref().map(AsRef::as_ref),
             shader,
             layout: &layout.raw,
             flags,
             parent,
         };
 
-        let mut raw = match unsafe { self.raw.create_compute_pipeline(&pipeline_desc, None) } {
+        let raw = match unsafe { self.raw.create_compute_pipeline(&pipeline_desc, None) } {
             Ok(pipeline) => pipeline,
             Err(hal::pso::CreationError::OutOfMemory(_)) => {
                 return Err(pipeline::CreateComputePipelineError::Device(
@@ -1734,9 +1754,6 @@ impl<B: GfxBackend> Device<B> {
             }
             other => panic!("Compute pipeline creation error: {:?}", other),
         };
-        if let Some(ref label) = desc.label {
-            unsafe { self.raw.set_compute_pipeline_name(&mut raw, label) };
-        }
 
         let pipeline = pipeline::ComputePipeline {
             raw,
@@ -2099,6 +2116,7 @@ impl<B: GfxBackend> Device<B> {
 
         let mut render_pass_cache = self.render_passes.lock();
         let pipeline_desc = hal::pso::GraphicsPipelineDesc {
+            label: desc.label.as_ref().map(AsRef::as_ref),
             primitive_assembler,
             rasterizer,
             fragment,
@@ -2123,7 +2141,7 @@ impl<B: GfxBackend> Device<B> {
             parent,
         };
         // TODO: cache
-        let mut raw = unsafe {
+        let raw = unsafe {
             self.raw
                 .create_graphics_pipeline(&pipeline_desc, None)
                 .map_err(|err| match err {
@@ -2131,9 +2149,6 @@ impl<B: GfxBackend> Device<B> {
                     _ => panic!("failed to create graphics pipeline: {}", err),
                 })?
         };
-        if let Some(ref label) = desc.label {
-            unsafe { self.raw.set_graphics_pipeline_name(&mut raw, label) };
-        }
 
         let pass_context = RenderPassContext {
             attachments: AttachmentData {

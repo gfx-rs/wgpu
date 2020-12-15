@@ -36,7 +36,7 @@ features = ["replay", "raw-window-handle"]
 
 #[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies.gfx-backend-metal]
 #git = "https://github.com/gfx-rs/gfx"
-#rev = "f1398d29c7ad726968723a37187bd3932c539783"
+#rev = "" # insert revision here
 #features = ["auto-capture"]
 
 [dependencies.wgpu-subscriber]

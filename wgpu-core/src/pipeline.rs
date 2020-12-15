@@ -25,11 +25,8 @@ pub enum ShaderModuleSource<'a> {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
-    /// If enabled, `wgpu` will attempt to operate on `Naga` representation
-    /// of the shader module for both validation and translation into the
-    /// backend shader languages, where `gfx-hal` supports this.
     #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
-    pub experimental_translation: bool,
+    pub flags: wgt::ShaderFlags,
 }
 
 #[derive(Debug)]
