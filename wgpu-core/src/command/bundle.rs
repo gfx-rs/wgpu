@@ -93,7 +93,7 @@ impl RenderBundleEncoder {
     ) -> Result<Self, CreateRenderBundleError> {
         span!(_guard, INFO, "RenderBundleEncoder::new");
         Ok(Self {
-            base: base.unwrap_or_else(BasePass::new),
+            base: base.unwrap_or_else(|| BasePass::new(&desc.label)),
             parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
@@ -114,7 +114,7 @@ impl RenderBundleEncoder {
 
     pub fn dummy(parent_id: id::DeviceId) -> Self {
         Self {
-            base: BasePass::new(),
+            base: BasePass::new(&None),
             parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
@@ -419,9 +419,9 @@ impl RenderBundleEncoder {
             }
         }
 
-        let _ = desc.label; //TODO: actually use
         Ok(RenderBundle {
             base: BasePass {
+                label: desc.label.as_ref().map(|cow| cow.to_string()),
                 commands,
                 dynamic_offsets: state.flat_dynamic_offsets,
                 string_data: Vec::new(),
@@ -517,6 +517,9 @@ impl RenderBundle {
 
         let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
+        if let Some(ref label) = self.base.label {
+            cmd_buf.begin_debug_marker(label, 0);
+        }
 
         for command in self.base.commands.iter() {
             match *command {
@@ -677,6 +680,10 @@ impl RenderBundle {
                 | RenderCommand::SetViewport { .. }
                 | RenderCommand::SetScissor(_) => unreachable!(),
             }
+        }
+
+        if let Some(_) = self.base.label {
+            cmd_buf.end_debug_marker();
         }
 
         Ok(())

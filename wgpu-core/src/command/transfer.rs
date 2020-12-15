@@ -404,14 +404,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dst: destination_offset,
             size,
         };
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {
-            cmb_raw.pipeline_barrier(
+            cmd_buf_raw.pipeline_barrier(
                 all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 barriers,
             );
-            cmb_raw.copy_buffer(src_raw, dst_raw, iter::once(region));
+            cmd_buf_raw.copy_buffer(src_raw, dst_raw, iter::once(region));
         }
         Ok(())
     }
@@ -539,14 +539,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             image_offset: dst_offset,
             image_extent: conv::map_extent(&image_extent, dst_texture.dimension),
         };
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {
-            cmb_raw.pipeline_barrier(
+            cmd_buf_raw.pipeline_barrier(
                 all_buffer_stages() | all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 src_barriers.chain(dst_barriers),
             );
-            cmb_raw.copy_buffer_to_image(
+            cmd_buf_raw.copy_buffer_to_image(
                 src_raw,
                 dst_raw,
                 hal::image::Layout::TransferDstOptimal,
@@ -680,14 +680,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             image_offset: src_offset,
             image_extent: conv::map_extent(&image_extent, src_texture.dimension),
         };
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {
-            cmb_raw.pipeline_barrier(
+            cmd_buf_raw.pipeline_barrier(
                 all_buffer_stages() | all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 src_barriers.chain(dst_barrier),
             );
-            cmb_raw.copy_image_to_buffer(
+            cmd_buf_raw.copy_image_to_buffer(
                 src_raw,
                 hal::image::Layout::TransferSrcOptimal,
                 dst_raw,
@@ -817,14 +817,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dst_offset,
             extent: conv::map_extent(&image_extent, src_texture.dimension),
         };
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {
-            cmb_raw.pipeline_barrier(
+            cmd_buf_raw.pipeline_barrier(
                 all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 barriers,
             );
-            cmb_raw.copy_image(
+            cmd_buf_raw.copy_image(
                 src_raw,
                 hal::image::Layout::TransferSrcOptimal,
                 dst_raw,

@@ -87,37 +87,30 @@ impl<B: GfxBackend> CommandAllocator<B> {
         #[cfg(feature = "trace")] enable_tracing: bool,
     ) -> Result<CommandBuffer<B>, CommandAllocatorError> {
         //debug_assert_eq!(device_id.backend(), B::VARIANT);
-        let _ = label; // silence warning on release
         let thread_id = thread::current().id();
         let mut inner = self.inner.lock();
 
         use std::collections::hash_map::Entry;
-        let pool = match inner.pools.entry(thread_id) {
-            Entry::Occupied(e) => e.into_mut(),
-            Entry::Vacant(e) => {
-                tracing::info!("Starting on thread {:?}", thread_id);
-                let raw = unsafe {
-                    device
-                        .create_command_pool(
-                            self.queue_family,
-                            hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
-                        )
-                        .or(Err(DeviceError::OutOfMemory))?
-                };
-                let pool = CommandPool {
-                    raw,
-                    total: 0,
-                    available: Vec::new(),
-                    pending: Vec::new(),
-                };
-                e.insert(pool)
-            }
-        };
-
-        let init = pool.allocate();
+        if let Entry::Vacant(e) = inner.pools.entry(thread_id) {
+            tracing::info!("Starting on thread {:?}", thread_id);
+            let raw = unsafe {
+                device
+                    .create_command_pool(
+                        self.queue_family,
+                        hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
+                    )
+                    .or(Err(DeviceError::OutOfMemory))?
+            };
+            e.insert(CommandPool {
+                raw,
+                total: 0,
+                available: Vec::new(),
+                pending: Vec::new(),
+            });
+        }
 
         Ok(CommandBuffer {
-            raw: vec![init],
+            raw: Vec::new(),
             is_recording: true,
             recorded_thread_id: thread_id,
             device_id,
@@ -131,7 +124,6 @@ impl<B: GfxBackend> CommandAllocator<B> {
             } else {
                 None
             },
-            #[cfg(debug_assertions)]
             label: label.to_string_or_default(),
         })
     }
@@ -209,15 +201,26 @@ impl<B: hal::Backend> CommandAllocator<B> {
             .push((raw, submit_index));
     }
 
-    pub fn after_submit(&self, cmd_buf: CommandBuffer<B>, submit_index: SubmissionIndex) {
+    pub fn after_submit(
+        &self,
+        cmd_buf: CommandBuffer<B>,
+        device: &B::Device,
+        submit_index: SubmissionIndex,
+    ) {
         // Record this command buffer as pending
         let mut inner = self.inner.lock();
+        let clear_label = !cmd_buf.label.is_empty();
         inner
             .pools
             .get_mut(&cmd_buf.recorded_thread_id)
             .unwrap()
             .pending
-            .extend(cmd_buf.raw.into_iter().map(|raw| (raw, submit_index)));
+            .extend(cmd_buf.raw.into_iter().map(|mut raw| {
+                if clear_label {
+                    unsafe { device.set_command_buffer_name(&mut raw, "") };
+                }
+                (raw, submit_index)
+            }));
     }
 
     pub fn maintain(&self, device: &B::Device, last_done_index: SubmissionIndex) {
