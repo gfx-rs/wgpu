@@ -768,6 +768,7 @@ impl framework::Example for Example {
             encoder.insert_debug_marker("render entities");
             {
                 let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
                     color_attachments: &[],
                     depth_stencil_attachment: Some(
                         wgpu::RenderPassDepthStencilAttachmentDescriptor {
@@ -799,6 +800,7 @@ impl framework::Example for Example {
         encoder.push_debug_group("forward rendering pass");
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
