@@ -118,12 +118,14 @@ impl<B: GfxBackend> CommandAllocator<B> {
             used_swap_chain: None,
             limits,
             private_features,
+            has_labels: label.is_some(),
             #[cfg(feature = "trace")]
             commands: if enable_tracing {
                 Some(Vec::new())
             } else {
                 None
             },
+            #[cfg(debug_assertions)]
             label: label.to_string_or_default(),
         })
     }
@@ -209,7 +211,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
     ) {
         // Record this command buffer as pending
         let mut inner = self.inner.lock();
-        let clear_label = !cmd_buf.label.is_empty();
+        let clear_label = cmd_buf.has_labels;
         inner
             .pools
             .get_mut(&cmd_buf.recorded_thread_id)

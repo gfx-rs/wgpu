@@ -499,6 +499,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         unsafe {
             if let Some(ref label) = base.label {
+                cmd_buf.has_labels = true;
                 device.raw.set_command_buffer_name(&mut raw, label);
             }
             raw.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);

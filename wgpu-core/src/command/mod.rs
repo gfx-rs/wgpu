@@ -45,8 +45,10 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) used_swap_chain: Option<(Stored<id::SwapChainId>, B::Framebuffer)>,
     limits: wgt::Limits,
     private_features: PrivateFeatures,
+    has_labels: bool,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
+    #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
 
