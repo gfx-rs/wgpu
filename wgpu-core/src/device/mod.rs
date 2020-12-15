@@ -1725,7 +1725,7 @@ impl<B: GfxBackend> Device<B> {
             parent,
         };
 
-        let raw = match unsafe { self.raw.create_compute_pipeline(&pipeline_desc, None) } {
+        let mut raw = match unsafe { self.raw.create_compute_pipeline(&pipeline_desc, None) } {
             Ok(pipeline) => pipeline,
             Err(hal::pso::CreationError::OutOfMemory(_)) => {
                 return Err(pipeline::CreateComputePipelineError::Device(
@@ -1734,8 +1734,8 @@ impl<B: GfxBackend> Device<B> {
             }
             other => panic!("Compute pipeline creation error: {:?}", other),
         };
-        if let Some(_) = desc.label {
-            //TODO-0.6: self.raw.set_compute_pipeline_name(&mut raw, label);
+        if let Some(ref label) = desc.label {
+            unsafe { self.raw.set_compute_pipeline_name(&mut raw, label) };
         }
 
         let pipeline = pipeline::ComputePipeline {
@@ -2123,7 +2123,7 @@ impl<B: GfxBackend> Device<B> {
             parent,
         };
         // TODO: cache
-        let raw = unsafe {
+        let mut raw = unsafe {
             self.raw
                 .create_graphics_pipeline(&pipeline_desc, None)
                 .map_err(|err| match err {
@@ -2131,8 +2131,8 @@ impl<B: GfxBackend> Device<B> {
                     _ => panic!("failed to create graphics pipeline: {}", err),
                 })?
         };
-        if let Some(_) = desc.label {
-            //TODO-0.6: self.set_graphics_pipeline_name(&mut raw, label)
+        if let Some(ref label) = desc.label {
+            unsafe { self.raw.set_graphics_pipeline_name(&mut raw, label) };
         }
 
         let pass_context = RenderPassContext {
@@ -3391,15 +3391,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
 
+            let mut raw = device.cmd_allocator.extend(&command_buffer);
             unsafe {
-                let raw_command_buffer = command_buffer.raw.last_mut().unwrap();
                 if let Some(ref label) = desc.label {
-                    device
-                        .raw
-                        .set_command_buffer_name(raw_command_buffer, label);
+                    device.raw.set_command_buffer_name(&mut raw, label);
                 }
-                raw_command_buffer.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+                raw.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
             }
+            command_buffer.raw.push(raw);
 
             let id = hub
                 .command_buffers

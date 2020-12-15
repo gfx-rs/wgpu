@@ -626,9 +626,10 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
         }
         for element in self.command_buffers.data.write().map.drain(..) {
             if let Element::Occupied(command_buffer, _) = element {
-                devices[command_buffer.device_id.value]
+                let device = &devices[command_buffer.device_id.value];
+                device
                     .cmd_allocator
-                    .after_submit(command_buffer, 0);
+                    .after_submit(command_buffer, &device.raw, 0);
             }
         }
         for element in self.bind_groups.data.write().map.drain(..) {

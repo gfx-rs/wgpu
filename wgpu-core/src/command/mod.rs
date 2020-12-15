@@ -47,7 +47,6 @@ pub struct CommandBuffer<B: hal::Backend> {
     private_features: PrivateFeatures,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
-    #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
 
@@ -120,6 +119,7 @@ impl<B: hal::Backend> crate::hub::Resource for CommandBuffer<B> {
 
 #[derive(Copy, Clone, Debug)]
 pub struct BasePassRef<'a, C> {
+    pub label: Option<&'a str>,
     pub commands: &'a [C],
     pub dynamic_offsets: &'a [wgt::DynamicOffset],
     pub string_data: &'a [u8],
@@ -137,6 +137,7 @@ pub struct BasePassRef<'a, C> {
     derive(serde::Deserialize)
 )]
 pub struct BasePass<C> {
+    pub label: Option<String>,
     pub commands: Vec<C>,
     pub dynamic_offsets: Vec<wgt::DynamicOffset>,
     pub string_data: Vec<u8>,
@@ -144,8 +145,9 @@ pub struct BasePass<C> {
 }
 
 impl<C: Clone> BasePass<C> {
-    fn new() -> Self {
+    fn new(label: &Label) -> Self {
         Self {
+            label: label.as_ref().map(|cow| cow.to_string()),
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
@@ -156,6 +158,7 @@ impl<C: Clone> BasePass<C> {
     #[cfg(feature = "trace")]
     fn from_ref(base: BasePassRef<C>) -> Self {
         Self {
+            label: base.label.map(str::to_string),
             commands: base.commands.to_vec(),
             dynamic_offsets: base.dynamic_offsets.to_vec(),
             string_data: base.string_data.to_vec(),
@@ -165,6 +168,7 @@ impl<C: Clone> BasePass<C> {
 
     pub fn as_ref(&self) -> BasePassRef<C> {
         BasePassRef {
+            label: self.label.as_ref().map(String::as_str),
             commands: &self.commands,
             dynamic_offsets: &self.dynamic_offsets,
             string_data: &self.string_data,
@@ -227,10 +231,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
-            cmb_raw.begin_debug_marker(label, 0);
+            cmd_buf_raw.begin_debug_marker(label, 0);
         }
         Ok(())
     }
@@ -247,10 +251,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
-            cmb_raw.insert_debug_marker(label, 0);
+            cmd_buf_raw.insert_debug_marker(label, 0);
         }
         Ok(())
     }
@@ -266,10 +270,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
-            cmb_raw.end_debug_marker();
+            cmd_buf_raw.end_debug_marker();
         }
         Ok(())
     }

@@ -23,11 +23,11 @@ use crate::{
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
     },
-    Stored, MAX_BIND_GROUPS,
+    Label, Stored, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
-use hal::command::CommandBuffer as _;
+use hal::{command::CommandBuffer as _, device::Device as _};
 use thiserror::Error;
 use wgt::{
     BufferAddress, BufferSize, BufferUsage, Color, IndexFormat, InputStepMode, TextureUsage,
@@ -138,6 +138,7 @@ impl DepthStencilAttachmentDescriptor {
 /// Describes the attachments of a render pass.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RenderPassDescriptor<'a> {
+    pub label: Label<'a>,
     /// The color attachments of the render pass.
     pub color_attachments: Cow<'a, [ColorAttachmentDescriptor]>,
     /// The depth and stencil attachment of the render pass, if any.
@@ -153,9 +154,9 @@ pub struct RenderPass {
 }
 
 impl RenderPass {
-    pub fn new(parent_id: id::CommandEncoderId, desc: RenderPassDescriptor) -> Self {
+    pub fn new(parent_id: id::CommandEncoderId, desc: &RenderPassDescriptor) -> Self {
         Self {
-            base: BasePass::new(),
+            base: BasePass::new(&desc.label),
             parent_id,
             color_targets: desc.color_attachments.iter().cloned().collect(),
             depth_stencil_target: desc.depth_stencil_attachment.cloned(),
@@ -497,6 +498,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         unsafe {
+            if let Some(ref label) = base.label {
+                device.raw.set_command_buffer_name(&mut raw, label);
+            }
             raw.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
         }
 

@@ -15,7 +15,7 @@ use crate::{
     span,
     track::{TrackerSet, UsageConflict},
     validation::{check_buffer_usage, MissingBufferUsageError},
-    MAX_BIND_GROUPS,
+    Label, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -70,9 +70,9 @@ pub struct ComputePass {
 }
 
 impl ComputePass {
-    pub fn new(parent_id: id::CommandEncoderId) -> Self {
+    pub fn new(parent_id: id::CommandEncoderId, desc: &ComputePassDescriptor) -> Self {
         Self {
-            base: BasePass::new(),
+            base: BasePass::new(&desc.label),
             parent_id,
         }
     }
@@ -99,10 +99,9 @@ impl fmt::Debug for ComputePass {
     }
 }
 
-#[repr(C)]
 #[derive(Clone, Debug, Default)]
-pub struct ComputePassDescriptor {
-    pub todo: u32,
+pub struct ComputePassDescriptor<'a> {
+    pub label: Label<'a>,
 }
 
 #[derive(Clone, Debug, Error, PartialEq)]
@@ -249,6 +248,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             list.push(crate::device::trace::Command::RunComputePass {
                 base: BasePass::from_ref(base),
             });
+        }
+
+        if let Some(ref label) = base.label {
+            unsafe {
+                raw.begin_debug_marker(label, 0);
+            }
         }
 
         let (_, mut token) = hub.render_bundles.read(&mut token);
@@ -507,6 +512,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     unsafe { raw.insert_debug_marker(label, color) }
                     base.string_data = &base.string_data[len..];
                 }
+            }
+        }
+
+        if let Some(_) = base.label {
+            unsafe {
+                raw.end_debug_marker();
             }
         }
 
