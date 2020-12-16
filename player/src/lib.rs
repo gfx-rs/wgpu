@@ -294,6 +294,9 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.queue_write_texture::<B>(device, &to, &bin, &layout, &size)
                     .unwrap();
             }
+            A::Submit(_index, ref commands) if commands.is_empty() => {
+                self.queue_submit::<B>(device, &[]).unwrap();
+            }
             A::Submit(_index, commands) => {
                 let (encoder, error) = self.device_create_command_encoder::<B>(
                     device,
