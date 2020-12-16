@@ -483,7 +483,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
                 let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
 
-                {
+                if !command_buffer_ids.is_empty() {
                     let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
                     let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
                     let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
