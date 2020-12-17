@@ -13,29 +13,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-10.15, ubuntu-18.04, windows-2019]
-        include:
-          - os: macos-10.15
-            PREPARE_COMMAND: echo "Ready"
-            CHECK_COMMAND: cargo check --all-targets --all-features
-            TEST_COMMAND: cargo test --all-targets --no-run
-          - os: ubuntu-18.04
-            PREPARE_COMMAND: |
-              sudo apt-get update -y -qq
-              sudo apt-get install -y -qq libegl1-mesa-dev
-            CHECK_COMMAND: cargo check --all-targets --all-features
-            TEST_COMMAND: cargo test --all-targets --no-run
-          - os: windows-2019
-            PREPARE_COMMAND: rustup default stable-msvc
-            CHECK_COMMAND: cargo check --all-targets --all-features
-            TEST_COMMAND: cargo test --all-targets --no-run
     steps:
     - uses: actions/checkout@v2
-    - name: Prepare
-      run: ${{ matrix.PREPARE_COMMAND }}
-    - name: Check
-      run: ${{ matrix.CHECK_COMMAND }}
-    - name: Test
-      run: ${{ matrix.TEST_COMMAND }}
+    - run: cargo check --all-targets --all-features
+    - run: cargo test --all-targets --no-run
 
   wasm:
     runs-on: [ubuntu-18.04]
@@ -44,8 +25,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - run: rustup target add wasm32-unknown-unknown
-    - name: Check
-      run: cargo check --all-targets --all-features --target=wasm32-unknown-unknown
+    - run: cargo check --all-targets --all-features --target=wasm32-unknown-unknown
 
   docs:
     runs-on: [ubuntu-18.04]
