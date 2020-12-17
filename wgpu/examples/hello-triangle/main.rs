@@ -25,7 +25,6 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
                 label: None,
                 features: wgpu::Features::empty(),
                 limits: wgpu::Limits::default(),
-                shader_validation: true,
             },
             None,
         )
@@ -36,7 +35,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
     let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        experimental_translation: true,
+        flags: wgpu::ShaderFlags::all(),
     });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
