@@ -230,15 +230,15 @@ macro_rules! gfx_select {
         // Note: For some reason the cfg aliases defined in build.rs don't succesfully apply in this
         // macro so we must specify their equivalents manually
         match $id.backend() {
-            #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+            #[cfg(all(not(target_arch = "wasm32"), any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan")))]
             wgt::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),* ),
-            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
             wgt::Backend::Metal => $global.$method::<$crate::backend::Metal>( $($param),* ),
-            #[cfg(windows)]
+            #[cfg(all(not(target_arch = "wasm32"), windows))]
             wgt::Backend::Dx12 => $global.$method::<$crate::backend::Dx12>( $($param),* ),
-            #[cfg(windows)]
+            #[cfg(all(not(target_arch = "wasm32"), windows))]
             wgt::Backend::Dx11 => $global.$method::<$crate::backend::Dx11>( $($param),* ),
-            #[cfg(all(unix, not(any(target_os = "ios", target_os = "macos"))))]
+            #[cfg(any(target_arch = "wasm32", all(unix, not(any(target_os = "ios", target_os = "macos")))))]
             wgt::Backend::Gl => $global.$method::<$crate::backend::Gl>( $($param),+ ),
             other => panic!("Unexpected backend {:?}", other),
         }
