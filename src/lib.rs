@@ -38,7 +38,7 @@ pub use wgt::{
     DepthStencilStateDescriptor, DynamicOffset, Extent3d, Features, FilterMode, FrontFace,
     IndexFormat, InputStepMode, Limits, Origin3d, PolygonMode, PowerPreference, PresentMode,
     PrimitiveTopology, PushConstantRange, RasterizationStateDescriptor, SamplerBorderColor,
-    ShaderLocation, ShaderStage, StencilOperation, StencilStateDescriptor,
+    ShaderFlags, ShaderLocation, ShaderStage, StencilOperation, StencilStateDescriptor,
     StencilStateFaceDescriptor, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus,
     TextureAspect, TextureDataLayout, TextureDimension, TextureFormat, TextureSampleType,
     TextureUsage, TextureViewDimension, VertexAttributeDescriptor, VertexFormat,
@@ -694,8 +694,8 @@ pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
     /// Source code for the shader.
     pub source: ShaderSource<'a>,
-    /// Experimental translation path attempts to avoid SPIR-V and work with Naga IR directly.
-    pub experimental_translation: bool,
+    /// Shader handling flags.
+    pub flags: ShaderFlags,
 }
 
 /// Handle to a pipeline layout.

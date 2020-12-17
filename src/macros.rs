@@ -52,7 +52,7 @@ macro_rules! include_spirv {
             $crate::ShaderModuleDescriptor {
                 label: Some($($token)*),
                 source: $crate::util::make_spirv(include_bytes!($($token)*)),
-                experimental_translation: false,
+                flags: $crate::ShaderFlags::VALIDATION,
             }
         }
     };
