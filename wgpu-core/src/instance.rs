@@ -363,11 +363,7 @@ impl<B: GfxBackend> Adapter<B> {
         }
 
         let mem_props = phd.memory_properties();
-        if !desc.shader_validation {
-            tracing::warn!("Shader validation is disabled");
-        }
         let private_features = PrivateFeatures {
-            shader_validation: desc.shader_validation,
             anisotropic_filtering: enabled_features.contains(hal::Features::SAMPLER_ANISOTROPY),
             texture_d24: phd
                 .format_properties(Some(hal::format::Format::X8D24Unorm))

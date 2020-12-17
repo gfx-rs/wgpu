@@ -26,11 +26,7 @@ jobs:
       PKG_CONFIG_ALLOW_CROSS: 1
     steps:
       - uses: actions/checkout@v2
-      - name: Prepare
-        run: |
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq libegl1-mesa-dev
-          echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+      - run: echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
       - run: rustup component add clippy
       - run: rustup target add ${{ env.TARGET }}
       - run: cargo clippy --target ${{ env.TARGET }}
@@ -61,9 +57,7 @@ jobs:
           - name: Ubuntu Stable
             os: ubuntu-18.04
             channel: stable
-            prepare_command: |
-              sudo apt-get update -y -qq
-              sudo apt-get install -y -qq libegl1-mesa-dev
+            prepare_command:
             additional_core_features: trace,replay
             additional_player_features:
           - name: Ubuntu Nightly
@@ -71,8 +65,6 @@ jobs:
             channel: nightly
             prepare_command: |
               sudo apt-get update -y -qq
-              echo "Installing EGL"
-              sudo apt-get install -y -qq libegl1-mesa-dev
               echo "Installing Vulkan"
               sudo apt-get install -y -qq mesa-vulkan-drivers
             additional_core_features: serial-pass

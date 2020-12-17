@@ -415,9 +415,6 @@ pub struct DeviceDescriptor<L> {
     /// Limits that the device should support. If any limit is "better" than the limit exposed by
     /// the adapter, creating a device will panic.
     pub limits: Limits,
-    /// Switch shader validation on/off. This is a temporary field
-    /// that will be removed once our validation logic is complete.
-    pub shader_validation: bool,
 }
 
 impl<L> DeviceDescriptor<L> {
@@ -426,7 +423,6 @@ impl<L> DeviceDescriptor<L> {
             label: fun(&self.label),
             features: self.features,
             limits: self.limits.clone(),
-            shader_validation: self.shader_validation,
         }
     }
 }
@@ -448,6 +444,22 @@ bitflags::bitflags! {
         const FRAGMENT = 2;
         /// Binding is visible from the compute shader of a compute pipeline.
         const COMPUTE = 4;
+    }
+}
+
+bitflags::bitflags! {
+    #[derive(Default)]
+    #[cfg_attr(feature = "trace", derive(serde::Serialize))]
+    #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+    pub struct ShaderFlags: u32 {
+        /// If enabled, `wgpu` will parse the shader with `Naga`
+        /// and validate it both internally and with regards to
+        /// the given pipeline interface.
+        const VALIDATION = 1;
+        /// If enabled, `wgpu` will attempt to operate on `Naga`'s internal
+        /// representation of the shader module for both validation and translation
+        /// into the backend shader language, on backends where `gfx-hal` supports this.
+        const EXPERIMENTAL_TRANSLATION = 2;
     }
 }
 

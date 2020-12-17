@@ -1,6 +1,7 @@
 /target
 **/*.rs.bk
 #Cargo.lock
+.fuse_hidden*
 .DS_Store
 .vscode
 .vs
