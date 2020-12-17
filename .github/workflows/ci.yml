@@ -74,7 +74,10 @@ jobs:
               echo "Installing EGL"
               sudo apt-get install -y -qq libegl1-mesa-dev
               echo "Installing Vulkan"
-              sudo apt-get install -y -qq mesa-vulkan-drivers
+              sudo apt-get install -y -qq mesa-vulkan-drivers libvulkan1 vulkan-utils
+              echo "Checking Vulkan support"
+              lspci -k
+              vulkaninfo
             additional_core_features: serial-pass
             additional_player_features: winit
           - name: Windows Stable
