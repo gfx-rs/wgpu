@@ -33,6 +33,14 @@ jobs:
       - name: Additional core features
         run: cargo check --manifest-path wgpu-core/Cargo.toml --features trace --target ${{ env.TARGET }}
 
+  webgl_build:
+    name: Web Assembly
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - run: rustup target add wasm32-unknown-unknown
+      - run: cargo build --manifest-path wgpu-core/Cargo.toml --target wasm32-unknown-unknown
+
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
