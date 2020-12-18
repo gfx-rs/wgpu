@@ -36,103 +36,108 @@ fn consume_number(input: &str) -> (&str, &str) {
 }
 
 fn consume_token(mut input: &str) -> (Token<'_>, &str) {
-    input = input.trim_start();
-    let mut chars = input.chars();
-    let cur = match chars.next() {
-        Some(c) => c,
-        None => return (Token::End, input),
-    };
-    match cur {
-        ':' => {
-            input = chars.as_str();
-            if chars.next() == Some(':') {
-                (Token::DoubleColon, chars.as_str())
-            } else {
-                (Token::Separator(cur), input)
-            }
-        }
-        ';' | ',' => (Token::Separator(cur), chars.as_str()),
-        '.' => {
-            let og_chars = chars.as_str();
-            match chars.next() {
-                Some('0'..='9') => {
-                    let (number, rest) = consume_number(input);
-                    (Token::Number(number), rest)
+    loop {
+        input = input.trim_start();
+        let mut chars = input.chars();
+        let cur = match chars.next() {
+            Some(c) => c,
+            None => return (Token::End, input),
+        };
+        break match cur {
+            ':' => {
+                input = chars.as_str();
+                if chars.next() == Some(':') {
+                    (Token::DoubleColon, chars.as_str())
+                } else {
+                    (Token::Separator(cur), input)
                 }
-                _ => (Token::Separator(cur), og_chars),
             }
-        }
-        '(' | ')' | '{' | '}' => (Token::Paren(cur), chars.as_str()),
-        '<' | '>' => {
-            input = chars.as_str();
-            let next = chars.next();
-            if next == Some('=') {
-                (Token::LogicalOperation(cur), chars.as_str())
-            } else if next == Some(cur) {
-                (Token::ShiftOperation(cur), chars.as_str())
-            } else {
-                (Token::Paren(cur), input)
+            ';' | ',' => (Token::Separator(cur), chars.as_str()),
+            '.' => {
+                let og_chars = chars.as_str();
+                match chars.next() {
+                    Some('0'..='9') => {
+                        let (number, rest) = consume_number(input);
+                        (Token::Number(number), rest)
+                    }
+                    _ => (Token::Separator(cur), og_chars),
+                }
             }
-        }
-        '[' | ']' => {
-            input = chars.as_str();
-            if chars.next() == Some(cur) {
-                (Token::DoubleParen(cur), chars.as_str())
-            } else {
-                (Token::Paren(cur), input)
+            '(' | ')' | '{' | '}' => (Token::Paren(cur), chars.as_str()),
+            '<' | '>' => {
+                input = chars.as_str();
+                let next = chars.next();
+                if next == Some('=') {
+                    (Token::LogicalOperation(cur), chars.as_str())
+                } else if next == Some(cur) {
+                    (Token::ShiftOperation(cur), chars.as_str())
+                } else {
+                    (Token::Paren(cur), input)
+                }
             }
-        }
-        '0'..='9' => {
-            let (number, rest) = consume_number(input);
-            (Token::Number(number), rest)
-        }
-        'a'..='z' | 'A'..='Z' | '_' => {
-            let (word, rest) = consume_any(input, |c| c.is_ascii_alphanumeric() || c == '_');
-            (Token::Word(word), rest)
-        }
-        '"' => {
-            let mut iter = chars.as_str().splitn(2, '"');
+            '[' | ']' => {
+                input = chars.as_str();
+                if chars.next() == Some(cur) {
+                    (Token::DoubleParen(cur), chars.as_str())
+                } else {
+                    (Token::Paren(cur), input)
+                }
+            }
+            '0'..='9' => {
+                let (number, rest) = consume_number(input);
+                (Token::Number(number), rest)
+            }
+            'a'..='z' | 'A'..='Z' | '_' => {
+                let (word, rest) = consume_any(input, |c| c.is_ascii_alphanumeric() || c == '_');
+                (Token::Word(word), rest)
+            }
+            '"' => {
+                let mut iter = chars.as_str().splitn(2, '"');
 
-            // splitn returns an iterator with at least one element, so unwrapping is fine
-            let quote_content = iter.next().unwrap();
-            if let Some(rest) = iter.next() {
-                (Token::String(quote_content), rest)
-            } else {
-                (Token::UnterminatedString, quote_content)
-            }
-        }
-        '-' => {
-            let og_chars = chars.as_str();
-            match chars.next() {
-                Some('>') => (Token::Arrow, chars.as_str()),
-                Some('0'..='9') | Some('.') => {
-                    let (number, rest) = consume_number(input);
-                    (Token::Number(number), rest)
+                // splitn returns an iterator with at least one element, so unwrapping is fine
+                let quote_content = iter.next().unwrap();
+                if let Some(rest) = iter.next() {
+                    (Token::String(quote_content), rest)
+                } else {
+                    (Token::UnterminatedString, quote_content)
                 }
-                _ => (Token::Operation(cur), og_chars),
             }
-        }
-        '+' | '*' | '/' | '%' | '^' => (Token::Operation(cur), chars.as_str()),
-        '!' => {
-            if chars.next() == Some('=') {
-                (Token::LogicalOperation(cur), chars.as_str())
-            } else {
-                (Token::Operation(cur), input)
+            '-' => {
+                let og_chars = chars.as_str();
+                match chars.next() {
+                    Some('>') => (Token::Arrow, chars.as_str()),
+                    Some('0'..='9') | Some('.') => {
+                        let (number, rest) = consume_number(input);
+                        (Token::Number(number), rest)
+                    }
+                    _ => (Token::Operation(cur), og_chars),
+                }
             }
-        }
-        '=' | '&' | '|' => {
-            input = chars.as_str();
-            if chars.next() == Some(cur) {
-                (Token::LogicalOperation(cur), chars.as_str())
-            } else {
-                (Token::Operation(cur), input)
+            '+' | '*' | '/' | '%' | '^' => (Token::Operation(cur), chars.as_str()),
+            '!' => {
+                if chars.next() == Some('=') {
+                    (Token::LogicalOperation(cur), chars.as_str())
+                } else {
+                    (Token::Operation(cur), input)
+                }
             }
-        }
-        '#' => match chars.position(|c| c == '\n' || c == '\r') {
-            Some(_) => consume_token(chars.as_str()),
-            None => (Token::End, chars.as_str()),
-        },
-        _ => (Token::Unknown(cur), chars.as_str()),
+            '=' | '&' | '|' => {
+                input = chars.as_str();
+                if chars.next() == Some(cur) {
+                    (Token::LogicalOperation(cur), chars.as_str())
+                } else {
+                    (Token::Operation(cur), input)
+                }
+            }
+            '#' => match chars.position(|c| c == '\n' || c == '\r') {
+                Some(_) => {
+                    input = chars.as_str();
+                    continue;
+                }
+                None => (Token::End, chars.as_str()),
+            },
+            _ => (Token::Unknown(cur), chars.as_str()),
+        };
     }
 }
 
