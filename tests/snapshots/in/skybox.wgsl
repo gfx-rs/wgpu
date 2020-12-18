@@ -5,8 +5,8 @@ var<out> out_position: vec4<f32>;
 
 #[[block]]
 struct Data {
-    [[offset(0)]] proj_inv: mat4x4<f32>;
-    [[offset(64)]] view: mat4x4<f32>;
+    proj_inv: mat4x4<f32>;
+    view: mat4x4<f32>;
 };
 [[group(0), binding(0)]]
 var r_data: Data;

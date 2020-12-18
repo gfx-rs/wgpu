@@ -204,32 +204,6 @@ impl Decoration {
             _ => None,
         }
     }
-
-    fn get_origin(&self) -> Result<crate::MemberOrigin, Error> {
-        match *self {
-            Decoration {
-                location: Some(_), ..
-            }
-            | Decoration {
-                desc_set: Some(_), ..
-            }
-            | Decoration {
-                desc_index: Some(_),
-                ..
-            } => Err(Error::MissingDecoration(spirv::Decoration::Offset)),
-            Decoration {
-                built_in: Some(built_in),
-                offset: None,
-                ..
-            } => Ok(crate::MemberOrigin::BuiltIn(built_in)),
-            Decoration {
-                built_in: None,
-                offset: Some(offset),
-                ..
-            } => Ok(crate::MemberOrigin::Offset(offset)),
-            _ => Ok(crate::MemberOrigin::Empty),
-        }
-    }
 }
 
 bitflags::bitflags! {
@@ -2028,6 +2002,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect_at_least(2)?;
         let id = self.next()?;
         let parent_decor = self.future_decor.remove(&id);
+        let block_decor = parent_decor.as_ref().and_then(|decor| decor.block.clone());
 
         let mut members = Vec::with_capacity(inst.wc as usize - 2);
         let mut member_type_ids = Vec::with_capacity(members.capacity());
@@ -2039,15 +2014,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 .future_member_decor
                 .remove(&(id, i))
                 .unwrap_or_default();
-            let origin = decor.get_origin()?;
             members.push(crate::StructMember {
                 name: decor.name,
-                origin,
+                span: None, //TODO
                 ty,
             });
         }
 
-        let block_decor = parent_decor.as_ref().and_then(|decor| decor.block.clone());
         let inner = crate::TypeInner::Struct {
             block: block_decor.is_some(),
             members,

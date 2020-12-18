@@ -23,13 +23,6 @@ fn parse_types() {
     parse_str("var t: texture_multisampled_2d<u32>;").unwrap();
     parse_str("var t: [[access(write)]] texture_storage_1d<rgba8uint>;").unwrap();
     parse_str("var t: [[access(read)]] texture_storage_3d<r32float>;").unwrap();
-    parse_str(
-        "
-        [[block]] struct Foo { [[offset(0)]] x: i32; };
-        var s: [[access(read_write)]] Foo;
-    ",
-    )
-    .unwrap();
 }
 
 #[test]
@@ -41,6 +34,19 @@ fn parse_type_cast() {
             var x: f32 = f32(a);
             x = f32(i32(a + 1) / 2);
         }
+    ",
+    )
+    .unwrap();
+}
+
+#[test]
+fn parse_struct() {
+    parse_str(
+        "
+        [[block]] struct Foo { x: i32; };
+        struct Bar { [[span(16)]] x: vec2<i32>; };
+        struct Empty {};
+        var s: [[access(read_write)]] Foo;
     ",
     )
     .unwrap();

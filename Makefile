@@ -6,7 +6,7 @@ all:
 clean:
 	rm *.metal *.air *.metallib *.vert *.frag *.comp
 
-%.metal: test-data/%.wgsl $(wildcard src/*.rs src/**/*.rs examples/*.rs)
+%.metal: tests/snapshots/in/%.wgsl $(wildcard src/*.rs src/**/*.rs examples/*.rs)
 	cargo run --example convert --features wgsl-in,msl-out -- $< $@
 
 %.air: %.metal

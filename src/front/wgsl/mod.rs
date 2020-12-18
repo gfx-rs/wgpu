@@ -82,8 +82,6 @@ pub enum Error<'a> {
     UnknownFunction(&'a str),
     #[error("unknown storage format: `{0}`")]
     UnknownStorageFormat(&'a str),
-    #[error("missing offset for structure member `{0}`")]
-    MissingMemberOffset(&'a str),
     #[error("array stride must not be 0")]
     ZeroStride,
     #[error("not a composite type: {0:?}")]
@@ -1131,7 +1129,7 @@ impl Parser {
         let mut members = Vec::new();
         lexer.expect(Token::Paren('{'))?;
         loop {
-            let mut offset = !0;
+            let mut span = 0;
             if lexer.skip(Token::DoubleParen('[')) {
                 self.scopes.push(Scope::Decoration);
                 let mut ready = true;
@@ -1143,9 +1141,10 @@ impl Parser {
                         Token::Separator(',') if !ready => {
                             ready = true;
                         }
-                        Token::Word("offset") if ready => {
+                        Token::Word("span") if ready => {
                             lexer.expect(Token::Paren('('))?;
-                            offset = lexer.next_uint_literal()?;
+                            //Note: 0 is not handled
+                            span = lexer.next_uint_literal()?;
                             lexer.expect(Token::Paren(')'))?;
                             ready = false;
                         }
@@ -1159,15 +1158,12 @@ impl Parser {
                 Token::Paren('}') => return Ok(members),
                 other => return other.unexpected("field name"),
             };
-            if offset == !0 {
-                return Err(Error::MissingMemberOffset(name));
-            }
             lexer.expect(Token::Separator(':'))?;
             let (ty, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
             lexer.expect(Token::Separator(';'))?;
             members.push(crate::StructMember {
                 name: Some(name.to_owned()),
-                origin: crate::MemberOrigin::Offset(offset),
+                span: NonZeroU32::new(span),
                 ty,
             });
         }

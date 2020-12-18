@@ -10,7 +10,7 @@ pomelo! {
             Arena, BinaryOperator, Binding, Block, Constant,
             ConstantInner, EntryPoint, Expression,
             Function, GlobalVariable, Handle, Interpolation,
-            LocalVariable, MemberOrigin, SampleLevel, ScalarKind,
+            LocalVariable, SampleLevel, ScalarKind,
             Statement, StorageAccess, StorageClass, StructMember,
             SwitchCase, Type, TypeInner, UnaryOperator,
         };
@@ -745,7 +745,7 @@ pomelo! {
         if let Some(ty) = t {
             sdl.iter().map(|name| StructMember {
                 name: Some(name.clone()),
-                origin: MemberOrigin::Empty,
+                span: None,
                 ty,
             }).collect()
         } else {

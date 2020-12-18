@@ -57,20 +57,15 @@ pub enum Error {
     IO(IoError),
     Utf8(FromUtf8Error),
     Type(ResolveError),
-    UnexpectedLocation,
-    MissingBinding(Handle<crate::GlobalVariable>),
     MissingBindTarget(BindSource),
     InvalidImageAccess(crate::StorageAccess),
-    MutabilityViolation(Handle<crate::GlobalVariable>),
     BadName(String),
-    UnexpectedGlobalType(Handle<crate::Type>),
     UnimplementedBindTarget(BindTarget),
     UnsupportedCompose(Handle<crate::Type>),
     UnsupportedBinaryOp(crate::BinaryOperator),
     UnexpectedSampleLevel(crate::SampleLevel),
     UnsupportedCall(String),
     UnsupportedDynamicArrayLength,
-    UnableToReturnValue(Handle<crate::Expression>),
     /// The source IR is not valid.
     Validation,
 }
@@ -115,12 +110,12 @@ impl Options {
     fn resolve_binding(
         &self,
         stage: crate::ShaderStage,
-        binding: &crate::Binding,
+        var: &crate::GlobalVariable,
         mode: LocationMode,
     ) -> Result<ResolvedBinding, Error> {
-        match *binding {
-            crate::Binding::BuiltIn(built_in) => Ok(ResolvedBinding::BuiltIn(built_in)),
-            crate::Binding::Location(index) => match mode {
+        match var.binding {
+            Some(crate::Binding::BuiltIn(built_in)) => Ok(ResolvedBinding::BuiltIn(built_in)),
+            Some(crate::Binding::Location(index)) => match mode {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(index)),
                 LocationMode::FragmentOutput => Ok(ResolvedBinding::Color(index)),
                 LocationMode::Intermediate => Ok(ResolvedBinding::User {
@@ -131,9 +126,15 @@ impl Options {
                     },
                     index,
                 }),
-                LocationMode::Uniform => Err(Error::UnexpectedLocation),
+                LocationMode::Uniform => {
+                    log::error!(
+                        "Unexpected Binding::Location({}) for the Uniform mode",
+                        index
+                    );
+                    Err(Error::Validation)
+                }
             },
-            crate::Binding::Resource { group, binding } => {
+            Some(crate::Binding::Resource { group, binding }) => {
                 let source = BindSource {
                     stage,
                     group,
@@ -144,6 +145,10 @@ impl Options {
                     .cloned()
                     .map(ResolvedBinding::Resource)
                     .ok_or(Error::MissingBindTarget(source))
+            }
+            None => {
+                log::error!("Missing binding for {:?}", var.name);
+                Err(Error::Validation)
             }
         }
     }

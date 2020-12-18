@@ -201,19 +201,6 @@ pub enum ArraySize {
     Dynamic,
 }
 
-/// Describes where a struct member is placed.
-#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-pub enum MemberOrigin {
-    /// Member is local to the shader.
-    Empty,
-    /// Built-in shader variable.
-    BuiltIn(BuiltIn),
-    /// Offset within the struct.
-    Offset(u32),
-}
-
 /// The interpolation qualifier of a binding or struct field.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -245,7 +232,7 @@ pub enum Interpolation {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct StructMember {
     pub name: Option<String>,
-    pub origin: MemberOrigin,
+    pub span: Option<NonZeroU32>,
     pub ty: Handle<Type>,
 }
 
