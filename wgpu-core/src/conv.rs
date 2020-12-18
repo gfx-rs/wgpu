@@ -9,6 +9,27 @@ use crate::{
 
 use std::convert::TryInto;
 
+pub fn map_adapter_info(
+    info: hal::adapter::AdapterInfo,
+    backend: wgt::Backend,
+) -> wgt::AdapterInfo {
+    use hal::adapter::DeviceType as Dt;
+
+    wgt::AdapterInfo {
+        name: info.name,
+        vendor: info.vendor,
+        device: info.device,
+        device_type: match info.device_type {
+            Dt::Other => wgt::DeviceType::Other,
+            Dt::IntegratedGpu => wgt::DeviceType::IntegratedGpu,
+            Dt::DiscreteGpu => wgt::DeviceType::DiscreteGpu,
+            Dt::VirtualGpu => wgt::DeviceType::VirtualGpu,
+            Dt::Cpu => wgt::DeviceType::Cpu,
+        },
+        backend,
+    }
+}
+
 pub fn map_buffer_usage(usage: wgt::BufferUsage) -> (hal::buffer::Usage, hal::memory::Properties) {
     use hal::buffer::Usage as U;
     use hal::memory::Properties as P;

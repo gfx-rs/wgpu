@@ -401,6 +401,41 @@ impl Default for Limits {
     }
 }
 
+/// Supported physical device types.
+#[repr(u8)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum DeviceType {
+    /// Other.
+    Other,
+    /// Integrated GPU with shared CPU/GPU memory.
+    IntegratedGpu,
+    /// Discrete GPU with separate CPU/GPU memory.
+    DiscreteGpu,
+    /// Virtual / Hosted.
+    VirtualGpu,
+    /// Cpu / Software Rendering.
+    Cpu,
+}
+
+/// Information about an adapter.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct AdapterInfo {
+    /// Adapter name
+    pub name: String,
+    /// Vendor PCI id of the adapter
+    pub vendor: usize,
+    /// PCI id of the adapter
+    pub device: usize,
+    /// Type of device
+    pub device_type: DeviceType,
+    /// Backend used for device
+    pub backend: Backend,
+}
+
 /// Describes a [`Device`].
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
