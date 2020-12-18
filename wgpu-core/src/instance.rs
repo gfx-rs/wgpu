@@ -743,7 +743,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             #[cfg(dx11)]
             map(("Dx11", &mut id_dx11, adapters_dx11, backend::Dx11::hub)),
             #[cfg(gl)]
-            map(("GL", &mut id_dx11, adapters_gl, backend::Gl::hub)),
+            map(("GL", &mut id_gl, adapters_gl, backend::Gl::hub)),
         }
 
         let _ = (
