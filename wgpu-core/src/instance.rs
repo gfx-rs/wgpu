@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    backend,
+    backend, conv,
     device::{Device, DeviceDescriptor},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId, Valid},
@@ -13,10 +13,7 @@ use crate::{
 use wgt::{Backend, BackendBit, PowerPreference, BIND_BUFFER_ALIGNMENT};
 
 use hal::{
-    adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
-    queue::QueueFamily as _,
-    window::Surface as _,
-    Instance as _,
+    adapter::PhysicalDevice as _, queue::QueueFamily as _, window::Surface as _, Instance as _,
 };
 use thiserror::Error;
 
@@ -400,42 +397,6 @@ impl<B: hal::Backend> crate::hub::Resource for Adapter<B> {
     }
 }
 
-/// Metadata about a backend adapter.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct AdapterInfo {
-    /// Adapter name
-    pub name: String,
-    /// Vendor PCI id of the adapter
-    pub vendor: usize,
-    /// PCI id of the adapter
-    pub device: usize,
-    /// Type of device
-    pub device_type: DeviceType,
-    /// Backend used for device
-    pub backend: Backend,
-}
-
-impl AdapterInfo {
-    fn from_gfx(adapter_info: HalAdapterInfo, backend: Backend) -> Self {
-        let HalAdapterInfo {
-            name,
-            vendor,
-            device,
-            device_type,
-        } = adapter_info;
-
-        Self {
-            name,
-            vendor,
-            device,
-            device_type: device_type.into(),
-            backend,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Error)]
 /// Error when requesting a device from the adaptor
 pub enum RequestDeviceError {
@@ -453,36 +414,6 @@ pub enum RequestDeviceError {
     OutOfMemory,
     #[error("unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),
-}
-
-/// Supported physical device types.
-#[repr(u8)]
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub enum DeviceType {
-    /// Other.
-    Other,
-    /// Integrated GPU with shared CPU/GPU memory.
-    IntegratedGpu,
-    /// Discrete GPU with separate CPU/GPU memory.
-    DiscreteGpu,
-    /// Virtual / Hosted.
-    VirtualGpu,
-    /// Cpu / Software Rendering.
-    Cpu,
-}
-
-impl From<HalDeviceType> for DeviceType {
-    fn from(device_type: HalDeviceType) -> Self {
-        match device_type {
-            HalDeviceType::Other => Self::Other,
-            HalDeviceType::IntegratedGpu => Self::IntegratedGpu,
-            HalDeviceType::DiscreteGpu => Self::DiscreteGpu,
-            HalDeviceType::VirtualGpu => Self::VirtualGpu,
-            HalDeviceType::Cpu => Self::Cpu,
-        }
-    }
 }
 
 pub enum AdapterInputs<'a, I> {
@@ -761,7 +692,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn adapter_get_info<B: GfxBackend>(
         &self,
         adapter_id: AdapterId,
-    ) -> Result<AdapterInfo, InvalidAdapter> {
+    ) -> Result<wgt::AdapterInfo, InvalidAdapter> {
         span!(_guard, INFO, "Adapter::get_info");
 
         let hub = B::hub(self);
@@ -769,7 +700,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| AdapterInfo::from_gfx(adapter.raw.info.clone(), adapter_id.backend()))
+            .map(|adapter| conv::map_adapter_info(adapter.raw.info.clone(), adapter_id.backend()))
             .map_err(|_| InvalidAdapter)
     }
 
