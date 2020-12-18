@@ -36,6 +36,7 @@ impl Clone for Resolution {
     }
 }
 
+/// Helper processor that derives the types of all expressions.
 #[derive(Debug)]
 pub struct Typifier {
     resolutions: Vec<Resolution>,
