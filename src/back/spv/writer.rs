@@ -1277,6 +1277,39 @@ impl Writer {
                         ));
                         Ok((RawExpression::Value(id), result_lookup_ty))
                     }
+                    Mf::Ceil => {
+                        let result_lookup_ty =
+                            match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
+                                crate::TypeInner::Scalar {
+                                    kind: crate::ScalarKind::Float,
+                                    width,
+                                } => LookupType::Local(LocalType::Scalar {
+                                    kind: crate::ScalarKind::Float,
+                                    width,
+                                }),
+                                crate::TypeInner::Vector {
+                                    kind: crate::ScalarKind::Float,
+                                    size,
+                                    width,
+                                } => LookupType::Local(LocalType::Vector {
+                                    kind: crate::ScalarKind::Float,
+                                    size,
+                                    width,
+                                }),
+                                _ => unreachable!(),
+                            };
+                        let result_type_id =
+                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
+
+                        block.body.push(super::instructions::instruction_ext_inst(
+                            result_type_id,
+                            id,
+                            1, //TODO get the actual import set id
+                            spirv::GLOp::Ceil as u32,
+                            &[arg0_id],
+                        ));
+                        Ok((RawExpression::Value(id), result_lookup_ty))
+                    }
                     _ => {
                         log::error!("unimplemented math function {:?}", fun);
                         Err(Error::FeatureNotImplemented("math function"))

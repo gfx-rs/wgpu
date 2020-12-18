@@ -1,4 +1,7 @@
-use crate::{Block, Expression, Function, SampleLevel, TypeInner, proc::{ensure_block_returns, Typifier}};
+use crate::{
+    proc::{ensure_block_returns, Typifier},
+    Block, Expression, Function, MathFunction, SampleLevel, TypeInner,
+};
 
 use super::{ast::*, error::ErrorKind};
 
@@ -71,12 +74,28 @@ impl Program {
                                     .collect(),
                             })
                         } else {
-                            return Err(ErrorKind::SemanticError("Bad call to texture"));
+                            Err(ErrorKind::SemanticError("Bad call to texture"))
                         }
                     }
-                    _ => {
-                        return Err(ErrorKind::NotImplemented("Function call"));
+                    "ceil" => {
+                        //TODO: check args len
+                        Ok(ExpressionRule {
+                            expression: self.context.expressions.append(Expression::Math {
+                                fun: MathFunction::Ceil,
+                                arg: fc.args[0].expression,
+                                arg1: None,
+                                arg2: None,
+                            }),
+                            sampler: None,
+                            statements: fc
+                                .args
+                                .into_iter()
+                                .map(|a| a.statements)
+                                .flatten()
+                                .collect(),
+                        })
                     }
+                    _ => Err(ErrorKind::NotImplemented("Function call")),
                 }
             }
         }
