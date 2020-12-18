@@ -1,10 +1,10 @@
 use crate::{
     backend::{error::ContextError, native_gpu_future},
-    BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, CommandEncoderDescriptor,
-    ComputePassDescriptor, ComputePipelineDescriptor, Features, Label, Limits, LoadOp, MapMode,
-    Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderSource, SwapChainStatus, TextureDescriptor,
-    TextureViewDescriptor,
+    AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, Features, Label,
+    Limits, LoadOp, MapMode, Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
+    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor, ShaderSource,
+    SwapChainStatus, TextureDescriptor, TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
@@ -35,14 +35,6 @@ impl fmt::Debug for Context {
 impl Context {
     pub(crate) fn global(&self) -> &wgc::hub::Global<wgc::hub::IdentityManagerFactory> {
         &self.0
-    }
-
-    pub fn adapter_get_info(&self, id: wgc::id::AdapterId) -> wgc::instance::AdapterInfo {
-        let global = &self.0;
-        match wgc::gfx_select!(id => global.adapter_get_info(id)) {
-            Ok(info) => info,
-            Err(e) => panic!("{}", e),
-        }
     }
 
     pub fn enumerate_adapters(&self, backends: wgt::BackendBit) -> Vec<wgc::id::AdapterId> {
@@ -688,6 +680,14 @@ impl crate::Context for Context {
         match wgc::gfx_select!(*adapter => global.adapter_limits(*adapter)) {
             Ok(limits) => limits,
             Err(err) => self.handle_error_fatal(err, "Adapter::limits"),
+        }
+    }
+
+    fn adapter_get_info(&self, adapter: &wgc::id::AdapterId) -> AdapterInfo {
+        let global = &self.0;
+        match wgc::gfx_select!(*adapter => global.adapter_get_info(*adapter)) {
+            Ok(info) => info,
+            Err(err) => self.handle_error_fatal(err, "Adapter::get_info"),
         }
     }
 

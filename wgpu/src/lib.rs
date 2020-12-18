@@ -24,26 +24,20 @@ use std::{
 
 use futures::FutureExt as _;
 use parking_lot::Mutex;
-#[cfg(feature = "replay")]
-use serde::Deserialize;
-#[cfg(feature = "trace")]
-use serde::Serialize;
 
-#[cfg(not(target_arch = "wasm32"))]
-pub use wgc::instance::{AdapterInfo, DeviceType};
 pub use wgt::{
-    AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType, BlendDescriptor,
-    BlendFactor, BlendOperation, BufferAddress, BufferBindingType, BufferSize, BufferUsage, Color,
-    ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction, CullMode,
-    DepthStencilStateDescriptor, DynamicOffset, Extent3d, Features, FilterMode, FrontFace,
-    IndexFormat, InputStepMode, Limits, Origin3d, PolygonMode, PowerPreference, PresentMode,
-    PrimitiveTopology, PushConstantRange, RasterizationStateDescriptor, SamplerBorderColor,
-    ShaderFlags, ShaderLocation, ShaderStage, StencilOperation, StencilStateDescriptor,
-    StencilStateFaceDescriptor, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus,
-    TextureAspect, TextureDataLayout, TextureDimension, TextureFormat, TextureSampleType,
-    TextureUsage, TextureViewDimension, VertexAttributeDescriptor, VertexFormat,
-    BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT,
+    AdapterInfo, AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType,
+    BlendDescriptor, BlendFactor, BlendOperation, BufferAddress, BufferBindingType, BufferSize,
+    BufferUsage, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction,
+    CullMode, DepthStencilStateDescriptor, DeviceType, DynamicOffset, Extent3d, Features,
+    FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, Origin3d, PolygonMode,
+    PowerPreference, PresentMode, PrimitiveTopology, PushConstantRange,
+    RasterizationStateDescriptor, SamplerBorderColor, ShaderFlags, ShaderLocation, ShaderStage,
+    StencilOperation, StencilStateDescriptor, StencilStateFaceDescriptor, StorageTextureAccess,
+    SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureDataLayout, TextureDimension,
+    TextureFormat, TextureSampleType, TextureUsage, TextureViewDimension,
+    VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C};
@@ -198,6 +192,7 @@ trait Context: Debug + Send + Sized + Sync {
     ) -> Self::RequestDeviceFuture;
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features;
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
+    fn adapter_get_info(&self, adapter: &Self::AdapterId) -> AdapterInfo;
 
     fn device_features(&self, device: &Self::DeviceId) -> Features;
     fn device_limits(&self, device: &Self::DeviceId) -> Limits;
@@ -915,8 +910,8 @@ pub enum BindingResource<'a> {
 ///
 /// The render target must be cleared at least once before it's content be loaded.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum LoadOp<V> {
     /// Clear with a specified value.
     Clear(V),
@@ -932,8 +927,8 @@ impl<V: Default> Default for LoadOp<V> {
 
 /// Pair of load and store operations for an attachment aspect.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct Operations<V> {
     /// How data should be read through this attachment.
     pub load: LoadOp<V>,
@@ -1406,9 +1401,8 @@ impl Adapter {
     }
 
     /// Get info about the adapter itself.
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn get_info(&self) -> AdapterInfo {
-        self.context.adapter_get_info(self.id)
+        Context::adapter_get_info(&*self.context, &self.id)
     }
 }
 
