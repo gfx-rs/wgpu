@@ -231,7 +231,7 @@ impl framework::Example for Example {
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &impl futures::task::LocalSpawn,
+        _spawner: &framework::Spawner,
     ) {
         if self.rebuild_bundle {
             self.bundle = Example::create_bundle(

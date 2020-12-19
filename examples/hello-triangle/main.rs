@@ -140,7 +140,7 @@ fn main() {
     {
         wgpu_subscriber::initialize_default_subscriber(None);
         // Temporarily avoid srgb formats for the swapchain on the web
-        futures::executor::block_on(run(event_loop, window));
+        pollster::block_on(run(event_loop, window));
     }
     #[cfg(target_arch = "wasm32")]
     {

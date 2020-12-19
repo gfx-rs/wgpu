@@ -22,7 +22,6 @@ use std::{
     thread,
 };
 
-use futures::FutureExt as _;
 use parking_lot::Mutex;
 
 pub use wgt::{
@@ -1312,9 +1311,8 @@ impl Instance {
         options: &RequestAdapterOptions,
     ) -> impl Future<Output = Option<Adapter>> + Send {
         let context = Arc::clone(&self.context);
-        self.context
-            .instance_request_adapter(options)
-            .map(|option| option.map(|id| Adapter { context, id }))
+        let adapter = self.context.instance_request_adapter(options);
+        async move { adapter.await.map(|id| Adapter { context, id }) }
     }
 
     /// Creates a surface from a raw window handle.
@@ -1369,8 +1367,9 @@ impl Adapter {
         trace_path: Option<&std::path::Path>,
     ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + Send {
         let context = Arc::clone(&self.context);
-        Context::adapter_request_device(&*self.context, &self.id, desc, trace_path).map(|result| {
-            result.map(|(device_id, queue_id)| {
+        let device = Context::adapter_request_device(&*self.context, &self.id, desc, trace_path);
+        async move {
+            device.await.map(|(device_id, queue_id)| {
                 (
                     Device {
                         context: Arc::clone(&context),
@@ -1382,7 +1381,7 @@ impl Adapter {
                     },
                 )
             })
-        })
+        }
     }
 
     /// List all features that are supported with this adapter.

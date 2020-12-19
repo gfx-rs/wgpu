@@ -7,7 +7,6 @@ use crate::{
     TextureViewDescriptor, TextureViewDimension,
 };
 
-use futures::FutureExt;
 use std::{
     fmt,
     future::Future,
@@ -55,19 +54,34 @@ pub(crate) struct RenderBundleEncoder(web_sys::GpuRenderBundleEncoder);
 // This is safe on wasm32 *for now*, but similarly to the unsafe Send impls for the handle type
 // wrappers, the full story for threading on wasm32 is still unfolding.
 
-pub(crate) struct MakeSendFuture<F>(F);
+pub(crate) struct MakeSendFuture<F, M> {
+    future: F,
+    map: M,
+}
 
-impl<F: Future> Future for MakeSendFuture<F> {
-    type Output = F::Output;
+impl<F: Future, M: Fn(F::Output) -> T, T> Future for MakeSendFuture<F, M> {
+    type Output = T;
 
     fn poll(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Self::Output> {
         // This is safe because we have no Drop implementation to violate the Pin requirements and
         // do not provide any means of moving the inner future.
-        unsafe { self.map_unchecked_mut(|s| &mut s.0) }.poll(cx)
+        unsafe {
+            let this = self.get_unchecked_mut();
+            match Pin::new_unchecked(&mut this.future).poll(cx) {
+                task::Poll::Ready(value) => task::Poll::Ready((this.map)(value)),
+                task::Poll::Pending => task::Poll::Pending,
+            }
+        }
     }
 }
 
-unsafe impl<F> Send for MakeSendFuture<F> {}
+impl<F, M> MakeSendFuture<F, M> {
+    fn new(future: F, map: M) -> Self {
+        Self { future, map }
+    }
+}
+
+unsafe impl<F, M> Send for MakeSendFuture<F, M> {}
 
 impl crate::ComputePassInner<Context> for ComputePass {
     fn set_pipeline(&mut self, pipeline: &Sendable<web_sys::GpuComputePipeline>) {
@@ -800,7 +814,6 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
 }
 
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
-type FutureMap<T> = futures::future::Map<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> T>;
 
 fn future_request_adapter(result: JsFutureResult) -> Option<Sendable<web_sys::GpuAdapter>> {
     match result {
@@ -850,11 +863,18 @@ impl crate::Context for Context {
 
     type SwapChainOutputDetail = SwapChainOutputDetail;
 
-    type RequestAdapterFuture = MakeSendFuture<FutureMap<Option<Self::AdapterId>>>;
-    type RequestDeviceFuture = MakeSendFuture<
-        FutureMap<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>,
+    type RequestAdapterFuture = MakeSendFuture<
+        wasm_bindgen_futures::JsFuture,
+        fn(JsFutureResult) -> Option<Self::AdapterId>,
     >;
-    type MapAsyncFuture = MakeSendFuture<FutureMap<Result<(), crate::BufferAsyncError>>>;
+    type RequestDeviceFuture = MakeSendFuture<
+        wasm_bindgen_futures::JsFuture,
+        fn(JsFutureResult) -> Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>,
+    >;
+    type MapAsyncFuture = MakeSendFuture<
+        wasm_bindgen_futures::JsFuture,
+        fn(JsFutureResult) -> Result<(), crate::BufferAsyncError>,
+    >;
 
     fn init(_backends: wgt::BackendBit) -> Self {
         Context(web_sys::window().unwrap().navigator().gpu())
@@ -900,8 +920,10 @@ impl crate::Context for Context {
         };
         mapped_options.power_preference(mapped_power_preference);
         let adapter_promise = self.0.request_adapter_with_options(&mapped_options);
-        MakeSendFuture(
-            wasm_bindgen_futures::JsFuture::from(adapter_promise).map(future_request_adapter),
+
+        MakeSendFuture::new(
+            wasm_bindgen_futures::JsFuture::from(adapter_promise),
+            future_request_adapter,
         )
     }
 
@@ -926,8 +948,9 @@ impl crate::Context for Context {
         mapped_desc.limits(&mapped_limits);
         let device_promise = adapter.0.request_device_with_descriptor(&mapped_desc);
 
-        MakeSendFuture(
-            wasm_bindgen_futures::JsFuture::from(device_promise).map(future_request_device),
+        MakeSendFuture::new(
+            wasm_bindgen_futures::JsFuture::from(device_promise),
+            future_request_device,
         )
     }
 
@@ -1343,7 +1366,10 @@ impl crate::Context for Context {
             (range.end - range.start) as f64,
         );
 
-        MakeSendFuture(wasm_bindgen_futures::JsFuture::from(map_promise).map(future_map_async))
+        MakeSendFuture::new(
+            wasm_bindgen_futures::JsFuture::from(map_promise),
+            future_map_async,
+        )
     }
 
     fn buffer_get_mapped_range(

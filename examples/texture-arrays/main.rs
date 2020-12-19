@@ -307,7 +307,7 @@ impl framework::Example for Example {
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &impl futures::task::LocalSpawn,
+        _spawner: &framework::Spawner,
     ) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("primary"),
