@@ -1203,23 +1203,16 @@ impl Writer {
                             other => unreachable!("Mul {:?}", other),
                         }
                     }
-                    crate::BinaryOperator::Divide => match *left_ty_inner {
-                        crate::TypeInner::Scalar { kind, .. }
-                        | crate::TypeInner::Vector { kind, .. } => match kind {
-                            crate::ScalarKind::Sint => spirv::Op::SDiv,
-                            crate::ScalarKind::Uint => spirv::Op::UDiv,
-                            _ => unreachable!(),
-                        },
+                    crate::BinaryOperator::Divide => match left_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Sint) => spirv::Op::SDiv,
+                        Some(crate::ScalarKind::Uint) => spirv::Op::UDiv,
+                        Some(crate::ScalarKind::Float) => spirv::Op::FDiv,
                         _ => unreachable!(),
                     },
-                    crate::BinaryOperator::Modulo => match *left_ty_inner {
-                        crate::TypeInner::Scalar { kind, .. }
-                        | crate::TypeInner::Vector { kind, .. } => match kind {
-                            crate::ScalarKind::Sint => spirv::Op::SMod,
-                            crate::ScalarKind::Uint => spirv::Op::UMod,
-                            crate::ScalarKind::Float => spirv::Op::FMod,
-                            _ => unreachable!(),
-                        },
+                    crate::BinaryOperator::Modulo => match left_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Sint) => spirv::Op::SMod,
+                        Some(crate::ScalarKind::Uint) => spirv::Op::UMod,
+                        Some(crate::ScalarKind::Float) => spirv::Op::FMod,
                         _ => unreachable!(),
                     },
                     crate::BinaryOperator::And => spirv::Op::BitwiseAnd,
