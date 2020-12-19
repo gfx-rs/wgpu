@@ -14,6 +14,16 @@ pub struct Validator {
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum TypeError {
+    #[error("The {0:?} scalar width {1} is not supported")]
+    InvalidWidth(crate::ScalarKind, crate::Bytes),
+    #[error("The base handle {0:?} can not be resolved")]
+    UnresolvedBase(Handle<crate::Type>),
+    #[error("The constant {0:?} can not be used for an array size")]
+    InvalidArraySizeConstant(Handle<crate::Constant>),
+}
+
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum GlobalVariableError {
     #[error("Usage isn't compatible with the storage class")]
     InvalidUsage,
@@ -78,12 +88,12 @@ pub enum EntryPointError {
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum ValidationError {
-    #[error("The type {0:?} width {1} is not supported")]
-    InvalidTypeWidth(crate::ScalarKind, crate::Bytes),
-    #[error("The type handle {0:?} can not be resolved")]
-    UnresolvedType(Handle<crate::Type>),
-    #[error("The constant {0:?} can not be used for an array size")]
-    InvalidArraySizeConstant(Handle<crate::Constant>),
+    #[error("Type {handle:?} '{name}' is invalid: {error:?}")]
+    Type {
+        handle: Handle<crate::Type>,
+        name: String,
+        error: TypeError,
+    },
     #[error("Global variable {handle:?} '{name}' is invalid: {error:?}")]
     GlobalVariable {
         handle: Handle<crate::GlobalVariable>,
@@ -215,6 +225,66 @@ impl Validator {
         Validator {
             typifier: Typifier::new(),
         }
+    }
+
+    fn validate_type(
+        &self,
+        ty: &crate::Type,
+        handle: Handle<crate::Type>,
+        constants: &Arena<crate::Constant>,
+    ) -> Result<(), TypeError> {
+        use crate::TypeInner as Ti;
+        match ty.inner {
+            Ti::Scalar { kind, width } | Ti::Vector { kind, width, .. } => {
+                let expected = match kind {
+                    crate::ScalarKind::Bool => 1,
+                    _ => 4,
+                };
+                if width != expected {
+                    return Err(TypeError::InvalidWidth(kind, width));
+                }
+            }
+            Ti::Matrix { width, .. } => {
+                if width != 4 {
+                    return Err(TypeError::InvalidWidth(crate::ScalarKind::Float, width));
+                }
+            }
+            Ti::Pointer { base, class: _ } => {
+                if base >= handle {
+                    return Err(TypeError::UnresolvedBase(base));
+                }
+            }
+            Ti::Array { base, size, .. } => {
+                if base >= handle {
+                    return Err(TypeError::UnresolvedBase(base));
+                }
+                if let crate::ArraySize::Constant(const_handle) = size {
+                    match constants.try_get(const_handle) {
+                        Some(&crate::Constant {
+                            inner: crate::ConstantInner::Uint(_),
+                            ..
+                        }) => {}
+                        _ => {
+                            return Err(TypeError::InvalidArraySizeConstant(const_handle));
+                        }
+                    }
+                }
+            }
+            Ti::Struct {
+                block: _,
+                ref members,
+            } => {
+                //TODO: check the offsets
+                for member in members {
+                    if member.ty >= handle {
+                        return Err(TypeError::UnresolvedBase(member.ty));
+                    }
+                }
+            }
+            Ti::Image { .. } => {}
+            Ti::Sampler { comparison: _ } => {}
+        }
+        Ok(())
     }
 
     fn validate_global_var(
@@ -454,61 +524,12 @@ impl Validator {
     pub fn validate(&mut self, module: &crate::Module) -> Result<(), ValidationError> {
         // check the types
         for (handle, ty) in module.types.iter() {
-            use crate::TypeInner as Ti;
-            match ty.inner {
-                Ti::Scalar { kind, width } | Ti::Vector { kind, width, .. } => {
-                    let expected = match kind {
-                        crate::ScalarKind::Bool => 1,
-                        _ => 4,
-                    };
-                    if width != expected {
-                        return Err(ValidationError::InvalidTypeWidth(kind, width));
-                    }
-                }
-                Ti::Matrix { width, .. } => {
-                    if width != 4 {
-                        return Err(ValidationError::InvalidTypeWidth(
-                            crate::ScalarKind::Float,
-                            width,
-                        ));
-                    }
-                }
-                Ti::Pointer { base, class: _ } => {
-                    if base >= handle {
-                        return Err(ValidationError::UnresolvedType(base));
-                    }
-                }
-                Ti::Array { base, size, .. } => {
-                    if base >= handle {
-                        return Err(ValidationError::UnresolvedType(base));
-                    }
-                    if let crate::ArraySize::Constant(const_handle) = size {
-                        let constant = module
-                            .constants
-                            .try_get(const_handle)
-                            .ok_or(ValidationError::Corrupted)?;
-                        match constant.inner {
-                            crate::ConstantInner::Uint(_) => {}
-                            _ => {
-                                return Err(ValidationError::InvalidArraySizeConstant(const_handle))
-                            }
-                        }
-                    }
-                }
-                Ti::Struct {
-                    block: _,
-                    ref members,
-                } => {
-                    //TODO: check the offsets
-                    for member in members {
-                        if member.ty >= handle {
-                            return Err(ValidationError::UnresolvedType(member.ty));
-                        }
-                    }
-                }
-                Ti::Image { .. } => {}
-                Ti::Sampler { comparison: _ } => {}
-            }
+            self.validate_type(ty, handle, &module.constants)
+                .map_err(|error| ValidationError::Type {
+                    handle,
+                    name: ty.name.clone().unwrap_or_default(),
+                    error,
+                })?;
         }
 
         for (var_handle, var) in module.global_variables.iter() {
