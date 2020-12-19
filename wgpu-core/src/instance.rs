@@ -276,6 +276,10 @@ impl<B: GfxBackend> Adapter<B> {
 
         // Features
         enabled_features.set(
+            hal::Features::DEPTH_CLAMP,
+            desc.features.contains(wgt::Features::DEPTH_CLAMPING),
+        );
+        enabled_features.set(
             hal::Features::FORMAT_BC,
             desc.features
                 .contains(wgt::Features::TEXTURE_COMPRESSION_BC),
