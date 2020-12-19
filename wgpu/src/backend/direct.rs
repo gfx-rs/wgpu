@@ -8,11 +8,17 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use futures::future::{ready, Ready};
 use parking_lot::Mutex;
 use smallvec::SmallVec;
 use std::{
-    borrow::Cow::Borrowed, error::Error, fmt, marker::PhantomData, ops::Range, slice, sync::Arc,
+    borrow::Cow::Borrowed,
+    error::Error,
+    fmt,
+    future::{ready, Ready},
+    marker::PhantomData,
+    ops::Range,
+    slice,
+    sync::Arc,
 };
 use typed_arena::Arena;
 

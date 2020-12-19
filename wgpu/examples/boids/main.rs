@@ -262,7 +262,7 @@ impl framework::Example for Example {
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &impl futures::task::LocalSpawn,
+        _spawner: &framework::Spawner,
     ) {
         // create render pass descriptor and its color attachments
         let color_attachments = [wgpu::RenderPassColorAttachmentDescriptor {

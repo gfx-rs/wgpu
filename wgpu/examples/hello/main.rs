@@ -14,7 +14,7 @@ fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
         wgpu_subscriber::initialize_default_subscriber(None);
-        futures::executor::block_on(run());
+        pollster::block_on(run());
     }
     #[cfg(target_arch = "wasm32")]
     {
