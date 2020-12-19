@@ -941,6 +941,17 @@ impl crate::Context for Context {
         wgt::Limits::default()
     }
 
+    fn adapter_get_info(&self, _adapter: &Self::AdapterId) -> wgt::AdapterInfo {
+        // TODO: web-sys has no way of getting information on adapters
+        wgt::AdapterInfo {
+            name: String::new(),
+            vendor: 0,
+            device: 0,
+            device_type: wgt::DeviceType::Other,
+            backend: wgt::Backend::BrowserWebGpu,
+        }
+    }
+
     fn device_features(&self, _device: &Self::DeviceId) -> wgt::Features {
         // TODO: web-sys has no way of getting extensions on devices
         wgt::Features::empty()
