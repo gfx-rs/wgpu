@@ -1277,27 +1277,8 @@ impl Writer {
                         ));
                         Ok((RawExpression::Value(id), result_lookup_ty))
                     }
-                    Mf::Ceil => {
-                        let result_lookup_ty =
-                            match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
-                                crate::TypeInner::Scalar {
-                                    kind: crate::ScalarKind::Float,
-                                    width,
-                                } => LookupType::Local(LocalType::Scalar {
-                                    kind: crate::ScalarKind::Float,
-                                    width,
-                                }),
-                                crate::TypeInner::Vector {
-                                    kind: crate::ScalarKind::Float,
-                                    size,
-                                    width,
-                                } => LookupType::Local(LocalType::Vector {
-                                    kind: crate::ScalarKind::Float,
-                                    size,
-                                    width,
-                                }),
-                                _ => unreachable!(),
-                            };
+                    Mf::Ceil | Mf::Round | Mf::Floor | Mf::Fract | Mf::Trunc => {
+                        let result_lookup_ty = arg0_lookup_ty;
                         let result_type_id =
                             self.get_type_id(&ir_module.types, result_lookup_ty)?;
 
@@ -1305,7 +1286,14 @@ impl Writer {
                             result_type_id,
                             id,
                             1, //TODO get the actual import set id
-                            spirv::GLOp::Ceil as u32,
+                            match fun {
+                                Mf::Ceil => spirv::GLOp::Ceil,
+                                Mf::Round => spirv::GLOp::Round,
+                                Mf::Floor => spirv::GLOp::Floor,
+                                Mf::Fract => spirv::GLOp::Fract,
+                                Mf::Trunc => spirv::GLOp::Trunc,
+                                _ => unreachable!(),
+                            } as u32,
                             &[arg0_id],
                         ));
                         Ok((RawExpression::Value(id), result_lookup_ty))

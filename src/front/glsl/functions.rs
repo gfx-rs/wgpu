@@ -77,11 +77,18 @@ impl Program {
                             Err(ErrorKind::SemanticError("Bad call to texture"))
                         }
                     }
-                    "ceil" => {
+                    "ceil" | "round" | "floor" | "fract" | "trunc" => {
                         //TODO: check args len
                         Ok(ExpressionRule {
                             expression: self.context.expressions.append(Expression::Math {
-                                fun: MathFunction::Ceil,
+                                fun: match name.as_str() {
+                                    "ceil" => MathFunction::Ceil,
+                                    "round" => MathFunction::Round,
+                                    "floor" => MathFunction::Floor,
+                                    "fract" => MathFunction::Fract,
+                                    "trunc" => MathFunction::Trunc,
+                                    _ => unreachable!(),
+                                },
                                 arg: fc.args[0].expression,
                                 arg1: None,
                                 arg2: None,
