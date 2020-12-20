@@ -527,25 +527,30 @@ impl<W: Write> Writer<W> {
     ) -> Result<(), Error> {
         let constant = &module.constants[handle];
         match constant.inner {
-            crate::ConstantInner::Sint(value) => {
-                write!(self.out, "{}", value)?;
-            }
-            crate::ConstantInner::Uint(value) => {
-                write!(self.out, "{}", value)?;
-            }
-            crate::ConstantInner::Float(value) => {
-                write!(self.out, "{}", value)?;
-                if value.fract() == 0.0 {
-                    write!(self.out, ".0")?;
+            crate::ConstantInner::Scalar {
+                width: _,
+                ref value,
+            } => match *value {
+                crate::ScalarValue::Sint(value) => {
+                    write!(self.out, "{}", value)?;
                 }
-            }
-            crate::ConstantInner::Bool(value) => {
-                write!(self.out, "{}", value)?;
-            }
-            crate::ConstantInner::Composite(ref constituents) => {
-                let ty_name = &self.names[&NameKey::Type(constant.ty)];
+                crate::ScalarValue::Uint(value) => {
+                    write!(self.out, "{}", value)?;
+                }
+                crate::ScalarValue::Float(value) => {
+                    write!(self.out, "{}", value)?;
+                    if value.fract() == 0.0 {
+                        write!(self.out, ".0")?;
+                    }
+                }
+                crate::ScalarValue::Bool(value) => {
+                    write!(self.out, "{}", value)?;
+                }
+            },
+            crate::ConstantInner::Composite { ty, ref components } => {
+                let ty_name = &self.names[&NameKey::Type(ty)];
                 write!(self.out, "{}(", ty_name)?;
-                for (i, &handle) in constituents.iter().enumerate() {
+                for (i, &handle) in components.iter().enumerate() {
                     if i != 0 {
                         write!(self.out, ", ")?;
                     }

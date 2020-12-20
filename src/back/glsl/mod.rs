@@ -50,8 +50,9 @@ use crate::{
     },
     Arena, ArraySize, BinaryOperator, BuiltIn, Bytes, ConservativeDepth, Constant, ConstantInner,
     DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle, ImageClass,
-    Interpolation, LocalVariable, Module, RelationalFunction, ScalarKind, ShaderStage, Statement,
-    StorageAccess, StorageClass, StorageFormat, StructMember, Type, TypeInner, UnaryOperator,
+    Interpolation, LocalVariable, Module, RelationalFunction, ScalarKind, ScalarValue, ShaderStage,
+    Statement, StorageAccess, StorageClass, StorageFormat, StructMember, Type, TypeInner,
+    UnaryOperator,
 };
 use features::FeaturesManager;
 use std::{
@@ -561,7 +562,10 @@ impl<'a, W: Write> Writer<'a, W> {
                 match size {
                     ArraySize::Constant(const_handle) => {
                         match self.module.constants[const_handle].inner {
-                            ConstantInner::Uint(size) => write!(self.out, "{}", size)?,
+                            ConstantInner::Scalar {
+                                width: _,
+                                value: ScalarValue::Uint(size),
+                            } => write!(self.out, "{}", size)?,
                             _ => unreachable!(),
                         }
                     }
@@ -866,22 +870,27 @@ impl<'a, W: Write> Writer<'a, W> {
     /// Adds no newlines or leading/trailing whitespaces
     fn write_constant(&mut self, constant: &Constant) -> BackendResult {
         match constant.inner {
-            // Signed integers don't need anything special
-            ConstantInner::Sint(int) => write!(self.out, "{}", int)?,
-            // Unsigned integers need a `u` at the end
-            //
-            // While `core` doesn't necessarily need it, it's allowed and since `es` needs it we
-            // always write it as the extra branch wouldn't have any benefit in readability
-            ConstantInner::Uint(int) => write!(self.out, "{}u", int)?,
-            // Floats are written using `Debug` insted of `Display` because it always appends the
-            // decimal part even it's zero which is needed for a valid glsl float constant
-            ConstantInner::Float(float) => write!(self.out, "{:?}", float)?,
-            // Booleans are either `true` or `false` so nothing special needs to be done
-            ConstantInner::Bool(boolean) => write!(self.out, "{}", boolean)?,
+            ConstantInner::Scalar {
+                width: _,
+                ref value,
+            } => match *value {
+                // Signed integers don't need anything special
+                ScalarValue::Sint(int) => write!(self.out, "{}", int)?,
+                // Unsigned integers need a `u` at the end
+                //
+                // While `core` doesn't necessarily need it, it's allowed and since `es` needs it we
+                // always write it as the extra branch wouldn't have any benefit in readability
+                ScalarValue::Uint(int) => write!(self.out, "{}u", int)?,
+                // Floats are written using `Debug` insted of `Display` because it always appends the
+                // decimal part even it's zero which is needed for a valid glsl float constant
+                ScalarValue::Float(float) => write!(self.out, "{:?}", float)?,
+                // Booleans are either `true` or `false` so nothing special needs to be done
+                ScalarValue::Bool(boolean) => write!(self.out, "{}", boolean)?,
+            },
             // Composite constant are created using the same syntax as compose
             // `type(components)` where `components` is a comma separated list of constants
-            ConstantInner::Composite(ref components) => {
-                self.write_type(constant.ty)?;
+            ConstantInner::Composite { ty, ref components } => {
+                self.write_type(ty)?;
                 write!(self.out, "(")?;
 
                 // Write the comma separated constants

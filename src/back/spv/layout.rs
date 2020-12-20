@@ -1,4 +1,4 @@
-use crate::back::spv::{Instruction, LogicalLayout, PhysicalLayout};
+use super::{Instruction, LogicalLayout, PhysicalLayout};
 use spirv::*;
 use std::iter;
 

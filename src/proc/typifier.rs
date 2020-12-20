@@ -170,7 +170,15 @@ impl Typifier {
                     })
                 }
             },
-            crate::Expression::Constant(h) => Resolution::Handle(ctx.constants[h].ty),
+            crate::Expression::Constant(h) => match ctx.constants[h].inner {
+                crate::ConstantInner::Scalar { width, ref value } => {
+                    Resolution::Value(crate::TypeInner::Scalar {
+                        kind: value.scalar_kind(),
+                        width,
+                    })
+                }
+                crate::ConstantInner::Composite { ty, components: _ } => Resolution::Handle(ty),
+            },
             crate::Expression::Compose { ty, .. } => Resolution::Handle(ty),
             crate::Expression::FunctionArgument(index) => {
                 Resolution::Handle(ctx.arguments[index as usize].ty)
@@ -456,40 +464,5 @@ impl Typifier {
             self.resolutions.push(resolution);
         }
         Ok(())
-    }
-}
-
-pub fn check_constant_type(inner: &crate::ConstantInner, type_inner: &crate::TypeInner) -> bool {
-    match (inner, type_inner) {
-        (
-            crate::ConstantInner::Sint(_),
-            crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Sint,
-                width: _,
-            },
-        ) => true,
-        (
-            crate::ConstantInner::Uint(_),
-            crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Uint,
-                width: _,
-            },
-        ) => true,
-        (
-            crate::ConstantInner::Float(_),
-            crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Float,
-                width: _,
-            },
-        ) => true,
-        (
-            crate::ConstantInner::Bool(_),
-            crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Bool,
-                width: _,
-            },
-        ) => true,
-        (crate::ConstantInner::Composite(_inner), _) => true, // TODO recursively check composite types
-        (_, _) => false,
     }
 }

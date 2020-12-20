@@ -14,8 +14,8 @@ struct Data {
 	type3 view;
 };
 typedef int type4;
-typedef float type5;
-typedef metal::float3x3 type6;
+typedef metal::float3x3 type5;
+typedef float type6;
 typedef metal::texturecube<float, metal::access::sample> type7;
 typedef metal::sampler type8;
 typedef metal::int3 type9;

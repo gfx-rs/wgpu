@@ -369,16 +369,14 @@ impl Parser {
         }
     }
 
-    fn get_constant_inner(
-        word: &str,
-    ) -> Result<(crate::ConstantInner, crate::ScalarKind), Error<'_>> {
+    fn get_scalar_value(word: &str) -> Result<crate::ScalarValue, Error<'_>> {
         if word.contains('.') {
             word.parse()
-                .map(|f| (crate::ConstantInner::Float(f), crate::ScalarKind::Float))
+                .map(crate::ScalarValue::Float)
                 .map_err(|err| Error::BadFloat(word, err))
         } else {
             word.parse()
-                .map(|i| (crate::ConstantInner::Sint(i), crate::ScalarKind::Sint))
+                .map(crate::ScalarValue::Sint)
                 .map_err(|err| Error::BadInteger(word, err))
         }
     }
@@ -688,16 +686,24 @@ impl Parser {
         let inner = match lexer.peek() {
             Token::Word("true") => {
                 let _ = lexer.next();
-                crate::ConstantInner::Bool(true)
+                crate::ConstantInner::Scalar {
+                    width: 1,
+                    value: crate::ScalarValue::Bool(true),
+                }
             }
             Token::Word("false") => {
                 let _ = lexer.next();
-                crate::ConstantInner::Bool(false)
+                crate::ConstantInner::Scalar {
+                    width: 1,
+                    value: crate::ScalarValue::Bool(false),
+                }
             }
             Token::Number(word) => {
                 let _ = lexer.next();
-                let (inner, _) = Self::get_constant_inner(word)?;
-                inner
+                crate::ConstantInner::Scalar {
+                    width: 4,
+                    value: Self::get_scalar_value(word)?,
+                }
             }
             _ => {
                 let (composite_ty, _access) =
@@ -717,14 +723,16 @@ impl Parser {
                         self.parse_const_expression(lexer, ty, type_arena, const_arena)?;
                     components.push(component);
                 }
-                crate::ConstantInner::Composite(components)
+                crate::ConstantInner::Composite {
+                    ty: self_ty,
+                    components,
+                }
             }
         };
         let handle = const_arena.fetch_or_append(crate::Constant {
             name: None,
             specialization: None,
             inner,
-            ty: self_ty,
         });
         self.scopes.pop();
         Ok(handle)
@@ -747,14 +755,10 @@ impl Parser {
                 let handle = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
                     specialization: None,
-                    inner: crate::ConstantInner::Bool(true),
-                    ty: ctx.types.fetch_or_append(crate::Type {
-                        name: None,
-                        inner: crate::TypeInner::Scalar {
-                            kind: crate::ScalarKind::Bool,
-                            width: 1,
-                        },
-                    }),
+                    inner: crate::ConstantInner::Scalar {
+                        width: 1,
+                        value: crate::ScalarValue::Bool(true),
+                    },
                 });
                 crate::Expression::Constant(handle)
             }
@@ -762,27 +766,19 @@ impl Parser {
                 let handle = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
                     specialization: None,
-                    inner: crate::ConstantInner::Bool(false),
-                    ty: ctx.types.fetch_or_append(crate::Type {
-                        name: None,
-                        inner: crate::TypeInner::Scalar {
-                            kind: crate::ScalarKind::Bool,
-                            width: 1,
-                        },
-                    }),
+                    inner: crate::ConstantInner::Scalar {
+                        width: 1,
+                        value: crate::ScalarValue::Bool(false),
+                    },
                 });
                 crate::Expression::Constant(handle)
             }
             Token::Number(word) => {
-                let (inner, kind) = Self::get_constant_inner(word)?;
+                let value = Self::get_scalar_value(word)?;
                 let handle = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
                     specialization: None,
-                    inner,
-                    ty: ctx.types.fetch_or_append(crate::Type {
-                        name: None,
-                        inner: crate::TypeInner::Scalar { kind, width: 4 },
-                    }),
+                    inner: crate::ConstantInner::Scalar { width: 4, value },
                 });
                 crate::Expression::Constant(handle)
             }
@@ -1304,14 +1300,10 @@ impl Parser {
                         let const_handle = const_arena.fetch_or_append(crate::Constant {
                             name: None,
                             specialization: None,
-                            inner: crate::ConstantInner::Uint(value as u64),
-                            ty: type_arena.fetch_or_append(crate::Type {
-                                name: None,
-                                inner: crate::TypeInner::Scalar {
-                                    kind: crate::ScalarKind::Uint,
-                                    width: 4,
-                                },
-                            }),
+                            inner: crate::ConstantInner::Scalar {
+                                width: 4,
+                                value: crate::ScalarValue::Uint(value as u64),
+                            },
                         });
                         crate::ArraySize::Constant(const_handle)
                     }

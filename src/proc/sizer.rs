@@ -28,7 +28,10 @@ impl Sizer {
                 Ti::Array { base, size, stride } => {
                     let count = match size {
                         crate::ArraySize::Constant(handle) => match constants[handle].inner {
-                            crate::ConstantInner::Uint(value) => value as u32,
+                            crate::ConstantInner::Scalar {
+                                width: _,
+                                value: crate::ScalarValue::Uint(value),
+                            } => value as u32,
                             ref other => unreachable!("Unexpected array size {:?}", other),
                         },
                         crate::ArraySize::Dynamic => 1,

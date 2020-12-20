@@ -15,7 +15,7 @@ pub use interface::{Interface, Visitor};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use sizer::Sizer;
 pub use terminator::ensure_block_returns;
-pub use typifier::{check_constant_type, ResolveContext, ResolveError, Typifier};
+pub use typifier::{ResolveContext, ResolveError, Typifier};
 pub use validator::{ValidationError, Validator};
 
 impl From<super::StorageFormat> for super::ScalarKind {
@@ -54,6 +54,17 @@ impl From<super::StorageFormat> for super::ScalarKind {
             Sf::Rgba32Uint => Sk::Uint,
             Sf::Rgba32Sint => Sk::Sint,
             Sf::Rgba32Float => Sk::Float,
+        }
+    }
+}
+
+impl crate::ScalarValue {
+    pub fn scalar_kind(&self) -> crate::ScalarKind {
+        match *self {
+            Self::Uint(_) => crate::ScalarKind::Uint,
+            Self::Sint(_) => crate::ScalarKind::Sint,
+            Self::Float(_) => crate::ScalarKind::Float,
+            Self::Bool(_) => crate::ScalarKind::Bool,
         }
     }
 }

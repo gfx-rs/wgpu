@@ -21,12 +21,12 @@ struct SimParams {
 	type2 rule2Scale;
 	type2 rule3Scale;
 };
-typedef uint type3;
-typedef Particle type4[5];
+typedef Particle type3[5];
 struct Particles {
-	type4 particles;
+	type3 particles;
 };
-typedef metal::uint3 type5;
+typedef metal::uint3 type4;
+typedef uint type5;
 typedef int type6;
 
 struct main1Input {
@@ -60,7 +60,7 @@ kernel void main3(
 	constant SimParams& params [[buffer(0)]],
 	constant Particles& particlesA [[buffer(1)]],
 	device Particles& particlesB [[buffer(2)]],
-	type5 gl_GlobalInvocationID [[thread_position_in_grid]]
+	type4 gl_GlobalInvocationID [[thread_position_in_grid]]
 ) {
 	type vPos;
 	type vVel;
@@ -71,7 +71,7 @@ kernel void main3(
 	type6 cVelCount = 0;
 	type pos1;
 	type vel1;
-	type3 i = 0;
+	type5 i = 0;
 	if (gl_GlobalInvocationID.x >= static_cast<uint>(5)) {
 	}
 	vPos = particlesA.particles[gl_GlobalInvocationID.x].pos;

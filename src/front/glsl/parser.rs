@@ -10,7 +10,7 @@ pomelo! {
             Arena, BinaryOperator, Binding, Block, Constant,
             ConstantInner, EntryPoint, Expression,
             Function, GlobalVariable, Handle, Interpolation,
-            LocalVariable, SampleLevel, ScalarKind,
+            LocalVariable, SampleLevel, ScalarValue,
             Statement, StorageAccess, StorageClass, StructMember,
             SwitchCase, Type, TypeInner, UnaryOperator,
         };
@@ -165,18 +165,13 @@ pomelo! {
 
     primary_expression ::= variable_identifier;
     primary_expression ::= IntConstant(i) {
-        let ty = extra.module.types.fetch_or_append(Type {
-            name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Sint,
-                width: 4,
-            }
-        });
         let ch = extra.module.constants.fetch_or_append(Constant {
             name: None,
             specialization: None,
-            ty,
-            inner: ConstantInner::Sint(i.1)
+            inner: ConstantInner::Scalar {
+                width: 4,
+                value: ScalarValue::Sint(i.1),
+            },
         });
         ExpressionRule::from_expression(
             extra.context.expressions.append(Expression::Constant(ch))
@@ -184,36 +179,26 @@ pomelo! {
     }
     // primary_expression ::= UintConstant;
     primary_expression ::= FloatConstant(f) {
-        let ty = extra.module.types.fetch_or_append(Type {
-            name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Float,
-                width: 4,
-            }
-        });
         let ch = extra.module.constants.fetch_or_append(Constant {
             name: None,
             specialization: None,
-            ty,
-            inner: ConstantInner::Float(f.1 as f64)
+            inner: ConstantInner::Scalar {
+                width: 4,
+                value: ScalarValue::Float(f.1 as f64),
+            },
         });
         ExpressionRule::from_expression(
             extra.context.expressions.append(Expression::Constant(ch))
         )
     }
     primary_expression ::= BoolConstant(b) {
-        let ty = extra.module.types.fetch_or_append(Type {
-            name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Bool,
-                width: 4,
-            }
-        });
         let ch = extra.module.constants.fetch_or_append(Constant {
             name: None,
             specialization: None,
-            ty,
-            inner: ConstantInner::Bool(b.1)
+            inner: ConstantInner::Scalar {
+                width: 1,
+                value: ScalarValue::Bool(b.1)
+            },
         });
         ExpressionRule::from_expression(
             extra.context.expressions.append(Expression::Constant(ch))

@@ -396,7 +396,17 @@ pub struct Constant {
     pub name: Option<String>,
     pub specialization: Option<u32>,
     pub inner: ConstantInner,
-    pub ty: Handle<Type>,
+}
+
+/// A literal scalar value, used in constants.
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum ScalarValue {
+    Sint(i64),
+    Uint(u64),
+    Float(f64),
+    Bool(bool),
 }
 
 /// Additional information, dependendent on the kind of constant.
@@ -404,11 +414,14 @@ pub struct Constant {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ConstantInner {
-    Sint(i64),
-    Uint(u64),
-    Float(f64),
-    Bool(bool),
-    Composite(Vec<Handle<Constant>>),
+    Scalar {
+        width: Bytes,
+        value: ScalarValue,
+    },
+    Composite {
+        ty: Handle<Type>,
+        components: Vec<Handle<Constant>>,
+    },
 }
 
 /// Describes how an input/output variable is to be bound.

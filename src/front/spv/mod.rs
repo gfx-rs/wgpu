@@ -624,8 +624,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 let index = match expressions[index_expr.handle] {
                                     crate::Expression::Constant(const_handle) => {
                                         match const_arena[const_handle].inner {
-                                            crate::ConstantInner::Uint(v) => v as u32,
-                                            crate::ConstantInner::Sint(v) => v as u32,
+                                            crate::ConstantInner::Scalar {
+                                                width: 4,
+                                                value: crate::ScalarValue::Uint(v),
+                                            } => v as u32,
+                                            crate::ConstantInner::Scalar {
+                                                width: 4,
+                                                value: crate::ScalarValue::Sint(v),
+                                            } => v as u32,
                                             _ => {
                                                 return Err(Error::InvalidAccess(index_expr.handle))
                                             }
@@ -2168,7 +2174,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 } else {
                     0
                 };
-                crate::ConstantInner::Uint((u64::from(high) << 32) | u64::from(low))
+                crate::ConstantInner::Scalar {
+                    width,
+                    value: crate::ScalarValue::Uint((u64::from(high) << 32) | u64::from(low)),
+                }
             }
             crate::TypeInner::Scalar {
                 kind: crate::ScalarKind::Sint,
@@ -2184,7 +2193,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
                     Ordering::Equal => 0,
                 };
-                crate::ConstantInner::Sint(((u64::from(high) << 32) | u64::from(low)) as i64)
+                crate::ConstantInner::Scalar {
+                    width,
+                    value: crate::ScalarValue::Sint(
+                        ((u64::from(high) << 32) | u64::from(low)) as i64,
+                    ),
+                }
             }
             crate::TypeInner::Scalar {
                 kind: crate::ScalarKind::Float,
@@ -2200,7 +2214,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
                     _ => return Err(Error::InvalidTypeWidth(u32::from(width))),
                 };
-                crate::ConstantInner::Float(extended)
+                crate::ConstantInner::Scalar {
+                    width,
+                    value: crate::ScalarValue::Float(extended),
+                }
             }
             _ => return Err(Error::UnsupportedType(type_lookup.handle)),
         };
@@ -2211,7 +2228,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     name: self.future_decor.remove(&id).and_then(|dec| dec.name),
                     specialization: None, //TODO
                     inner,
-                    ty,
                 }),
                 type_id,
             },
@@ -2229,15 +2245,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let type_id = self.next()?;
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
-
         let id = self.next()?;
 
-        let constituents_count = inst.wc - 3;
-        let mut constituents = Vec::with_capacity(constituents_count as usize);
-        for _ in 0..constituents_count {
-            let constituent_id = self.next()?;
-            let constant = self.lookup_constant.lookup(constituent_id)?;
-            constituents.push(constant.handle);
+        let mut components = Vec::with_capacity(inst.wc as usize - 3);
+        for _ in 0..components.capacity() {
+            let component_id = self.next()?;
+            let constant = self.lookup_constant.lookup(component_id)?;
+            components.push(constant.handle);
         }
 
         self.lookup_constant.insert(
@@ -2246,8 +2260,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 handle: module.constants.append(crate::Constant {
                     name: self.future_decor.remove(&id).and_then(|dec| dec.name),
                     specialization: None,
-                    inner: crate::ConstantInner::Composite(constituents),
-                    ty,
+                    inner: crate::ConstantInner::Composite { ty, components },
                 }),
                 type_id,
             },

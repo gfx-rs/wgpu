@@ -6,7 +6,6 @@ expression: msl
 #include <simd/simd.h>
 
 typedef metal::float4 type;
-typedef int type1;
 
 struct main1Input {
 };

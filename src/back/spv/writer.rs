@@ -695,76 +695,75 @@ impl Writer {
         let arena = &ir_module.types;
 
         let instruction = match constant.inner {
-            crate::ConstantInner::Sint(val) => {
-                let ty = &ir_module.types[constant.ty];
-                let type_id = self.get_type_id(arena, LookupType::Handle(constant.ty))?;
-
-                match ty.inner {
-                    crate::TypeInner::Scalar { kind: _, width } => match width {
-                        4 => super::instructions::instruction_constant(type_id, id, &[val as u32]),
-                        8 => {
-                            let (low, high) = ((val >> 32) as u32, val as u32);
-                            super::instructions::instruction_constant(type_id, id, &[low, high])
-                        }
-                        _ => unreachable!(),
-                    },
-                    _ => unreachable!(),
+            crate::ConstantInner::Scalar { width, ref value } => {
+                let type_id = self.get_type_id(
+                    arena,
+                    LookupType::Local(LocalType::Scalar {
+                        kind: value.scalar_kind(),
+                        width,
+                    }),
+                )?;
+                let (solo, pair);
+                match *value {
+                    crate::ScalarValue::Sint(val) => {
+                        let words = match width {
+                            4 => {
+                                solo = [val as u32];
+                                &solo[..]
+                            }
+                            8 => {
+                                pair = [(val >> 32) as u32, val as u32];
+                                &pair
+                            }
+                            _ => unreachable!(),
+                        };
+                        super::instructions::instruction_constant(type_id, id, words)
+                    }
+                    crate::ScalarValue::Uint(val) => {
+                        let words = match width {
+                            4 => {
+                                solo = [val as u32];
+                                &solo[..]
+                            }
+                            8 => {
+                                pair = [(val >> 32) as u32, val as u32];
+                                &pair
+                            }
+                            _ => unreachable!(),
+                        };
+                        super::instructions::instruction_constant(type_id, id, words)
+                    }
+                    crate::ScalarValue::Float(val) => {
+                        let words = match width {
+                            4 => {
+                                solo = [(val as f32).to_bits()];
+                                &solo[..]
+                            }
+                            8 => {
+                                let bits = f64::to_bits(val);
+                                pair = [(bits >> 32) as u32, bits as u32];
+                                &pair
+                            }
+                            _ => unreachable!(),
+                        };
+                        super::instructions::instruction_constant(type_id, id, words)
+                    }
+                    crate::ScalarValue::Bool(true) => {
+                        super::instructions::instruction_constant_true(type_id, id)
+                    }
+                    crate::ScalarValue::Bool(false) => {
+                        super::instructions::instruction_constant_false(type_id, id)
+                    }
                 }
             }
-            crate::ConstantInner::Uint(val) => {
-                let ty = &ir_module.types[constant.ty];
-                let type_id = self.get_type_id(arena, LookupType::Handle(constant.ty))?;
-
-                match ty.inner {
-                    crate::TypeInner::Scalar { kind: _, width } => match width {
-                        4 => super::instructions::instruction_constant(type_id, id, &[val as u32]),
-                        8 => {
-                            let (low, high) = ((val >> 32) as u32, val as u32);
-                            super::instructions::instruction_constant(type_id, id, &[low, high])
-                        }
-                        _ => unreachable!(),
-                    },
-                    _ => unreachable!(),
-                }
-            }
-            crate::ConstantInner::Float(val) => {
-                let ty = &ir_module.types[constant.ty];
-                let type_id = self.get_type_id(arena, LookupType::Handle(constant.ty))?;
-
-                match ty.inner {
-                    crate::TypeInner::Scalar { kind: _, width } => match width {
-                        4 => super::instructions::instruction_constant(
-                            type_id,
-                            id,
-                            &[(val as f32).to_bits()],
-                        ),
-                        8 => {
-                            let bits = f64::to_bits(val);
-                            let (low, high) = ((bits >> 32) as u32, bits as u32);
-                            super::instructions::instruction_constant(type_id, id, &[low, high])
-                        }
-                        _ => unreachable!(),
-                    },
-                    _ => unreachable!(),
-                }
-            }
-            crate::ConstantInner::Bool(val) => {
-                let type_id = self.get_type_id(arena, LookupType::Handle(constant.ty))?;
-
-                if val {
-                    super::instructions::instruction_constant_true(type_id, id)
-                } else {
-                    super::instructions::instruction_constant_false(type_id, id)
-                }
-            }
-            crate::ConstantInner::Composite(ref constituents) => {
-                let mut constituent_ids = Vec::with_capacity(constituents.len());
-                for constituent in constituents.iter() {
+            crate::ConstantInner::Composite { ty, ref components } => {
+                let mut constituent_ids = Vec::with_capacity(components.len());
+                for constituent in components.iter() {
                     let constituent_id = self.get_constant_id(*constituent, &ir_module)?;
                     constituent_ids.push(constituent_id);
                 }
 
-                let type_id = self.get_type_id(arena, LookupType::Handle(constant.ty))?;
+                let type_id = self.get_type_id(arena, LookupType::Handle(ty))?;
                 super::instructions::instruction_constant_composite(
                     type_id,
                     id,
@@ -1115,7 +1114,16 @@ impl Writer {
             crate::Expression::Constant(handle) => {
                 let var = &ir_module.constants[handle];
                 let id = self.get_constant_id(handle, ir_module)?;
-                Ok((RawExpression::Value(id), LookupType::Handle(var.ty)))
+                let lookup_type = match var.inner {
+                    crate::ConstantInner::Scalar { width, ref value } => {
+                        LookupType::Local(LocalType::Scalar {
+                            kind: value.scalar_kind(),
+                            width,
+                        })
+                    }
+                    crate::ConstantInner::Composite { ty, components: _ } => LookupType::Handle(ty),
+                };
+                Ok((RawExpression::Value(id), lookup_type))
             }
             crate::Expression::Compose { ty, ref components } => {
                 let base_type_id = self.get_type_id(&ir_module.types, LookupType::Handle(ty))?;

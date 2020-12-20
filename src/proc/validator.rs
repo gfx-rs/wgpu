@@ -24,6 +24,14 @@ pub enum TypeError {
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum ConstantError {
+    #[error("The type doesn't match the constant")]
+    InvalidType,
+    #[error("The component handle {0:?} can not be resolved")]
+    UnresolvedComponent(Handle<crate::Constant>),
+}
+
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum GlobalVariableError {
     #[error("Usage isn't compatible with the storage class")]
     InvalidUsage,
@@ -93,6 +101,12 @@ pub enum ValidationError {
         handle: Handle<crate::Type>,
         name: String,
         error: TypeError,
+    },
+    #[error("Constant {handle:?} '{name}' is invalid: {error:?}")]
+    Constant {
+        handle: Handle<crate::Constant>,
+        name: String,
+        error: ConstantError,
     },
     #[error("Global variable {handle:?} '{name}' is invalid: {error:?}")]
     GlobalVariable {
@@ -227,6 +241,13 @@ impl Validator {
         }
     }
 
+    fn check_width(kind: crate::ScalarKind, width: crate::Bytes) -> bool {
+        match kind {
+            crate::ScalarKind::Bool => width == 1,
+            _ => width == 4,
+        }
+    }
+
     fn validate_type(
         &self,
         ty: &crate::Type,
@@ -236,16 +257,12 @@ impl Validator {
         use crate::TypeInner as Ti;
         match ty.inner {
             Ti::Scalar { kind, width } | Ti::Vector { kind, width, .. } => {
-                let expected = match kind {
-                    crate::ScalarKind::Bool => 1,
-                    _ => 4,
-                };
-                if width != expected {
+                if !Self::check_width(kind, width) {
                     return Err(TypeError::InvalidWidth(kind, width));
                 }
             }
             Ti::Matrix { width, .. } => {
-                if width != 4 {
+                if !Self::check_width(crate::ScalarKind::Float, width) {
                     return Err(TypeError::InvalidWidth(crate::ScalarKind::Float, width));
                 }
             }
@@ -261,7 +278,11 @@ impl Validator {
                 if let crate::ArraySize::Constant(const_handle) = size {
                     match constants.try_get(const_handle) {
                         Some(&crate::Constant {
-                            inner: crate::ConstantInner::Uint(_),
+                            inner:
+                                crate::ConstantInner::Scalar {
+                                    width: _,
+                                    value: crate::ScalarValue::Uint(_),
+                                },
                             ..
                         }) => {}
                         _ => {
@@ -283,6 +304,32 @@ impl Validator {
             }
             Ti::Image { .. } => {}
             Ti::Sampler { comparison: _ } => {}
+        }
+        Ok(())
+    }
+
+    fn validate_constant(
+        &self,
+        handle: Handle<crate::Constant>,
+        constants: &Arena<crate::Constant>,
+        _types: &Arena<crate::Type>,
+    ) -> Result<(), ConstantError> {
+        let con = &constants[handle];
+        match con.inner {
+            crate::ConstantInner::Scalar { width, ref value } => {
+                if !Self::check_width(value.scalar_kind(), width) {
+                    return Err(ConstantError::InvalidType);
+                }
+            }
+            crate::ConstantInner::Composite {
+                ty: _,
+                ref components,
+            } => {
+                if let Some(&comp) = components.iter().find(|&&comp| handle <= comp) {
+                    return Err(ConstantError::UnresolvedComponent(comp));
+                }
+                //TODO
+            }
         }
         Ok(())
     }
@@ -522,7 +569,6 @@ impl Validator {
 
     /// Check the given module to be valid.
     pub fn validate(&mut self, module: &crate::Module) -> Result<(), ValidationError> {
-        // check the types
         for (handle, ty) in module.types.iter() {
             self.validate_type(ty, handle, &module.constants)
                 .map_err(|error| ValidationError::Type {
@@ -532,6 +578,14 @@ impl Validator {
                 })?;
         }
 
+        for (handle, constant) in module.constants.iter() {
+            self.validate_constant(handle, &module.constants, &module.types)
+                .map_err(|error| ValidationError::Constant {
+                    handle,
+                    name: constant.name.clone().unwrap_or_default(),
+                    error,
+                })?;
+        }
         for (var_handle, var) in module.global_variables.iter() {
             self.validate_global_var(var, &module.types)
                 .map_err(|error| ValidationError::GlobalVariable {

@@ -32,14 +32,18 @@
         (
             name: None,
             specialization: None,
-            inner: Float(1),
-            ty: 3,
+            inner: Scalar(
+                width: 4,
+                value: Float(1),
+            ),
         ),
         (
             name: None,
             specialization: None,
-            inner: Float(0),
-            ty: 3,
+            inner: Scalar(
+                width: 4,
+                value: Float(0),
+            ),
         ),
     ],
     global_variables: [
