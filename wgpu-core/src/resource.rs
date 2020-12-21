@@ -238,6 +238,8 @@ pub enum CreateTextureError {
     InvalidDimension(#[from] TextureDimensionError),
     #[error("texture descriptor mip level count ({0}) is invalid")]
     InvalidMipLevelCount(u32),
+    #[error("The texture usages {0:?} are not allowed on a texture of type {1:?}")]
+    InvalidUsages(wgt::TextureUsage, wgt::TextureFormat),
     #[error("Feature {0:?} must be enabled to create a texture of type {1:?}")]
     MissingFeature(wgt::Features, wgt::TextureFormat),
 }
