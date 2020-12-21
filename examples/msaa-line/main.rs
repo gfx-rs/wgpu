@@ -193,15 +193,17 @@ impl framework::Example for Example {
             winit::event::WindowEvent::KeyboardInput { input, .. } => {
                 if let winit::event::ElementState::Pressed = input.state {
                     match input.virtual_keycode {
+                        // TODO: Switch back to full scans of possible options when we expose
+                        //       supported sample counts to the user.
                         Some(winit::event::VirtualKeyCode::Left) => {
-                            if self.sample_count >= 2 {
-                                self.sample_count = self.sample_count >> 1;
+                            if self.sample_count == 4 {
+                                self.sample_count = 1;
                                 self.rebuild_bundle = true;
                             }
                         }
                         Some(winit::event::VirtualKeyCode::Right) => {
-                            if self.sample_count <= 16 {
-                                self.sample_count = self.sample_count << 1;
+                            if self.sample_count == 1 {
+                                self.sample_count = 4;
                                 self.rebuild_bundle = true;
                             }
                         }
