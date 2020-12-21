@@ -38,7 +38,9 @@ impl Program {
             FunctionCallKind::Function(name) => {
                 match name.as_str() {
                     "sampler2D" => {
-                        //TODO: check args len
+                        if fc.args.len() != 2 {
+                            return Err(ErrorKind::WrongNumberArgs(name, 2, fc.args.len()));
+                        }
                         Ok(ExpressionRule {
                             expression: fc.args[0].expression,
                             sampler: Some(fc.args[1].expression),
@@ -51,7 +53,9 @@ impl Program {
                         })
                     }
                     "texture" => {
-                        //TODO: check args len
+                        if fc.args.len() != 2 {
+                            return Err(ErrorKind::WrongNumberArgs(name, 2, fc.args.len()));
+                        }
                         if let Some(sampler) = fc.args[0].sampler {
                             Ok(ExpressionRule {
                                 expression: self.context.expressions.append(
@@ -78,7 +82,9 @@ impl Program {
                         }
                     }
                     "ceil" | "round" | "floor" | "fract" | "trunc" => {
-                        //TODO: check args len
+                        if fc.args.len() != 1 {
+                            return Err(ErrorKind::WrongNumberArgs(name, 1, fc.args.len()));
+                        }
                         Ok(ExpressionRule {
                             expression: self.context.expressions.append(Expression::Math {
                                 fun: match name.as_str() {
