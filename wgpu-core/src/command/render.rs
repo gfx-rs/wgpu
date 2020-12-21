@@ -274,23 +274,40 @@ impl VertexBufferState {
 #[derive(Debug, Default)]
 struct VertexState {
     inputs: ArrayVec<[VertexBufferState; MAX_VERTEX_BUFFERS]>,
+    /// Length of the shortest vertex rate vertex buffer
     vertex_limit: u32,
+    /// Buffer slot which the shortest vertex rate vertex buffer is bound to
+    vertex_limit_slot: u32,
+    /// Length of the shortest instance rate vertex buffer
     instance_limit: u32,
+    /// Buffer slot which the shortest instance rate vertex buffer is bound to
+    instance_limit_slot: u32,
+    /// Total amount of buffers required by the pipeline.
     buffers_required: u32,
 }
 
 impl VertexState {
     fn update_limits(&mut self) {
-        self.vertex_limit = !0;
-        self.instance_limit = !0;
-        for vbs in &self.inputs {
+        self.vertex_limit = u32::MAX;
+        self.instance_limit = u32::MAX;
+        for (idx, vbs) in self.inputs.iter().enumerate() {
             if vbs.stride == 0 || !vbs.bound {
                 continue;
             }
             let limit = (vbs.total_size / vbs.stride) as u32;
             match vbs.rate {
-                InputStepMode::Vertex => self.vertex_limit = self.vertex_limit.min(limit),
-                InputStepMode::Instance => self.instance_limit = self.instance_limit.min(limit),
+                InputStepMode::Vertex => {
+                    if limit < self.vertex_limit {
+                        self.vertex_limit = limit;
+                        self.vertex_limit_slot = idx as _;
+                    }
+                }
+                InputStepMode::Instance => {
+                    if limit < self.instance_limit {
+                        self.instance_limit = limit;
+                        self.instance_limit_slot = idx as _;
+                    }
+                }
             }
         }
     }
@@ -1427,6 +1444,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         return Err(DrawError::VertexBeyondLimit {
                             last_vertex,
                             vertex_limit,
+                            slot: state.vertex.vertex_limit_slot,
                         })
                         .map_pass_err(scope);
                     }
@@ -1436,6 +1454,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         return Err(DrawError::InstanceBeyondLimit {
                             last_instance,
                             instance_limit,
+                            slot: state.vertex.instance_limit_slot,
                         })
                         .map_pass_err(scope);
                     }
@@ -1473,6 +1492,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         return Err(DrawError::InstanceBeyondLimit {
                             last_instance,
                             instance_limit,
+                            slot: state.vertex.instance_limit_slot,
                         })
                         .map_pass_err(scope);
                     }

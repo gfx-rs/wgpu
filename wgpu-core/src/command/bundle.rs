@@ -313,20 +313,22 @@ impl RenderBundleEncoder {
                     first_instance,
                 } => {
                     let scope = PassErrorScope::Draw;
-                    let (vertex_limit, instance_limit) = state.vertex_limits();
+                    let vertex_limits = state.vertex_limits();
                     let last_vertex = first_vertex + vertex_count;
-                    if last_vertex > vertex_limit {
+                    if last_vertex > vertex_limits.vertex_limit {
                         return Err(DrawError::VertexBeyondLimit {
                             last_vertex,
-                            vertex_limit,
+                            vertex_limit: vertex_limits.vertex_limit,
+                            slot: vertex_limits.vertex_limit_slot,
                         })
                         .map_pass_err(scope);
                     }
                     let last_instance = first_instance + instance_count;
-                    if last_instance > instance_limit {
+                    if last_instance > vertex_limits.instance_limit {
                         return Err(DrawError::InstanceBeyondLimit {
                             last_instance,
-                            instance_limit,
+                            instance_limit: vertex_limits.instance_limit,
+                            slot: vertex_limits.instance_limit_slot,
                         })
                         .map_pass_err(scope);
                     }
@@ -343,7 +345,7 @@ impl RenderBundleEncoder {
                 } => {
                     let scope = PassErrorScope::DrawIndexed;
                     //TODO: validate that base_vertex + max_index() is within the provided range
-                    let (_, instance_limit) = state.vertex_limits();
+                    let vertex_limits = state.vertex_limits();
                     let index_limit = state.index.limit();
                     let last_index = first_index + index_count;
                     if last_index > index_limit {
@@ -354,10 +356,11 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope);
                     }
                     let last_instance = first_instance + instance_count;
-                    if last_instance > instance_limit {
+                    if last_instance > vertex_limits.instance_limit {
                         return Err(DrawError::InstanceBeyondLimit {
                             last_instance,
-                            instance_limit,
+                            instance_limit: vertex_limits.instance_limit,
+                            slot: vertex_limits.instance_limit_slot,
                         })
                         .map_pass_err(scope);
                     }
@@ -856,6 +859,18 @@ impl PushConstantState {
 }
 
 #[derive(Debug)]
+struct VertexLimitState {
+    /// Length of the shortest vertex rate vertex buffer
+    vertex_limit: u32,
+    /// Buffer slot which the shortest vertex rate vertex buffer is bound to
+    vertex_limit_slot: u32,
+    /// Length of the shortest instance rate vertex buffer
+    instance_limit: u32,
+    /// Buffer slot which the shortest instance rate vertex buffer is bound to
+    instance_limit_slot: u32,
+}
+
+#[derive(Debug)]
 struct State {
     trackers: TrackerSet,
     index: IndexState,
@@ -869,20 +884,34 @@ struct State {
 }
 
 impl State {
-    fn vertex_limits(&self) -> (u32, u32) {
-        let mut vertex_limit = !0;
-        let mut instance_limit = !0;
-        for vbs in &self.vertex {
+    fn vertex_limits(&self) -> VertexLimitState {
+        let mut vert_state = VertexLimitState {
+            vertex_limit: u32::MAX,
+            vertex_limit_slot: 0,
+            instance_limit: u32::MAX,
+            instance_limit_slot: 0,
+        };
+        for (idx, vbs) in self.vertex.iter().enumerate() {
             if vbs.stride == 0 {
                 continue;
             }
             let limit = ((vbs.range.end - vbs.range.start) / vbs.stride) as u32;
             match vbs.rate {
-                wgt::InputStepMode::Vertex => vertex_limit = vertex_limit.min(limit),
-                wgt::InputStepMode::Instance => instance_limit = instance_limit.min(limit),
+                wgt::InputStepMode::Vertex => {
+                    if limit < vert_state.vertex_limit {
+                        vert_state.vertex_limit = limit;
+                        vert_state.vertex_limit_slot = idx as _;
+                    }
+                }
+                wgt::InputStepMode::Instance => {
+                    if limit < vert_state.instance_limit {
+                        vert_state.instance_limit = limit;
+                        vert_state.instance_limit_slot = idx as _;
+                    }
+                }
             }
         }
-        (vertex_limit, instance_limit)
+        vert_state
     }
 
     fn invalidate_group_from(&mut self, slot: usize) {

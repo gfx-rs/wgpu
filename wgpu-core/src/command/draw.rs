@@ -36,12 +36,17 @@ pub enum DrawError {
         //expected: BindGroupLayoutId,
         //provided: Option<(BindGroupLayoutId, BindGroupId)>,
     },
-    #[error("vertex {last_vertex} extends beyond limit {vertex_limit}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
-    VertexBeyondLimit { last_vertex: u32, vertex_limit: u32 },
-    #[error("instance {last_instance} extends beyond limit {instance_limit}. Did you bind the correct `Instance` step-rate vertex buffer?")]
+    #[error("vertex {last_vertex} extends beyond limit {vertex_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
+    VertexBeyondLimit {
+        last_vertex: u32,
+        vertex_limit: u32,
+        slot: u32,
+    },
+    #[error("instance {last_instance} extends beyond limit {instance_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Instance` step-rate vertex buffer?")]
     InstanceBeyondLimit {
         last_instance: u32,
         instance_limit: u32,
+        slot: u32,
     },
     #[error("index {last_index} extends beyond limit {index_limit}. Did you bind the correct index buffer?")]
     IndexBeyondLimit { last_index: u32, index_limit: u32 },
