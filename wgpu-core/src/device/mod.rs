@@ -438,6 +438,10 @@ impl<B: GfxBackend> Device<B> {
             }
         }
 
+        if desc.usage.is_empty() {
+            return Err(resource::CreateBufferError::EmptyUsage);
+        }
+
         let mem_usage = {
             use gpu_alloc::UsageFlags as Uf;
             use wgt::BufferUsage as Bu;
@@ -535,6 +539,10 @@ impl<B: GfxBackend> Device<B> {
                 }
             }
             _ => {}
+        }
+
+        if desc.usage.is_empty() {
+            return Err(resource::CreateTextureError::EmptyUsage);
         }
 
         let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.sample_count)?;
