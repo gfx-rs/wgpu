@@ -438,6 +438,10 @@ impl<B: GfxBackend> Device<B> {
             }
         }
 
+        if desc.usage.is_empty() {
+            return Err(resource::CreateBufferError::EmptyUsage);
+        }
+
         let mem_usage = {
             use gpu_alloc::UsageFlags as Uf;
             use wgt::BufferUsage as Bu;
@@ -516,7 +520,8 @@ impl<B: GfxBackend> Device<B> {
     ) -> Result<resource::Texture<B>, resource::CreateTextureError> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
-        let features = desc.format.describe().features;
+        let format_desc = desc.format.describe();
+        let features = format_desc.features;
         if !self.features.contains(features) {
             return Err(resource::CreateTextureError::MissingFeature(
                 features,
@@ -535,6 +540,18 @@ impl<B: GfxBackend> Device<B> {
                 }
             }
             _ => {}
+        }
+
+        if desc.usage.is_empty() {
+            return Err(resource::CreateTextureError::EmptyUsage);
+        }
+
+        let missing_features = desc.usage - format_desc.allowed_usages;
+        if !missing_features.is_empty() {
+            return Err(resource::CreateTextureError::InvalidUsages(
+                missing_features,
+                desc.format,
+            ));
         }
 
         let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.sample_count)?;

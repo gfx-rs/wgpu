@@ -226,7 +226,7 @@ impl OptionalState {
 #[derive(Debug, Default)]
 struct IndexState {
     bound_buffer_view: Option<(id::Valid<id::BufferId>, Range<BufferAddress>)>,
-    format: IndexFormat,
+    format: Option<IndexFormat>,
     pipeline_format: Option<IndexFormat>,
     limit: u32,
 }
@@ -235,7 +235,10 @@ impl IndexState {
     fn update_limit(&mut self) {
         self.limit = match self.bound_buffer_view {
             Some((_, ref range)) => {
-                let shift = match self.format {
+                let format = self
+                    .format
+                    .expect("IndexState::update_limit must be called after a index buffer is set");
+                let shift = match format {
                     IndexFormat::Uint16 => 1,
                     IndexFormat::Uint32 => 2,
                 };
@@ -256,6 +259,7 @@ struct VertexBufferState {
     total_size: BufferAddress,
     stride: BufferAddress,
     rate: InputStepMode,
+    bound: bool,
 }
 
 impl VertexBufferState {
@@ -263,28 +267,47 @@ impl VertexBufferState {
         total_size: 0,
         stride: 0,
         rate: InputStepMode::Vertex,
+        bound: false,
     };
 }
 
 #[derive(Debug, Default)]
 struct VertexState {
     inputs: ArrayVec<[VertexBufferState; MAX_VERTEX_BUFFERS]>,
+    /// Length of the shortest vertex rate vertex buffer
     vertex_limit: u32,
+    /// Buffer slot which the shortest vertex rate vertex buffer is bound to
+    vertex_limit_slot: u32,
+    /// Length of the shortest instance rate vertex buffer
     instance_limit: u32,
+    /// Buffer slot which the shortest instance rate vertex buffer is bound to
+    instance_limit_slot: u32,
+    /// Total amount of buffers required by the pipeline.
+    buffers_required: u32,
 }
 
 impl VertexState {
     fn update_limits(&mut self) {
-        self.vertex_limit = !0;
-        self.instance_limit = !0;
-        for vbs in &self.inputs {
-            if vbs.stride == 0 {
+        self.vertex_limit = u32::MAX;
+        self.instance_limit = u32::MAX;
+        for (idx, vbs) in self.inputs.iter().enumerate() {
+            if vbs.stride == 0 || !vbs.bound {
                 continue;
             }
             let limit = (vbs.total_size / vbs.stride) as u32;
             match vbs.rate {
-                InputStepMode::Vertex => self.vertex_limit = self.vertex_limit.min(limit),
-                InputStepMode::Instance => self.instance_limit = self.instance_limit.min(limit),
+                InputStepMode::Vertex => {
+                    if limit < self.vertex_limit {
+                        self.vertex_limit = limit;
+                        self.vertex_limit_slot = idx as _;
+                    }
+                }
+                InputStepMode::Instance => {
+                    if limit < self.instance_limit {
+                        self.instance_limit = limit;
+                        self.instance_limit_slot = idx as _;
+                    }
+                }
             }
         }
     }
@@ -310,7 +333,15 @@ struct State {
 
 impl State {
     fn is_ready(&self) -> Result<(), DrawError> {
-        //TODO: vertex buffers
+        // Determine how many vertex buffers have already been bound
+        let bound_buffers = self.vertex.inputs.iter().take_while(|v| v.bound).count() as u32;
+        // Compare with the needed quantity
+        if bound_buffers < self.vertex.buffers_required {
+            return Err(DrawError::MissingVertexBuffer {
+                index: bound_buffers,
+            });
+        }
+
         let bind_mask = self.binder.invalid_mask();
         if bind_mask != 0 {
             //let (expected, provided) = self.binder.entries[index as usize].info();
@@ -324,9 +355,17 @@ impl State {
         if self.blend_color == OptionalState::Required {
             return Err(DrawError::MissingBlendColor);
         }
+        // Pipeline expects an index buffer
         if let Some(pipeline_index_format) = self.index.pipeline_format {
-            if pipeline_index_format != self.index.format {
-                return Err(DrawError::UnmatchedIndexFormats);
+            // We have a buffer bound
+            let buffer_index_format = self.index.format.ok_or(DrawError::MissingIndexBuffer)?;
+
+            // The buffers are different formats
+            if pipeline_index_format != buffer_index_format {
+                return Err(DrawError::UnmatchedIndexFormats {
+                    pipeline: pipeline_index_format,
+                    buffer: buffer_index_format,
+                });
             }
         }
         Ok(())
@@ -1188,9 +1227,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     state.index.pipeline_format = pipeline.index_format;
 
                     let vertex_strides_len = pipeline.vertex_strides.len();
+                    state.vertex.buffers_required = vertex_strides_len as u32;
+
                     while state.vertex.inputs.len() < vertex_strides_len {
                         state.vertex.inputs.push(VertexBufferState::EMPTY);
                     }
+
                     // Update vertex buffer limits
                     for (vbs, &(stride, rate)) in
                         state.vertex.inputs.iter_mut().zip(&pipeline.vertex_strides)
@@ -1229,14 +1271,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
                     state.index.bound_buffer_view = Some((id::Valid(buffer_id), offset..end));
 
-                    state.index.format = index_format;
+                    state.index.format = Some(index_format);
                     state.index.update_limit();
 
                     let range = hal::buffer::SubRange {
                         offset,
                         size: Some(end - offset),
                     };
-                    let index_type = conv::map_index_format(state.index.format);
+                    let index_type = conv::map_index_format(index_format);
                     unsafe {
                         raw.bind_index_buffer(buf_raw, range, index_type);
                     }
@@ -1265,10 +1307,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .vertex
                         .inputs
                         .extend(iter::repeat(VertexBufferState::EMPTY).take(empty_slots));
-                    state.vertex.inputs[slot as usize].total_size = match size {
+                    let vertex_state = &mut state.vertex.inputs[slot as usize];
+                    vertex_state.total_size = match size {
                         Some(s) => s.get(),
                         None => buffer.size - offset,
                     };
+                    vertex_state.bound = true;
 
                     let range = hal::buffer::SubRange {
                         offset,
@@ -1400,6 +1444,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         return Err(DrawError::VertexBeyondLimit {
                             last_vertex,
                             vertex_limit,
+                            slot: state.vertex.vertex_limit_slot,
                         })
                         .map_pass_err(scope);
                     }
@@ -1409,6 +1454,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         return Err(DrawError::InstanceBeyondLimit {
                             last_instance,
                             instance_limit,
+                            slot: state.vertex.instance_limit_slot,
                         })
                         .map_pass_err(scope);
                     }
@@ -1446,6 +1492,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         return Err(DrawError::InstanceBeyondLimit {
                             last_instance,
                             instance_limit,
+                            slot: state.vertex.instance_limit_slot,
                         })
                         .map_pass_err(scope);
                     }

@@ -26,23 +26,37 @@ pub enum DrawError {
     MissingBlendColor,
     #[error("render pipeline must be set")]
     MissingPipeline,
+    #[error("vertex buffer {index} must be set")]
+    MissingVertexBuffer { index: u32 },
+    #[error("index buffer must be set")]
+    MissingIndexBuffer,
     #[error("current render pipeline has a layout which is incompatible with a currently set bind group, first differing at entry index {index}")]
     IncompatibleBindGroup {
         index: u32,
         //expected: BindGroupLayoutId,
         //provided: Option<(BindGroupLayoutId, BindGroupId)>,
     },
-    #[error("vertex {last_vertex} extends beyond limit {vertex_limit}")]
-    VertexBeyondLimit { last_vertex: u32, vertex_limit: u32 },
-    #[error("instance {last_instance} extends beyond limit {instance_limit}")]
+    #[error("vertex {last_vertex} extends beyond limit {vertex_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
+    VertexBeyondLimit {
+        last_vertex: u32,
+        vertex_limit: u32,
+        slot: u32,
+    },
+    #[error("instance {last_instance} extends beyond limit {instance_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Instance` step-rate vertex buffer?")]
     InstanceBeyondLimit {
         last_instance: u32,
         instance_limit: u32,
+        slot: u32,
     },
-    #[error("index {last_index} extends beyond limit {index_limit}")]
+    #[error("index {last_index} extends beyond limit {index_limit}. Did you bind the correct index buffer?")]
     IndexBeyondLimit { last_index: u32, index_limit: u32 },
-    #[error("pipeline index format and buffer index format do not match")]
-    UnmatchedIndexFormats,
+    #[error(
+        "pipeline index format ({pipeline:?}) and buffer index format ({buffer:?}) do not match"
+    )]
+    UnmatchedIndexFormats {
+        pipeline: wgt::IndexFormat,
+        buffer: wgt::IndexFormat,
+    },
 }
 
 /// Error encountered when encoding a render command.

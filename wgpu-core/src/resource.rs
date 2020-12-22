@@ -174,6 +174,8 @@ pub enum CreateBufferError {
     AccessError(#[from] BufferAccessError),
     #[error("buffers that are mapped at creation have to be aligned to `COPY_BUFFER_ALIGNMENT`")]
     UnalignedSize,
+    #[error("Buffers cannot have empty usage flags")]
+    EmptyUsage,
     #[error("`MAP` usage can only be combined with the opposite `COPY`, requested {0:?}")]
     UsageMismatch(wgt::BufferUsage),
 }
@@ -230,10 +232,14 @@ pub enum CreateTextureError {
     Device(#[from] DeviceError),
     #[error("D24Plus textures cannot be copied")]
     CannotCopyD24Plus,
+    #[error("Textures cannot have empty usage flags")]
+    EmptyUsage,
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
     #[error("texture descriptor mip level count ({0}) is invalid")]
     InvalidMipLevelCount(u32),
+    #[error("The texture usages {0:?} are not allowed on a texture of type {1:?}")]
+    InvalidUsages(wgt::TextureUsage, wgt::TextureFormat),
     #[error("Feature {0:?} must be enabled to create a texture of type {1:?}")]
     MissingFeature(wgt::Features, wgt::TextureFormat),
 }
