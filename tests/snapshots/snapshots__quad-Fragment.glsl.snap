@@ -8,13 +8,13 @@ precision highp float;
 
 
 
-in vec2 v_uv1;
+in vec2  _location_0_vs;
 uniform sampler2D u_texture;
-out vec4 o_color;
+out vec4  _location_0;
 
 void main() {
 
-	o_color = texture(u_texture, vec2(v_uv1));
+	 _location_0 = texture( _group_0_binding_0, vec2( _location_0_vs));
 	return;
 }
 

@@ -8,14 +8,14 @@ precision highp float;
 
 
 
-in vec2 a_pos;
-in vec2 a_uv;
-out vec2 v_uv;
+in vec2  _location_0;
+in vec2  _location_1;
+out vec2  _location_0_vs;
 
 void main() {
 
-	v_uv = a_uv;
-	gl_Position = vec4((1.2 * a_pos), 0.0, 1.0);
+	 _location_0_vs =  _location_1;
+	gl_Position = vec4((1.2 *  _location_0), 0.0, 1.0);
 	return;
 }
 

@@ -48,11 +48,11 @@ use crate::{
         CallGraph, CallGraphBuilder, Interface, NameKey, Namer, ResolveContext, ResolveError,
         Typifier, Visitor,
     },
-    Arena, ArraySize, BinaryOperator, BuiltIn, Bytes, ConservativeDepth, Constant, ConstantInner,
-    DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle, ImageClass,
-    Interpolation, LocalVariable, Module, RelationalFunction, ScalarKind, ScalarValue, ShaderStage,
-    Statement, StorageAccess, StorageClass, StorageFormat, StructMember, Type, TypeInner,
-    UnaryOperator,
+    Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant,
+    ConstantInner, DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle,
+    ImageClass, Interpolation, LocalVariable, Module, RelationalFunction, ScalarKind, ScalarValue,
+    ShaderStage, Statement, StorageAccess, StorageClass, StorageFormat, StructMember, Type,
+    TypeInner, UnaryOperator,
 };
 use features::FeaturesManager;
 use std::{
@@ -713,10 +713,38 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Finally write the global name and end the global with a `;` and a newline
         // Leading space is important
-        let name = &self.names[&NameKey::GlobalVariable(handle)];
-        writeln!(self.out, " {};", name)?;
+        writeln!(self.out, " {};", self.get_global_name(handle, global))?;
 
         Ok(())
+    }
+
+    /// Helper method used to get a name for a global
+    ///
+    /// Globals have different naming schemes depending on their binding:
+    /// - Globals without bindings use the name from the [`Namer`](crate::proc::Namer)
+    /// - Globals with builtin bindings get the from [`glsl_built_in`](glsl_built_in)
+    /// - Globals with location bindings are named `_location_X` where `X` is the location
+    /// - Globals with resource binding are named `_group_X_binding_Y` where `X`
+    ///   is the group and `Y` is the binding
+    fn get_global_name(&self, handle: Handle<GlobalVariable>, global: &GlobalVariable) -> String {
+        match global.binding {
+            Some(Binding::Location(location)) => {
+                format!(
+                    " _location_{}{}",
+                    location,
+                    match (self.options.entry_point.0, global.class) {
+                        (ShaderStage::Fragment, StorageClass::Input) => "_vs",
+                        (ShaderStage::Vertex, StorageClass::Output) => "_vs",
+                        _ => "",
+                    }
+                )
+            }
+            Some(Binding::Resource { group, binding }) => {
+                format!(" _group_{}_binding_{}", group, binding)
+            }
+            Some(Binding::BuiltIn(built_in)) => glsl_built_in(built_in).to_string(),
+            None => self.names[&NameKey::GlobalVariable(handle)].clone(),
+        }
     }
 
     /// Helper method used to write functions (both entry points and regular functions)
@@ -1156,23 +1184,11 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::FunctionArgument(pos) => {
                 write!(self.out, "{}", ctx.get_arg(pos, &self.names))?
             }
-            // Global variables need some special work, if they are a builtin we write the glsl
-            // variable name produced by `glsl_built_in` otherwise we write the global name
-            // produced by the `Namer`
+            // Global variables need some special work for their name but
+            // `get_global_name` does the work for us
             Expression::GlobalVariable(handle) => {
-                if let Some(crate::Binding::BuiltIn(built_in)) =
-                    self.module.global_variables[handle].binding
-                {
-                    // Global is a builtin so get the glsl variable name
-                    write!(self.out, "{}", glsl_built_in(built_in))?
-                } else {
-                    // Global isn't a builtin so just write the name
-                    write!(
-                        self.out,
-                        "{}",
-                        &self.names[&NameKey::GlobalVariable(handle)]
-                    )?
-                }
+                let global = &self.module.global_variables[handle];
+                write!(self.out, "{}", self.get_global_name(handle, global))?
             }
             // A local is written as it's name
             Expression::LocalVariable(handle) => {
