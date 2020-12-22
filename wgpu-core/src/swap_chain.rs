@@ -91,6 +91,8 @@ pub enum CreateSwapChainError {
     InvalidSurface,
     #[error("`SwapChainOutput` must be dropped before a new `SwapChain` is made")]
     SwapChainOutputExists,
+    #[error("Both `SwapChain` width and height must be non-zero. Wait to recreate the `SwapChain` until the window has non-zero area.")]
+    ZeroArea,
     #[error("surface does not support the adapter's queue family")]
     UnsupportedQueueFamily,
     #[error("requested format {requested:?} is not in list of supported formats: {available:?}")]

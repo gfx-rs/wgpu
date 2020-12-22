@@ -3847,7 +3847,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         fn validate_swap_chain_descriptor(
             config: &mut hal::window::SwapchainConfig,
             caps: &hal::window::SurfaceCapabilities,
-        ) {
+        ) -> Result<(), swap_chain::CreateSwapChainError> {
             let width = config.extent.width;
             let height = config.extent.height;
             if width < caps.extents.start().width
@@ -3870,6 +3870,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
                 config.present_mode = hal::window::PresentMode::FIFO;
             }
+            if width == 0 || height == 0 {
+                return Err(swap_chain::CreateSwapChainError::ZeroArea);
+            }
+            Ok(())
         }
 
         tracing::info!("creating swap chain {:?}", desc);
@@ -3911,7 +3915,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
         }
-        validate_swap_chain_descriptor(&mut config, &caps);
+        validate_swap_chain_descriptor(&mut config, &caps)?;
 
         unsafe {
             B::get_surface_mut(surface)
