@@ -64,6 +64,17 @@ impl<B: GfxBackend> CommandBuffer<B> {
         }
     }
 
+    fn get_encoder_read_only(
+        storage: &Storage<Self, id::CommandEncoderId>,
+        id: id::CommandEncoderId,
+    ) -> Result<&Self, CommandEncoderError> {
+        match storage.get(id) {
+            Ok(cmd_buf) if cmd_buf.is_recording => Ok(cmd_buf),
+            Ok(_) => Err(CommandEncoderError::NotRecording),
+            Err(_) => Err(CommandEncoderError::Invalid),
+        }
+    }
+
     pub(crate) fn insert_barriers(
         raw: &mut B::CommandBuffer,
         base: &mut TrackerSet,
