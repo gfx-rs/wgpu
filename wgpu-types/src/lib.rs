@@ -483,6 +483,7 @@ bitflags::bitflags! {
 }
 
 bitflags::bitflags! {
+    #[repr(transparent)]
     #[derive(Default)]
     #[cfg_attr(feature = "trace", derive(serde::Serialize))]
     #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
