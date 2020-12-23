@@ -1075,8 +1075,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // read-only lock guard
             let (cmb_guard, mut token) = hub.command_buffers.read(&mut token);
 
-            let cmd_buf = CommandBuffer::get_encoder_read_only(&*cmb_guard, encoder_id)
-                .map_pass_err(scope)?;
+            let cmd_buf =
+                CommandBuffer::get_encoder(&*cmb_guard, encoder_id).map_pass_err(scope)?;
             let device = &device_guard[cmd_buf.device_id.value];
             let mut raw = device.cmd_allocator.extend(cmd_buf);
             unsafe {
@@ -1823,7 +1823,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
         let cmd_buf =
-            CommandBuffer::get_encoder(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
+            CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
         cmd_buf.has_labels |= base.label.is_some();
         cmd_buf.used_swap_chain = used_swapchain_with_framebuffer;
 
