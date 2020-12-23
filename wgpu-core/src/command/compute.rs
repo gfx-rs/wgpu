@@ -240,7 +240,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf =
-            CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id).map_pass_err(scope)?;
+            CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id).map_pass_err(scope)?;
         let raw = cmd_buf.raw.last_mut().unwrap();
 
         #[cfg(feature = "trace")]

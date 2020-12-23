@@ -54,6 +54,17 @@ pub struct CommandBuffer<B: hal::Backend> {
 
 impl<B: GfxBackend> CommandBuffer<B> {
     fn get_encoder(
+        storage: &Storage<Self, id::CommandEncoderId>,
+        id: id::CommandEncoderId,
+    ) -> Result<&Self, CommandEncoderError> {
+        match storage.get(id) {
+            Ok(cmd_buf) if cmd_buf.is_recording => Ok(cmd_buf),
+            Ok(_) => Err(CommandEncoderError::NotRecording),
+            Err(_) => Err(CommandEncoderError::Invalid),
+        }
+    }
+
+    fn get_encoder_mut(
         storage: &mut Storage<Self, id::CommandEncoderId>,
         id: id::CommandEncoderId,
     ) -> Result<&mut Self, CommandEncoderError> {
@@ -201,7 +212,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: actually close the last recorded command buffer
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
 
-        let error = match CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id) {
+        let error = match CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id) {
             Ok(cmd_buf) => {
                 cmd_buf.is_recording = false;
                 // stop tracking the swapchain image, if used
@@ -232,7 +243,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
         let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
@@ -252,7 +263,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
         let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
@@ -271,7 +282,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
         let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
