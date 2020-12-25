@@ -86,6 +86,38 @@ pub trait RenderEncoder<'a> {
         indirect_buffer: &'a Buffer,
         indirect_offset: BufferAddress,
     );
+
+    /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call this function.
+    ///
+    /// Set push constant data.
+    ///
+    /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
+    ///
+    /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
+    /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
+    /// of 4..16.
+    ///
+    /// For each byte in the range of push constant data written, the union of the stages of all push constant
+    /// ranges that covers that byte must be exactly `stages`. There's no good way of explaining this simply,
+    /// so here are some examples:
+    ///
+    /// ```text
+    /// For the given ranges:
+    /// - 0..4 Vertex
+    /// - 4..8 Fragment
+    /// ```
+    ///
+    /// You would need to upload this in two set_push_constants calls. First for the `Vertex` range, second for the `Fragment` range.
+    ///
+    /// ```text
+    /// For the given ranges:
+    /// - 0..8  Vertex
+    /// - 4..12 Fragment
+    /// ```
+    ///
+    /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
+    /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
+    fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]);
 }
 
 impl<'a> RenderEncoder<'a> for RenderPass<'a> {
@@ -132,6 +164,11 @@ impl<'a> RenderEncoder<'a> for RenderPass<'a> {
     ) {
         Self::draw_indexed_indirect(self, indirect_buffer, indirect_offset);
     }
+
+    #[inline(always)]
+    fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]) {
+        Self::set_push_constants(self, stages, offset, data);
+    }
 }
 
 impl<'a> RenderEncoder<'a> for RenderBundleEncoder<'a> {
@@ -177,5 +214,10 @@ impl<'a> RenderEncoder<'a> for RenderBundleEncoder<'a> {
         indirect_offset: BufferAddress,
     ) {
         Self::draw_indexed_indirect(self, indirect_buffer, indirect_offset);
+    }
+
+    #[inline(always)]
+    fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]) {
+        Self::set_push_constants(self, stages, offset, data);
     }
 }
