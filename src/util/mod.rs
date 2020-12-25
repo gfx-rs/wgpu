@@ -2,6 +2,7 @@
 
 mod belt;
 mod device;
+mod encoder;
 
 use std::{
     borrow::Cow,
@@ -11,6 +12,7 @@ use std::{
 
 pub use belt::StagingBelt;
 pub use device::{BufferInitDescriptor, DeviceExt};
+pub use encoder::RenderEncoder;
 
 /// Treat the given byte slice as a SPIR-V module.
 ///
