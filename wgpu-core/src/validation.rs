@@ -418,6 +418,7 @@ impl Resource {
                         let usage = match access {
                             wgt::StorageTextureAccess::ReadOnly => naga::GlobalUse::LOAD,
                             wgt::StorageTextureAccess::WriteOnly => naga::GlobalUse::STORE,
+                            wgt::StorageTextureAccess::ReadWrite => naga::GlobalUse::all(),
                         };
                         (naga::ImageClass::Storage(naga_format), usage)
                     }

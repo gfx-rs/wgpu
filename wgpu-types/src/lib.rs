@@ -330,6 +330,28 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const TEXTURE_COMPRESSION_ASTC_LDR = 0x0000_0000_0800_0000;
+        /// Enables read/write storage texture binding.
+        ///
+        /// Without this extension, a storage texture can be bound either as readonly or writeonly.
+        /// With this extension enabled certain texture formats can be bound for read and write by the same shader.
+        /// The exact support of which texture formats are supported varies.
+        ///
+        /// The minimal supported set of formats is R32Float/Uint/Sint.
+        ///
+        /// Vulkan additionally guarantees support for at least:
+        /// - Rgba8Uint/Sint/Unorm/Snorm
+        /// - Rg32float/Uint/Sint
+        /// - Rgba16float/Uint/Sint
+        /// - Rgba32float/Uint/Sint
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - DX11
+        /// - Vulkan
+        /// - Metal (some, see MTLReadWriteTextureTier)
+        ///
+        /// This is a native-only feature.
+        const STORAGE_TEXTURE_ACCESS_READ_WRITE = 0x0000_0000_1000_0000;
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).
@@ -2303,13 +2325,21 @@ pub enum StorageTextureAccess {
     /// layout(set=0, binding=0, r32f) readonly uniform image2D myStorageImage;
     /// ```
     ReadOnly,
-    /// The texture can only be read in the shader and it must be annotated with `writeonly`.
+    /// The texture can only be written in the shader and it must be annotated with `writeonly`.
     ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(set=0, binding=0, r32f) writeonly uniform image2D myStorageImage;
     /// ```
     WriteOnly,
+    /// The texture can be both read and written in the shader.
+    /// [`Features::STORAGE_TEXTURE_ACCESS_READ_WRITE`] must be enabled to use this access mode.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(set=0, binding=0, r32f) uniform image2D myStorageImage;
+    /// ```
+    ReadWrite,
 }
 
 /// Specific type of a binding.

@@ -1310,6 +1310,13 @@ impl<B: GfxBackend> Device<B> {
                                 wgt::StorageTextureAccess::WriteOnly => {
                                     resource::TextureUse::STORAGE_STORE
                                 }
+                                wgt::StorageTextureAccess::ReadWrite => {
+                                    if !self.features.contains(wgt::Features::STORAGE_TEXTURE_ACCESS_READ_WRITE) {
+                                        return Err(Error::MissingFeatures(wgt::Features::STORAGE_TEXTURE_ACCESS_READ_WRITE));
+                                    }
+                                    resource::TextureUse::STORAGE_STORE
+                                        | resource::TextureUse::STORAGE_LOAD
+                                }
                             },
                         ),
                         _ => return Err(Error::WrongBindingType {

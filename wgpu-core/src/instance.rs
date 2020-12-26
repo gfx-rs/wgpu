@@ -132,7 +132,8 @@ impl<B: GfxBackend> Adapter<B> {
 
         let mut features = wgt::Features::default()
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
-            | wgt::Features::PUSH_CONSTANTS;
+            | wgt::Features::PUSH_CONSTANTS
+            | wgt::Features::STORAGE_TEXTURE_ACCESS_READ_WRITE; // TODO: Should check for any support at all (applies only to Metal) and expose fine grained format support somehow
         features.set(
             wgt::Features::DEPTH_CLAMPING,
             adapter_features.contains(hal::Features::DEPTH_CLAMP),
