@@ -546,12 +546,20 @@ impl<B: GfxBackend> Device<B> {
             return Err(resource::CreateTextureError::EmptyUsage);
         }
 
-        let missing_features = desc.usage - format_desc.allowed_usages;
-        if !missing_features.is_empty() {
-            return Err(resource::CreateTextureError::InvalidUsages(
-                missing_features,
-                desc.format,
-            ));
+        if self
+            .features
+            .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
+        {
+            // To check if the format usage is not available, we'd need to check with the adapter of which we only have an id here.
+            // Assuming that the underlying device fails to create the texture, this _should_ not be a big problem.
+        } else {
+            let missing_allowed_usages = desc.usage - desc.format.features_webgpu().allowed_usages;
+            if !missing_allowed_usages.is_empty() {
+                return Err(resource::CreateTextureError::InvalidUsages(
+                    missing_allowed_usages,
+                    desc.format,
+                ));
+            }
         }
 
         let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.sample_count)?;
@@ -1301,17 +1309,29 @@ impl<B: GfxBackend> Device<B> {
                         wgt::BindingType::Texture { .. } => {
                             (wgt::TextureUsage::SAMPLED, resource::TextureUse::SAMPLED)
                         }
-                        wgt::BindingType::StorageTexture { access, .. } => (
-                            wgt::TextureUsage::STORAGE,
-                            match access {
-                                wgt::StorageTextureAccess::ReadOnly => {
-                                    resource::TextureUse::STORAGE_LOAD
-                                }
-                                wgt::StorageTextureAccess::WriteOnly => {
-                                    resource::TextureUse::STORAGE_STORE
-                                }
-                            },
-                        ),
+                        wgt::BindingType::StorageTexture { access, .. } => {
+                            (
+                                wgt::TextureUsage::STORAGE,
+                                match access {
+                                    wgt::StorageTextureAccess::ReadOnly => {
+                                        resource::TextureUse::STORAGE_LOAD
+                                    }
+                                    wgt::StorageTextureAccess::WriteOnly => {
+                                        resource::TextureUse::STORAGE_STORE
+                                    }
+                                    wgt::StorageTextureAccess::ReadWrite => {
+                                        if !self.features.contains(
+                                            wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                                        ) {
+                                            return Err(Error::MissingFeatures(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES));
+                                        }
+                                        // TODO: How to verify? Can't access adapter with just adapter_id.
+                                        resource::TextureUse::STORAGE_STORE
+                                            | resource::TextureUse::STORAGE_LOAD
+                                    }
+                                },
+                            )
+                        }
                         _ => return Err(Error::WrongBindingType {
                             binding,
                             actual: decl.ty.clone(),
