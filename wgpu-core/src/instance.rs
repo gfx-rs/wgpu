@@ -273,6 +273,9 @@ impl<B: GfxBackend> Adapter<B> {
         if texture_format_properties.contains(hal::format::ImageFeature::COLOR_ATTACHMENT) {
             allowed_usages |= wgt::TextureUsage::RENDER_ATTACHMENT;
         }
+        if texture_format_properties.contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT) {
+            allowed_usages |= wgt::TextureUsage::RENDER_ATTACHMENT;
+        }
         if texture_format_properties.contains(hal::format::ImageFeature::BLIT_SRC) {
             allowed_usages |= wgt::TextureUsage::COPY_SRC;
         }
