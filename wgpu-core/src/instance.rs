@@ -759,6 +759,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| InvalidAdapter)
     }
 
+    pub fn adapter_get_texture_format_features<B: GfxBackend>(
+        &self,
+        adapter_id: AdapterId,
+        format: wgt::TextureFormat,
+    ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
+        span!(_guard, INFO, "Adapter::get_texture_format_features");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (adapter_guard, _) = hub.adapters.read(&mut token);
+        adapter_guard
+            .get(adapter_id)
+            .map(|adapter| adapter.get_texture_format_features(format))
+            .map_err(|_| InvalidAdapter)
+    }
+
     pub fn adapter_features<B: GfxBackend>(
         &self,
         adapter_id: AdapterId,
