@@ -516,15 +516,16 @@ impl<B: GfxBackend> Device<B> {
     fn create_texture(
         &self,
         self_id: id::DeviceId,
+        adapter: &crate::instance::Adapter<B>,
         desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<B>, resource::CreateTextureError> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
         let format_desc = desc.format.describe();
-        let features = format_desc.features;
-        if !self.features.contains(features) {
+        let required_features = format_desc.features;
+        if !self.features.contains(required_features) {
             return Err(resource::CreateTextureError::MissingFeature(
-                features,
+                required_features,
                 desc.format,
             ));
         }
@@ -546,20 +547,21 @@ impl<B: GfxBackend> Device<B> {
             return Err(resource::CreateTextureError::EmptyUsage);
         }
 
-        if self
+        let format_features = if self
             .features
             .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
         {
-            // To check if the format usage is not available, we'd need to check with the adapter of which we only have an id here.
-            // Assuming that the underlying device fails to create the texture, this _should_ not be a big problem.
+            adapter.get_texture_format_features(desc.format)
         } else {
-            let missing_allowed_usages = desc.usage - desc.format.features_webgpu().allowed_usages;
-            if !missing_allowed_usages.is_empty() {
-                return Err(resource::CreateTextureError::InvalidUsages(
-                    missing_allowed_usages,
-                    desc.format,
-                ));
-            }
+            desc.format.features_webgpu()
+        };
+
+        let missing_allowed_usages = desc.usage - format_features.allowed_usages;
+        if !missing_allowed_usages.is_empty() {
+            return Err(resource::CreateTextureError::InvalidUsages(
+                missing_allowed_usages,
+                desc.format,
+            ));
         }
 
         let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.sample_count)?;
@@ -626,6 +628,7 @@ impl<B: GfxBackend> Device<B> {
             dimension: desc.dimension,
             kind,
             format: desc.format,
+            format_features,
             full_range: TextureSelector {
                 levels: 0..desc.mip_level_count as hal::image::Level,
                 layers: 0..kind.num_layers(),
@@ -782,6 +785,7 @@ impl<B: GfxBackend> Device<B> {
             },
             aspects,
             format: texture.format,
+            format_features: texture.format_features,
             extent: texture.kind.extent().at_level(desc.base_mip_level as _),
             samples: texture.kind.num_samples(),
             selector,
@@ -1320,12 +1324,17 @@ impl<B: GfxBackend> Device<B> {
                                         resource::TextureUse::STORAGE_STORE
                                     }
                                     wgt::StorageTextureAccess::ReadWrite => {
-                                        if !self.features.contains(
-                                            wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                                        if !view.format_features.flags.contains(
+                                            wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
                                         ) {
-                                            return Err(Error::MissingFeatures(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES));
+                                            if !self.features.contains(
+                                                    wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                                                ) {
+                                                    return Err(Error::MissingFeatures(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES));
+                                                } else {
+                                                    return Err(Error::StorageReadWriteNotSupported(view.format))
+                                                }
                                         }
-                                        // TODO: How to verify? Can't access adapter with just adapter_id.
                                         resource::TextureUse::STORAGE_STORE
                                             | resource::TextureUse::STORAGE_LOAD
                                     }
@@ -2712,13 +2721,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
+        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
-            let texture = match device.create_texture(device_id, desc) {
+            let adapter = &adapter_guard[device.adapter_id.value];
+            let texture = match device.create_texture(device_id, adapter, desc) {
                 Ok(texture) => texture,
                 Err(error) => break error,
             };

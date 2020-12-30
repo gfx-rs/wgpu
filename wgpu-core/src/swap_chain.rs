@@ -182,6 +182,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     },
                     aspects: hal::format::Aspects::COLOR,
                     format: sc.desc.format,
+                    format_features: wgt::TextureFormatFeatures {
+                        allowed_usages: wgt::TextureUsage::RENDER_ATTACHMENT,
+                        flags: wgt::TextureFormatFeatureFlags::empty(),
+                    },
                     extent: hal::image::Extent {
                         width: sc.desc.width,
                         height: sc.desc.height,

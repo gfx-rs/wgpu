@@ -250,8 +250,7 @@ impl<B: GfxBackend> Adapter<B> {
         }
     }
 
-    // TODO: Expose
-    fn get_texture_format_features(
+    pub(crate) fn get_texture_format_features(
         &self,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
@@ -280,15 +279,19 @@ impl<B: GfxBackend> Adapter<B> {
         if texture_format_properties.contains(hal::format::ImageFeature::BLIT_DST) {
             allowed_usages |= wgt::TextureUsage::COPY_DST;
         }
-        let storage_atomics =
-            texture_format_properties.contains(hal::format::ImageFeature::STORAGE_ATOMIC);
+
+        let mut flags = wgt::TextureFormatFeatureFlags::empty();
+        if texture_format_properties.contains(hal::format::ImageFeature::STORAGE_ATOMIC) {
+            flags |= wgt::TextureFormatFeatureFlags::STORAGE_ATOMICS;
+        }
         // TODO: hal update
-        let storage_read_write = false; //texture_format_properties.contains(hal::format::ImageFeature::STORAGE_READ_WRITE);
+        //if texture_format_properties.contains(hal::format::ImageFeature::STORAGE_READ_WRITE) {
+        //    flags |= wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE;
+        //}
 
         wgt::TextureFormatFeatures {
             allowed_usages,
-            storage_read_write,
-            storage_atomics,
+            flags,
         }
     }
 

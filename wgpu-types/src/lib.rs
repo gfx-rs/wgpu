@@ -775,15 +775,26 @@ pub struct RasterizationStateDescriptor {
     pub depth_bias_clamp: f32,
 }
 
+bitflags::bitflags! {
+    /// Feature flags for a texture format.
+    #[repr(transparent)]
+    #[cfg_attr(feature = "trace", derive(Serialize))]
+    #[cfg_attr(feature = "replay", derive(Deserialize))]
+    pub struct TextureFormatFeatureFlags: u32 {
+        /// When used as a STORAGE texture, then a texture with this format can be bound with `StorageTextureAccess::ReadWrite`.
+        const STORAGE_READ_WRITE = 1;
+        /// When used as a STORAGE texture, then a texture with this format can be written to with atomics. TODO: No access flag exposed as of writing
+        const STORAGE_ATOMICS = 2;
+    }
+}
+
 /// Features supported by a given texture format
 ///
 /// Features are defined by WebGPU specification unless `Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub struct TextureFormatFeatures {
     pub allowed_usages: TextureUsage,
-    /// If usage is `TextureUsage::STORAGE`, then this texture can be bound with `StorageTextureAccess::ReadWrite`.
-    pub storage_read_write: bool,
-    pub storage_atomics: bool,
+    pub flags: TextureFormatFeatureFlags,
 }
 
 /// Information about a texture format.
@@ -1331,7 +1342,6 @@ impl TextureFormat {
     }
 
     /// Lists features supported by WebGPU, not using any native extensions.
-    /// WebGPU spec: https://gpuweb.github.io/gpuweb/#texture-format-caps
     pub fn features_webgpu(&self) -> TextureFormatFeatures {
         // Usage flags
         let basic = TextureUsage::COPY_SRC | TextureUsage::COPY_DST | TextureUsage::SAMPLED;
@@ -1454,8 +1464,7 @@ impl TextureFormat {
 
         TextureFormatFeatures {
             allowed_usages,
-            storage_read_write: false,
-            storage_atomics: false,
+            flags: TextureFormatFeatureFlags::empty(),
         }
     }
 }
