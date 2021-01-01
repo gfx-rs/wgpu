@@ -5,7 +5,7 @@ use winit::{
     window::Window,
 };
 
-async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::TextureFormat) {
+async fn run(event_loop: EventLoop<()>, window: Window) {
     let size = window.inner_size();
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
@@ -43,6 +43,8 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
         bind_group_layouts: &[],
         push_constant_ranges: &[],
     });
+
+    let swapchain_format = device.get_swap_chain_preferred_format();
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
@@ -138,7 +140,7 @@ fn main() {
     {
         subscriber::initialize_default_subscriber(None);
         // Temporarily avoid srgb formats for the swapchain on the web
-        futures::executor::block_on(run(event_loop, window, wgpu::TextureFormat::Bgra8UnormSrgb));
+        futures::executor::block_on(run(event_loop, window));
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -154,6 +156,6 @@ fn main() {
                     .ok()
             })
             .expect("couldn't append canvas to document body");
-        wasm_bindgen_futures::spawn_local(run(event_loop, window, wgpu::TextureFormat::Bgra8Unorm));
+        wasm_bindgen_futures::spawn_local(run(event_loop, window));
     }
 }
