@@ -499,6 +499,16 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
                     if let Some(res) = hub.buffers.unregister_locked(id.0, &mut *guard) {
                         let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        if let resource::BufferMapState::Init {
+                            stage_buffer,
+                            stage_memory,
+                            ..
+                        } = res.map_state
+                        {
+                            self.free_resources
+                                .buffers
+                                .push((stage_buffer, stage_memory));
+                        }
                         self.active
                             .iter_mut()
                             .find(|a| a.index == submit_index)
