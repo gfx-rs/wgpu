@@ -107,10 +107,11 @@ pub enum BindingZone {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("too many bindings of type {kind:?} in {zone}, limit is {count}")]
+#[error("too many bindings of type {kind:?} in {zone}, limit is {limit}, count was {count}")]
 pub struct BindingTypeMaxCountError {
     pub kind: BindingTypeMaxCountErrorKind,
     pub zone: BindingZone,
+    pub limit: u32,
     pub count: u32,
 }
 
@@ -173,7 +174,12 @@ impl PerStageBindingTypeCounter {
     ) -> Result<(), BindingTypeMaxCountError> {
         let (zone, count) = self.max();
         if limit < count {
-            Err(BindingTypeMaxCountError { kind, zone, count })
+            Err(BindingTypeMaxCountError {
+                kind,
+                zone,
+                limit,
+                count,
+            })
         } else {
             Ok(())
         }
@@ -242,6 +248,7 @@ impl BindingTypeMaxCountValidator {
             return Err(BindingTypeMaxCountError {
                 kind: BindingTypeMaxCountErrorKind::DynamicUniformBuffers,
                 zone: BindingZone::Pipeline,
+                limit: limits.max_dynamic_uniform_buffers_per_pipeline_layout,
                 count: self.dynamic_uniform_buffers,
             });
         }
@@ -249,6 +256,7 @@ impl BindingTypeMaxCountValidator {
             return Err(BindingTypeMaxCountError {
                 kind: BindingTypeMaxCountErrorKind::DynamicStorageBuffers,
                 zone: BindingZone::Pipeline,
+                limit: limits.max_dynamic_storage_buffers_per_pipeline_layout,
                 count: self.dynamic_storage_buffers,
             });
         }
