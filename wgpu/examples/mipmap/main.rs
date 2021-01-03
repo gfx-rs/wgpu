@@ -2,10 +2,12 @@
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
-use std::num::NonZeroU32;
+use std::{mem, num::NonZeroU32};
 use wgpu::util::DeviceExt;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+const MIP_LEVEL_COUNT: u32 = 9;
+const MIP_PASS_COUNT: u32 = MIP_LEVEL_COUNT - 1;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -54,6 +56,27 @@ fn create_texels(size: usize, cx: f32, cy: f32) -> Vec<u8> {
         .collect()
 }
 
+struct QuerySets {
+    timestamp: wgpu::QuerySet,
+    timestamp_period: f32,
+    pipeline_statistics: wgpu::QuerySet,
+    data_buffer: wgpu::Buffer,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct TimestampData {
+    start: u64,
+    end: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct QueryData {
+    timestamps: [TimestampData; MIP_PASS_COUNT as usize],
+    pipeline_queries: [u64; MIP_PASS_COUNT as usize],
+}
+
 struct Example {
     vertex_buf: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
@@ -77,6 +100,7 @@ impl Example {
         encoder: &mut wgpu::CommandEncoder,
         device: &wgpu::Device,
         texture: &wgpu::Texture,
+        query_sets: &Option<QuerySets>,
         mip_count: u32,
     ) {
         let vs_module = device.create_shader_module(&wgpu::include_spirv!("blit.vert.spv"));
@@ -154,6 +178,9 @@ impl Example {
                 label: None,
             });
 
+            let pipeline_query_index_base = target_mip as u32 - 1;
+            let timestamp_query_index_base = (target_mip as u32 - 1) * 2;
+
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
@@ -166,21 +193,51 @@ impl Example {
                 }],
                 depth_stencil_attachment: None,
             });
+            if let Some(ref query_sets) = query_sets {
+                rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base);
+                rpass.begin_pipeline_statistics_query(
+                    &query_sets.pipeline_statistics,
+                    pipeline_query_index_base,
+                );
+            }
             rpass.set_pipeline(&pipeline);
             rpass.set_bind_group(0, &bind_group, &[]);
             rpass.draw(0..4, 0..1);
+            if let Some(ref query_sets) = query_sets {
+                rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base + 1);
+                rpass.end_pipeline_statistics_query();
+            }
+        }
+
+        if let Some(ref query_sets) = query_sets {
+            let timestamp_query_count = MIP_PASS_COUNT * 2;
+            encoder.resolve_query_set(
+                &query_sets.timestamp,
+                0..timestamp_query_count,
+                &query_sets.data_buffer,
+                0,
+            );
+            encoder.resolve_query_set(
+                &query_sets.pipeline_statistics,
+                0..MIP_PASS_COUNT,
+                &query_sets.data_buffer,
+                (timestamp_query_count * mem::size_of::<u64>() as u32) as wgpu::BufferAddress,
+            );
         }
     }
 }
 
 impl framework::Example for Example {
+    fn optional_features() -> wgpu::Features {
+        wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::PIPELINE_STATISTICS_QUERY
+    }
+
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
+        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        use std::mem;
-
         let mut init_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
@@ -194,8 +251,7 @@ impl framework::Example for Example {
         });
 
         // Create the texture
-        let mip_level_count = 9;
-        let size = 1 << mip_level_count;
+        let size = 1 << MIP_LEVEL_COUNT;
         let texels = create_texels(size as usize, -0.8, 0.156);
         let texture_extent = wgpu::Extent3d {
             width: size,
@@ -204,7 +260,7 @@ impl framework::Example for Example {
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: texture_extent,
-            mip_level_count,
+            mip_level_count: MIP_LEVEL_COUNT,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: TEXTURE_FORMAT,
@@ -314,9 +370,95 @@ impl framework::Example for Example {
             label: None,
         });
 
-        // Done
-        Self::generate_mipmaps(&mut init_encoder, &device, &texture, mip_level_count);
+        // If both kinds of query are supported, use queries
+        let query_sets = if device
+            .features()
+            .contains(wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::PIPELINE_STATISTICS_QUERY)
+        {
+            // For N total mips, it takes N - 1 passes to generate them, and we're measuring those.
+            let mip_passes = MIP_LEVEL_COUNT - 1;
+
+            // Create the timestamp query set. We need twice as many queries as we have passes,
+            // as we need a query at the beginning and at the end of the operation.
+            let timestamp = device.create_query_set(&wgpu::QuerySetDescriptor {
+                count: mip_passes * 2,
+                ty: wgpu::QueryType::Timestamp,
+            });
+            // Timestamp queries use an device-specific timestamp unit. We need to figure out how many
+            // nanoseconds go by for the timestamp to be incremented by one. The period is this value.
+            let timestamp_period = adapter.get_timestamp_period();
+
+            // We only need one pipeline statistics query per pass.
+            let pipeline_statistics = device.create_query_set(&wgpu::QuerySetDescriptor {
+                count: mip_passes,
+                ty: wgpu::QueryType::PipelineStatistics(
+                    wgpu::PipelineStatisticsTypes::FRAGMENT_SHADER_INVOCATIONS,
+                ),
+            });
+
+            // This databuffer has to store all of the query results, 2 * passes timestamp queries
+            // and 1 * passes statistics queries. Each query returns a u64 value.
+            let data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("query buffer"),
+                size: mip_passes as wgpu::BufferAddress
+                    * 3
+                    * mem::size_of::<u64>() as wgpu::BufferAddress,
+                usage: wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_READ,
+                mapped_at_creation: false,
+            });
+
+            Some(QuerySets {
+                timestamp,
+                timestamp_period,
+                pipeline_statistics,
+                data_buffer,
+            })
+        } else {
+            None
+        };
+
+        Self::generate_mipmaps(
+            &mut init_encoder,
+            &device,
+            &texture,
+            &query_sets,
+            MIP_LEVEL_COUNT,
+        );
+
         queue.submit(Some(init_encoder.finish()));
+        if let Some(ref query_sets) = query_sets {
+            // We can ignore the future as we're about to wait for the device.
+            let _ = query_sets
+                .data_buffer
+                .slice(..)
+                .map_async(wgpu::MapMode::Read);
+            // Wait for device to be done rendering mipmaps
+            device.poll(wgpu::Maintain::Wait);
+            // This is guaranteed to be ready.
+            let view = query_sets.data_buffer.slice(..).get_mapped_range();
+            // Convert the raw data into a useful structure
+            let data: &QueryData = bytemuck::from_bytes(&*view);
+            // Iterate over the data
+            for (idx, (timestamp, pipeline)) in data
+                .timestamps
+                .iter()
+                .zip(data.pipeline_queries.iter())
+                .enumerate()
+            {
+                // Figure out the timestamp differences and multiply by the period to get nanoseconds
+                let nanoseconds =
+                    (timestamp.end - timestamp.start) as f32 * query_sets.timestamp_period;
+                // Nanoseconds is a bit small, so lets use microseconds.
+                let microseconds = nanoseconds / 1000.0;
+                // Print the data!
+                println!(
+                    "Generating mip level {} took {:.3} μs and called the fragment shader {} times",
+                    idx + 1,
+                    microseconds,
+                    pipeline
+                );
+            }
+        }
 
         Example {
             vertex_buf,

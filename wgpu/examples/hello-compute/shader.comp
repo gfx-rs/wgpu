@@ -13,7 +13,7 @@ layout(set = 0, binding = 0) buffer PrimeIndices {
 // This function returns how many times this recurrence needs to be applied to reach 1.
 uint collatz_iterations(uint n) {
     uint i = 0;
-    while(n != 1) {
+    while(n > 1) {
         if (mod(n, 2) == 0) {
             n = n / 2;
         }
