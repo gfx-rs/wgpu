@@ -211,6 +211,16 @@ fn fire_map_callbacks<I: IntoIterator<Item = BufferMapPendingCallback>>(callback
     }
 }
 
+/// Structure describing a logical device. Some members are internally mutable,
+/// stored behind mutexes.
+/// TODO: establish clear order of locking for these:
+/// `mem_allocator`, `desc_allocator`, `life_tracke`, `trackers`,
+/// `render_passes`, `framebuffers`, `pending_writes`, `trace`.
+///
+/// Currently, the rules are:
+/// 1. `life_tracker` is locked after `hub.devices`, enforced by the type system
+/// 1. `self.trackers` is locked last (unenforced)
+/// 1. `self.trace` is locked last (unenforced)
 #[derive(Debug)]
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
@@ -222,6 +232,7 @@ pub struct Device<B: hal::Backend> {
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) life_guard: LifeGuard,
     pub(crate) active_submission_index: SubmissionIndex,
+    /// Has to be locked temporarily only (locked last)
     pub(crate) trackers: Mutex<TrackerSet>,
     pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
@@ -448,7 +459,8 @@ impl<B: GfxBackend> Device<B> {
 
             let mut flags = Uf::empty();
             let map_flags = desc.usage & (Bu::MAP_READ | Bu::MAP_WRITE);
-            let map_copy_flags = desc.usage & (Bu::MAP_READ | Bu::MAP_WRITE | Bu::COPY_SRC | Bu::COPY_DST);
+            let map_copy_flags =
+                desc.usage & (Bu::MAP_READ | Bu::MAP_WRITE | Bu::COPY_SRC | Bu::COPY_DST);
             if map_flags.is_empty() || !(desc.usage - map_copy_flags).is_empty() {
                 flags |= Uf::FAST_DEVICE_ACCESS;
             }
