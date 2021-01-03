@@ -29,6 +29,7 @@ impl framework::Example for Example {
     /// constructs initial instance of Example struct
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {

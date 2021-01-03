@@ -26,20 +26,20 @@ webgl = ["wgc"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "c788b1cef630fa5b5f0a86132fe84551d4149fb6"
+rev = "9dce0afa746d624533dd086985889a2439750628"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "c788b1cef630fa5b5f0a86132fe84551d4149fb6"
+rev = "9dce0afa746d624533dd086985889a2439750628"
 features = ["raw-window-handle"]
 optional = true
 
 [dependencies.wgt]
 package = "wgpu-types"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "c788b1cef630fa5b5f0a86132fe84551d4149fb6"
+rev = "9dce0afa746d624533dd086985889a2439750628"
 
 [dependencies]
 arrayvec = "0.5"

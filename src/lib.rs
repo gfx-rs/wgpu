@@ -29,14 +29,15 @@ pub use wgt::{
     BlendDescriptor, BlendFactor, BlendOperation, BufferAddress, BufferBindingType, BufferSize,
     BufferUsage, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction,
     CullMode, DepthStencilStateDescriptor, DeviceType, DynamicOffset, Extent3d, Features,
-    FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, Origin3d, PolygonMode,
-    PowerPreference, PresentMode, PrimitiveTopology, PushConstantRange,
-    RasterizationStateDescriptor, SamplerBorderColor, ShaderFlags, ShaderLocation, ShaderStage,
-    StencilOperation, StencilStateDescriptor, StencilStateFaceDescriptor, StorageTextureAccess,
-    SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureDataLayout, TextureDimension,
-    TextureFormat, TextureSampleType, TextureUsage, TextureViewDimension,
-    VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, Origin3d, PipelineStatisticsTypes,
+    PolygonMode, PowerPreference, PresentMode, PrimitiveTopology, PushConstantRange,
+    QuerySetDescriptor, QueryType, RasterizationStateDescriptor, SamplerBorderColor, ShaderFlags,
+    ShaderLocation, ShaderStage, StencilOperation, StencilStateDescriptor,
+    StencilStateFaceDescriptor, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus,
+    TextureAspect, TextureDataLayout, TextureDimension, TextureFormat, TextureSampleType,
+    TextureUsage, TextureViewDimension, VertexAttributeDescriptor, VertexFormat,
+    BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    PUSH_CONSTANT_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C};
@@ -53,6 +54,9 @@ trait ComputePassInner<Ctx: Context> {
     fn insert_debug_marker(&mut self, label: &str);
     fn push_debug_group(&mut self, group_label: &str);
     fn pop_debug_group(&mut self);
+    fn write_timestamp(&mut self, query_set: &Ctx::QuerySetId, query_index: u32);
+    fn begin_pipeline_statistics_query(&mut self, query_set: &Ctx::QuerySetId, query_index: u32);
+    fn end_pipeline_statistics_query(&mut self);
     fn dispatch(&mut self, x: u32, y: u32, z: u32);
     fn dispatch_indirect(
         &mut self,
@@ -138,6 +142,9 @@ trait RenderPassInner<Ctx: Context>: RenderInner<Ctx> {
     fn insert_debug_marker(&mut self, label: &str);
     fn push_debug_group(&mut self, group_label: &str);
     fn pop_debug_group(&mut self);
+    fn write_timestamp(&mut self, query_set: &Ctx::QuerySetId, query_index: u32);
+    fn begin_pipeline_statistics_query(&mut self, query_set: &Ctx::QuerySetId, query_index: u32);
+    fn end_pipeline_statistics_query(&mut self);
     fn execute_bundles<'a, I: Iterator<Item = &'a Ctx::RenderBundleId>>(
         &mut self,
         render_bundles: I,
@@ -155,6 +162,7 @@ trait Context: Debug + Send + Sized + Sync {
     type SamplerId: Debug + Send + Sync + 'static;
     type BufferId: Debug + Send + Sync + 'static;
     type TextureId: Debug + Send + Sync + 'static;
+    type QuerySetId: Debug + Send + Sync + 'static;
     type PipelineLayoutId: Debug + Send + Sync + 'static;
     type RenderPipelineId: Debug + Send + Sync + 'static;
     type ComputePipelineId: Debug + Send + Sync + 'static;
@@ -196,6 +204,7 @@ trait Context: Debug + Send + Sized + Sync {
     ) -> TextureFormat;
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features;
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
+    fn adapter_get_timestamp_period(&self, adapter: &Self::AdapterId) -> f32;
     fn adapter_get_info(&self, adapter: &Self::AdapterId) -> AdapterInfo;
     fn adapter_get_texture_format_features(
         &self,
@@ -256,6 +265,11 @@ trait Context: Debug + Send + Sized + Sync {
         device: &Self::DeviceId,
         desc: &SamplerDescriptor,
     ) -> Self::SamplerId;
+    fn device_create_query_set(
+        &self,
+        device: &Self::DeviceId,
+        desc: &QuerySetDescriptor,
+    ) -> Self::QuerySetId;
     fn device_create_command_encoder(
         &self,
         device: &Self::DeviceId,
@@ -309,6 +323,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn texture_drop(&self, texture: &Self::TextureId);
     fn texture_view_drop(&self, texture_view: &Self::TextureViewId);
     fn sampler_drop(&self, sampler: &Self::SamplerId);
+    fn query_set_drop(&self, query_set: &Self::QuerySetId);
     fn bind_group_drop(&self, bind_group: &Self::BindGroupId);
     fn bind_group_layout_drop(&self, bind_group_layout: &Self::BindGroupLayoutId);
     fn pipeline_layout_drop(&self, pipeline_layout: &Self::PipelineLayoutId);
@@ -385,6 +400,22 @@ trait Context: Debug + Send + Sized + Sync {
     fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str);
     fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str);
     fn command_encoder_pop_debug_group(&self, encoder: &Self::CommandEncoderId);
+
+    fn command_encoder_write_timestamp(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        query_set: &Self::QuerySetId,
+        query_index: u32,
+    );
+    fn command_encoder_resolve_query_set(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        query_set: &Self::QuerySetId,
+        first_query: u32,
+        query_count: u32,
+        destination: &Self::BufferId,
+        destination_offset: BufferAddress,
+    );
 
     fn render_bundle_encoder_finish(
         &self,
@@ -864,6 +895,20 @@ impl Drop for RenderBundle {
     fn drop(&mut self) {
         if !thread::panicking() {
             self.context.render_bundle_drop(&self.id);
+        }
+    }
+}
+
+/// Handle to a query set.
+pub struct QuerySet {
+    context: Arc<C>,
+    id: <C as Context>::QuerySetId,
+}
+
+impl Drop for QuerySet {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context.query_set_drop(&self.id);
         }
     }
 }
@@ -1414,6 +1459,13 @@ impl Adapter {
         Context::adapter_limits(&*self.context, &self.id)
     }
 
+    /// Gets the amount of nanoseconds each tick of a timestamp query represents.
+    ///
+    /// Returns zero if timestamp queries are unsupported.
+    pub fn get_timestamp_period(&self) -> f32 {
+        Context::adapter_get_timestamp_period(&*self.context, &self.id)
+    }
+
     /// Get info about the adapter itself.
     pub fn get_info(&self) -> AdapterInfo {
         Context::adapter_get_info(&*self.context, &self.id)
@@ -1555,6 +1607,14 @@ impl Device {
         Sampler {
             context: Arc::clone(&self.context),
             id: Context::device_create_sampler(&*self.context, &self.id, desc),
+        }
+    }
+
+    /// Creates a new [`QuerySet`].
+    pub fn create_query_set(&self, desc: &QuerySetDescriptor) -> QuerySet {
+        QuerySet {
+            context: Arc::clone(&self.context),
+            id: Context::device_create_query_set(&*self.context, &self.id, desc),
         }
     }
 
@@ -1991,6 +2051,49 @@ impl CommandEncoder {
     }
 }
 
+/// [`Features::TIMESTAMP_QUERY`] must be enabled on the device in order to call these functions.
+impl CommandEncoder {
+    /// Issue a timestamp command at this point in the queue.
+    /// The timestamp will be written to the specified query set, at the specified index.
+    ///
+    /// Must be multiplied by [`Device::get_timestamp_period`] to get
+    /// the value in nanoseconds. Absolute values have no meaning,
+    /// but timestamps can be subtracted to get the time it takes
+    /// for a string of operations to complete.
+    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
+        Context::command_encoder_write_timestamp(
+            &*self.context,
+            &self.id,
+            &query_set.id,
+            query_index,
+        )
+    }
+}
+
+/// [`Features::TIMESTAMP_QUERY`] or [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
+impl CommandEncoder {
+    /// Resolve a query set, writing the results into the supplied destination buffer.
+    ///
+    /// Queries may be between 8 and 40 bytes each. See [`PipelineStatisticsType`] for more information.
+    pub fn resolve_query_set(
+        &mut self,
+        query_set: &QuerySet,
+        query_range: Range<u32>,
+        destination: &Buffer,
+        destination_offset: BufferAddress,
+    ) {
+        Context::command_encoder_resolve_query_set(
+            &*self.context,
+            &self.id,
+            &query_set.id,
+            query_range.start,
+            query_range.end - query_range.start,
+            &destination.id,
+            destination_offset,
+        )
+    }
+}
+
 impl<'a> RenderPass<'a> {
     /// Sets the active bind group for a given bind group index. The bind group layout
     /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
@@ -2354,6 +2457,36 @@ impl<'a> RenderPass<'a> {
     }
 }
 
+/// [`Features::TIMESTAMP_QUERY`] must be enabled on the device in order to call these functions.
+impl<'a> RenderPass<'a> {
+    /// Issue a timestamp command at this point in the queue. The
+    /// timestamp will be written to the specified query set, at the specified index.
+    ///
+    /// Must be multiplied by [`Device::get_timestamp_period`] to get
+    /// the value in nanoseconds. Absolute values have no meaning,
+    /// but timestamps can be subtracted to get the time it takes
+    /// for a string of operations to complete.
+    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
+        self.id.write_timestamp(&query_set.id, query_index)
+    }
+}
+
+/// [`Features::PIPEILNE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
+impl<'a> RenderPass<'a> {
+    /// Start a pipeline statistics query on this render pass. It can be ended with
+    /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
+    pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
+        self.id
+            .begin_pipeline_statistics_query(&query_set.id, query_index);
+    }
+
+    /// End the pipeline statistics query on this render pass. It can be started with
+    /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
+    pub fn end_pipeline_statistics_query(&mut self) {
+        self.id.end_pipeline_statistics_query();
+    }
+}
+
 impl<'a> Drop for RenderPass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
@@ -2427,6 +2560,35 @@ impl<'a> ComputePass<'a> {
     /// of 4..16.
     pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
         self.id.set_push_constants(offset, data);
+    }
+}
+
+/// [`Features::TIMESTAMP_QUERY`] must be enabled on the device in order to call these functions.
+impl<'a> ComputePass<'a> {
+    /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.
+    ///
+    /// Must be multiplied by [`Device::get_timestamp_period`] to get
+    /// the value in nanoseconds. Absolute values have no meaning,
+    /// but timestamps can be subtracted to get the time it takes
+    /// for a string of operations to complete.
+    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
+        self.id.write_timestamp(&query_set.id, query_index)
+    }
+}
+
+/// [`Features::PIPEILNE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
+impl<'a> ComputePass<'a> {
+    /// Start a pipeline statistics query on this render pass. It can be ended with
+    /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
+    pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
+        self.id
+            .begin_pipeline_statistics_query(&query_set.id, query_index);
+    }
+
+    /// End the pipeline statistics query on this render pass. It can be started with
+    /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
+    pub fn end_pipeline_statistics_query(&mut self) {
+        self.id.end_pipeline_statistics_query();
     }
 }
 
