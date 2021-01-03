@@ -448,7 +448,8 @@ impl<B: GfxBackend> Device<B> {
 
             let mut flags = Uf::empty();
             let map_flags = desc.usage & (Bu::MAP_READ | Bu::MAP_WRITE);
-            if !(desc.usage - map_flags).is_empty() {
+            let map_copy_flags = desc.usage & (Bu::MAP_READ | Bu::MAP_WRITE | Bu::COPY_SRC | Bu::COPY_DST);
+            if map_flags.is_empty() || !(desc.usage - map_copy_flags).is_empty() {
                 flags |= Uf::FAST_DEVICE_ACCESS;
             }
             if transient {
