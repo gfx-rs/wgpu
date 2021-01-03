@@ -91,6 +91,11 @@ pub enum Action<'a> {
         base: crate::command::BasePass<crate::command::RenderCommand>,
     },
     DestroyRenderBundle(id::RenderBundleId),
+    CreateQuerySet {
+        id: id::QuerySetId,
+        desc: wgt::QuerySetDescriptor,
+    },
+    DestroyQuerySet(id::QuerySetId),
     WriteBuffer {
         id: id::BufferId,
         data: FileName,
@@ -131,6 +136,17 @@ pub enum Command {
         src: crate::command::TextureCopyView,
         dst: crate::command::TextureCopyView,
         size: wgt::Extent3d,
+    },
+    WriteTimestamp {
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    },
+    ResolveQuerySet {
+        query_set_id: id::QuerySetId,
+        start_query: u32,
+        query_count: u32,
+        destination: id::BufferId,
+        destination_offset: wgt::BufferAddress,
     },
     RunComputePass {
         base: crate::command::BasePass<crate::command::ComputeCommand>,

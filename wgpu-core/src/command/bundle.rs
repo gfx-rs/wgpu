@@ -430,6 +430,9 @@ impl RenderBundleEncoder {
                 RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
                 RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
                 RenderCommand::PopDebugGroup => unimplemented!(),
+                RenderCommand::WriteTimestamp { .. }
+                | RenderCommand::BeginPipelineStatisticsQuery { .. }
+                | RenderCommand::EndPipelineStatisticsQuery => unimplemented!(),
                 RenderCommand::ExecuteBundle(_)
                 | RenderCommand::SetBlendColor(_)
                 | RenderCommand::SetStencilReference(_)
@@ -693,6 +696,9 @@ impl RenderBundle {
                 RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
                 RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
                 RenderCommand::PopDebugGroup => unimplemented!(),
+                RenderCommand::WriteTimestamp { .. }
+                | RenderCommand::BeginPipelineStatisticsQuery { .. }
+                | RenderCommand::EndPipelineStatisticsQuery => unimplemented!(),
                 RenderCommand::ExecuteBundle(_)
                 | RenderCommand::SetBlendColor(_)
                 | RenderCommand::SetStencilReference(_)

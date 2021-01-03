@@ -447,6 +447,42 @@ impl<B: hal::Backend> Borrow<()> for Sampler<B> {
         &DUMMY_SELECTOR
     }
 }
+#[derive(Clone, Debug, Error)]
+pub enum CreateQuerySetError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("QuerySets cannot be made with zero queries")]
+    ZeroCount,
+    #[error("{count} is too many queries for a single QuerySet. QuerySets cannot be made more than {maximum} queries.")]
+    TooManyQueries { count: u32, maximum: u32 },
+    #[error("Feature {0:?} must be enabled")]
+    MissingFeature(wgt::Features),
+}
+
+#[derive(Debug)]
+pub struct QuerySet<B: hal::Backend> {
+    pub(crate) raw: B::QueryPool,
+    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) life_guard: LifeGuard,
+    /// Amount of queries in the query set.
+    pub(crate) desc: wgt::QuerySetDescriptor,
+    /// Amount of numbers in each query (i.e. a pipeline statistics query for two attributes will have this number be two)
+    pub(crate) elements: u32,
+}
+
+impl<B: hal::Backend> Resource for QuerySet<B> {
+    const TYPE: &'static str = "QuerySet";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
+    }
+}
+
+impl<B: hal::Backend> Borrow<()> for QuerySet<B> {
+    fn borrow(&self) -> &() {
+        &DUMMY_SELECTOR
+    }
+}
 
 #[derive(Clone, Debug, Error)]
 pub enum DestroyError {

@@ -81,6 +81,28 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 trace::Command::CopyTextureToTexture { src, dst, size } => self
                     .command_encoder_copy_texture_to_texture::<B>(encoder, &src, &dst, &size)
                     .unwrap(),
+                trace::Command::WriteTimestamp {
+                    query_set_id,
+                    query_index,
+                } => self
+                    .command_encoder_write_timestamp::<B>(encoder, query_set_id, query_index)
+                    .unwrap(),
+                trace::Command::ResolveQuerySet {
+                    query_set_id,
+                    start_query,
+                    query_count,
+                    destination,
+                    destination_offset,
+                } => self
+                    .command_encoder_resolve_query_set::<B>(
+                        encoder,
+                        query_set_id,
+                        start_query,
+                        query_count,
+                        destination,
+                        destination_offset,
+                    )
+                    .unwrap(),
                 trace::Command::RunComputePass { base } => {
                     self.command_encoder_run_compute_pass_impl::<B>(encoder, base.as_ref())
                         .unwrap();
@@ -266,6 +288,16 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             A::DestroyRenderBundle(id) => {
                 self.render_bundle_drop::<B>(id);
+            }
+            A::CreateQuerySet { id, desc } => {
+                self.device_maintain_ids::<B>(device).unwrap();
+                let (_, error) = self.device_create_query_set::<B>(device, &desc, id);
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
+            }
+            A::DestroyQuerySet(id) => {
+                self.query_set_drop::<B>(id);
             }
             A::WriteBuffer {
                 id,

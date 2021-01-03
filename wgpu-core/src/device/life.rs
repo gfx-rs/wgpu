@@ -39,6 +39,7 @@ pub struct SuspectedResources {
     pub(crate) bind_group_layouts: Vec<id::Valid<id::BindGroupLayoutId>>,
     pub(crate) pipeline_layouts: Vec<Stored<id::PipelineLayoutId>>,
     pub(crate) render_bundles: Vec<id::Valid<id::RenderBundleId>>,
+    pub(crate) query_sets: Vec<id::Valid<id::QuerySetId>>,
 }
 
 impl SuspectedResources {
@@ -53,6 +54,7 @@ impl SuspectedResources {
         self.bind_group_layouts.clear();
         self.pipeline_layouts.clear();
         self.render_bundles.clear();
+        self.query_sets.clear();
     }
 
     pub(crate) fn extend(&mut self, other: &Self) {
@@ -70,6 +72,7 @@ impl SuspectedResources {
         self.pipeline_layouts
             .extend_from_slice(&other.pipeline_layouts);
         self.render_bundles.extend_from_slice(&other.render_bundles);
+        self.query_sets.extend_from_slice(&other.query_sets);
     }
 
     pub(crate) fn add_trackers(&mut self, trackers: &TrackerSet) {
@@ -81,6 +84,7 @@ impl SuspectedResources {
         self.compute_pipelines.extend(trackers.compute_pipes.used());
         self.render_pipelines.extend(trackers.render_pipes.used());
         self.render_bundles.extend(trackers.bundles.used());
+        self.query_sets.extend(trackers.query_sets.used());
     }
 }
 
@@ -99,6 +103,7 @@ struct NonReferencedResources<B: hal::Backend> {
     graphics_pipes: Vec<B::GraphicsPipeline>,
     descriptor_set_layouts: Vec<B::DescriptorSetLayout>,
     pipeline_layouts: Vec<B::PipelineLayout>,
+    query_sets: Vec<B::QueryPool>,
 }
 
 impl<B: hal::Backend> NonReferencedResources<B> {
@@ -114,6 +119,7 @@ impl<B: hal::Backend> NonReferencedResources<B> {
             graphics_pipes: Vec::new(),
             descriptor_set_layouts: Vec::new(),
             pipeline_layouts: Vec::new(),
+            query_sets: Vec::new(),
         }
     }
 
@@ -126,6 +132,7 @@ impl<B: hal::Backend> NonReferencedResources<B> {
         self.desc_sets.extend(other.desc_sets);
         self.compute_pipes.extend(other.compute_pipes);
         self.graphics_pipes.extend(other.graphics_pipes);
+        self.query_sets.extend(other.query_sets);
         assert!(other.descriptor_set_layouts.is_empty());
         assert!(other.pipeline_layouts.is_empty());
     }
@@ -177,6 +184,9 @@ impl<B: hal::Backend> NonReferencedResources<B> {
         }
         for raw in self.pipeline_layouts.drain(..) {
             device.destroy_pipeline_layout(raw);
+        }
+        for raw in self.query_sets.drain(..) {
+            device.destroy_query_pool(raw);
         }
     }
 }
@@ -600,6 +610,27 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     trace.map(|t| t.lock().add(trace::Action::DestroyBindGroupLayout(id.0)));
                     if let Some(lay) = hub.bind_group_layouts.unregister_locked(id.0, &mut *guard) {
                         self.free_resources.descriptor_set_layouts.push(lay.raw);
+                    }
+                }
+            }
+        }
+
+        if !self.suspected_resources.query_sets.is_empty() {
+            let (mut guard, _) = hub.query_sets.write(token);
+            let mut trackers = trackers.lock();
+
+            for id in self.suspected_resources.query_sets.drain(..) {
+                if trackers.query_sets.remove_abandoned(id) {
+                    // #[cfg(feature = "trace")]
+                    // trace.map(|t| t.lock().add(trace::Action::DestroyComputePipeline(id.0)));
+                    if let Some(res) = hub.query_sets.unregister_locked(id.0, &mut *guard) {
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .query_sets
+                            .push(res.raw);
                     }
                 }
             }

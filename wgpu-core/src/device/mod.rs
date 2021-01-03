@@ -401,6 +401,7 @@ impl<B: GfxBackend> Device<B> {
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
             let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
             let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
+            let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
             let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
@@ -439,6 +440,11 @@ impl<B: GfxBackend> Device<B> {
             for id in trackers.render_pipes.used() {
                 if render_pipe_guard[id].life_guard.ref_count.is_none() {
                     self.temp_suspected.render_pipelines.push(id);
+                }
+            }
+            for id in trackers.query_sets.used() {
+                if query_set_guard[id].life_guard.ref_count.is_none() {
+                    self.temp_suspected.query_sets.push(id);
                 }
             }
         }
@@ -3671,6 +3677,132 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .suspected_resources
             .render_bundles
             .push(id::Valid(render_bundle_id));
+    }
+
+    pub fn device_create_query_set<B: GfxBackend>(
+        &self,
+        device_id: id::DeviceId,
+        desc: &wgt::QuerySetDescriptor,
+        id_in: Input<G, id::QuerySetId>,
+    ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
+        span!(_guard, INFO, "Device::create_query_set");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+
+            match desc.ty {
+                wgt::QueryType::Timestamp => {
+                    if !device.features.contains(wgt::Features::TIMESTAMP_QUERY) {
+                        break resource::CreateQuerySetError::MissingFeature(
+                            wgt::Features::TIMESTAMP_QUERY,
+                        );
+                    }
+                }
+                wgt::QueryType::PipelineStatistics(..) => {
+                    if !device
+                        .features
+                        .contains(wgt::Features::PIPELINE_STATISTICS_QUERY)
+                    {
+                        break resource::CreateQuerySetError::MissingFeature(
+                            wgt::Features::PIPELINE_STATISTICS_QUERY,
+                        );
+                    }
+                }
+            }
+
+            if desc.count == 0 {
+                break resource::CreateQuerySetError::ZeroCount;
+            }
+
+            if desc.count >= wgt::QUERY_SET_MAX_QUERIES {
+                break resource::CreateQuerySetError::TooManyQueries {
+                    count: desc.count,
+                    maximum: wgt::QUERY_SET_MAX_QUERIES,
+                };
+            }
+
+            let query_set = {
+                let (hal_type, elements) = conv::map_query_type(&desc.ty);
+
+                resource::QuerySet {
+                    raw: unsafe { device.raw.create_query_pool(hal_type, desc.count).unwrap() },
+                    device_id: Stored {
+                        value: id::Valid(device_id),
+                        ref_count: device.life_guard.add_ref(),
+                    },
+                    life_guard: LifeGuard::new(""),
+                    desc: desc.clone(),
+                    elements,
+                }
+            };
+
+            let ref_count = query_set.life_guard.add_ref();
+
+            let id = hub
+                .query_sets
+                .register_identity(id_in, query_set, &mut token);
+            #[cfg(feature = "trace")]
+            match device.trace {
+                Some(ref trace) => trace.lock().add(trace::Action::CreateQuerySet {
+                    id: id.0,
+                    desc: desc.clone(),
+                }),
+                None => (),
+            };
+
+            device
+                .trackers
+                .lock()
+                .query_sets
+                .init(id, ref_count, PhantomData)
+                .unwrap();
+
+            return (id.0, None);
+        };
+
+        let id = B::hub(self)
+            .query_sets
+            .register_error(id_in, "", &mut token);
+        (id, Some(error))
+    }
+
+    pub fn query_set_drop<B: GfxBackend>(&self, query_set_id: id::QuerySetId) {
+        span!(_guard, INFO, "QuerySet::drop");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let device_id = {
+            let (mut query_set_guard, _) = hub.query_sets.write(&mut token);
+            let query_set = query_set_guard.get_mut(query_set_id).unwrap();
+            query_set.life_guard.ref_count.take();
+            query_set.device_id.value
+        };
+
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id];
+
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::DestroyQuerySet(query_set_id)),
+            None => (),
+        };
+
+        device
+            .lock_life(&mut token)
+            .suspected_resources
+            .query_sets
+            .push(id::Valid(query_set_id));
     }
 
     pub fn device_create_render_pipeline<B: GfxBackend>(

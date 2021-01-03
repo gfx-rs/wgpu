@@ -6,8 +6,9 @@ use crate::{
     binding_model::BindError,
     command::{
         bind::{Binder, LayoutChange},
-        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, DrawError, ExecutionError,
-        MapPassErr, PassErrorScope, RenderCommand, RenderCommandError, StateChange,
+        end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer, CommandEncoderError,
+        DrawError, ExecutionError, MapPassErr, PassErrorScope, QueryResetMap, QueryUseError,
+        RenderCommand, RenderCommandError, StateChange,
     },
     conv,
     device::{
@@ -38,6 +39,7 @@ use serde::Deserialize;
 #[cfg(any(feature = "serial-pass", feature = "trace"))]
 use serde::Serialize;
 
+use crate::track::UseExtendError;
 use std::{
     borrow::{Borrow, Cow},
     collections::hash_map::Entry,
@@ -441,6 +443,8 @@ pub enum RenderPassErrorInner {
     Draw(#[from] DrawError),
     #[error(transparent)]
     Bind(#[from] BindError),
+    #[error(transparent)]
+    QueryUse(#[from] QueryUseError),
 }
 
 impl From<MissingBufferUsageError> for RenderPassErrorInner {
@@ -1019,7 +1023,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (cmd_buf_raw, trackers, used_swapchain) = {
+        let (cmd_buf_raw, trackers, used_swapchain, query_reset_state) = {
             // read-only lock guard
             let (cmb_guard, mut token) = hub.command_buffers.read(&mut token);
 
@@ -1039,6 +1043,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
             let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
+            let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
             let (view_guard, _) = hub.texture_views.read(&mut token);
@@ -1071,6 +1076,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut temp_offsets = Vec::new();
             let mut dynamic_offset_count = 0;
             let mut string_offset = 0;
+            let mut active_query = None;
+            let mut query_reset_state = QueryResetMap::new();
 
             for command in base.commands {
                 match *command {
@@ -1734,6 +1741,71 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             raw.insert_debug_marker(label, color);
                         }
                     }
+                    RenderCommand::WriteTimestamp {
+                        query_set_id,
+                        query_index,
+                    } => {
+                        let scope = PassErrorScope::WriteTimestamp;
+
+                        let query_set = info
+                            .trackers
+                            .query_sets
+                            .use_extend(&*query_set_guard, query_set_id, (), ())
+                            .map_err(|e| match e {
+                                UseExtendError::InvalidResource => {
+                                    RenderCommandError::InvalidQuerySet(query_set_id)
+                                }
+                                _ => unreachable!(),
+                            })
+                            .map_pass_err(scope)?;
+
+                        query_set
+                            .validate_and_write_timestamp(
+                                &mut raw,
+                                query_set_id,
+                                query_index,
+                                Some(&mut query_reset_state),
+                            )
+                            .map_pass_err(scope)?;
+                    }
+                    RenderCommand::BeginPipelineStatisticsQuery {
+                        query_set_id,
+                        query_index,
+                    } => {
+                        let scope = PassErrorScope::BeginPipelineStatisticsQuery;
+
+                        let query_set = info
+                            .trackers
+                            .query_sets
+                            .use_extend(&*query_set_guard, query_set_id, (), ())
+                            .map_err(|e| match e {
+                                UseExtendError::InvalidResource => {
+                                    RenderCommandError::InvalidQuerySet(query_set_id)
+                                }
+                                _ => unreachable!(),
+                            })
+                            .map_pass_err(scope)?;
+
+                        query_set
+                            .validate_and_begin_pipeline_statistics_query(
+                                &mut raw,
+                                query_set_id,
+                                query_index,
+                                Some(&mut query_reset_state),
+                                &mut active_query,
+                            )
+                            .map_pass_err(scope)?;
+                    }
+                    RenderCommand::EndPipelineStatisticsQuery => {
+                        let scope = PassErrorScope::EndPipelineStatisticsQuery;
+
+                        end_pipeline_statistics_query(
+                            &mut raw,
+                            &*query_set_guard,
+                            &mut active_query,
+                        )
+                        .map_pass_err(scope)?;
+                    }
                     RenderCommand::ExecuteBundle(bundle_id) => {
                         let scope = PassErrorScope::ExecuteBundle;
                         let bundle = info
@@ -1778,10 +1850,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let (trackers, used_swapchain) = info.finish(&*texture_guard).map_pass_err(scope)?;
-            (raw, trackers, used_swapchain)
+            (raw, trackers, used_swapchain, query_reset_state)
         };
 
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
+        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
         let cmd_buf =
@@ -1798,15 +1871,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
+        let last_cmd_buf = cmd_buf.raw.last_mut().unwrap();
+
+        query_reset_state
+            .reset_queries(
+                last_cmd_buf,
+                &query_set_guard,
+                cmd_buf.device_id.value.0.backend(),
+            )
+            .map_err(RenderCommandError::InvalidQuerySet)
+            .map_pass_err(PassErrorScope::QueryReset)?;
+
         super::CommandBuffer::insert_barriers(
-            cmd_buf.raw.last_mut().unwrap(),
+            last_cmd_buf,
             &mut cmd_buf.trackers,
             &trackers,
             &*buffer_guard,
             &*texture_guard,
         );
         unsafe {
-            cmd_buf.raw.last_mut().unwrap().finish();
+            last_cmd_buf.finish();
         }
         cmd_buf.raw.push(cmd_buf_raw);
 
@@ -2146,6 +2230,45 @@ pub mod render_ffi {
             color,
             len: bytes.len(),
         });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_render_pass_write_timestamp(
+        pass: &mut RenderPass,
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    ) {
+        span!(_guard, DEBUG, "RenderPass::write_timestamp");
+
+        pass.base.commands.push(RenderCommand::WriteTimestamp {
+            query_set_id,
+            query_index,
+        });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_render_pass_begin_pipeline_statistics_query(
+        pass: &mut RenderPass,
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    ) {
+        span!(_guard, DEBUG, "RenderPass::begin_pipeline_statistics query");
+
+        pass.base
+            .commands
+            .push(RenderCommand::BeginPipelineStatisticsQuery {
+                query_set_id,
+                query_index,
+            });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_render_pass_end_pipeline_statistics_query(pass: &mut RenderPass) {
+        span!(_guard, DEBUG, "RenderPass::end_pipeline_statistics_query");
+
+        pass.base
+            .commands
+            .push(RenderCommand::EndPipelineStatisticsQuery);
     }
 
     #[no_mangle]

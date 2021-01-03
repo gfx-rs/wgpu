@@ -23,6 +23,8 @@ use crate::{
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use wgt::Backend;
 
+use crate::id::QuerySetId;
+use crate::resource::QuerySet;
 #[cfg(debug_assertions)]
 use std::cell::Cell;
 use std::{fmt::Debug, marker::PhantomData, ops, thread};
@@ -264,6 +266,11 @@ impl<B: hal::Backend> Access<ComputePipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for ComputePipeline<B> {}
+impl<B: hal::Backend> Access<QuerySet<B>> for Root {}
+impl<B: hal::Backend> Access<QuerySet<B>> for Device<B> {}
+impl<B: hal::Backend> Access<QuerySet<B>> for CommandBuffer<B> {}
+impl<B: hal::Backend> Access<QuerySet<B>> for RenderPipeline<B> {}
+impl<B: hal::Backend> Access<QuerySet<B>> for ComputePipeline<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for Device<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for BindGroupLayout<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for Root {}
@@ -273,6 +280,7 @@ impl<B: hal::Backend> Access<Buffer<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for ComputePipeline<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for RenderPipeline<B> {}
+impl<B: hal::Backend> Access<Buffer<B>> for QuerySet<B> {}
 impl<B: hal::Backend> Access<Texture<B>> for Root {}
 impl<B: hal::Backend> Access<Texture<B>> for Device<B> {}
 impl<B: hal::Backend> Access<Texture<B>> for Buffer<B> {}
@@ -374,6 +382,7 @@ pub trait GlobalIdentityHandlerFactory:
     + IdentityHandlerFactory<RenderBundleId>
     + IdentityHandlerFactory<RenderPipelineId>
     + IdentityHandlerFactory<ComputePipelineId>
+    + IdentityHandlerFactory<QuerySetId>
     + IdentityHandlerFactory<BufferId>
     + IdentityHandlerFactory<TextureId>
     + IdentityHandlerFactory<TextureViewId>
@@ -547,6 +556,7 @@ pub struct Hub<B: hal::Backend, F: GlobalIdentityHandlerFactory> {
     pub render_bundles: Registry<RenderBundle, RenderBundleId, F>,
     pub render_pipelines: Registry<RenderPipeline<B>, RenderPipelineId, F>,
     pub compute_pipelines: Registry<ComputePipeline<B>, ComputePipelineId, F>,
+    pub query_sets: Registry<QuerySet<B>, QuerySetId, F>,
     pub buffers: Registry<Buffer<B>, BufferId, F>,
     pub textures: Registry<Texture<B>, TextureId, F>,
     pub texture_views: Registry<TextureView<B>, TextureViewId, F>,
@@ -567,6 +577,7 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
             render_bundles: Registry::new(B::VARIANT, factory),
             render_pipelines: Registry::new(B::VARIANT, factory),
             compute_pipelines: Registry::new(B::VARIANT, factory),
+            query_sets: Registry::new(B::VARIANT, factory),
             buffers: Registry::new(B::VARIANT, factory),
             textures: Registry::new(B::VARIANT, factory),
             texture_views: Registry::new(B::VARIANT, factory),
@@ -694,6 +705,15 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
                     unsafe {
                         suf.unconfigure_swapchain(&device.raw);
                     }
+                }
+            }
+        }
+
+        for element in self.query_sets.data.write().map.drain(..) {
+            if let Element::Occupied(query_set, _) = element {
+                let device = &devices[query_set.device_id.value];
+                unsafe {
+                    device.raw.destroy_query_pool(query_set.raw);
                 }
             }
         }
