@@ -196,6 +196,7 @@ trait Context: Debug + Send + Sized + Sync {
 
     fn device_features(&self, device: &Self::DeviceId) -> Features;
     fn device_limits(&self, device: &Self::DeviceId) -> Limits;
+    fn device_get_swap_chain_preferred_format(&self, device: &Self::DeviceId) -> TextureFormat;
     fn device_create_swap_chain(
         &self,
         device: &Self::DeviceId,
@@ -1426,6 +1427,11 @@ impl Device {
     /// If any of these limits are exceeded, functions may panic.
     pub fn limits(&self) -> Limits {
         Context::device_limits(&*self.context, &self.id)
+    }
+
+    /// Returns an optimal texture format to use for the [`SwapChain`] with this device.
+    pub fn get_swap_chain_preferred_format(&self) -> TextureFormat {
+        Context::device_get_swap_chain_preferred_format(&*self.context, &self.id)
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.

@@ -962,6 +962,14 @@ impl crate::Context for Context {
         wgt::Limits::default()
     }
 
+    fn device_get_swap_chain_preferred_format(
+        &self,
+        device: &Self::DeviceId,
+    ) -> wgt::TextureFormat {
+        // TODO: web-sys bindings need to be updated to not return a promise
+        wgt::TextureFormat::Bgra8Unorm
+    }
+
     fn device_create_swap_chain(
         &self,
         device: &Self::DeviceId,
