@@ -551,9 +551,11 @@ pub mod compute_ffi {
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
         });
-        pass.base
-            .dynamic_offsets
-            .extend_from_slice(slice::from_raw_parts(offsets, offset_length));
+        if offset_length != 0 {
+            pass.base
+                .dynamic_offsets
+                .extend_from_slice(slice::from_raw_parts(offsets, offset_length));
+        }
     }
 
     #[no_mangle]
