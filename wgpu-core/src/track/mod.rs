@@ -370,7 +370,12 @@ impl<S: ResourceState> ResourceTracker<S> {
                     e.insert(new.clone());
                 }
                 Entry::Occupied(e) => {
-                    assert_eq!(e.get().epoch, new.epoch);
+                    assert_eq!(
+                        e.get().epoch,
+                        new.epoch,
+                        "ID {:?} wasn't properly removed",
+                        S::Id::zip(index, e.get().epoch, self.backend)
+                    );
                     let id = Valid(S::Id::zip(index, new.epoch, self.backend));
                     e.into_mut().state.merge(id, &new.state, None)?;
                 }
@@ -388,7 +393,12 @@ impl<S: ResourceState> ResourceTracker<S> {
                     e.insert(new.clone());
                 }
                 Entry::Occupied(e) => {
-                    assert_eq!(e.get().epoch, new.epoch);
+                    assert_eq!(
+                        e.get().epoch,
+                        new.epoch,
+                        "ID {:?} wasn't properly removed",
+                        S::Id::zip(index, e.get().epoch, self.backend)
+                    );
                     let id = Valid(S::Id::zip(index, new.epoch, self.backend));
                     e.into_mut()
                         .state
