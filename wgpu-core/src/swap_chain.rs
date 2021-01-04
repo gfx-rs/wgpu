@@ -81,6 +81,8 @@ pub enum SwapChainError {
     Device(#[from] DeviceError),
     #[error("swap chain image is already acquired")]
     AlreadyAcquired,
+    #[error("acquired frame is still referenced")]
+    StillReferenced,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -250,12 +252,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             trace.lock().add(Action::PresentSwapChain(swap_chain_id));
         }
 
-        let view_id = sc
-            .acquired_view_id
-            .take()
-            .ok_or(SwapChainError::AlreadyAcquired)?;
-        let (view_maybe, _) = hub.texture_views.unregister(view_id.value.0, &mut token);
-        let view = view_maybe.ok_or(SwapChainError::Invalid)?;
+        let view = {
+            let view_id = sc
+                .acquired_view_id
+                .take()
+                .ok_or(SwapChainError::AlreadyAcquired)?;
+            let (view_maybe, _) = hub.texture_views.unregister(view_id.value.0, &mut token);
+            view_maybe.ok_or(SwapChainError::Invalid)?
+        };
+        if view.life_guard.ref_count.unwrap().load() != 1 {
+            return Err(SwapChainError::StillReferenced);
+        }
         let image = match view.inner {
             resource::TextureViewInner::Native { .. } => unreachable!(),
             resource::TextureViewInner::SwapChain { image, .. } => image,
