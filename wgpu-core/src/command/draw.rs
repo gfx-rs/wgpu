@@ -65,6 +65,8 @@ pub enum DrawError {
 pub enum RenderCommandError {
     #[error("bind group {0:?} is invalid")]
     InvalidBindGroup(id::BindGroupId),
+    #[error("render bundle {0:?} is invalid")]
+    InvalidRenderBundle(id::RenderBundleId),
     #[error("bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u8, max: u32 },
     #[error("dynamic buffer offset {0} does not respect `BIND_BUFFER_ALIGNMENT`")]

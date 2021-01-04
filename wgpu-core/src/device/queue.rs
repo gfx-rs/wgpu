@@ -484,6 +484,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
 
                 if !command_buffer_ids.is_empty() {
+                    let (render_bundle_guard, mut token) = hub.render_bundles.read(&mut token);
+                    let (_, mut token) = hub.pipeline_layouts.read(&mut token);
                     let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
                     let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
                     let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
@@ -581,6 +583,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         for id in cmdbuf.trackers.render_pipes.used() {
                             if !render_pipe_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.render_pipelines.push(id);
+                            }
+                        }
+                        for id in cmdbuf.trackers.bundles.used() {
+                            if !render_bundle_guard[id].life_guard.use_at(submit_index) {
+                                device.temp_suspected.render_bundles.push(id);
                             }
                         }
 

@@ -1778,7 +1778,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .trackers
                             .bundles
                             .use_extend(&*bundle_guard, bundle_id, (), ())
-                            .unwrap();
+                            .map_err(|_| RenderCommandError::InvalidRenderBundle(bundle_id))
+                            .map_pass_err(scope)?;
 
                         info.context
                             .check_compatible(&bundle.context)
