@@ -207,26 +207,28 @@ impl<'a, I: Copy + Debug + Ord, T: Copy + Debug> Iterator for Merge<'a, I, T> {
             (Some(&(ref ra, va)), Some(&(ref rb, vb))) => {
                 let (range, usage) = if ra.start < self.base {
                     // in the middle of the left stream
-                    if self.base == rb.start {
+                    let (end, end_value) = if self.base == rb.start {
                         // right stream is starting
                         debug_assert!(self.base < ra.end);
-                        (self.base..ra.end.min(rb.end), Some(*va)..Some(*vb))
+                        (rb.end, Some(*vb))
                     } else {
                         // right hasn't started yet
                         debug_assert!(self.base < rb.start);
-                        (self.base..rb.start, Some(*va)..None)
-                    }
+                        (rb.start, None)
+                    };
+                    (self.base..ra.end.min(end), Some(*va)..end_value)
                 } else if rb.start < self.base {
                     // in the middle of the right stream
-                    if self.base == ra.start {
+                    let (end, start_value) = if self.base == ra.start {
                         // left stream is starting
                         debug_assert!(self.base < rb.end);
-                        (self.base..ra.end.min(rb.end), Some(*va)..Some(*vb))
+                        (ra.end, Some(*va))
                     } else {
                         // left hasn't started yet
                         debug_assert!(self.base < ra.start);
-                        (self.base..ra.start, None..Some(*vb))
-                    }
+                        (ra.start, None)
+                    };
+                    (self.base..rb.end.min(end), start_value..Some(*vb))
                 } else {
                     // no active streams
                     match ra.start.cmp(&rb.start) {
@@ -393,6 +395,42 @@ mod test {
                 (6..7, Some(1)..None),
                 (7..8, Some(1)..Some(3)),
                 (8..9, None..Some(3)),
+            ]
+        );
+    }
+
+    #[test]
+    fn merge_complex() {
+        assert_eq!(
+            &easy_merge(
+                &[
+                    (0..8, 0u8),
+                    (8..9, 1),
+                    (9..16, 2),
+                    (16..17, 3),
+                    (17..118, 4),
+                    (118..119, 5),
+                    (119..124, 6),
+                    (124..125, 7),
+                    (125..512, 8),
+                ],
+                &[(15..16, 10u8), (51..52, 11), (126..127, 12),],
+            ),
+            &[
+                (0..8, Some(0)..None),
+                (8..9, Some(1)..None),
+                (9..15, Some(2)..None),
+                (15..16, Some(2)..Some(10)),
+                (16..17, Some(3)..None),
+                (17..51, Some(4)..None),
+                (51..52, Some(4)..Some(11)),
+                (52..118, Some(4)..None),
+                (118..119, Some(5)..None),
+                (119..124, Some(6)..None),
+                (124..125, Some(7)..None),
+                (125..126, Some(8)..None),
+                (126..127, Some(8)..Some(12)),
+                (127..512, Some(8)..None),
             ]
         );
     }
