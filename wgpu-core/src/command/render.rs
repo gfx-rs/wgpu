@@ -1059,7 +1059,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_run_render_pass_impl<B: GfxBackend>(
         &self,
         encoder_id: id::CommandEncoderId,
-        mut base: BasePassRef<RenderCommand>,
+        base: BasePassRef<RenderCommand>,
         color_attachments: &[ColorAttachmentDescriptor],
         depth_stencil_attachment: Option<&DepthStencilAttachmentDescriptor>,
     ) -> Result<(), RenderPassError> {
@@ -1121,6 +1121,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 debug_scope_depth: 0,
             };
             let mut temp_offsets = Vec::new();
+            let mut dynamic_offset_count = 0;
+            let mut string_offset = 0;
 
             for command in base.commands {
                 match *command {
@@ -1141,10 +1143,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         temp_offsets.clear();
                         temp_offsets.extend_from_slice(
-                            &base.dynamic_offsets[..num_dynamic_offsets as usize],
+                            &base.dynamic_offsets[dynamic_offset_count
+                                ..dynamic_offset_count + (num_dynamic_offsets as usize)],
                         );
-                        base.dynamic_offsets =
-                            &base.dynamic_offsets[num_dynamic_offsets as usize..];
+                        dynamic_offset_count += num_dynamic_offsets as usize;
 
                         let bind_group = info
                             .trackers
@@ -1748,11 +1750,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::PushDebugGroup { color, len } => {
                         state.debug_scope_depth += 1;
-                        let label = str::from_utf8(&base.string_data[..len]).unwrap();
+                        let label =
+                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                                .unwrap();
+                        string_offset += len;
                         unsafe {
                             raw.begin_debug_marker(label, color);
                         }
-                        base.string_data = &base.string_data[len..];
                     }
                     RenderCommand::PopDebugGroup => {
                         let scope = PassErrorScope::PopDebugGroup;
@@ -1766,11 +1770,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
                     RenderCommand::InsertDebugMarker { color, len } => {
-                        let label = str::from_utf8(&base.string_data[..len]).unwrap();
+                        let label =
+                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                                .unwrap();
+                        string_offset += len;
                         unsafe {
                             raw.insert_debug_marker(label, color);
                         }
-                        base.string_data = &base.string_data[len..];
                     }
                     RenderCommand::ExecuteBundle(bundle_id) => {
                         let scope = PassErrorScope::ExecuteBundle;
