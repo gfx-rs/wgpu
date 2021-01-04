@@ -20,15 +20,15 @@ fn consume_number(input: &str) -> (&str, &str) {
     let mut what = |c| {
         if is_first_char {
             is_first_char = false;
-            c == '-' || c >= '0' && c <= '9' || c == '.'
+            c == '-' || ('0'..='9').contains(&c) || c == '.'
         } else if c == 'e' || c == 'E' {
             right_after_exponent = true;
             true
         } else if right_after_exponent {
             right_after_exponent = false;
-            c >= '0' && c <= '9' || c == '-'
+            ('0'..='9').contains(&c) || c == '-'
         } else {
-            c >= '0' && c <= '9' || c == '.'
+            ('0'..='9').contains(&c) || c == '.'
         }
     };
     let pos = input.find(|c| !what(c)).unwrap_or_else(|| input.len());

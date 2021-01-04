@@ -1,6 +1,5 @@
-#![allow(clippy::panic)]
+#![allow(clippy::panic, clippy::needless_lifetimes)]
 use pomelo::pomelo;
-
 pomelo! {
     //%verbose;
     %include {

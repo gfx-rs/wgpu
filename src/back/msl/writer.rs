@@ -19,7 +19,7 @@ impl Level {
 }
 impl Display for Level {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
-        (0..self.0).map(|_| formatter.write_str("\t")).collect()
+        (0..self.0).try_for_each(|_| formatter.write_str("\t"))
     }
 }
 

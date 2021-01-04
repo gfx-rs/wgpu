@@ -93,7 +93,8 @@ impl<'a> Lexer<'a> {
                 }
             }
             '0'..='9' => {
-                let (number, _, pos) = consume_any(input, |c| (c >= '0' && c <= '9' || c == '.'));
+                let (number, _, pos) =
+                    consume_any(input, |c| (('0'..='9').contains(&c) || c == '.'));
                 if number.find('.').is_some() {
                     if (
                         chars.next().map(|c| c.to_lowercase().next().unwrap()),

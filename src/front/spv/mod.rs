@@ -576,8 +576,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
 
-                    let mut phi = PhiInstruction::default();
-                    phi.id = result_id;
+                    let mut phi = PhiInstruction {
+                        id: result_id,
+                        ..Default::default()
+                    };
                     for _ in 0..(inst.wc - 3) / 2 {
                         phi.variables.push((self.next()?, self.next()?));
                     }
