@@ -160,6 +160,7 @@ pub struct Writer {
     lookup_global_variable:
         crate::FastHashMap<crate::Handle<crate::GlobalVariable>, (Word, spirv::StorageClass)>,
     storage_type_handles: crate::FastHashSet<crate::Handle<crate::Type>>,
+    gl450_ext_inst_id: Word,
 }
 
 // type alias, for success return of write_expression
@@ -187,6 +188,7 @@ impl Writer {
             lookup_constant: crate::FastHashMap::default(),
             lookup_global_variable: crate::FastHashMap::default(),
             storage_type_handles: crate::FastHashSet::default(),
+            gl450_ext_inst_id: 0,
         }
     }
 
@@ -1285,7 +1287,7 @@ impl Writer {
                         block.body.push(super::instructions::instruction_ext_inst(
                             result_type_id,
                             id,
-                            1, //TODO get the actual import set id
+                            self.gl450_ext_inst_id,
                             match fun {
                                 Mf::Ceil => spirv::GLOp::Ceil,
                                 Mf::Round => spirv::GLOp::Round,
@@ -1556,8 +1558,8 @@ impl Writer {
     }
 
     fn write_logical_layout(&mut self, ir_module: &crate::Module) -> Result<(), Error> {
-        let id = self.generate_id();
-        super::instructions::instruction_ext_inst_import(id, "GLSL.std.450")
+        self.gl450_ext_inst_id = self.generate_id();
+        super::instructions::instruction_ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
             .to_words(&mut self.logical_layout.ext_inst_imports);
 
         if self.flags.contains(WriterFlags::DEBUG) {
