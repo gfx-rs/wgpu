@@ -374,8 +374,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         token: &mut Token<super::Device<B>>,
     ) {
         if !self.suspected_resources.render_bundles.is_empty() {
-            let mut trackers = trackers.lock();
             let (mut guard, _) = hub.render_bundles.write(token);
+            let mut trackers = trackers.lock();
 
             while let Some(id) = self.suspected_resources.render_bundles.pop() {
                 if trackers.bundles.remove_abandoned(id) {
@@ -390,8 +390,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.bind_groups.is_empty() {
-            let mut trackers = trackers.lock();
             let (mut guard, _) = hub.bind_groups.write(token);
+            let mut trackers = trackers.lock();
 
             while let Some(id) = self.suspected_resources.bind_groups.pop() {
                 if trackers.bind_groups.remove_abandoned(id) {
@@ -414,8 +414,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.texture_views.is_empty() {
-            let mut trackers = trackers.lock();
             let (mut guard, _) = hub.texture_views.write(token);
+            let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.texture_views.drain(..) {
                 if trackers.views.remove_abandoned(id) {
@@ -444,8 +444,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.textures.is_empty() {
-            let mut trackers = trackers.lock();
             let (mut guard, _) = hub.textures.write(token);
+            let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.textures.drain(..) {
                 if trackers.textures.remove_abandoned(id) {
@@ -466,8 +466,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.samplers.is_empty() {
-            let mut trackers = trackers.lock();
             let (mut guard, _) = hub.samplers.write(token);
+            let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.samplers.drain(..) {
                 if trackers.samplers.remove_abandoned(id) {
@@ -488,8 +488,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.buffers.is_empty() {
-            let mut trackers = trackers.lock();
             let (mut guard, _) = hub.buffers.write(token);
+            let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.buffers.drain(..) {
                 if trackers.buffers.remove_abandoned(id) {
@@ -521,8 +521,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.compute_pipelines.is_empty() {
-            let mut trackers = trackers.lock();
             let (mut guard, _) = hub.compute_pipelines.write(token);
+            let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.compute_pipelines.drain(..) {
                 if trackers.compute_pipes.remove_abandoned(id) {
@@ -543,8 +543,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.render_pipelines.is_empty() {
-            let mut trackers = trackers.lock();
             let (mut guard, _) = hub.render_pipelines.write(token);
+            let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.render_pipelines.drain(..) {
                 if trackers.render_pipes.remove_abandoned(id) {
