@@ -224,12 +224,7 @@ fn start<E: Example>(
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-        // TODO: Allow srgb unconditionally
-        format: if cfg!(target_arch = "wasm32") {
-            wgpu::TextureFormat::Bgra8Unorm
-        } else {
-            wgpu::TextureFormat::Bgra8UnormSrgb
-        },
+        format: device.get_swap_chain_preferred_format(),
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Mailbox,

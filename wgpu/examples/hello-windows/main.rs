@@ -27,12 +27,12 @@ impl ViewportDesc {
         }
     }
 
-    fn build(self, device: &wgpu::Device, swapchain_format: wgpu::TextureFormat) -> Viewport {
+    fn build(self, device: &wgpu::Device) -> Viewport {
         let size = self.window.inner_size();
 
         let sc_desc = wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-            format: swapchain_format,
+            format: device.get_swap_chain_preferred_format(),
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
@@ -62,11 +62,7 @@ impl Viewport {
     }
 }
 
-async fn run(
-    event_loop: EventLoop<()>,
-    viewports: Vec<(Window, wgpu::Color)>,
-    swapchain_format: wgpu::TextureFormat,
-) {
+async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let viewports: Vec<_> = viewports
         .into_iter()
@@ -96,7 +92,7 @@ async fn run(
 
     let mut viewports: HashMap<WindowId, Viewport> = viewports
         .into_iter()
-        .map(|desc| (desc.window.id(), desc.build(&device, swapchain_format)))
+        .map(|desc| (desc.window.id(), desc.build(&device)))
         .collect();
 
     event_loop.run(move |event, _, control_flow| {
@@ -195,11 +191,7 @@ fn main() {
 
         subscriber::initialize_default_subscriber(None);
         // Temporarily avoid srgb formats for the swapchain on the web
-        futures::executor::block_on(run(
-            event_loop,
-            viewports,
-            wgpu::TextureFormat::Bgra8UnormSrgb,
-        ));
+        futures::executor::block_on(run(event_loop, viewports));
     }
     #[cfg(target_arch = "wasm32")]
     {

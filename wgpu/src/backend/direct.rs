@@ -4,7 +4,7 @@ use crate::{
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, Features, Label,
     Limits, LoadOp, MapMode, Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
     RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor, ShaderSource,
-    SwapChainStatus, TextureDescriptor, TextureViewDescriptor,
+    SwapChainStatus, TextureDescriptor, TextureFormat, TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
@@ -704,6 +704,15 @@ impl crate::Context for Context {
         match wgc::gfx_select!(device.id => global.device_limits(device.id)) {
             Ok(limits) => limits,
             Err(err) => self.handle_error_fatal(err, "Device::limits"),
+        }
+    }
+
+    fn device_get_swap_chain_preferred_format(&self, device: &Self::DeviceId) -> TextureFormat {
+        let global = &self.0;
+        match wgc::gfx_select!(device.id => global.device_get_swap_chain_preferred_format(device.id))
+        {
+            Ok(swap_chain_preferred_format) => swap_chain_preferred_format,
+            Err(err) => self.handle_error_fatal(err, "Device::get_swap_chain_preferred_format"),
         }
     }
 
