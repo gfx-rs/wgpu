@@ -194,7 +194,7 @@ impl BufferDimensions {
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        subscriber::initialize_default_subscriber(None);
+        wgpu_subscriber::initialize_default_subscriber(None);
         futures::executor::block_on(run("red.png"));
     }
     #[cfg(target_arch = "wasm32")]
