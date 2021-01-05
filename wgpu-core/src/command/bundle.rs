@@ -312,7 +312,7 @@ impl RenderBundleEncoder {
                     first_vertex,
                     first_instance,
                 } => {
-                    let scope = PassErrorScope::Draw;
+                    let scope = PassErrorScope::Draw(state.pipeline.last_state);
                     let vertex_limits = state.vertex_limits();
                     let last_vertex = first_vertex + vertex_count;
                     if last_vertex > vertex_limits.vertex_limit {
@@ -343,7 +343,7 @@ impl RenderBundleEncoder {
                     base_vertex: _,
                     first_instance,
                 } => {
-                    let scope = PassErrorScope::DrawIndexed;
+                    let scope = PassErrorScope::DrawIndexed(state.pipeline.last_state);
                     //TODO: validate that base_vertex + max_index() is within the provided range
                     let vertex_limits = state.vertex_limits();
                     let index_limit = state.index.limit();
@@ -375,7 +375,7 @@ impl RenderBundleEncoder {
                     count: None,
                     indexed: false,
                 } => {
-                    let scope = PassErrorScope::DrawIndirect;
+                    let scope = PassErrorScope::DrawIndirect(state.pipeline.last_state);
                     let buffer = state
                         .trackers
                         .buffers
@@ -394,7 +394,7 @@ impl RenderBundleEncoder {
                     count: None,
                     indexed: true,
                 } => {
-                    let scope = PassErrorScope::DrawIndexedIndirect;
+                    let scope = PassErrorScope::DrawIndexedIndirect(state.pipeline.last_state);
                     let buffer = state
                         .trackers
                         .buffers

@@ -1543,7 +1543,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         first_vertex,
                         first_instance,
                     } => {
-                        let scope = PassErrorScope::Draw;
+                        let scope = PassErrorScope::Draw(state.pipeline.last_state);
                         state.is_ready().map_pass_err(scope)?;
                         let last_vertex = first_vertex + vertex_count;
                         let vertex_limit = state.vertex.vertex_limit;
@@ -1580,7 +1580,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         base_vertex,
                         first_instance,
                     } => {
-                        let scope = PassErrorScope::DrawIndexed;
+                        let scope = PassErrorScope::DrawIndexed(state.pipeline.last_state);
                         state.is_ready().map_pass_err(scope)?;
 
                         //TODO: validate that base_vertex + max_index() is within the provided range
@@ -1619,9 +1619,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         indexed,
                     } => {
                         let scope = if indexed {
-                            PassErrorScope::DrawIndexedIndirect
+                            PassErrorScope::DrawIndexedIndirect(state.pipeline.last_state)
                         } else {
-                            PassErrorScope::DrawIndirect
+                            PassErrorScope::DrawIndirect(state.pipeline.last_state)
                         };
                         state.is_ready().map_pass_err(scope)?;
 
@@ -1695,9 +1695,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         indexed,
                     } => {
                         let scope = if indexed {
-                            PassErrorScope::DrawIndexedIndirect
+                            PassErrorScope::DrawIndexedIndirect(state.pipeline.last_state)
                         } else {
-                            PassErrorScope::DrawIndirect
+                            PassErrorScope::DrawIndirect(state.pipeline.last_state)
                         };
                         state.is_ready().map_pass_err(scope)?;
 

@@ -362,19 +362,19 @@ pub enum PassErrorScope {
     #[error("In a set_scissor_rect command")]
     SetScissorRect,
     #[error("In a draw command")]
-    Draw,
+    Draw(Option<id::RenderPipelineId>),
     #[error("In a draw_indexed command")]
-    DrawIndexed,
+    DrawIndexed(Option<id::RenderPipelineId>),
     #[error("In a draw_indirect command")]
-    DrawIndirect,
+    DrawIndirect(Option<id::RenderPipelineId>),
     #[error("In a draw_indexed_indirect command")]
-    DrawIndexedIndirect,
+    DrawIndexedIndirect(Option<id::RenderPipelineId>),
     #[error("In a execute_bundle command")]
     ExecuteBundle,
     #[error("In a dispatch command")]
-    Dispatch,
+    Dispatch(Option<id::ComputePipelineId>),
     #[error("In a dispatch_indirect command")]
-    DispatchIndirect,
+    DispatchIndirect(Option<id::ComputePipelineId>),
     #[error("In a pop_debug_group command")]
     PopDebugGroup,
 }
