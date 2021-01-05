@@ -317,6 +317,22 @@ impl PrettyError for wgc::command::PassErrorScope {
                 let name = wgc::gfx_select!(id => global.buffer_label(id));
                 format_label_line("buffer", &name)
             }
+            Self::Draw { pipeline, .. } => {
+                if let Some(id) = pipeline {
+                    let name = wgc::gfx_select!(id => global.render_pipeline_label(id));
+                    format_label_line("render pipeline", &name)
+                } else {
+                    String::new()
+                }
+            }
+            Self::Dispatch { pipeline, .. } => {
+                if let Some(id) = pipeline {
+                    let name = wgc::gfx_select!(id => global.compute_pipeline_label(id));
+                    format_label_line("compute pipeline", &name)
+                } else {
+                    String::new()
+                }
+            }
             _ => String::new(),
         }
     }
