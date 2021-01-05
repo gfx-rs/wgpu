@@ -62,8 +62,7 @@ noise = "0.6"
 ddsfile = "0.4"
 futures = { version = "0.3", default-features = false, features = ["std", "executor"] }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.subscriber]
-package = "wgpu-subscriber"
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.wgpu-subscriber]
 version = "0.1"
 
 [[example]]

@@ -75,7 +75,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let chrome_tracing_dir = std::env::var("WGPU_CHROME_TRACE");
-        subscriber::initialize_default_subscriber(
+        wgpu_subscriber::initialize_default_subscriber(
             chrome_tracing_dir.as_ref().map(std::path::Path::new).ok(),
         );
     };
