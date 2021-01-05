@@ -522,7 +522,7 @@ impl<B: GfxBackend> Device<B> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
         let format_desc = desc.format.describe();
-        let required_features = format_desc.features;
+        let required_features = format_desc.required_features;
         if !self.features.contains(required_features) {
             return Err(resource::CreateTextureError::MissingFeature(
                 required_features,
@@ -553,7 +553,7 @@ impl<B: GfxBackend> Device<B> {
         {
             adapter.get_texture_format_features(desc.format)
         } else {
-            desc.format.features_webgpu()
+            format_desc.guaranteed_format_features
         };
 
         let missing_allowed_usages = desc.usage - format_features.allowed_usages;
@@ -1314,32 +1314,31 @@ impl<B: GfxBackend> Device<B> {
                             (wgt::TextureUsage::SAMPLED, resource::TextureUse::SAMPLED)
                         }
                         wgt::BindingType::StorageTexture { access, .. } => {
-                            (
-                                wgt::TextureUsage::STORAGE,
-                                match access {
-                                    wgt::StorageTextureAccess::ReadOnly => {
-                                        resource::TextureUse::STORAGE_LOAD
-                                    }
-                                    wgt::StorageTextureAccess::WriteOnly => {
-                                        resource::TextureUse::STORAGE_STORE
-                                    }
-                                    wgt::StorageTextureAccess::ReadWrite => {
-                                        if !view.format_features.flags.contains(
-                                            wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                            let internal_use = match access {
+                                wgt::StorageTextureAccess::ReadOnly => {
+                                    resource::TextureUse::STORAGE_LOAD
+                                }
+                                wgt::StorageTextureAccess::WriteOnly => {
+                                    resource::TextureUse::STORAGE_STORE
+                                }
+                                wgt::StorageTextureAccess::ReadWrite => {
+                                    if !view.format_features.flags.contains(
+                                        wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                                    ) {
+                                        return Err(if self.features.contains(
+                                            wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                                         ) {
-                                            if !self.features.contains(
-                                                    wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                                                ) {
-                                                    return Err(Error::MissingFeatures(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES));
-                                                } else {
-                                                    return Err(Error::StorageReadWriteNotSupported(view.format))
-                                                }
-                                        }
-                                        resource::TextureUse::STORAGE_STORE
-                                            | resource::TextureUse::STORAGE_LOAD
+                                            Error::StorageReadWriteNotSupported(view.format)
+                                        } else {
+                                            Error::MissingFeatures(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
+                                        });
                                     }
-                                },
-                            )
+
+                                    resource::TextureUse::STORAGE_STORE
+                                        | resource::TextureUse::STORAGE_LOAD
+                                }
+                            };
+                            (wgt::TextureUsage::STORAGE, internal_use)
                         }
                         _ => return Err(Error::WrongBindingType {
                             binding,
