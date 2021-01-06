@@ -1,4 +1,4 @@
-# vertex
+// vertex
 [[location(0)]] var<in> a_pos : vec2<f32>;
 [[location(0)]] var<out> o_pos : vec4<f32>;
 

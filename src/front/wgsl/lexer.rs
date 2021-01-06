@@ -102,6 +102,15 @@ fn consume_token(mut input: &str) -> (Token<'_>, &str) {
                     (Token::UnterminatedString, quote_content)
                 }
             }
+            '/' if chars.as_str().starts_with('/') => {
+                match chars.position(|c| c == '\n' || c == '\r') {
+                    Some(_) => {
+                        input = chars.as_str();
+                        continue;
+                    }
+                    None => (Token::End, chars.as_str()),
+                }
+            }
             '-' => {
                 let og_chars = chars.as_str();
                 match chars.next() {
@@ -129,13 +138,6 @@ fn consume_token(mut input: &str) -> (Token<'_>, &str) {
                     (Token::Operation(cur), input)
                 }
             }
-            '#' => match chars.position(|c| c == '\n' || c == '\r') {
-                Some(_) => {
-                    input = chars.as_str();
-                    continue;
-                }
-                None => (Token::End, chars.as_str()),
-            },
             _ => (Token::Unknown(cur), chars.as_str()),
         };
     }

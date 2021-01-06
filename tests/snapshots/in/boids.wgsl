@@ -1,18 +1,18 @@
-# Copyright 2020 The Tint Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+// Copyright 2020 The Tint Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-# vertex shader
+// vertex shader
 
 [[location(0)]] var<in> a_particlePos : vec2<f32>;
 [[location(1)]] var<in> a_particleVel : vec2<f32>;
@@ -28,7 +28,7 @@ fn main() {
   gl_Position = vec4<f32>(pos + a_particlePos, 0.0, 1.0);
 }
 
-# fragment shader
+// fragment shader
 [[location(0)]] var<out> fragColor : vec4<f32>;
 
 [[stage(fragment)]]
@@ -36,7 +36,7 @@ fn main() {
   fragColor = vec4<f32>(1.0, 1.0, 1.0, 1.0);
 }
 
-# compute shader
+// compute shader
 [[block]]
 struct Particle {
   [[span(8)]] pos : vec2<f32>;
@@ -65,7 +65,7 @@ struct Particles {
 
 [[builtin(global_invocation_id)]] var gl_GlobalInvocationID : vec3<u32>;
 
-# https://github.com/austinEng/Project6-Vulkan-Flocking/blob/master/data/shaders/computeparticles/particle.comp
+// https://github.com/austinEng/Project6-Vulkan-Flocking/blob/master/data/shaders/computeparticles/particle.comp
 [[stage(compute), workgroup_size(1)]]
 fn main() {
   const index : u32 = gl_GlobalInvocationID.x;
@@ -122,13 +122,13 @@ fn main() {
   vVel = vVel + (cMass * params.rule1Scale) + (colVel * params.rule2Scale) +
       (cVel * params.rule3Scale);
 
-  # clamp velocity for a more pleasing simulation
+  // clamp velocity for a more pleasing simulation
   vVel = normalize(vVel) * clamp(length(vVel), 0.0, 0.1);
 
-  # kinematic update
+  // kinematic update
   vPos = vPos + (vVel * params.deltaT);
 
-  # Wrap around boundary
+  // Wrap around boundary
   if (vPos.x < -1.0) {
     vPos.x = 1.0;
   }
@@ -142,7 +142,7 @@ fn main() {
     vPos.y = -1.0;
   }
 
-  # Write back
+  // Write back
   particlesB.particles[index].pos = vPos;
   particlesB.particles[index].vel = vVel;
 }
