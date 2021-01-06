@@ -1,13 +1,13 @@
 //! Convenience macros
 
-/// Macro to produce an array of [`VertexAttributeDescriptor`].
+/// Macro to produce an array of [VertexAttributeDescriptor](crate::VertexAttributeDescriptor).
 ///
 /// Output has type: `[VertexAttributeDescriptor; _]`. Usage is as follows:
 /// ```
 /// # use wgpu::vertex_attr_array;
 /// let attrs = vertex_attr_array![0 => Float2, 1 => Float, 2 => Ushort4];
 /// ```
-/// This example specifies a list of three [`VertexAttributeDescriptor`],
+/// This example specifies a list of three [VertexAttributeDescriptor](crate::VertexAttributeDescriptor),
 /// each with the given `shader_location` and `format`.
 /// Offsets are calculated automatically.
 #[macro_export]
