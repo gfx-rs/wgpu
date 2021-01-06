@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-/// Describes a [`Buffer`] when allocating.
+/// Describes a [Buffer](crate::Buffer) when allocating.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BufferInitDescriptor<'a> {
     /// Debug label of a buffer. This will show up in graphics debuggers for easy identification.
@@ -14,7 +14,7 @@ pub struct BufferInitDescriptor<'a> {
 
 /// Utility methods not meant to be in the main API.
 pub trait DeviceExt {
-    /// Creates a [`Buffer`] with data to initialize it.
+    /// Creates a [Buffer](crate::Buffer) with data to initialize it.
     fn create_buffer_init(&self, desc: &BufferInitDescriptor) -> crate::Buffer;
 
     /// Upload an entire texture and its mipmaps from a source buffer.

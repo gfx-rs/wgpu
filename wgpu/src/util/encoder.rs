@@ -29,7 +29,7 @@ pub trait RenderEncoder<'a> {
     /// [`RenderBundleEncoder`] will use `buffer` as one of the source vertex buffers.
     ///
     /// The `slot` refers to the index of the matching descriptor in
-    /// [`VertexStateDescriptor::vertex_buffers`].
+    /// [VertexStateDescriptor::vertex_buffers](crate::VertexStateDescriptor::vertex_buffers).
     ///
     /// [`draw`]: RenderBundleEncoder::draw
     /// [`draw_indexed`]: RenderBundleEncoder::draw_indexed
@@ -87,11 +87,11 @@ pub trait RenderEncoder<'a> {
         indirect_offset: BufferAddress,
     );
 
-    /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call this function.
+    /// [`wgt::Features::PUSH_CONSTANTS`] must be enabled on the device in order to call this function.
     ///
     /// Set push constant data.
     ///
-    /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
+    /// Offset is measured in bytes, but must be a multiple of [`wgt::PUSH_CONSTANT_ALIGNMENT`].
     ///
     /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
     /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
