@@ -520,7 +520,7 @@ impl MapContext {
 
 /// Handle to a GPU-accessible buffer.
 ///
-/// Created with [`Device::create_buffer`] or [`Device::create_buffer_init`]
+/// Created with [`Device::create_buffer`] or [DeviceExt::create_buffer_init](util::DeviceExt::create_buffer_init)
 #[derive(Debug)]
 pub struct Buffer {
     context: Arc<C>,
@@ -876,7 +876,7 @@ pub struct Queue {
 pub enum BindingResource<'a> {
     /// Binding is backed by a buffer.
     ///
-    /// Corresponds to [`BindingType::UniformBuffer`] and [`BindingType::StorageBuffer`]
+    /// Corresponds to [`wgt::BufferBindingType::Uniform`] and [`wgt::BufferBindingType::Storage`]
     /// with [`BindGroupLayoutEntry::count`] set to None.
     Buffer {
         /// The buffer to bind.
@@ -891,18 +891,18 @@ pub enum BindingResource<'a> {
     },
     /// Binding is a sampler.
     ///
-    /// Corresponds to [`BindingType::Sampler`] with [`BindGroupLayoutEntry::count`] set to None.
+    /// Corresponds to [`wgt::BindingType::Sampler`] with [`BindGroupLayoutEntry::count`] set to None.
     Sampler(&'a Sampler),
     /// Binding is backed by a texture.
     ///
-    /// Corresponds to [`BindingType::SampledTexture`] and [`BindingType::StorageTexture`] with
+    /// Corresponds to [`wgt::BindingType::Texture`] and [`wgt::BindingType::StorageTexture`] with
     /// [`BindGroupLayoutEntry::count`] set to None.
     TextureView(&'a TextureView),
     /// Binding is backed by an array of textures.
     ///
     /// [`Features::SAMPLED_TEXTURE_BINDING_ARRAY`] must be supported to use this feature.
     ///
-    /// Corresponds to [`BindingType::SampledTexture`] and [`BindingType::StorageTexture`] with
+    /// Corresponds to [`wgt::BindingType::Texture`] and [`wgt::BindingType::StorageTexture`] with
     /// [`BindGroupLayoutEntry::count`] set to Some.
     TextureViewArray(&'a [&'a TextureView]),
 }
