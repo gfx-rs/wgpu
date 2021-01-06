@@ -120,6 +120,7 @@ impl crate::hub::Resource for Surface {
 pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
     features: wgt::Features,
+    private_features: PrivateFeatures,
     limits: wgt::Limits,
     life_guard: LifeGuard,
 }
@@ -132,7 +133,8 @@ impl<B: GfxBackend> Adapter<B> {
 
         let mut features = wgt::Features::default()
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
-            | wgt::Features::PUSH_CONSTANTS;
+            | wgt::Features::PUSH_CONSTANTS
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
         features.set(
             wgt::Features::DEPTH_CLAMPING,
             adapter_features.contains(hal::Features::DEPTH_CLAMP),
@@ -181,6 +183,20 @@ impl<B: GfxBackend> Adapter<B> {
         //TODO: https://github.com/gfx-rs/gfx/issues/3346
         features.set(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER, true);
 
+        let private_features = PrivateFeatures {
+            anisotropic_filtering: adapter_features.contains(hal::Features::SAMPLER_ANISOTROPY),
+            texture_d24: raw
+                .physical_device
+                .format_properties(Some(hal::format::Format::X8D24Unorm))
+                .optimal_tiling
+                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+            texture_d24_s8: raw
+                .physical_device
+                .format_properties(Some(hal::format::Format::D24UnormS8Uint))
+                .optimal_tiling
+                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+        };
+
         let adapter_limits = raw.physical_device.limits();
 
         let default_limits = wgt::Limits::default();
@@ -228,8 +244,57 @@ impl<B: GfxBackend> Adapter<B> {
         Self {
             raw,
             features,
+            private_features,
             limits,
             life_guard: LifeGuard::new("<Adapter>"),
+        }
+    }
+
+    pub(crate) fn get_texture_format_features(
+        &self,
+        format: wgt::TextureFormat,
+    ) -> wgt::TextureFormatFeatures {
+        let texture_format_properties = self
+            .raw
+            .physical_device
+            .format_properties(Some(conv::map_texture_format(
+                format,
+                self.private_features,
+            )))
+            .optimal_tiling;
+
+        let mut allowed_usages = wgt::TextureUsage::empty();
+        if texture_format_properties.contains(hal::format::ImageFeature::SAMPLED) {
+            allowed_usages |= wgt::TextureUsage::SAMPLED;
+        }
+        if texture_format_properties.contains(hal::format::ImageFeature::STORAGE) {
+            allowed_usages |= wgt::TextureUsage::STORAGE;
+        }
+        if texture_format_properties.contains(hal::format::ImageFeature::COLOR_ATTACHMENT) {
+            allowed_usages |= wgt::TextureUsage::RENDER_ATTACHMENT;
+        }
+        if texture_format_properties.contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT) {
+            allowed_usages |= wgt::TextureUsage::RENDER_ATTACHMENT;
+        }
+        if texture_format_properties.contains(hal::format::ImageFeature::BLIT_SRC) {
+            allowed_usages |= wgt::TextureUsage::COPY_SRC;
+        }
+        if texture_format_properties.contains(hal::format::ImageFeature::BLIT_DST) {
+            allowed_usages |= wgt::TextureUsage::COPY_DST;
+        }
+
+        let mut flags = wgt::TextureFormatFeatureFlags::empty();
+        if texture_format_properties.contains(hal::format::ImageFeature::STORAGE_ATOMIC) {
+            flags |= wgt::TextureFormatFeatureFlags::STORAGE_ATOMICS;
+        }
+        // TODO: Hal update required. This in turn is blocked by https://github.com/zakarumych/gpu-alloc/issues/33
+        //if texture_format_properties.contains(hal::format::ImageFeature::STORAGE_READ_WRITE) {
+        //    flags |= wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE;
+        //}
+
+        wgt::TextureFormatFeatures {
+            allowed_usages,
+            flags,
         }
     }
 
@@ -364,17 +429,6 @@ impl<B: GfxBackend> Adapter<B> {
         }
 
         let mem_props = phd.memory_properties();
-        let private_features = PrivateFeatures {
-            anisotropic_filtering: enabled_features.contains(hal::Features::SAMPLER_ANISOTROPY),
-            texture_d24: phd
-                .format_properties(Some(hal::format::Format::X8D24Unorm))
-                .optimal_tiling
-                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
-            texture_d24_s8: phd
-                .format_properties(Some(hal::format::Format::D24UnormS8Uint))
-                .optimal_tiling
-                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
-        };
 
         Device::new(
             gpu.device,
@@ -385,7 +439,7 @@ impl<B: GfxBackend> Adapter<B> {
             gpu.queue_groups.swap_remove(0),
             mem_props,
             limits,
-            private_features,
+            self.private_features,
             desc,
             trace_path,
         )
@@ -709,6 +763,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_guard
             .get(adapter_id)
             .map(|adapter| conv::map_adapter_info(adapter.raw.info.clone(), adapter_id.backend()))
+            .map_err(|_| InvalidAdapter)
+    }
+
+    pub fn adapter_get_texture_format_features<B: GfxBackend>(
+        &self,
+        adapter_id: AdapterId,
+        format: wgt::TextureFormat,
+    ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
+        span!(_guard, INFO, "Adapter::get_texture_format_features");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (adapter_guard, _) = hub.adapters.read(&mut token);
+        adapter_guard
+            .get(adapter_id)
+            .map(|adapter| adapter.get_texture_format_features(format))
             .map_err(|_| InvalidAdapter)
     }
 

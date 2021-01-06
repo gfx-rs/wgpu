@@ -529,15 +529,16 @@ impl<B: GfxBackend> Device<B> {
     fn create_texture(
         &self,
         self_id: id::DeviceId,
+        adapter: &crate::instance::Adapter<B>,
         desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<B>, resource::CreateTextureError> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
         let format_desc = desc.format.describe();
-        let features = format_desc.features;
-        if !self.features.contains(features) {
+        let required_features = format_desc.required_features;
+        if !self.features.contains(required_features) {
             return Err(resource::CreateTextureError::MissingFeature(
-                features,
+                required_features,
                 desc.format,
             ));
         }
@@ -559,10 +560,19 @@ impl<B: GfxBackend> Device<B> {
             return Err(resource::CreateTextureError::EmptyUsage);
         }
 
-        let missing_features = desc.usage - format_desc.allowed_usages;
-        if !missing_features.is_empty() {
+        let format_features = if self
+            .features
+            .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
+        {
+            adapter.get_texture_format_features(desc.format)
+        } else {
+            format_desc.guaranteed_format_features
+        };
+
+        let missing_allowed_usages = desc.usage - format_features.allowed_usages;
+        if !missing_allowed_usages.is_empty() {
             return Err(resource::CreateTextureError::InvalidUsages(
-                missing_features,
+                missing_allowed_usages,
                 desc.format,
             ));
         }
@@ -631,6 +641,7 @@ impl<B: GfxBackend> Device<B> {
             dimension: desc.dimension,
             kind,
             format: desc.format,
+            format_features,
             full_range: TextureSelector {
                 levels: 0..desc.mip_level_count as hal::image::Level,
                 layers: 0..kind.num_layers(),
@@ -787,6 +798,7 @@ impl<B: GfxBackend> Device<B> {
             },
             aspects,
             format: texture.format,
+            format_features: texture.format_features,
             extent: texture.kind.extent().at_level(desc.base_mip_level as _),
             samples: texture.kind.num_samples(),
             selector,
@@ -1314,17 +1326,33 @@ impl<B: GfxBackend> Device<B> {
                         wgt::BindingType::Texture { .. } => {
                             (wgt::TextureUsage::SAMPLED, resource::TextureUse::SAMPLED)
                         }
-                        wgt::BindingType::StorageTexture { access, .. } => (
-                            wgt::TextureUsage::STORAGE,
-                            match access {
+                        wgt::BindingType::StorageTexture { access, .. } => {
+                            let internal_use = match access {
                                 wgt::StorageTextureAccess::ReadOnly => {
                                     resource::TextureUse::STORAGE_LOAD
                                 }
                                 wgt::StorageTextureAccess::WriteOnly => {
                                     resource::TextureUse::STORAGE_STORE
                                 }
-                            },
-                        ),
+                                wgt::StorageTextureAccess::ReadWrite => {
+                                    if !view.format_features.flags.contains(
+                                        wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                                    ) {
+                                        return Err(if self.features.contains(
+                                            wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                                        ) {
+                                            Error::StorageReadWriteNotSupported(view.format)
+                                        } else {
+                                            Error::MissingFeatures(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
+                                        });
+                                    }
+
+                                    resource::TextureUse::STORAGE_STORE
+                                        | resource::TextureUse::STORAGE_LOAD
+                                }
+                            };
+                            (wgt::TextureUsage::STORAGE, internal_use)
+                        }
                         _ => return Err(Error::WrongBindingType {
                             binding,
                             actual: decl.ty.clone(),
@@ -2705,13 +2733,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
+        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
-            let texture = match device.create_texture(device_id, desc) {
+            let adapter = &adapter_guard[device.adapter_id.value];
+            let texture = match device.create_texture(device_id, adapter, desc) {
                 Ok(texture) => texture,
                 Err(error) => break error,
             };

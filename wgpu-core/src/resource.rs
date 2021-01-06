@@ -205,6 +205,7 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) dimension: wgt::TextureDimension,
     pub(crate) kind: hal::image::Kind,
     pub(crate) format: wgt::TextureFormat,
+    pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }
@@ -305,6 +306,7 @@ pub struct TextureView<B: hal::Backend> {
     //TODO: store device_id for quick access?
     pub(crate) aspects: hal::format::Aspects,
     pub(crate) format: wgt::TextureFormat,
+    pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) extent: hal::image::Extent,
     pub(crate) samples: hal::image::NumSamples,
     pub(crate) selector: TextureSelector,
