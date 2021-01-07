@@ -14,13 +14,13 @@ use ast::Program;
 use lex::Lexer;
 mod error;
 use error::ParseError;
+mod functions;
 mod parser;
 #[cfg(test)]
 mod parser_tests;
 mod token;
 mod types;
 mod variables;
-mod functions;
 
 pub fn parse_str(
     source: &str,

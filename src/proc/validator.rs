@@ -29,6 +29,8 @@ pub enum ConstantError {
     InvalidType,
     #[error("The component handle {0:?} can not be resolved")]
     UnresolvedComponent(Handle<crate::Constant>),
+    #[error("The array size handle {0:?} can not be resolved")]
+    UnresolvedSize(Handle<crate::Constant>),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -312,7 +314,7 @@ impl Validator {
         &self,
         handle: Handle<crate::Constant>,
         constants: &Arena<crate::Constant>,
-        _types: &Arena<crate::Type>,
+        types: &Arena<crate::Type>,
     ) -> Result<(), ConstantError> {
         let con = &constants[handle];
         match con.inner {
@@ -321,14 +323,27 @@ impl Validator {
                     return Err(ConstantError::InvalidType);
                 }
             }
-            crate::ConstantInner::Composite {
-                ty: _,
-                ref components,
-            } => {
+            crate::ConstantInner::Composite { ty, ref components } => {
+                match types[ty].inner {
+                    crate::TypeInner::Array {
+                        size: crate::ArraySize::Dynamic,
+                        ..
+                    } => {
+                        return Err(ConstantError::InvalidType);
+                    }
+                    crate::TypeInner::Array {
+                        size: crate::ArraySize::Constant(size_handle),
+                        ..
+                    } => {
+                        if handle <= size_handle {
+                            return Err(ConstantError::UnresolvedSize(size_handle));
+                        }
+                    }
+                    _ => {} //TODO
+                }
                 if let Some(&comp) = components.iter().find(|&&comp| handle <= comp) {
                     return Err(ConstantError::UnresolvedComponent(comp));
                 }
-                //TODO
             }
         }
         Ok(())
