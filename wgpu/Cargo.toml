@@ -43,7 +43,6 @@ rev = "4ebe1f50b057046e4d4f015eb006330d62f5fe91"
 
 [dependencies]
 arrayvec = "0.5"
-futures = { version = "0.3", default-features = false, features = ["std"] }
 parking_lot = "0.11"
 raw-window-handle = "0.3"
 smallvec = "1"
@@ -60,7 +59,10 @@ rand = { version = "0.7.2", features = ["wasm-bindgen"] }
 bytemuck = { version = "1.4", features = ["derive"] }
 noise = "0.6"
 ddsfile = "0.4"
-futures = { version = "0.3", default-features = false, features = ["std", "executor"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+async-executor = "1.0"
+pollster = "0.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.wgpu-subscriber]
 version = "0.1"

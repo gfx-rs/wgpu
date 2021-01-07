@@ -1,4 +1,4 @@
-use futures::task::LocalSpawn;
+use std::future::Future;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, Instant};
 use winit::{
@@ -56,7 +56,7 @@ pub trait Example: 'static + Sized {
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        spawner: &impl LocalSpawn,
+        spawner: &Spawner,
     );
 }
 
@@ -198,30 +198,7 @@ fn start<E: Example>(
         queue,
     }: Setup,
 ) {
-    #[cfg(not(target_arch = "wasm32"))]
-    let (mut pool, spawner) = {
-        let local_pool = futures::executor::LocalPool::new();
-        let spawner = local_pool.spawner();
-        (local_pool, spawner)
-    };
-
-    #[cfg(target_arch = "wasm32")]
-    let spawner = {
-        use futures::{future::LocalFutureObj, task::SpawnError};
-
-        struct WebSpawner {}
-        impl LocalSpawn for WebSpawner {
-            fn spawn_local_obj(
-                &self,
-                future: LocalFutureObj<'static, ()>,
-            ) -> Result<(), SpawnError> {
-                Ok(wasm_bindgen_futures::spawn_local(future))
-            }
-        }
-
-        WebSpawner {}
-    };
-
+    let spawner = Spawner::new();
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
         format: device.get_swap_chain_preferred_format(),
@@ -266,7 +243,7 @@ fn start<E: Example>(
                         );
                     }
 
-                    pool.run_until_stalled();
+                    spawner.run_until_stalled();
                 }
 
                 #[cfg(target_arch = "wasm32")]
@@ -318,8 +295,46 @@ fn start<E: Example>(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+pub struct Spawner<'a> {
+    executor: async_executor::LocalExecutor<'a>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl<'a> Spawner<'a> {
+    fn new() -> Self {
+        Self {
+            executor: async_executor::LocalExecutor::new(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn spawn_local(&self, future: impl Future<Output = ()> + 'a) {
+        self.executor.spawn(future).detach();
+    }
+
+    fn run_until_stalled(&self) {
+        while self.executor.try_tick() {}
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub struct Spawner {}
+
+#[cfg(target_arch = "wasm32")]
+impl Spawner {
+    fn new() -> Self {
+        Self {}
+    }
+
+    #[allow(dead_code)]
+    pub fn spawn_local(&self, future: impl Future<Output = ()> + 'static) {
+        wasm_bindgen_futures::spawn_local(future);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run<E: Example>(title: &str) {
-    let setup = futures::executor::block_on(setup::<E>(title));
+    let setup = pollster::block_on(setup::<E>(title));
     start::<E>(setup);
 }
 

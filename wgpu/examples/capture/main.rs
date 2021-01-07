@@ -195,7 +195,7 @@ fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
         wgpu_subscriber::initialize_default_subscriber(None);
-        futures::executor::block_on(run("red.png"));
+        pollster::block_on(run("red.png"));
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn ensure_generated_data_matches_expected() {
-        futures::executor::block_on(assert_generated_data_matches_expected());
+        pollster::block_on(assert_generated_data_matches_expected());
     }
 
     async fn assert_generated_data_matches_expected() {

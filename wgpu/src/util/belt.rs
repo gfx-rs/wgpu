@@ -2,8 +2,41 @@ use crate::{
     Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsage, BufferViewMut,
     CommandEncoder, Device, MapMode,
 };
-use futures::{future::join_all, FutureExt};
+use std::pin::Pin;
+use std::task::{self, Poll};
 use std::{future::Future, sync::mpsc};
+
+// Given a vector of futures, poll each in parallel until all are ready.
+struct Join<F> {
+    futures: Vec<Option<F>>,
+}
+
+impl<F: Future<Output = ()>> Future for Join<F> {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Self::Output> {
+        // This is safe because we have no Drop implementation to violate the Pin requirements and
+        // do not provide any means of moving the inner futures.
+        let all_ready = unsafe {
+            // Poll all remaining futures, removing all that are ready
+            self.get_unchecked_mut().futures.iter_mut().all(|opt| {
+                if let Some(future) = opt {
+                    if Pin::new_unchecked(future).poll(cx) == Poll::Ready(()) {
+                        *opt = None;
+                    }
+                }
+
+                opt.is_none()
+            })
+        };
+
+        if all_ready {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
+        }
+    }
+}
 
 struct Chunk {
     buffer: Buffer,
@@ -133,18 +166,24 @@ impl StagingBelt {
             self.free_chunks.push(chunk);
         }
 
-        let sender_template = &self.sender;
-        join_all(self.closed_chunks.drain(..).map(|chunk| {
-            let sender = sender_template.clone();
-            chunk
-                .buffer
-                .slice(..)
-                .map_async(MapMode::Write)
-                .inspect(move |_| {
+        let sender = &self.sender;
+        let futures = self
+            .closed_chunks
+            .drain(..)
+            .map(|chunk| {
+                let sender = sender.clone();
+                let async_buffer = chunk.buffer.slice(..).map_async(MapMode::Write);
+
+                Some(async move {
+                    // The result is ignored
+                    async_buffer.await.ok();
+
                     // The only possible error is the other side disconnecting, which is fine
                     let _ = sender.send(chunk);
                 })
-        }))
-        .map(|_| ())
+            })
+            .collect::<Vec<_>>();
+
+        Join { futures }
     }
 }

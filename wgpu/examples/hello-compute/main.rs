@@ -183,7 +183,7 @@ fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
         wgpu_subscriber::initialize_default_subscriber(None);
-        futures::executor::block_on(run());
+        pollster::block_on(run());
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -193,20 +193,20 @@ fn main() {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
 
     #[test]
     fn test_compute_1() {
         let input = vec![1, 2, 3, 4];
-        futures::executor::block_on(assert_execute_gpu(input, vec![0, 1, 7, 2]));
+        pollster::block_on(assert_execute_gpu(input, vec![0, 1, 7, 2]));
     }
 
     #[test]
     fn test_compute_2() {
         let input = vec![5, 23, 10, 9];
-        futures::executor::block_on(assert_execute_gpu(input, vec![5, 15, 6, 19]));
+        pollster::block_on(assert_execute_gpu(input, vec![5, 15, 6, 19]));
     }
 
     #[test]
@@ -220,7 +220,7 @@ mod tests {
             let tx = tx.clone();
             thread::spawn(move || {
                 let input = vec![100, 100, 100];
-                futures::executor::block_on(assert_execute_gpu(input, vec![25, 25, 25]));
+                pollster::block_on(assert_execute_gpu(input, vec![25, 25, 25]));
                 tx.send(true).unwrap();
             });
         }
