@@ -673,7 +673,7 @@ impl framework::Example for Example {
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &impl futures::task::LocalSpawn,
+        _spawner: &framework::Spawner,
     ) {
         // Increment frame count regardless of if we draw.
         self.current_frame += 1;

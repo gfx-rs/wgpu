@@ -1,7 +1,6 @@
 #[path = "../framework.rs"]
 mod framework;
 
-use futures::task::{LocalSpawn, LocalSpawnExt};
 use wgpu::util::DeviceExt;
 
 const IMAGE_SIZE: u32 = 128;
@@ -253,7 +252,7 @@ impl framework::Example for Skybox {
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        spawner: &impl LocalSpawn,
+        spawner: &framework::Spawner,
     ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -301,7 +300,7 @@ impl framework::Example for Skybox {
         queue.submit(std::iter::once(encoder.finish()));
 
         let belt_future = self.staging_belt.recall();
-        spawner.spawn_local(belt_future).unwrap();
+        spawner.spawn_local(belt_future);
     }
 }
 
