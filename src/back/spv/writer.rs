@@ -765,6 +765,15 @@ impl Writer {
                     constituent_ids.push(constituent_id);
                 }
 
+                // Get the size constant for arrays
+                if let crate::TypeInner::Array {
+                    size: crate::ArraySize::Constant(const_handle),
+                    ..
+                } = arena[ty].inner
+                {
+                    self.get_constant_id(const_handle, &ir_module)?;
+                }
+
                 let type_id = self.get_type_id(arena, LookupType::Handle(ty))?;
                 super::instructions::instruction_constant_composite(
                     type_id,
@@ -1019,12 +1028,18 @@ impl Writer {
 
                 let base_ty_inner = self.get_type_inner(&ir_module.types, base_lookup_ty);
                 let (pointer_type_id, lookup_ty) = match *base_ty_inner {
+                    crate::TypeInner::Array { base, .. } => {
+                        self.create_pointer_type(LookupType::Handle(base), class, &ir_module.types)?
+                    }
                     crate::TypeInner::Vector { kind, width, .. } => self.create_pointer_type(
                         LocalType::Scalar { kind, width }.into(),
                         class,
                         &ir_module.types,
                     )?,
-                    _ => return Err(Error::FeatureNotImplemented("accessing of non-vector")),
+                    ref other => {
+                        log::error!("Unable to index {:?}", other);
+                        return Err(Error::FeatureNotImplemented("accessing of non-vector"));
+                    }
                 };
 
                 block
@@ -1077,10 +1092,11 @@ impl Writer {
                             &ir_module.types,
                         )?
                     }
-                    _ => {
+                    ref other => {
+                        log::error!("Unable to access index {:?}", other);
                         return Err(Error::FeatureNotImplemented(
                             "accessing index of non vector or struct",
-                        ))
+                        ));
                     }
                 };
 
