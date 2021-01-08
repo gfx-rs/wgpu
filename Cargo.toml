@@ -11,6 +11,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 bitflags = "1"
+bit-set = "0.5"
 fxhash = "0.2"
 log = "0.4"
 num-traits = "0.2"

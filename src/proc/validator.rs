@@ -1,9 +1,7 @@
 use super::typifier::{ResolveContext, ResolveError, Typifier};
 use crate::arena::{Arena, Handle};
+use bit_set::BitSet;
 
-const MAX_BIND_GROUPS: u32 = 8;
-const MAX_LOCATIONS: u32 = 64; // using u64 mask
-const MAX_BIND_INDICES: u32 = 64; // using u64 mask
 const MAX_WORKGROUP_SIZE: u32 = 0x4000;
 
 #[derive(Debug)]
@@ -11,6 +9,9 @@ pub struct Validator {
     //Note: this is a bit tricky: some of the front-ends as well as backends
     // already have to use the typifier, so the work here is redundant in a way.
     typifier: Typifier,
+    location_in_mask: BitSet,
+    location_out_mask: BitSet,
+    bind_group_masks: Vec<BitSet>,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -48,8 +49,6 @@ pub enum GlobalVariableError {
     },
     #[error("Binding decoration is missing or not applicable")]
     InvalidBinding,
-    #[error("Binding is out of range")]
-    OutOfRangeBinding,
     #[error("BuiltIn type for {0:?} is invalid")]
     InvalidBuiltInType(crate::BuiltIn),
 }
@@ -138,11 +137,7 @@ impl crate::GlobalVariable {
 
     fn check_resource(&self) -> Result<(), GlobalVariableError> {
         match self.binding {
-            Some(crate::Binding::Resource { group, binding }) => {
-                if group > MAX_BIND_GROUPS || binding > MAX_BIND_INDICES {
-                    return Err(GlobalVariableError::OutOfRangeBinding);
-                }
-            }
+            Some(crate::Binding::Resource { .. }) => {}
             Some(crate::Binding::BuiltIn(_)) | Some(crate::Binding::Location(_)) | None => {
                 return Err(GlobalVariableError::InvalidBinding)
             }
@@ -195,17 +190,12 @@ impl crate::GlobalVariable {
                 }
                 self.forbid_interpolation()?
             }
-            Some(crate::Binding::Location(loc)) => {
-                if loc > MAX_LOCATIONS {
-                    return Err(GlobalVariableError::OutOfRangeBinding);
-                }
-                match types[self.ty].inner {
-                    crate::TypeInner::Scalar { .. }
-                    | crate::TypeInner::Vector { .. }
-                    | crate::TypeInner::Matrix { .. } => {}
-                    _ => return Err(GlobalVariableError::InvalidType),
-                }
-            }
+            Some(crate::Binding::Location(_)) => match types[self.ty].inner {
+                crate::TypeInner::Scalar { .. }
+                | crate::TypeInner::Vector { .. }
+                | crate::TypeInner::Matrix { .. } => {}
+                _ => return Err(GlobalVariableError::InvalidType),
+            },
             Some(crate::Binding::Resource { .. }) => {
                 return Err(GlobalVariableError::InvalidBinding)
             }
@@ -240,6 +230,9 @@ impl Validator {
     pub fn new() -> Self {
         Validator {
             typifier: Typifier::new(),
+            location_in_mask: BitSet::new(),
+            location_out_mask: BitSet::new(),
+            bind_group_masks: Vec::new(),
         }
     }
 
@@ -467,9 +460,12 @@ impl Validator {
             return Err(EntryPointError::UnexpectedWorkgroupSize);
         }
 
-        let mut bind_group_masks = [0u64; MAX_BIND_GROUPS as usize];
-        let mut location_in_mask = 0u64;
-        let mut location_out_mask = 0u64;
+        self.location_in_mask.clear();
+        self.location_out_mask.clear();
+        for bg in self.bind_group_masks.iter_mut() {
+            bg.clear();
+        }
+
         for ((var_handle, var), &usage) in module
             .global_variables
             .iter()
@@ -498,7 +494,7 @@ impl Validator {
             let allowed_usage = match var.class {
                 crate::StorageClass::Function => unreachable!(),
                 crate::StorageClass::Input => {
-                    let mask = match var.binding {
+                    match var.binding {
                         Some(crate::Binding::BuiltIn(built_in)) => match (stage, built_in) {
                             (crate::ShaderStage::Vertex, crate::BuiltIn::BaseInstance)
                             | (crate::ShaderStage::Vertex, crate::BuiltIn::BaseVertex)
@@ -512,36 +508,36 @@ impl Validator {
                             | (crate::ShaderStage::Compute, crate::BuiltIn::LocalInvocationId)
                             | (crate::ShaderStage::Compute, crate::BuiltIn::LocalInvocationIndex)
                             | (crate::ShaderStage::Compute, crate::BuiltIn::WorkGroupId)
-                            | (crate::ShaderStage::Compute, crate::BuiltIn::WorkGroupSize) => 0,
+                            | (crate::ShaderStage::Compute, crate::BuiltIn::WorkGroupSize) => (),
                             _ => return Err(EntryPointError::InvalidBuiltIn(built_in)),
                         },
-                        Some(crate::Binding::Location(loc)) => 1 << loc,
+                        Some(crate::Binding::Location(loc)) => {
+                            if !self.location_in_mask.insert(loc as usize) {
+                                return Err(EntryPointError::BindingCollision(var_handle));
+                            }
+                        }
                         Some(crate::Binding::Resource { .. }) => unreachable!(),
-                        None => 0,
-                    };
-                    if location_in_mask & mask != 0 {
-                        return Err(EntryPointError::BindingCollision(var_handle));
+                        None => (),
                     }
-                    location_in_mask |= mask;
                     crate::GlobalUse::LOAD
                 }
                 crate::StorageClass::Output => {
-                    let mask = match var.binding {
+                    match var.binding {
                         Some(crate::Binding::BuiltIn(built_in)) => match (stage, built_in) {
                             (crate::ShaderStage::Vertex, crate::BuiltIn::Position)
                             | (crate::ShaderStage::Vertex, crate::BuiltIn::PointSize)
                             | (crate::ShaderStage::Vertex, crate::BuiltIn::ClipDistance)
-                            | (crate::ShaderStage::Fragment, crate::BuiltIn::FragDepth) => 0,
+                            | (crate::ShaderStage::Fragment, crate::BuiltIn::FragDepth) => (),
                             _ => return Err(EntryPointError::InvalidBuiltIn(built_in)),
                         },
-                        Some(crate::Binding::Location(loc)) => 1 << loc,
+                        Some(crate::Binding::Location(loc)) => {
+                            if !self.location_out_mask.insert(loc as usize) {
+                                return Err(EntryPointError::BindingCollision(var_handle));
+                            }
+                        }
                         Some(crate::Binding::Resource { .. }) => unreachable!(),
-                        None => 0,
-                    };
-                    if location_out_mask & mask != 0 {
-                        return Err(EntryPointError::BindingCollision(var_handle));
+                        None => (),
                     }
-                    location_out_mask |= mask;
                     crate::GlobalUse::LOAD | crate::GlobalUse::STORE
                 }
                 crate::StorageClass::Uniform => crate::GlobalUse::LOAD,
@@ -569,12 +565,12 @@ impl Validator {
             }
 
             if let Some(crate::Binding::Resource { group, binding }) = var.binding {
-                let mask = 1 << binding;
-                let group_mask = &mut bind_group_masks[group as usize];
-                if *group_mask & mask != 0 {
+                while self.bind_group_masks.len() <= group as usize {
+                    self.bind_group_masks.push(BitSet::new());
+                }
+                if !self.bind_group_masks[group as usize].insert(binding as usize) {
                     return Err(EntryPointError::BindingCollision(var_handle));
                 }
-                *group_mask |= mask;
             }
         }
 
