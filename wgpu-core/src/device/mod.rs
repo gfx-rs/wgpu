@@ -1482,14 +1482,14 @@ impl<B: GfxBackend> Device<B> {
                 .into_iter()
                 .flat_map(|(_, list)| list)
                 .collect::<Vec<_>>();
-            let write = hal::pso::DescriptorSetWrite {
-                set: desc_set.raw(),
-                binding: start_binding,
-                array_offset: 0,
-                descriptors,
-            };
             unsafe {
-                self.raw.write_descriptor_sets(iter::once(write));
+                let write = hal::pso::DescriptorSetWrite {
+                    set: desc_set.raw_mut(),
+                    binding: start_binding,
+                    array_offset: 0,
+                    descriptors,
+                };
+                self.raw.write_descriptor_set(write);
             }
         }
 

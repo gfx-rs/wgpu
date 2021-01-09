@@ -273,7 +273,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let sem = if sc.active_submission_index > device.last_completed_submission_index() {
-            Some(&sc.semaphore)
+            Some(&mut sc.semaphore)
         } else {
             None
         };
