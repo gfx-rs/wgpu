@@ -617,7 +617,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
 
                 // now prepare the GPU submission
-                let fence = device
+                let mut fence = device
                     .raw
                     .create_fence(false)
                     .or(Err(DeviceError::OutOfMemory))?;
@@ -634,7 +634,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
 
                 unsafe {
-                    device.queue_group.queues[0].submit(submission, Some(&fence));
+                    device.queue_group.queues[0].submit(submission, Some(&mut fence));
                 }
                 fence
             };

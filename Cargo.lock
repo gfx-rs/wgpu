@@ -441,7 +441,7 @@ dependencies = [
 [[package]]
 name = "gfx-auxil"
 version = "0.5.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=40b6220a937a4c8663ce06aa8a7219cf131e60e2#40b6220a937a4c8663ce06aa8a7219cf131e60e2"
+source = "git+https://github.com/gfx-rs/gfx?rev=6b3a1e36939473f0062232baf11e1deacd6605f4#6b3a1e36939473f0062232baf11e1deacd6605f4"
 dependencies = [
  "fxhash",
  "gfx-hal",
@@ -451,7 +451,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-dx11"
 version = "0.6.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=40b6220a937a4c8663ce06aa8a7219cf131e60e2#40b6220a937a4c8663ce06aa8a7219cf131e60e2"
+source = "git+https://github.com/gfx-rs/gfx?rev=6b3a1e36939473f0062232baf11e1deacd6605f4#6b3a1e36939473f0062232baf11e1deacd6605f4"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -472,7 +472,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-dx12"
 version = "0.6.2"
-source = "git+https://github.com/gfx-rs/gfx?rev=40b6220a937a4c8663ce06aa8a7219cf131e60e2#40b6220a937a4c8663ce06aa8a7219cf131e60e2"
+source = "git+https://github.com/gfx-rs/gfx?rev=6b3a1e36939473f0062232baf11e1deacd6605f4#6b3a1e36939473f0062232baf11e1deacd6605f4"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -492,7 +492,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-empty"
 version = "0.6.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=40b6220a937a4c8663ce06aa8a7219cf131e60e2#40b6220a937a4c8663ce06aa8a7219cf131e60e2"
+source = "git+https://github.com/gfx-rs/gfx?rev=6b3a1e36939473f0062232baf11e1deacd6605f4#6b3a1e36939473f0062232baf11e1deacd6605f4"
 dependencies = [
  "gfx-hal",
  "log",
@@ -502,7 +502,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-gl"
 version = "0.6.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=40b6220a937a4c8663ce06aa8a7219cf131e60e2#40b6220a937a4c8663ce06aa8a7219cf131e60e2"
+source = "git+https://github.com/gfx-rs/gfx?rev=6b3a1e36939473f0062232baf11e1deacd6605f4#6b3a1e36939473f0062232baf11e1deacd6605f4"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -525,7 +525,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-metal"
 version = "0.6.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=40b6220a937a4c8663ce06aa8a7219cf131e60e2#40b6220a937a4c8663ce06aa8a7219cf131e60e2"
+source = "git+https://github.com/gfx-rs/gfx?rev=6b3a1e36939473f0062232baf11e1deacd6605f4#6b3a1e36939473f0062232baf11e1deacd6605f4"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -550,7 +550,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-vulkan"
 version = "0.6.5"
-source = "git+https://github.com/gfx-rs/gfx?rev=40b6220a937a4c8663ce06aa8a7219cf131e60e2#40b6220a937a4c8663ce06aa8a7219cf131e60e2"
+source = "git+https://github.com/gfx-rs/gfx?rev=6b3a1e36939473f0062232baf11e1deacd6605f4#6b3a1e36939473f0062232baf11e1deacd6605f4"
 dependencies = [
  "arrayvec",
  "ash",
@@ -570,7 +570,7 @@ dependencies = [
 [[package]]
 name = "gfx-hal"
 version = "0.6.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=40b6220a937a4c8663ce06aa8a7219cf131e60e2#40b6220a937a4c8663ce06aa8a7219cf131e60e2"
+source = "git+https://github.com/gfx-rs/gfx?rev=6b3a1e36939473f0062232baf11e1deacd6605f4#6b3a1e36939473f0062232baf11e1deacd6605f4"
 dependencies = [
  "bitflags",
  "naga",
@@ -862,9 +862,8 @@ dependencies = [
 
 [[package]]
 name = "metal"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c4e8a431536529327e28c9ba6992f2cb0c15d4222f0602a16e6d7695ff3bccf"
+version = "0.20.1"
+source = "git+https://github.com/gfx-rs/metal-rs?rev=ba08f5f98c70ab941020b8997936c9c75363b9aa#ba08f5f98c70ab941020b8997936c9c75363b9aa"
 dependencies = [
  "bitflags",
  "block",
@@ -1210,7 +1209,7 @@ dependencies = [
 [[package]]
 name = "range-alloc"
 version = "0.1.1"
-source = "git+https://github.com/gfx-rs/gfx?rev=40b6220a937a4c8663ce06aa8a7219cf131e60e2#40b6220a937a4c8663ce06aa8a7219cf131e60e2"
+source = "git+https://github.com/gfx-rs/gfx?rev=6b3a1e36939473f0062232baf11e1deacd6605f4#6b3a1e36939473f0062232baf11e1deacd6605f4"
 
 [[package]]
 name = "raw-window-handle"
