@@ -263,7 +263,7 @@ impl<B: GfxBackend> Adapter<B> {
             )))
             .optimal_tiling;
 
-        let mut allowed_usages = wgt::TextureUsage::empty();
+        let mut allowed_usages = format.describe().guaranteed_format_features.allowed_usages;
         if texture_format_properties.contains(hal::format::ImageFeature::SAMPLED) {
             allowed_usages |= wgt::TextureUsage::SAMPLED;
         }
@@ -275,12 +275,6 @@ impl<B: GfxBackend> Adapter<B> {
         }
         if texture_format_properties.contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT) {
             allowed_usages |= wgt::TextureUsage::RENDER_ATTACHMENT;
-        }
-        if texture_format_properties.contains(hal::format::ImageFeature::BLIT_SRC) {
-            allowed_usages |= wgt::TextureUsage::COPY_SRC;
-        }
-        if texture_format_properties.contains(hal::format::ImageFeature::BLIT_DST) {
-            allowed_usages |= wgt::TextureUsage::COPY_DST;
         }
 
         let mut flags = wgt::TextureFormatFeatureFlags::empty();
