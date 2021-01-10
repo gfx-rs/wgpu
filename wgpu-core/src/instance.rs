@@ -281,10 +281,9 @@ impl<B: GfxBackend> Adapter<B> {
         if texture_format_properties.contains(hal::format::ImageFeature::STORAGE_ATOMIC) {
             flags |= wgt::TextureFormatFeatureFlags::STORAGE_ATOMICS;
         }
-        // TODO: Hal update required. This in turn is blocked by https://github.com/zakarumych/gpu-alloc/issues/33
-        //if texture_format_properties.contains(hal::format::ImageFeature::STORAGE_READ_WRITE) {
-        //    flags |= wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE;
-        //}
+        if texture_format_properties.contains(hal::format::ImageFeature::STORAGE_READ_WRITE) {
+            flags |= wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE;
+        }
 
         wgt::TextureFormatFeatures {
             allowed_usages,
