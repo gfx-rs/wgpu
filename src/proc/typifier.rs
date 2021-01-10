@@ -217,30 +217,38 @@ impl Typifier {
                     let ty_right = self.get(right, types);
                     if ty_left == ty_right {
                         self.resolutions[left.index()].clone()
+                    } else if let crate::TypeInner::Scalar { .. } = *ty_left {
+                        self.resolutions[right.index()].clone()
                     } else if let crate::TypeInner::Scalar { .. } = *ty_right {
                         self.resolutions[left.index()].clone()
+                    } else if let crate::TypeInner::Matrix {
+                        columns,
+                        rows: _,
+                        width,
+                    } = *ty_left
+                    {
+                        Resolution::Value(crate::TypeInner::Vector {
+                            size: columns,
+                            kind: crate::ScalarKind::Float,
+                            width,
+                        })
+                    } else if let crate::TypeInner::Matrix {
+                        columns: _,
+                        rows,
+                        width,
+                    } = *ty_right
+                    {
+                        Resolution::Value(crate::TypeInner::Vector {
+                            size: rows,
+                            kind: crate::ScalarKind::Float,
+                            width,
+                        })
                     } else {
-                        match *ty_left {
-                            crate::TypeInner::Scalar { .. } => {
-                                self.resolutions[right.index()].clone()
-                            }
-                            crate::TypeInner::Matrix {
-                                columns,
-                                rows: _,
-                                width,
-                            } => Resolution::Value(crate::TypeInner::Vector {
-                                size: columns,
-                                kind: crate::ScalarKind::Float,
-                                width,
-                            }),
-                            _ => {
-                                return Err(ResolveError::IncompatibleOperands {
-                                    op: "x".to_string(),
-                                    left: format!("{:?}", ty_left),
-                                    right: format!("{:?}", ty_right),
-                                })
-                            }
-                        }
+                        return Err(ResolveError::IncompatibleOperands {
+                            op: "x".to_string(),
+                            left: format!("{:?}", ty_left),
+                            right: format!("{:?}", ty_right),
+                        });
                     }
                 }
                 crate::BinaryOperator::Equal
