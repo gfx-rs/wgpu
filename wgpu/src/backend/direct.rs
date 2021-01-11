@@ -673,6 +673,19 @@ impl crate::Context for Context {
         ready(Ok((device, device_id)))
     }
 
+    fn adapter_get_swap_chain_preferred_format(
+        &self,
+        adapter: &Self::AdapterId,
+        surface: &Self::SurfaceId,
+    ) -> TextureFormat {
+        let global = &self.0;
+        match wgc::gfx_select!(adapter => global.adapter_get_swap_chain_preferred_format(*adapter, *surface))
+        {
+            Ok(swap_chain_preferred_format) => swap_chain_preferred_format,
+            Err(err) => self.handle_error_fatal(err, "Adapter::get_swap_chain_preferred_format"),
+        }
+    }
+
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features {
         let global = &self.0;
         match wgc::gfx_select!(*adapter => global.adapter_features(*adapter)) {
@@ -710,15 +723,6 @@ impl crate::Context for Context {
         match wgc::gfx_select!(device.id => global.device_limits(device.id)) {
             Ok(limits) => limits,
             Err(err) => self.handle_error_fatal(err, "Device::limits"),
-        }
-    }
-
-    fn device_get_swap_chain_preferred_format(&self, device: &Self::DeviceId) -> TextureFormat {
-        let global = &self.0;
-        match wgc::gfx_select!(device.id => global.device_get_swap_chain_preferred_format(device.id))
-        {
-            Ok(swap_chain_preferred_format) => swap_chain_preferred_format,
-            Err(err) => self.handle_error_fatal(err, "Device::get_swap_chain_preferred_format"),
         }
     }
 
