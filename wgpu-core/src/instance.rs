@@ -250,6 +250,44 @@ impl<B: GfxBackend> Adapter<B> {
         }
     }
 
+    pub fn get_swap_chain_preferred_format(
+        &self,
+        surface: &mut Surface,
+    ) -> Result<wgt::TextureFormat, GetSwapChainPreferredFormatError> {
+        span!(_guard, INFO, "Adapter::get_swap_chain_preferred_format");
+
+        let formats = {
+            let surface = B::get_surface_mut(surface);
+            let queue_family = &self.raw.queue_families[0];
+            if !surface.supports_queue_family(queue_family) {
+                return Err(GetSwapChainPreferredFormatError::UnsupportedQueueFamily);
+            }
+            surface.supported_formats(&self.raw.physical_device)
+        };
+        if let Some(formats) = formats {
+            // Check the four formats mentioned in the WebGPU spec:
+            // Bgra8UnormSrgb, Rgba8UnormSrgb, Bgra8Unorm, Rgba8Unorm
+            // Also, prefer sRGB over linear as it is better in
+            // representing perceived colors.
+            if formats.contains(&hal::format::Format::Bgra8Srgb) {
+                return Ok(wgt::TextureFormat::Bgra8UnormSrgb);
+            }
+            if formats.contains(&hal::format::Format::Rgba8Srgb) {
+                return Ok(wgt::TextureFormat::Rgba8UnormSrgb);
+            }
+            if formats.contains(&hal::format::Format::Bgra8Unorm) {
+                return Ok(wgt::TextureFormat::Bgra8Unorm);
+            }
+            if formats.contains(&hal::format::Format::Rgba8Unorm) {
+                return Ok(wgt::TextureFormat::Rgba8Unorm);
+            }
+            return Err(GetSwapChainPreferredFormatError::NotFound);
+        }
+
+        // If no formats were returned, use Bgra8UnormSrgb
+        Ok(wgt::TextureFormat::Bgra8UnormSrgb)
+    }
+
     pub(crate) fn get_texture_format_features(
         &self,
         format: wgt::TextureFormat,
@@ -446,6 +484,18 @@ impl<B: hal::Backend> crate::hub::Resource for Adapter<B> {
     fn life_guard(&self) -> &LifeGuard {
         &self.life_guard
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum GetSwapChainPreferredFormatError {
+    #[error("no suitable format found")]
+    NotFound,
+    #[error("invalid adapter")]
+    InvalidAdapter,
+    #[error("invalid surface")]
+    InvalidSurface,
+    #[error("surface does not support the adapter's queue family")]
+    UnsupportedQueueFamily,
 }
 
 #[derive(Clone, Debug, Error)]
