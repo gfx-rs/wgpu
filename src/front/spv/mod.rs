@@ -2290,10 +2290,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             None
         };
         let lookup_type = self.lookup_type.lookup(type_id)?;
-        let dec = self
-            .future_decor
-            .remove(&id)
-            .ok_or(Error::InvalidBinding(id))?;
+        let dec = match self.future_decor.remove(&id) {
+            Some(dec) => dec,
+            None => {
+                log::warn!("Missing decoration for global {:?}", id);
+                Decoration::default()
+            }
+        };
 
         let class = {
             use spirv::StorageClass as Sc;
@@ -2320,11 +2323,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         };
 
-        let binding = match (class, &module.types[lookup_type.handle].inner) {
-            (crate::StorageClass::Input, &crate::TypeInner::Struct { .. })
-            | (crate::StorageClass::Output, &crate::TypeInner::Struct { .. }) => None,
-            _ => Some(dec.get_binding().ok_or(Error::InvalidBinding(id))?),
-        };
         let is_storage = match module.types[lookup_type.handle].inner {
             crate::TypeInner::Struct { .. } => class == crate::StorageClass::Storage,
             crate::TypeInner::Image {
@@ -2347,6 +2345,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             crate::StorageAccess::empty()
         };
 
+        let binding = dec.get_binding();
         let ty = match binding {
             // SPIR-V only cares about some of the built-in types being integer.
             // Naga requires them to be strictly unsigned, so we have to patch it.
