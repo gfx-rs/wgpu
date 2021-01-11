@@ -27,12 +27,12 @@ impl ViewportDesc {
         }
     }
 
-    fn build(self, device: &wgpu::Device) -> Viewport {
+    fn build(self, adapter: &wgpu::Adapter, device: &wgpu::Device) -> Viewport {
         let size = self.window.inner_size();
 
         let sc_desc = wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-            format: device.get_swap_chain_preferred_format(),
+            format: adapter.get_swap_chain_preferred_format(&self.surface),
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
@@ -92,7 +92,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
 
     let mut viewports: HashMap<WindowId, Viewport> = viewports
         .into_iter()
-        .map(|desc| (desc.window.id(), desc.build(&device)))
+        .map(|desc| (desc.window.id(), desc.build(&adapter, &device)))
         .collect();
 
     event_loop.run(move |event, _, control_flow| {

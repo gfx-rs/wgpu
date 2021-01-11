@@ -954,6 +954,15 @@ impl crate::Context for Context {
         )
     }
 
+    fn adapter_get_swap_chain_preferred_format(
+        &self,
+        adapter: &Self::AdapterId,
+        surface: &Self::SurfaceId,
+    ) -> wgt::TextureFormat {
+        // TODO: web-sys bindings need to be updated to not return a promise
+        wgt::TextureFormat::Bgra8Unorm
+    }
+
     fn adapter_features(&self, _adapter: &Self::AdapterId) -> wgt::Features {
         // TODO: web-sys has no way of getting extensions on adapters
         wgt::Features::empty()
@@ -983,14 +992,6 @@ impl crate::Context for Context {
     fn device_limits(&self, _device: &Self::DeviceId) -> wgt::Limits {
         // TODO: web-sys has a method for getting limits on devices, but it returns Object not GpuLimit
         wgt::Limits::default()
-    }
-
-    fn device_get_swap_chain_preferred_format(
-        &self,
-        device: &Self::DeviceId,
-    ) -> wgt::TextureFormat {
-        // TODO: web-sys bindings need to be updated to not return a promise
-        wgt::TextureFormat::Bgra8Unorm
     }
 
     fn device_create_swap_chain(

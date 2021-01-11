@@ -201,7 +201,7 @@ fn start<E: Example>(
     let spawner = Spawner::new();
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-        format: device.get_swap_chain_preferred_format(),
+        format: adapter.get_swap_chain_preferred_format(&surface),
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Mailbox,
