@@ -8,7 +8,7 @@ use crate::{
     hub::{
         GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, InvalidId, Storage, Token,
     },
-    id, pipeline, resource, span, swap_chain,
+    id, instance, pipeline, resource, span, swap_chain,
     track::{BufferState, TextureSelector, TextureState, TrackerSet},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, FastHashSet, Label, LabelHelpers, LifeGuard, MultiRefCount, PrivateFeatures,
@@ -2379,6 +2379,28 @@ pub struct ImplicitPipelineIds<'a, G: GlobalIdentityHandlerFactory> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
+    pub fn adapter_get_swap_chain_preferred_format<B: GfxBackend>(
+        &self,
+        adapter_id: id::AdapterId,
+        surface_id: id::SurfaceId,
+    ) -> Result<TextureFormat, instance::GetSwapChainPreferredFormatError> {
+        span!(_guard, INFO, "Adapter::get_swap_chain_preferred_format");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
+        let (adapter_guard, mut _token) = hub.adapters.read(&mut token);
+        let adapter = adapter_guard
+            .get(adapter_id)
+            .map_err(|_| instance::GetSwapChainPreferredFormatError::InvalidAdapter)?;
+        let surface = surface_guard
+            .get_mut(surface_id)
+            .map_err(|_| instance::GetSwapChainPreferredFormatError::InvalidSurface)?;
+
+        adapter.get_swap_chain_preferred_format(surface)
+    }
+
     pub fn device_features<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
@@ -3883,17 +3905,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .suspected_resources
             .pipeline_layouts
             .push(layout_id);
-    }
-
-    pub fn device_get_swap_chain_preferred_format<B: GfxBackend>(
-        &self,
-        _device_id: id::DeviceId,
-    ) -> Result<TextureFormat, InvalidDevice> {
-        span!(_guard, INFO, "Device::get_swap_chain_preferred_format");
-        //TODO: we can query the formats like done in `device_create_swapchain`,
-        // but its not clear which format in the list to return.
-        // For now, return `Bgra8UnormSrgb` that we know is supported everywhere.
-        Ok(TextureFormat::Bgra8UnormSrgb)
     }
 
     pub fn device_create_swap_chain<B: GfxBackend>(
