@@ -1901,7 +1901,7 @@ impl crate::BufferMappedRangeSlice for BufferMappedRange {
     }
 }
 
-impl<'a> Drop for BufferMappedRange<'a> {
+impl Drop for BufferMappedRange {
     fn drop(&mut self) {
         // Copy from the temporary mapping back into the array buffer that was
         // originally provided by the browser
