@@ -387,10 +387,22 @@ pub enum RenderPassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("attachment texture view {0:?} is invalid")]
     InvalidAttachment(id::TextureViewId),
-    #[error("there are attachments")]
-    NoAttachments,
-    #[error("attachments have different sizes")]
-    MismatchAttachments,
+    #[error("necessary attachments are missing")]
+    MissingAttachments,
+    #[error("color and/or depth attachments have differing sizes: a {mismatching_attachment_type_name} attachment of size {mismatching_dimensions_width}x{mismatching_dimensions_height} is not compatible with a {previous_attachment_type_name} attachment's size ({previous_dimensions_height}x{previous_dimensions_width})",
+        previous_dimensions_width = previous_dimensions.0,
+        previous_dimensions_height = previous_dimensions.1,
+        mismatching_dimensions_width =  mismatching_dimensions.0,
+        mismatching_dimensions_height = mismatching_dimensions.1,
+    )]
+    AttachmentsDimensionMismatch {
+        /// depth or color
+        previous_attachment_type_name: &'static str,
+        /// depth or color
+        mismatching_attachment_type_name: &'static str,
+        previous_dimensions: (u32, u32),
+        mismatching_dimensions: (u32, u32),
+    },
     #[error("attachment's sample count {0} is invalid")]
     InvalidSampleCount(u8),
     #[error("attachment with resolve target must be multi-sampled")]
@@ -526,9 +538,12 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
 
         let mut render_attachments = AttachmentDataVec::<RenderAttachment>::new();
 
+        // need to be initialized to None!, check `AttachmentsDimensionMismatch` error
         let mut attachment_width = None;
         let mut attachment_height = None;
-        let mut valid_attachment = true;
+        let mut attachment_type_name = None;
+
+        let mut mismatching_dimensions = None;
 
         let mut extent = None;
         let mut sample_count = 0;
@@ -567,6 +582,25 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         .use_extend(&*view_guard, at.attachment, (), ())
                         .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.attachment))?;
                     add_view(view)?;
+
+                    // get the width and height set by another attachment, then check if it matches
+                    let (previous_width, previous_height) = (
+                        *attachment_width.get_or_insert(view.extent.width),
+                        *attachment_height.get_or_insert(view.extent.height),
+                    );
+
+                    if previous_width != view.extent.width || previous_height != view.extent.height
+                    {
+                        mismatching_dimensions = Some((
+                            "depth",
+                            (view.extent.width, view.extent.height),
+                            (previous_width, previous_height),
+                        ));
+                    } else {
+                        // this attachment's size was successfully inserted into `attachment_width` and `attachment_height`
+                        attachment_type_name = Some("depth");
+                    }
+
                     depth_stencil_aspects = view.aspects;
 
                     let source_id = match view.inner {
@@ -625,9 +659,22 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.attachment))?;
                 add_view(view)?;
 
-                valid_attachment &= *attachment_width.get_or_insert(view.extent.width)
-                    == view.extent.width
-                    && *attachment_height.get_or_insert(view.extent.height) == view.extent.height;
+                // get the width and height set by another attachment, then check if it matches
+                let (previous_width, previous_height) = (
+                    *attachment_width.get_or_insert(view.extent.width),
+                    *attachment_height.get_or_insert(view.extent.height),
+                );
+
+                if previous_width != view.extent.width || previous_height != view.extent.height {
+                    mismatching_dimensions = Some((
+                        "color",
+                        (view.extent.width, view.extent.height),
+                        (previous_width, previous_height),
+                    ));
+                } else {
+                    // this attachment's size was successfully inserted into `attachment_width` and `attachment_height`
+                    attachment_type_name = Some("color");
+                }
 
                 let layouts = match view.inner {
                     TextureViewInner::Native { ref source_id, .. } => {
@@ -685,8 +732,20 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 colors.push((color_at, hal::image::Layout::ColorAttachmentOptimal));
             }
 
-            if !valid_attachment {
-                return Err(RenderPassErrorInner::MismatchAttachments);
+            if let Some((
+                mismatching_attachment_type_name,
+                previous_dimensions,
+                mismatching_dimensions,
+            )) = mismatching_dimensions
+            {
+                return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
+                    // okay to unwrap: for `mismatching_dimensions` to be set, `attachment_{width/height}` must have been
+                    // set, which includes `attachment_type_name` being set in a later `else` block
+                    previous_attachment_type_name: attachment_type_name.unwrap(),
+                    mismatching_attachment_type_name,
+                    previous_dimensions,
+                    mismatching_dimensions,
+                });
             }
 
             for resolve_target in color_attachments.iter().flat_map(|at| at.resolve_target) {
@@ -994,8 +1053,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             used_swapchain_with_framebuffer,
             is_ds_read_only,
             extent: wgt::Extent3d {
-                width: attachment_width.ok_or(RenderPassErrorInner::NoAttachments)?,
-                height: attachment_height.ok_or(RenderPassErrorInner::NoAttachments)?,
+                width: attachment_width.ok_or(RenderPassErrorInner::MissingAttachments)?,
+                height: attachment_height.ok_or(RenderPassErrorInner::MissingAttachments)?,
                 depth: 1,
             },
         })
