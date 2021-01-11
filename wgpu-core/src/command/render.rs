@@ -389,11 +389,7 @@ pub enum RenderPassErrorInner {
     InvalidAttachment(id::TextureViewId),
     #[error("necessary attachments are missing")]
     MissingAttachments,
-    #[error("color and/or depth attachments have differing sizes: a {mismatching_attachment_type_name} attachment of size {mismatching_dimensions_width}x{mismatching_dimensions_height} is not compatible with a {previous_attachment_type_name} attachment's size ({previous_dimensions_height}x{previous_dimensions_width})",
-        previous_dimensions_width = previous_dimensions.0,
-        previous_dimensions_height = previous_dimensions.1,
-        mismatching_dimensions_width =  mismatching_dimensions.0,
-        mismatching_dimensions_height = mismatching_dimensions.1,
+    #[error("color and/or depth attachments have differing sizes: a {mismatching_attachment_type_name} attachment of size {mismatching_dimensions:?} is not compatible with a {previous_attachment_type_name} attachment's size {previous_dimensions:?}",
     )]
     AttachmentsDimensionMismatch {
         /// depth or color
@@ -538,10 +534,9 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
 
         let mut render_attachments = AttachmentDataVec::<RenderAttachment>::new();
 
-        // need to be initialized to None!, check `AttachmentsDimensionMismatch` error
         let mut attachment_width = None;
         let mut attachment_height = None;
-        let mut attachment_type_name = None;
+        let mut attachment_type_name = "";
 
         let mut mismatching_dimensions = None;
 
@@ -598,7 +593,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         ));
                     } else {
                         // this attachment's size was successfully inserted into `attachment_width` and `attachment_height`
-                        attachment_type_name = Some("depth");
+                        attachment_type_name = "depth";
                     }
 
                     depth_stencil_aspects = view.aspects;
@@ -673,7 +668,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     ));
                 } else {
                     // this attachment's size was successfully inserted into `attachment_width` and `attachment_height`
-                    attachment_type_name = Some("color");
+                    attachment_type_name = "color";
                 }
 
                 let layouts = match view.inner {
@@ -741,7 +736,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
                     // okay to unwrap: for `mismatching_dimensions` to be set, `attachment_{width/height}` must have been
                     // set, which includes `attachment_type_name` being set in a later `else` block
-                    previous_attachment_type_name: attachment_type_name.unwrap(),
+                    previous_attachment_type_name: attachment_type_name,
                     mismatching_attachment_type_name,
                     previous_dimensions,
                     mismatching_dimensions,
