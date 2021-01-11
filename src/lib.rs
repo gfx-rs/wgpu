@@ -189,13 +189,17 @@ trait Context: Debug + Send + Sized + Sync {
         desc: &DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture;
+    fn adapter_get_swap_chain_preferred_format(
+        &self,
+        adapter: &Self::AdapterId,
+        surface: &Self::SurfaceId,
+    ) -> TextureFormat;
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features;
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
     fn adapter_get_info(&self, adapter: &Self::AdapterId) -> AdapterInfo;
 
     fn device_features(&self, device: &Self::DeviceId) -> Features;
     fn device_limits(&self, device: &Self::DeviceId) -> Limits;
-    fn device_get_swap_chain_preferred_format(&self, device: &Self::DeviceId) -> TextureFormat;
     fn device_create_swap_chain(
         &self,
         device: &Self::DeviceId,
@@ -1384,6 +1388,11 @@ impl Adapter {
         }
     }
 
+    /// Returns an optimal texture format to use for the [`SwapChain`] with this adapter.
+    pub fn get_swap_chain_preferred_format(&self, surface: &Surface) -> TextureFormat {
+        Context::adapter_get_swap_chain_preferred_format(&*self.context, &self.id, &surface.id)
+    }
+
     /// List all features that are supported with this adapter.
     ///
     /// Features must be explicitly requested in [`Adapter::request_device`] in order
@@ -1426,11 +1435,6 @@ impl Device {
     /// If any of these limits are exceeded, functions may panic.
     pub fn limits(&self) -> Limits {
         Context::device_limits(&*self.context, &self.id)
-    }
-
-    /// Returns an optimal texture format to use for the [`SwapChain`] with this device.
-    pub fn get_swap_chain_preferred_format(&self) -> TextureFormat {
-        Context::device_get_swap_chain_preferred_format(&*self.context, &self.id)
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.
