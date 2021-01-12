@@ -710,6 +710,19 @@ impl crate::Context for Context {
         }
     }
 
+    fn adapter_get_texture_format_features(
+        &self,
+        adapter: &Self::AdapterId,
+        format: wgt::TextureFormat,
+    ) -> wgt::TextureFormatFeatures {
+        let global = &self.0;
+        match wgc::gfx_select!(*adapter => global.adapter_get_texture_format_features(*adapter, format))
+        {
+            Ok(info) => info,
+            Err(err) => self.handle_error_fatal(err, "Adapter::get_texture_format_features"),
+        }
+    }
+
     fn device_features(&self, device: &Self::DeviceId) -> Features {
         let global = &self.0;
         match wgc::gfx_select!(device.id => global.device_features(device.id)) {
