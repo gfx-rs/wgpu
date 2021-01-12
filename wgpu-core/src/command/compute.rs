@@ -442,7 +442,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     unsafe { raw.push_compute_constants(&pipeline_layout.raw, offset, data_slice) }
                 }
                 ComputeCommand::Dispatch(groups) => {
-                    let scope = PassErrorScope::Dispatch;
+                    let scope = PassErrorScope::Dispatch {
+                        indirect: false,
+                        pipeline: state.pipeline.last_state,
+                    };
 
                     state.is_ready().map_pass_err(scope)?;
                     state
@@ -459,7 +462,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::DispatchIndirect { buffer_id, offset } => {
-                    let scope = PassErrorScope::DispatchIndirect;
+                    let scope = PassErrorScope::Dispatch {
+                        indirect: true,
+                        pipeline: state.pipeline.last_state,
+                    };
 
                     state.is_ready().map_pass_err(scope)?;
 

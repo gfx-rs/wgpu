@@ -1543,7 +1543,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         first_vertex,
                         first_instance,
                     } => {
-                        let scope = PassErrorScope::Draw;
+                        let scope = PassErrorScope::Draw {
+                            indexed: false,
+                            indirect: false,
+                            pipeline: state.pipeline.last_state,
+                        };
                         state.is_ready().map_pass_err(scope)?;
                         let last_vertex = first_vertex + vertex_count;
                         let vertex_limit = state.vertex.vertex_limit;
@@ -1580,7 +1584,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         base_vertex,
                         first_instance,
                     } => {
-                        let scope = PassErrorScope::DrawIndexed;
+                        let scope = PassErrorScope::Draw {
+                            indexed: true,
+                            indirect: false,
+                            pipeline: state.pipeline.last_state,
+                        };
                         state.is_ready().map_pass_err(scope)?;
 
                         //TODO: validate that base_vertex + max_index() is within the provided range
@@ -1618,10 +1626,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         count,
                         indexed,
                     } => {
-                        let scope = if indexed {
-                            PassErrorScope::DrawIndexedIndirect
-                        } else {
-                            PassErrorScope::DrawIndirect
+                        let scope = PassErrorScope::Draw {
+                            indexed,
+                            indirect: true,
+                            pipeline: state.pipeline.last_state,
                         };
                         state.is_ready().map_pass_err(scope)?;
 
@@ -1694,10 +1702,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         max_count,
                         indexed,
                     } => {
-                        let scope = if indexed {
-                            PassErrorScope::DrawIndexedIndirect
-                        } else {
-                            PassErrorScope::DrawIndirect
+                        let scope = PassErrorScope::Draw {
+                            indexed,
+                            indirect: true,
+                            pipeline: state.pipeline.last_state,
                         };
                         state.is_ready().map_pass_err(scope)?;
 
