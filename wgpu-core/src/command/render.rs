@@ -420,8 +420,6 @@ pub enum RenderPassErrorInner {
     InvalidStencilOps,
     #[error("all attachments must have the same sample count, found {actual} != {expected}")]
     SampleCountMismatch { actual: u8, expected: u8 },
-    #[error("texture view's swap chain must match swap chain in use")]
-    SwapChainMismatch,
     #[error("setting `values_offset` to be `None` is only for internal use in render bundles")]
     InvalidValuesOffset,
     #[error("required device features not enabled: {0:?}")]
@@ -696,14 +694,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         old_layout..new_layout
                     }
                     TextureViewInner::SwapChain { ref source_id, .. } => {
-                        if let Some((ref sc_id, _)) = cmd_buf.used_swap_chain {
-                            if source_id.value != sc_id.value {
-                                return Err(RenderPassErrorInner::SwapChainMismatch);
-                            }
-                        } else {
-                            assert!(used_swap_chain.is_none());
-                            used_swap_chain = Some(source_id.clone());
-                        }
+                        assert!(used_swap_chain.is_none());
+                        used_swap_chain = Some(source_id.clone());
 
                         let end = hal::image::Layout::Present;
                         let start = match at.channel.load_op {
@@ -786,14 +778,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         old_layout..new_layout
                     }
                     TextureViewInner::SwapChain { ref source_id, .. } => {
-                        if let Some((ref sc_id, _)) = cmd_buf.used_swap_chain {
-                            if source_id.value != sc_id.value {
-                                return Err(RenderPassErrorInner::SwapChainMismatch);
-                            }
-                        } else {
-                            assert!(used_swap_chain.is_none());
-                            used_swap_chain = Some(source_id.clone());
-                        }
+                        assert!(used_swap_chain.is_none());
+                        used_swap_chain = Some(source_id.clone());
                         hal::image::Layout::Undefined..hal::image::Layout::Present
                     }
                 };
@@ -919,7 +905,6 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
 
         let framebuffer = match used_swap_chain.take() {
             Some(sc_id) => {
-                assert!(cmd_buf.used_swap_chain.is_none());
                 // Always create a new framebuffer and delete it after presentation.
                 let attachments = fb_key
                     .all()
@@ -1886,7 +1871,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf =
             CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
         cmd_buf.has_labels |= base.label.is_some();
-        cmd_buf.used_swap_chain = used_swapchain_with_framebuffer;
+        cmd_buf
+            .used_swap_chains
+            .extend(used_swapchain_with_framebuffer);
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
