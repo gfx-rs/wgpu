@@ -173,6 +173,8 @@ impl ResolvedBinding {
                     Bi::FragDepth => "depth(any)",
                     Bi::FrontFacing => "front_facing",
                     Bi::SampleIndex => "sample_id",
+                    Bi::SampleMaskIn => "sample_mask",
+                    Bi::SampleMaskOut => "sample_mask",
                     // compute
                     Bi::GlobalInvocationId => "thread_position_in_grid",
                     Bi::LocalInvocationId => "thread_position_in_threadgroup",

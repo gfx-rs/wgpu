@@ -98,21 +98,28 @@ pub fn map_width(word: spirv::Word) -> Result<crate::Bytes, Error> {
         .map_err(|_| Error::InvalidTypeWidth(word))
 }
 
-pub fn map_builtin(word: spirv::Word) -> Result<crate::BuiltIn, Error> {
+pub fn map_builtin(word: spirv::Word, is_output: bool) -> Result<crate::BuiltIn, Error> {
     use spirv::BuiltIn as Bi;
     Ok(match spirv::BuiltIn::from_u32(word) {
         Some(Bi::BaseInstance) => crate::BuiltIn::BaseInstance,
         Some(Bi::BaseVertex) => crate::BuiltIn::BaseVertex,
         Some(Bi::ClipDistance) => crate::BuiltIn::ClipDistance,
         Some(Bi::InstanceIndex) => crate::BuiltIn::InstanceIndex,
+        Some(Bi::PointSize) => crate::BuiltIn::PointSize,
         Some(Bi::Position) => crate::BuiltIn::Position,
         Some(Bi::VertexIndex) => crate::BuiltIn::VertexIndex,
         // fragment
-        Some(Bi::PointSize) => crate::BuiltIn::PointSize,
         Some(Bi::FragCoord) => crate::BuiltIn::FragCoord,
+        Some(Bi::FragDepth) => crate::BuiltIn::FragDepth,
         Some(Bi::FrontFacing) => crate::BuiltIn::FrontFacing,
         Some(Bi::SampleId) => crate::BuiltIn::SampleIndex,
-        Some(Bi::FragDepth) => crate::BuiltIn::FragDepth,
+        Some(Bi::SampleMask) => {
+            if is_output {
+                crate::BuiltIn::SampleMaskOut
+            } else {
+                crate::BuiltIn::SampleMaskIn
+            }
+        }
         // compute
         Some(Bi::GlobalInvocationId) => crate::BuiltIn::GlobalInvocationId,
         Some(Bi::LocalInvocationId) => crate::BuiltIn::LocalInvocationId,

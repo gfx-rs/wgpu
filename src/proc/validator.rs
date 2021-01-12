@@ -158,6 +158,8 @@ impl crate::GlobalVariable {
                     | Bi::InstanceIndex
                     | Bi::VertexIndex
                     | Bi::SampleIndex
+                    | Bi::SampleMaskIn
+                    | Bi::SampleMaskOut
                     | Bi::LocalInvocationIndex => Ti::Scalar {
                         kind: Sk::Uint,
                         width,
@@ -500,10 +502,10 @@ impl Validator {
                             | (crate::ShaderStage::Vertex, crate::BuiltIn::BaseVertex)
                             | (crate::ShaderStage::Vertex, crate::BuiltIn::InstanceIndex)
                             | (crate::ShaderStage::Vertex, crate::BuiltIn::VertexIndex)
-                            | (crate::ShaderStage::Fragment, crate::BuiltIn::PointSize)
                             | (crate::ShaderStage::Fragment, crate::BuiltIn::FragCoord)
                             | (crate::ShaderStage::Fragment, crate::BuiltIn::FrontFacing)
                             | (crate::ShaderStage::Fragment, crate::BuiltIn::SampleIndex)
+                            | (crate::ShaderStage::Fragment, crate::BuiltIn::SampleMaskIn)
                             | (crate::ShaderStage::Compute, crate::BuiltIn::GlobalInvocationId)
                             | (crate::ShaderStage::Compute, crate::BuiltIn::LocalInvocationId)
                             | (crate::ShaderStage::Compute, crate::BuiltIn::LocalInvocationIndex)
@@ -527,7 +529,8 @@ impl Validator {
                             (crate::ShaderStage::Vertex, crate::BuiltIn::Position)
                             | (crate::ShaderStage::Vertex, crate::BuiltIn::PointSize)
                             | (crate::ShaderStage::Vertex, crate::BuiltIn::ClipDistance)
-                            | (crate::ShaderStage::Fragment, crate::BuiltIn::FragDepth) => (),
+                            | (crate::ShaderStage::Fragment, crate::BuiltIn::FragDepth)
+                            | (crate::ShaderStage::Fragment, crate::BuiltIn::SampleMaskOut) => (),
                             _ => return Err(EntryPointError::InvalidBuiltIn(built_in)),
                         },
                         Some(crate::Binding::Location(loc)) => {

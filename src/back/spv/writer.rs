@@ -856,23 +856,28 @@ impl Writer {
                     ));
             }
             Some(crate::Binding::BuiltIn(built_in)) => {
+                use crate::BuiltIn as Bi;
                 let built_in = match built_in {
-                    crate::BuiltIn::BaseInstance => spirv::BuiltIn::BaseInstance,
-                    crate::BuiltIn::BaseVertex => spirv::BuiltIn::BaseVertex,
-                    crate::BuiltIn::ClipDistance => spirv::BuiltIn::ClipDistance,
-                    crate::BuiltIn::InstanceIndex => spirv::BuiltIn::InstanceIndex,
-                    crate::BuiltIn::Position => spirv::BuiltIn::Position,
-                    crate::BuiltIn::VertexIndex => spirv::BuiltIn::VertexIndex,
-                    crate::BuiltIn::PointSize => spirv::BuiltIn::PointSize,
-                    crate::BuiltIn::FragCoord => spirv::BuiltIn::FragCoord,
-                    crate::BuiltIn::FrontFacing => spirv::BuiltIn::FrontFacing,
-                    crate::BuiltIn::SampleIndex => spirv::BuiltIn::SampleId,
-                    crate::BuiltIn::FragDepth => spirv::BuiltIn::FragDepth,
-                    crate::BuiltIn::GlobalInvocationId => spirv::BuiltIn::GlobalInvocationId,
-                    crate::BuiltIn::LocalInvocationId => spirv::BuiltIn::LocalInvocationId,
-                    crate::BuiltIn::LocalInvocationIndex => spirv::BuiltIn::LocalInvocationIndex,
-                    crate::BuiltIn::WorkGroupId => spirv::BuiltIn::WorkgroupId,
-                    crate::BuiltIn::WorkGroupSize => spirv::BuiltIn::WorkgroupSize,
+                    Bi::BaseInstance => spirv::BuiltIn::BaseInstance,
+                    Bi::BaseVertex => spirv::BuiltIn::BaseVertex,
+                    Bi::ClipDistance => spirv::BuiltIn::ClipDistance,
+                    Bi::InstanceIndex => spirv::BuiltIn::InstanceIndex,
+                    Bi::PointSize => spirv::BuiltIn::PointSize,
+                    Bi::Position => spirv::BuiltIn::Position,
+                    Bi::VertexIndex => spirv::BuiltIn::VertexIndex,
+                    // fragment
+                    Bi::FragCoord => spirv::BuiltIn::FragCoord,
+                    Bi::FragDepth => spirv::BuiltIn::FragDepth,
+                    Bi::FrontFacing => spirv::BuiltIn::FrontFacing,
+                    Bi::SampleIndex => spirv::BuiltIn::SampleId,
+                    Bi::SampleMaskIn => spirv::BuiltIn::SampleMask,
+                    Bi::SampleMaskOut => spirv::BuiltIn::SampleMask,
+                    // compute
+                    Bi::GlobalInvocationId => spirv::BuiltIn::GlobalInvocationId,
+                    Bi::LocalInvocationId => spirv::BuiltIn::LocalInvocationId,
+                    Bi::LocalInvocationIndex => spirv::BuiltIn::LocalInvocationIndex,
+                    Bi::WorkGroupId => spirv::BuiltIn::WorkgroupId,
+                    Bi::WorkGroupSize => spirv::BuiltIn::WorkgroupSize,
                 };
 
                 self.annotations

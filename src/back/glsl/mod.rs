@@ -1686,18 +1686,23 @@ fn glsl_scalar(kind: ScalarKind, width: crate::Bytes) -> Result<ScalarString<'st
 /// Helper function that returns the glsl variable name for a builtin
 fn glsl_built_in(built_in: BuiltIn) -> &'static str {
     match built_in {
+        // vertex
         BuiltIn::Position => "gl_Position",
-        BuiltIn::GlobalInvocationId => "gl_GlobalInvocationID",
         BuiltIn::BaseInstance => "gl_BaseInstance",
         BuiltIn::BaseVertex => "gl_BaseVertex",
         BuiltIn::ClipDistance => "gl_ClipDistance",
         BuiltIn::InstanceIndex => "gl_InstanceID",
-        BuiltIn::VertexIndex => "gl_VertexID",
         BuiltIn::PointSize => "gl_PointSize",
+        BuiltIn::VertexIndex => "gl_VertexID",
+        // fragment
         BuiltIn::FragCoord => "gl_FragCoord",
+        BuiltIn::FragDepth => "gl_FragDepth",
         BuiltIn::FrontFacing => "gl_FrontFacing",
         BuiltIn::SampleIndex => "gl_SampleID",
-        BuiltIn::FragDepth => "gl_FragDepth",
+        BuiltIn::SampleMaskIn => "gl_SampleMaskIn",
+        BuiltIn::SampleMaskOut => "gl_SampleMask",
+        // compute
+        BuiltIn::GlobalInvocationId => "gl_GlobalInvocationID",
         BuiltIn::LocalInvocationId => "gl_LocalInvocationID",
         BuiltIn::LocalInvocationIndex => "gl_LocalInvocationIndex",
         BuiltIn::WorkGroupId => "gl_WorkGroupID",

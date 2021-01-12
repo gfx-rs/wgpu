@@ -140,14 +140,16 @@ pub enum BuiltIn {
     BaseVertex,
     ClipDistance,
     InstanceIndex,
+    PointSize,
     Position,
     VertexIndex,
     // fragment
-    PointSize,
     FragCoord,
+    FragDepth,
     FrontFacing,
     SampleIndex,
-    FragDepth,
+    SampleMaskIn,
+    SampleMaskOut,
     // compute
     GlobalInvocationId,
     LocalInvocationId,

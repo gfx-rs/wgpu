@@ -158,7 +158,7 @@ bitflags::bitflags! {
 #[derive(Debug, Default)]
 struct Decoration {
     name: Option<String>,
-    built_in: Option<crate::BuiltIn>,
+    built_in: Option<spirv::Word>,
     location: Option<spirv::Word>,
     desc_set: Option<spirv::Word>,
     desc_index: Option<spirv::Word>,
@@ -177,7 +177,7 @@ impl Decoration {
         }
     }
 
-    fn get_binding(&self) -> Option<crate::Binding> {
+    fn get_binding(&self, is_output: bool) -> Option<crate::Binding> {
         //TODO: validate this better
         match *self {
             Decoration {
@@ -186,7 +186,13 @@ impl Decoration {
                 desc_set: None,
                 desc_index: None,
                 ..
-            } => Some(crate::Binding::BuiltIn(built_in)),
+            } => match convert::map_builtin(built_in, is_output) {
+                Ok(built_in) => Some(crate::Binding::BuiltIn(built_in)),
+                Err(e) => {
+                    log::warn!("{:?}", e);
+                    None
+                }
+            },
             Decoration {
                 built_in: None,
                 location: Some(loc),
@@ -381,11 +387,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         match dec_typed {
             spirv::Decoration::BuiltIn => {
                 inst.expect(base_words + 2)?;
-                let raw = self.next()?;
-                match map_builtin(raw) {
-                    Ok(built_in) => dec.built_in = Some(built_in),
-                    Err(_e) => log::warn!("Unsupported builtin {}", raw),
-                };
+                dec.built_in = Some(self.next()?);
             }
             spirv::Decoration::Location => {
                 inst.expect(base_words + 2)?;
@@ -2345,7 +2347,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             crate::StorageAccess::empty()
         };
 
-        let binding = dec.get_binding();
+        let binding = dec.get_binding(class == crate::StorageClass::Output);
         let ty = match binding {
             // SPIR-V only cares about some of the built-in types being integer.
             // Naga requires them to be strictly unsigned, so we have to patch it.
