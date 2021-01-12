@@ -514,7 +514,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ));
                         }
 
-                        if let Some((sc_id, fbo)) = cmdbuf.used_swap_chain.take() {
+                        for (sc_id, fbo) in cmdbuf.used_swap_chains.drain(..) {
                             let sc = &mut swap_chain_guard[sc_id.value];
                             sc.active_submission_index = submit_index;
                             if sc.acquired_view_id.is_none() {

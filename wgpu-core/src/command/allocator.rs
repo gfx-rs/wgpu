@@ -115,7 +115,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
             recorded_thread_id: thread_id,
             device_id,
             trackers: TrackerSet::new(B::VARIANT),
-            used_swap_chain: None,
+            used_swap_chains: Default::default(),
             limits,
             private_features,
             has_labels: label.is_some(),

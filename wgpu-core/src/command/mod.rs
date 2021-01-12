@@ -29,6 +29,7 @@ use crate::{
 };
 
 use hal::command::CommandBuffer as _;
+use smallvec::SmallVec;
 use thiserror::Error;
 
 use std::thread::ThreadId;
@@ -42,7 +43,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     recorded_thread_id: ThreadId,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
-    pub(crate) used_swap_chain: Option<(Stored<id::SwapChainId>, B::Framebuffer)>,
+    pub(crate) used_swap_chains: SmallVec<[(Stored<id::SwapChainId>, B::Framebuffer); 1]>,
     limits: wgt::Limits,
     private_features: PrivateFeatures,
     has_labels: bool,
@@ -216,7 +217,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Ok(cmd_buf) => {
                 cmd_buf.is_recording = false;
                 // stop tracking the swapchain image, if used
-                if let Some((ref sc_id, _)) = cmd_buf.used_swap_chain {
+                for (ref sc_id, _) in cmd_buf.used_swap_chains.iter() {
                     let view_id = swap_chain_guard[sc_id.value]
                         .acquired_view_id
                         .as_ref()
