@@ -14,7 +14,7 @@ use crate::{
     hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Token},
     id, resource,
     track::TrackerSet,
-    FastHashMap, RefCount, Stored, SubmissionIndex,
+    RefCount, Stored, SubmissionIndex,
 };
 
 use copyless::VecHelper as _;
@@ -633,74 +633,6 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                 .find(|a| a.index == submit_index)
                 .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
                 .push(resource_id);
-        }
-    }
-
-    pub(crate) fn triage_framebuffers<G: GlobalIdentityHandlerFactory>(
-        &mut self,
-        hub: &Hub<B, G>,
-        framebuffers: &mut FastHashMap<super::FramebufferKey, B::Framebuffer>,
-        token: &mut Token<super::Device<B>>,
-    ) {
-        let (texture_view_guard, _) = hub.texture_views.read(token);
-        let remove_list = framebuffers
-            .keys()
-            .filter_map(|key| {
-                let mut last_submit = None;
-                let mut needs_cleanup = false;
-
-                // A framebuffer needs to be scheduled for cleanup, if there's at least one
-                // attachment is no longer valid.
-
-                for &at in key.all() {
-                    // If this attachment is still registered, it's still valid
-                    if texture_view_guard.contains(at.0) {
-                        continue;
-                    }
-
-                    // This attachment is no longer registered, this framebuffer needs cleanup
-                    needs_cleanup = true;
-
-                    // Check if there's any active submissions that are still referring to this
-                    // attachment, if there are we need to get the greatest submission index, as
-                    // that's the last time this attachment is still valid
-                    let mut attachment_last_submit = None;
-                    for a in &self.active {
-                        if a.last_resources.image_views.iter().any(|&(id, _)| id == at) {
-                            let max = attachment_last_submit.unwrap_or(0).max(a.index);
-                            attachment_last_submit = Some(max);
-                        }
-                    }
-
-                    // Between all attachments, we need the smallest index, because that's the last
-                    // time this framebuffer is still valid
-                    if let Some(attachment_last_submit) = attachment_last_submit {
-                        let min = last_submit
-                            .unwrap_or(std::usize::MAX)
-                            .min(attachment_last_submit);
-                        last_submit = Some(min);
-                    }
-                }
-
-                if needs_cleanup {
-                    Some((key.clone(), last_submit.unwrap_or(0)))
-                } else {
-                    None
-                }
-            })
-            .collect::<FastHashMap<_, _>>();
-
-        if !remove_list.is_empty() {
-            tracing::debug!("Free framebuffers {:?}", remove_list);
-            for (ref key, submit_index) in remove_list {
-                let framebuffer = framebuffers.remove(key).unwrap();
-                self.active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                    .framebuffers
-                    .push(framebuffer);
-            }
         }
     }
 

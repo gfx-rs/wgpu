@@ -206,6 +206,7 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) kind: hal::image::Kind,
     pub(crate) format: wgt::TextureFormat,
     pub(crate) format_features: wgt::TextureFormatFeatures,
+    pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }
@@ -309,6 +310,7 @@ pub struct TextureView<B: hal::Backend> {
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) extent: hal::image::Extent,
     pub(crate) samples: hal::image::NumSamples,
+    pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
     pub(crate) selector: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }

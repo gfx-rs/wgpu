@@ -44,7 +44,7 @@ use crate::{
     LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
 };
 
-use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
+use hal::{queue::CommandQueue as _, window::PresentationSurface as _};
 use thiserror::Error;
 use wgt::{SwapChainDescriptor, SwapChainStatus};
 
@@ -59,8 +59,8 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) num_frames: hal::window::SwapImageIndex,
     pub(crate) semaphore: B::Semaphore,
     pub(crate) acquired_view_id: Option<Stored<TextureViewId>>,
-    pub(crate) acquired_framebuffers: Vec<B::Framebuffer>,
     pub(crate) active_submission_index: SubmissionIndex,
+    pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
 }
 
 impl<B: hal::Backend> crate::hub::Resource for SwapChain<B> {
@@ -194,6 +194,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         depth: 1,
                     },
                     samples: 1,
+                    framebuffer_attachment: sc.framebuffer_attachment.clone(),
                     selector: TextureSelector {
                         layers: 0..1,
                         levels: 0..1,
@@ -281,12 +282,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let result = unsafe { queue.present(B::get_surface_mut(surface), image, sem) };
 
         tracing::debug!(trace = true, "Presented. End of Frame");
-
-        for fbo in sc.acquired_framebuffers.drain(..) {
-            unsafe {
-                device.raw.destroy_framebuffer(fbo);
-            }
-        }
 
         match result {
             Ok(None) => Ok(SwapChainStatus::Good),

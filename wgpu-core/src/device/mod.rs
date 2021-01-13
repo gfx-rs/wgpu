@@ -103,12 +103,20 @@ impl<T> AttachmentData<T> {
             .chain(&self.resolves)
             .chain(&self.depth_stencil)
     }
+
+    pub(crate) fn map<U, F: Fn(&T) -> U>(&self, fun: F) -> AttachmentData<U> {
+        AttachmentData {
+            colors: self.colors.iter().map(&fun).collect(),
+            resolves: self.resolves.iter().map(&fun).collect(),
+            depth_stencil: self.depth_stencil.as_ref().map(&fun),
+        }
+    }
 }
 
 pub(crate) type AttachmentDataVec<T> = ArrayVec<[T; MAX_COLOR_TARGETS + MAX_COLOR_TARGETS + 1]>;
 
 pub(crate) type RenderPassKey = AttachmentData<(hal::pass::Attachment, hal::image::Layout)>;
-pub(crate) type FramebufferKey = AttachmentData<id::Valid<id::TextureViewId>>;
+pub(crate) type FramebufferKey = AttachmentData<hal::image::FramebufferAttachment>;
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
@@ -211,11 +219,17 @@ fn fire_map_callbacks<I: IntoIterator<Item = BufferMapPendingCallback>>(callback
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct RenderPassLock<B: hal::Backend> {
+    pub(crate) render_passes: FastHashMap<RenderPassKey, B::RenderPass>,
+    pub(crate) framebuffers: FastHashMap<FramebufferKey, B::Framebuffer>,
+}
+
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 /// TODO: establish clear order of locking for these:
 /// `mem_allocator`, `desc_allocator`, `life_tracke`, `trackers`,
-/// `render_passes`, `framebuffers`, `pending_writes`, `trace`.
+/// `render_passes`, `pending_writes`, `trace`.
 ///
 /// Currently, the rules are:
 /// 1. `life_tracker` is locked after `hub.devices`, enforced by the type system
@@ -234,8 +248,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) active_submission_index: SubmissionIndex,
     /// Has to be locked temporarily only (locked last)
     pub(crate) trackers: Mutex<TrackerSet>,
-    pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
-    pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
+    pub(crate) render_passes: Mutex<RenderPassLock<B>>,
     // Life tracker should be locked right after the device and before anything else.
     life_tracker: Mutex<life::LifetimeTracker<B>>,
     temp_suspected: life::SuspectedResources,
@@ -297,8 +310,10 @@ impl<B: GfxBackend> Device<B> {
             life_guard: LifeGuard::new("<device>"),
             active_submission_index: 0,
             trackers: Mutex::new(TrackerSet::new(B::VARIANT)),
-            render_passes: Mutex::new(FastHashMap::default()),
-            framebuffers: Mutex::new(FastHashMap::default()),
+            render_passes: Mutex::new(RenderPassLock {
+                render_passes: FastHashMap::default(),
+                framebuffers: FastHashMap::default(),
+            }),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: life::SuspectedResources::default(),
             #[cfg(feature = "trace")]
@@ -359,7 +374,6 @@ impl<B: GfxBackend> Device<B> {
             token,
         );
         life_tracker.triage_mapped(hub, token);
-        life_tracker.triage_framebuffers(hub, &mut *self.framebuffers.lock(), token);
         let last_done = life_tracker.triage_submissions(&self.raw, force_wait)?;
         let callbacks = life_tracker.handle_mapping(hub, &self.raw, &self.trackers, token);
         life_tracker.cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
@@ -591,12 +605,11 @@ impl<B: GfxBackend> Device<B> {
                 mip_level_count,
             ));
         }
-        let mut view_capabilities = hal::image::ViewCapabilities::empty();
-
+        let mut view_caps = hal::image::ViewCapabilities::empty();
         // 2D textures with array layer counts that are multiples of 6 could be cubemaps
         // Following gpuweb/gpuweb#68 always add the hint in that case
         if desc.dimension == TextureDimension::D2 && desc.size.depth % 6 == 0 {
-            view_capabilities |= hal::image::ViewCapabilities::KIND_CUBE;
+            view_caps |= hal::image::ViewCapabilities::KIND_CUBE;
         };
 
         // TODO: 2D arrays, cubemap arrays
@@ -610,7 +623,7 @@ impl<B: GfxBackend> Device<B> {
                     format,
                     hal::image::Tiling::Optimal,
                     usage,
-                    view_capabilities,
+                    view_caps,
                 )
                 .map_err(|err| match err {
                     hal::image::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
@@ -642,6 +655,11 @@ impl<B: GfxBackend> Device<B> {
             kind,
             format: desc.format,
             format_features,
+            framebuffer_attachment: hal::image::FramebufferAttachment {
+                usage,
+                format,
+                view_caps,
+            },
             full_range: TextureSelector {
                 levels: 0..desc.mip_level_count as hal::image::Level,
                 layers: 0..kind.num_layers(),
@@ -801,6 +819,7 @@ impl<B: GfxBackend> Device<B> {
             format_features: texture.format_features,
             extent: texture.kind.extent().at_level(desc.base_mip_level as _),
             samples: texture.kind.num_samples(),
+            framebuffer_attachment: texture.framebuffer_attachment.clone(),
             selector,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
@@ -2172,7 +2191,7 @@ impl<B: GfxBackend> Device<B> {
             .get(pipeline_layout_id)
             .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
 
-        let mut render_pass_cache = self.render_passes.lock();
+        let mut rp_lock = self.render_passes.lock();
         let pipeline_desc = hal::pso::GraphicsPipelineDesc {
             label: desc.label.as_ref().map(AsRef::as_ref),
             primitive_assembler,
@@ -2185,7 +2204,7 @@ impl<B: GfxBackend> Device<B> {
             layout: &layout.raw,
             subpass: hal::pass::Subpass {
                 index: 0,
-                main_pass: match render_pass_cache.entry(rp_key) {
+                main_pass: match rp_lock.render_passes.entry(rp_key) {
                     Entry::Occupied(e) => e.into_mut(),
                     Entry::Vacant(e) => {
                         let pass = self
@@ -2312,10 +2331,11 @@ impl<B: hal::Backend> Device<B> {
         unsafe {
             desc_alloc.cleanup(&self.raw);
             mem_alloc.clear(&self.raw);
-            for (_, rp) in self.render_passes.lock().drain() {
+            let rps = self.render_passes.into_inner();
+            for (_, rp) in rps.render_passes {
                 self.raw.destroy_render_pass(rp);
             }
-            for (_, fbo) in self.framebuffers.lock().drain() {
+            for (_, fbo) in rps.framebuffers {
                 self.raw.destroy_framebuffer(fbo);
             }
         }
@@ -3987,6 +4007,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
         validate_swap_chain_descriptor(&mut config, &caps)?;
+        let framebuffer_attachment = config.framebuffer_attachment();
 
         unsafe {
             B::get_surface_mut(surface)
@@ -4027,8 +4048,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .create_semaphore()
                 .or(Err(DeviceError::OutOfMemory))?,
             acquired_view_id: None,
-            acquired_framebuffers: Vec::new(),
             active_submission_index: 0,
+            framebuffer_attachment,
         };
         swap_chain_guard.insert(sc_id, swap_chain);
         Ok(sc_id)
