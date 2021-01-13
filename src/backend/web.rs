@@ -984,6 +984,14 @@ impl crate::Context for Context {
         }
     }
 
+    fn adapter_get_texture_format_features(
+        &self,
+        _adapter: &Self::AdapterId,
+        format: wgt::TextureFormat,
+    ) -> wgt::TextureFormatFeatures {
+        format.describe().guaranteed_format_features
+    }
+
     fn device_features(&self, _device: &Self::DeviceId) -> wgt::Features {
         // TODO: web-sys has no way of getting extensions on devices
         wgt::Features::empty()

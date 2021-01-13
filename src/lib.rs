@@ -197,6 +197,11 @@ trait Context: Debug + Send + Sized + Sync {
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features;
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
     fn adapter_get_info(&self, adapter: &Self::AdapterId) -> AdapterInfo;
+    fn adapter_get_texture_format_features(
+        &self,
+        adapter: &Self::AdapterId,
+        format: wgt::TextureFormat,
+    ) -> wgt::TextureFormatFeatures;
 
     fn device_features(&self, device: &Self::DeviceId) -> Features;
     fn device_limits(&self, device: &Self::DeviceId) -> Limits;
@@ -1412,6 +1417,17 @@ impl Adapter {
     /// Get info about the adapter itself.
     pub fn get_info(&self) -> AdapterInfo {
         Context::adapter_get_info(&*self.context, &self.id)
+    }
+
+    /// Returns the features supported for a given texture format by this adapter.
+    ///
+    /// Note that the WebGPU spec further restricts the available usages/features.
+    /// To disable these restrictions on a device, request the [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] feature.
+    pub fn get_texture_format_features(
+        &self,
+        format: wgt::TextureFormat,
+    ) -> wgt::TextureFormatFeatures {
+        Context::adapter_get_texture_format_features(&*self.context, &self.id, format)
     }
 }
 
