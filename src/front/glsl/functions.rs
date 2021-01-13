@@ -100,15 +100,23 @@ impl Program {
                                 arg2: None,
                             }),
                             sampler: None,
-                            statements: fc
-                                .args
-                                .into_iter()
-                                .map(|a| a.statements)
-                                .flatten()
-                                .collect(),
+                            statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
                         })
                     }
-                    _ => Err(ErrorKind::NotImplemented("Function call")),
+                    func_name => {
+                        let function = *self
+                            .lookup_function
+                            .get(func_name)
+                            .ok_or(ErrorKind::SemanticError("Unknown function"))?;
+                        Ok(ExpressionRule {
+                            expression: self.context.expressions.append(Expression::Call {
+                                function,
+                                arguments: fc.args.iter().map(|a| a.expression).collect(),
+                            }),
+                            sampler: None,
+                            statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
+                        })
+                    }
                 }
             }
         }
