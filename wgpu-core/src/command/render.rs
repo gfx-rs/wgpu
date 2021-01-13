@@ -726,8 +726,6 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             )) = mismatching_dimensions
             {
                 return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
-                    // okay to unwrap: for `mismatching_dimensions` to be set, `attachment_{width/height}` must have been
-                    // set, which includes `attachment_type_name` being set in a later `else` block
                     previous_attachment_type_name: attachment_type_name,
                     mismatching_attachment_type_name,
                     previous_dimensions,
