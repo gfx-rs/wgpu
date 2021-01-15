@@ -514,19 +514,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ));
                         }
 
-                        for (sc_id, fbo) in cmdbuf.used_swap_chains.drain(..) {
+                        for sc_id in cmdbuf.used_swap_chains.drain(..) {
                             let sc = &mut swap_chain_guard[sc_id.value];
-                            sc.active_submission_index = submit_index;
                             if sc.acquired_view_id.is_none() {
                                 return Err(QueueSubmitError::SwapChainOutputDropped);
                             }
-                            // For each swapchain, we only want to have at most 1 signaled semaphore.
-                            if sc.acquired_framebuffers.is_empty() {
+                            if sc.active_submission_index != submit_index {
+                                sc.active_submission_index = submit_index;
                                 // Only add a signal if this is the first time for this swapchain
                                 // to be used in the submission.
                                 signal_swapchain_semaphores.push(sc_id.value);
                             }
-                            sc.acquired_framebuffers.push(fbo);
                         }
 
                         // optimize the tracked states
