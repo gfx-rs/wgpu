@@ -517,7 +517,7 @@ pomelo! {
     }
 
     single_declaration ::= fully_specified_type(t) {
-        let ty = t.1.ok_or(ErrorKind::SemanticError("Empty type for declaration"))?;
+        let ty = t.1.ok_or_else(||ErrorKind::SemanticError("Empty type for declaration".into()))?;
 
         VarDeclaration {
             type_qualifiers: t.0,
@@ -526,7 +526,7 @@ pomelo! {
         }
     }
     single_declaration ::= fully_specified_type(t) Identifier(i) {
-        let ty = t.1.ok_or(ErrorKind::SemanticError("Empty type for declaration"))?;
+        let ty = t.1.ok_or_else(|| ErrorKind::SemanticError("Empty type for declaration".into()))?;
 
         VarDeclaration {
             type_qualifiers: t.0,
@@ -537,7 +537,7 @@ pomelo! {
     // single_declaration ::= fully_specified_type Identifier array_specifier;
     // single_declaration ::= fully_specified_type Identifier array_specifier Equal initializer;
     single_declaration ::= fully_specified_type(t) Identifier(i) Equal initializer(init) {
-        let ty = t.1.ok_or(ErrorKind::SemanticError("Empty type for declaration"))?;
+        let ty = t.1.ok_or_else(|| ErrorKind::SemanticError("Empty type for declaration".into()))?;
 
         VarDeclaration {
             type_qualifiers: t.0,
@@ -676,7 +676,7 @@ pomelo! {
                 ty,
             }).collect()
         } else {
-            return Err(ErrorKind::SemanticError("Struct member can't be void"))
+            return Err(ErrorKind::SemanticError("Struct member can't be void".into()))
         }
     }
     //struct_declaration ::= type_qualifier type_specifier struct_declarator_list Semicolon;
@@ -707,7 +707,7 @@ pomelo! {
         // local variables
         if let Some(d) = d {
             for (id, initializer) in d.ids_initializers {
-                let id = id.ok_or(ErrorKind::SemanticError("local var must be named"))?;
+                let id = id.ok_or_else(|| ErrorKind::SemanticError("Local var must be named".into()))?;
                 // check if already declared in current scope
                 #[cfg(feature = "glsl-validate")]
                 {
@@ -1002,7 +1002,7 @@ pomelo! {
         if let Some(d) = d {
             let class = d.type_qualifiers.iter().find_map(|tq| {
                 if let TypeQualifier::StorageClass(sc) = tq { Some(*sc) } else { None }
-            }).ok_or(ErrorKind::SemanticError("Missing storage class for global var"))?;
+            }).ok_or_else(|| ErrorKind::SemanticError(format!("Missing storage class for global var \"{:?}\"", d).into()))?;
 
             let binding = d.type_qualifiers.iter().find_map(|tq| {
                 if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }

@@ -204,7 +204,11 @@ impl Program {
                                         4 => VectorSize::Quad,
                                         _ => {
                                             return Err(ErrorKind::SemanticError(
-                                                "Bad swizzle size",
+                                                format!(
+                                                    "Bad swizzle size for \"{:?}\": {:?}",
+                                                    name, v
+                                                )
+                                                .into(),
                                             ));
                                         }
                                     },
@@ -214,10 +218,14 @@ impl Program {
                         }))
                     }
                 } else {
-                    Err(ErrorKind::SemanticError("Invalid swizzle for vector"))
+                    Err(ErrorKind::SemanticError(
+                        format!("Invalid swizzle for vector \"{}\"", name).into(),
+                    ))
                 }
             }
-            _ => Err(ErrorKind::SemanticError("Can't lookup field on this type")),
+            _ => Err(ErrorKind::SemanticError(
+                format!("Can't lookup field on this type \"{}\"", name).into(),
+            )),
         }
     }
 }

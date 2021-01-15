@@ -1,6 +1,6 @@
 use super::parser::Token;
 use super::token::TokenMetadata;
-use std::{fmt, io};
+use std::{borrow::Cow, fmt, io};
 
 #[derive(Debug)]
 pub enum ErrorKind {
@@ -20,7 +20,7 @@ pub enum ErrorKind {
     #[cfg(feature = "glsl-validate")]
     VariableNotAvailable(String),
     ExpectedConstant,
-    SemanticError(&'static str),
+    SemanticError(Cow<'static, str>),
     PreprocessorError(String),
     WrongNumberArgs(String, usize, usize),
 }
