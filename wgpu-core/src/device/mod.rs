@@ -116,7 +116,10 @@ impl<T> AttachmentData<T> {
 pub(crate) type AttachmentDataVec<T> = ArrayVec<[T; MAX_COLOR_TARGETS + MAX_COLOR_TARGETS + 1]>;
 
 pub(crate) type RenderPassKey = AttachmentData<(hal::pass::Attachment, hal::image::Layout)>;
-pub(crate) type FramebufferKey = AttachmentData<hal::image::FramebufferAttachment>;
+pub(crate) type FramebufferKey = (
+    AttachmentData<hal::image::FramebufferAttachment>,
+    wgt::Extent3d,
+);
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
@@ -793,6 +796,7 @@ impl<B: GfxBackend> Device<B> {
             layer_start: desc.base_array_layer as _,
             layer_count: desc.array_layer_count.map(|v| v.get() as _),
         };
+        let hal_extent = texture.kind.extent().at_level(desc.base_mip_level as _);
 
         let raw = unsafe {
             self.raw
@@ -817,7 +821,11 @@ impl<B: GfxBackend> Device<B> {
             aspects,
             format: texture.format,
             format_features: texture.format_features,
-            extent: texture.kind.extent().at_level(desc.base_mip_level as _),
+            extent: wgt::Extent3d {
+                width: hal_extent.width,
+                height: hal_extent.height,
+                depth: view_layer_count,
+            },
             samples: texture.kind.num_samples(),
             framebuffer_attachment: texture.framebuffer_attachment.clone(),
             selector,

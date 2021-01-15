@@ -188,7 +188,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         allowed_usages: wgt::TextureUsage::RENDER_ATTACHMENT,
                         flags: wgt::TextureFormatFeatureFlags::empty(),
                     },
-                    extent: hal::image::Extent {
+                    extent: wgt::Extent3d {
                         width: sc.desc.width,
                         height: sc.desc.height,
                         depth: 1,

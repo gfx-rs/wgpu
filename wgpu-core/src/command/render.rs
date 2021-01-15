@@ -390,15 +390,10 @@ pub enum RenderPassErrorInner {
     InvalidAttachment(id::TextureViewId),
     #[error("necessary attachments are missing")]
     MissingAttachments,
-    #[error("color and/or depth attachments have differing sizes: a {mismatching_attachment_type_name} attachment of size {mismatching_dimensions:?} is not compatible with a {previous_attachment_type_name} attachment's size {previous_dimensions:?}",
-    )]
+    #[error("attachments have differing sizes: {previous:?} is followed by {mismatch:?}")]
     AttachmentsDimensionMismatch {
-        /// depth or color
-        previous_attachment_type_name: &'static str,
-        /// depth or color
-        mismatching_attachment_type_name: &'static str,
-        previous_dimensions: (u32, u32),
-        mismatching_dimensions: (u32, u32),
+        previous: (&'static str, wgt::Extent3d),
+        mismatch: (&'static str, wgt::Extent3d),
     },
     #[error("attachment's sample count {0} is invalid")]
     InvalidSampleCount(u8),
@@ -408,11 +403,6 @@ pub enum RenderPassErrorInner {
     InvalidResolveTargetSampleCount,
     #[error("not enough memory left")]
     OutOfMemory,
-    #[error("extent state {state_extent:?} must match extent from view {view_extent:?}")]
-    ExtentStateMismatch {
-        state_extent: hal::image::Extent,
-        view_extent: hal::image::Extent,
-    },
     #[error("attempted to use a swap chain image as a depth/stencil attachment")]
     SwapChainImageAsDepthStencil,
     #[error("unable to clear non-present/read-only depth")]
@@ -532,24 +522,19 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
 
         let mut render_attachments = AttachmentDataVec::<RenderAttachment>::new();
 
-        let mut attachment_width = None;
-        let mut attachment_height = None;
         let mut attachment_type_name = "";
-
-        let mut mismatching_dimensions = None;
-
         let mut extent = None;
         let mut sample_count = 0;
         let mut depth_stencil_aspects = hal::format::Aspects::empty();
         let mut used_swap_chain = None::<Stored<id::SwapChainId>>;
         let mut trackers = TrackerSet::new(B::VARIANT);
 
-        let mut add_view = |view: &TextureView<B>| {
+        let mut add_view = |view: &TextureView<B>, type_name| {
             if let Some(ex) = extent {
                 if ex != view.extent {
-                    return Err(RenderPassErrorInner::ExtentStateMismatch {
-                        state_extent: ex,
-                        view_extent: view.extent,
+                    return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
+                        previous: (attachment_type_name, ex),
+                        mismatch: (type_name, view.extent),
                     });
                 }
             } else {
@@ -563,6 +548,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     expected: sample_count,
                 });
             }
+            attachment_type_name = type_name;
             Ok(())
         };
 
@@ -573,25 +559,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         .views
                         .use_extend(&*view_guard, at.attachment, (), ())
                         .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.attachment))?;
-                    add_view(view)?;
-
-                    // get the width and height set by another attachment, then check if it matches
-                    let (previous_width, previous_height) = (
-                        *attachment_width.get_or_insert(view.extent.width),
-                        *attachment_height.get_or_insert(view.extent.height),
-                    );
-
-                    if previous_width != view.extent.width || previous_height != view.extent.height
-                    {
-                        mismatching_dimensions = Some((
-                            "depth",
-                            (view.extent.width, view.extent.height),
-                            (previous_width, previous_height),
-                        ));
-                    } else {
-                        // this attachment's size was successfully inserted into `attachment_width` and `attachment_height`
-                        attachment_type_name = "depth";
-                    }
+                    add_view(view, "depth")?;
 
                     depth_stencil_aspects = view.aspects;
 
@@ -649,24 +617,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     .views
                     .use_extend(&*view_guard, at.attachment, (), ())
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.attachment))?;
-                add_view(view)?;
-
-                // get the width and height set by another attachment, then check if it matches
-                let (previous_width, previous_height) = (
-                    *attachment_width.get_or_insert(view.extent.width),
-                    *attachment_height.get_or_insert(view.extent.height),
-                );
-
-                if previous_width != view.extent.width || previous_height != view.extent.height {
-                    mismatching_dimensions = Some((
-                        "color",
-                        (view.extent.width, view.extent.height),
-                        (previous_width, previous_height),
-                    ));
-                } else {
-                    // this attachment's size was successfully inserted into `attachment_width` and `attachment_height`
-                    attachment_type_name = "color";
-                }
+                add_view(view, "color")?;
 
                 let layouts = match view.inner {
                     TextureViewInner::Native { ref source_id, .. } => {
@@ -718,29 +669,15 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 colors.push((color_at, hal::image::Layout::ColorAttachmentOptimal));
             }
 
-            if let Some((
-                mismatching_attachment_type_name,
-                previous_dimensions,
-                mismatching_dimensions,
-            )) = mismatching_dimensions
-            {
-                return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
-                    previous_attachment_type_name: attachment_type_name,
-                    mismatching_attachment_type_name,
-                    previous_dimensions,
-                    mismatching_dimensions,
-                });
-            }
-
             for resolve_target in color_attachments.iter().flat_map(|at| at.resolve_target) {
                 let view = trackers
                     .views
                     .use_extend(&*view_guard, resolve_target, (), ())
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))?;
                 if extent != Some(view.extent) {
-                    return Err(RenderPassErrorInner::ExtentStateMismatch {
-                        state_extent: extent.unwrap_or_default(),
-                        view_extent: view.extent,
+                    return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
+                        previous: (attachment_type_name, extent.unwrap_or_default()),
+                        mismatch: ("resolve", view.extent),
                     });
                 }
                 if view.samples != 1 {
@@ -886,7 +823,11 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             depth_stencil: depth_stencil_attachment
                 .map(|at| view_guard.get(at.attachment).unwrap()),
         };
-        let fb_key = view_data.map(|view| view.framebuffer_attachment.clone());
+        let extent = extent.ok_or(RenderPassErrorInner::MissingAttachments)?;
+        let fb_key = (
+            view_data.map(|view| view.framebuffer_attachment.clone()),
+            extent,
+        );
         let context = RenderPassContext {
             attachments: view_data.map(|view| view.format),
             sample_count,
@@ -901,8 +842,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         .raw
                         .create_framebuffer(
                             &render_pass,
-                            e.key().all().map(|fat| fat.clone()),
-                            extent.unwrap(),
+                            e.key().0.all().map(|fat| fat.clone()),
+                            conv::map_extent(&extent, wgt::TextureDimension::D3),
                         )
                         .or(Err(RenderPassErrorInner::OutOfMemory))?
                 };
@@ -910,14 +851,11 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             }
         };
 
-        let rect = {
-            let ex = extent.unwrap();
-            hal::pso::Rect {
-                x: 0,
-                y: 0,
-                w: ex.width as _,
-                h: ex.height as _,
-            }
+        let rect = hal::pso::Rect {
+            x: 0,
+            y: 0,
+            w: extent.width as _,
+            h: extent.height as _,
         };
         let raw_views = view_data.map(|view| match view.inner {
             TextureViewInner::Native { ref raw, .. } => raw,
@@ -1006,11 +944,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             render_attachments,
             used_swap_chain,
             is_ds_read_only,
-            extent: wgt::Extent3d {
-                width: attachment_width.ok_or(RenderPassErrorInner::MissingAttachments)?,
-                height: attachment_height.ok_or(RenderPassErrorInner::MissingAttachments)?,
-                depth: 1,
-            },
+            extent,
             _phantom: PhantomData,
         })
     }

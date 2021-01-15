@@ -308,7 +308,7 @@ pub struct TextureView<B: hal::Backend> {
     pub(crate) aspects: hal::format::Aspects,
     pub(crate) format: wgt::TextureFormat,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    pub(crate) extent: hal::image::Extent,
+    pub(crate) extent: wgt::Extent3d,
     pub(crate) samples: hal::image::NumSamples,
     pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
     pub(crate) selector: TextureSelector,
