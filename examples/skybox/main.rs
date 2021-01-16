@@ -46,6 +46,7 @@ impl framework::Example for Skybox {
 
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {

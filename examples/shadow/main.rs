@@ -199,6 +199,7 @@ impl framework::Example for Example {
 
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
