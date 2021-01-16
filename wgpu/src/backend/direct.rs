@@ -184,6 +184,25 @@ mod pass_impl {
         fn pop_debug_group(&mut self) {
             wgpu_compute_pass_pop_debug_group(self);
         }
+
+        fn write_timestamp(&mut self, query_set: &wgc::id::QuerySetId, query_index: u32) {
+            unsafe { wgpu_compute_pass_write_timestamp(self, *query_set, query_index) }
+        }
+
+        fn begin_pipeline_statistics_query(
+            &mut self,
+            query_set: &wgc::id::QuerySetId,
+            query_index: u32,
+        ) {
+            unsafe {
+                wgpu_compute_pass_begin_pipeline_statistics_query(self, *query_set, query_index)
+            }
+        }
+
+        fn end_pipeline_statistics_query(&mut self) {
+            unsafe { wgpu_compute_pass_end_pipeline_statistics_query(self) }
+        }
+
         fn dispatch(&mut self, x: u32, y: u32, z: u32) {
             wgpu_compute_pass_dispatch(self, x, y, z)
         }
@@ -373,6 +392,24 @@ mod pass_impl {
 
         fn pop_debug_group(&mut self) {
             wgpu_render_pass_pop_debug_group(self);
+        }
+
+        fn write_timestamp(&mut self, query_set: &wgc::id::QuerySetId, query_index: u32) {
+            unsafe { wgpu_render_pass_write_timestamp(self, *query_set, query_index) }
+        }
+
+        fn begin_pipeline_statistics_query(
+            &mut self,
+            query_set: &wgc::id::QuerySetId,
+            query_index: u32,
+        ) {
+            unsafe {
+                wgpu_render_pass_begin_pipeline_statistics_query(self, *query_set, query_index)
+            }
+        }
+
+        fn end_pipeline_statistics_query(&mut self) {
+            unsafe { wgpu_render_pass_end_pipeline_statistics_query(self) }
         }
 
         fn execute_bundles<'a, I: Iterator<Item = &'a wgc::id::RenderBundleId>>(
@@ -600,6 +637,7 @@ impl crate::Context for Context {
     type BindGroupId = wgc::id::BindGroupId;
     type TextureViewId = wgc::id::TextureViewId;
     type SamplerId = wgc::id::SamplerId;
+    type QuerySetId = wgc::id::QuerySetId;
     type BufferId = Buffer;
     type TextureId = Texture;
     type PipelineLayoutId = wgc::id::PipelineLayoutId;
@@ -699,6 +737,19 @@ impl crate::Context for Context {
         match wgc::gfx_select!(*adapter => global.adapter_limits(*adapter)) {
             Ok(limits) => limits,
             Err(err) => self.handle_error_fatal(err, "Adapter::limits"),
+        }
+    }
+
+    fn adapter_get_timestamp_period(&self, adapter: &Self::AdapterId) -> f32 {
+        let global = &self.0;
+        let res = wgc::gfx_select!(adapter => global.adapter_get_timestamp_period(
+            *adapter
+        ));
+        match res {
+            Ok(v) => v,
+            Err(cause) => {
+                self.handle_error_fatal(cause, "Adapter::get_timestamp_period");
+            }
         }
     }
 
@@ -1123,6 +1174,23 @@ impl crate::Context for Context {
         id
     }
 
+    fn device_create_query_set(
+        &self,
+        device: &Self::DeviceId,
+        desc: &wgt::QuerySetDescriptor,
+    ) -> Self::QuerySetId {
+        let global = &self.0;
+        let (id, error) = wgc::gfx_select!(device.id => global.device_create_query_set(
+            device.id,
+            &desc,
+            PhantomData
+        ));
+        if let Some(cause) = error {
+            self.handle_error_nolabel(&device.error_sink, cause, "Device::create_query_set");
+        }
+        id
+    }
+
     fn device_create_command_encoder(
         &self,
         device: &Self::DeviceId,
@@ -1382,6 +1450,10 @@ impl crate::Context for Context {
         let global = &self.0;
         wgc::gfx_select!(*sampler => global.sampler_drop(*sampler))
     }
+    fn query_set_drop(&self, query_set: &Self::QuerySetId) {
+        let global = &self.0;
+        wgc::gfx_select!(*query_set => global.query_set_drop(*query_set))
+    }
     fn bind_group_drop(&self, bind_group: &Self::BindGroupId) {
         let global = &self.0;
         wgc::gfx_select!(*bind_group => global.bind_group_drop(*bind_group))
@@ -1528,6 +1600,52 @@ impl crate::Context for Context {
                 &encoder.error_sink,
                 cause,
                 "CommandEncoder::copy_texture_to_texture",
+            );
+        }
+    }
+
+    fn command_encoder_write_timestamp(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        query_set: &Self::QuerySetId,
+        query_index: u32,
+    ) {
+        let global = &self.0;
+        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_write_timestamp(
+            encoder.id,
+            *query_set,
+            query_index
+        )) {
+            self.handle_error_nolabel(
+                &encoder.error_sink,
+                cause,
+                "CommandEncoder::write_timestamp",
+            );
+        }
+    }
+
+    fn command_encoder_resolve_query_set(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        query_set: &Self::QuerySetId,
+        first_query: u32,
+        query_count: u32,
+        destination: &Self::BufferId,
+        destination_offset: wgt::BufferAddress,
+    ) {
+        let global = &self.0;
+        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_resolve_query_set(
+            encoder.id,
+            *query_set,
+            first_query,
+            query_count,
+            destination.id,
+            destination_offset
+        )) {
+            self.handle_error_nolabel(
+                &encoder.error_sink,
+                cause,
+                "CommandEncoder::resolve_query_set",
             );
         }
     }
