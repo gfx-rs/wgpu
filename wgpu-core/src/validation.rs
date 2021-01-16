@@ -202,7 +202,10 @@ fn get_aligned_type_size(
                 None => get_aligned_type_size(module, base, false),
             };
             let count = match module.constants[const_handle].inner {
-                naga::ConstantInner::Uint(value) => value,
+                naga::ConstantInner::Scalar {
+                    value: naga::ScalarValue::Uint(value),
+                    width: _,
+                } => value,
                 ref other => panic!("Invalid array size constant: {:?}", other),
             };
             base_size * count
@@ -218,17 +221,16 @@ fn get_aligned_type_size(
         Ti::Struct {
             block: _,
             ref members,
-        } => members.last().map_or(0, |member| {
-            let offset = match member.origin {
-                naga::MemberOrigin::Empty => 0,
-                naga::MemberOrigin::BuiltIn(_) => {
-                    tracing::error!("Missing offset on a struct member");
-                    0 // TODO: make it a proper error
+        } => {
+            let mut offset = 0;
+            for member in members {
+                offset += match member.span {
+                    Some(span) => span.get() as wgt::BufferAddress,
+                    None => get_aligned_type_size(module, member.ty, false),
                 }
-                naga::MemberOrigin::Offset(offset) => offset as wgt::BufferAddress,
-            };
-            offset + get_aligned_type_size(module, member.ty, false)
-        }),
+            }
+            offset
+        }
         _ => panic!("Unexpected struct field"),
     }
 }
