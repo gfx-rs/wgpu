@@ -5,7 +5,7 @@ var<out> out_pos: vec4<f32>;
 
 [[stage(vertex)]]
 fn vs_main() {
-    # hacky way to draw a large triangle
+    // hacky way to draw a large triangle
     var tmp1: i32 = i32(in_vertex_index) / 2;
     var tmp2: i32 = i32(in_vertex_index) & 1;
     var pos: vec2<f32> = vec2<f32>(

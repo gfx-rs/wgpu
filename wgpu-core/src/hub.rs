@@ -587,7 +587,10 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
 }
 
 impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
-    fn clear(&self, surface_guard: &mut Storage<Surface, SurfaceId>) {
+    //TODO: instead of having a hacky `with_adapters` parameter,
+    // we should have `clear_device(device_id)` that specifically destroys
+    // everything related to a logical device.
+    fn clear(&self, surface_guard: &mut Storage<Surface, SurfaceId>, with_adapters: bool) {
         use crate::resource::TextureViewInner;
         use hal::{device::Device as _, window::PresentationSurface as _};
 
@@ -723,6 +726,9 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
                 device.dispose();
             }
         }
+        if with_adapters {
+            self.adapters.data.write().map.clear();
+        }
     }
 }
 
@@ -777,7 +783,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn clear_backend<B: GfxBackend>(&self, _dummy: ()) {
         let mut surface_guard = self.surfaces.data.write();
         let hub = B::hub(self);
-        hub.clear(&mut *surface_guard);
+        // this is used for tests, which keep the adapter
+        hub.clear(&mut *surface_guard, false);
     }
 }
 
@@ -790,23 +797,23 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
             // destroy hubs
             #[cfg(vulkan)]
             {
-                self.hubs.vulkan.clear(&mut *surface_guard);
+                self.hubs.vulkan.clear(&mut *surface_guard, true);
             }
             #[cfg(metal)]
             {
-                self.hubs.metal.clear(&mut *surface_guard);
+                self.hubs.metal.clear(&mut *surface_guard, true);
             }
             #[cfg(dx12)]
             {
-                self.hubs.dx12.clear(&mut *surface_guard);
+                self.hubs.dx12.clear(&mut *surface_guard, true);
             }
             #[cfg(dx11)]
             {
-                self.hubs.dx11.clear(&mut *surface_guard);
+                self.hubs.dx11.clear(&mut *surface_guard, true);
             }
             #[cfg(gl)]
             {
-                self.hubs.gl.clear(&mut *surface_guard);
+                self.hubs.gl.clear(&mut *surface_guard, true);
             }
 
             // destroy surfaces
