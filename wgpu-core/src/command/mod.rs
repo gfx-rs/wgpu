@@ -7,6 +7,7 @@ mod bind;
 mod bundle;
 mod compute;
 mod draw;
+mod query;
 mod render;
 mod transfer;
 
@@ -15,6 +16,7 @@ pub use self::allocator::CommandAllocatorError;
 pub use self::bundle::*;
 pub use self::compute::*;
 pub use self::draw::*;
+pub use self::query::*;
 pub use self::render::*;
 pub use self::transfer::*;
 
@@ -367,6 +369,14 @@ pub enum PassErrorScope {
         indirect: bool,
         pipeline: Option<id::RenderPipelineId>,
     },
+    #[error("While resetting queries after the renderpass was ran")]
+    QueryReset,
+    #[error("In a write_timestamp command")]
+    WriteTimestamp,
+    #[error("In a begin_pipeline_statistics_query command")]
+    BeginPipelineStatisticsQuery,
+    #[error("In a end_pipeline_statistics_query command")]
+    EndPipelineStatisticsQuery,
     #[error("In a execute_bundle command")]
     ExecuteBundle,
     #[error("In a dispatch command, indirect:{indirect}")]

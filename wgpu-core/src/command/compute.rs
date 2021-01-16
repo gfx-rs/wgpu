@@ -6,8 +6,8 @@ use crate::{
     binding_model::{BindError, BindGroup, PushConstantUploadError},
     command::{
         bind::{Binder, LayoutChange},
-        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, MapPassErr, PassErrorScope,
-        StateChange,
+        end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer, CommandEncoderError,
+        MapPassErr, PassErrorScope, QueryUseError, StateChange,
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
@@ -23,6 +23,7 @@ use hal::command::CommandBuffer as _;
 use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, ShaderStage};
 
+use crate::track::UseExtendError;
 use std::{fmt, iter, str};
 
 #[doc(hidden)]
@@ -61,6 +62,15 @@ pub enum ComputeCommand {
         color: u32,
         len: usize,
     },
+    WriteTimestamp {
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    },
+    BeginPipelineStatisticsQuery {
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    },
+    EndPipelineStatisticsQuery,
 }
 
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
@@ -127,6 +137,8 @@ pub enum ComputePassErrorInner {
     BindGroupIndexOutOfRange { index: u8, max: u32 },
     #[error("compute pipeline {0:?} is invalid")]
     InvalidPipeline(id::ComputePipelineId),
+    #[error("QuerySet {0:?} is invalid")]
+    InvalidQuerySet(id::QuerySetId),
     #[error("indirect buffer {0:?} is invalid or destroyed")]
     InvalidIndirectBuffer(id::BufferId),
     #[error(transparent)]
@@ -141,6 +153,8 @@ pub enum ComputePassErrorInner {
     Bind(#[from] BindError),
     #[error(transparent)]
     PushConstants(#[from] PushConstantUploadError),
+    #[error(transparent)]
+    QueryUse(#[from] QueryUseError),
 }
 
 /// Error encountered when performing a compute pass.
@@ -260,6 +274,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
         let (pipeline_guard, mut token) = hub.compute_pipelines.read(&mut token);
+        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
 
@@ -272,6 +287,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut temp_offsets = Vec::new();
         let mut dynamic_offset_count = 0;
         let mut string_offset = 0;
+        let mut active_query = None;
 
         for command in base.commands {
             match *command {
@@ -525,6 +541,62 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     string_offset += len;
                     unsafe { raw.insert_debug_marker(label, color) }
                 }
+                ComputeCommand::WriteTimestamp {
+                    query_set_id,
+                    query_index,
+                } => {
+                    let scope = PassErrorScope::WriteTimestamp;
+
+                    let query_set = cmd_buf
+                        .trackers
+                        .query_sets
+                        .use_extend(&*query_set_guard, query_set_id, (), ())
+                        .map_err(|e| match e {
+                            UseExtendError::InvalidResource => {
+                                ComputePassErrorInner::InvalidQuerySet(query_set_id)
+                            }
+                            _ => unreachable!(),
+                        })
+                        .map_pass_err(scope)?;
+
+                    query_set
+                        .validate_and_write_timestamp(raw, query_set_id, query_index, None)
+                        .map_pass_err(scope)?;
+                }
+                ComputeCommand::BeginPipelineStatisticsQuery {
+                    query_set_id,
+                    query_index,
+                } => {
+                    let scope = PassErrorScope::BeginPipelineStatisticsQuery;
+
+                    let query_set = cmd_buf
+                        .trackers
+                        .query_sets
+                        .use_extend(&*query_set_guard, query_set_id, (), ())
+                        .map_err(|e| match e {
+                            UseExtendError::InvalidResource => {
+                                ComputePassErrorInner::InvalidQuerySet(query_set_id)
+                            }
+                            _ => unreachable!(),
+                        })
+                        .map_pass_err(scope)?;
+
+                    query_set
+                        .validate_and_begin_pipeline_statistics_query(
+                            raw,
+                            query_set_id,
+                            query_index,
+                            None,
+                            &mut active_query,
+                        )
+                        .map_pass_err(scope)?;
+                }
+                ComputeCommand::EndPipelineStatisticsQuery => {
+                    let scope = PassErrorScope::EndPipelineStatisticsQuery;
+
+                    end_pipeline_statistics_query(raw, &*query_set_guard, &mut active_query)
+                        .map_pass_err(scope)?;
+                }
             }
         }
 
@@ -679,5 +751,50 @@ pub mod compute_ffi {
             color,
             len: bytes.len(),
         });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_compute_pass_write_timestamp(
+        pass: &mut ComputePass,
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    ) {
+        span!(_guard, DEBUG, "ComputePass::write_timestamp");
+
+        pass.base.commands.push(ComputeCommand::WriteTimestamp {
+            query_set_id,
+            query_index,
+        });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_compute_pass_begin_pipeline_statistics_query(
+        pass: &mut ComputePass,
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    ) {
+        span!(
+            _guard,
+            DEBUG,
+            "ComputePass::begin_pipeline_statistics query"
+        );
+
+        pass.base
+            .commands
+            .push(ComputeCommand::BeginPipelineStatisticsQuery {
+                query_set_id,
+                query_index,
+            });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_compute_pass_end_pipeline_statistics_query(
+        pass: &mut ComputePass,
+    ) {
+        span!(_guard, DEBUG, "ComputePass::end_pipeline_statistics_query");
+
+        pass.base
+            .commands
+            .push(ComputeCommand::EndPipelineStatisticsQuery);
     }
 }

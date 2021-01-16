@@ -677,6 +677,43 @@ pub(crate) fn map_texture_state(
     (access, layout)
 }
 
+pub fn map_query_type(ty: &wgt::QueryType) -> (hal::query::Type, u32) {
+    match ty {
+        wgt::QueryType::PipelineStatistics(pipeline_statistics) => {
+            let mut ps = hal::query::PipelineStatistic::empty();
+            ps.set(
+                hal::query::PipelineStatistic::VERTEX_SHADER_INVOCATIONS,
+                pipeline_statistics
+                    .contains(wgt::PipelineStatisticsTypes::VERTEX_SHADER_INVOCATIONS),
+            );
+            ps.set(
+                hal::query::PipelineStatistic::CLIPPING_INVOCATIONS,
+                pipeline_statistics.contains(wgt::PipelineStatisticsTypes::CLIPPER_INVOCATIONS),
+            );
+            ps.set(
+                hal::query::PipelineStatistic::CLIPPING_PRIMITIVES,
+                pipeline_statistics.contains(wgt::PipelineStatisticsTypes::CLIPPER_PRIMITIVES_OUT),
+            );
+            ps.set(
+                hal::query::PipelineStatistic::FRAGMENT_SHADER_INVOCATIONS,
+                pipeline_statistics
+                    .contains(wgt::PipelineStatisticsTypes::FRAGMENT_SHADER_INVOCATIONS),
+            );
+            ps.set(
+                hal::query::PipelineStatistic::COMPUTE_SHADER_INVOCATIONS,
+                pipeline_statistics
+                    .contains(wgt::PipelineStatisticsTypes::COMPUTE_SHADER_INVOCATIONS),
+            );
+
+            (
+                hal::query::Type::PipelineStatistics(ps),
+                pipeline_statistics.bits().count_ones(),
+            )
+        }
+        wgt::QueryType::Timestamp => (hal::query::Type::Timestamp, 1),
+    }
+}
+
 pub fn map_load_store_ops<V>(channel: &PassChannel<V>) -> hal::pass::AttachmentOps {
     hal::pass::AttachmentOps {
         load: match channel.load_op {

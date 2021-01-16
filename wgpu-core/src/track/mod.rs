@@ -528,6 +528,7 @@ pub(crate) struct TrackerSet {
     pub compute_pipes: ResourceTracker<PhantomData<id::ComputePipelineId>>,
     pub render_pipes: ResourceTracker<PhantomData<id::RenderPipelineId>>,
     pub bundles: ResourceTracker<PhantomData<id::RenderBundleId>>,
+    pub query_sets: ResourceTracker<PhantomData<id::QuerySetId>>,
 }
 
 impl TrackerSet {
@@ -542,6 +543,7 @@ impl TrackerSet {
             compute_pipes: ResourceTracker::new(backend),
             render_pipes: ResourceTracker::new(backend),
             bundles: ResourceTracker::new(backend),
+            query_sets: ResourceTracker::new(backend),
         }
     }
 
@@ -555,6 +557,7 @@ impl TrackerSet {
         self.compute_pipes.clear();
         self.render_pipes.clear();
         self.bundles.clear();
+        self.query_sets.clear();
     }
 
     /// Try to optimize the tracking representation.
@@ -567,6 +570,7 @@ impl TrackerSet {
         self.compute_pipes.optimize();
         self.render_pipes.optimize();
         self.bundles.optimize();
+        self.query_sets.optimize();
     }
 
     /// Merge all the trackers of another instance by extending
@@ -594,6 +598,7 @@ impl TrackerSet {
             .unwrap();
         self.render_pipes.merge_extend(&other.render_pipes).unwrap();
         self.bundles.merge_extend(&other.bundles).unwrap();
+        self.query_sets.merge_extend(&other.query_sets).unwrap();
         Ok(())
     }
 

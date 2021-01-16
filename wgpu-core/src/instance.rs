@@ -120,7 +120,7 @@ impl crate::hub::Resource for Surface {
 pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
     features: wgt::Features,
-    private_features: PrivateFeatures,
+    pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
     life_guard: LifeGuard,
 }
@@ -130,6 +130,7 @@ impl<B: GfxBackend> Adapter<B> {
         span!(_guard, INFO, "Adapter::new");
 
         let adapter_features = raw.physical_device.features();
+        let adapter_limits = raw.physical_device.limits();
 
         let mut features = wgt::Features::default()
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
@@ -179,6 +180,14 @@ impl<B: GfxBackend> Adapter<B> {
             wgt::Features::NON_FILL_POLYGON_MODE,
             adapter_features.contains(hal::Features::NON_FILL_POLYGON_MODE),
         );
+        features.set(
+            wgt::Features::TIMESTAMP_QUERY,
+            adapter_limits.timestamp_compute_and_graphics,
+        );
+        features.set(
+            wgt::Features::PIPELINE_STATISTICS_QUERY,
+            adapter_features.contains(hal::Features::PIPELINE_STATISTICS_QUERY),
+        );
         #[cfg(not(target_os = "ios"))]
         //TODO: https://github.com/gfx-rs/gfx/issues/3346
         features.set(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER, true);
@@ -195,9 +204,8 @@ impl<B: GfxBackend> Adapter<B> {
                 .format_properties(Some(hal::format::Format::D24UnormS8Uint))
                 .optimal_tiling
                 .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+            timestamp_period: adapter_limits.timestamp_period,
         };
-
-        let adapter_limits = raw.physical_device.limits();
 
         let default_limits = wgt::Limits::default();
 
@@ -422,6 +430,11 @@ impl<B: GfxBackend> Adapter<B> {
             hal::Features::NON_FILL_POLYGON_MODE,
             desc.features.contains(wgt::Features::NON_FILL_POLYGON_MODE),
         );
+        enabled_features.set(
+            hal::Features::PIPELINE_STATISTICS_QUERY,
+            desc.features
+                .contains(wgt::Features::PIPELINE_STATISTICS_QUERY),
+        );
 
         let family = self
             .raw
@@ -429,6 +442,7 @@ impl<B: GfxBackend> Adapter<B> {
             .iter()
             .find(|family| family.queue_type().supports_graphics())
             .ok_or(RequestDeviceError::NoGraphicsQueue)?;
+
         let mut gpu =
             unsafe { phd.open(&[(family, &[1.0])], enabled_features) }.map_err(|err| {
                 use hal::device::CreationError::*;
@@ -852,6 +866,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_guard
             .get(adapter_id)
             .map(|adapter| adapter.limits.clone())
+            .map_err(|_| InvalidAdapter)
+    }
+
+    pub fn adapter_get_timestamp_period<B: GfxBackend>(
+        &self,
+        adapter_id: AdapterId,
+    ) -> Result<f32, InvalidAdapter> {
+        span!(_guard, INFO, "Adapter::get_timestamp_period");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (adapter_guard, _) = hub.adapters.read(&mut token);
+
+        adapter_guard
+            .get(adapter_id)
+            .map(|adapter| adapter.private_features.timestamp_period)
             .map_err(|_| InvalidAdapter)
     }
 

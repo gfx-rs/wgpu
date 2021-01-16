@@ -35,6 +35,10 @@ pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
 pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
 /// Alignment all push constants need
 pub const PUSH_CONSTANT_ALIGNMENT: u32 = 4;
+/// Maximum queries in a query set
+pub const QUERY_SET_MAX_QUERIES: u32 = 8192;
+/// Size of a single piece of query data.
+pub const QUERY_SIZE: u32 = 8;
 
 /// Backends supported by wgpu.
 #[repr(u8)]
@@ -170,6 +174,39 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const TEXTURE_COMPRESSION_BC = 0x0000_0000_0000_0002;
+        /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
+        /// all work before the query is finished. Call [`CommandEncoder::write_timestamp`],
+        /// [`RenderPassEncoder::write_timestamp`], or [`ComputePassEncoder::write_timestamp`] to
+        /// write out a timestamp.
+        ///
+        /// They must be resolved using [`CommandEncoder::resolve_query_sets`] into a buffer,
+        /// then the result must be multiplied by the timestamp period [`Device::get_timestamp_period`]
+        /// to get the timestamp in nanoseconds. Multiple timestamps can then be diffed to get the
+        /// time for operations between them to finish.
+        ///
+        /// Due to gfx-hal limitations, this is only supported on vulkan for now.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan (works)
+        /// - DX12 (future)
+        ///
+        /// This is a web and native feature.
+        const TIMESTAMP_QUERY = 0x0000_0000_0000_0004;
+        /// Enables use of Pipeline Statistics Queries. These queries tell the count of various operations
+        /// performed between the start and stop call. Call [`RenderPassEncoder::begin_pipeline_statistics_query`] to start
+        /// a query, then call [`RenderPassEncoder::end_pipeline_statistics_query`] to stop one.
+        ///
+        /// They must be resolved using [`CommandEncoder::resolve_query_sets`] into a buffer.
+        /// The rules on how these resolve into buffers are detailed in the documentation for [`PipelineStatisticsTypes`].
+        ///
+        /// Due to gfx-hal limitations, this is only supported on vulkan for now.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan (works)
+        /// - DX12 (future)
+        ///
+        /// This is a web and native feature.
+        const PIPELINE_STATISTICS_QUERY = 0x0000_0000_0000_0008;
         /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
         /// COPY_DST and COPY_SRC respectively. This removes this requirement.
         ///
@@ -401,7 +438,7 @@ pub struct Limits {
     /// - DX12: 256 bytes
     /// - Metal: 4096 bytes
     /// - DX11 & OpenGL don't natively support push constants, and are emulated with uniforms,
-    ///   so this number is less useful.
+    ///   so this number is less useful but likely 256.
     pub max_push_constant_size: u32,
 }
 
@@ -2511,4 +2548,76 @@ pub enum SamplerBorderColor {
     TransparentBlack,
     OpaqueBlack,
     OpaqueWhite,
+}
+
+/// Describes how to create a QuerySet.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct QuerySetDescriptor {
+    /// Kind of query that this query set should contain.
+    pub ty: QueryType,
+    /// Total count of queries the set contains. Must not be zero.
+    /// Must not be greater than [`QUERY_SET_MAX_QUERIES`].
+    pub count: u32,
+}
+
+/// Type of query contained in a QuerySet.
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum QueryType {
+    /// Query returns up to 5 64-bit numbers based on the given flags.
+    ///
+    /// See [`PipelineStatisticsTypes`]'s documentation for more information
+    /// on how they get resolved.
+    ///
+    /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled to use this query type.
+    PipelineStatistics(PipelineStatisticsTypes),
+    /// Query returns a 64-bit number indicating the GPU-timestamp
+    /// where all previous commands have finished executing.
+    ///
+    /// Must be multiplied by [`Device::get_timestamp_period`] to get
+    /// the value in nanoseconds. Absolute values have no meaning,
+    /// but timestamps can be subtracted to get the time it takes
+    /// for a string of operations to complete.
+    ///
+    /// [`Features::TIMESTAMP_QUERY`] must be enabled to use this query type.
+    Timestamp,
+}
+
+bitflags::bitflags! {
+    /// Flags for which pipeline data should be recorded.
+    ///
+    /// The amount of values written when resolved depends
+    /// on the amount of flags. If 3 flags are enabled, 3
+    /// 64-bit values will be writen per-query.
+    ///
+    /// The order they are written is the order they are declared
+    /// in this bitflags. If you enabled `CLIPPER_PRIMITIVES_OUT`
+    /// and `COMPUTE_SHADER_INVOCATIONS`, it would write 16 bytes,
+    /// the first 8 bytes being the primative out value, the last 8
+    /// bytes being the compute shader invocation count.
+    #[repr(transparent)]
+    #[cfg_attr(feature = "trace", derive(Serialize))]
+    #[cfg_attr(feature = "replay", derive(Deserialize))]
+    pub struct PipelineStatisticsTypes : u8 {
+        /// Amount of times the vertex shader is ran. Accounts for
+        /// the vertex cache when doing indexed rendering.
+        const VERTEX_SHADER_INVOCATIONS = 0x01;
+        /// Amount of times the clipper is invoked. This
+        /// is also the amount of triangles output by the vertex shader.
+        const CLIPPER_INVOCATIONS = 0x02;
+        /// Amount of primitives that are not culled by the clipper.
+        /// This is the amount of triangles that are actually on screen
+        /// and will be rasterized and rendered.
+        const CLIPPER_PRIMITIVES_OUT = 0x04;
+        /// Amount of times the fragment shader is ran. Accounts for
+        /// fragment shaders running in 2x2 blocks in order to get
+        /// derivatives.
+        const FRAGMENT_SHADER_INVOCATIONS = 0x08;
+        /// Amount of times a compute shader is invoked. This will
+        /// be equivilent to the dispatch count times the workgroup size.
+        const COMPUTE_SHADER_INVOCATIONS = 0x10;
+    }
 }

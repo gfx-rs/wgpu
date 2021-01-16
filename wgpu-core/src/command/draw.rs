@@ -75,6 +75,8 @@ pub enum RenderCommandError {
     InvalidDynamicOffsetCount { actual: usize, expected: usize },
     #[error("render pipeline {0:?} is invalid")]
     InvalidPipeline(id::RenderPipelineId),
+    #[error("QuerySet {0:?} is invalid")]
+    InvalidQuerySet(id::QuerySetId),
     #[error("Render pipeline is incompatible with render pass")]
     IncompatiblePipeline(#[from] crate::device::RenderPassCompatibilityError),
     #[error("pipeline is not compatible with the depth-stencil read-only render pass")]
@@ -195,5 +197,14 @@ pub enum RenderCommand {
         color: u32,
         len: usize,
     },
+    WriteTimestamp {
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    },
+    BeginPipelineStatisticsQuery {
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    },
+    EndPipelineStatisticsQuery,
     ExecuteBundle(id::RenderBundleId),
 }
