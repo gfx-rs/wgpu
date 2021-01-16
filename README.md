@@ -50,40 +50,7 @@ The following environment variables can be used to configure how the framework e
 
 #### Run Examples on the Web (`wasm32-unknown-unknown`)
 
-Running on the web is still work-in-progress. You may need to enable experimental flags on your browser. Check browser implementation status on [webgpu.io](https://webgpu.io). Notably, `wgpu-rs` is often ahead in catching up with upstream WebGPU API changes. We keep the `gecko` branch pointing to the code that should work on latest Firefox.
-
-To run examples on the `wasm32-unknown-unknown` target, first build the example as usual, then run `wasm-bindgen`:
-
-```bash
-# Checkout `gecko` branch that matches the state of Firefox
-git checkout upstream/gecko
-# Install or update wasm-bindgen-cli
-cargo install -f wasm-bindgen-cli --version 0.2.69
-# Build with the wasm target
-RUSTFLAGS=--cfg=web_sys_unstable_apis cargo build --target wasm32-unknown-unknown --example hello-triangle
-# Generate bindings in a `target/generated` directory
-wasm-bindgen --out-dir target/generated --web target/wasm32-unknown-unknown/debug/examples/hello-triangle.wasm
-```
-
-Create an `index.html` file into `target/generated` directory and add the following code:
-
-```html
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  </head>
-  <body>
-    <script type="module">
-      import init from "./hello-triangle.js";
-      init();
-    </script>
-  </body>
-</html>
-```
-
-Now run a web server locally inside the `target/generated` directory to see the `hello-triangle` in the browser.
-e.g. `python -m http.server`
+See [wiki article](https://github.com/gfx-rs/wgpu-rs/wiki/Running-on-the-Web-with-WebGPU-and-WebGL).
 
 ### How to compile the shaders in the examples
 
