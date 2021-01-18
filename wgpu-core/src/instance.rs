@@ -439,6 +439,11 @@ impl<B: GfxBackend> Adapter<B> {
             desc.features
                 .contains(wgt::Features::PIPELINE_STATISTICS_QUERY),
         );
+        enabled_features.set(
+            hal::Features::SHADER_FLOAT64,
+            desc.features
+                .contains(wgt::Features::SHADER_FLOAT64),
+        );
 
         let family = self
             .raw
