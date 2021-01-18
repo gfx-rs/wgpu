@@ -441,8 +441,7 @@ impl<B: GfxBackend> Adapter<B> {
         );
         enabled_features.set(
             hal::Features::SHADER_FLOAT64,
-            desc.features
-                .contains(wgt::Features::SHADER_FLOAT64),
+            desc.features.contains(wgt::Features::SHADER_FLOAT64),
         );
 
         let family = self
