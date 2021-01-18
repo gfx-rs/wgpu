@@ -388,6 +388,13 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 0x0000_0000_1000_0000;
+        /// Enables 64-bit floating point types in SPIR-V shaders.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        ///
+        /// This is a native-only feature.
+        const SHADER_FLOAT64 = 0x0000_0000_2000_0000;
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).
