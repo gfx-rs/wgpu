@@ -191,7 +191,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard
             .get_mut(queue_id)
             .map_err(|_| DeviceError::Invalid)?;
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
+        let (mut buffer_guard, _) = hub.buffers.write(&mut token);
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -270,6 +270,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         device.pending_writes.consume(stage);
         device.pending_writes.dst_buffers.insert(buffer_id);
+
+        // Ensure the overwritten bytes are marked as initialized so they don't need to be nulled prior to mapping or binding.
+        {
+            let dst = buffer_guard.get_mut(buffer_id).unwrap();
+            for range in dst
+                .uninitialized_ranges_in_range::<Vec<std::ops::Range<wgt::BufferAddress>>>(
+                    std::ops::Range {
+                        start: buffer_offset,
+                        end: buffer_offset + data_size,
+                    },
+                )
+            {
+                dst.mark_initialized(range);
+            }
+        }
 
         Ok(())
     }

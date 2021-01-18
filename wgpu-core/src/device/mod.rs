@@ -196,6 +196,30 @@ fn map_buffer<B: hal::Backend>(
         }),
         _ => None,
     };
+    let writes_are_synced = buffer.sync_mapped_writes.is_some() || block.is_coherent();
+
+    // Zero out uninitialized parts of the mapping. (Spec dictates all resources behave as if they were initialized with zero)
+    // Note that going through a `fill_buffer` command may be faster but we don't have the chance of interacting with the queue
+    // between map intent (map_buffer_async or immediately) and this call.
+    let uninitialized_ranges: Vec<Range<BufferAddress>> =
+        buffer.uninitialized_ranges_in_range(Range {
+            start: offset,
+            end: offset + size,
+        });
+    for range in uninitialized_ranges {
+        unsafe {
+            ptr::write_bytes(
+                ptr.as_ptr().offset(range.start as isize),
+                0,
+                (range.end - range.start) as usize,
+            )
+        };
+        // (technically the buffer is only initialized when we're done unmapping but we know it can't be used otherwise meanwhile)
+        if writes_are_synced {
+            buffer.mark_initialized(range);
+        }
+    }
+
     Ok(ptr)
 }
 
@@ -534,6 +558,13 @@ impl<B: GfxBackend> Device<B> {
             .allocate(&self.raw, requirements, mem_usage)?;
         block.bind_buffer(&self.raw, &mut buffer)?;
 
+        let mut uninitialized_ranges = range_alloc::RangeAllocator::new(Range {
+            start: 0,
+            end: desc.size,
+        });
+        // Mark buffer as uninitialized
+        let _ = uninitialized_ranges.allocate_range(desc.size);
+
         Ok(resource::Buffer {
             raw: Some((buffer, block)),
             device_id: Stored {
@@ -542,7 +573,7 @@ impl<B: GfxBackend> Device<B> {
             },
             usage: desc.usage,
             size: desc.size,
-            full_range: (),
+            uninitialized_ranges,
             sync_mapped_writes: None,
             map_state: resource::BufferMapState::Idle,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
