@@ -805,11 +805,15 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 let all = entry
                     .key()
                     .all()
-                    .map(|(at, _)| at)
+                    .map(|(at, _)| at.clone())
                     .collect::<AttachmentDataVec<_>>();
 
-                let pass = unsafe { device.raw.create_render_pass(all, iter::once(subpass), &[]) }
-                    .unwrap();
+                let pass = unsafe {
+                    device
+                        .raw
+                        .create_render_pass(all, iter::once(subpass), iter::empty())
+                }
+                .unwrap();
                 entry.insert(pass)
             }
         };
@@ -932,7 +936,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 attachments,
                 hal::command::SubpassContents::Inline,
             );
-            raw.set_scissors(0, iter::once(&rect));
+            raw.set_scissors(0, iter::once(rect));
             raw.set_viewports(
                 0,
                 iter::once(hal::pso::Viewport {
@@ -1135,7 +1139,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     &pipeline_layout_guard[pipeline_layout_id].raw,
                                     index as usize,
                                     bind_groups,
-                                    &temp_offsets,
+                                    temp_offsets.iter().cloned(),
                                 );
                             }
                         };

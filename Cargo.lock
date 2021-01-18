@@ -476,7 +476,7 @@ dependencies = [
 [[package]]
 name = "gfx-auxil"
 version = "0.5.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=696947377a0ce5ba8a15a2e06ff97ed69c04f00a#696947377a0ce5ba8a15a2e06ff97ed69c04f00a"
+source = "git+https://github.com/gfx-rs/gfx?rev=477f17957a54d024f0077584b68e308376cb05c6#477f17957a54d024f0077584b68e308376cb05c6"
 dependencies = [
  "fxhash",
  "gfx-hal",
@@ -486,7 +486,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-dx11"
 version = "0.6.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=696947377a0ce5ba8a15a2e06ff97ed69c04f00a#696947377a0ce5ba8a15a2e06ff97ed69c04f00a"
+source = "git+https://github.com/gfx-rs/gfx?rev=477f17957a54d024f0077584b68e308376cb05c6#477f17957a54d024f0077584b68e308376cb05c6"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -507,7 +507,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-dx12"
 version = "0.6.2"
-source = "git+https://github.com/gfx-rs/gfx?rev=696947377a0ce5ba8a15a2e06ff97ed69c04f00a#696947377a0ce5ba8a15a2e06ff97ed69c04f00a"
+source = "git+https://github.com/gfx-rs/gfx?rev=477f17957a54d024f0077584b68e308376cb05c6#477f17957a54d024f0077584b68e308376cb05c6"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -527,7 +527,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-empty"
 version = "0.6.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=696947377a0ce5ba8a15a2e06ff97ed69c04f00a#696947377a0ce5ba8a15a2e06ff97ed69c04f00a"
+source = "git+https://github.com/gfx-rs/gfx?rev=477f17957a54d024f0077584b68e308376cb05c6#477f17957a54d024f0077584b68e308376cb05c6"
 dependencies = [
  "gfx-hal",
  "log",
@@ -537,7 +537,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-gl"
 version = "0.6.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=696947377a0ce5ba8a15a2e06ff97ed69c04f00a#696947377a0ce5ba8a15a2e06ff97ed69c04f00a"
+source = "git+https://github.com/gfx-rs/gfx?rev=477f17957a54d024f0077584b68e308376cb05c6#477f17957a54d024f0077584b68e308376cb05c6"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -551,7 +551,6 @@ dependencies = [
  "naga",
  "parking_lot",
  "raw-window-handle",
- "smallvec",
  "spirv_cross",
  "wasm-bindgen",
  "web-sys",
@@ -560,7 +559,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-metal"
 version = "0.6.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=696947377a0ce5ba8a15a2e06ff97ed69c04f00a#696947377a0ce5ba8a15a2e06ff97ed69c04f00a"
+source = "git+https://github.com/gfx-rs/gfx?rev=477f17957a54d024f0077584b68e308376cb05c6#477f17957a54d024f0077584b68e308376cb05c6"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -584,7 +583,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-vulkan"
 version = "0.6.5"
-source = "git+https://github.com/gfx-rs/gfx?rev=696947377a0ce5ba8a15a2e06ff97ed69c04f00a#696947377a0ce5ba8a15a2e06ff97ed69c04f00a"
+source = "git+https://github.com/gfx-rs/gfx?rev=477f17957a54d024f0077584b68e308376cb05c6#477f17957a54d024f0077584b68e308376cb05c6"
 dependencies = [
  "arrayvec",
  "ash",
@@ -604,7 +603,7 @@ dependencies = [
 [[package]]
 name = "gfx-hal"
 version = "0.6.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=696947377a0ce5ba8a15a2e06ff97ed69c04f00a#696947377a0ce5ba8a15a2e06ff97ed69c04f00a"
+source = "git+https://github.com/gfx-rs/gfx?rev=477f17957a54d024f0077584b68e308376cb05c6#477f17957a54d024f0077584b68e308376cb05c6"
 dependencies = [
  "bitflags",
  "naga",
@@ -768,7 +767,7 @@ dependencies = [
 [[package]]
 name = "khronos-egl"
 version = "3.0.0-beta"
-source = "git+https://github.com/timothee-haudebourg/khronos-egl?rev=9568b2ee3b02f2c17cc9479f824db16daecf1664#9568b2ee3b02f2c17cc9479f824db16daecf1664"
+source = "git+https://github.com/timothee-haudebourg/khronos-egl?rev=4b769b8f2d068fa78db9285a8557cd11365fa314#4b769b8f2d068fa78db9285a8557cd11365fa314"
 dependencies = [
  "libc",
  "libloading",
@@ -1197,7 +1196,7 @@ dependencies = [
 [[package]]
 name = "range-alloc"
 version = "0.1.1"
-source = "git+https://github.com/gfx-rs/gfx?rev=696947377a0ce5ba8a15a2e06ff97ed69c04f00a#696947377a0ce5ba8a15a2e06ff97ed69c04f00a"
+source = "git+https://github.com/gfx-rs/gfx?rev=477f17957a54d024f0077584b68e308376cb05c6#477f17957a54d024f0077584b68e308376cb05c6"
 
 [[package]]
 name = "raw-window-handle"

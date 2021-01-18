@@ -145,7 +145,9 @@ impl<B: hal::Backend>
         sets: &mut impl Extend<B::DescriptorSet>,
     ) -> Result<(), gpu_descriptor::DeviceAllocationError> {
         use gpu_descriptor::DeviceAllocationError as Dae;
-        match hal::pso::DescriptorPool::allocate(pool, layouts, sets) {
+        //TODO: https://github.com/zakarumych/gpu-descriptor/pull/10
+        let temp_layouts = layouts.collect::<Vec<_>>();
+        match hal::pso::DescriptorPool::allocate(pool, temp_layouts, sets) {
             Ok(()) => Ok(()),
             Err(hal::pso::AllocationError::OutOfMemory(oom)) => Err(match oom {
                 hal::device::OutOfMemory::Host => Dae::OutOfHostMemory,
