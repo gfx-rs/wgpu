@@ -555,7 +555,7 @@ impl RenderBundle {
                         &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw,
                         index as usize,
                         iter::once(bind_group.raw.raw()),
-                        &offsets[..num_dynamic_offsets as usize],
+                        offsets.iter().take(num_dynamic_offsets as usize).cloned(),
                     );
                     offsets = &offsets[num_dynamic_offsets as usize..];
                 }

@@ -1060,10 +1060,13 @@ impl<B: GfxBackend> Device<B> {
         };
         let all = key
             .all()
-            .map(|(at, _)| at)
+            .map(|(at, _)| at.clone())
             .collect::<AttachmentDataVec<_>>();
 
-        unsafe { self.raw.create_render_pass(all, iter::once(subpass), &[]) }
+        unsafe {
+            self.raw
+                .create_render_pass(all, iter::once(subpass), iter::empty())
+        }
     }
 
     fn deduplicate_bind_group_layout(

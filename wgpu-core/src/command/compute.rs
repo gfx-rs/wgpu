@@ -343,7 +343,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 &pipeline_layout_guard[pipeline_layout_id].raw,
                                 index as usize,
                                 bind_groups,
-                                &temp_offsets,
+                                temp_offsets.iter().cloned(),
                             );
                         }
                     }
