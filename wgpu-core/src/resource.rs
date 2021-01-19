@@ -169,7 +169,6 @@ pub struct Buffer<B: hal::Backend> {
 
 impl<B: hal::Backend> Buffer<B> {
     pub(crate) fn uninitialized_ranges_in_range<
-        'a,
         R: std::iter::FromIterator<Range<wgt::BufferAddress>>,
     >(
         &self,
@@ -188,6 +187,12 @@ impl<B: hal::Backend> Buffer<B> {
                 }
             })
             .collect::<R>()
+    }
+
+    pub(crate) fn uninitialized_ranges<'a>(
+        &'a self,
+    ) -> impl 'a + Iterator<Item = Range<wgt::BufferAddress>> {
+        self.uninitialized_ranges.allocated_ranges()
     }
 
     // Range must be continuous previously uninitialized section.

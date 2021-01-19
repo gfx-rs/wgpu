@@ -78,6 +78,36 @@ impl<B: GfxBackend> CommandBuffer<B> {
         }
     }
 
+    pub(crate) fn insert_zero_initializations(
+        raw: &mut B::CommandBuffer,
+        head: &TrackerSet,
+        buffer_guard: &mut Storage<Buffer<B>, id::BufferId>,
+        // TODO: Textures also need initialization!
+        _texture_guard: &mut Storage<Texture<B>, id::TextureId>,
+    ) {
+        // Make sure all used buffers are fully initialized.
+        // TODO This is not optimal since buffer usage may be target of a copy operation.
+        for id in head.buffers.used() {
+            let buffer = &mut buffer_guard[id];
+            let uninitialized_ranges: Vec<std::ops::Range<wgt::BufferAddress>> =
+                buffer.uninitialized_ranges().collect();
+            for uninitialized_range in uninitialized_ranges {
+                // TODO this itself needs resource barriers. How can we make this work?
+                unsafe {
+                    raw.fill_buffer(
+                        &buffer.raw.as_ref().unwrap().0,
+                        hal::buffer::SubRange {
+                            offset: uninitialized_range.start,
+                            size: Some(uninitialized_range.end - uninitialized_range.start),
+                        },
+                        0,
+                    );
+                }
+                buffer.mark_initialized(uninitialized_range);
+            }
+        }
+    }
+
     pub(crate) fn insert_barriers(
         raw: &mut B::CommandBuffer,
         base: &mut TrackerSet,

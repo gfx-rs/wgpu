@@ -505,7 +505,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
                     let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
                     let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
-                    let (texture_guard, mut token) = hub.textures.read(&mut token);
+                    let (mut texture_guard, mut token) = hub.textures.write(&mut token);
                     let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
                     let (sampler_guard, _) = hub.samplers.read(&mut token);
 
@@ -613,6 +613,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
                         }
                         tracing::trace!("Stitching command buffer {:?} before submission", cmb_id);
+                        CommandBuffer::insert_zero_initializations(
+                            &mut transit,
+                            &cmdbuf.trackers,
+                            &mut *buffer_guard,
+                            &mut *texture_guard,
+                        );
                         CommandBuffer::insert_barriers(
                             &mut transit,
                             &mut *trackers,
