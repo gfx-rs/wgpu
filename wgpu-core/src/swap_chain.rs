@@ -195,6 +195,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     },
                     samples: 1,
                     framebuffer_attachment: sc.framebuffer_attachment.clone(),
+                    sampled_internal_use: resource::TextureUse::empty(),
                     selector: TextureSelector {
                         layers: 0..1,
                         levels: 0..1,
