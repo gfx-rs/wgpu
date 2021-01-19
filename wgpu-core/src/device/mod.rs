@@ -834,6 +834,12 @@ impl<B: GfxBackend> Device<B> {
             },
             samples: texture.kind.num_samples(),
             framebuffer_attachment: texture.framebuffer_attachment.clone(),
+            // once a storage - forever a storage
+            sampled_internal_use: if texture.usage.contains(wgt::TextureUsage::STORAGE) {
+                resource::TextureUse::SAMPLED | resource::TextureUse::STORAGE_LOAD
+            } else {
+                resource::TextureUse::SAMPLED
+            },
             selector,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
@@ -1360,7 +1366,7 @@ impl<B: GfxBackend> Device<B> {
                         .map_err(|_| Error::InvalidTextureView(id))?;
                     let (pub_usage, internal_use) = match decl.ty {
                         wgt::BindingType::Texture { .. } => {
-                            (wgt::TextureUsage::SAMPLED, resource::TextureUse::SAMPLED)
+                            (wgt::TextureUsage::SAMPLED, view.sampled_internal_use)
                         }
                         wgt::BindingType::StorageTexture { access, .. } => {
                             let internal_use = match access {
@@ -1447,18 +1453,6 @@ impl<B: GfxBackend> Device<B> {
                         return Err(Error::SingleBindingExpected);
                     }
 
-                    let (pub_usage, internal_use) = match decl.ty {
-                        wgt::BindingType::Texture { .. } => {
-                            (wgt::TextureUsage::SAMPLED, resource::TextureUse::SAMPLED)
-                        }
-                        _ => {
-                            return Err(Error::WrongBindingType {
-                                binding,
-                                actual: decl.ty.clone(),
-                                expected: "SampledTextureArray",
-                            })
-                        }
-                    };
                     bindings_array
                         .iter()
                         .map(|&id| {
@@ -1466,6 +1460,18 @@ impl<B: GfxBackend> Device<B> {
                                 .views
                                 .use_extend(&*texture_view_guard, id, (), ())
                                 .map_err(|_| Error::InvalidTextureView(id))?;
+                            let (pub_usage, internal_use) = match decl.ty {
+                                wgt::BindingType::Texture { .. } => {
+                                    (wgt::TextureUsage::SAMPLED, view.sampled_internal_use)
+                                }
+                                _ => {
+                                    return Err(Error::WrongBindingType {
+                                        binding,
+                                        actual: decl.ty.clone(),
+                                        expected: "SampledTextureArray",
+                                    })
+                                }
+                            };
                             match view.inner {
                                 resource::TextureViewInner::Native {
                                     ref raw,

@@ -311,6 +311,8 @@ pub struct TextureView<B: hal::Backend> {
     pub(crate) extent: wgt::Extent3d,
     pub(crate) samples: hal::image::NumSamples,
     pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
+    /// Internal use of this texture view when used as `BindingType::Texture`.
+    pub(crate) sampled_internal_use: TextureUse,
     pub(crate) selector: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }
