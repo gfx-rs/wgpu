@@ -139,6 +139,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
     ) {
         use wgc::device::trace::Action as A;
         log::info!("action {:?}", action);
+        //TODO: find a way to force ID perishing without excessive `maintain()` calls.
         match action {
             A::Init { .. } => panic!("Unexpected Action::Init: has to be the first action only"),
             A::CreateSwapChain { .. } | A::PresentSwapChain(_) => {
@@ -182,7 +183,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 }
             }
             A::DestroyTextureView(id) => {
-                self.texture_view_drop::<B>(id).unwrap();
+                self.texture_view_drop::<B>(id, true).unwrap();
             }
             A::CreateSampler(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
@@ -196,6 +197,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             A::GetSwapChainTexture { id, parent_id } => {
                 if let Some(id) = id {
+                    self.device_maintain_ids::<B>(device).unwrap();
                     self.swap_chain_get_current_texture_view::<B>(parent_id, id)
                         .unwrap()
                         .view_id
