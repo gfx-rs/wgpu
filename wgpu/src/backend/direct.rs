@@ -20,7 +20,6 @@ use std::{
     slice,
     sync::Arc,
 };
-use typed_arena::Arena;
 
 const LABEL: &str = "label";
 
@@ -608,6 +607,7 @@ fn map_pass_channel<V: Copy + Default>(
 pub(crate) struct Device {
     id: wgc::id::DeviceId,
     error_sink: ErrorSink,
+    features: Features,
 }
 
 #[derive(Debug)]
@@ -707,6 +707,7 @@ impl crate::Context for Context {
         let device = Device {
             id: device_id,
             error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
+            features: desc.features,
         };
         ready(Ok((device, device_id)))
     }
@@ -867,7 +868,23 @@ impl crate::Context for Context {
         wgc::span!(_guard, TRACE, "Device::create_bind_group wrapper");
         use wgc::binding_model as bm;
 
-        let texture_view_arena: Arena<wgc::id::TextureViewId> = Arena::new();
+        let mut arrayed_texture_views = Vec::new();
+        if device
+            .features
+            .contains(Features::SAMPLED_TEXTURE_BINDING_ARRAY)
+        {
+            // gather all the array view IDs first
+            for entry in desc.entries.iter() {
+                match entry.resource {
+                    BindingResource::TextureViewArray(array) => {
+                        arrayed_texture_views.extend(array.iter().map(|view| view.id));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut remaining_arrayed_texture_views = &arrayed_texture_views[..];
+
         let entries = desc
             .entries
             .iter()
@@ -887,11 +904,11 @@ impl crate::Context for Context {
                     BindingResource::TextureView(texture_view) => {
                         bm::BindingResource::TextureView(texture_view.id)
                     }
-                    BindingResource::TextureViewArray(texture_view_array) => {
-                        bm::BindingResource::TextureViewArray(Borrowed(
-                            texture_view_arena
-                                .alloc_extend(texture_view_array.iter().map(|view| view.id)),
-                        ))
+                    BindingResource::TextureViewArray(array) => {
+                        let slice = &remaining_arrayed_texture_views[..array.len()];
+                        remaining_arrayed_texture_views =
+                            &remaining_arrayed_texture_views[array.len()..];
+                        bm::BindingResource::TextureViewArray(Borrowed(slice))
                     }
                 },
             })
