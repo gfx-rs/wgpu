@@ -2995,27 +2995,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn texture_view_drop<B: GfxBackend>(
         &self,
         texture_view_id: id::TextureViewId,
+        wait: bool,
     ) -> Result<(), resource::TextureViewDestroyError> {
         span!(_guard, INFO, "TextureView::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let device_id = {
+        let (last_submit_index, device_id) = {
             let (texture_guard, mut token) = hub.textures.read(&mut token);
             let (mut texture_view_guard, _) = hub.texture_views.write(&mut token);
 
             match texture_view_guard.get_mut(texture_view_id) {
                 Ok(view) => {
-                    view.life_guard.ref_count.take();
-                    match view.inner {
+                    let _ref_count = view.life_guard.ref_count.take();
+                    let last_submit_index =
+                        view.life_guard.submission_index.load(Ordering::Acquire);
+                    let device_id = match view.inner {
                         resource::TextureViewInner::Native { ref source_id, .. } => {
                             texture_guard[source_id.value].device_id.value
                         }
                         resource::TextureViewInner::SwapChain { .. } => {
                             return Err(resource::TextureViewDestroyError::SwapChainImage)
                         }
-                    }
+                    };
+                    (last_submit_index, device_id)
                 }
                 Err(InvalidId) => {
                     hub.texture_views
@@ -3026,11 +3030,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        device_guard[device_id]
+        let device = &device_guard[device_id];
+        device
             .lock_life(&mut token)
             .suspected_resources
             .texture_views
             .push(id::Valid(texture_view_id));
+
+        if wait {
+            match device.wait_for_submit(last_submit_index, &mut token) {
+                Ok(()) => (),
+                Err(e) => tracing::error!(
+                    "Failed to wait for texture view {:?}: {:?}",
+                    texture_view_id,
+                    e
+                ),
+            }
+        }
         Ok(())
     }
 
