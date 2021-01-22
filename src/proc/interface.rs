@@ -203,13 +203,13 @@ struct GlobalUseVisitor<'a>(&'a mut [crate::GlobalUse]);
 impl Visitor for GlobalUseVisitor<'_> {
     fn visit_expr(&mut self, expr: &crate::Expression) {
         if let crate::Expression::GlobalVariable(handle) = expr {
-            self.0[handle.index()] |= crate::GlobalUse::LOAD;
+            self.0[handle.index()] |= crate::GlobalUse::READ;
         }
     }
 
     fn visit_lhs_expr(&mut self, expr: &crate::Expression) {
         if let crate::Expression::GlobalVariable(handle) = expr {
-            self.0[handle.index()] |= crate::GlobalUse::STORE;
+            self.0[handle.index()] |= crate::GlobalUse::WRITE;
         }
     }
 }
@@ -291,10 +291,10 @@ mod tests {
         assert_eq!(
             &function.global_usage,
             &[
-                GlobalUse::LOAD,
-                GlobalUse::STORE,
-                GlobalUse::STORE,
-                GlobalUse::LOAD,
+                GlobalUse::READ,
+                GlobalUse::WRITE,
+                GlobalUse::WRITE,
+                GlobalUse::READ,
             ],
         )
     }

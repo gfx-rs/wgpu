@@ -40,7 +40,7 @@ impl<'a> TypedGlobalVariable<'a> {
         let (space_qualifier, reference) = match ty.inner {
             crate::TypeInner::Struct { .. } => match var.class {
                 crate::StorageClass::Uniform | crate::StorageClass::Storage => {
-                    let space = if self.usage.contains(crate::GlobalUse::STORE) {
+                    let space = if self.usage.contains(crate::GlobalUse::WRITE) {
                         "device "
                     } else {
                         "constant "
@@ -930,7 +930,7 @@ impl<W: Write> Writer<W> {
                         module.global_variables.iter().zip(&fun.global_usage)
                     {
                         if var.class != crate::StorageClass::Input
-                            || !usage.contains(crate::GlobalUse::LOAD)
+                            || !usage.contains(crate::GlobalUse::READ)
                         {
                             continue;
                         }
@@ -956,7 +956,7 @@ impl<W: Write> Writer<W> {
                         module.global_variables.iter().zip(&fun.global_usage)
                     {
                         if var.class != crate::StorageClass::Output
-                            || !usage.contains(crate::GlobalUse::STORE)
+                            || !usage.contains(crate::GlobalUse::WRITE)
                         {
                             continue;
                         }

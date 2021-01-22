@@ -219,10 +219,10 @@ impl crate::GlobalVariable {
 fn storage_usage(access: crate::StorageAccess) -> crate::GlobalUse {
     let mut storage_usage = crate::GlobalUse::empty();
     if access.contains(crate::StorageAccess::LOAD) {
-        storage_usage |= crate::GlobalUse::LOAD;
+        storage_usage |= crate::GlobalUse::READ;
     }
     if access.contains(crate::StorageAccess::STORE) {
-        storage_usage |= crate::GlobalUse::STORE;
+        storage_usage |= crate::GlobalUse::WRITE;
     }
     storage_usage
 }
@@ -230,24 +230,24 @@ fn storage_usage(access: crate::StorageAccess) -> crate::GlobalUse {
 fn built_in_usage(built_in: crate::BuiltIn) -> (crate::ShaderStage, crate::GlobalUse) {
     use crate::{BuiltIn as Bi, GlobalUse as Gu, ShaderStage as Ss};
     match built_in {
-        Bi::BaseInstance => (Ss::Vertex, Gu::LOAD),
-        Bi::BaseVertex => (Ss::Vertex, Gu::LOAD),
-        Bi::ClipDistance => (Ss::Vertex, Gu::STORE),
-        Bi::InstanceIndex => (Ss::Vertex, Gu::LOAD),
-        Bi::PointSize => (Ss::Vertex, Gu::STORE),
-        Bi::Position => (Ss::Vertex, Gu::STORE),
-        Bi::VertexIndex => (Ss::Vertex, Gu::LOAD),
-        Bi::FragCoord => (Ss::Fragment, Gu::LOAD),
-        Bi::FragDepth => (Ss::Fragment, Gu::LOAD),
-        Bi::FrontFacing => (Ss::Fragment, Gu::LOAD),
-        Bi::SampleIndex => (Ss::Fragment, Gu::LOAD),
-        Bi::SampleMaskIn => (Ss::Fragment, Gu::LOAD),
-        Bi::SampleMaskOut => (Ss::Fragment, Gu::STORE),
-        Bi::GlobalInvocationId => (Ss::Compute, Gu::LOAD),
-        Bi::LocalInvocationId => (Ss::Compute, Gu::LOAD),
-        Bi::LocalInvocationIndex => (Ss::Compute, Gu::LOAD),
-        Bi::WorkGroupId => (Ss::Compute, Gu::LOAD),
-        Bi::WorkGroupSize => (Ss::Compute, Gu::LOAD),
+        Bi::BaseInstance => (Ss::Vertex, Gu::READ),
+        Bi::BaseVertex => (Ss::Vertex, Gu::READ),
+        Bi::ClipDistance => (Ss::Vertex, Gu::WRITE),
+        Bi::InstanceIndex => (Ss::Vertex, Gu::READ),
+        Bi::PointSize => (Ss::Vertex, Gu::WRITE),
+        Bi::Position => (Ss::Vertex, Gu::WRITE),
+        Bi::VertexIndex => (Ss::Vertex, Gu::READ),
+        Bi::FragCoord => (Ss::Fragment, Gu::READ),
+        Bi::FragDepth => (Ss::Fragment, Gu::READ),
+        Bi::FrontFacing => (Ss::Fragment, Gu::READ),
+        Bi::SampleIndex => (Ss::Fragment, Gu::READ),
+        Bi::SampleMaskIn => (Ss::Fragment, Gu::READ),
+        Bi::SampleMaskOut => (Ss::Fragment, Gu::WRITE),
+        Bi::GlobalInvocationId => (Ss::Compute, Gu::READ),
+        Bi::LocalInvocationId => (Ss::Compute, Gu::READ),
+        Bi::LocalInvocationIndex => (Ss::Compute, Gu::READ),
+        Bi::WorkGroupId => (Ss::Compute, Gu::READ),
+        Bi::WorkGroupSize => (Ss::Compute, Gu::READ),
     }
 }
 
@@ -524,7 +524,7 @@ impl Validator {
                         Some(crate::Binding::BuiltIn(built_in)) => {
                             let (allowed_stage, allowed_usage) = built_in_usage(built_in);
                             if allowed_stage != stage
-                                || !allowed_usage.contains(crate::GlobalUse::LOAD)
+                                || !allowed_usage.contains(crate::GlobalUse::READ)
                             {
                                 return Err(EntryPointError::InvalidBuiltIn(built_in));
                             }
@@ -537,14 +537,14 @@ impl Validator {
                         Some(crate::Binding::Resource { .. }) => unreachable!(),
                         None => (),
                     }
-                    crate::GlobalUse::LOAD
+                    crate::GlobalUse::READ
                 }
                 crate::StorageClass::Output => {
                     match var.binding {
                         Some(crate::Binding::BuiltIn(built_in)) => {
                             let (allowed_stage, allowed_usage) = built_in_usage(built_in);
                             if allowed_stage != stage
-                                || !allowed_usage.contains(crate::GlobalUse::STORE)
+                                || !allowed_usage.contains(crate::GlobalUse::WRITE)
                             {
                                 return Err(EntryPointError::InvalidBuiltIn(built_in));
                             }
@@ -557,21 +557,21 @@ impl Validator {
                         Some(crate::Binding::Resource { .. }) => unreachable!(),
                         None => (),
                     }
-                    crate::GlobalUse::LOAD | crate::GlobalUse::STORE
+                    crate::GlobalUse::READ | crate::GlobalUse::WRITE
                 }
-                crate::StorageClass::Uniform => crate::GlobalUse::LOAD,
+                crate::StorageClass::Uniform => crate::GlobalUse::READ,
                 crate::StorageClass::Storage => storage_usage(var.storage_access),
                 crate::StorageClass::Handle => match module.types[var.ty].inner {
                     crate::TypeInner::Image {
                         class: crate::ImageClass::Storage(_),
                         ..
                     } => storage_usage(var.storage_access),
-                    _ => crate::GlobalUse::LOAD,
+                    _ => crate::GlobalUse::READ,
                 },
                 crate::StorageClass::Private | crate::StorageClass::WorkGroup => {
                     crate::GlobalUse::all()
                 }
-                crate::StorageClass::PushConstant => crate::GlobalUse::LOAD,
+                crate::StorageClass::PushConstant => crate::GlobalUse::READ,
             };
             if !allowed_usage.contains(usage) {
                 log::warn!("\tUsage error for: {:?}", var);

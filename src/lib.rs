@@ -445,9 +445,9 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "deserialize", derive(Deserialize))]
     pub struct GlobalUse: u8 {
         /// Data will be read from the variable.
-        const LOAD = 0x1;
+        const READ = 0x1;
         /// Data will be written to the variable.
-        const STORE = 0x2;
+        const WRITE = 0x2;
     }
 }
 
