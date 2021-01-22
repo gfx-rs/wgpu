@@ -583,6 +583,8 @@ impl Validator {
 
     /// Check the given module to be valid.
     pub fn validate(&mut self, module: &crate::Module) -> Result<(), ValidationError> {
+        self.typifier.clear();
+
         for (handle, ty) in module.types.iter() {
             self.validate_type(ty, handle, &module.constants)
                 .map_err(|error| ValidationError::Type {

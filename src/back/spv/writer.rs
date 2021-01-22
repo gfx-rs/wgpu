@@ -1,5 +1,6 @@
 /*! Standard Portable Intermediate Representation (SPIR-V) backend !*/
 use super::{Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
+use crate::proc::Layouter;
 use spirv::Word;
 use std::{collections::hash_map::Entry, ops};
 use thiserror::Error;
@@ -161,6 +162,7 @@ pub struct Writer {
         crate::FastHashMap<crate::Handle<crate::GlobalVariable>, (Word, spirv::StorageClass)>,
     storage_type_handles: crate::FastHashSet<crate::Handle<crate::Type>>,
     gl450_ext_inst_id: Word,
+    layouter: Layouter,
 }
 
 // type alias, for success return of write_expression
@@ -189,6 +191,7 @@ impl Writer {
             lookup_global_variable: crate::FastHashMap::default(),
             storage_type_handles: crate::FastHashSet::default(),
             gl450_ext_inst_id: 0,
+            layouter: Layouter::default(),
         }
     }
 
@@ -582,6 +585,12 @@ impl Writer {
                 rows,
                 width,
             } => {
+                self.annotations
+                    .push(super::instructions::instruction_decorate(
+                        id,
+                        spirv::Decoration::RowMajor,
+                        &[],
+                    ));
                 let vector_id = self.get_type_id(
                     arena,
                     LookupType::Local(LocalType::Vector {
@@ -648,20 +657,67 @@ impl Writer {
                     }
                 }
             }
-            crate::TypeInner::Struct { block, ref members } => {
-                if block {
-                    let decoration = if self.storage_type_handles.contains(&handle) {
-                        spirv::Decoration::BufferBlock
-                    } else {
-                        spirv::Decoration::Block
-                    };
+            crate::TypeInner::Struct {
+                block: true,
+                ref members,
+            } => {
+                let decoration = if self.storage_type_handles.contains(&handle) {
+                    spirv::Decoration::BufferBlock
+                } else {
+                    spirv::Decoration::Block
+                };
+                self.annotations
+                    .push(super::instructions::instruction_decorate(
+                        id,
+                        decoration,
+                        &[],
+                    ));
+
+                let mut current_offset = 0;
+                let mut member_ids = Vec::with_capacity(members.len());
+                for (index, member) in members.iter().enumerate() {
+                    let layout = self.layouter.resolve(member.ty);
+                    current_offset += layout.pad(current_offset);
                     self.annotations
-                        .push(super::instructions::instruction_decorate(
+                        .push(super::instructions::instruction_member_decorate(
                             id,
-                            decoration,
-                            &[],
+                            index as u32,
+                            spirv::Decoration::Offset,
+                            &[current_offset],
                         ));
+                    current_offset += match member.span {
+                        Some(span) => span.get(),
+                        None => layout.size,
+                    };
+
+                    if let crate::TypeInner::Matrix {
+                        columns,
+                        rows: _,
+                        width,
+                    } = arena[member.ty].inner
+                    {
+                        let byte_stride = match columns {
+                            crate::VectorSize::Bi => 2 * width,
+                            crate::VectorSize::Tri | crate::VectorSize::Quad => 4 * width,
+                        };
+                        self.annotations
+                            .push(super::instructions::instruction_member_decorate(
+                                id,
+                                index as u32,
+                                spirv::Decoration::MatrixStride,
+                                &[byte_stride as u32],
+                            ));
+                    }
+
+                    let member_id = self.get_type_id(arena, LookupType::Handle(member.ty))?;
+                    member_ids.push(member_id);
                 }
+                super::instructions::instruction_type_struct(id, member_ids.as_slice())
+            }
+            crate::TypeInner::Struct {
+                block: false,
+                ref members,
+            } => {
                 let mut member_ids = Vec::with_capacity(members.len());
                 for member in members {
                     let member_id = self.get_type_id(arena, LookupType::Handle(member.ty))?;
@@ -1633,6 +1689,9 @@ impl Writer {
     }
 
     pub fn write(&mut self, ir_module: &crate::Module, words: &mut Vec<Word>) -> Result<(), Error> {
+        self.layouter
+            .initialize(&ir_module.types, &ir_module.constants);
+
         self.write_logical_layout(ir_module)?;
         self.write_physical_layout();
 

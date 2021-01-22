@@ -39,11 +39,25 @@ pub(super) fn instruction_decorate(
     let mut instruction = Instruction::new(Op::Decorate);
     instruction.add_operand(target_id);
     instruction.add_operand(decoration as u32);
-
     for operand in operands {
         instruction.add_operand(*operand)
     }
+    instruction
+}
 
+pub(super) fn instruction_member_decorate(
+    target_id: Word,
+    member_index: Word,
+    decoration: spirv::Decoration,
+    operands: &[Word],
+) -> Instruction {
+    let mut instruction = Instruction::new(Op::MemberDecorate);
+    instruction.add_operand(target_id);
+    instruction.add_operand(member_index);
+    instruction.add_operand(decoration as u32);
+    for operand in operands {
+        instruction.add_operand(*operand)
+    }
     instruction
 }
 
