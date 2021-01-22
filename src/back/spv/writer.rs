@@ -1302,6 +1302,44 @@ impl Writer {
                         Some(crate::ScalarKind::Float) => spirv::Op::FMod,
                         _ => unreachable!(),
                     },
+                    crate::BinaryOperator::Equal => match left_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Sint) | Some(crate::ScalarKind::Uint) =>
+                            spirv::Op::IEqual,
+                        Some(crate::ScalarKind::Float) => spirv::Op::FOrdEqual,
+                        Some(crate::ScalarKind::Bool) => spirv::Op::LogicalEqual,
+                        _ => unreachable!(),
+                    },
+                    crate::BinaryOperator::NotEqual => match left_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Sint) | Some(crate::ScalarKind::Uint) =>
+                            spirv::Op::INotEqual,
+                        Some(crate::ScalarKind::Float) => spirv::Op::FOrdNotEqual,
+                        Some(crate::ScalarKind::Bool) => spirv::Op::LogicalNotEqual,
+                        _ => unreachable!(),
+                    },
+                    crate::BinaryOperator::Less => match left_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Sint) => spirv::Op::SLessThan,
+                        Some(crate::ScalarKind::Uint) => spirv::Op::ULessThan,
+                        Some(crate::ScalarKind::Float) => spirv::Op::FOrdLessThan,
+                        _ => unreachable!(),
+                    },
+                    crate::BinaryOperator::LessEqual => match left_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Sint) => spirv::Op::SLessThanEqual,
+                        Some(crate::ScalarKind::Uint) => spirv::Op::ULessThanEqual,
+                        Some(crate::ScalarKind::Float) => spirv::Op::FOrdLessThanEqual,
+                        _ => unreachable!(),
+                    },
+                    crate::BinaryOperator::Greater => match left_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Sint) => spirv::Op::SGreaterThan,
+                        Some(crate::ScalarKind::Uint) => spirv::Op::UGreaterThan,
+                        Some(crate::ScalarKind::Float) => spirv::Op::FOrdGreaterThan,
+                        _ => unreachable!(),
+                    },
+                    crate::BinaryOperator::GreaterEqual => match left_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Sint) => spirv::Op::SGreaterThanEqual,
+                        Some(crate::ScalarKind::Uint) => spirv::Op::UGreaterThanEqual,
+                        Some(crate::ScalarKind::Float) => spirv::Op::FOrdGreaterThanEqual,
+                        _ => unreachable!(),
+                    },
                     crate::BinaryOperator::And => spirv::Op::BitwiseAnd,
                     _ => {
                         log::error!("unimplemented {:?}", op);
