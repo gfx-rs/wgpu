@@ -55,8 +55,6 @@ pub enum GlobalVariableError {
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum LocalVariableError {
-    #[error("Initializer is not a constant expression")]
-    InitializerConst,
     #[error("Initializer doesn't match the variable type")]
     InitializerType,
 }
@@ -67,12 +65,16 @@ pub enum FunctionError {
     Resolve(#[from] ResolveError),
     #[error("There are instructions after `return`/`break`/`continue`")]
     InvalidControlFlowExitTail,
+    #[error("The global use array has a different length from the global variables")]
+    InvalidGlobalUsageLength,
     #[error("Local variable {handle:?} '{name}' is invalid: {error:?}")]
     LocalVariable {
         handle: Handle<crate::LocalVariable>,
         name: String,
         error: LocalVariableError,
     },
+    #[error("Argument '{name}' at index {index} has a type that can't be passed into functions.")]
+    InvalidArgumentType { index: usize, name: String },
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -83,6 +85,10 @@ pub enum EntryPointError {
     UnexpectedWorkgroupSize,
     #[error("Workgroup size is out of range")]
     OutOfRangeWorkgroupSize,
+    #[error("Can't have arguments")]
+    UnexpectedArguments,
+    #[error("Can't have a return value")]
+    UnexpectedReturnValue,
     #[error("Global variable {0:?} is used incorrectly as {1:?}")]
     InvalidGlobalUsage(Handle<crate::GlobalVariable>, crate::GlobalUse),
     #[error("Bindings for {0:?} conflict with other global variables")]
@@ -427,13 +433,26 @@ impl Validator {
     fn validate_local_var(
         &self,
         var: &crate::LocalVariable,
-        _fun: &crate::Function,
-        _types: &Arena<crate::Type>,
+        types: &Arena<crate::Type>,
+        constants: &Arena<crate::Constant>,
     ) -> Result<(), LocalVariableError> {
         log::debug!("var {:?}", var);
-        if let Some(_expr_handle) = var.init {
-            if false {
-                return Err(LocalVariableError::InitializerConst);
+        if let Some(const_handle) = var.init {
+            match constants[const_handle].inner {
+                crate::ConstantInner::Scalar { width, ref value } => {
+                    let ty_inner = crate::TypeInner::Scalar {
+                        width,
+                        kind: value.scalar_kind(),
+                    };
+                    if types[var.ty].inner != ty_inner {
+                        return Err(LocalVariableError::InitializerType);
+                    }
+                }
+                crate::ConstantInner::Composite { ty, components: _ } => {
+                    if ty != var.ty {
+                        return Err(LocalVariableError::InitializerType);
+                    }
+                }
             }
         }
         Ok(())
@@ -454,14 +473,31 @@ impl Validator {
         self.typifier
             .resolve_all(&fun.expressions, &module.types, &resolve_ctx)?;
 
+        if fun.global_usage.len() > module.global_variables.len() {
+            return Err(FunctionError::InvalidGlobalUsageLength);
+        }
+
         for (var_handle, var) in fun.local_variables.iter() {
-            self.validate_local_var(var, fun, &module.types)
+            self.validate_local_var(var, &module.types, &module.constants)
                 .map_err(|error| FunctionError::LocalVariable {
                     handle: var_handle,
                     name: var.name.clone().unwrap_or_default(),
                     error,
                 })?;
         }
+
+        for (index, argument) in fun.arguments.iter().enumerate() {
+            match module.types[argument.ty].inner {
+                crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
+                    return Err(FunctionError::InvalidArgumentType {
+                        index,
+                        name: argument.name.clone().unwrap_or_default(),
+                    })
+                }
+                _ => (),
+            }
+        }
+
         Ok(())
     }
 
@@ -591,6 +627,13 @@ impl Validator {
                     return Err(EntryPointError::BindingCollision(var_handle));
                 }
             }
+        }
+
+        if !ep.function.arguments.is_empty() {
+            return Err(EntryPointError::UnexpectedArguments);
+        }
+        if ep.function.return_type.is_some() {
+            return Err(EntryPointError::UnexpectedReturnValue);
         }
 
         self.validate_function(&ep.function, module)?;
