@@ -227,6 +227,30 @@ fn storage_usage(access: crate::StorageAccess) -> crate::GlobalUse {
     storage_usage
 }
 
+fn built_in_usage(built_in: crate::BuiltIn) -> (crate::ShaderStage, crate::GlobalUse) {
+    use crate::{BuiltIn as Bi, GlobalUse as Gu, ShaderStage as Ss};
+    match built_in {
+        Bi::BaseInstance => (Ss::Vertex, Gu::LOAD),
+        Bi::BaseVertex => (Ss::Vertex, Gu::LOAD),
+        Bi::ClipDistance => (Ss::Vertex, Gu::STORE),
+        Bi::InstanceIndex => (Ss::Vertex, Gu::LOAD),
+        Bi::PointSize => (Ss::Vertex, Gu::STORE),
+        Bi::Position => (Ss::Vertex, Gu::STORE),
+        Bi::VertexIndex => (Ss::Vertex, Gu::LOAD),
+        Bi::FragCoord => (Ss::Fragment, Gu::LOAD),
+        Bi::FragDepth => (Ss::Fragment, Gu::LOAD),
+        Bi::FrontFacing => (Ss::Fragment, Gu::LOAD),
+        Bi::SampleIndex => (Ss::Fragment, Gu::LOAD),
+        Bi::SampleMaskIn => (Ss::Fragment, Gu::LOAD),
+        Bi::SampleMaskOut => (Ss::Fragment, Gu::STORE),
+        Bi::GlobalInvocationId => (Ss::Compute, Gu::LOAD),
+        Bi::LocalInvocationId => (Ss::Compute, Gu::LOAD),
+        Bi::LocalInvocationIndex => (Ss::Compute, Gu::LOAD),
+        Bi::WorkGroupId => (Ss::Compute, Gu::LOAD),
+        Bi::WorkGroupSize => (Ss::Compute, Gu::LOAD),
+    }
+}
+
 impl Validator {
     /// Construct a new validator instance.
     pub fn new() -> Self {
@@ -497,22 +521,14 @@ impl Validator {
                 crate::StorageClass::Function => unreachable!(),
                 crate::StorageClass::Input => {
                     match var.binding {
-                        Some(crate::Binding::BuiltIn(built_in)) => match (stage, built_in) {
-                            (crate::ShaderStage::Vertex, crate::BuiltIn::BaseInstance)
-                            | (crate::ShaderStage::Vertex, crate::BuiltIn::BaseVertex)
-                            | (crate::ShaderStage::Vertex, crate::BuiltIn::InstanceIndex)
-                            | (crate::ShaderStage::Vertex, crate::BuiltIn::VertexIndex)
-                            | (crate::ShaderStage::Fragment, crate::BuiltIn::FragCoord)
-                            | (crate::ShaderStage::Fragment, crate::BuiltIn::FrontFacing)
-                            | (crate::ShaderStage::Fragment, crate::BuiltIn::SampleIndex)
-                            | (crate::ShaderStage::Fragment, crate::BuiltIn::SampleMaskIn)
-                            | (crate::ShaderStage::Compute, crate::BuiltIn::GlobalInvocationId)
-                            | (crate::ShaderStage::Compute, crate::BuiltIn::LocalInvocationId)
-                            | (crate::ShaderStage::Compute, crate::BuiltIn::LocalInvocationIndex)
-                            | (crate::ShaderStage::Compute, crate::BuiltIn::WorkGroupId)
-                            | (crate::ShaderStage::Compute, crate::BuiltIn::WorkGroupSize) => (),
-                            _ => return Err(EntryPointError::InvalidBuiltIn(built_in)),
-                        },
+                        Some(crate::Binding::BuiltIn(built_in)) => {
+                            let (allowed_stage, allowed_usage) = built_in_usage(built_in);
+                            if allowed_stage != stage
+                                || !allowed_usage.contains(crate::GlobalUse::LOAD)
+                            {
+                                return Err(EntryPointError::InvalidBuiltIn(built_in));
+                            }
+                        }
                         Some(crate::Binding::Location(loc)) => {
                             if !self.location_in_mask.insert(loc as usize) {
                                 return Err(EntryPointError::BindingCollision(var_handle));
@@ -525,14 +541,14 @@ impl Validator {
                 }
                 crate::StorageClass::Output => {
                     match var.binding {
-                        Some(crate::Binding::BuiltIn(built_in)) => match (stage, built_in) {
-                            (crate::ShaderStage::Vertex, crate::BuiltIn::Position)
-                            | (crate::ShaderStage::Vertex, crate::BuiltIn::PointSize)
-                            | (crate::ShaderStage::Vertex, crate::BuiltIn::ClipDistance)
-                            | (crate::ShaderStage::Fragment, crate::BuiltIn::FragDepth)
-                            | (crate::ShaderStage::Fragment, crate::BuiltIn::SampleMaskOut) => (),
-                            _ => return Err(EntryPointError::InvalidBuiltIn(built_in)),
-                        },
+                        Some(crate::Binding::BuiltIn(built_in)) => {
+                            let (allowed_stage, allowed_usage) = built_in_usage(built_in);
+                            if allowed_stage != stage
+                                || !allowed_usage.contains(crate::GlobalUse::STORE)
+                            {
+                                return Err(EntryPointError::InvalidBuiltIn(built_in));
+                            }
+                        }
                         Some(crate::Binding::Location(loc)) => {
                             if !self.location_out_mask.insert(loc as usize) {
                                 return Err(EntryPointError::BindingCollision(var_handle));

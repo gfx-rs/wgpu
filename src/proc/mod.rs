@@ -58,18 +58,18 @@ impl From<super::StorageFormat> for super::ScalarKind {
     }
 }
 
-impl crate::ScalarValue {
-    pub fn scalar_kind(&self) -> crate::ScalarKind {
+impl super::ScalarValue {
+    pub fn scalar_kind(&self) -> super::ScalarKind {
         match *self {
-            Self::Uint(_) => crate::ScalarKind::Uint,
-            Self::Sint(_) => crate::ScalarKind::Sint,
-            Self::Float(_) => crate::ScalarKind::Float,
-            Self::Bool(_) => crate::ScalarKind::Bool,
+            Self::Uint(_) => super::ScalarKind::Uint,
+            Self::Sint(_) => super::ScalarKind::Sint,
+            Self::Float(_) => super::ScalarKind::Float,
+            Self::Bool(_) => super::ScalarKind::Bool,
         }
     }
 }
 
-impl crate::TypeInner {
+impl super::TypeInner {
     pub fn scalar_kind(&self) -> Option<super::ScalarKind> {
         match *self {
             super::TypeInner::Scalar { kind, .. } | super::TypeInner::Vector { kind, .. } => {
@@ -81,7 +81,7 @@ impl crate::TypeInner {
     }
 }
 
-impl crate::MathFunction {
+impl super::MathFunction {
     pub fn argument_count(&self) -> usize {
         match *self {
             // comparison
