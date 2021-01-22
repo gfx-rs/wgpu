@@ -84,7 +84,7 @@ fn main() {
 
   var pos : vec2<f32>;
   var vel : vec2<f32>;
-  var i : u32 = 0;
+  var i : u32 = u32(0);
   loop {
     if (i >= u32(5)) {
       break;

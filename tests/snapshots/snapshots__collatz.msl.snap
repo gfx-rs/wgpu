@@ -1,0 +1,39 @@
+---
+source: tests/snapshots.rs
+expression: msl
+---
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+typedef metal::uint3 type;
+typedef uint type1;
+typedef type1 type2[1];
+struct PrimeIndices {
+	type2 data;
+};
+
+type1 collatz_iterations(
+	type1 n
+) {
+	type1 i;
+	i = static_cast<uint>(0);
+	while(true) {
+		if (n <= static_cast<uint>(1)) {
+			break;
+		}
+		if (n % static_cast<uint>(2) == static_cast<uint>(0)) {
+			n = n / static_cast<uint>(2);
+		} else {
+			n = static_cast<uint>(3) * n + static_cast<int>(1);
+		}
+		i = i + static_cast<uint>(1);
+	}
+	return i;
+}
+kernel void main1(
+	type global_id [[thread_position_in_grid]],
+	device PrimeIndices& v_indices [[buffer(0)]]
+) {
+	v_indices.data[global_id.x] = collatz_iterations(v_indices.data[global_id.x]);
+}
+

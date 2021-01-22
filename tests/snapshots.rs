@@ -176,3 +176,9 @@ fn converts_wgsl_boids() {
 fn converts_wgsl_skybox() {
     convert_wgsl("skybox", Language::all());
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn converts_wgsl_collatz() {
+    convert_wgsl("collatz", Language::METAL);
+}
