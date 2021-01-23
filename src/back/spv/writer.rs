@@ -1303,15 +1303,17 @@ impl Writer {
                         _ => unreachable!(),
                     },
                     crate::BinaryOperator::Equal => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint) | Some(crate::ScalarKind::Uint) =>
-                            spirv::Op::IEqual,
+                        Some(crate::ScalarKind::Sint) | Some(crate::ScalarKind::Uint) => {
+                            spirv::Op::IEqual
+                        }
                         Some(crate::ScalarKind::Float) => spirv::Op::FOrdEqual,
                         Some(crate::ScalarKind::Bool) => spirv::Op::LogicalEqual,
                         _ => unreachable!(),
                     },
                     crate::BinaryOperator::NotEqual => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint) | Some(crate::ScalarKind::Uint) =>
-                            spirv::Op::INotEqual,
+                        Some(crate::ScalarKind::Sint) | Some(crate::ScalarKind::Uint) => {
+                            spirv::Op::INotEqual
+                        }
                         Some(crate::ScalarKind::Float) => spirv::Op::FOrdNotEqual,
                         Some(crate::ScalarKind::Bool) => spirv::Op::LogicalNotEqual,
                         _ => unreachable!(),

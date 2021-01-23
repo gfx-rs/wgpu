@@ -2,7 +2,7 @@
 
 #[cfg(feature = "glsl-in")]
 fn check_glsl(name: &str) {
-    let path = std::path::PathBuf::from("test-data").join(name);
+    let path = std::path::PathBuf::from("tests/cases").join(name);
     let input = std::fs::read_to_string(path).unwrap();
     let stage = if name.ends_with(".vert") {
         naga::ShaderStage::Vertex
