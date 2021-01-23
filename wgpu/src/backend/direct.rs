@@ -1458,7 +1458,7 @@ impl crate::Context for Context {
     }
     fn texture_view_drop(&self, texture_view: &Self::TextureViewId) {
         let global = &self.0;
-        match wgc::gfx_select!(*texture_view => global.texture_view_drop(*texture_view)) {
+        match wgc::gfx_select!(*texture_view => global.texture_view_drop(*texture_view, false)) {
             Ok(()) => (),
             Err(err) => self.handle_error_fatal(err, "TextureView::drop"),
         }
