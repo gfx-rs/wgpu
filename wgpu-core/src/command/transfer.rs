@@ -10,6 +10,7 @@ use crate::{
     device::{all_buffer_stages, all_image_stages},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId},
+    memory_init_tracker::{MemoryInitTrackerAction, ResourceMemoryInitTrackerAction},
     resource::{BufferUse, Texture, TextureErrorDimension, TextureUse},
     span,
     track::TextureSelector,
@@ -149,6 +150,7 @@ pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
 }
 
 /// Function copied with minor modifications from webgpu standard https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
+/// If successful, returns number of buffer bytes required for this copy.
 pub(crate) fn validate_linear_texture_data(
     layout: &wgt::TextureDataLayout,
     format: wgt::TextureFormat,
@@ -156,7 +158,7 @@ pub(crate) fn validate_linear_texture_data(
     buffer_side: CopySide,
     bytes_per_block: BufferAddress,
     copy_size: &Extent3d,
-) -> Result<(), TransferError> {
+) -> Result<BufferAddress, TransferError> {
     // Convert all inputs to BufferAddress (u64) to prevent overflow issues
     let copy_width = copy_size.width as BufferAddress;
     let copy_height = copy_size.height as BufferAddress;
@@ -217,7 +219,7 @@ pub(crate) fn validate_linear_texture_data(
     if copy_depth > 1 && rows_per_image == 0 {
         return Err(TransferError::InvalidRowsPerImage);
     }
-    Ok(())
+    Ok(required_bytes_in_copy)
 }
 
 /// Function copied with minor modifications from webgpu standard https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
@@ -401,6 +403,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
+        // Make sure source is initialized memory and mark dest as initialized.
+        cmd_buf
+            .used_buffer_ranges
+            .push(ResourceMemoryInitTrackerAction {
+                id: destination,
+                action: MemoryInitTrackerAction::ImplicitlyInitialized(
+                    destination_offset..(destination_offset + size),
+                ),
+            });
+        cmd_buf
+            .used_buffer_ranges
+            .push(ResourceMemoryInitTrackerAction {
+                id: source,
+                action: MemoryInitTrackerAction::NeedsInitializedMemory(
+                    source_offset..(source_offset + size),
+                ),
+            });
+
         let region = hal::command::BufferCopy {
             src: source_offset,
             dst: destination_offset,
@@ -505,7 +525,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             CopySide::Destination,
             copy_size,
         )?;
-        validate_linear_texture_data(
+        let required_buffer_bytes_in_copy = validate_linear_texture_data(
             &source.layout,
             dst_texture.format,
             src_buffer.size,
@@ -513,6 +533,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             bytes_per_block as BufferAddress,
             copy_size,
         )?;
+
+        cmd_buf
+            .used_buffer_ranges
+            .push(ResourceMemoryInitTrackerAction {
+                id: source.buffer,
+                action: MemoryInitTrackerAction::NeedsInitializedMemory(
+                    source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
+                ),
+            });
+        // TODO: Mark dest texture memory as implicitly initialized here.
 
         let (block_width, _) = dst_texture.format.describe().block_dimensions;
         if !conv::is_valid_copy_dst_texture_format(dst_texture.format) {
@@ -645,7 +675,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             CopySide::Source,
             copy_size,
         )?;
-        validate_linear_texture_data(
+        let required_buffer_bytes_in_copy = validate_linear_texture_data(
             &destination.layout,
             src_texture.format,
             dst_buffer.size,
@@ -660,6 +690,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 src_texture.format,
             ))?
         }
+
+        cmd_buf
+            .used_buffer_ranges
+            .push(ResourceMemoryInitTrackerAction {
+                id: destination.buffer,
+                action: MemoryInitTrackerAction::ImplicitlyInitialized(
+                    destination.layout.offset
+                        ..(destination.layout.offset + required_buffer_bytes_in_copy),
+                ),
+            });
+        // TODO: Mark dest texture memory as required to be initialized here.
 
         // WebGPU uses the physical size of the texture for copies whereas vulkan uses
         // the virtual size. We have passed validation, so it's safe to use the

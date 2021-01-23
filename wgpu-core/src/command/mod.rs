@@ -24,6 +24,7 @@ use crate::{
     device::{all_buffer_stages, all_image_stages},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
+    memory_init_tracker::ResourceMemoryInitTrackerAction,
     resource::{Buffer, Texture},
     span,
     track::TrackerSet,
@@ -46,6 +47,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
     pub(crate) used_swap_chains: SmallVec<[Stored<id::SwapChainId>; 1]>,
+    pub(crate) used_buffer_ranges: Vec<ResourceMemoryInitTrackerAction<id::BufferId>>,
     limits: wgt::Limits,
     private_features: PrivateFeatures,
     has_labels: bool,
@@ -75,40 +77,6 @@ impl<B: GfxBackend> CommandBuffer<B> {
             Ok(cmd_buf) if cmd_buf.is_recording => Ok(cmd_buf),
             Ok(_) => Err(CommandEncoderError::NotRecording),
             Err(_) => Err(CommandEncoderError::Invalid),
-        }
-    }
-
-    pub(crate) fn insert_zero_initializations(
-        raw: &mut B::CommandBuffer,
-        head: &TrackerSet,
-        buffer_guard: &mut Storage<Buffer<B>, id::BufferId>,
-        // TODO: Textures also need initialization!
-        _texture_guard: &mut Storage<Texture<B>, id::TextureId>,
-    ) {
-        // Make sure all used buffers are fully initialized.
-        // TODO This is not optimal since buffer usage may be target of a copy operation.
-        for id in head.buffers.used() {
-            let buffer = &mut buffer_guard[id];
-            for uninitialized_segment in
-                buffer
-                    .initialization_status
-                    .drain_uninitialized_segments(hal::memory::Segment {
-                        offset: 0,
-                        size: None,
-                    })
-            {
-                // TODO this itself needs resource barriers. How can we make this work?
-                unsafe {
-                    raw.fill_buffer(
-                        &buffer.raw.as_ref().unwrap().0,
-                        hal::buffer::SubRange {
-                            offset: uninitialized_segment.offset,
-                            size: uninitialized_segment.size,
-                        },
-                        0,
-                    );
-                }
-            }
         }
     }
 

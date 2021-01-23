@@ -9,7 +9,7 @@ use crate::{
         GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, InvalidId, Storage, Token,
     },
     id, instance,
-    memory_init_tracker::MemoryInitTracker,
+    memory_init_tracker::*,
     pipeline, resource, span, swap_chain,
     track::{BufferState, TextureSelector, TextureState, TrackerSet},
     validation::{self, check_buffer_usage, check_texture_usage},
@@ -1274,6 +1274,7 @@ impl<B: GfxBackend> Device<B> {
         // `BTreeMap` has ordered bindings as keys, which allows us to coalesce
         // the descriptor writes into a single transaction.
         let mut write_map = BTreeMap::new();
+        let mut used_buffer_ranges = Vec::new();
         for entry in desc.entries.iter() {
             let binding = entry.binding;
             // Find the corresponding declaration in the layout
@@ -1365,6 +1366,13 @@ impl<B: GfxBackend> Device<B> {
                     } else if bind_size == 0 {
                         return Err(Error::BindingZeroSize(bb.buffer_id));
                     }
+
+                    used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
+                        id: bb.buffer_id,
+                        action: MemoryInitTrackerAction::NeedsInitializedMemory(
+                            bb.offset..(bb.offset + bind_size),
+                        ),
+                    });
 
                     let sub_range = hal::buffer::SubRange {
                         offset: bb.offset,
@@ -1581,6 +1589,7 @@ impl<B: GfxBackend> Device<B> {
             layout_id: id::Valid(desc.layout),
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
             used,
+            used_buffer_ranges,
             dynamic_binding_info,
         })
     }

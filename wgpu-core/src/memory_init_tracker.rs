@@ -1,8 +1,21 @@
+use hal::memory::Segment;
 use std::ops::Range;
 
-use hal::memory::Segment;
+#[derive(Debug, Clone)]
+pub(crate) enum MemoryInitTrackerAction {
+    // The memory range is going to be written by an already initialized source, thus doesn't need extra attention.
+    ImplicitlyInitialized(Range<wgt::BufferAddress>),
+    // The memory range is going to be read, therefore needs to ensure prior initialization.
+    NeedsInitializedMemory(Range<wgt::BufferAddress>),
+}
 
-/// Tracks initialization status of a linear range
+#[derive(Debug, Clone)]
+pub(crate) struct ResourceMemoryInitTrackerAction<ResourceId> {
+    pub(crate) id: ResourceId,
+    pub(crate) action: MemoryInitTrackerAction,
+}
+
+/// Tracks initialization status of a linear range from 0..size
 #[derive(Debug)]
 pub(crate) struct MemoryInitTracker {
     // TODO: Use a more fitting data structure!
@@ -63,3 +76,5 @@ impl MemoryInitTracker {
         })
     }
 }
+
+// TODO: Add some unit tests for this construct

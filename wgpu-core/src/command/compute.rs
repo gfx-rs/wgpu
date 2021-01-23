@@ -11,6 +11,7 @@ use crate::{
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
+    memory_init_tracker::{MemoryInitTrackerAction, ResourceMemoryInitTrackerAction},
     resource::{Buffer, BufferUse, Texture},
     span,
     track::{TrackerSet, UsageConflict},
@@ -329,6 +330,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .validate_dynamic_bindings(&temp_offsets)
                         .map_pass_err(scope)?;
 
+                    cmd_buf
+                        .used_buffer_ranges
+                        .extend(bind_group.used_buffer_ranges.iter().map(|x| x.clone()));
+
                     if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
                         index as usize,
                         id::Valid(bind_group_id),
@@ -512,6 +517,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .as_ref()
                         .ok_or(ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
                         .map_pass_err(scope)?;
+
+                    let stride = 3 * 4; // 3 integers, x/y/z group size
+                    cmd_buf
+                        .used_buffer_ranges
+                        .push(ResourceMemoryInitTrackerAction {
+                            id: buffer_id,
+                            action: MemoryInitTrackerAction::NeedsInitializedMemory(
+                                offset..(offset + stride),
+                            ),
+                        });
 
                     state
                         .flush_states(
