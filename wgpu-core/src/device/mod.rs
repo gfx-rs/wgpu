@@ -196,27 +196,28 @@ fn map_buffer<B: hal::Backend>(
         }),
         _ => None,
     };
-    let writes_are_synced = buffer.sync_mapped_writes.is_some() || block.is_coherent();
 
     // Zero out uninitialized parts of the mapping. (Spec dictates all resources behave as if they were initialized with zero)
-    // Note that going through a `fill_buffer` command may be faster but we don't have the chance of interacting with the queue
-    // between map intent (map_buffer_async or immediately) and this call.
+    //
+    // If this is a read mapping, ideally we would use a `fill_buffer` command before reading the data from GPU (i.e. `invalidate_range`).
+    // However, this would require us to kick off and wait for a command buffer or piggy back on an existing one (the later is likely the only worthwhile option).
+    // As reading uninitialized memory isn't a particular important path to support,
+    // we instead just initialize the memory here and make sure it is GPU visible, so this happens at max only once for every buffer region.
+    //
+    // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
+    let zero_init_needs_flush_now = !block.is_coherent() && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
+
     let uninitialized_ranges: Vec<Range<BufferAddress>> =
         buffer.uninitialized_ranges_in_range(Range {
             start: offset,
             end: offset + size,
         });
     for range in uninitialized_ranges {
-        unsafe {
-            ptr::write_bytes(
-                ptr.as_ptr().offset(range.start as isize),
-                0,
-                (range.end - range.start) as usize,
-            )
-        };
+        let size = (range.end - range.start) as usize;
+        unsafe { ptr::write_bytes(ptr.as_ptr().offset(range.start as isize), 0, size) };
         // (technically the buffer is only initialized when we're done unmapping but we know it can't be used otherwise meanwhile)
-        if writes_are_synced {
-            buffer.mark_initialized(range);
+        if zero_init_needs_flush_now {
+            block.flush_range(raw, range.start, Some(size))?;
         }
     }
 
