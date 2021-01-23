@@ -1,0 +1,12 @@
+---
+source: tests/snapshots.rs
+expression: msl
+---
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+
+kernel void main1(
+) {
+}
+

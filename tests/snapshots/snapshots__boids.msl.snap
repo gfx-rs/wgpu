@@ -71,17 +71,16 @@ kernel void main3(
 	type6 cVelCount = 0;
 	type pos1;
 	type vel1;
-	type5 i;
-	if (gl_GlobalInvocationID.x >= static_cast<uint>(5)) {
+	type5 i = 0;
+	if (gl_GlobalInvocationID.x >= 5) {
 	}
 	vPos = particlesA.particles[gl_GlobalInvocationID.x].pos;
 	vVel = particlesA.particles[gl_GlobalInvocationID.x].vel;
 	cMass = metal::float2(0.0, 0.0);
 	cVel = metal::float2(0.0, 0.0);
 	colVel = metal::float2(0.0, 0.0);
-	i = static_cast<uint>(0);
 	while(true) {
-		if (i >= static_cast<uint>(5)) {
+		if (i >= 5) {
 			break;
 		}
 		if (i == gl_GlobalInvocationID.x) {

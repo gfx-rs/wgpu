@@ -23,7 +23,11 @@ pub enum Token<'a> {
     DoubleColon,
     Paren(char),
     DoubleParen(char),
-    Number(&'a str),
+    Number {
+        value: &'a str,
+        ty: char,
+        width: &'a str,
+    },
     String(&'a str),
     Word(&'a str),
     Operation(char),
@@ -50,6 +54,8 @@ pub enum Error<'a> {
     BadInteger(&'a str, std::num::ParseIntError),
     #[error("unable to parse `{1}` as float: {1}")]
     BadFloat(&'a str, std::num::ParseFloatError),
+    #[error("unable to parse `{0}{1}{2}` as scalar width: {3}")]
+    BadScalarWidth(&'a str, char, &'a str, std::num::ParseIntError),
     #[error("bad field accessor `{0}`")]
     BadAccessor(&'a str),
     #[error("bad texture {0}`")]
@@ -369,16 +375,37 @@ impl Parser {
         }
     }
 
-    fn get_scalar_value(word: &str) -> Result<crate::ScalarValue, Error<'_>> {
-        if word.contains('.') {
-            word.parse()
-                .map(crate::ScalarValue::Float)
-                .map_err(|err| Error::BadFloat(word, err))
-        } else {
-            word.parse()
+    fn get_constant_inner<'a>(
+        word: &'a str,
+        ty: char,
+        width: &'a str,
+    ) -> Result<crate::ConstantInner, Error<'a>> {
+        let value = match ty {
+            'i' => word
+                .parse()
                 .map(crate::ScalarValue::Sint)
-                .map_err(|err| Error::BadInteger(word, err))
-        }
+                .map_err(|err| Error::BadInteger(word, err))?,
+            'u' => word
+                .parse()
+                .map(crate::ScalarValue::Uint)
+                .map_err(|err| Error::BadInteger(word, err))?,
+            'f' => word
+                .parse()
+                .map(crate::ScalarValue::Float)
+                .map_err(|err| Error::BadFloat(word, err))?,
+            _ => unreachable!(),
+        };
+        Ok(crate::ConstantInner::Scalar {
+            value,
+            width: if width.is_empty() {
+                4
+            } else {
+                match width.parse::<crate::Bytes>() {
+                    Ok(bits) => bits / 8,
+                    Err(e) => return Err(Error::BadScalarWidth(word, ty, width, e)),
+                }
+            },
+        })
     }
 
     fn parse_function_call_inner<'a>(
@@ -698,12 +725,9 @@ impl Parser {
                     value: crate::ScalarValue::Bool(false),
                 }
             }
-            Token::Number(word) => {
+            Token::Number { value, ty, width } => {
                 let _ = lexer.next();
-                crate::ConstantInner::Scalar {
-                    width: 4,
-                    value: Self::get_scalar_value(word)?,
-                }
+                Self::get_constant_inner(value, ty, width)?
             }
             _ => {
                 let (composite_ty, _access) =
@@ -773,12 +797,12 @@ impl Parser {
                 });
                 crate::Expression::Constant(handle)
             }
-            Token::Number(word) => {
-                let value = Self::get_scalar_value(word)?;
+            Token::Number { value, ty, width } => {
+                let inner = Self::get_constant_inner(value, ty, width)?;
                 let handle = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
                     specialization: None,
-                    inner: crate::ConstantInner::Scalar { width: 4, value },
+                    inner,
                 });
                 crate::Expression::Constant(handle)
             }

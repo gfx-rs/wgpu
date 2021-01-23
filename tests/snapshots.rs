@@ -155,30 +155,30 @@ fn convert_wgsl(name: &str, language: Language) {
 
 #[cfg(feature = "wgsl-in")]
 #[test]
-fn converts_wgsl_quad() {
+fn convert_wgsl_quad() {
     convert_wgsl("quad", Language::all());
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
-fn converts_wgsl_simple() {
-    convert_wgsl("simple", Language::all());
+fn convert_wgsl_empty() {
+    convert_wgsl("empty", Language::all());
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
-fn converts_wgsl_boids() {
+fn convert_wgsl_boids() {
     convert_wgsl("boids", Language::METAL);
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
-fn converts_wgsl_skybox() {
+fn convert_wgsl_skybox() {
     convert_wgsl("skybox", Language::all());
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
-fn converts_wgsl_collatz() {
+fn convert_wgsl_collatz() {
     convert_wgsl("collatz", Language::METAL);
 }

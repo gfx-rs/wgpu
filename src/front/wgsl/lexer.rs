@@ -13,7 +13,8 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
     input.split_at(pos)
 }
 
-fn consume_number(input: &str) -> (&str, &str) {
+fn consume_number(input: &str) -> (Token, &str) {
+    //Note: I wish this function was simpler and faster...
     let mut is_first_char = true;
     let mut right_after_exponent = false;
 
@@ -32,7 +33,28 @@ fn consume_number(input: &str) -> (&str, &str) {
         }
     };
     let pos = input.find(|c| !what(c)).unwrap_or_else(|| input.len());
-    input.split_at(pos)
+    let (value, rest) = input.split_at(pos);
+
+    let mut rest_iter = rest.chars();
+    let ty = rest_iter.next().unwrap_or(' ');
+    match ty {
+        'u' | 'i' | 'f' => {
+            let width_end = rest_iter
+                .position(|c| !('0'..='9').contains(&c))
+                .unwrap_or_else(|| rest.len() - 1);
+            let (width, rest) = rest[1..].split_at(width_end);
+            (Token::Number { value, ty, width }, rest)
+        }
+        // default to `i32` or `f32`
+        _ => (
+            Token::Number {
+                value,
+                ty: if value.contains('.') { 'f' } else { 'i' },
+                width: "",
+            },
+            rest,
+        ),
+    }
 }
 
 fn consume_token(mut input: &str) -> (Token<'_>, &str) {
@@ -56,10 +78,7 @@ fn consume_token(mut input: &str) -> (Token<'_>, &str) {
             '.' => {
                 let og_chars = chars.as_str();
                 match chars.next() {
-                    Some('0'..='9') => {
-                        let (number, rest) = consume_number(input);
-                        (Token::Number(number), rest)
-                    }
+                    Some('0'..='9') => consume_number(input),
                     _ => (Token::Separator(cur), og_chars),
                 }
             }
@@ -83,10 +102,7 @@ fn consume_token(mut input: &str) -> (Token<'_>, &str) {
                     (Token::Paren(cur), input)
                 }
             }
-            '0'..='9' => {
-                let (number, rest) = consume_number(input);
-                (Token::Number(number), rest)
-            }
+            '0'..='9' => consume_number(input),
             'a'..='z' | 'A'..='Z' | '_' => {
                 let (word, rest) = consume_any(input, |c| c.is_ascii_alphanumeric() || c == '_');
                 (Token::Word(word), rest)
@@ -115,10 +131,7 @@ fn consume_token(mut input: &str) -> (Token<'_>, &str) {
                 let og_chars = chars.as_str();
                 match chars.next() {
                     Some('>') => (Token::Arrow, chars.as_str()),
-                    Some('0'..='9') | Some('.') => {
-                        let (number, rest) = consume_number(input);
-                        (Token::Number(number), rest)
-                    }
+                    Some('0'..='9') | Some('.') => consume_number(input),
                     _ => (Token::Operation(cur), og_chars),
                 }
             }
@@ -193,21 +206,25 @@ impl<'a> Lexer<'a> {
 
     fn _next_float_literal(&mut self) -> Result<f32, Error<'a>> {
         match self.next() {
-            Token::Number(word) => word.parse().map_err(|err| Error::BadFloat(word, err)),
+            Token::Number { value, .. } => value.parse().map_err(|err| Error::BadFloat(value, err)),
             other => other.unexpected("float literal"),
         }
     }
 
     pub(super) fn next_uint_literal(&mut self) -> Result<u32, Error<'a>> {
         match self.next() {
-            Token::Number(word) => word.parse().map_err(|err| Error::BadInteger(word, err)),
+            Token::Number { value, .. } => {
+                value.parse().map_err(|err| Error::BadInteger(value, err))
+            }
             other => other.unexpected("uint literal"),
         }
     }
 
     pub(super) fn next_sint_literal(&mut self) -> Result<i32, Error<'a>> {
         match self.next() {
-            Token::Number(word) => word.parse().map_err(|err| Error::BadInteger(word, err)),
+            Token::Number { value, .. } => {
+                value.parse().map_err(|err| Error::BadInteger(value, err))
+            }
             other => other.unexpected("sint literal"),
         }
     }
@@ -246,7 +263,39 @@ fn sub_test(source: &str, expected_tokens: &[Token]) {
 #[test]
 fn test_tokens() {
     sub_test("id123_OK", &[Token::Word("id123_OK")]);
-    sub_test("92No", &[Token::Number("92"), Token::Word("No")]);
+    sub_test(
+        "92No",
+        &[
+            Token::Number {
+                value: "92",
+                ty: 'i',
+                width: "",
+            },
+            Token::Word("No"),
+        ],
+    );
+    sub_test(
+        "2u3o",
+        &[
+            Token::Number {
+                value: "2",
+                ty: 'u',
+                width: "3",
+            },
+            Token::Word("o"),
+        ],
+    );
+    sub_test(
+        "2.4f44po",
+        &[
+            Token::Number {
+                value: "2.4",
+                ty: 'f',
+                width: "44",
+            },
+            Token::Word("po"),
+        ],
+    );
     sub_test(
         "æNoø",
         &[Token::Unknown('æ'), Token::Word("No"), Token::Unknown('ø')],
@@ -264,7 +313,11 @@ fn test_variable_decl() {
             Token::DoubleParen('['),
             Token::Word("group"),
             Token::Paren('('),
-            Token::Number("0"),
+            Token::Number {
+                value: "0",
+                ty: 'i',
+                width: "",
+            },
             Token::Paren(')'),
             Token::DoubleParen(']'),
             Token::Word("var"),

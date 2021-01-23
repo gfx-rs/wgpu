@@ -69,7 +69,7 @@ struct Particles {
 [[stage(compute), workgroup_size(1)]]
 fn main() {
   const index : u32 = gl_GlobalInvocationID.x;
-  if (index >= u32(5)) {
+  if (index >= 5u) {
     return;
   }
 
@@ -84,9 +84,9 @@ fn main() {
 
   var pos : vec2<f32>;
   var vel : vec2<f32>;
-  var i : u32 = u32(0);
+  var i : u32 = 0u;
   loop {
-    if (i >= u32(5)) {
+    if (i >= 5u) {
       break;
     }
     if (i == index) {
@@ -109,7 +109,7 @@ fn main() {
     }
 
     continuing {
-      i = i + u32(1);
+      i = i + 1u;
     }
   }
   if (cMassCount > 0) {

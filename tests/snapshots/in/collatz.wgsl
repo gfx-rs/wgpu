@@ -15,18 +15,18 @@ var<storage> v_indices: [[access(read_write)]] PrimeIndices;
 // Though the conjecture has not been proven, no counterexample has ever been found.
 // This function returns how many times this recurrence needs to be applied to reach 1.
 fn collatz_iterations(n: u32) -> u32{
-    var i: u32 = u32(0);
+    var i: u32 = 0u;
     loop {
-        if (n <= u32(1)) {
+        if (n <= 1u) {
             break;
         }
-        if (n % u32(2) == u32(0)) {
-            n = n / u32(2);
+        if (n % 2u == 0u) {
+            n = n / 2u;
         }
         else {
-            n = u32(3) * n + i32(1);
+            n = 3u * n + 1u;
         }
-        i = i + u32(1);
+        i = i + 1u;
     }
     return i;
 }
