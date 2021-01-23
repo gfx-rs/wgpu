@@ -274,16 +274,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Ensure the overwritten bytes are marked as initialized so they don't need to be nulled prior to mapping or binding.
         {
             let dst = buffer_guard.get_mut(buffer_id).unwrap();
-            for range in dst
-                .uninitialized_ranges_in_range::<Vec<std::ops::Range<wgt::BufferAddress>>>(
-                    std::ops::Range {
-                        start: buffer_offset,
-                        end: buffer_offset + data_size,
-                    },
-                )
-            {
-                dst.mark_initialized(range);
-            }
+            for _ in dst
+                .initialization_status
+                .drain_uninitialized_segments(hal::memory::Segment {
+                    offset: buffer_offset,
+                    size: Some(buffer_offset + data_size),
+                })
+            {}
         }
 
         Ok(())

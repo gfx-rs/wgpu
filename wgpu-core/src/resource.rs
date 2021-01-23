@@ -6,6 +6,7 @@ use crate::{
     device::{alloc::MemoryBlock, DeviceError, HostMap},
     hub::Resource,
     id::{DeviceId, SwapChainId, TextureId},
+    memory_init_tracker::MemoryInitTracker,
     track::{TextureSelector, DUMMY_SELECTOR},
     validation::MissingBufferUsageError,
     Label, LifeGuard, RefCount, Stored,
@@ -160,45 +161,10 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) usage: wgt::BufferUsage,
     pub(crate) size: wgt::BufferAddress,
-    // An allocated range in this allocator means that the range in question is NOT yet initialized.
-    pub(crate) uninitialized_ranges: range_alloc::RangeAllocator<wgt::BufferAddress>,
+    pub(crate) initialization_status: MemoryInitTracker,
     pub(crate) sync_mapped_writes: Option<hal::memory::Segment>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) map_state: BufferMapState<B>,
-}
-
-impl<B: hal::Backend> Buffer<B> {
-    pub(crate) fn uninitialized_ranges_in_range<
-        R: std::iter::FromIterator<Range<wgt::BufferAddress>>,
-    >(
-        &self,
-        range: Range<wgt::BufferAddress>,
-    ) -> R {
-        self.uninitialized_ranges
-            .allocated_ranges()
-            .filter_map(|r: Range<wgt::BufferAddress>| {
-                if r.end > range.start && r.start < range.end {
-                    Some(Range {
-                        start: range.start.max(r.start),
-                        end: range.end.min(r.end),
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect::<R>()
-    }
-
-    pub(crate) fn uninitialized_ranges<'a>(
-        &'a self,
-    ) -> impl 'a + Iterator<Item = Range<wgt::BufferAddress>> {
-        self.uninitialized_ranges.allocated_ranges()
-    }
-
-    // Range must be continuous previously uninitialized section.
-    pub(crate) fn mark_initialized(&mut self, range: Range<wgt::BufferAddress>) {
-        self.uninitialized_ranges.free_range(range);
-    }
 }
 
 #[derive(Clone, Debug, Error)]

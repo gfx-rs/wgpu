@@ -8,7 +8,9 @@ use crate::{
     hub::{
         GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, InvalidId, Storage, Token,
     },
-    id, instance, pipeline, resource, span, swap_chain,
+    id, instance,
+    memory_init_tracker::MemoryInitTracker,
+    pipeline, resource, span, swap_chain,
     track::{BufferState, TextureSelector, TextureState, TrackerSet},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, FastHashSet, Label, LabelHelpers, LifeGuard, MultiRefCount, PrivateFeatures,
@@ -207,17 +209,27 @@ fn map_buffer<B: hal::Backend>(
     // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
     let zero_init_needs_flush_now = !block.is_coherent() && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
 
-    let uninitialized_ranges: Vec<Range<BufferAddress>> =
-        buffer.uninitialized_ranges_in_range(Range {
-            start: offset,
-            end: offset + size,
-        });
-    for range in uninitialized_ranges {
-        let size = (range.end - range.start) as usize;
-        unsafe { ptr::write_bytes(ptr.as_ptr().offset(range.start as isize), 0, size) };
-        // (technically the buffer is only initialized when we're done unmapping but we know it can't be used otherwise meanwhile)
+    for uninitialized_segment in
+        buffer
+            .initialization_status
+            .drain_uninitialized_segments(hal::memory::Segment {
+                offset,
+                size: Some(size),
+            })
+    {
+        unsafe {
+            ptr::write_bytes(
+                ptr.as_ptr().offset(uninitialized_segment.offset as isize),
+                0,
+                uninitialized_segment.size.unwrap_or(size) as usize,
+            )
+        };
         if zero_init_needs_flush_now {
-            block.flush_range(raw, range.start, Some(size))?;
+            block.flush_range(
+                raw,
+                uninitialized_segment.offset,
+                uninitialized_segment.size,
+            )?;
         }
     }
 
@@ -559,13 +571,6 @@ impl<B: GfxBackend> Device<B> {
             .allocate(&self.raw, requirements, mem_usage)?;
         block.bind_buffer(&self.raw, &mut buffer)?;
 
-        let mut uninitialized_ranges = range_alloc::RangeAllocator::new(Range {
-            start: 0,
-            end: desc.size,
-        });
-        // Mark buffer as uninitialized
-        let _ = uninitialized_ranges.allocate_range(desc.size);
-
         Ok(resource::Buffer {
             raw: Some((buffer, block)),
             device_id: Stored {
@@ -574,7 +579,7 @@ impl<B: GfxBackend> Device<B> {
             },
             usage: desc.usage,
             size: desc.size,
-            uninitialized_ranges,
+            initialization_status: MemoryInitTracker::new(desc.size),
             sync_mapped_writes: None,
             map_state: resource::BufferMapState::Idle,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),

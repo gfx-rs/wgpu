@@ -89,21 +89,25 @@ impl<B: GfxBackend> CommandBuffer<B> {
         // TODO This is not optimal since buffer usage may be target of a copy operation.
         for id in head.buffers.used() {
             let buffer = &mut buffer_guard[id];
-            let uninitialized_ranges: Vec<std::ops::Range<wgt::BufferAddress>> =
-                buffer.uninitialized_ranges().collect();
-            for uninitialized_range in uninitialized_ranges {
+            for uninitialized_segment in
+                buffer
+                    .initialization_status
+                    .drain_uninitialized_segments(hal::memory::Segment {
+                        offset: 0,
+                        size: None,
+                    })
+            {
                 // TODO this itself needs resource barriers. How can we make this work?
                 unsafe {
                     raw.fill_buffer(
                         &buffer.raw.as_ref().unwrap().0,
                         hal::buffer::SubRange {
-                            offset: uninitialized_range.start,
-                            size: Some(uninitialized_range.end - uninitialized_range.start),
+                            offset: uninitialized_segment.offset,
+                            size: uninitialized_segment.size,
                         },
                         0,
                     );
                 }
-                buffer.mark_initialized(uninitialized_range);
             }
         }
     }
