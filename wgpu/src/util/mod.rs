@@ -54,3 +54,11 @@ pub fn make_spirv<'a>(data: &'a [u8]) -> super::ShaderSource<'a> {
     );
     super::ShaderSource::SpirV(words)
 }
+
+struct ReadBuffer(super::BufferMappedRange);
+impl std::ops::Deref for ReadBuffer{
+  type Target = [u8];
+  fn deref(&self) -> &[u8] {
+    super::BufferMappedRangeSlice::slice(&self.0)
+  }
+}

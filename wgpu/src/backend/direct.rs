@@ -1325,7 +1325,6 @@ impl crate::Context for Context {
             Ok(ptr) => BufferMappedRange {
                 ptr,
                 size: size as usize,
-                phantom: PhantomData,
             },
             Err(err) => self.handle_error_fatal(err, "Buffer::get_mapped_range"),
         }
@@ -1897,13 +1896,12 @@ fn default_error_handler(err: crate::Error) {
 }
 
 #[derive(Debug)]
-pub struct BufferMappedRange<'a> {
+pub struct BufferMappedRange {
     ptr: *mut u8,
     size: usize,
-    phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> crate::BufferMappedRangeSlice for BufferMappedRange<'a> {
+impl crate::BufferMappedRangeSlice for BufferMappedRange {
     fn slice(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.ptr, self.size) }
     }
@@ -1913,7 +1911,7 @@ impl<'a> crate::BufferMappedRangeSlice for BufferMappedRange<'a> {
     }
 }
 
-impl<'a> Drop for BufferMappedRange<'a> {
+impl Drop for BufferMappedRange {
     fn drop(&mut self) {
         // Intentionally left blank so that `BufferMappedRange` still
         // implements `Drop`, to match the web backend
