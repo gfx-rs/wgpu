@@ -316,7 +316,7 @@ impl Resource {
                         let global_use = match ty {
                             wgt::BufferBindingType::Uniform
                             | wgt::BufferBindingType::Storage { read_only: true } => {
-                                naga::GlobalUse::LOAD
+                                naga::GlobalUse::READ
                             }
                             wgt::BufferBindingType::Storage { read_only: _ } => {
                                 naga::GlobalUse::all()
@@ -340,7 +340,7 @@ impl Resource {
                     comparison: cmp,
                 } => {
                     if cmp == comparison {
-                        naga::GlobalUse::LOAD
+                        naga::GlobalUse::READ
                     } else {
                         return Err(BindingError::WrongSamplerComparison);
                     }
@@ -408,7 +408,7 @@ impl Resource {
                             },
                             wgt::TextureSampleType::Depth => naga::ImageClass::Depth,
                         };
-                        (class, naga::GlobalUse::LOAD)
+                        (class, naga::GlobalUse::READ)
                     }
                     BindingType::StorageTexture {
                         access,
@@ -418,8 +418,8 @@ impl Resource {
                         let naga_format = map_storage_format_to_naga(format)
                             .ok_or(BindingError::BadStorageFormat(format))?;
                         let usage = match access {
-                            wgt::StorageTextureAccess::ReadOnly => naga::GlobalUse::LOAD,
-                            wgt::StorageTextureAccess::WriteOnly => naga::GlobalUse::STORE,
+                            wgt::StorageTextureAccess::ReadOnly => naga::GlobalUse::READ,
+                            wgt::StorageTextureAccess::WriteOnly => naga::GlobalUse::WRITE,
                             wgt::StorageTextureAccess::ReadWrite => naga::GlobalUse::all(),
                         };
                         (naga::ImageClass::Storage(naga_format), usage)
@@ -452,7 +452,7 @@ impl Resource {
                 ty: match self.class {
                     naga::StorageClass::Uniform => wgt::BufferBindingType::Uniform,
                     naga::StorageClass::Storage => wgt::BufferBindingType::Storage {
-                        read_only: !shader_usage.contains(naga::GlobalUse::STORE),
+                        read_only: !shader_usage.contains(naga::GlobalUse::WRITE),
                     },
                     _ => return Err(BindingError::WrongType),
                 },
@@ -495,7 +495,7 @@ impl Resource {
                         multisampled: false,
                     },
                     naga::ImageClass::Storage(format) => BindingType::StorageTexture {
-                        access: if shader_usage.contains(naga::GlobalUse::STORE) {
+                        access: if shader_usage.contains(naga::GlobalUse::WRITE) {
                             wgt::StorageTextureAccess::WriteOnly
                         } else {
                             wgt::StorageTextureAccess::ReadOnly
