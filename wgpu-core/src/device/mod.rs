@@ -209,27 +209,22 @@ fn map_buffer<B: hal::Backend>(
     // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
     let zero_init_needs_flush_now = !block.is_coherent() && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
 
-    for uninitialized_segment in
-        buffer
-            .initialization_status
-            .drain_uninitialized_segments(hal::memory::Segment {
-                offset,
-                size: Some(size),
-            })
+    if let Some(uninitialized_ranges) = buffer
+        .initialization_status
+        .drain_uninitialized_ranges(offset..(size + offset))
     {
-        unsafe {
-            ptr::write_bytes(
-                ptr.as_ptr().offset(uninitialized_segment.offset as isize),
-                0,
-                uninitialized_segment.size.unwrap_or(size) as usize,
-            )
-        };
-        if zero_init_needs_flush_now {
-            block.flush_range(
-                raw,
-                uninitialized_segment.offset,
-                uninitialized_segment.size,
-            )?;
+        for uninitialized_range in uninitialized_ranges {
+            let num_bytes = uninitialized_range.end - uninitialized_range.start;
+            unsafe {
+                ptr::write_bytes(
+                    ptr.as_ptr().offset(uninitialized_range.start as isize),
+                    0,
+                    num_bytes as usize,
+                )
+            };
+            if zero_init_needs_flush_now {
+                block.flush_range(raw, uninitialized_range.start, Some(num_bytes))?;
+            }
         }
     }
 
@@ -507,6 +502,11 @@ impl<B: GfxBackend> Device<B> {
                 // we are going to be copying into it, internally
                 usage |= hal::buffer::Usage::TRANSFER_DST;
             }
+        } else {
+            // We are required to zero out (initialize) all memory.
+            // This can be done via mapping, transfer or with a shader. However, right now we only implement it via transfer!
+            // TODO: Investigate if we could also do init via mapping or shader so that we need to alter the requested usage in less cases.
+            usage |= hal::buffer::Usage::TRANSFER_DST;
         }
 
         if desc.usage.is_empty() {
@@ -1369,9 +1369,8 @@ impl<B: GfxBackend> Device<B> {
 
                     used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
                         id: bb.buffer_id,
-                        action: MemoryInitTrackerAction::NeedsInitializedMemory(
-                            bb.offset..(bb.offset + bind_size),
-                        ),
+                        range: bb.offset..(bb.offset + bind_size),
+                        kind: MemoryInitKind::NeedsInitializedMemory,
                     });
 
                     let sub_range = hal::buffer::SubRange {

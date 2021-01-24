@@ -13,13 +13,14 @@ use crate::{
     device::{alloc, DeviceError, WaitIdleError},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
+    memory_init_tracker::MemoryInitKind,
     resource::{BufferAccessError, BufferMapState, BufferUse, TextureUse},
-    span, FastHashSet,
+    span, FastHashMap, FastHashSet,
 };
 
 use hal::{command::CommandBuffer as _, device::Device as _, queue::CommandQueue as _};
 use smallvec::SmallVec;
-use std::{iter, ptr};
+use std::{iter, ops::Range, ptr};
 use thiserror::Error;
 
 struct StagingData<B: hal::Backend> {
@@ -274,13 +275,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Ensure the overwritten bytes are marked as initialized so they don't need to be nulled prior to mapping or binding.
         {
             let dst = buffer_guard.get_mut(buffer_id).unwrap();
-            for _ in dst
+            if let Some(uninitialized_ranges) = dst
                 .initialization_status
-                .drain_uninitialized_segments(hal::memory::Segment {
-                    offset: buffer_offset,
-                    size: Some(buffer_offset + data_size),
-                })
-            {}
+                .drain_uninitialized_ranges(buffer_offset..(buffer_offset + data_size))
+            {
+                uninitialized_ranges.for_each(drop);
+            }
         }
 
         Ok(())
@@ -478,9 +478,96 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         span!(_guard, INFO, "Queue::submit");
 
         let hub = B::hub(self);
+        let mut token = Token::root();
+
+        // Insert zero initializations if necessary.
+        // Since we push those to the pending_writes buffer, this needs to happen before any other processing
+        if !command_buffer_ids.is_empty() {
+            // Note that in the vast majority of cases this remains empty!
+            let required_buffer_inits = {
+                let (command_buffer_guard, mut token) = hub.command_buffers.read(&mut token);
+                let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+
+                let mut required_buffer_inits: FastHashMap<
+                    id::BufferId,
+                    Vec<Range<wgt::BufferAddress>>,
+                > = FastHashMap::default();
+
+                for &cmb_id in command_buffer_ids {
+                    let cmdbuf = command_buffer_guard
+                        .get(cmb_id)
+                        .map_err(|_| QueueSubmitError::InvalidCommandBuffer(cmb_id))?;
+
+                    for buffer_use in cmdbuf.used_buffer_ranges.iter() {
+                        let buffer = buffer_guard
+                            .get_mut(buffer_use.id)
+                            .map_err(|_| QueueSubmitError::DestroyedBuffer(buffer_use.id))?;
+
+                        if let Some(uninitialized_ranges) = buffer
+                            .initialization_status
+                            .drain_uninitialized_ranges(buffer_use.range.clone())
+                        {
+                            match buffer_use.kind {
+                                MemoryInitKind::ImplicitlyInitialized => {
+                                    uninitialized_ranges.for_each(drop);
+                                }
+                                MemoryInitKind::NeedsInitializedMemory => {
+                                    required_buffer_inits
+                                        .entry(buffer_use.id)
+                                        .or_default()
+                                        .extend(uninitialized_ranges);
+                                }
+                            }
+                        }
+                    }
+                }
+                required_buffer_inits
+            };
+
+            if !required_buffer_inits.is_empty() {
+                let (mut device_guard, mut token) = hub.devices.write(&mut token);
+                let (buffer_guard, _) = hub.buffers.read(&mut token);
+                let device = device_guard
+                    .get_mut(queue_id)
+                    .map_err(|_| DeviceError::Invalid)?;
+
+                device
+                    .pending_writes
+                    .dst_buffers
+                    .extend(required_buffer_inits.keys());
+                let pending_writes_cmd_buf = device.borrow_pending_writes();
+
+                for (buffer_id, ranges) in required_buffer_inits {
+                    let buffer_raw = &buffer_guard
+                        .get(buffer_id)
+                        .map_err(|_| QueueSubmitError::DestroyedBuffer(buffer_id))?
+                        .raw
+                        .as_ref()
+                        .ok_or(QueueSubmitError::DestroyedBuffer(buffer_id))?
+                        .0;
+
+                    // TODO: Currently, we implement zero init only via fill_buffer. Should we implement this also via map & shader/storage?
+                    // Note that this requires TRANSFER usage on the buffer - see also device.create_buffer
+
+                    // TODO: Collapse ranges
+                    for range in ranges {
+                        // TODO SHIPSTOPPER: Insert necessary barriers!!
+                        unsafe {
+                            pending_writes_cmd_buf.fill_buffer(
+                                buffer_raw,
+                                hal::buffer::SubRange {
+                                    offset: range.start,
+                                    size: Some(range.end - range.start),
+                                },
+                                0,
+                            );
+                        }
+                    }
+                }
+            }
+        }
 
         let callbacks = {
-            let mut token = Token::root();
             let (mut device_guard, mut token) = hub.devices.write(&mut token);
             let device = device_guard
                 .get_mut(queue_id)
@@ -600,9 +687,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 device.temp_suspected.render_bundles.push(id);
                             }
                         }
-
-                        // TODO
-                        // go through memory_init_tracker of every buffer and gather which areas need to be cleared.
 
                         // execute resource transitions
                         let mut transit = device.cmd_allocator.extend(cmdbuf);

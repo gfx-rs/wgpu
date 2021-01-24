@@ -49,7 +49,7 @@ use crate::{
     },
     hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Resource, Storage, Token},
     id,
-    memory_init_tracker::{MemoryInitTrackerAction, ResourceMemoryInitTrackerAction},
+    memory_init_tracker::{MemoryInitKind, ResourceMemoryInitTrackerAction},
     resource::BufferUse,
     span,
     track::{TrackerSet, UsageConflict},
@@ -269,7 +269,8 @@ impl RenderBundleEncoder {
                     };
                     used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
                         id: buffer_id,
-                        action: MemoryInitTrackerAction::NeedsInitializedMemory(offset..end),
+                        range: offset..end,
+                        kind: MemoryInitKind::NeedsInitializedMemory,
                     });
                     state.index.set_format(index_format);
                     state.index.set_buffer(buffer_id, offset..end);
@@ -295,7 +296,8 @@ impl RenderBundleEncoder {
                     };
                     used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
                         id: buffer_id,
-                        action: MemoryInitTrackerAction::NeedsInitializedMemory(offset..end),
+                        range: offset..end,
+                        kind: MemoryInitKind::NeedsInitializedMemory,
                     });
                     state.vertex[slot as usize].set_buffer(buffer_id, offset..end);
                 }
@@ -411,7 +413,8 @@ impl RenderBundleEncoder {
 
                     used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
                         id: buffer_id,
-                        action: MemoryInitTrackerAction::NeedsInitializedMemory(0..buffer.size),
+                        range: 0..buffer.size,
+                        kind: MemoryInitKind::NeedsInitializedMemory,
                     });
 
                     commands.extend(state.flush_vertices());
@@ -441,7 +444,8 @@ impl RenderBundleEncoder {
                     let stride = 4 * 4; // 4 integers, vertexCount, instanceCount, firstVertex, firstInstance
                     used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
                         id: buffer_id,
-                        action: MemoryInitTrackerAction::NeedsInitializedMemory(0..stride),
+                        range: 0..stride,
+                        kind: MemoryInitKind::NeedsInitializedMemory,
                     });
 
                     commands.extend(state.index.flush());

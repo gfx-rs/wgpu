@@ -11,7 +11,7 @@ use crate::{
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
-    memory_init_tracker::{MemoryInitTrackerAction, ResourceMemoryInitTrackerAction},
+    memory_init_tracker::{MemoryInitKind, ResourceMemoryInitTrackerAction},
     resource::{Buffer, BufferUse, Texture},
     span,
     track::{TrackerSet, UsageConflict},
@@ -523,9 +523,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .used_buffer_ranges
                         .push(ResourceMemoryInitTrackerAction {
                             id: buffer_id,
-                            action: MemoryInitTrackerAction::NeedsInitializedMemory(
-                                offset..(offset + stride),
-                            ),
+                            range: offset..(offset + stride),
+                            kind: MemoryInitKind::NeedsInitializedMemory,
                         });
 
                     state

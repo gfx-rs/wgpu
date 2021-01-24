@@ -17,7 +17,7 @@ use crate::{
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
-    memory_init_tracker::{MemoryInitTrackerAction, ResourceMemoryInitTrackerAction},
+    memory_init_tracker::{MemoryInitKind, ResourceMemoryInitTrackerAction},
     pipeline::PipelineFlags,
     resource::{BufferUse, Texture, TextureUse, TextureView, TextureViewInner},
     span,
@@ -1300,7 +1300,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
                             id: buffer_id,
-                            action: MemoryInitTrackerAction::NeedsInitializedMemory(offset..end),
+                            range: offset..end,
+                            kind: MemoryInitKind::NeedsInitializedMemory,
                         });
 
                         let range = hal::buffer::SubRange {
@@ -1348,9 +1349,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
                             id: buffer_id,
-                            action: MemoryInitTrackerAction::NeedsInitializedMemory(
-                                offset..(offset + vertex_state.total_size),
-                            ),
+                            range: offset..(offset + vertex_state.total_size),
+                            kind: MemoryInitKind::NeedsInitializedMemory,
                         });
 
                         let range = hal::buffer::SubRange {
@@ -1607,9 +1607,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
                             id: buffer_id,
-                            action: MemoryInitTrackerAction::NeedsInitializedMemory(
-                                offset..end_offset,
-                            ),
+                            range: offset..end_offset,
+                            kind: MemoryInitKind::NeedsInitializedMemory,
                         });
 
                         match indexed {
@@ -1709,15 +1708,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
                             id: buffer_id,
-                            action: MemoryInitTrackerAction::NeedsInitializedMemory(
-                                offset..end_offset,
-                            ),
+                            range: offset..end_offset,
+                            kind: MemoryInitKind::NeedsInitializedMemory,
                         });
                         used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
                             id: count_buffer_id,
-                            action: MemoryInitTrackerAction::NeedsInitializedMemory(
-                                count_buffer_offset..end_count_offset,
-                            ),
+                            range: count_buffer_offset..end_count_offset,
+                            kind: MemoryInitKind::NeedsInitializedMemory,
                         });
 
                         match indexed {

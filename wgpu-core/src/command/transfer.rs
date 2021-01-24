@@ -10,7 +10,7 @@ use crate::{
     device::{all_buffer_stages, all_image_stages},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId},
-    memory_init_tracker::{MemoryInitTrackerAction, ResourceMemoryInitTrackerAction},
+    memory_init_tracker::{MemoryInitKind, ResourceMemoryInitTrackerAction},
     resource::{BufferUse, Texture, TextureErrorDimension, TextureUse},
     span,
     track::TextureSelector,
@@ -408,17 +408,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .used_buffer_ranges
             .push(ResourceMemoryInitTrackerAction {
                 id: destination,
-                action: MemoryInitTrackerAction::ImplicitlyInitialized(
-                    destination_offset..(destination_offset + size),
-                ),
+                range: destination_offset..(destination_offset + size),
+                kind: MemoryInitKind::ImplicitlyInitialized,
             });
         cmd_buf
             .used_buffer_ranges
             .push(ResourceMemoryInitTrackerAction {
                 id: source,
-                action: MemoryInitTrackerAction::NeedsInitializedMemory(
-                    source_offset..(source_offset + size),
-                ),
+                range: source_offset..(source_offset + size),
+                kind: MemoryInitKind::NeedsInitializedMemory,
             });
 
         let region = hal::command::BufferCopy {
@@ -538,9 +536,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .used_buffer_ranges
             .push(ResourceMemoryInitTrackerAction {
                 id: source.buffer,
-                action: MemoryInitTrackerAction::NeedsInitializedMemory(
-                    source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
-                ),
+                range: source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
+                kind: MemoryInitKind::NeedsInitializedMemory,
             });
         // TODO: Mark dest texture memory as implicitly initialized here.
 
@@ -695,10 +692,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .used_buffer_ranges
             .push(ResourceMemoryInitTrackerAction {
                 id: destination.buffer,
-                action: MemoryInitTrackerAction::ImplicitlyInitialized(
-                    destination.layout.offset
-                        ..(destination.layout.offset + required_buffer_bytes_in_copy),
-                ),
+                range: destination.layout.offset
+                    ..(destination.layout.offset + required_buffer_bytes_in_copy),
+                kind: MemoryInitKind::ImplicitlyInitialized,
             });
         // TODO: Mark dest texture memory as required to be initialized here.
 

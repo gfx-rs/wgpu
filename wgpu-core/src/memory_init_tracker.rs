@@ -1,18 +1,18 @@
-use hal::memory::Segment;
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
-pub(crate) enum MemoryInitTrackerAction {
+pub(crate) enum MemoryInitKind {
     // The memory range is going to be written by an already initialized source, thus doesn't need extra attention.
-    ImplicitlyInitialized(Range<wgt::BufferAddress>),
+    ImplicitlyInitialized,
     // The memory range is going to be read, therefore needs to ensure prior initialization.
-    NeedsInitializedMemory(Range<wgt::BufferAddress>),
+    NeedsInitializedMemory,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResourceMemoryInitTrackerAction<ResourceId> {
     pub(crate) id: ResourceId,
-    pub(crate) action: MemoryInitTrackerAction,
+    pub(crate) range: Range<wgt::BufferAddress>,
+    pub(crate) kind: MemoryInitKind,
 }
 
 /// Tracks initialization status of a linear range from 0..size
@@ -34,15 +34,11 @@ impl MemoryInitTracker {
         }
     }
 
-    pub(crate) fn drain_uninitialized_segments<'a>(
+    #[must_use]
+    pub(crate) fn drain_uninitialized_ranges<'a>(
         &'a mut self,
-        segment: Segment,
-    ) -> impl Iterator<Item = Segment> + 'a {
-        let range = match segment.size {
-            Some(size) => segment.offset..(segment.offset + size),
-            None => segment.offset..self.uninitialized_ranges.initial_range().end,
-        };
-
+        range: Range<wgt::BufferAddress>,
+    ) -> Option<impl Iterator<Item = Range<wgt::BufferAddress>> + 'a> {
         let mut uninitialized_ranges: Vec<Range<wgt::BufferAddress>> = self
             .uninitialized_ranges
             .allocated_ranges()
@@ -58,22 +54,23 @@ impl MemoryInitTracker {
             })
             .collect();
 
-        std::iter::from_fn(move || {
+        if uninitialized_ranges.is_empty() {
+            return None;
+        }
+
+        Some(std::iter::from_fn(move || {
             let range: Option<Range<wgt::BufferAddress>> =
                 uninitialized_ranges.last().map(|r| r.clone());
             match range {
                 Some(range) => {
                     uninitialized_ranges.pop();
-                    let result = Some(Segment {
-                        offset: range.start,
-                        size: Some(range.end - range.start),
-                    });
+                    let result = range.clone();
                     self.uninitialized_ranges.free_range(range);
-                    result
+                    Some(result)
                 }
                 None => None,
             }
-        })
+        }))
     }
 }
 
