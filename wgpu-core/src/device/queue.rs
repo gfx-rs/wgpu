@@ -470,6 +470,122 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
+    // Enacts all zero initializations required by the given command buffers
+    // Required commands are appended to device.pending_writes
+    fn initialize_used_uninitialized_memory<B: GfxBackend>(
+        &self,
+        queue_id: id::QueueId,
+        command_buffer_ids: &[id::CommandBufferId],
+    ) -> Result<(), QueueSubmitError> {
+        if command_buffer_ids.is_empty() {
+            return Ok(());
+        }
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let mut required_buffer_inits = {
+            let (command_buffer_guard, mut token) = hub.command_buffers.read(&mut token);
+            let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+
+            let mut required_buffer_inits: FastHashMap<
+                id::BufferId,
+                Vec<Range<wgt::BufferAddress>>,
+            > = FastHashMap::default();
+
+            for &cmb_id in command_buffer_ids {
+                let cmdbuf = command_buffer_guard
+                    .get(cmb_id)
+                    .map_err(|_| QueueSubmitError::InvalidCommandBuffer(cmb_id))?;
+
+                for buffer_use in cmdbuf.used_buffer_ranges.iter() {
+                    let buffer = buffer_guard
+                        .get_mut(buffer_use.id)
+                        .map_err(|_| QueueSubmitError::DestroyedBuffer(buffer_use.id))?;
+
+                    if let Some(uninitialized_ranges) = buffer
+                        .initialization_status
+                        .drain_uninitialized_ranges(buffer_use.range.clone())
+                    {
+                        match buffer_use.kind {
+                            MemoryInitKind::ImplicitlyInitialized => {
+                                uninitialized_ranges.for_each(drop);
+                            }
+                            MemoryInitKind::NeedsInitializedMemory => {
+                                required_buffer_inits
+                                    .entry(buffer_use.id)
+                                    .or_default()
+                                    .extend(uninitialized_ranges);
+                            }
+                        }
+                    }
+                }
+            }
+            required_buffer_inits
+        };
+
+        // Memory init is expected to be rare (means user relies on default zero!), so most of the time we early here!
+        if required_buffer_inits.is_empty() {
+            return Ok(());
+        }
+
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        let (buffer_guard, _) = hub.buffers.read(&mut token);
+        let device = device_guard
+            .get_mut(queue_id)
+            .map_err(|_| DeviceError::Invalid)?;
+
+        device
+            .pending_writes
+            .dst_buffers
+            .extend(required_buffer_inits.keys());
+        device.borrow_pending_writes(); // Call ensures there is a pending_writes cmdbuffer, but using the reference returned would make the borrow checker unhappy!
+        let pending_writes_cmd_buf = device.pending_writes.command_buffer.as_mut().unwrap();
+        let mut trackers = device.trackers.lock();
+
+        for (buffer_id, mut ranges) in required_buffer_inits.drain() {
+            // Collapse touching ranges. We can't do this any earlier since we only now gathered ranges from several different command buffers!
+            ranges.sort_by(|a, b| a.start.cmp(&b.start));
+            for i in (1..ranges.len()).rev() {
+                assert!(ranges[i - 1].end <= ranges[i].start); // The memory init tracker made sure of this!
+                if ranges[i].start == ranges[i - 1].end {
+                    ranges[i - 1].end = ranges[i].end;
+                    ranges.remove(i);
+                }
+            }
+
+            let (buffer, transition) = trackers
+                .buffers
+                .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST)
+                .map_err(|_| QueueSubmitError::DestroyedBuffer(buffer_id))?;
+            let &(ref buffer_raw, _) = buffer
+                .raw
+                .as_ref()
+                .ok_or(QueueSubmitError::DestroyedBuffer(buffer_id))?;
+            unsafe {
+                pending_writes_cmd_buf.pipeline_barrier(
+                    super::all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
+                    hal::memory::Dependencies::empty(),
+                    transition.map(|pending| pending.into_hal(buffer)),
+                );
+            }
+            for range in ranges {
+                unsafe {
+                    pending_writes_cmd_buf.fill_buffer(
+                        buffer_raw,
+                        hal::buffer::SubRange {
+                            offset: range.start,
+                            size: Some(range.end - range.start),
+                        },
+                        0,
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn queue_submit<B: GfxBackend>(
         &self,
         queue_id: id::QueueId,
@@ -477,95 +593,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueueSubmitError> {
         span!(_guard, INFO, "Queue::submit");
 
+        self.initialize_used_uninitialized_memory::<B>(queue_id, command_buffer_ids)?;
+
         let hub = B::hub(self);
         let mut token = Token::root();
-
-        // Insert zero initializations if necessary.
-        // Since we push those to the pending_writes buffer, this needs to happen before any other processing
-        if !command_buffer_ids.is_empty() {
-            // Note that in the vast majority of cases this remains empty!
-            let required_buffer_inits = {
-                let (command_buffer_guard, mut token) = hub.command_buffers.read(&mut token);
-                let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-
-                let mut required_buffer_inits: FastHashMap<
-                    id::BufferId,
-                    Vec<Range<wgt::BufferAddress>>,
-                > = FastHashMap::default();
-
-                for &cmb_id in command_buffer_ids {
-                    let cmdbuf = command_buffer_guard
-                        .get(cmb_id)
-                        .map_err(|_| QueueSubmitError::InvalidCommandBuffer(cmb_id))?;
-
-                    for buffer_use in cmdbuf.used_buffer_ranges.iter() {
-                        let buffer = buffer_guard
-                            .get_mut(buffer_use.id)
-                            .map_err(|_| QueueSubmitError::DestroyedBuffer(buffer_use.id))?;
-
-                        if let Some(uninitialized_ranges) = buffer
-                            .initialization_status
-                            .drain_uninitialized_ranges(buffer_use.range.clone())
-                        {
-                            match buffer_use.kind {
-                                MemoryInitKind::ImplicitlyInitialized => {
-                                    uninitialized_ranges.for_each(drop);
-                                }
-                                MemoryInitKind::NeedsInitializedMemory => {
-                                    required_buffer_inits
-                                        .entry(buffer_use.id)
-                                        .or_default()
-                                        .extend(uninitialized_ranges);
-                                }
-                            }
-                        }
-                    }
-                }
-                required_buffer_inits
-            };
-
-            if !required_buffer_inits.is_empty() {
-                let (mut device_guard, mut token) = hub.devices.write(&mut token);
-                let (buffer_guard, _) = hub.buffers.read(&mut token);
-                let device = device_guard
-                    .get_mut(queue_id)
-                    .map_err(|_| DeviceError::Invalid)?;
-
-                device
-                    .pending_writes
-                    .dst_buffers
-                    .extend(required_buffer_inits.keys());
-                let pending_writes_cmd_buf = device.borrow_pending_writes();
-
-                for (buffer_id, ranges) in required_buffer_inits {
-                    let buffer_raw = &buffer_guard
-                        .get(buffer_id)
-                        .map_err(|_| QueueSubmitError::DestroyedBuffer(buffer_id))?
-                        .raw
-                        .as_ref()
-                        .ok_or(QueueSubmitError::DestroyedBuffer(buffer_id))?
-                        .0;
-
-                    // TODO: Currently, we implement zero init only via fill_buffer. Should we implement this also via map & shader/storage?
-                    // Note that this requires TRANSFER usage on the buffer - see also device.create_buffer
-
-                    // TODO: Collapse ranges
-                    for range in ranges {
-                        // TODO SHIPSTOPPER: Insert necessary barriers!!
-                        unsafe {
-                            pending_writes_cmd_buf.fill_buffer(
-                                buffer_raw,
-                                hal::buffer::SubRange {
-                                    offset: range.start,
-                                    size: Some(range.end - range.start),
-                                },
-                                0,
-                            );
-                        }
-                    }
-                }
-            }
-        }
 
         let callbacks = {
             let (mut device_guard, mut token) = hub.devices.write(&mut token);

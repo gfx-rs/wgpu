@@ -504,8 +504,7 @@ impl<B: GfxBackend> Device<B> {
             }
         } else {
             // We are required to zero out (initialize) all memory.
-            // This can be done via mapping, transfer or with a shader. However, right now we only implement it via transfer!
-            // TODO: Investigate if we could also do init via mapping or shader so that we need to alter the requested usage in less cases.
+            // This is done on demand using fill_buffer which requires write transfer usage!
             usage |= hal::buffer::Usage::TRANSFER_DST;
         }
 
