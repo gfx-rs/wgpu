@@ -2575,7 +2575,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     usage: wgt::BufferUsage::MAP_WRITE | wgt::BufferUsage::COPY_SRC,
                     mapped_at_creation: false,
                 };
-                let stage = match device.create_buffer(device_id, &stage_desc, true) {
+                let mut stage = match device.create_buffer(device_id, &stage_desc, true) {
                     Ok(stage) => stage,
                     Err(e) => {
                         let (raw, memory) = buffer.raw.unwrap();
@@ -2606,6 +2606,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         break e.into();
                     }
                 };
+
+                // Zero initialize memory and then mark both staging and buffer as initialized
+                // (it's guaranteed that this is the case by the time the buffer is usable)
+                unsafe { ptr::write_bytes(ptr.as_ptr(), 0, buffer.size as usize) };
+                buffer
+                    .initialization_status
+                    .drain_uninitialized_ranges(0..buffer.size)
+                    .unwrap()
+                    .for_each(drop);
+                stage
+                    .initialization_status
+                    .drain_uninitialized_ranges(0..buffer.size)
+                    .unwrap()
+                    .for_each(drop);
+
                 buffer.map_state = resource::BufferMapState::Init {
                     ptr,
                     needs_flush: !stage_memory.is_coherent(),
