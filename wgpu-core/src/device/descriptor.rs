@@ -141,13 +141,11 @@ impl<B: hal::Backend>
     unsafe fn alloc_descriptor_sets<'a>(
         &self,
         pool: &mut B::DescriptorPool,
-        layouts: impl Iterator<Item = &'a B::DescriptorSetLayout>,
+        layouts: impl ExactSizeIterator<Item = &'a B::DescriptorSetLayout>,
         sets: &mut impl Extend<B::DescriptorSet>,
     ) -> Result<(), gpu_descriptor::DeviceAllocationError> {
         use gpu_descriptor::DeviceAllocationError as Dae;
-        //TODO: https://github.com/zakarumych/gpu-descriptor/pull/10
-        let temp_layouts = layouts.collect::<Vec<_>>();
-        match hal::pso::DescriptorPool::allocate(pool, temp_layouts, sets) {
+        match hal::pso::DescriptorPool::allocate(pool, layouts, sets) {
             Ok(()) => Ok(()),
             Err(hal::pso::AllocationError::OutOfMemory(oom)) => Err(match oom {
                 hal::device::OutOfMemory::Host => Dae::OutOfHostMemory,
