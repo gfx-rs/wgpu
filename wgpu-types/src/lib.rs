@@ -390,6 +390,9 @@ bitflags::bitflags! {
         const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 0x0000_0000_1000_0000;
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
+        /// Note: even when supported by GPU hardware, 64-bit floating point operations are
+        /// frequently between 16 and 64 _times_ slower than equivelent operations on 32-bit floats.
+        ///
         /// Supported Platforms:
         /// - Vulkan
         ///
