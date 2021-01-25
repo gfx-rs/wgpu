@@ -211,7 +211,7 @@ fn map_buffer<B: hal::Backend>(
 
     if let Some(uninitialized_ranges) = buffer
         .initialization_status
-        .drain_uninitialized_ranges(offset..(size + offset))
+        .drain_uninitialized_ranges(&(offset..(size + offset)))
     {
         for uninitialized_range in uninitialized_ranges {
             let num_bytes = uninitialized_range.end - uninitialized_range.start;
@@ -1366,7 +1366,7 @@ impl<B: GfxBackend> Device<B> {
                         return Err(Error::BindingZeroSize(bb.buffer_id));
                     }
 
-                    used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
+                    used_buffer_ranges.push(MemoryInitTrackerAction {
                         id: bb.buffer_id,
                         range: bb.offset..(bb.offset + bind_size),
                         kind: MemoryInitKind::NeedsInitializedMemory,
@@ -2611,12 +2611,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 unsafe { ptr::write_bytes(ptr.as_ptr(), 0, buffer.size as usize) };
                 buffer
                     .initialization_status
-                    .drain_uninitialized_ranges(0..buffer.size)
+                    .drain_uninitialized_ranges(&(0..buffer.size))
                     .unwrap()
                     .for_each(drop);
                 stage
                     .initialization_status
-                    .drain_uninitialized_ranges(0..buffer.size)
+                    .drain_uninitialized_ranges(&(0..buffer.size))
                     .unwrap()
                     .for_each(drop);
 

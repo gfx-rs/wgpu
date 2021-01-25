@@ -2,14 +2,14 @@ use std::ops::Range;
 
 #[derive(Debug, Clone)]
 pub(crate) enum MemoryInitKind {
-    // The memory range is going to be written by an already initialized source, thus doesn't need extra attention.
+    // The memory range is going to be written by an already initialized source, thus doesn't need extra attention other than marking as initialized.
     ImplicitlyInitialized,
     // The memory range is going to be read, therefore needs to ensure prior initialization.
     NeedsInitializedMemory,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ResourceMemoryInitTrackerAction<ResourceId> {
+pub(crate) struct MemoryInitTrackerAction<ResourceId> {
     pub(crate) id: ResourceId,
     pub(crate) range: Range<wgt::BufferAddress>,
     pub(crate) kind: MemoryInitKind,
@@ -34,10 +34,16 @@ impl MemoryInitTracker {
         }
     }
 
+    pub(crate) fn is_initialized(&self, range: &Range<wgt::BufferAddress>) -> bool {
+        self.uninitialized_ranges
+            .allocated_ranges()
+            .all(|r: Range<wgt::BufferAddress>| r.start >= range.end || r.end <= range.start)
+    }
+
     #[must_use]
     pub(crate) fn drain_uninitialized_ranges<'a>(
         &'a mut self,
-        range: Range<wgt::BufferAddress>,
+        range: &Range<wgt::BufferAddress>,
     ) -> Option<impl Iterator<Item = Range<wgt::BufferAddress>> + 'a> {
         let mut uninitialized_ranges: Vec<Range<wgt::BufferAddress>> = self
             .uninitialized_ranges

@@ -10,7 +10,7 @@ use crate::{
     device::{all_buffer_stages, all_image_stages},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId},
-    memory_init_tracker::{MemoryInitKind, ResourceMemoryInitTrackerAction},
+    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{BufferUse, Texture, TextureErrorDimension, TextureUse},
     span,
     track::TextureSelector,
@@ -404,20 +404,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // Make sure source is initialized memory and mark dest as initialized.
-        cmd_buf
-            .used_buffer_ranges
-            .push(ResourceMemoryInitTrackerAction {
-                id: destination,
-                range: destination_offset..(destination_offset + size),
-                kind: MemoryInitKind::ImplicitlyInitialized,
-            });
-        cmd_buf
-            .used_buffer_ranges
-            .push(ResourceMemoryInitTrackerAction {
-                id: source,
-                range: source_offset..(source_offset + size),
-                kind: MemoryInitKind::NeedsInitializedMemory,
-            });
+        let used_dst_buffer_range = destination_offset..(destination_offset + size);
+        if !dst_buffer
+            .initialization_status
+            .is_initialized(&used_dst_buffer_range)
+        {
+            cmd_buf
+                .buffer_memory_init_actions
+                .push(MemoryInitTrackerAction {
+                    id: destination,
+                    range: used_dst_buffer_range,
+                    kind: MemoryInitKind::ImplicitlyInitialized,
+                });
+        }
+        let used_src_buffer_range = source_offset..(source_offset + size);
+        if !src_buffer
+            .initialization_status
+            .is_initialized(&used_src_buffer_range)
+        {
+            cmd_buf
+                .buffer_memory_init_actions
+                .push(MemoryInitTrackerAction {
+                    id: source,
+                    range: used_src_buffer_range,
+                    kind: MemoryInitKind::NeedsInitializedMemory,
+                });
+        }
 
         let region = hal::command::BufferCopy {
             src: source_offset,
@@ -532,14 +544,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        cmd_buf
-            .used_buffer_ranges
-            .push(ResourceMemoryInitTrackerAction {
-                id: source.buffer,
-                range: source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
-                kind: MemoryInitKind::NeedsInitializedMemory,
-            });
-        // TODO: Mark dest texture memory as implicitly initialized here.
+        let used_src_buffer_range =
+            source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy);
+        if !src_buffer
+            .initialization_status
+            .is_initialized(&used_src_buffer_range)
+        {
+            cmd_buf
+                .buffer_memory_init_actions
+                .push(MemoryInitTrackerAction {
+                    id: source.buffer,
+                    range: used_src_buffer_range,
+                    kind: MemoryInitKind::NeedsInitializedMemory,
+                });
+        }
 
         let (block_width, _) = dst_texture.format.describe().block_dimensions;
         if !conv::is_valid_copy_dst_texture_format(dst_texture.format) {
@@ -688,16 +706,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ))?
         }
 
-        cmd_buf
-            .used_buffer_ranges
-            .push(ResourceMemoryInitTrackerAction {
-                id: destination.buffer,
-                range: destination.layout.offset
-                    ..(destination.layout.offset + required_buffer_bytes_in_copy),
-                kind: MemoryInitKind::ImplicitlyInitialized,
-            });
-        // TODO: Mark dest texture memory as required to be initialized here.
-
+        let used_dst_buffer_range =
+            destination.layout.offset..(destination.layout.offset + required_buffer_bytes_in_copy);
+        if !dst_buffer
+            .initialization_status
+            .is_initialized(&used_dst_buffer_range)
+        {
+            cmd_buf
+                .buffer_memory_init_actions
+                .push(MemoryInitTrackerAction {
+                    id: destination.buffer,
+                    range: used_dst_buffer_range,
+                    kind: MemoryInitKind::ImplicitlyInitialized,
+                });
+        }
         // WebGPU uses the physical size of the texture for copies whereas vulkan uses
         // the virtual size. We have passed validation, so it's safe to use the
         // image extent data directly. We want the provided copy size to be no larger than

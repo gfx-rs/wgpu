@@ -49,7 +49,7 @@ use crate::{
     },
     hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Resource, Storage, Token},
     id,
-    memory_init_tracker::{MemoryInitKind, ResourceMemoryInitTrackerAction},
+    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::BufferUse,
     span,
     track::{TrackerSet, UsageConflict},
@@ -160,7 +160,7 @@ impl RenderBundleEncoder {
         let mut commands = Vec::new();
         let mut base = self.base.as_ref();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
-        let mut used_buffer_ranges = Vec::new();
+        let mut buffer_memory_init_actions = Vec::new();
 
         for &command in base.commands {
             match command {
@@ -206,7 +206,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope);
                     }
 
-                    used_buffer_ranges
+                    buffer_memory_init_actions
                         .extend(bind_group.used_buffer_ranges.iter().map(|x| x.clone()));
 
                     state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
@@ -267,7 +267,7 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
-                    used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
+                    buffer_memory_init_actions.push(MemoryInitTrackerAction {
                         id: buffer_id,
                         range: offset..end,
                         kind: MemoryInitKind::NeedsInitializedMemory,
@@ -294,7 +294,7 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
-                    used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
+                    buffer_memory_init_actions.push(MemoryInitTrackerAction {
                         id: buffer_id,
                         range: offset..end,
                         kind: MemoryInitKind::NeedsInitializedMemory,
@@ -411,7 +411,7 @@ impl RenderBundleEncoder {
                     check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
                         .map_pass_err(scope)?;
 
-                    used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
+                    buffer_memory_init_actions.push(MemoryInitTrackerAction {
                         id: buffer_id,
                         range: 0..buffer.size,
                         kind: MemoryInitKind::NeedsInitializedMemory,
@@ -442,7 +442,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
 
                     let stride = 4 * 4; // 4 integers, vertexCount, instanceCount, firstVertex, firstInstance
-                    used_buffer_ranges.push(ResourceMemoryInitTrackerAction {
+                    buffer_memory_init_actions.push(MemoryInitTrackerAction {
                         id: buffer_id,
                         range: 0..stride,
                         kind: MemoryInitKind::NeedsInitializedMemory,
@@ -482,7 +482,7 @@ impl RenderBundleEncoder {
                 ref_count: device.life_guard.add_ref(),
             },
             used: state.trackers,
-            used_buffer_ranges,
+            buffer_memory_init_actions,
             context: self.context,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
@@ -531,7 +531,7 @@ pub struct RenderBundle {
     base: BasePass<RenderCommand>,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) used: TrackerSet,
-    pub(crate) used_buffer_ranges: Vec<ResourceMemoryInitTrackerAction<id::BufferId>>,
+    pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     pub(crate) context: RenderPassContext,
     pub(crate) life_guard: LifeGuard,
 }

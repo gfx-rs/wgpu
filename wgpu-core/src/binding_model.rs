@@ -9,7 +9,7 @@ use crate::{
     },
     hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
-    memory_init_tracker::ResourceMemoryInitTrackerAction,
+    memory_init_tracker::MemoryInitTrackerAction,
     track::{TrackerSet, DUMMY_SELECTOR},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label, LifeGuard, MultiRefCount, Stored, MAX_BIND_GROUPS,
@@ -589,7 +589,7 @@ pub struct BindGroup<B: hal::Backend> {
     pub(crate) layout_id: Valid<BindGroupLayoutId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) used: TrackerSet,
-    pub(crate) used_buffer_ranges: Vec<ResourceMemoryInitTrackerAction<BufferId>>,
+    pub(crate) used_buffer_ranges: Vec<MemoryInitTrackerAction<BufferId>>,
     pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,
 }
 

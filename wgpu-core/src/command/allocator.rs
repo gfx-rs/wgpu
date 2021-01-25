@@ -123,7 +123,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
             device_id,
             trackers: TrackerSet::new(B::VARIANT),
             used_swap_chains: Default::default(),
-            used_buffer_ranges: Default::default(),
+            buffer_memory_init_actions: Default::default(),
             limits,
             private_features,
             has_labels: label.is_some(),

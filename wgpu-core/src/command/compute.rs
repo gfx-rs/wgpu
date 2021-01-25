@@ -11,7 +11,7 @@ use crate::{
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
-    memory_init_tracker::{MemoryInitKind, ResourceMemoryInitTrackerAction},
+    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, BufferUse, Texture},
     span,
     track::{TrackerSet, UsageConflict},
@@ -147,6 +147,8 @@ pub enum ComputePassErrorInner {
         end_offset: u64,
         buffer_size: u64,
     },
+    #[error("buffer {0:?} is invalid or destroyed")]
+    InvalidBuffer(id::BufferId),
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
     #[error(transparent)]
@@ -330,9 +332,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .validate_dynamic_bindings(&temp_offsets)
                         .map_pass_err(scope)?;
 
-                    cmd_buf
-                        .used_buffer_ranges
-                        .extend(bind_group.used_buffer_ranges.iter().map(|x| x.clone()));
+                    cmd_buf.buffer_memory_init_actions.extend(
+                        bind_group
+                            .used_buffer_ranges
+                            .iter()
+                            .filter(|action| match buffer_guard.get(action.id) {
+                                Ok(buffer) => {
+                                    !buffer.initialization_status.is_initialized(&action.range)
+                                }
+                                Err(_) => false,
+                            })
+                            .map(|action| action.clone()),
+                    );
 
                     if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
                         index as usize,
@@ -519,13 +530,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope)?;
 
                     let stride = 3 * 4; // 3 integers, x/y/z group size
-                    cmd_buf
-                        .used_buffer_ranges
-                        .push(ResourceMemoryInitTrackerAction {
-                            id: buffer_id,
-                            range: offset..(offset + stride),
-                            kind: MemoryInitKind::NeedsInitializedMemory,
-                        });
+
+                    let used_buffer_range = offset..(offset + stride);
+                    if !indirect_buffer
+                        .initialization_status
+                        .is_initialized(&used_buffer_range)
+                    {
+                        cmd_buf
+                            .buffer_memory_init_actions
+                            .push(MemoryInitTrackerAction {
+                                id: buffer_id,
+                                range: used_buffer_range,
+                                kind: MemoryInitKind::NeedsInitializedMemory,
+                            });
+                    }
 
                     state
                         .flush_states(

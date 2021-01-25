@@ -277,7 +277,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let dst = buffer_guard.get_mut(buffer_id).unwrap();
             if let Some(uninitialized_ranges) = dst
                 .initialization_status
-                .drain_uninitialized_ranges(buffer_offset..(buffer_offset + data_size))
+                .drain_uninitialized_ranges(&(buffer_offset..(buffer_offset + data_size)))
             {
                 uninitialized_ranges.for_each(drop);
             }
@@ -498,14 +498,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .get(cmb_id)
                     .map_err(|_| QueueSubmitError::InvalidCommandBuffer(cmb_id))?;
 
-                for buffer_use in cmdbuf.used_buffer_ranges.iter() {
+                for buffer_use in cmdbuf.buffer_memory_init_actions.iter() {
                     let buffer = buffer_guard
                         .get_mut(buffer_use.id)
                         .map_err(|_| QueueSubmitError::DestroyedBuffer(buffer_use.id))?;
 
                     if let Some(uninitialized_ranges) = buffer
                         .initialization_status
-                        .drain_uninitialized_ranges(buffer_use.range.clone())
+                        .drain_uninitialized_ranges(&buffer_use.range)
                     {
                         match buffer_use.kind {
                             MemoryInitKind::ImplicitlyInitialized => {
