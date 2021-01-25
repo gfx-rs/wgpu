@@ -40,6 +40,8 @@ pub enum GlobalVariableError {
     InvalidUsage,
     #[error("Type isn't compatible with the storage class")]
     InvalidType,
+    #[error("Structure doesn't have a block decoration, can't be host-shared")]
+    MissingBlockDecoration,
     #[error("Interpolation is not valid")]
     InvalidInterpolation,
     #[error("Storage access {seen:?} exceed the allowed {allowed:?}")]
@@ -222,6 +224,22 @@ impl crate::GlobalVariable {
     }
 }
 
+impl crate::TypeInner {
+    fn check_block(&self) -> Result<(), GlobalVariableError> {
+        match *self {
+            Self::Struct {
+                block: true,
+                members: _,
+            } => Ok(()),
+            Self::Struct {
+                block: false,
+                members: _,
+            } => Err(GlobalVariableError::MissingBlockDecoration),
+            _ => Err(GlobalVariableError::InvalidType),
+        }
+    }
+}
+
 fn storage_usage(access: crate::StorageAccess) -> crate::GlobalUse {
     let mut storage_usage = crate::GlobalUse::empty();
     if access.contains(crate::StorageAccess::LOAD) {
@@ -388,10 +406,14 @@ impl Validator {
             }
             crate::StorageClass::Storage => {
                 var.check_resource()?;
+                let ty = &types[var.ty];
+                ty.inner.check_block()?;
                 crate::StorageAccess::all()
             }
             crate::StorageClass::Uniform => {
                 var.check_resource()?;
+                let ty = &types[var.ty];
+                ty.inner.check_block()?;
                 crate::StorageAccess::empty()
             }
             crate::StorageClass::Handle => {

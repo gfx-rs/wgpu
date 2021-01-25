@@ -13,7 +13,12 @@ OpEntryPoint Vertex %11 "vs_main" %157 %44 %15
 OpEntryPoint Fragment %168 "fs_main" %180 %170
 OpExecutionMode %168 OriginUpperLeft
 OpDecorate %15 BuiltIn VertexIndex
+OpDecorate %26 Block
+OpMemberDecorate %26 0 Offset 0
+OpMemberDecorate %26 0 MatrixStride 16
 OpDecorate %27 ColMajor
+OpMemberDecorate %26 1 Offset 64
+OpMemberDecorate %26 1 MatrixStride 16
 OpDecorate %25 DescriptorSet 0
 OpDecorate %25 Binding 0
 OpDecorate %44 Location 0

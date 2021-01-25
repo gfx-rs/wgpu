@@ -3,7 +3,7 @@ var<out> out_position: vec4<f32>;
 [[location(0)]] var<out> out_uv: vec3<f32>;
 [[builtin(vertex_index)]] var<in> in_vertex_index: u32;
 
-//[[block]]
+[[block]]
 struct Data {
     proj_inv: mat4x4<f32>;
     view: mat4x4<f32>;

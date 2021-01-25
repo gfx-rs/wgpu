@@ -13,7 +13,12 @@ struct Data {
 };
 
 out vec3  _location_0_vs;
-uniform Data  _group_0_binding_0;
+uniform Data_block_0 {
+	
+mat4x4 proj_inv;
+	
+mat4x4 view;
+}  _group_0_binding_0;
 
 void main() {
 	int tmp1_;
