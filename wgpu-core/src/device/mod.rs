@@ -1939,6 +1939,19 @@ impl<B: GfxBackend> Device<B> {
                         },
                     );
                 }
+
+                if let wgt::VertexFormat::Double
+                | wgt::VertexFormat::Double2
+                | wgt::VertexFormat::Double3
+                | wgt::VertexFormat::Double4 = attribute.format
+                {
+                    if !self.features.contains(wgt::Features::VERTEX_ATTRIBUTE_64BIT) {
+                        return Err(pipeline::CreateRenderPipelineError::MissingFeature(
+                            wgt::Features::VERTEX_ATTRIBUTE_64BIT,
+                        ));
+                    }
+                }
+
                 attributes.alloc().init(hal::pso::AttributeDesc {
                     location: attribute.shader_location,
                     binding: i as u32,

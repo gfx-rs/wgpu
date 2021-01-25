@@ -496,6 +496,10 @@ pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> hal::format::Forma
         Vf::Int2 => H::Rg32Sint,
         Vf::Int3 => H::Rgb32Sint,
         Vf::Int4 => H::Rgba32Sint,
+        Vf::Double => H::R64Sfloat,
+        Vf::Double2 => H::Rg64Sfloat,
+        Vf::Double3 => H::Rgb64Sfloat,
+        Vf::Double4 => H::Rgba64Sfloat,
     }
 }
 
