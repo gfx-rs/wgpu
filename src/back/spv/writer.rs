@@ -588,7 +588,7 @@ impl Writer {
                 self.annotations
                     .push(super::instructions::instruction_decorate(
                         id,
-                        spirv::Decoration::RowMajor,
+                        spirv::Decoration::ColMajor,
                         &[],
                     ));
                 let vector_id = self.get_type_id(
@@ -1743,8 +1743,10 @@ impl Writer {
 
 #[cfg(test)]
 mod tests {
-    use crate::back::spv::{Writer, WriterFlags};
-    use crate::Header;
+    use crate::{
+        back::spv::{Writer, WriterFlags},
+        Header,
+    };
 
     #[test]
     fn test_writer_generate_id() {
