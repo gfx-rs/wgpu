@@ -962,15 +962,16 @@ impl<B: GfxBackend> Device<B> {
             pipeline::ShaderModuleSource::Naga(module) => (None, Some(module)),
         };
 
-        let interface = module.as_ref().map(|m| validation::Interface::new(m));
-
-        let naga_result = match module {
+        let (naga_result, interface) = match module {
             // If succeeded, then validate it and attempt to give it to gfx-hal directly.
             Some(module) => {
-                if desc.flags.contains(wgt::ShaderFlags::VALIDATION) {
+                let interface = if desc.flags.contains(wgt::ShaderFlags::VALIDATION) {
                     naga::proc::Validator::new().validate(&module)?;
-                }
-                if desc
+                    Some(validation::Interface::new(&module))
+                } else {
+                    None
+                };
+                let naga_result = if desc
                     .flags
                     .contains(wgt::ShaderFlags::EXPERIMENTAL_TRANSLATION)
                 {
@@ -984,9 +985,10 @@ impl<B: GfxBackend> Device<B> {
                     }
                 } else {
                     Err(Some(module))
-                }
+                };
+                (naga_result, interface)
             }
-            None => Err(None),
+            None => (Err(None), None),
         };
 
         // Otherwise, fall back to SPIR-V.
@@ -1954,7 +1956,10 @@ impl<B: GfxBackend> Device<B> {
                 | wgt::VertexFormat::Double3
                 | wgt::VertexFormat::Double4 = attribute.format
                 {
-                    if !self.features.contains(wgt::Features::VERTEX_ATTRIBUTE_64BIT) {
+                    if !self
+                        .features
+                        .contains(wgt::Features::VERTEX_ATTRIBUTE_64BIT)
+                    {
                         return Err(pipeline::CreateRenderPipelineError::MissingFeature(
                             wgt::Features::VERTEX_ATTRIBUTE_64BIT,
                         ));
