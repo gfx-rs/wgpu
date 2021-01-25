@@ -117,6 +117,7 @@ struct StatementContext<'input, 'temp, 'out> {
     types: &'out mut Arena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
     global_vars: &'out Arena<crate::GlobalVariable>,
+    functions: &'out Arena<crate::Function>,
     arguments: &'out [crate::FunctionArgument],
 }
 
@@ -130,6 +131,7 @@ impl<'a> StatementContext<'a, '_, '_> {
             types: self.types,
             constants: self.constants,
             global_vars: self.global_vars,
+            functions: self.functions,
             arguments: self.arguments,
         }
     }
@@ -143,6 +145,7 @@ impl<'a> StatementContext<'a, '_, '_> {
             constants: self.constants,
             global_vars: self.global_vars,
             local_vars: self.variables,
+            functions: self.functions,
             arguments: self.arguments,
         }
     }
@@ -163,6 +166,7 @@ struct ExpressionContext<'input, 'temp, 'out> {
     global_vars: &'out Arena<crate::GlobalVariable>,
     local_vars: &'out Arena<crate::LocalVariable>,
     arguments: &'out [crate::FunctionArgument],
+    functions: &'out Arena<crate::Function>,
 }
 
 impl<'a> ExpressionContext<'a, '_, '_> {
@@ -175,6 +179,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             constants: self.constants,
             global_vars: self.global_vars,
             local_vars: self.local_vars,
+            functions: self.functions,
             arguments: self.arguments,
         }
     }
@@ -183,12 +188,11 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         &mut self,
         handle: Handle<crate::Expression>,
     ) -> Result<&crate::TypeInner, Error<'a>> {
-        let functions = Arena::new(); //TODO
         let resolve_ctx = ResolveContext {
             constants: self.constants,
             global_vars: self.global_vars,
             local_vars: self.local_vars,
-            functions: &functions,
+            functions: self.functions,
             arguments: self.arguments,
         };
         match self
@@ -1815,6 +1819,7 @@ impl Parser {
                 types: &mut module.types,
                 constants: &mut module.constants,
                 global_vars: &module.global_variables,
+                functions: &module.functions,
                 arguments: &fun.arguments,
             },
         )?;
