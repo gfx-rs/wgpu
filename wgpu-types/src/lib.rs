@@ -388,6 +388,24 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 0x0000_0000_1000_0000;
+        /// Enables 64-bit floating point types in SPIR-V shaders.
+        ///
+        /// Note: even when supported by GPU hardware, 64-bit floating point operations are
+        /// frequently between 16 and 64 _times_ slower than equivelent operations on 32-bit floats.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        ///
+        /// This is a native-only feature.
+        const SHADER_FLOAT64 = 0x0000_0000_2000_0000;
+        /// Enables using 64-bit types for vertex attributes.
+        ///
+        /// Requires SHADER_FLOAT64.
+        ///
+        /// Supported Platforms: N/A
+        ///
+        /// This is a native-only feature.
+        const VERTEX_ATTRIBUTE_64BIT = 0x0000_0000_4000_0000;
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).
@@ -1680,6 +1698,14 @@ pub enum VertexFormat {
     Int3 = 28,
     /// Four signed ints (i32). `ivec4` in shaders.
     Int4 = 29,
+    /// One double-precision float (f64). `double` in shaders. Requires VERTEX_ATTRIBUTE_64BIT features.
+    Double = 30,
+    /// Two double-precision floats (f64). `dvec2` in shaders. Requires VERTEX_ATTRIBUTE_64BIT features.
+    Double2 = 31,
+    /// Three double-precision floats (f64). `dvec3` in shaders. Requires VERTEX_ATTRIBUTE_64BIT features.
+    Double3 = 32,
+    /// Four double-precision floats (f64). `dvec4` in shaders. Requires VERTEX_ATTRIBUTE_64BIT features.
+    Double4 = 33,
 }
 
 impl VertexFormat {
@@ -1705,9 +1731,12 @@ impl VertexFormat {
             | Self::Half4
             | Self::Float2
             | Self::Uint2
-            | Self::Int2 => 8,
+            | Self::Int2
+            | Self::Double => 8,
             Self::Float3 | Self::Uint3 | Self::Int3 => 12,
-            Self::Float4 | Self::Uint4 | Self::Int4 => 16,
+            Self::Float4 | Self::Uint4 | Self::Int4 | Self::Double2 => 16,
+            Self::Double3 => 24,
+            Self::Double4 => 32,
         }
     }
 }

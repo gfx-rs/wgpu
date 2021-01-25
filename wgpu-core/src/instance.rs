@@ -188,6 +188,10 @@ impl<B: GfxBackend> Adapter<B> {
             wgt::Features::PIPELINE_STATISTICS_QUERY,
             adapter_features.contains(hal::Features::PIPELINE_STATISTICS_QUERY),
         );
+        features.set(
+            wgt::Features::SHADER_FLOAT64,
+            adapter_features.contains(hal::Features::SHADER_FLOAT64),
+        );
         #[cfg(not(target_os = "ios"))]
         //TODO: https://github.com/gfx-rs/gfx/issues/3346
         features.set(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER, true);
@@ -434,6 +438,10 @@ impl<B: GfxBackend> Adapter<B> {
             hal::Features::PIPELINE_STATISTICS_QUERY,
             desc.features
                 .contains(wgt::Features::PIPELINE_STATISTICS_QUERY),
+        );
+        enabled_features.set(
+            hal::Features::SHADER_FLOAT64,
+            desc.features.contains(wgt::Features::SHADER_FLOAT64),
         );
 
         let family = self
