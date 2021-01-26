@@ -116,3 +116,34 @@ fn parse_switch() {
     )
     .unwrap();
 }
+
+#[test]
+fn parse_texture_load() {
+    parse_str(
+        "
+        var t: texture_3d<u32>;
+        fn foo() {
+            const r: vec4<u32> = textureLoad(t, vec3<u32>(0.0, 1.0, 2.0), 1);
+        }
+    ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        var t: texture_multisampled_2d_array<i32>;
+        fn foo() {
+        const r: vec4<i32> = textureLoad(t, vec2<i32>(10, 20), 2, 3);
+        }
+    ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        var t: [[access(read)]] texture_storage_1d_array<r32float>;
+        fn foo() {
+            const r: vec4<f32> = textureLoad(t, 10, 2);
+        }
+    ",
+    )
+    .unwrap();
+}

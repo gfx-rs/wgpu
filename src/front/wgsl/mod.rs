@@ -665,12 +665,12 @@ impl Parser {
                         None
                     };
                     let index = match class {
-                        crate::ImageClass::Storage(_) => {
+                        crate::ImageClass::Storage(_) => None,
+                        // it's the MSAA index for multi-sampled, and LOD for the others
+                        crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth => {
                             lexer.expect(Token::Separator(','))?;
-                            let index_name = lexer.next_ident()?;
-                            Some(ctx.lookup_ident.lookup(index_name)?)
+                            Some(self.parse_general_expression(lexer, ctx.reborrow())?)
                         }
-                        crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth => None,
                     };
                     lexer.expect(Token::Paren(')'))?;
                     Some(crate::Expression::ImageLoad {
@@ -1408,6 +1408,14 @@ impl Parser {
                 crate::TypeInner::Image {
                     dim: crate::ImageDimension::D2,
                     arrayed: false,
+                    class: crate::ImageClass::Sampled { kind, multi: true },
+                }
+            }
+            "texture_multisampled_2d_array" => {
+                let (kind, _) = lexer.next_scalar_generic()?;
+                crate::TypeInner::Image {
+                    dim: crate::ImageDimension::D2,
+                    arrayed: true,
                     class: crate::ImageClass::Sampled { kind, multi: true },
                 }
             }
