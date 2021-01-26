@@ -147,3 +147,8 @@ fn parse_texture_load() {
     )
     .unwrap();
 }
+
+#[test]
+fn parse_postfix() {
+    parse_str("fn foo() { const x: f32 = fract(vec2<f32>(0.5, 1.0)).x; }").unwrap();
+}

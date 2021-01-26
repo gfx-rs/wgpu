@@ -947,12 +947,13 @@ impl Parser {
             Some(expr) => ctx.expressions.append(expr),
             None => {
                 *lexer = backup;
-                let handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
-                self.parse_postfix(lexer, ctx, handle)?
+                self.parse_primary_expression(lexer, ctx.reborrow())?
             }
         };
+
+        let post_handle = self.parse_postfix(lexer, ctx, handle)?;
         self.scopes.pop();
-        Ok(handle)
+        Ok(post_handle)
     }
 
     fn parse_equality_expression<'a>(
