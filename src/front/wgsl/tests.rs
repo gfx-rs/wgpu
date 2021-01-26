@@ -150,5 +150,7 @@ fn parse_texture_load() {
 
 #[test]
 fn parse_postfix() {
+    parse_str("fn foo() { const x: f32 = vec4<f32>(1.0, 2.0, 3.0, 4.0).xyz.rgbr.aaaa.wz.g; }")
+        .unwrap();
     parse_str("fn foo() { const x: f32 = fract(vec2<f32>(0.5, 1.0)).x; }").unwrap();
 }

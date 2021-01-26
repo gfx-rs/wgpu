@@ -265,24 +265,31 @@ enum Composition {
 }
 
 impl Composition {
+    //TODO: could be `const fn` once MSRV allows
+    fn letter_pos(letter: char) -> u32 {
+        match letter {
+            'x' | 'r' => 0,
+            'y' | 'g' => 1,
+            'z' | 'b' => 2,
+            'w' | 'a' => 3,
+            _ => !0,
+        }
+    }
+
     fn make<'a>(
         base: Handle<crate::Expression>,
         base_size: crate::VectorSize,
         name: &'a str,
         expressions: &mut Arena<crate::Expression>,
     ) -> Result<Self, Error<'a>> {
-        const MEMBERS: [char; 4] = ['x', 'y', 'z', 'w'];
-
         Ok(if name.len() > 1 {
             let mut components = Vec::with_capacity(name.len());
             for ch in name.chars() {
-                let expr = crate::Expression::AccessIndex {
-                    base,
-                    index: MEMBERS[..base_size as usize]
-                        .iter()
-                        .position(|&m| m == ch)
-                        .ok_or(Error::BadAccessor(name))? as u32,
-                };
+                let index = Self::letter_pos(ch);
+                if index >= base_size as u32 {
+                    return Err(Error::BadAccessor(name));
+                }
+                let expr = crate::Expression::AccessIndex { base, index };
                 components.push(expressions.append(expr));
             }
 
@@ -295,10 +302,10 @@ impl Composition {
             Composition::Multi(size, components)
         } else {
             let ch = name.chars().next().ok_or(Error::BadAccessor(name))?;
-            let index = MEMBERS[..base_size as usize]
-                .iter()
-                .position(|&m| m == ch)
-                .ok_or(Error::BadAccessor(name))? as u32;
+            let index = Self::letter_pos(ch);
+            if index >= base_size as u32 {
+                return Err(Error::BadAccessor(name));
+            }
             Composition::Single(crate::Expression::AccessIndex { base, index })
         })
     }
