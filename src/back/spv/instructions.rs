@@ -570,6 +570,40 @@ pub(super) fn instruction_composite_construct(
     instruction
 }
 
+pub(super) fn instruction_composite_extract(
+    result_type_id: Word,
+    id: Word,
+    composite_id: Word,
+    indices: &[Word],
+) -> Instruction {
+    let mut instruction = Instruction::new(Op::CompositeExtract);
+    instruction.set_type(result_type_id);
+    instruction.set_result(id);
+
+    instruction.add_operand(composite_id);
+    for index in indices {
+        instruction.add_operand(*index);
+    }
+
+    instruction
+}
+
+pub(super) fn instruction_vector_extract_dynamic(
+    result_type_id: Word,
+    id: Word,
+    vector_id: Word,
+    index_id: Word,
+) -> Instruction {
+    let mut instruction = Instruction::new(Op::VectorExtractDynamic);
+    instruction.set_type(result_type_id);
+    instruction.set_result(id);
+
+    instruction.add_operand(vector_id);
+    instruction.add_operand(index_id);
+
+    instruction
+}
+
 //
 // Arithmetic Instructions
 //

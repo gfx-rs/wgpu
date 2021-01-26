@@ -1060,11 +1060,10 @@ impl Writer {
         let (raw_expression, lookup_ty) =
             self.write_expression_raw(ir_module, ir_function, handle, block, function)?;
         Ok(match raw_expression {
-            RawExpression::Value(_id) => {
-                //TODO: create a local variable?
-                log::error!("Pointer expression {:?}", ir_function.expressions[handle]);
-                return Err(Error::FeatureNotImplemented("getting pointer of a value"));
-            }
+            RawExpression::Value(_id) => unimplemented!(
+                "Expression {:?} is not a pointer",
+                ir_function.expressions[handle]
+            ),
             RawExpression::Pointer(id, class) => (id, lookup_ty, class),
         })
     }
@@ -1081,78 +1080,89 @@ impl Writer {
         match ir_function.expressions[expr_handle] {
             crate::Expression::Access { base, index } => {
                 let id = self.generate_id();
-
-                let (base_id, base_lookup_ty, class) =
-                    self.write_expression_pointer(ir_module, ir_function, base, block, function)?;
+                let (raw_base_expression, base_lookup_ty) =
+                    self.write_expression_raw(ir_module, ir_function, base, block, function)?;
+                let base_ty_inner = self.get_type_inner(&ir_module.types, base_lookup_ty);
                 let (index_id, _) =
                     self.write_expression(ir_module, ir_function, index, block, function)?;
 
-                let base_ty_inner = self.get_type_inner(&ir_module.types, base_lookup_ty);
-                let (pointer_type_id, lookup_ty) = match *base_ty_inner {
-                    crate::TypeInner::Array { base, .. } => {
-                        self.create_pointer_type(LookupType::Handle(base), class, &ir_module.types)?
-                    }
-                    crate::TypeInner::Vector { kind, width, .. } => self.create_pointer_type(
-                        LocalType::Scalar { kind, width }.into(),
-                        class,
-                        &ir_module.types,
-                    )?,
-                    ref other => {
-                        log::error!("Unable to index {:?}", other);
-                        return Err(Error::FeatureNotImplemented("accessing of non-vector"));
-                    }
-                };
-
-                block
-                    .body
-                    .push(super::instructions::instruction_access_chain(
-                        pointer_type_id,
-                        id,
-                        base_id,
-                        &[index_id],
-                    ));
-
-                Ok((RawExpression::Pointer(id, class), lookup_ty))
-            }
-            crate::Expression::AccessIndex { base, index } => {
-                let id = self.generate_id();
-                let (base_id, base_lookup_ty, class) =
-                    self.write_expression_pointer(ir_module, ir_function, base, block, function)?;
-
-                let base_ty_inner = self.get_type_inner(&ir_module.types, base_lookup_ty);
-                let (pointer_type_id, lookup_ty) = match *base_ty_inner {
+                let lookup_ty = match *base_ty_inner {
                     crate::TypeInner::Vector {
                         size: _,
                         kind,
                         width,
-                    } => self.create_pointer_type(
-                        LocalType::Scalar { kind, width }.into(),
-                        class,
-                        &ir_module.types,
-                    )?,
+                    } => LookupType::Local(LocalType::Scalar { kind, width }),
+                    crate::TypeInner::Array { base, .. } => LookupType::Handle(base),
+                    ref other => {
+                        log::error!("Unable to index {:?}", other);
+                        return Err(Error::FeatureNotImplemented(
+                            "accessing index of non vector or array",
+                        ));
+                    }
+                };
+
+                Ok(match raw_base_expression {
+                    RawExpression::Value(base_id) => {
+                        if let crate::TypeInner::Array { .. } = *base_ty_inner {
+                            return Err(Error::FeatureNotImplemented(
+                                "accessing index of a value array",
+                            ));
+                        }
+
+                        let result_type_id = self.get_type_id(&ir_module.types, lookup_ty)?;
+                        block
+                            .body
+                            .push(super::instructions::instruction_vector_extract_dynamic(
+                                result_type_id,
+                                id,
+                                base_id,
+                                index_id,
+                            ));
+
+                        (RawExpression::Value(id), lookup_ty)
+                    }
+                    RawExpression::Pointer(base_id, class) => {
+                        let (pointer_type_id, pointer_lookup_ty) =
+                            self.create_pointer_type(lookup_ty, class, &ir_module.types)?;
+
+                        block
+                            .body
+                            .push(super::instructions::instruction_access_chain(
+                                pointer_type_id,
+                                id,
+                                base_id,
+                                &[index_id],
+                            ));
+
+                        (RawExpression::Pointer(id, class), pointer_lookup_ty)
+                    }
+                })
+            }
+            crate::Expression::AccessIndex { base, index } => {
+                let id = self.generate_id();
+                let (raw_base_expression, base_lookup_ty) =
+                    self.write_expression_raw(ir_module, ir_function, base, block, function)?;
+                let base_ty_inner = self.get_type_inner(&ir_module.types, base_lookup_ty);
+
+                let lookup_ty = match *base_ty_inner {
+                    crate::TypeInner::Vector {
+                        size: _,
+                        kind,
+                        width,
+                    } => LookupType::Local(LocalType::Scalar { kind, width }),
                     crate::TypeInner::Matrix {
                         columns: _,
                         rows,
                         width,
-                    } => {
-                        let local_type = LocalType::Vector {
-                            size: rows,
-                            kind: crate::ScalarKind::Float,
-                            width,
-                        };
-                        self.create_pointer_type(local_type.into(), class, &ir_module.types)?
-                    }
+                    } => LookupType::Local(LocalType::Vector {
+                        size: rows,
+                        kind: crate::ScalarKind::Float,
+                        width,
+                    }),
                     crate::TypeInner::Struct {
                         block: _,
                         ref members,
-                    } => {
-                        let member = &members[index as usize];
-                        self.create_pointer_type(
-                            LookupType::Handle(member.ty),
-                            class,
-                            &ir_module.types,
-                        )?
-                    }
+                    } => LookupType::Handle(members[index as usize].ty),
                     ref other => {
                         log::error!("Unable to access index {:?}", other);
                         return Err(Error::FeatureNotImplemented(
@@ -1161,25 +1171,44 @@ impl Writer {
                     }
                 };
 
-                let const_ty_id = self.get_type_id(
-                    &ir_module.types,
-                    LookupType::Local(LocalType::Scalar {
-                        kind: crate::ScalarKind::Sint,
-                        width: 4,
-                    }),
-                )?;
-                let const_id = self.create_constant(const_ty_id, &[index]);
+                Ok(match raw_base_expression {
+                    RawExpression::Value(base_id) => {
+                        let result_type_id = self.get_type_id(&ir_module.types, lookup_ty)?;
+                        block
+                            .body
+                            .push(super::instructions::instruction_composite_extract(
+                                result_type_id,
+                                id,
+                                base_id,
+                                &[index],
+                            ));
 
-                block
-                    .body
-                    .push(super::instructions::instruction_access_chain(
-                        pointer_type_id,
-                        id,
-                        base_id,
-                        &[const_id],
-                    ));
+                        (RawExpression::Value(id), lookup_ty)
+                    }
+                    RawExpression::Pointer(base_id, class) => {
+                        let const_ty_id = self.get_type_id(
+                            &ir_module.types,
+                            LookupType::Local(LocalType::Scalar {
+                                kind: crate::ScalarKind::Sint,
+                                width: 4,
+                            }),
+                        )?;
+                        let const_id = self.create_constant(const_ty_id, &[index]);
+                        let (pointer_type_id, pointer_lookup_ty) =
+                            self.create_pointer_type(lookup_ty, class, &ir_module.types)?;
 
-                Ok((RawExpression::Pointer(id, class), lookup_ty))
+                        block
+                            .body
+                            .push(super::instructions::instruction_access_chain(
+                                pointer_type_id,
+                                id,
+                                base_id,
+                                &[const_id],
+                            ));
+
+                        (RawExpression::Pointer(id, class), pointer_lookup_ty)
+                    }
+                })
             }
             crate::Expression::GlobalVariable(handle) => {
                 let var = &ir_module.global_variables[handle];
