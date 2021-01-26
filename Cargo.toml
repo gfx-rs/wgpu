@@ -26,20 +26,20 @@ webgl = ["wgc"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "b23ece55e7abb8d449fcae09398b2402b0efee99"
+rev = "60cd0f7e56f22a7b9d37f36559073cc844adace1"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "b23ece55e7abb8d449fcae09398b2402b0efee99"
+rev = "60cd0f7e56f22a7b9d37f36559073cc844adace1"
 features = ["raw-window-handle"]
 optional = true
 
 [dependencies.wgt]
 package = "wgpu-types"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "b23ece55e7abb8d449fcae09398b2402b0efee99"
+rev = "60cd0f7e56f22a7b9d37f36559073cc844adace1"
 
 [dependencies]
 arrayvec = "0.5"
@@ -50,13 +50,13 @@ tracing = { version = "0.1", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
-cgmath = "0.17"
+cgmath = "0.18"
 log = "0.4"
 png = "0.16"
 winit = { version = "0.24.0", features = ["web-sys"] }
 rand = { version = "0.7.2", features = ["wasm-bindgen"] }
 bytemuck = { version = "1.4", features = ["derive"] }
-noise = "0.6"
+noise = "0.7"
 ddsfile = "0.4"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]

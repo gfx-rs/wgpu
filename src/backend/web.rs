@@ -1,10 +1,9 @@
 use crate::{
-    BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BindingType,
-    BufferBindingType, BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor,
-    ComputePipelineDescriptor, LoadOp, PipelineLayoutDescriptor, ProgrammableStageDescriptor,
-    RenderBundleEncoderDescriptor, RenderPipelineDescriptor, SamplerDescriptor,
-    ShaderModuleDescriptor, ShaderSource, StorageTextureAccess, SwapChainStatus, TextureDescriptor,
-    TextureViewDescriptor, TextureViewDimension,
+    BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferDescriptor,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, LoadOp,
+    PipelineLayoutDescriptor, ProgrammableStageDescriptor, RenderBundleEncoderDescriptor,
+    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor, ShaderSource,
+    SwapChainStatus, TextureDescriptor, TextureViewDescriptor,
 };
 
 use std::{
@@ -133,6 +132,18 @@ impl crate::ComputePassInner<Context> for ComputePass {
         self.0
             .dispatch_indirect_with_f64(&indirect_buffer.0, indirect_offset as f64);
     }
+
+    fn write_timestamp(&mut self, _query_set: &(), _query_index: u32) {
+        // Not available in gecko yet
+    }
+
+    fn begin_pipeline_statistics_query(&mut self, _query_set: &(), _query_index: u32) {
+        // Not available in gecko yet
+    }
+
+    fn end_pipeline_statistics_query(&mut self) {
+        // Not available in gecko yet
+    }
 }
 
 impl crate::RenderInner<Context> for RenderPass {
@@ -157,7 +168,7 @@ impl crate::RenderInner<Context> for RenderPass {
     fn set_index_buffer(
         &mut self,
         buffer: &Sendable<web_sys::GpuBuffer>,
-        index_format: wgt::IndexFormat,
+        _index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
@@ -282,7 +293,7 @@ impl crate::RenderInner<Context> for RenderBundleEncoder {
     fn set_index_buffer(
         &mut self,
         buffer: &Sendable<web_sys::GpuBuffer>,
-        index_format: wgt::IndexFormat,
+        _index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
@@ -432,6 +443,18 @@ impl crate::RenderPassInner<Context> for RenderPass {
             .map(|bundle| &bundle.0)
             .collect::<js_sys::Array>();
         self.0.execute_bundles(&mapped);
+    }
+
+    fn write_timestamp(&mut self, _query_set: &(), _query_index: u32) {
+        // Not available in gecko yet
+    }
+
+    fn begin_pipeline_statistics_query(&mut self, _query_set: &(), _query_index: u32) {
+        // Not available in gecko yet
+    }
+
+    fn end_pipeline_statistics_query(&mut self) {
+        // Not available in gecko yet
     }
 }
 
@@ -666,6 +689,12 @@ fn map_vertex_format(format: wgt::VertexFormat) -> web_sys::GpuVertexFormat {
         VertexFormat::Int2 => vf::Int2,
         VertexFormat::Int3 => vf::Int3,
         VertexFormat::Int4 => vf::Int4,
+        VertexFormat::Double
+        | VertexFormat::Double2
+        | VertexFormat::Double3
+        | VertexFormat::Double4 => {
+            panic!("VERTEX_ATTRIBUTE_64BIT feature must be enabled to use Double formats")
+        }
     }
 }
 
@@ -746,12 +775,12 @@ fn map_texture_view_dimension(
 ) -> web_sys::GpuTextureViewDimension {
     use web_sys::GpuTextureViewDimension as tvd;
     match texture_view_dimension {
-        TextureViewDimension::D1 => tvd::N1d,
-        TextureViewDimension::D2 => tvd::N2d,
-        TextureViewDimension::D2Array => tvd::N2dArray,
-        TextureViewDimension::Cube => tvd::Cube,
-        TextureViewDimension::CubeArray => tvd::CubeArray,
-        TextureViewDimension::D3 => tvd::N3d,
+        wgt::TextureViewDimension::D1 => tvd::N1d,
+        wgt::TextureViewDimension::D2 => tvd::N2d,
+        wgt::TextureViewDimension::D2Array => tvd::N2dArray,
+        wgt::TextureViewDimension::Cube => tvd::Cube,
+        wgt::TextureViewDimension::CubeArray => tvd::CubeArray,
+        wgt::TextureViewDimension::D3 => tvd::N3d,
     }
 }
 
@@ -849,6 +878,7 @@ impl crate::Context for Context {
     type SamplerId = Sendable<web_sys::GpuSampler>;
     type BufferId = Sendable<web_sys::GpuBuffer>;
     type TextureId = Sendable<web_sys::GpuTexture>;
+    type QuerySetId = (); //TODO!
     type PipelineLayoutId = Sendable<web_sys::GpuPipelineLayout>;
     type RenderPipelineId = Sendable<web_sys::GpuRenderPipeline>;
     type ComputePipelineId = Sendable<web_sys::GpuComputePipeline>;
@@ -927,6 +957,10 @@ impl crate::Context for Context {
         )
     }
 
+    fn adapter_get_timestamp_period(&self, _adapter: &Self::AdapterId) -> f32 {
+        1.0 //TODO
+    }
+
     fn adapter_request_device(
         &self,
         adapter: &Self::AdapterId,
@@ -956,8 +990,8 @@ impl crate::Context for Context {
 
     fn adapter_get_swap_chain_preferred_format(
         &self,
-        adapter: &Self::AdapterId,
-        surface: &Self::SurfaceId,
+        _adapter: &Self::AdapterId,
+        _surface: &Self::SurfaceId,
     ) -> wgt::TextureFormat {
         // TODO: web-sys bindings need to be updated to not return a promise
         wgt::TextureFormat::Bgra8Unorm
@@ -1043,31 +1077,31 @@ impl crate::Context for Context {
             .iter()
             .map(|bind| {
                 let mapped_type = match bind.ty {
-                    BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
+                    wgt::BindingType::Buffer {
+                        ty: wgt::BufferBindingType::Uniform,
                         ..
                     } => bt::UniformBuffer,
-                    BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: false },
+                    wgt::BindingType::Buffer {
+                        ty: wgt::BufferBindingType::Storage { read_only: false },
                         ..
                     } => bt::StorageBuffer,
-                    BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: true },
+                    wgt::BindingType::Buffer {
+                        ty: wgt::BufferBindingType::Storage { read_only: true },
                         ..
                     } => bt::ReadonlyStorageBuffer,
-                    BindingType::Sampler {
+                    wgt::BindingType::Sampler {
                         comparison: false, ..
                     } => bt::Sampler,
-                    BindingType::Sampler { .. } => bt::ComparisonSampler,
-                    BindingType::Texture {
+                    wgt::BindingType::Sampler { .. } => bt::ComparisonSampler,
+                    wgt::BindingType::Texture {
                         multisampled: true, ..
                     } => bt::MultisampledTexture,
-                    BindingType::Texture { .. } => bt::SampledTexture,
-                    BindingType::StorageTexture {
-                        access: StorageTextureAccess::ReadOnly,
+                    wgt::BindingType::Texture { .. } => bt::SampledTexture,
+                    wgt::BindingType::StorageTexture {
+                        access: wgt::StorageTextureAccess::ReadOnly,
                         ..
                     } => bt::ReadonlyStorageTexture,
-                    BindingType::StorageTexture { .. } => bt::WriteonlyStorageTexture,
+                    wgt::BindingType::StorageTexture { .. } => bt::WriteonlyStorageTexture,
                 };
 
                 assert!(
@@ -1081,26 +1115,26 @@ impl crate::Context for Context {
                     bind.visibility.bits(),
                 );
 
-                if let BindingType::Buffer {
+                if let wgt::BindingType::Buffer {
                     has_dynamic_offset, ..
                 } = bind.ty
                 {
                     mapped_entry.has_dynamic_offset(has_dynamic_offset);
                 }
 
-                if let BindingType::Texture { sample_type, .. } = bind.ty {
+                if let wgt::BindingType::Texture { sample_type, .. } = bind.ty {
                     mapped_entry.texture_component_type(map_texture_component_type(sample_type));
                 }
 
                 match bind.ty {
-                    BindingType::Texture { view_dimension, .. }
-                    | BindingType::StorageTexture { view_dimension, .. } => {
+                    wgt::BindingType::Texture { view_dimension, .. }
+                    | wgt::BindingType::StorageTexture { view_dimension, .. } => {
                         mapped_entry.view_dimension(map_texture_view_dimension(view_dimension));
                     }
                     _ => {}
                 }
 
-                if let BindingType::StorageTexture { format, .. } = bind.ty {
+                if let wgt::BindingType::StorageTexture { format, .. } = bind.ty {
                     mapped_entry.storage_texture_format(map_texture_format(format));
                 }
 
@@ -1312,6 +1346,14 @@ impl crate::Context for Context {
         Sendable(device.0.create_sampler_with_descriptor(&mapped_desc))
     }
 
+    fn device_create_query_set(
+        &self,
+        _device: &Self::DeviceId,
+        _desc: &wgt::QuerySetDescriptor,
+    ) -> Self::QuerySetId {
+        ()
+    }
+
     fn device_create_command_encoder(
         &self,
         device: &Self::DeviceId,
@@ -1484,6 +1526,10 @@ impl crate::Context for Context {
     }
 
     fn sampler_drop(&self, _sampler: &Self::SamplerId) {
+        // Dropped automatically
+    }
+
+    fn query_set_drop(&self, _query_set: &Self::QuerySetId) {
         // Dropped automatically
     }
 
@@ -1721,6 +1767,27 @@ impl crate::Context for Context {
     fn command_encoder_pop_debug_group(&self, _encoder: &Self::CommandEncoderId) {
         // Not available in gecko yet
         // encoder.pop_debug_group();
+    }
+
+    fn command_encoder_write_timestamp(
+        &self,
+        _encoder: &Self::CommandEncoderId,
+        _query_set: &Self::QuerySetId,
+        _query_index: u32,
+    ) {
+        // Not available in gecko yet
+    }
+
+    fn command_encoder_resolve_query_set(
+        &self,
+        _encoder: &Self::CommandEncoderId,
+        _query_set: &Self::QuerySetId,
+        _first_query: u32,
+        _query_count: u32,
+        _destination: &Self::BufferId,
+        _destination_offset: wgt::BufferAddress,
+    ) {
+        // Not available in gecko yet
     }
 
     fn render_bundle_encoder_finish(
