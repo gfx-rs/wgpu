@@ -870,6 +870,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             TextureViewInner::SwapChain { ref image, .. } => Borrow::borrow(image),
         });
 
+        //Note: the order of iteration has to match `AttachmentData::all()`
         let attachments = color_attachments
             .iter()
             .zip(&rp_key.colors)

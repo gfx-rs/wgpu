@@ -1296,6 +1296,7 @@ impl<B: GfxBackend> Device<B> {
                             let end = bb.offset + size.get();
                             if end > buffer.size {
                                 return Err(Error::BindingRangeTooLarge {
+                                    buffer: bb.buffer_id,
                                     range: bb.offset..end,
                                     size: buffer.size,
                                 });
@@ -1322,10 +1323,13 @@ impl<B: GfxBackend> Device<B> {
                         let min_size = non_zero.get();
                         if min_size > bind_size {
                             return Err(Error::BindingSizeTooSmall {
+                                buffer: bb.buffer_id,
                                 actual: bind_size,
                                 min: min_size,
                             });
                         }
+                    } else if bind_size == 0 {
+                        return Err(Error::BindingZeroSize(bb.buffer_id));
                     }
 
                     let sub_range = hal::buffer::SubRange {
