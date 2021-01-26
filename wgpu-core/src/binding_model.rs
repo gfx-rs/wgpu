@@ -58,11 +58,18 @@ pub enum CreateBindGroupError {
     BindingArrayLengthMismatch { actual: usize, expected: usize },
     #[error("bound buffer range {range:?} does not fit in buffer of size {size}")]
     BindingRangeTooLarge {
+        buffer: BufferId,
         range: Range<wgt::BufferAddress>,
         size: u64,
     },
     #[error("buffer binding size {actual} is less than minimum {min}")]
-    BindingSizeTooSmall { actual: u64, min: u64 },
+    BindingSizeTooSmall {
+        buffer: BufferId,
+        actual: u64,
+        min: u64,
+    },
+    #[error("buffer binding size is zero")]
+    BindingZeroSize(BufferId),
     #[error("number of bindings in bind group descriptor ({actual}) does not match the number of bindings defined in the bind group layout ({expected})")]
     BindingsNumMismatch { actual: usize, expected: usize },
     #[error("binding {0} is used at least twice in the descriptor")]
