@@ -275,12 +275,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Ensure the overwritten bytes are marked as initialized so they don't need to be nulled prior to mapping or binding.
         {
             let dst = buffer_guard.get_mut(buffer_id).unwrap();
-            if let Some(uninitialized_ranges) = dst
-                .initialization_status
+            dst.initialization_status
                 .drain_uninitialized_ranges(&(buffer_offset..(buffer_offset + data_size)))
-            {
-                uninitialized_ranges.for_each(drop);
-            }
+                .for_each(drop);
         }
 
         Ok(())
@@ -503,20 +500,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .get_mut(buffer_use.id)
                         .map_err(|_| QueueSubmitError::DestroyedBuffer(buffer_use.id))?;
 
-                    if let Some(uninitialized_ranges) = buffer
+                    let uninitialized_ranges = buffer
                         .initialization_status
-                        .drain_uninitialized_ranges(&buffer_use.range)
-                    {
-                        match buffer_use.kind {
-                            MemoryInitKind::ImplicitlyInitialized => {
-                                uninitialized_ranges.for_each(drop);
-                            }
-                            MemoryInitKind::NeedsInitializedMemory => {
-                                required_buffer_inits
-                                    .entry(buffer_use.id)
-                                    .or_default()
-                                    .extend(uninitialized_ranges);
-                            }
+                        .drain_uninitialized_ranges(&buffer_use.range);
+                    match buffer_use.kind {
+                        MemoryInitKind::ImplicitlyInitialized => {
+                            uninitialized_ranges.for_each(drop);
+                        }
+                        MemoryInitKind::NeedsInitializedMemory => {
+                            required_buffer_inits
+                                .entry(buffer_use.id)
+                                .or_default()
+                                .extend(uninitialized_ranges);
                         }
                     }
                 }
