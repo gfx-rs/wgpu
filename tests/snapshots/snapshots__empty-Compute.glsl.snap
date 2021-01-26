@@ -6,11 +6,7 @@ expression: string
 
 precision highp float;
 
-
-
-
 void main() {
-
-	return;
+    return;
 }
 

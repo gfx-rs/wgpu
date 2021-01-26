@@ -6,30 +6,27 @@ expression: string
 
 precision highp float;
 
-
 struct Data {
-	mat4x4 proj_inv;
-	mat4x4 view;
+    mat4x4 proj_inv;
+    mat4x4 view;
 };
 
-out vec3  _location_0_vs;
+out vec3 _location_0_vs;
+
 uniform Data_block_0 {
-	
-mat4x4 proj_inv;
-	
-mat4x4 view;
-}  _group_0_binding_0;
+    mat4x4 proj_inv;
+    mat4x4 view;
+} _group_0_binding_0;
 
 void main() {
-	int tmp1_;
-	int tmp2_;
-	vec4 unprojected;
-
-	tmp1_ = (int(gl_VertexID) / 2);
-	tmp2_ = (int(gl_VertexID) & 1);
-	unprojected = ( _group_0_binding_0.proj_inv * vec4(((float(tmp1_) * 4.0) - 1.0), ((float(tmp2_) * 4.0) - 1.0), 0.0, 1.0));
-	 _location_0_vs = (transpose(mat3x3(vec3( _group_0_binding_0.view[0][0],  _group_0_binding_0.view[0][1],  _group_0_binding_0.view[0][2]), vec3( _group_0_binding_0.view[1][0],  _group_0_binding_0.view[1][1],  _group_0_binding_0.view[1][2]), vec3( _group_0_binding_0.view[2][0],  _group_0_binding_0.view[2][1],  _group_0_binding_0.view[2][2]))) * vec3(unprojected[0], unprojected[1], unprojected[2]));
-	gl_Position = vec4(((float(tmp1_) * 4.0) - 1.0), ((float(tmp2_) * 4.0) - 1.0), 0.0, 1.0);
-	return;
+    int tmp1_;
+    int tmp2_;
+    vec4 unprojected;
+    tmp1_ = (int(gl_VertexID) / 2);
+    tmp2_ = (int(gl_VertexID) & 1);
+    unprojected = (_group_0_binding_0.proj_inv * vec4(((float(tmp1_) * 4.0) - 1.0), ((float(tmp2_) * 4.0) - 1.0), 0.0, 1.0));
+    _location_0_vs = (transpose(mat3x3(vec3(_group_0_binding_0.view[0][0], _group_0_binding_0.view[0][1], _group_0_binding_0.view[0][2]), vec3(_group_0_binding_0.view[1][0], _group_0_binding_0.view[1][1], _group_0_binding_0.view[1][2]), vec3(_group_0_binding_0.view[2][0], _group_0_binding_0.view[2][1], _group_0_binding_0.view[2][2]))) * vec3(unprojected[0], unprojected[1], unprojected[2]));
+    gl_Position = vec4(((float(tmp1_) * 4.0) - 1.0), ((float(tmp2_) * 4.0) - 1.0), 0.0, 1.0);
+    return;
 }
 

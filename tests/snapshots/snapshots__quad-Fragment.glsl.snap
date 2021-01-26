@@ -6,15 +6,14 @@ expression: string
 
 precision highp float;
 
+in vec2 _location_0_vs;
 
-
-in vec2  _location_0_vs;
 uniform sampler2D u_texture;
-out vec4  _location_0;
+
+out vec4 _location_0;
 
 void main() {
-
-	 _location_0 = texture( _group_0_binding_0, vec2( _location_0_vs));
-	return;
+    _location_0 = texture(_group_0_binding_0, vec2(_location_0_vs));
+    return;
 }
 

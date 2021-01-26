@@ -38,7 +38,7 @@
 //
 // The only thing that glsl removes that makes a difference are pointers.
 //
-// Addititions that are relevant for the backend are the discard keyword, the introduction of
+// Additions that are relevant for the backend are the discard keyword, the introduction of
 // vector, matrices, samplers, image types and functions that provide common shader operations
 
 pub use features::Features;
@@ -71,6 +71,7 @@ mod keywords;
 pub const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450];
 /// List of supported es glsl versions
 pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
+const INDENT: &str = "    ";
 
 /// glsl version
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -341,7 +342,7 @@ impl<'a, W: Write> Writer<'a, W> {
     /// # Panics
     /// Might panic if the module is invalid
     pub fn write(&mut self) -> Result<FastHashMap<String, TextureMapping>, Error> {
-        // We use `writeln!(self.out)` troughout the write to add newlines
+        // We use `writeln!(self.out)` throughout the write to add newlines
         // to make the output more readable
 
         let es = self.options.version.is_es();
@@ -355,12 +356,13 @@ impl<'a, W: Write> Writer<'a, W> {
         // extensions to appear before being used, even though extensions are part of the
         // preprocessor not the processor ¯\_(ツ)_/¯
         self.features.write(self.options.version, &mut self.out)?;
-        writeln!(self.out)?;
 
         // glsl es requires a precision to be specified for floats
         // TODO: Should this be user configurable?
         if es {
-            writeln!(self.out, "precision highp float;\n")?;
+            writeln!(self.out)?;
+            writeln!(self.out, "precision highp float;")?;
+            writeln!(self.out)?;
         }
 
         // Enable early depth tests if needed
@@ -378,9 +380,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                 )?;
             }
+            writeln!(self.out)?;
         }
-
-        writeln!(self.out)?;
 
         // Write all structs
         //
@@ -395,8 +396,6 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_struct(handle, members)?
             }
         }
-
-        writeln!(self.out)?;
 
         // Write the globals
         //
@@ -460,7 +459,9 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.out,
                         " {};",
                         self.names[&NameKey::GlobalVariable(handle)]
-                    )?
+                    )?;
+
+                    writeln!(self.out)?;
                 }
                 // glsl has no concept of samplers so we just ignore it
                 TypeInner::Sampler { .. } => continue,
@@ -468,8 +469,6 @@ impl<'a, W: Write> Writer<'a, W> {
                 _ => self.write_global(handle, global)?,
             }
         }
-
-        writeln!(self.out)?;
 
         // Sort the graph topologically so that functions calls are valid
         // It's impossible for this to panic because the IR forbids cycles
@@ -589,8 +588,8 @@ impl<'a, W: Write> Writer<'a, W> {
 
                     // Write the block members
                     for (idx, member) in members.iter().enumerate() {
-                        // Add a tab for identation (readability only)
-                        writeln!(self.out, "\t")?;
+                        // Add a tab for indentation (readability only)
+                        write!(self.out, "{}", INDENT)?;
                         // Write the member type
                         self.write_type(member.ty)?;
 
@@ -714,6 +713,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // Finally write the global name and end the global with a `;` and a newline
         // Leading space is important
         writeln!(self.out, " {};", self.get_global_name(handle, global))?;
+        writeln!(self.out)?;
 
         Ok(())
     }
@@ -730,7 +730,7 @@ impl<'a, W: Write> Writer<'a, W> {
         match global.binding {
             Some(Binding::Location(location)) => {
                 format!(
-                    " _location_{}{}",
+                    "_location_{}{}",
                     location,
                     match (self.options.entry_point.0, global.class) {
                         (ShaderStage::Fragment, StorageClass::Input) => "_vs",
@@ -740,7 +740,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 )
             }
             Some(Binding::Resource { group, binding }) => {
-                format!(" _group_{}_binding_{}", group, binding)
+                format!("_group_{}_binding_{}", group, binding)
             }
             Some(Binding::BuiltIn(built_in)) => glsl_built_in(built_in).to_string(),
             None => self.names[&NameKey::GlobalVariable(handle)].clone(),
@@ -824,9 +824,9 @@ impl<'a, W: Write> Writer<'a, W> {
         //
         // Always adds a newline
         for (handle, local) in func.local_variables.iter() {
-            // Write identation (only for readability) and the type
+            // Write indentation (only for readability) and the type
             // `write_type` adds no trailing space
-            write!(self.out, "\t")?;
+            write!(self.out, "{}", INDENT)?;
             self.write_type(local.ty)?;
 
             // Write the local name
@@ -847,8 +847,6 @@ impl<'a, W: Write> Writer<'a, W> {
             // Finish the local with `;` and add a newline (only for readability)
             writeln!(self.out, ";")?
         }
-
-        writeln!(self.out)?;
 
         // Write the function body (statement list)
         for sta in func.body.iter() {
@@ -949,8 +947,8 @@ impl<'a, W: Write> Writer<'a, W> {
         writeln!(self.out, "struct {} {{", self.names[&NameKey::Type(handle)])?;
 
         for (idx, member) in members.iter().enumerate() {
-            // The identation is only for readability
-            write!(self.out, "\t")?;
+            // The indentation is only for readability
+            write!(self.out, "{}", INDENT)?;
 
             // Write the member type
             // Adds no trailing space
@@ -967,6 +965,8 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         writeln!(self.out, "}};")?;
+        writeln!(self.out)?;
+
         Ok(())
     }
 
@@ -981,7 +981,7 @@ impl<'a, W: Write> Writer<'a, W> {
         indent: usize,
     ) -> BackendResult {
         // The indentation is only for readability
-        write!(self.out, "{}", "\t".repeat(indent))?;
+        write!(self.out, "{}", INDENT.repeat(indent))?;
 
         match sta {
             // Blocks are simple we just need to write the block statements between braces
@@ -993,7 +993,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     // Increase the indentation to help with readability
                     self.write_stmt(sta, ctx, indent + 1)?
                 }
-                writeln!(self.out, "{}}}", "\t".repeat(indent))?
+                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
             }
             // Ifs are written as in C:
             // ```
@@ -1020,15 +1020,15 @@ impl<'a, W: Write> Writer<'a, W> {
                 // If there are no statements in the reject block we skip writing it
                 // This is only for readability
                 if !reject.is_empty() {
-                    writeln!(self.out, "{}}} else {{", "\t".repeat(indent))?;
+                    writeln!(self.out, "{}}} else {{", INDENT.repeat(indent))?;
 
                     for sta in reject {
-                        // Increase identation to help with readability
+                        // Increase indentation to help with readability
                         self.write_stmt(sta, ctx, indent + 1)?;
                     }
                 }
 
-                writeln!(self.out, "{}}}", "\t".repeat(indent))?
+                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
             }
             // Switch are written as in C:
             // ```
@@ -1058,7 +1058,12 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // Write all cases
                 for case in cases {
-                    writeln!(self.out, "{}case {}:", "\t".repeat(indent + 1), case.value)?;
+                    writeln!(
+                        self.out,
+                        "{}case {}:",
+                        INDENT.repeat(indent + 1),
+                        case.value
+                    )?;
 
                     for sta in case.body.iter() {
                         self.write_stmt(sta, ctx, indent + 2)?;
@@ -1066,21 +1071,21 @@ impl<'a, W: Write> Writer<'a, W> {
 
                     // Write `break;` if the block isn't fallthrough
                     if case.fall_through {
-                        writeln!(self.out, "{}break;", "\t".repeat(indent + 2))?;
+                        writeln!(self.out, "{}break;", INDENT.repeat(indent + 2))?;
                     }
                 }
 
                 // Only write the default block if the block isn't empty
                 // Writing default without a block is valid but it's more readable this way
                 if !default.is_empty() {
-                    writeln!(self.out, "{}default:", "\t".repeat(indent + 1))?;
+                    writeln!(self.out, "{}default:", INDENT.repeat(indent + 1))?;
 
                     for sta in default {
                         self.write_stmt(sta, ctx, indent + 2)?;
                     }
                 }
 
-                writeln!(self.out, "{}}}", "\t".repeat(indent))?
+                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
             }
             // Loops in naga IR are based on wgsl loops, glsl can emulate the behaviour by using a
             // while true loop and appending the continuing block to the body resulting on:
@@ -1097,7 +1102,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.write_stmt(sta, ctx, indent + 1)?;
                 }
 
-                writeln!(self.out, "{}}}", "\t".repeat(indent))?
+                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
             }
             // Break, continue and return as written as in C
             // `break;`
@@ -1342,7 +1347,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // "~" - for `Not` if it's an integer
             // "!" - for `Not` if it's a boolean
             //
-            // We also wrap the everything in parantheses to avoid precedence issues
+            // We also wrap the everything in parentheses to avoid precedence issues
             Expression::Unary { op, expr } => {
                 write!(
                     self.out,
