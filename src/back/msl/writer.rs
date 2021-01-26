@@ -10,6 +10,7 @@ use std::{
 };
 
 const NAMESPACE: &str = "metal";
+const INDENT: &str = "    ";
 
 struct Level(usize);
 impl Level {
@@ -19,7 +20,7 @@ impl Level {
 }
 impl Display for Level {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
-        (0..self.0).try_for_each(|_| formatter.write_str("\t"))
+        (0..self.0).try_for_each(|_| formatter.write_str(INDENT))
     }
 }
 
@@ -649,7 +650,7 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "{}discard_fragment();", level)?;
                 }
                 crate::Statement::Store { pointer, value } => {
-                    //write!(self.out, "\t*")?;
+                    //write!(self.out, "{}*", INDENT)?;
                     write!(self.out, "{}", level)?;
                     self.put_expression(pointer, context)?;
                     write!(self.out, " = ")?;
@@ -671,11 +672,9 @@ impl<W: Write> Writer<W> {
 
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;
-
         writeln!(self.out)?;
+
         self.write_type_defs(module)?;
-
-        writeln!(self.out)?;
         self.write_functions(module, options)
     }
 
@@ -745,7 +744,7 @@ impl<W: Write> Writer<W> {
                     for (index, member) in members.iter().enumerate() {
                         let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
                         let base_name = &self.names[&NameKey::Type(member.ty)];
-                        writeln!(self.out, "\t{} {};", base_name, member_name)?;
+                        writeln!(self.out, "{}{} {};", INDENT, base_name, member_name)?;
                     }
                     write!(self.out, "}}")?;
                 }
@@ -809,6 +808,7 @@ impl<W: Write> Writer<W> {
                 }
             }
             writeln!(self.out, ";")?;
+            writeln!(self.out)?;
         }
         Ok(())
     }
@@ -843,14 +843,18 @@ impl<W: Write> Writer<W> {
                 let name = &self.names[&NameKey::FunctionArgument(fun_handle, index as u32)];
                 let param_type_name = &self.names[&NameKey::Type(arg.ty)];
                 let separator = separate(index + 1 == fun.arguments.len());
-                writeln!(self.out, "\t{} {}{}", param_type_name, name, separator)?;
+                writeln!(
+                    self.out,
+                    "{}{} {}{}",
+                    INDENT, param_type_name, name, separator
+                )?;
             }
             writeln!(self.out, ") {{")?;
 
             for (local_handle, local) in fun.local_variables.iter() {
                 let ty_name = &self.names[&NameKey::Type(local.ty)];
                 let local_name = &self.names[&NameKey::FunctionLocal(fun_handle, local_handle)];
-                write!(self.out, "\t{} {}", ty_name, local_name)?;
+                write!(self.out, "{}{} {}", INDENT, ty_name, local_name)?;
                 if let Some(value) = local.init {
                     write!(self.out, " = ")?;
                     self.put_constant(value, module)?;
@@ -865,6 +869,7 @@ impl<W: Write> Writer<W> {
             };
             self.put_block(Level(1), &fun.body, &context, None)?;
             writeln!(self.out, "}}")?;
+            writeln!(self.out)?;
         }
 
         let mut info = TranslationInfo {
@@ -944,12 +949,14 @@ impl<W: Write> Writer<W> {
                             handle,
                             usage: crate::GlobalUse::empty(),
                         };
-                        write!(self.out, "\t")?;
+                        write!(self.out, "{}", INDENT)?;
                         tyvar.try_fmt(&mut self.out)?;
                         let resolved = options.resolve_binding(stage, var, in_mode)?;
-                        resolved.try_fmt_decorated(&mut self.out, ";\n")?;
+                        resolved.try_fmt_decorated(&mut self.out, ";")?;
+                        writeln!(self.out)?;
                     }
                     writeln!(self.out, "}};")?;
+                    writeln!(self.out)?;
 
                     writeln!(self.out, "struct {} {{", output_name)?;
                     for ((handle, var), &usage) in
@@ -967,19 +974,21 @@ impl<W: Write> Writer<W> {
                             handle,
                             usage: crate::GlobalUse::empty(),
                         };
-                        write!(self.out, "\t")?;
+                        write!(self.out, "{}", INDENT)?;
                         tyvar.try_fmt(&mut self.out)?;
                         let resolved = options.resolve_binding(stage, var, out_mode)?;
-                        resolved.try_fmt_decorated(&mut self.out, ";\n")?;
+                        resolved.try_fmt_decorated(&mut self.out, ";")?;
+                        writeln!(self.out)?;
                     }
                     writeln!(self.out, "}};")?;
+                    writeln!(self.out)?;
 
                     writeln!(self.out, "{} {} {}(", em_str, output_name, fun_name)?;
                     let separator = separate(last_used_global.is_none());
                     writeln!(
                         self.out,
-                        "\t{} {} [[stage_in]]{}",
-                        location_input_name, LOCATION_INPUT_STRUCT_NAME, separator
+                        "{}{} {} [[stage_in]]{}",
+                        INDENT, location_input_name, LOCATION_INPUT_STRUCT_NAME, separator
                     )?;
 
                     Some(OUTPUT_STRUCT_NAME)
@@ -1021,7 +1030,7 @@ impl<W: Write> Writer<W> {
                     usage,
                 };
                 let separator = separate(last_used_global == Some(handle));
-                write!(self.out, "\t")?;
+                write!(self.out, "{}", INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;
                 resolved.try_fmt_decorated(&mut self.out, separator)?;
                 if let Some(value) = var.init {
@@ -1034,14 +1043,18 @@ impl<W: Write> Writer<W> {
 
             match stage {
                 crate::ShaderStage::Vertex | crate::ShaderStage::Fragment => {
-                    writeln!(self.out, "\t{} {};", output_name, OUTPUT_STRUCT_NAME)?;
+                    writeln!(
+                        self.out,
+                        "{}{} {};",
+                        INDENT, output_name, OUTPUT_STRUCT_NAME
+                    )?;
                 }
                 crate::ShaderStage::Compute => {}
             }
             for (local_handle, local) in fun.local_variables.iter() {
                 let name = &self.names[&NameKey::EntryPointLocal(ep_index as _, local_handle)];
                 let ty_name = &self.names[&NameKey::Type(local.ty)];
-                write!(self.out, "\t{} {}", ty_name, name)?;
+                write!(self.out, "{}{} {}", INDENT, ty_name, name)?;
                 if let Some(value) = local.init {
                     write!(self.out, " = ")?;
                     self.put_constant(value, module)?;
@@ -1056,6 +1069,10 @@ impl<W: Write> Writer<W> {
             };
             self.put_block(Level(1), &fun.body, &context, return_value)?;
             writeln!(self.out, "}}")?;
+            let is_last = ep_index == module.entry_points.len() - 1;
+            if !is_last {
+                writeln!(self.out)?;
+            }
         }
 
         Ok(info)

@@ -6,41 +6,51 @@ expression: msl
 #include <simd/simd.h>
 
 typedef float type;
+
 typedef metal::float2 type1;
+
 typedef metal::float4 type2;
+
 typedef metal::texture2d<float, metal::access::sample> type3;
+
 typedef metal::sampler type4;
+
 typedef metal::int2 type5;
 
 struct main1Input {
-	type1 a_pos [[attribute(0)]];
-	type1 a_uv [[attribute(1)]];
+    type1 a_pos [[attribute(0)]];
+    type1 a_uv [[attribute(1)]];
 };
+
 struct main1Output {
-	type1 v_uv [[user(loc0)]];
-	type2 o_position [[position]];
+    type1 v_uv [[user(loc0)]];
+    type2 o_position [[position]];
 };
+
 vertex main1Output main1(
-	main1Input input [[stage_in]]
+    main1Input input [[stage_in]]
 ) {
-	main1Output output;
-	output.v_uv = input.a_uv;
-	output.o_position = metal::float4(1.2 * input.a_pos, 0.0, 1.0);
-	return output;
+    main1Output output;
+    output.v_uv = input.a_uv;
+    output.o_position = metal::float4(1.2 * input.a_pos, 0.0, 1.0);
+    return output;
 }
+
 struct main2Input {
-	type1 v_uv1 [[user(loc0)]];
+    type1 v_uv1 [[user(loc0)]];
 };
+
 struct main2Output {
-	type2 o_color [[color(0)]];
+    type2 o_color [[color(0)]];
 };
+
 fragment main2Output main2(
-	main2Input input [[stage_in]],
-	type3 u_texture [[texture(0)]],
-	type4 u_sampler [[sampler(0)]]
+    main2Input input [[stage_in]],
+    type3 u_texture [[texture(0)]],
+    type4 u_sampler [[sampler(0)]]
 ) {
-	main2Output output;
-	output.o_color = u_texture.sample(u_sampler, input.v_uv1);
-	return output;
+    main2Output output;
+    output.o_color = u_texture.sample(u_sampler, input.v_uv1);
+    return output;
 }
 

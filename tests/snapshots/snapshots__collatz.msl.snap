@@ -6,33 +6,37 @@ expression: msl
 #include <simd/simd.h>
 
 typedef metal::uint3 type;
+
 typedef uint type1;
+
 typedef type1 type2[1];
+
 struct PrimeIndices {
-	type2 data;
+    type2 data;
 };
 
 type1 collatz_iterations(
-	type1 n
+    type1 n
 ) {
-	type1 i = 0;
-	while(true) {
-		if (n <= 1) {
-			break;
-		}
-		if (n % 2 == 0) {
-			n = n / 2;
-		} else {
-			n = 3 * n + 1;
-		}
-		i = i + 1;
-	}
-	return i;
+    type1 i = 0;
+    while(true) {
+        if (n <= 1) {
+            break;
+        }
+        if (n % 2 == 0) {
+            n = n / 2;
+        } else {
+            n = 3 * n + 1;
+        }
+        i = i + 1;
+    }
+    return i;
 }
+
 kernel void main1(
-	type global_id [[thread_position_in_grid]],
-	device PrimeIndices& v_indices [[buffer(0)]]
+    type global_id [[thread_position_in_grid]],
+    device PrimeIndices& v_indices [[buffer(0)]]
 ) {
-	v_indices.data[global_id.x] = collatz_iterations(v_indices.data[global_id.x]);
+    v_indices.data[global_id.x] = collatz_iterations(v_indices.data[global_id.x]);
 }
 
