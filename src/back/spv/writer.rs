@@ -243,8 +243,10 @@ impl Writer {
         if let Entry::Occupied(e) = self.lookup_constant.entry(handle) {
             Ok(*e.get())
         } else {
-            let (instruction, id) = self.write_constant_type(handle, ir_module)?;
-            instruction.to_words(&mut self.logical_layout.declarations);
+            let id = self.generate_id();
+            self.lookup_constant.insert(handle, id);
+            let inner = &ir_module.constants[handle].inner;
+            self.write_constant_type(id, inner, ir_module)?;
             Ok(id)
         }
     }
@@ -744,18 +746,14 @@ impl Writer {
 
     fn write_constant_type(
         &mut self,
-        handle: crate::Handle<crate::Constant>,
+        id: spirv::Word,
+        inner: &crate::ConstantInner,
         ir_module: &crate::Module,
-    ) -> Result<(Instruction, Word), Error> {
-        let id = self.generate_id();
-        self.lookup_constant.insert(handle, id);
-        let constant = &ir_module.constants[handle];
-        let arena = &ir_module.types;
-
-        let instruction = match constant.inner {
+    ) -> Result<(), Error> {
+        let instruction = match *inner {
             crate::ConstantInner::Scalar { width, ref value } => {
                 let type_id = self.get_type_id(
-                    arena,
+                    &ir_module.types,
                     LookupType::Local(LocalType::Scalar {
                         kind: value.scalar_kind(),
                         width,
@@ -825,12 +823,12 @@ impl Writer {
                 if let crate::TypeInner::Array {
                     size: crate::ArraySize::Constant(const_handle),
                     ..
-                } = arena[ty].inner
+                } = ir_module.types[ty].inner
                 {
                     self.get_constant_id(const_handle, &ir_module)?;
                 }
 
-                let type_id = self.get_type_id(arena, LookupType::Handle(ty))?;
+                let type_id = self.get_type_id(&ir_module.types, LookupType::Handle(ty))?;
                 super::instructions::instruction_constant_composite(
                     type_id,
                     id,
@@ -839,7 +837,8 @@ impl Writer {
             }
         };
 
-        Ok((instruction, id))
+        instruction.to_words(&mut self.logical_layout.declarations);
+        Ok(())
     }
 
     fn write_global_variable(
@@ -1551,11 +1550,12 @@ impl Writer {
                 image,
                 sampler,
                 coordinate,
-                array_index: _, //TODO
-                offset: _,      //TODO
+                array_index,
+                offset,
                 level,
-                depth_ref: _,
+                depth_ref,
             } => {
+                use super::instructions::SampleLod;
                 // image
                 let (image_id, image_lookup_ty) =
                     self.write_expression(ir_module, ir_function, image, block, function)?;
@@ -1578,8 +1578,81 @@ impl Writer {
                     self.write_expression(ir_module, ir_function, sampler, block, function)?;
 
                 // coordinate
-                let (coordinate_id, _) =
+                let (mut coordinate_id, coordinate_lookup_ty) =
                     self.write_expression(ir_module, ir_function, coordinate, block, function)?;
+
+                if let Some(array_index) = array_index {
+                    let coordinate_scalar_type_id = self.get_type_id(
+                        &ir_module.types,
+                        LookupType::Local(LocalType::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            width: 4,
+                        }),
+                    )?;
+
+                    let mut constituent_ids = [0u32; 4];
+                    let size = match *self.get_type_inner(&ir_module.types, coordinate_lookup_ty) {
+                        crate::TypeInner::Scalar { .. } => {
+                            constituent_ids[0] = coordinate_id;
+                            crate::VectorSize::Bi
+                        }
+                        crate::TypeInner::Vector { size, .. } => {
+                            for i in 0..size as u32 {
+                                let id = self.generate_id();
+                                constituent_ids[i as usize] = id;
+                                block.body.push(
+                                    super::instructions::instruction_composite_extract(
+                                        coordinate_scalar_type_id,
+                                        id,
+                                        coordinate_id,
+                                        &[i],
+                                    ),
+                                );
+                            }
+                            match size {
+                                crate::VectorSize::Bi => crate::VectorSize::Tri,
+                                crate::VectorSize::Tri => crate::VectorSize::Quad,
+                                crate::VectorSize::Quad => {
+                                    unimplemented!("Unable to extend the vec4 coordinate")
+                                }
+                            }
+                        }
+                        ref other => unimplemented!("wrong coordinate type {:?}", other),
+                    };
+
+                    let array_index_f32_id = self.generate_id();
+                    constituent_ids[size as usize - 1] = array_index_f32_id;
+
+                    let (array_index_u32_id, _) = self.write_expression(
+                        ir_module,
+                        ir_function,
+                        array_index,
+                        block,
+                        function,
+                    )?;
+                    let cast_instruction = super::instructions::instruction_unary(
+                        spirv::Op::ConvertUToF,
+                        coordinate_scalar_type_id,
+                        array_index_f32_id,
+                        array_index_u32_id,
+                    );
+                    block.body.push(cast_instruction);
+
+                    let extended_coordinate_type_id = self.get_type_id(
+                        &ir_module.types,
+                        LookupType::Local(LocalType::Vector {
+                            size,
+                            kind: crate::ScalarKind::Float,
+                            width: 4,
+                        }),
+                    )?;
+
+                    coordinate_id = self.write_composite_construct(
+                        extended_coordinate_type_id,
+                        &constituent_ids[..size as usize],
+                        block,
+                    );
+                }
 
                 // component kind
                 let image_type = &ir_module.types[image_ty];
@@ -1617,17 +1690,117 @@ impl Writer {
                 let image_sample_result_type_id =
                     self.get_type_id(&ir_module.types, image_sample_result_type)?;
 
-                let main_instruction = match level {
-                    crate::SampleLevel::Auto => {
-                        super::instructions::instruction_image_sample_implicit_lod(
+                let depth_id = match depth_ref {
+                    Some(handle) => {
+                        let (expr_id, _) =
+                            self.write_expression(ir_module, ir_function, handle, block, function)?;
+                        Some(expr_id)
+                    }
+                    None => None,
+                };
+
+                let mut main_instruction = match level {
+                    crate::SampleLevel::Zero => {
+                        let mut inst = super::instructions::instruction_image_sample(
                             image_sample_result_type_id,
                             id,
+                            SampleLod::Explicit,
                             sampled_image_id,
                             coordinate_id,
-                        )
+                            depth_id,
+                        );
+
+                        //TODO: cache this!
+                        let zero_id = self.generate_id();
+                        let zero_inner = crate::ConstantInner::Scalar {
+                            width: 4,
+                            value: crate::ScalarValue::Float(0.0),
+                        };
+                        self.write_constant_type(zero_id, &zero_inner, ir_module)?;
+                        inst.add_operand(spirv::ImageOperands::LOD.bits());
+                        inst.add_operand(zero_id);
+
+                        inst
                     }
-                    _ => return Err(Error::FeatureNotImplemented("sample level")),
+                    crate::SampleLevel::Auto => super::instructions::instruction_image_sample(
+                        image_sample_result_type_id,
+                        id,
+                        SampleLod::Implicit,
+                        sampled_image_id,
+                        coordinate_id,
+                        depth_id,
+                    ),
+                    crate::SampleLevel::Exact(lod_handle) => {
+                        let mut inst = super::instructions::instruction_image_sample(
+                            image_sample_result_type_id,
+                            id,
+                            SampleLod::Explicit,
+                            sampled_image_id,
+                            coordinate_id,
+                            depth_id,
+                        );
+
+                        let (lod_id, _) = self.write_expression(
+                            ir_module,
+                            ir_function,
+                            lod_handle,
+                            block,
+                            function,
+                        )?;
+                        inst.add_operand(spirv::ImageOperands::LOD.bits());
+                        inst.add_operand(lod_id);
+
+                        inst
+                    }
+                    crate::SampleLevel::Bias(bias_handle) => {
+                        let mut inst = super::instructions::instruction_image_sample(
+                            image_sample_result_type_id,
+                            id,
+                            SampleLod::Implicit,
+                            sampled_image_id,
+                            coordinate_id,
+                            depth_id,
+                        );
+
+                        let (bias_id, _) = self.write_expression(
+                            ir_module,
+                            ir_function,
+                            bias_handle,
+                            block,
+                            function,
+                        )?;
+                        inst.add_operand(spirv::ImageOperands::BIAS.bits());
+                        inst.add_operand(bias_id);
+
+                        inst
+                    }
+                    crate::SampleLevel::Gradient { x, y } => {
+                        let mut inst = super::instructions::instruction_image_sample(
+                            image_sample_result_type_id,
+                            id,
+                            SampleLod::Explicit,
+                            sampled_image_id,
+                            coordinate_id,
+                            depth_id,
+                        );
+
+                        let (x_id, _) =
+                            self.write_expression(ir_module, ir_function, x, block, function)?;
+                        let (y_id, _) =
+                            self.write_expression(ir_module, ir_function, y, block, function)?;
+                        inst.add_operand(spirv::ImageOperands::GRAD.bits());
+                        inst.add_operand(x_id);
+                        inst.add_operand(y_id);
+
+                        inst
+                    }
                 };
+
+                if let Some(offset_const) = offset {
+                    let offset_id = self.get_constant_id(offset_const, ir_module)?;
+                    main_instruction.add_operand(spirv::ImageOperands::CONST_OFFSET.bits());
+                    main_instruction.add_operand(offset_id);
+                }
 
                 block.body.push(main_instruction);
                 Ok((RawExpression::Value(id), image_sample_result_type))

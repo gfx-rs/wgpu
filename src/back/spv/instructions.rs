@@ -520,17 +520,35 @@ pub(super) fn instruction_sampled_image(
     instruction
 }
 
-pub(super) fn instruction_image_sample_implicit_lod(
+pub(super) enum SampleLod {
+    Explicit,
+    Implicit,
+}
+
+pub(super) fn instruction_image_sample(
     result_type_id: Word,
     id: Word,
+    lod: SampleLod,
     sampled_image: Word,
     coordinates: Word,
+    depth_ref: Option<Word>,
 ) -> Instruction {
-    let mut instruction = Instruction::new(Op::ImageSampleImplicitLod);
+    let op = match (lod, depth_ref) {
+        (SampleLod::Explicit, None) => Op::ImageSampleExplicitLod,
+        (SampleLod::Implicit, None) => Op::ImageSampleImplicitLod,
+        (SampleLod::Explicit, Some(_)) => Op::ImageSampleDrefExplicitLod,
+        (SampleLod::Implicit, Some(_)) => Op::ImageSampleDrefImplicitLod,
+    };
+
+    let mut instruction = Instruction::new(op);
     instruction.set_type(result_type_id);
     instruction.set_result(id);
     instruction.add_operand(sampled_image);
     instruction.add_operand(coordinates);
+    if let Some(dref) = depth_ref {
+        instruction.add_operand(dref);
+    }
+
     instruction
 }
 
