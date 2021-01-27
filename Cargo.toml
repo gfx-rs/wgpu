@@ -33,9 +33,12 @@ spv-in = ["petgraph", "spirv"]
 spv-out = ["spirv"]
 wgsl-in = []
 
+#Note: it would be nice to do `cargo run` for conversion.
+# Blocked on https://github.com/rust-lang/cargo/issues/4663
+
 [dev-dependencies]
 difference = "2.0"
-env_logger = "0.6"
+env_logger = "0.8"
 ron = "0.6"
 serde = { version = "1.0", features = ["derive"] }
 spirv = { package = "spirv_headers", version = "1.5", features = ["deserialize"] }

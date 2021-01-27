@@ -1,4 +1,4 @@
-use std::{env, fs, path::Path};
+use std::{env, fmt, fs, path::Path};
 
 #[derive(Hash, PartialEq, Eq, serde::Deserialize)]
 enum Stage {
@@ -41,6 +41,21 @@ struct Parameters {
     mtl_bindings: naga::FastHashMap<BindSource, BindTarget>,
 }
 
+trait PrettyResult {
+    type Target;
+    fn unwrap_pretty(self) -> Self::Target;
+}
+
+impl<T, E: fmt::Display> PrettyResult for Result<T, E> {
+    type Target = T;
+    fn unwrap_pretty(self) -> T {
+        match self {
+            Result::Ok(value) => value,
+            Result::Err(e) => panic!("{}", e),
+        }
+    }
+}
+
 fn main() {
     env_logger::init();
 
@@ -52,7 +67,7 @@ fn main() {
 
     let param_path = std::path::PathBuf::from(&args[1]).with_extension("param.ron");
     let params = match fs::read_to_string(param_path) {
-        Ok(string) => ron::de::from_str(&string).unwrap(),
+        Ok(string) => ron::de::from_str(&string).unwrap_pretty(),
         Err(_) => {
             let mut param = Parameters::default();
             // very useful to have this by default
@@ -82,7 +97,7 @@ fn main() {
         #[cfg(feature = "wgsl-in")]
         "wgsl" => {
             let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::wgsl::parse_str(&input).unwrap()
+            naga::front::wgsl::parse_str(&input).unwrap_pretty()
         }
         #[cfg(feature = "glsl-in")]
         "vert" => {
@@ -93,7 +108,7 @@ fn main() {
                 naga::ShaderStage::Vertex,
                 Default::default(),
             )
-            .unwrap()
+            .unwrap_pretty()
         }
         #[cfg(feature = "glsl-in")]
         "frag" => {
@@ -104,7 +119,7 @@ fn main() {
                 naga::ShaderStage::Fragment,
                 Default::default(),
             )
-            .unwrap()
+            .unwrap_pretty()
         }
         #[cfg(feature = "glsl-in")]
         "comp" => {
@@ -115,12 +130,12 @@ fn main() {
                 naga::ShaderStage::Compute,
                 Default::default(),
             )
-            .unwrap()
+            .unwrap_pretty()
         }
         #[cfg(feature = "deserialize")]
         "ron" => {
             let mut input = fs::File::open(&args[1]).unwrap();
-            ron::de::from_reader(&mut input).unwrap()
+            ron::de::from_reader(&mut input).unwrap_pretty()
         }
         other => {
             if true {
@@ -132,7 +147,9 @@ fn main() {
     };
 
     // validate the IR
-    naga::proc::Validator::new().validate(&module).unwrap();
+    naga::proc::Validator::new()
+        .validate(&module)
+        .unwrap_pretty();
 
     if args.len() <= 2 {
         println!("{:#?}", module);
@@ -188,7 +205,7 @@ fn main() {
                 }
             });
 
-            let spv = spv::write_vec(&module, debug_flag, params.spv_capabilities).unwrap();
+            let spv = spv::write_vec(&module, debug_flag, params.spv_capabilities).unwrap_pretty();
 
             let bytes = spv
                 .iter()
@@ -234,7 +251,7 @@ fn main() {
                 .open(&args[2])
                 .unwrap();
 
-            let mut writer = glsl::Writer::new(file, &module, &options).unwrap();
+            let mut writer = glsl::Writer::new(file, &module, &options).unwrap_pretty();
 
             writer
                 .write()
@@ -250,7 +267,7 @@ fn main() {
                 .with_enumerate_arrays(true)
                 .with_decimal_floats(true);
 
-            let output = ron::ser::to_string_pretty(&module, config).unwrap();
+            let output = ron::ser::to_string_pretty(&module, config).unwrap_pretty();
             fs::write(&args[2], output).unwrap();
         }
         other => {

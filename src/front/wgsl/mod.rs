@@ -17,6 +17,8 @@ use self::lexer::Lexer;
 use std::num::NonZeroU32;
 use thiserror::Error;
 
+const SPACE: &str = "                                                                                                    ";
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Token<'a> {
     Separator(char),
@@ -336,11 +338,12 @@ struct ParsedVariable<'a> {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("error while parsing WGSL in scopes {scopes:?} at position {pos:?}: {error}")]
+#[error("error while parsing WGSL in scopes {scopes:?} at line {line} pos {pos}: {error}")]
 pub struct ParseError<'a> {
     pub error: Error<'a>,
     pub scopes: Vec<Scope>,
-    pub pos: (usize, usize),
+    pub line: usize,
+    pub pos: usize,
 }
 
 pub struct Parser {
@@ -2085,23 +2088,38 @@ impl Parser {
                 Err(error) => {
                     let pos = lexer.offset_from(source);
                     let (mut rows, mut cols) = (0, 1);
+                    let (mut prev_line, mut cur_line) = ("", "");
                     for line in source[..pos].lines() {
                         rows += 1;
                         cols = line.len();
+                        prev_line = cur_line;
+                        cur_line = line;
+                    }
+                    log::error!("|\t{}", prev_line);
+                    log::error!(
+                        ">\t{}{}",
+                        cur_line,
+                        source[pos..].lines().next().unwrap_or_default()
+                    );
+                    if cols <= SPACE.len() {
+                        log::error!("|\t{}^", &SPACE[..cols]);
                     }
                     return Err(ParseError {
                         error,
                         scopes: std::mem::replace(&mut self.scopes, Vec::new()),
-                        pos: (rows, cols),
+                        line: rows,
+                        pos: cols,
                     });
                 }
                 Ok(true) => {}
                 Ok(false) => {
                     if !self.scopes.is_empty() {
+                        log::error!("Reached the end of file, but scopes are not closed");
                         return Err(ParseError {
                             error: Error::Other,
                             scopes: std::mem::replace(&mut self.scopes, Vec::new()),
-                            pos: (0, 0),
+                            line: 0,
+                            pos: 0,
                         });
                     };
                     return Ok(module);
