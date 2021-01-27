@@ -1857,23 +1857,22 @@ impl Writer {
         for statement in statements {
             match *statement {
                 crate::Statement::Block(ref block_statements) => {
+                    let merge_block = self.create_block();
                     let scope_block = self.write_block(
                         block_statements,
                         ir_module,
                         ir_function,
                         function,
-                        block.label_id,
+                        merge_block.label_id,
                     )?;
 
-                    let pdom_block = self.create_block();
-
-                    block
-                        .body
-                        .push(super::instructions::instruction_branch(pdom_block.label_id));
+                    block.termination = Some(super::instructions::instruction_branch(
+                        scope_block.label_id,
+                    ));
 
                     function.blocks.push(block);
                     function.blocks.push(scope_block);
-                    block = pdom_block;
+                    block = merge_block;
                 }
                 crate::Statement::If {
                     ref condition,
@@ -1888,12 +1887,12 @@ impl Writer {
                         function,
                     )?;
 
-                    let pdom_block = self.create_block();
+                    let merge_block = self.create_block();
 
                     block
                         .body
                         .push(super::instructions::instruction_selection_merge(
-                            pdom_block.label_id,
+                            merge_block.label_id,
                             spirv::SelectionControl::NONE,
                         ));
 
@@ -1902,14 +1901,14 @@ impl Writer {
                         ir_module,
                         ir_function,
                         function,
-                        pdom_block.label_id,
+                        merge_block.label_id,
                     )?;
                     let reject_block = self.write_block(
                         reject,
                         ir_module,
                         ir_function,
                         function,
-                        pdom_block.label_id,
+                        merge_block.label_id,
                     )?;
 
                     block.termination = Some(super::instructions::instruction_branch_conditional(
@@ -1917,26 +1916,19 @@ impl Writer {
                         accept_block.label_id,
                         reject_block.label_id,
                     ));
+
                     function.blocks.push(block);
                     function.blocks.push(accept_block);
                     function.blocks.push(reject_block);
-
-                    block = pdom_block;
+                    block = merge_block;
                 }
-                crate::Statement::Return { value } => {
-                    block.termination = Some(match ir_function.return_type {
-                        Some(_) => {
-                            let (id, _) = self.write_expression(
-                                ir_module,
-                                ir_function,
-                                value.unwrap(),
-                                &mut block,
-                                function,
-                            )?;
-                            super::instructions::instruction_return_value(id)
-                        }
-                        None => super::instructions::instruction_return(),
-                    });
+                crate::Statement::Return { value: Some(value) } => {
+                    let (id, _) =
+                        self.write_expression(ir_module, ir_function, value, &mut block, function)?;
+                    block.termination = Some(super::instructions::instruction_return_value(id));
+                }
+                crate::Statement::Return { value: None } => {
+                    block.termination = Some(super::instructions::instruction_return());
                 }
                 crate::Statement::Store { pointer, value } => {
                     let (pointer_id, _, _) = self.write_expression_pointer(
