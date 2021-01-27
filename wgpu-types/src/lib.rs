@@ -2658,7 +2658,7 @@ pub enum BindingType {
 }
 
 impl BindingType {
-    /// Returns true for buffer bindings with dynamic offseting enabled.
+    /// Returns true for buffer bindings with dynamic offset enabled.
     pub fn has_dynamic_offset(&self) -> bool {
         match *self {
             Self::Buffer {
