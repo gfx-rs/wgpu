@@ -74,6 +74,20 @@ fn parse_standard_fun() {
 }
 
 #[test]
+fn parse_statement() {
+    parse_str(
+        "
+        fn main() {
+            ;
+            {}
+            {;}
+        }
+    ",
+    )
+    .unwrap();
+}
+
+#[test]
 fn parse_if() {
     parse_str(
         "

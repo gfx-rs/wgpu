@@ -1557,6 +1557,17 @@ impl Parser {
     ) -> Result<Option<crate::Statement>, Error<'a>> {
         let word = match lexer.next() {
             Token::Separator(';') => return Ok(None),
+            Token::Paren('{') => {
+                self.scopes.push(Scope::Block);
+                let mut statements = Vec::new();
+                while !lexer.skip(Token::Paren('}')) {
+                    let s = self.parse_statement(lexer, context.reborrow())?;
+                    statements.extend(s);
+                }
+                self.scopes.pop();
+                let block = crate::Statement::Block(statements);
+                return Ok(Some(block));
+            }
             Token::Word(word) => word,
             other => return other.unexpected("statement"),
         };
