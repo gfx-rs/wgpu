@@ -178,12 +178,28 @@ impl<'a> Lexer<'a> {
         self.clone().next()
     }
 
-    pub(super) fn expect(&mut self, expected: Token<'_>) -> Result<(), Error<'a>> {
+    pub(super) fn expect(&mut self, expected: Token<'a>) -> Result<(), Error<'a>> {
         let token = self.next();
         if token == expected {
             Ok(())
         } else {
-            token.unexpected(expected)
+            let description = match expected {
+                Token::Separator(_) => "separator",
+                Token::DoubleColon => "::",
+                Token::Paren(_) => "paren",
+                Token::DoubleParen(_) => "double paren",
+                Token::Number { .. } => "number",
+                Token::String(string) => string,
+                Token::Word(word) => word,
+                Token::Operation(_) => "operation",
+                Token::LogicalOperation(_) => "logical op",
+                Token::ShiftOperation(_) => "shift op",
+                Token::Arrow => "->",
+                Token::Unknown(_) => "unknown",
+                Token::UnterminatedString => "string",
+                Token::End => "",
+            };
+            Err(Error::Unexpected(token, description))
         }
     }
 
@@ -200,14 +216,14 @@ impl<'a> Lexer<'a> {
     pub(super) fn next_ident(&mut self) -> Result<&'a str, Error<'a>> {
         match self.next() {
             Token::Word(word) => Ok(word),
-            other => other.unexpected("ident"),
+            other => Err(Error::Unexpected(other, "ident")),
         }
     }
 
     fn _next_float_literal(&mut self) -> Result<f32, Error<'a>> {
         match self.next() {
             Token::Number { value, .. } => value.parse().map_err(|err| Error::BadFloat(value, err)),
-            other => other.unexpected("float literal"),
+            other => Err(Error::Unexpected(other, "float literal")),
         }
     }
 
@@ -216,7 +232,7 @@ impl<'a> Lexer<'a> {
             Token::Number { value, .. } => {
                 value.parse().map_err(|err| Error::BadInteger(value, err))
             }
-            other => other.unexpected("uint literal"),
+            other => Err(Error::Unexpected(other, "uint literal")),
         }
     }
 
@@ -225,7 +241,7 @@ impl<'a> Lexer<'a> {
             Token::Number { value, .. } => {
                 value.parse().map_err(|err| Error::BadInteger(value, err))
             }
-            other => other.unexpected("sint literal"),
+            other => Err(Error::Unexpected(other, "sint literal")),
         }
     }
 
