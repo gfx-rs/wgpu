@@ -1807,7 +1807,6 @@ dependencies = [
  "loom",
  "naga",
  "parking_lot",
- "range-alloc",
  "raw-window-handle",
  "ron",
  "serde",

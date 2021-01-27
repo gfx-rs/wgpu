@@ -210,7 +210,7 @@ fn map_buffer<B: hal::Backend>(
     let zero_init_needs_flush_now = !block.is_coherent() && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
     for uninitialized_range in buffer
         .initialization_status
-        .drain_uninitialized_ranges(&(offset..(size + offset)))
+        .drain_uninitialized_ranges(offset..(size + offset))
     {
         let num_bytes = uninitialized_range.end - uninitialized_range.start;
         unsafe {
@@ -2608,11 +2608,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 unsafe { ptr::write_bytes(ptr.as_ptr(), 0, buffer.size as usize) };
                 buffer
                     .initialization_status
-                    .drain_uninitialized_ranges(&(0..buffer.size))
+                    .drain_uninitialized_ranges(0..buffer.size)
                     .for_each(drop);
                 stage
                     .initialization_status
-                    .drain_uninitialized_ranges(&(0..buffer.size))
+                    .drain_uninitialized_ranges(0..buffer.size)
                     .for_each(drop);
 
                 buffer.map_state = resource::BufferMapState::Init {

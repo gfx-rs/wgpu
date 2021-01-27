@@ -276,7 +276,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         {
             let dst = buffer_guard.get_mut(buffer_id).unwrap();
             dst.initialization_status
-                .drain_uninitialized_ranges(&(buffer_offset..(buffer_offset + data_size)))
+                .drain_uninitialized_ranges(buffer_offset..(buffer_offset + data_size))
                 .for_each(drop);
         }
 
@@ -502,7 +502,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let uninitialized_ranges = buffer
                         .initialization_status
-                        .drain_uninitialized_ranges(&buffer_use.range);
+                        .drain_uninitialized_ranges(buffer_use.range.clone());
                     match buffer_use.kind {
                         MemoryInitKind::ImplicitlyInitialized => {
                             uninitialized_ranges.for_each(drop);
