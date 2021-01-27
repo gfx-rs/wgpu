@@ -15,10 +15,8 @@ pub enum Error {
     FeatureNotImplemented(&'static str),
 }
 
-#[derive(Default)]
 struct Block {
-    label_id: Option<spirv::Word>,
-    label: Option<Instruction>,
+    label_id: spirv::Word,
     body: Vec<Instruction>,
     termination: Option<Instruction>,
 }
@@ -48,7 +46,7 @@ impl Function {
             instruction.to_words(sink);
         }
         for (index, block) in self.blocks.iter().enumerate() {
-            block.label.as_ref().unwrap().to_words(sink);
+            super::instructions::instruction_label(block.label_id).to_words(sink);
             if index == 0 {
                 for local_var in self.variables.values() {
                     local_var.instruction.to_words(sink);
@@ -415,7 +413,7 @@ impl Writer {
             ir_module,
             ir_function,
             &mut function,
-            None,
+            0, //isn't used
         )?;
         function.blocks.push(block);
 
@@ -1839,12 +1837,11 @@ impl Writer {
     }
 
     fn create_block(&mut self) -> Block {
-        let mut block = Block::default();
-        let label_id = self.generate_id();
-        let label_instruction = super::instructions::instruction_label(label_id);
-        block.label_id = Some(label_id);
-        block.label = Some(label_instruction);
-        block
+        Block {
+            label_id: self.generate_id(),
+            body: Vec::new(),
+            termination: None,
+        }
     }
 
     fn write_block(
@@ -1853,7 +1850,7 @@ impl Writer {
         ir_module: &crate::Module,
         ir_function: &crate::Function,
         function: &mut Function,
-        merge_id: Option<spirv::Word>,
+        merge_id: spirv::Word,
     ) -> Result<Block, Error> {
         let mut block = self.create_block();
 
@@ -1867,7 +1864,16 @@ impl Writer {
                         function,
                         block.label_id,
                     )?;
+
+                    let pdom_block = self.create_block();
+
+                    block
+                        .body
+                        .push(super::instructions::instruction_branch(pdom_block.label_id));
+
+                    function.blocks.push(block);
                     function.blocks.push(scope_block);
+                    block = pdom_block;
                 }
                 crate::Statement::If {
                     ref condition,
@@ -1887,7 +1893,7 @@ impl Writer {
                     block
                         .body
                         .push(super::instructions::instruction_selection_merge(
-                            pdom_block.label_id.unwrap(),
+                            pdom_block.label_id,
                             spirv::SelectionControl::NONE,
                         ));
 
@@ -1908,13 +1914,12 @@ impl Writer {
 
                     block.termination = Some(super::instructions::instruction_branch_conditional(
                         condition_id,
-                        accept_block.label_id.unwrap(),
-                        reject_block.label_id.unwrap(),
+                        accept_block.label_id,
+                        reject_block.label_id,
                     ));
                     function.blocks.push(block);
                     function.blocks.push(accept_block);
                     function.blocks.push(reject_block);
-
 
                     block = pdom_block;
                 }
@@ -1956,7 +1961,7 @@ impl Writer {
         }
 
         if block.termination.is_none() {
-            block.termination = Some(super::instructions::instruction_branch(merge_id.unwrap()));
+            block.termination = Some(super::instructions::instruction_branch(merge_id));
         }
 
         Ok(block)
