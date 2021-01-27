@@ -1778,15 +1778,12 @@ impl<B: GfxBackend> Device<B> {
             ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
 
         let io = validation::StageIo::default();
-        let pipeline_stage = &desc.compute_stage;
         let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
-        let entry_point_name = &pipeline_stage.entry_point;
-        let shader_module = shader_module_guard
-            .get(pipeline_stage.module)
-            .map_err(|_| {
-                pipeline::CreateComputePipelineError::Stage(validation::StageError::InvalidModule)
-            })?;
+        let entry_point_name = &desc.stage.entry_point;
+        let shader_module = shader_module_guard.get(desc.stage.module).map_err(|_| {
+            pipeline::CreateComputePipelineError::Stage(validation::StageError::InvalidModule)
+        })?;
 
         let flag = wgt::ShaderStage::COMPUTE;
         if let Some(ref interface) = shader_module.interface {
@@ -1898,47 +1895,37 @@ impl<B: GfxBackend> Device<B> {
         let mut derived_group_layouts =
             ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
 
-        let samples = {
-            let sc = desc.sample_count;
-            if sc == 0 || sc > 32 || !conv::is_power_of_two(sc) {
-                return Err(pipeline::CreateRenderPipelineError::InvalidSampleCount(sc));
-            }
-            sc as u8
-        };
-
-        let color_states = &desc.color_states;
-        let depth_stencil_state = desc.depth_stencil_state.as_ref();
-
-        let rasterization_state = desc
-            .rasterization_state
+        let color_states = desc
+            .fragment
             .as_ref()
-            .cloned()
-            .unwrap_or_default();
-        let rasterizer = conv::map_rasterization_state_descriptor(&rasterization_state);
+            .map_or(&[][..], |fragment| &fragment.targets);
+        let depth_stencil_state = desc.depth_stencil.as_ref();
+        let rasterizer =
+            conv::map_primitive_state_to_rasterizer(&desc.primitive, depth_stencil_state);
 
         let mut io = validation::StageIo::default();
         let mut validated_stages = wgt::ShaderStage::empty();
 
-        let desc_vbs = &desc.vertex_state.vertex_buffers;
+        let desc_vbs = &desc.vertex.buffers;
         let mut vertex_strides = Vec::with_capacity(desc_vbs.len());
         let mut vertex_buffers = Vec::with_capacity(desc_vbs.len());
         let mut attributes = Vec::new();
         for (i, vb_state) in desc_vbs.iter().enumerate() {
             vertex_strides
                 .alloc()
-                .init((vb_state.stride, vb_state.step_mode));
+                .init((vb_state.array_stride, vb_state.step_mode));
             if vb_state.attributes.is_empty() {
                 continue;
             }
-            if vb_state.stride % wgt::VERTEX_STRIDE_ALIGNMENT != 0 {
+            if vb_state.array_stride % wgt::VERTEX_STRIDE_ALIGNMENT != 0 {
                 return Err(pipeline::CreateRenderPipelineError::UnalignedVertexStride {
                     index: i as u32,
-                    stride: vb_state.stride,
+                    stride: vb_state.array_stride,
                 });
             }
             vertex_buffers.alloc().init(hal::pso::VertexBufferDesc {
                 binding: i as u32,
-                stride: vb_state.stride as u32,
+                stride: vb_state.array_stride as u32,
                 rate: match vb_state.step_mode {
                     InputStepMode::Vertex => hal::pso::VertexInputRate::Vertex,
                     InputStepMode::Instance => hal::pso::VertexInputRate::Instance(1),
@@ -1985,33 +1972,25 @@ impl<B: GfxBackend> Device<B> {
             }
         }
 
-        let input_assembler = hal::pso::InputAssemblerDesc {
-            primitive: conv::map_primitive_topology(desc.primitive_topology),
-            with_adjacency: false,
-            restart_index: None, //TODO
-        };
+        let input_assembler = conv::map_primitive_state_to_input_assembler(&desc.primitive);
 
         let blender = hal::pso::BlendDesc {
             logic_op: None, // TODO
             targets: color_states
                 .iter()
-                .map(conv::map_color_state_descriptor)
+                .map(conv::map_color_target_state)
                 .collect(),
         };
-        let depth_stencil = depth_stencil_state
-            .map(conv::map_depth_stencil_state_descriptor)
-            .unwrap_or_default();
-
-        let multisampling: Option<hal::pso::Multisampling> = if samples == 1 {
-            None
-        } else {
-            Some(hal::pso::Multisampling {
-                rasterization_samples: samples,
-                sample_shading: None,
-                sample_mask: desc.sample_mask as u64,
-                alpha_coverage: desc.alpha_to_coverage_enabled,
-                alpha_to_one: false,
-            })
+        let depth_stencil = match depth_stencil_state {
+            Some(dsd) => {
+                if dsd.clamp_depth && !self.features.contains(wgt::Features::DEPTH_CLAMPING) {
+                    return Err(pipeline::CreateRenderPipelineError::MissingFeature(
+                        wgt::Features::DEPTH_CLAMPING,
+                    ));
+                }
+                conv::map_depth_stencil_state(dsd)
+            }
+            None => hal::pso::DepthStencilDesc::default(),
         };
 
         // TODO
@@ -2022,13 +2001,7 @@ impl<B: GfxBackend> Device<B> {
             depth_bounds: None,
         };
 
-        if rasterization_state.clamp_depth && !self.features.contains(wgt::Features::DEPTH_CLAMPING)
-        {
-            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
-                wgt::Features::DEPTH_CLAMPING,
-            ));
-        }
-        if rasterization_state.polygon_mode != wgt::PolygonMode::Fill
+        if desc.primitive.polygon_mode != wgt::PolygonMode::Fill
             && !self.features.contains(wgt::Features::NON_FILL_POLYGON_MODE)
         {
             return Err(pipeline::CreateRenderPipelineError::MissingFeature(
@@ -2042,7 +2015,18 @@ impl<B: GfxBackend> Device<B> {
             }
         }
 
-        let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
+        let samples = {
+            let sc = desc.multisample.count;
+            if sc == 0 || sc > 32 || !conv::is_power_of_two(sc) {
+                return Err(pipeline::CreateRenderPipelineError::InvalidSampleCount(sc));
+            }
+            sc as u8
+        };
+        let multisampling = if samples == 1 {
+            None
+        } else {
+            Some(conv::map_multisample_state(&desc.multisample))
+        };
 
         let rp_key = RenderPassKey {
             colors: color_states
@@ -2081,17 +2065,18 @@ impl<B: GfxBackend> Device<B> {
             }),
         };
 
+        let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
+
         let vertex = {
-            let entry_point_name = &desc.vertex_stage.entry_point;
+            let stage = &desc.vertex.stage;
             let flag = wgt::ShaderStage::VERTEX;
 
-            let shader_module =
-                shader_module_guard
-                    .get(desc.vertex_stage.module)
-                    .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
-                        flag,
-                        error: validation::StageError::InvalidModule,
-                    })?;
+            let shader_module = shader_module_guard.get(stage.module).map_err(|_| {
+                pipeline::CreateRenderPipelineError::Stage {
+                    flag,
+                    error: validation::StageError::InvalidModule,
+                }
+            })?;
 
             if let Some(ref interface) = shader_module.interface {
                 let provided_layouts = match desc.layout {
@@ -2108,7 +2093,7 @@ impl<B: GfxBackend> Device<B> {
                     .check_stage(
                         provided_layouts.as_ref().map(|p| p.as_slice()),
                         &mut derived_group_layouts,
-                        &entry_point_name,
+                        &stage.entry_point,
                         flag,
                         io,
                     )
@@ -2117,23 +2102,24 @@ impl<B: GfxBackend> Device<B> {
             }
 
             hal::pso::EntryPoint::<B> {
-                entry: &entry_point_name, // TODO
+                entry: &stage.entry_point,
                 module: &shader_module.raw,
                 specialization: hal::pso::Specialization::EMPTY,
             }
         };
 
-        let fragment = match &desc.fragment_stage {
-            Some(stage) => {
-                let entry_point_name = &stage.entry_point;
+        let fragment = match &desc.fragment {
+            Some(fragment) => {
+                let entry_point_name = &fragment.stage.entry_point;
                 let flag = wgt::ShaderStage::FRAGMENT;
 
-                let shader_module = shader_module_guard.get(stage.module).map_err(|_| {
-                    pipeline::CreateRenderPipelineError::Stage {
-                        flag,
-                        error: validation::StageError::InvalidModule,
-                    }
-                })?;
+                let shader_module =
+                    shader_module_guard
+                        .get(fragment.stage.module)
+                        .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
+                            flag,
+                            error: validation::StageError::InvalidModule,
+                        })?;
 
                 let provided_layouts = match desc.layout {
                     Some(pipeline_layout_id) => Some(Device::get_introspection_bind_group_layouts(
@@ -2199,7 +2185,7 @@ impl<B: GfxBackend> Device<B> {
                 }
             }
         }
-        let last_stage = match desc.fragment_stage {
+        let last_stage = match desc.fragment {
             Some(_) => wgt::ShaderStage::FRAGMENT,
             None => wgt::ShaderStage::VERTEX,
         };
@@ -2310,7 +2296,7 @@ impl<B: GfxBackend> Device<B> {
             },
             pass_context,
             flags,
-            index_format: desc.vertex_state.index_format,
+            strip_index_format: desc.primitive.strip_index_format,
             vertex_strides,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         };

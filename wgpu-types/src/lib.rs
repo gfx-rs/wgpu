@@ -2,11 +2,16 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/*! This library describes the API surface of WebGPU that is agnostic of the backend.
+ *  This API is used for targeting both Web and Native.
+ */
+
 // The intra doc links to the wgpu crate in this crate actually succesfully link to the types in the wgpu crate, when built from the wgpu crate.
 // However when building from both the wgpu crate or this crate cargo doc will claim all the links cannot be resolved
 // despite the fact that it works fine when it needs to.
 // So we just disable those warnings.
 #![allow(broken_intra_doc_links)]
+#![warn(missing_docs)]
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -46,12 +51,19 @@ pub const QUERY_SIZE: u32 = 8;
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum Backend {
+    /// Dummy backend, used for testing.
     Empty = 0,
+    /// Vulkan API
     Vulkan = 1,
+    /// Metal API (Apple platforms)
     Metal = 2,
+    /// Direct3D-12 (Windows)
     Dx12 = 3,
+    /// Direct3D-11 (Windows)
     Dx11 = 4,
+    /// OpenGL ES-3 (Linux, Android)
     Gl = 5,
+    /// WebGPU in the browser
     BrowserWebGpu = 6,
 }
 
@@ -529,6 +541,7 @@ pub struct DeviceDescriptor<L> {
 }
 
 impl<L> DeviceDescriptor<L> {
+    ///
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> DeviceDescriptor<K> {
         DeviceDescriptor {
             label: fun(&self.label),
@@ -559,6 +572,9 @@ bitflags::bitflags! {
 }
 
 bitflags::bitflags! {
+    /// Flags controlling the shader processing.
+    ///
+    /// Note: These flags are internal tweaks, they don't affect the API.
     #[repr(transparent)]
     #[derive(Default)]
     #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -620,18 +636,31 @@ impl TextureViewDimension {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum BlendFactor {
+    /// 0.0
     Zero = 0,
+    /// 1.0
     One = 1,
+    /// S.color
     SrcColor = 2,
+    /// 1.0 - S.color
     OneMinusSrcColor = 3,
+    /// S.alpha
     SrcAlpha = 4,
+    /// 1.0 - S.alpha
     OneMinusSrcAlpha = 5,
+    /// D.color
     DstColor = 6,
+    /// 1.0 - D.color
     OneMinusDstColor = 7,
+    /// D.alpha
     DstAlpha = 8,
+    /// 1.0 - D.alpha
     OneMinusDstAlpha = 9,
+    /// min(S.alpha, 1.0 - D.alpha)
     SrcAlphaSaturated = 10,
+    /// Constant
     BlendColor = 11,
+    /// 1.0 - Constant
     OneMinusBlendColor = 12,
 }
 
@@ -643,10 +672,15 @@ pub enum BlendFactor {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum BlendOperation {
+    /// Src + Dst
     Add = 0,
+    /// Src - Dst
     Subtract = 1,
+    /// Dst - Src
     ReverseSubtract = 2,
+    /// min(Src, Dst)
     Min = 3,
+    /// max(Src, Dst)
     Max = 4,
 }
 
@@ -663,19 +697,26 @@ impl Default for BlendOperation {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct BlendDescriptor {
+pub struct BlendState {
+    /// Multiplier for the source, which is produced by the fragment shader.
     pub src_factor: BlendFactor,
+    /// Multiplier for the destination, which is stored in the target.
     pub dst_factor: BlendFactor,
+    /// The binary operation applied to the source and destination,
+    /// multiplied by their respective factors.
     pub operation: BlendOperation,
 }
 
-impl BlendDescriptor {
-    pub const REPLACE: Self = BlendDescriptor {
+impl BlendState {
+    /// Default blending state that replaces destination with the source.
+    pub const REPLACE: Self = BlendState {
         src_factor: BlendFactor::One,
         dst_factor: BlendFactor::Zero,
         operation: BlendOperation::Add,
     };
 
+    /// Returns true if the state relies on the constant color, which is
+    /// set independently on a render command encoder.
     pub fn uses_color(&self) -> bool {
         match (self.src_factor, self.dst_factor) {
             (BlendFactor::BlendColor, _)
@@ -687,7 +728,7 @@ impl BlendDescriptor {
     }
 }
 
-impl Default for BlendDescriptor {
+impl Default for BlendState {
     fn default() -> Self {
         Self::REPLACE
     }
@@ -698,24 +739,27 @@ impl Default for BlendDescriptor {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct ColorStateDescriptor {
+pub struct ColorTargetState {
     /// The [`TextureFormat`] of the image that this pipeline will render to. Must match the the format
     /// of the corresponding color attachment in [`CommandEncoder::begin_render_pass`].
     pub format: TextureFormat,
     /// The alpha blending that is used for this pipeline.
-    pub alpha_blend: BlendDescriptor,
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    pub alpha_blend: BlendState,
     /// The color blending that is used for this pipeline.
-    pub color_blend: BlendDescriptor,
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    pub color_blend: BlendState,
     /// Mask which enables/disables writes to different color/alpha channel.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub write_mask: ColorWrite,
 }
 
-impl From<TextureFormat> for ColorStateDescriptor {
+impl From<TextureFormat> for ColorTargetState {
     fn from(format: TextureFormat) -> Self {
         Self {
             format,
-            alpha_blend: BlendDescriptor::REPLACE,
-            color_blend: BlendDescriptor::REPLACE,
+            alpha_blend: BlendState::REPLACE,
+            color_blend: BlendState::REPLACE,
             write_mask: ColorWrite::ALL,
         }
     }
@@ -745,6 +789,12 @@ pub enum PrimitiveTopology {
     ///
     /// Vertices `0 1 2 3 4 5` creates four triangles `0 1 2`, `2 1 3`, `3 2 4`, and `4 3 5`
     TriangleStrip = 4,
+}
+
+impl Default for PrimitiveTopology {
+    fn default() -> Self {
+        PrimitiveTopology::TriangleList
+    }
 }
 
 /// Winding order which classifies the "front" face.
@@ -809,25 +859,59 @@ impl Default for PolygonMode {
     }
 }
 
-/// Describes the state of the rasterizer in a render pipeline.
+/// Describes the state of primitive assembly and rasterization in a render pipeline.
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct RasterizationStateDescriptor {
+pub struct PrimitiveState {
+    /// The primitive topology used to interpret vertices.
+    pub topology: PrimitiveTopology,
+    /// The format of index buffers for strip topologies. Should be left `None` for non-strip.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    pub strip_index_format: Option<IndexFormat>,
+    /// The face to consider the front for the purpose of culling and stencil operations.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub front_face: FrontFace,
+    /// The fact culling mode.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub cull_mode: CullMode,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
     ///
     /// Setting this to something other than `Fill` requires `Features::NON_FILL_POLYGON_MODE` to be enabled.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub polygon_mode: PolygonMode,
-    /// If enabled polygon depth is clamped to 0-1 range instead of being clipped.
+}
+
+/// Describes the multi-sampling state of a render pipeline.
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct MultisampleState {
+    /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
+    /// this should be `1`
+    pub count: u32,
+    /// Bitmask that restricts the samples of a pixel modified by this pipeline. All samples
+    /// can be enabled using the value `!0`
+    pub mask: u64,
+    /// When enabled, produces another sample mask per pixel based on the alpha output value, that
+    /// is ANDed with the sample_mask and the primitive coverage to restrict the set of samples
+    /// affected by a primitive.
     ///
-    /// Requires `Features::DEPTH_CLAMPING` enabled.
-    pub clamp_depth: bool,
-    pub depth_bias: i32,
-    pub depth_bias_slope_scale: f32,
-    pub depth_bias_clamp: f32,
+    /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
+    /// is guaranteed to be all 1-s.
+    pub alpha_to_coverage_enabled: bool,
+}
+
+impl Default for MultisampleState {
+    fn default() -> Self {
+        MultisampleState {
+            count: 1,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        }
+    }
 }
 
 bitflags::bitflags! {
@@ -848,7 +932,9 @@ bitflags::bitflags! {
 /// Features are defined by WebGPU specification unless `Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub struct TextureFormatFeatures {
+    /// Valid bits for `TextureDescriptor::Usage` provided for format creation.
     pub allowed_usages: TextureUsage,
+    /// Additional property flags for the format.
     pub flags: TextureFormatFeatureFlags,
 }
 
@@ -1437,30 +1523,33 @@ impl Default for ColorWrite {
     }
 }
 
+/// State of the stencil operation (fixed-pipeline stage).
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct StencilStateDescriptor {
+pub struct StencilState {
     /// Front face mode.
-    pub front: StencilStateFaceDescriptor,
+    pub front: StencilStateFace,
     /// Back face mode.
-    pub back: StencilStateFaceDescriptor,
+    pub back: StencilStateFace,
     /// Stencil values are AND'd with this mask when reading and writing from the stencil buffer. Only low 8 bits are used.
     pub read_mask: u32,
     /// Stencil values are AND'd with this mask when writing to the stencil buffer. Only low 8 bits are used.
     pub write_mask: u32,
 }
 
-impl StencilStateDescriptor {
+impl StencilState {
+    /// Returns true if the stencil test is enabled.
     pub fn is_enabled(&self) -> bool {
-        (self.front != StencilStateFaceDescriptor::IGNORE
-            || self.back != StencilStateFaceDescriptor::IGNORE)
+        (self.front != StencilStateFace::IGNORE || self.back != StencilStateFace::IGNORE)
             && (self.read_mask != 0 || self.write_mask != 0)
     }
+    /// Returns true if the state doesn't mutate the target values.
     pub fn is_read_only(&self) -> bool {
         self.write_mask == 0
     }
+    /// Returns true if the stencil state uses the reference value for testing.
     pub fn needs_ref_value(&self) -> bool {
         self.front.compare.needs_ref_value() || self.back.compare.needs_ref_value()
     }
@@ -1468,10 +1557,10 @@ impl StencilStateDescriptor {
 
 /// Describes the depth/stencil state in a render pipeline.
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct DepthStencilStateDescriptor {
+pub struct DepthStencilState {
     /// Format of the depth/stencil buffer, must be special depth format. Must match the the format
     /// of the depth/stencil attachment in [`CommandEncoder::begin_render_pass`].
     pub format: TextureFormat,
@@ -1479,15 +1568,39 @@ pub struct DepthStencilStateDescriptor {
     pub depth_write_enabled: bool,
     /// Comparison function used to compare depth values in the depth test.
     pub depth_compare: CompareFunction,
-    pub stencil: StencilStateDescriptor,
+    /// Stencil state.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    pub stencil: StencilState,
+
+    /// Constant depth biasing factor, in basic units of the depth format.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    pub depth_bias: i32,
+    /// Slope depth biasing factor.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    pub depth_bias_slope_scale: f32,
+    /// Depth bias clamp value (absolute).
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    pub depth_bias_clamp: f32,
+
+    /// If enabled polygon depth is clamped to 0-1 range instead of being clipped.
+    ///
+    /// Requires `Features::DEPTH_CLAMPING` enabled.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    pub clamp_depth: bool,
 }
 
-impl DepthStencilStateDescriptor {
+impl DepthStencilState {
+    /// Returns true if the depth testing is enabled.
     pub fn is_depth_enabled(&self) -> bool {
         self.depth_compare != CompareFunction::Always || self.depth_write_enabled
     }
+    /// Returns true if the state doesn't mutate either depth or stencil of the target.
     pub fn is_read_only(&self) -> bool {
         !self.depth_write_enabled && self.stencil.is_read_only()
+    }
+    /// Returns true if the depth bias is applied.
+    pub fn has_depth_bias(&self) -> bool {
+        self.depth_bias != 0 || self.depth_bias_slope_scale != 0.0
     }
 }
 
@@ -1540,12 +1653,12 @@ impl Default for StencilOperation {
 
 /// Describes stencil state in a render pipeline.
 ///
-/// If you are not using stencil state, set this to [`StencilStateFaceDescriptor::IGNORE`].
+/// If you are not using stencil state, set this to [`StencilStateFace::IGNORE`].
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct StencilStateFaceDescriptor {
+pub struct StencilStateFace {
     /// Comparison function that determines if the fail_op or pass_op is used on the stencil buffer.
     pub compare: CompareFunction,
     /// Operation that is preformed when stencil test fails.
@@ -1556,8 +1669,9 @@ pub struct StencilStateFaceDescriptor {
     pub pass_op: StencilOperation,
 }
 
-impl StencilStateFaceDescriptor {
-    pub const IGNORE: Self = StencilStateFaceDescriptor {
+impl StencilStateFace {
+    /// Ignore the stencil state for the face.
+    pub const IGNORE: Self = StencilStateFace {
         compare: CompareFunction::Always,
         fail_op: StencilOperation::Keep,
         depth_fail_op: StencilOperation::Keep,
@@ -1565,7 +1679,7 @@ impl StencilStateFaceDescriptor {
     };
 }
 
-impl Default for StencilStateFaceDescriptor {
+impl Default for StencilStateFace {
     fn default() -> Self {
         Self::IGNORE
     }
@@ -1596,6 +1710,7 @@ pub enum CompareFunction {
 }
 
 impl CompareFunction {
+    /// Returns true if the comparison depends on the reference value.
     pub fn needs_ref_value(self) -> bool {
         match self {
             Self::Never | Self::Always => false,
@@ -1616,6 +1731,12 @@ pub enum InputStepMode {
     Instance = 1,
 }
 
+impl Default for InputStepMode {
+    fn default() -> Self {
+        InputStepMode::Vertex
+    }
+}
+
 /// Vertex inputs (attributes) to shaders.
 ///
 /// Arrays of these can be made with the [`vertex_attr_array`] macro. Vertex attributes are assumed to be tightly packed.
@@ -1623,11 +1744,11 @@ pub enum InputStepMode {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct VertexAttributeDescriptor {
-    /// Byte offset of the start of the input
-    pub offset: BufferAddress,
+pub struct VertexAttribute {
     /// Format of the input
     pub format: VertexFormat,
+    /// Byte offset of the start of the input
+    pub offset: BufferAddress,
     /// Location for this input. Must match the location in the shader.
     pub shader_location: ShaderLocation,
 }
@@ -1709,6 +1830,7 @@ pub enum VertexFormat {
 }
 
 impl VertexFormat {
+    /// Returns the byte size of the format.
     pub const fn size(&self) -> u64 {
         match self {
             Self::Uchar2 | Self::Char2 | Self::Uchar2Norm | Self::Char2Norm => 2,
@@ -1800,6 +1922,7 @@ pub struct BufferDescriptor<L> {
 }
 
 impl<L> BufferDescriptor<L> {
+    ///
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> BufferDescriptor<K> {
         BufferDescriptor {
             label: fun(&self.label),
@@ -1821,6 +1944,7 @@ pub struct CommandEncoderDescriptor<L> {
 }
 
 impl<L> CommandEncoderDescriptor<L> {
+    ///
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandEncoderDescriptor<K> {
         CommandEncoderDescriptor {
             label: fun(&self.label),
@@ -1904,10 +2028,16 @@ pub struct SwapChainDescriptor {
 #[repr(C)]
 #[derive(Debug)]
 pub enum SwapChainStatus {
+    /// No issues.
     Good,
+    /// The swap chain is operational, but it does no longer perfectly
+    /// match the surface. A re-configuration is needed.
     Suboptimal,
+    /// Unable to get the next frame, timed out.
     Timeout,
+    /// The surface under the swap chain has changed.
     Outdated,
+    /// The surface under the swap chain is lost.
     Lost,
 }
 
@@ -1918,12 +2048,17 @@ pub enum SwapChainStatus {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Color {
+    ///
     pub r: f64,
+    ///
     pub g: f64,
+    ///
     pub b: f64,
+    ///
     pub a: f64,
 }
 
+#[allow(missing_docs)]
 impl Color {
     pub const TRANSPARENT: Self = Self {
         r: 0.0,
@@ -1983,12 +2118,16 @@ pub enum TextureDimension {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct Origin3d {
+    ///
     pub x: u32,
+    ///
     pub y: u32,
+    ///
     pub z: u32,
 }
 
 impl Origin3d {
+    /// Zero origin.
     pub const ZERO: Self = Self { x: 0, y: 0, z: 0 };
 }
 
@@ -2004,8 +2143,11 @@ impl Default for Origin3d {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct Extent3d {
+    ///
     pub width: u32,
+    ///
     pub height: u32,
+    ///
     pub depth: u32,
 }
 
@@ -2137,6 +2279,7 @@ pub struct TextureDescriptor<L> {
 }
 
 impl<L> TextureDescriptor<L> {
+    ///
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K> {
         TextureDescriptor {
             label: fun(&self.label),
@@ -2246,10 +2389,12 @@ pub struct PushConstantRange {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct CommandBufferDescriptor<L> {
+    /// Debug label of this command buffer.
     pub label: L,
 }
 
 impl<L> CommandBufferDescriptor<L> {
+    ///
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandBufferDescriptor<K> {
         CommandBufferDescriptor {
             label: fun(&self.label),
@@ -2268,6 +2413,7 @@ pub struct RenderBundleDescriptor<L> {
 }
 
 impl<L> RenderBundleDescriptor<L> {
+    ///
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> RenderBundleDescriptor<K> {
         RenderBundleDescriptor {
             label: fun(&self.label),
@@ -2360,15 +2506,16 @@ impl Default for BufferBindingType {
 pub enum TextureSampleType {
     /// Sampling returns floats.
     ///
-    /// If `filterable` is false, the texture can't be sampled with
-    /// a filtering sampler.
-    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
     /// uniform texture2D t;
     /// ```
-    Float { filterable: bool },
+    Float {
+        /// If `filterable` is false, the texture can't be sampled with
+        /// a filtering sampler.
+        filterable: bool,
+    },
     /// Sampling does the depth reference comparison.
     ///
     /// Example GLSL syntax:
@@ -2445,16 +2592,17 @@ pub enum StorageTextureAccess {
 pub enum BindingType {
     /// A buffer binding.
     Buffer {
+        /// Sub-type of the buffer binding.
         ty: BufferBindingType,
         /// Indicates that the binding has a dynamic offset.
         /// One offset must be passed to [`RenderPass::set_bind_group`] for each dynamic binding in increasing order of binding number.
-        #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
+        #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
         has_dynamic_offset: bool,
         /// Minimum size of the corresponding `BufferBinding` required to match this entry.
         /// When pipeline is created, the size has to cover at least the corresponding structure in the shader
         /// plus one element of the unbound array, which can only be last in the structure.
         /// If `None`, the check is performed at draw call time instead of pipeline and bind group creation.
-        #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
+        #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
         min_binding_size: Option<BufferSize>,
     },
     /// A sampler that can be used to sample a texture.
@@ -2510,6 +2658,7 @@ pub enum BindingType {
 }
 
 impl BindingType {
+    /// Returns true for buffer bindings with dynamic offseting enabled.
     pub fn has_dynamic_offset(&self) -> bool {
         match *self {
             Self::Buffer {
@@ -2537,7 +2686,7 @@ pub struct BindGroupLayoutEntry {
     /// If this value is Some and `ty` is `BindingType::Texture`, [`Features::SAMPLED_TEXTURE_BINDING_ARRAY`] must be supported.
     ///
     /// If this value is Some and `ty` is any other variant, bind group creation will fail.
-    #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub count: Option<NonZeroU32>,
 }
 
@@ -2564,7 +2713,7 @@ pub struct TextureCopyView<T> {
     /// The target mip level of the texture.
     pub mip_level: u32,
     /// The base texel of the texture in the selected `mip_level`.
-    #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub origin: Origin3d,
 }
 
@@ -2574,8 +2723,11 @@ pub struct TextureCopyView<T> {
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum SamplerBorderColor {
+    /// [0, 0, 0, 0]
     TransparentBlack,
+    /// [0, 0, 0, 1]
     OpaqueBlack,
+    /// [1, 1, 1, 1]
     OpaqueWhite,
 }
 

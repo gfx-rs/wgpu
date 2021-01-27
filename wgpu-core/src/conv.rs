@@ -177,14 +177,14 @@ pub fn map_primitive_topology(primitive_topology: wgt::PrimitiveTopology) -> hal
     }
 }
 
-pub fn map_color_state_descriptor(desc: &wgt::ColorStateDescriptor) -> hal::pso::ColorBlendDesc {
+pub fn map_color_target_state(desc: &wgt::ColorTargetState) -> hal::pso::ColorBlendDesc {
     let color_mask = desc.write_mask;
-    let blend_state = if desc.color_blend != wgt::BlendDescriptor::REPLACE
-        || desc.alpha_blend != wgt::BlendDescriptor::REPLACE
+    let blend_state = if desc.color_blend != wgt::BlendState::REPLACE
+        || desc.alpha_blend != wgt::BlendState::REPLACE
     {
         Some(hal::pso::BlendState {
-            color: map_blend_descriptor(&desc.color_blend),
-            alpha: map_blend_descriptor(&desc.alpha_blend),
+            color: map_blend_state(&desc.color_blend),
+            alpha: map_blend_state(&desc.alpha_blend),
         })
     } else {
         None
@@ -215,7 +215,7 @@ fn map_color_write_flags(flags: wgt::ColorWrite) -> hal::pso::ColorMask {
     value
 }
 
-fn map_blend_descriptor(blend_desc: &wgt::BlendDescriptor) -> hal::pso::BlendOp {
+fn map_blend_state(blend_desc: &wgt::BlendState) -> hal::pso::BlendOp {
     use hal::pso::BlendOp as H;
     use wgt::BlendOperation as Bo;
     match blend_desc.operation {
@@ -256,9 +256,7 @@ fn map_blend_factor(blend_factor: wgt::BlendFactor) -> hal::pso::Factor {
     }
 }
 
-pub fn map_depth_stencil_state_descriptor(
-    desc: &wgt::DepthStencilStateDescriptor,
-) -> hal::pso::DepthStencilDesc {
+pub fn map_depth_stencil_state(desc: &wgt::DepthStencilState) -> hal::pso::DepthStencilDesc {
     hal::pso::DepthStencilDesc {
         depth: if desc.is_depth_enabled() {
             Some(hal::pso::DepthTest {
@@ -290,9 +288,7 @@ pub fn map_depth_stencil_state_descriptor(
     }
 }
 
-fn map_stencil_face(
-    stencil_state_face_desc: &wgt::StencilStateFaceDescriptor,
-) -> hal::pso::StencilFace {
+fn map_stencil_face(stencil_state_face_desc: &wgt::StencilStateFace) -> hal::pso::StencilFace {
     hal::pso::StencilFace {
         fun: map_compare_function(stencil_state_face_desc.compare),
         op_fail: map_stencil_operation(stencil_state_face_desc.fail_op),
@@ -774,12 +770,38 @@ pub fn map_wrap(address: wgt::AddressMode) -> hal::image::WrapMode {
     }
 }
 
-pub fn map_rasterization_state_descriptor(
-    desc: &wgt::RasterizationStateDescriptor,
+pub fn map_primitive_state_to_input_assembler(
+    desc: &wgt::PrimitiveState,
+) -> hal::pso::InputAssemblerDesc {
+    hal::pso::InputAssemblerDesc {
+        primitive: map_primitive_topology(desc.topology),
+        with_adjacency: false,
+        restart_index: desc.strip_index_format.map(map_index_format),
+    }
+}
+
+pub fn map_primitive_state_to_rasterizer(
+    desc: &wgt::PrimitiveState,
+    depth_stencil: Option<&wgt::DepthStencilState>,
 ) -> hal::pso::Rasterizer {
     use hal::pso;
+    let (depth_clamping, depth_bias) = match depth_stencil {
+        Some(dsd) => {
+            let bias = if dsd.has_depth_bias() {
+                Some(pso::State::Static(pso::DepthBias {
+                    const_factor: dsd.depth_bias as f32,
+                    slope_factor: dsd.depth_bias_slope_scale,
+                    clamp: dsd.depth_bias_clamp,
+                }))
+            } else {
+                None
+            };
+            (dsd.clamp_depth, bias)
+        }
+        None => (false, None),
+    };
     pso::Rasterizer {
-        depth_clamping: desc.clamp_depth,
+        depth_clamping,
         polygon_mode: match desc.polygon_mode {
             wgt::PolygonMode::Fill => pso::PolygonMode::Fill,
             wgt::PolygonMode::Line => pso::PolygonMode::Line,
@@ -794,20 +816,19 @@ pub fn map_rasterization_state_descriptor(
             wgt::FrontFace::Ccw => pso::FrontFace::CounterClockwise,
             wgt::FrontFace::Cw => pso::FrontFace::Clockwise,
         },
-        depth_bias: if desc.depth_bias != 0
-            || desc.depth_bias_slope_scale != 0.0
-            || desc.depth_bias_clamp != 0.0
-        {
-            Some(pso::State::Static(pso::DepthBias {
-                const_factor: desc.depth_bias as f32,
-                slope_factor: desc.depth_bias_slope_scale,
-                clamp: desc.depth_bias_clamp,
-            }))
-        } else {
-            None
-        },
+        depth_bias,
         conservative: false,
         line_width: pso::State::Static(1.0),
+    }
+}
+
+pub fn map_multisample_state(desc: &wgt::MultisampleState) -> hal::pso::Multisampling {
+    hal::pso::Multisampling {
+        rasterization_samples: desc.count as _,
+        sample_shading: None,
+        sample_mask: desc.mask,
+        alpha_coverage: desc.alpha_to_coverage_enabled,
+        alpha_to_one: false,
     }
 }
 

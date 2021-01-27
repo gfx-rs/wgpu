@@ -11,7 +11,6 @@ use crate::{
 };
 use std::borrow::Cow;
 use thiserror::Error;
-use wgt::{BufferAddress, IndexFormat, InputStepMode};
 
 #[derive(Debug)]
 pub enum ShaderModuleSource<'a> {
@@ -99,7 +98,7 @@ pub struct ComputePipelineDescriptor<'a> {
     /// The layout of bind groups for this pipeline.
     pub layout: Option<PipelineLayoutId>,
     /// The compiled compute stage and its entry point.
-    pub compute_stage: ProgrammableStageDescriptor<'a>,
+    pub stage: ProgrammableStageDescriptor<'a>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -134,24 +133,35 @@ impl<B: hal::Backend> Resource for ComputePipeline<B> {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexBufferDescriptor<'a> {
+pub struct VertexBufferLayout<'a> {
     /// The stride, in bytes, between elements of this buffer.
-    pub stride: BufferAddress,
+    pub array_stride: wgt::BufferAddress,
     /// How often this vertex buffer is "stepped" forward.
-    pub step_mode: InputStepMode,
+    pub step_mode: wgt::InputStepMode,
     /// The list of attributes which comprise a single vertex.
-    pub attributes: Cow<'a, [wgt::VertexAttributeDescriptor]>,
+    pub attributes: Cow<'a, [wgt::VertexAttribute]>,
 }
 
-/// Describes vertex input state for a render pipeline.
+/// Describes the vertex process in a render pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexStateDescriptor<'a> {
-    /// The format of any index buffers used with this pipeline.
-    pub index_format: Option<IndexFormat>,
+pub struct VertexState<'a> {
+    /// The compiled vertex stage and its entry point.
+    pub stage: ProgrammableStageDescriptor<'a>,
     /// The format of any vertex buffers used with this pipeline.
-    pub vertex_buffers: Cow<'a, [VertexBufferDescriptor<'a>]>,
+    pub buffers: Cow<'a, [VertexBufferLayout<'a>]>,
+}
+
+/// Describes fragment processing in a render pipeline.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct FragmentState<'a> {
+    /// The compiled fragment stage and its entry point.
+    pub stage: ProgrammableStageDescriptor<'a>,
+    /// The effect of draw calls on the color aspect of the output target.
+    pub targets: Cow<'a, [wgt::ColorTargetState]>,
 }
 
 /// Describes a render (graphics) pipeline.
@@ -162,33 +172,19 @@ pub struct RenderPipelineDescriptor<'a> {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
     pub layout: Option<PipelineLayoutId>,
-    /// The compiled vertex stage and its entry point.
-    pub vertex_stage: ProgrammableStageDescriptor<'a>,
-    /// The compiled fragment stage and its entry point, if any.
-    pub fragment_stage: Option<ProgrammableStageDescriptor<'a>>,
-    /// The rasterization process for this pipeline.
-    pub rasterization_state: Option<wgt::RasterizationStateDescriptor>,
-    /// The primitive topology used to interpret vertices.
-    pub primitive_topology: wgt::PrimitiveTopology,
-    /// The effect of draw calls on the color aspect of the output target.
-    pub color_states: Cow<'a, [wgt::ColorStateDescriptor]>,
+    /// The vertex processing state for this pipeline.
+    pub vertex: VertexState<'a>,
+    /// The properties of the pipeline at the primitive assembly and rasterization level.
+    #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
+    pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
-    pub depth_stencil_state: Option<wgt::DepthStencilStateDescriptor>,
-    /// The vertex input state for this pipeline.
-    pub vertex_state: VertexStateDescriptor<'a>,
-    /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
-    /// this should be `1`
-    pub sample_count: u32,
-    /// Bitmask that restricts the samples of a pixel modified by this pipeline. All samples
-    /// can be enabled using the value `!0`
-    pub sample_mask: u32,
-    /// When enabled, produces another sample mask per pixel based on the alpha output value, that
-    /// is ANDed with the sample_mask and the primitive coverage to restrict the set of samples
-    /// affected by a primitive.
-    ///
-    /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
-    /// is guaranteed to be all 1-s.
-    pub alpha_to_coverage_enabled: bool,
+    #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
+    pub depth_stencil: Option<wgt::DepthStencilState>,
+    /// The multi-sampling properties of the pipeline.
+    #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
+    pub multisample: wgt::MultisampleState,
+    /// The fragment processing state for this pipeline.
+    pub fragment: Option<FragmentState<'a>>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -206,11 +202,14 @@ pub enum CreateRenderPipelineError {
     #[error("invalid sample count {0}")]
     InvalidSampleCount(u32),
     #[error("vertex buffer {index} stride {stride} does not respect `VERTEX_STRIDE_ALIGNMENT`")]
-    UnalignedVertexStride { index: u32, stride: BufferAddress },
+    UnalignedVertexStride {
+        index: u32,
+        stride: wgt::BufferAddress,
+    },
     #[error("vertex attribute at location {location} has invalid offset {offset}")]
     InvalidVertexAttributeOffset {
         location: wgt::ShaderLocation,
-        offset: BufferAddress,
+        offset: wgt::BufferAddress,
     },
     #[error("missing required device features {0:?}")]
     MissingFeature(wgt::Features),
@@ -238,8 +237,8 @@ pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
-    pub(crate) index_format: Option<IndexFormat>,
-    pub(crate) vertex_strides: Vec<(BufferAddress, InputStepMode)>,
+    pub(crate) strip_index_format: Option<wgt::IndexFormat>,
+    pub(crate) vertex_strides: Vec<(wgt::BufferAddress, wgt::InputStepMode)>,
     pub(crate) life_guard: LifeGuard,
 }
 
