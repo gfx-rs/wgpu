@@ -20,9 +20,9 @@ struct Data {
 
 typedef int type4;
 
-typedef metal::float3x3 type5;
+typedef float type5;
 
-typedef float type6;
+typedef metal::float3x3 type6;
 
 typedef metal::texturecube<float, metal::access::sample> type7;
 

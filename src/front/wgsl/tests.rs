@@ -37,6 +37,15 @@ fn parse_type_cast() {
     ",
     )
     .unwrap();
+    parse_str(
+        "
+        fn main() {
+            const x: vec2<f32> = vec2<f32>(1.0, 2.0);
+            const y: vec2<u32> = vec2<u32>(x);
+        }
+    ",
+    )
+    .unwrap();
 }
 
 #[test]

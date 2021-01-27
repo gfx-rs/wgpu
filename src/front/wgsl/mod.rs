@@ -62,6 +62,8 @@ pub enum Error<'a> {
     BadTexture(&'a str),
     #[error("bad texture coordinate")]
     BadCoordinate,
+    #[error("invalid type cast to `{0}`")]
+    BadTypeCast(&'a str),
     #[error(transparent)]
     InvalidResolve(ResolveError),
     #[error("unknown import: `{0}`")]
@@ -435,15 +437,6 @@ impl Parser {
             let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
             lexer.expect(Token::Paren(')'))?;
             Some(crate::Expression::Derivative { axis, expr })
-        } else if let Some((kind, _width)) = conv::get_scalar_type(name) {
-            lexer.expect(Token::Paren('('))?;
-            let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
-            lexer.expect(Token::Paren(')'))?;
-            Some(crate::Expression::As {
-                expr,
-                kind,
-                convert: true,
-            })
         } else if let Some(fun) = conv::map_standard_fun(name) {
             lexer.expect(Token::Paren('('))?;
             let arg_count = fun.argument_count();
@@ -833,18 +826,28 @@ impl Parser {
                         ctx.types,
                         ctx.constants,
                     )?;
+                    let kind = inner.scalar_kind();
                     let ty = ctx.types.fetch_or_append(crate::Type { name: None, inner });
 
                     lexer.expect(Token::Paren('('))?;
                     let mut components = Vec::new();
-                    while !lexer.skip(Token::Paren(')')) {
-                        if !components.is_empty() {
-                            lexer.expect(Token::Separator(','))?;
-                        }
-                        let sub_expr = self.parse_general_expression(lexer, ctx.reborrow())?;
-                        components.push(sub_expr);
+                    let mut last_component =
+                        self.parse_general_expression(lexer, ctx.reborrow())?;
+                    while lexer.skip(Token::Separator(',')) {
+                        components.push(last_component);
+                        last_component = self.parse_general_expression(lexer, ctx.reborrow())?;
                     }
-                    crate::Expression::Compose { ty, components }
+                    lexer.expect(Token::Paren(')'))?;
+                    if components.is_empty() {
+                        crate::Expression::As {
+                            expr: last_component,
+                            kind: kind.ok_or(Error::BadTypeCast(word))?,
+                            convert: true,
+                        }
+                    } else {
+                        components.push(last_component);
+                        crate::Expression::Compose { ty, components }
+                    }
                 }
             }
             other => return other.unexpected("primary expression"),
