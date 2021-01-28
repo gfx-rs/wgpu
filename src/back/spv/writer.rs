@@ -70,7 +70,6 @@ impl Function {
     }
 
     fn consume(&mut self, mut block: Block, termination: Instruction) {
-        assert!(block.termination.is_none());
         block.termination = Some(termination);
         self.blocks.push(block);
     }
@@ -2077,10 +2076,11 @@ impl Writer {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn write_block(
         &mut self,
         label_id: Word,
-        statements: &crate::Block,
+        statements: &[crate::Statement],
         ir_module: &crate::Module,
         ir_function: &crate::Function,
         function: &mut Function,
@@ -2090,10 +2090,9 @@ impl Writer {
         let mut block = Block::new(label_id);
 
         for statement in statements {
-            assert!(
-                block.termination.is_none(),
-                "No statements are expected after block termination"
-            );
+            if block.termination.is_some() {
+                unimplemented!("No statements are expected after block termination");
+            }
             match *statement {
                 crate::Statement::Block(ref block_statements) => {
                     let scope_id = self.generate_id();
