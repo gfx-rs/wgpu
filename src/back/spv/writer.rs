@@ -1454,21 +1454,197 @@ impl Writer {
                 fun,
                 arg,
                 arg1,
-                arg2: _,
+                arg2,
             } => {
                 use crate::MathFunction as Mf;
                 enum MathOp {
                     Single(spirv::GLOp),
                     Double(spirv::GLOp),
+                    Triple(spirv::GLOp),
                     Other(super::Instruction, LookupType),
                 }
 
                 let (arg0_id, arg0_lookup_ty) =
                     self.write_expression(ir_module, ir_function, arg, block, function)?;
                 let arg0_type_id = self.get_type_id(&ir_module.types, arg0_lookup_ty)?;
+                let arg1_id = match arg1 {
+                    Some(id) => {
+                        let (arg1_id, _) =
+                            self.write_expression(ir_module, ir_function, id, block, function)?;
+                        arg1_id
+                    }
+                    None => 0,
+                };
+                let arg2_id = match arg2 {
+                    Some(id) => {
+                        let (arg2_id, _) =
+                            self.write_expression(ir_module, ir_function, id, block, function)?;
+                        arg2_id
+                    }
+                    None => 0,
+                };
 
                 let id = self.generate_id();
                 let math_op = match fun {
+                    // comparison
+                    Mf::Abs => {
+                        let inst = match self
+                            .get_type_inner(&ir_module.types, arg0_lookup_ty)
+                            .scalar_kind()
+                        {
+                            Some(crate::ScalarKind::Float) => {
+                                super::instructions::instruction_ext_inst(
+                                    spirv::GLOp::FAbs,
+                                    arg0_type_id,
+                                    self.gl450_ext_inst_id,
+                                    id,
+                                    &[arg0_id],
+                                )
+                            }
+                            Some(crate::ScalarKind::Sint) => {
+                                super::instructions::instruction_ext_inst(
+                                    spirv::GLOp::SAbs,
+                                    arg0_type_id,
+                                    self.gl450_ext_inst_id,
+                                    id,
+                                    &[arg0_id],
+                                )
+                            }
+                            Some(crate::ScalarKind::Uint) => {
+                                super::instructions::instruction_unary(
+                                    spirv::Op::CopyObject, // do nothing
+                                    arg0_type_id,
+                                    id,
+                                    arg0_id,
+                                )
+                            }
+                            other => unimplemented!("Unexpected abs({:?})", other),
+                        };
+                        MathOp::Other(inst, arg0_lookup_ty)
+                    }
+                    Mf::Min => {
+                        let op = match self
+                            .get_type_inner(&ir_module.types, arg0_lookup_ty)
+                            .scalar_kind()
+                        {
+                            Some(crate::ScalarKind::Float) => spirv::GLOp::FMin,
+                            Some(crate::ScalarKind::Sint) => spirv::GLOp::SMin,
+                            Some(crate::ScalarKind::Uint) => spirv::GLOp::UMin,
+                            other => unimplemented!("Unexpected min({:?})", other),
+                        };
+                        MathOp::Double(op)
+                    }
+                    Mf::Max => {
+                        let op = match self
+                            .get_type_inner(&ir_module.types, arg0_lookup_ty)
+                            .scalar_kind()
+                        {
+                            Some(crate::ScalarKind::Float) => spirv::GLOp::FMax,
+                            Some(crate::ScalarKind::Sint) => spirv::GLOp::SMax,
+                            Some(crate::ScalarKind::Uint) => spirv::GLOp::UMax,
+                            other => unimplemented!("Unexpected max({:?})", other),
+                        };
+                        MathOp::Double(op)
+                    }
+                    Mf::Clamp => {
+                        let op = match self
+                            .get_type_inner(&ir_module.types, arg0_lookup_ty)
+                            .scalar_kind()
+                        {
+                            Some(crate::ScalarKind::Float) => spirv::GLOp::FClamp,
+                            Some(crate::ScalarKind::Sint) => spirv::GLOp::SClamp,
+                            Some(crate::ScalarKind::Uint) => spirv::GLOp::UClamp,
+                            other => unimplemented!("Unexpected max({:?})", other),
+                        };
+                        MathOp::Triple(op)
+                    }
+                    // trigonometry
+                    Mf::Sin => MathOp::Single(spirv::GLOp::Sin),
+                    Mf::Asin => MathOp::Single(spirv::GLOp::Asin),
+                    Mf::Cos => MathOp::Single(spirv::GLOp::Cos),
+                    Mf::Acos => MathOp::Single(spirv::GLOp::Acos),
+                    Mf::Tan => MathOp::Single(spirv::GLOp::Tan),
+                    Mf::Atan => MathOp::Single(spirv::GLOp::Atan),
+                    Mf::Atan2 => MathOp::Double(spirv::GLOp::Atan2),
+                    // decomposition
+                    Mf::Ceil => MathOp::Single(spirv::GLOp::Ceil),
+                    Mf::Round => MathOp::Single(spirv::GLOp::Round),
+                    Mf::Floor => MathOp::Single(spirv::GLOp::Floor),
+                    Mf::Fract => MathOp::Single(spirv::GLOp::Fract),
+                    Mf::Trunc => MathOp::Single(spirv::GLOp::Trunc),
+                    // geometry
+                    Mf::Dot => {
+                        let result_lookup_ty =
+                            match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
+                                crate::TypeInner::Scalar { kind, width }
+                                | crate::TypeInner::Vector {
+                                    size: _,
+                                    kind,
+                                    width,
+                                } => LookupType::Local(LocalType::Scalar { kind, width }),
+                                _ => unreachable!(),
+                            };
+                        let result_type_id =
+                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
+
+                        let inst = super::instructions::instruction_binary(
+                            spirv::Op::Dot,
+                            result_type_id,
+                            id,
+                            arg0_id,
+                            arg1_id,
+                        );
+                        MathOp::Other(inst, result_lookup_ty)
+                    }
+                    Mf::Cross => MathOp::Double(spirv::GLOp::Cross),
+                    Mf::Distance => {
+                        let result_lookup_ty =
+                            match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
+                                crate::TypeInner::Scalar { kind, width }
+                                | crate::TypeInner::Vector {
+                                    size: _,
+                                    kind,
+                                    width,
+                                } => LookupType::Local(LocalType::Scalar { kind, width }),
+                                _ => unreachable!(),
+                            };
+                        let result_type_id =
+                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
+
+                        let inst = super::instructions::instruction_ext_inst(
+                            spirv::GLOp::Distance,
+                            result_type_id,
+                            self.gl450_ext_inst_id,
+                            id,
+                            &[arg0_id, arg1_id],
+                        );
+                        MathOp::Other(inst, result_lookup_ty)
+                    }
+                    Mf::Length => {
+                        let result_lookup_ty =
+                            match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
+                                crate::TypeInner::Scalar { kind, width }
+                                | crate::TypeInner::Vector {
+                                    size: _,
+                                    kind,
+                                    width,
+                                } => LookupType::Local(LocalType::Scalar { kind, width }),
+                                _ => unreachable!(),
+                            };
+                        let result_type_id =
+                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
+
+                        let inst = super::instructions::instruction_ext_inst(
+                            spirv::GLOp::Length,
+                            result_type_id,
+                            self.gl450_ext_inst_id,
+                            id,
+                            &[arg0_id, arg1_id],
+                        );
+                        MathOp::Other(inst, result_lookup_ty)
+                    }
+                    Mf::Normalize => MathOp::Single(spirv::GLOp::Normalize),
+                    // computational
                     Mf::Transpose => {
                         let result_lookup_ty =
                             match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
@@ -1483,27 +1659,17 @@ impl Writer {
                                 }),
                                 _ => unreachable!(),
                             };
+                        let result_type_id =
+                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
 
                         let inst = super::instructions::instruction_unary(
                             spirv::Op::Transpose,
-                            arg0_type_id,
+                            result_type_id,
                             id,
                             arg0_id,
                         );
                         MathOp::Other(inst, result_lookup_ty)
                     }
-                    Mf::Sin => MathOp::Single(spirv::GLOp::Sin),
-                    Mf::Asin => MathOp::Single(spirv::GLOp::Asin),
-                    Mf::Cos => MathOp::Single(spirv::GLOp::Cos),
-                    Mf::Acos => MathOp::Single(spirv::GLOp::Acos),
-                    Mf::Tan => MathOp::Single(spirv::GLOp::Tan),
-                    Mf::Atan => MathOp::Single(spirv::GLOp::Atan),
-                    Mf::Atan2 => MathOp::Double(spirv::GLOp::Atan2),
-                    Mf::Ceil => MathOp::Single(spirv::GLOp::Ceil),
-                    Mf::Round => MathOp::Single(spirv::GLOp::Round),
-                    Mf::Floor => MathOp::Single(spirv::GLOp::Floor),
-                    Mf::Fract => MathOp::Single(spirv::GLOp::Fract),
-                    Mf::Trunc => MathOp::Single(spirv::GLOp::Trunc),
                     _ => {
                         log::error!("unimplemented math function {:?}", fun);
                         return Err(Error::FeatureNotImplemented("math function"));
@@ -1513,28 +1679,31 @@ impl Writer {
                 let (instruction, result_lookup_ty) = match math_op {
                     MathOp::Single(op) => {
                         let inst = super::instructions::instruction_ext_inst(
+                            op,
                             arg0_type_id,
                             id,
                             self.gl450_ext_inst_id,
-                            op as u32,
                             &[arg0_id],
                         );
                         (inst, arg0_lookup_ty)
                     }
                     MathOp::Double(op) => {
-                        let (arg1_id, _) = self.write_expression(
-                            ir_module,
-                            ir_function,
-                            arg1.unwrap(),
-                            block,
-                            function,
-                        )?;
                         let inst = super::instructions::instruction_ext_inst(
+                            op,
                             arg0_type_id,
                             id,
                             self.gl450_ext_inst_id,
-                            op as u32,
                             &[arg0_id, arg1_id],
+                        );
+                        (inst, arg0_lookup_ty)
+                    }
+                    MathOp::Triple(op) => {
+                        let inst = super::instructions::instruction_ext_inst(
+                            op,
+                            arg0_type_id,
+                            id,
+                            self.gl450_ext_inst_id,
+                            &[arg0_id, arg1_id, arg2_id],
                         );
                         (inst, arg0_lookup_ty)
                     }
