@@ -374,6 +374,13 @@ impl Writer {
         for (handle, variable) in ir_function.local_variables.iter() {
             let id = self.generate_id();
 
+            if self.flags.contains(WriterFlags::DEBUG) {
+                if let Some(ref name) = variable.name {
+                    self.debugs
+                        .push(super::instructions::instruction_name(id, name));
+                }
+            }
+
             let init_word = variable
                 .init
                 .map(|constant| self.get_constant_id(constant, ir_module))
@@ -589,6 +596,13 @@ impl Writer {
         let ty = &arena[handle];
         let id = self.generate_id();
 
+        if self.flags.contains(WriterFlags::DEBUG) {
+            if let Some(ref name) = ty.name {
+                self.debugs
+                    .push(super::instructions::instruction_name(id, name));
+            }
+        }
+
         let instruction = match ty.inner {
             crate::TypeInner::Scalar { kind, width } => {
                 self.lookup_type
@@ -713,6 +727,17 @@ impl Writer {
                         Some(span) => span.get(),
                         None => layout.size,
                     };
+
+                    if self.flags.contains(WriterFlags::DEBUG) {
+                        if let Some(ref name) = member.name {
+                            self.debugs
+                                .push(super::instructions::instruction_member_name(
+                                    id,
+                                    index as u32,
+                                    name,
+                                ));
+                        }
+                    }
 
                     if let crate::TypeInner::Matrix {
                         columns,
@@ -886,7 +911,7 @@ impl Writer {
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(ref name) = global_variable.name {
                 self.debugs
-                    .push(super::instructions::instruction_name(id, name.as_str()));
+                    .push(super::instructions::instruction_name(id, name));
             }
         }
 

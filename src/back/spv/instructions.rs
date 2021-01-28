@@ -27,6 +27,14 @@ pub(super) fn instruction_name(target_id: Word, name: &str) -> Instruction {
     instruction
 }
 
+pub(super) fn instruction_member_name(target_id: Word, member: Word, name: &str) -> Instruction {
+    let mut instruction = Instruction::new(Op::MemberName);
+    instruction.add_operand(target_id);
+    instruction.add_operand(member);
+    instruction.add_operands(helpers::string_to_words(name));
+    instruction
+}
+
 //
 // Annotation Instructions
 //
