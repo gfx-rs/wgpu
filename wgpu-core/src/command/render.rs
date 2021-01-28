@@ -24,7 +24,7 @@ use crate::{
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
     },
-    Label, Stored, MAX_BIND_GROUPS,
+    Label, Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -802,11 +802,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     inputs: &[],
                     preserves: &[],
                 };
-                let all = entry
-                    .key()
-                    .all()
-                    .map(|(at, _)| at.clone())
-                    .collect::<AttachmentDataVec<_>>();
+                let all = entry.key().all().map(|(at, _)| at.clone());
 
                 let pass = unsafe {
                     device
@@ -1127,13 +1123,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             bind_group,
                             &temp_offsets,
                         ) {
-                            let bind_groups = iter::once(bind_group.raw.raw())
-                                .chain(
-                                    follow_ups
-                                        .clone()
-                                        .map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()),
-                                )
-                                .collect::<ArrayVec<[_; MAX_BIND_GROUPS]>>();
+                            let bind_groups = iter::once(bind_group.raw.raw()).chain(
+                                follow_ups
+                                    .clone()
+                                    .map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()),
+                            );
                             temp_offsets.extend(follow_ups.flat_map(|(_, offsets)| offsets));
                             unsafe {
                                 raw.bind_graphics_descriptor_sets(

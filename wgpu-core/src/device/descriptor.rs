@@ -121,7 +121,7 @@ impl<B: hal::Backend>
         match hal::device::Device::create_descriptor_pool(
             self.0,
             max_sets as usize,
-            ranges,
+            ranges.into_iter(),
             hal::pso::DescriptorPoolCreateFlags::from_bits_truncate(flags.bits()),
         ) {
             Ok(pool) => Ok(pool),

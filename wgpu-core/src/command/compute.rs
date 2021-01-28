@@ -15,10 +15,9 @@ use crate::{
     span,
     track::{TrackerSet, UsageConflict},
     validation::{check_buffer_usage, MissingBufferUsageError},
-    Label, MAX_BIND_GROUPS,
+    Label,
 };
 
-use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
 use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, ShaderStage};
@@ -330,13 +329,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         bind_group,
                         &temp_offsets,
                     ) {
-                        let bind_groups = iter::once(bind_group.raw.raw())
-                            .chain(
-                                follow_ups
-                                    .clone()
-                                    .map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()),
-                            )
-                            .collect::<ArrayVec<[_; MAX_BIND_GROUPS]>>();
+                        let bind_groups = iter::once(bind_group.raw.raw()).chain(
+                            follow_ups
+                                .clone()
+                                .map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()),
+                        );
                         temp_offsets.extend(follow_ups.flat_map(|(_, offsets)| offsets));
                         unsafe {
                             raw.bind_compute_descriptor_sets(

@@ -619,14 +619,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .raw
                     .create_fence(false)
                     .or(Err(DeviceError::OutOfMemory))?;
-                let mut command_buffers = pending_write_command_buffer
-                    .as_ref()
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                for &cmd_buf_id in command_buffer_ids {
-                    let cmd_buf = command_buffer_guard.get(cmd_buf_id).unwrap();
-                    command_buffers.extend(cmd_buf.raw.iter());
-                }
+                let command_buffers = pending_write_command_buffer.as_ref().into_iter().chain(
+                    command_buffer_ids.iter().flat_map(|&cmd_buf_id| {
+                        command_buffer_guard.get(cmd_buf_id).unwrap().raw.iter()
+                    }),
+                );
                 let signal_semaphores = signal_swapchain_semaphores
                     .into_iter()
                     .map(|sc_id| &swap_chain_guard[sc_id].semaphore);

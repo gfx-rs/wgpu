@@ -319,9 +319,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
         let (buffer_guard, _) = hub.buffers.read(&mut token);
-        // we can't hold both src_pending and dst_pending in scope because they
-        // borrow the buffer tracker mutably...
-        let mut barriers = Vec::new();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -346,7 +343,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !src_buffer.usage.contains(BufferUsage::COPY_SRC) {
             Err(TransferError::MissingCopySrcUsageFlag)?
         }
-        barriers.extend(src_pending.map(|pending| pending.into_hal(src_buffer)));
+        // expecting only a single barrier
+        let src_barrier = src_pending
+            .map(|pending| pending.into_hal(src_buffer))
+            .next();
 
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
@@ -363,7 +363,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 None,
             ))?
         }
-        barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_buffer)));
+        let dst_barrier = dst_pending
+            .map(|pending| pending.into_hal(dst_buffer))
+            .next();
 
         if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             Err(TransferError::UnalignedCopySize(size))?
@@ -409,7 +411,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             cmd_buf_raw.pipeline_barrier(
                 all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
-                barriers,
+                src_barrier.into_iter().chain(dst_barrier),
             );
             cmd_buf_raw.copy_buffer(src_raw, dst_raw, iter::once(region));
         }
@@ -713,9 +715,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
         let (_, mut token) = hub.buffers.read(&mut token); // skip token
         let (texture_guard, _) = hub.textures.read(&mut token);
-        // we can't hold both src_pending and dst_pending in scope because they
-        // borrow the buffer tracker mutably...
-        let mut barriers = Vec::new();
         let (src_layers, src_selector, src_offset) =
             texture_copy_view_to_hal(source, copy_size, &*texture_guard)?;
         let (dst_layers, dst_selector, dst_offset) =
@@ -755,7 +754,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !src_texture.usage.contains(TextureUsage::COPY_SRC) {
             Err(TransferError::MissingCopySrcUsageFlag)?
         }
-        barriers.extend(src_pending.map(|pending| pending.into_hal(src_texture)));
+        //TODO: try to avoid this the collection. It's needed because both
+        // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
+        let mut barriers = src_pending
+            .map(|pending| pending.into_hal(src_texture))
+            .collect::<Vec<_>>();
 
         let (dst_texture, dst_pending) = cmd_buf
             .trackers
@@ -822,7 +825,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             cmd_buf_raw.pipeline_barrier(
                 all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
-                barriers,
+                barriers.into_iter(),
             );
             cmd_buf_raw.copy_image(
                 src_raw,

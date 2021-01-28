@@ -1066,10 +1066,7 @@ impl<B: GfxBackend> Device<B> {
             resolves: &[],
             preserves: &[],
         };
-        let all = key
-            .all()
-            .map(|(at, _)| at.clone())
-            .collect::<AttachmentDataVec<_>>();
+        let all = key.all().map(|(at, _)| at.clone());
 
         unsafe {
             self.raw
@@ -1169,7 +1166,7 @@ impl<B: GfxBackend> Device<B> {
         let raw = unsafe {
             let mut raw_layout = self
                 .raw
-                .create_descriptor_set_layout(raw_bindings, &[])
+                .create_descriptor_set_layout(raw_bindings, iter::empty())
                 .or(Err(DeviceError::OutOfMemory))?;
             if let Some(label) = label {
                 self.raw
@@ -1526,10 +1523,7 @@ impl<B: GfxBackend> Device<B> {
         }
 
         if let Some(start_binding) = write_map.keys().next().cloned() {
-            let descriptors = write_map
-                .into_iter()
-                .flat_map(|(_, list)| list)
-                .collect::<Vec<_>>();
+            let descriptors = write_map.into_iter().flat_map(|(_, list)| list);
             unsafe {
                 let write = hal::pso::DescriptorSetWrite {
                     set: desc_set.raw_mut(),
