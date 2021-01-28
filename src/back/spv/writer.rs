@@ -16,9 +16,19 @@ pub enum Error {
 }
 
 struct Block {
-    label_id: spirv::Word,
+    label_id: Word,
     body: Vec<Instruction>,
     termination: Option<Instruction>,
+}
+
+impl Block {
+    fn new(label_id: Word) -> Self {
+        Block {
+            label_id,
+            body: Vec::new(),
+            termination: None,
+        }
+    }
 }
 
 struct LocalVariable {
@@ -57,6 +67,12 @@ impl Function {
             }
             block.termination.as_ref().unwrap().to_words(sink);
         }
+    }
+
+    fn consume(&mut self, mut block: Block, termination: Instruction) {
+        assert!(block.termination.is_none());
+        block.termination = Some(termination);
+        self.blocks.push(block);
     }
 }
 
@@ -353,7 +369,7 @@ impl Writer {
         &mut self,
         ir_function: &crate::Function,
         ir_module: &crate::Module,
-    ) -> Result<spirv::Word, Error> {
+    ) -> Result<Word, Error> {
         let mut function = Function::default();
 
         for (handle, variable) in ir_function.local_variables.iter() {
@@ -380,21 +396,15 @@ impl Writer {
             self.get_function_return_type(ir_function.return_type, &ir_module.types)?;
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
 
-        let mut function_parameter_pointer_ids = vec![];
-
         for argument in ir_function.arguments.iter() {
             let id = self.generate_id();
-            let pointer_type_id =
-                self.get_pointer_id(&ir_module.types, argument.ty, crate::StorageClass::Function)?;
-
-            function_parameter_pointer_ids.push(pointer_type_id);
             let parameter_type_id =
                 self.get_type_id(&ir_module.types, LookupType::Handle(argument.ty))?;
             parameter_type_ids.push(parameter_type_id);
             function
                 .parameters
                 .push(super::instructions::instruction_function_parameter(
-                    pointer_type_id,
+                    parameter_type_id,
                     id,
                 ));
         }
@@ -405,8 +415,7 @@ impl Writer {
         };
 
         let function_id = self.generate_id();
-        let function_type =
-            self.get_function_type(lookup_function_type, function_parameter_pointer_ids);
+        let function_type = self.get_function_type(lookup_function_type);
         function.signature = Some(super::instructions::instruction_function(
             return_type_id,
             function_id,
@@ -414,15 +423,16 @@ impl Writer {
             function_type,
         ));
 
-        let block = self.write_block(
+        let main_id = self.generate_id();
+        self.write_block(
+            main_id,
             &ir_function.body,
             ir_module,
             ir_function,
             &mut function,
-            0, //isn't used
+            None,
             LoopContext::default(),
         )?;
-        function.blocks.push(block);
 
         function.to_words(&mut self.logical_layout.function_definitions);
         super::instructions::instruction_function_end()
@@ -759,7 +769,7 @@ impl Writer {
 
     fn write_constant_type(
         &mut self,
-        id: spirv::Word,
+        id: Word,
         inner: &crate::ConstantInner,
         ir_module: &crate::Module,
     ) -> Result<(), Error> {
@@ -964,11 +974,7 @@ impl Writer {
         Ok((instruction, id, class))
     }
 
-    fn get_function_type(
-        &mut self,
-        lookup_function_type: LookupFunctionType,
-        parameter_pointer_ids: Vec<Word>,
-    ) -> Word {
+    fn get_function_type(&mut self, lookup_function_type: LookupFunctionType) -> Word {
         match self
             .lookup_function_type
             .entry(lookup_function_type.clone())
@@ -979,7 +985,7 @@ impl Writer {
                 let instruction = super::instructions::instruction_type_function(
                     id,
                     lookup_function_type.return_type_id,
-                    parameter_pointer_ids.as_slice(),
+                    &lookup_function_type.parameter_type_ids,
                 );
                 instruction.to_words(&mut self.logical_layout.declarations);
                 self.lookup_function_type.insert(lookup_function_type, id);
@@ -1722,12 +1728,9 @@ impl Writer {
                 ))
             }
             crate::Expression::FunctionArgument(index) => {
-                let handle = ir_function.arguments[index as usize].ty;
+                let ty_handle = ir_function.arguments[index as usize].ty;
                 let id = function.parameters[index as usize].result_id.unwrap();
-                Ok((
-                    RawExpression::Pointer(id, spirv::StorageClass::Function),
-                    LookupType::Handle(handle),
-                ))
+                Ok((RawExpression::Value(id), LookupType::Handle(ty_handle)))
             }
             crate::Expression::Call {
                 function: local_function,
@@ -2074,24 +2077,17 @@ impl Writer {
         }
     }
 
-    fn create_block(&mut self) -> Block {
-        Block {
-            label_id: self.generate_id(),
-            body: Vec::new(),
-            termination: None,
-        }
-    }
-
     fn write_block(
         &mut self,
+        label_id: Word,
         statements: &crate::Block,
         ir_module: &crate::Module,
         ir_function: &crate::Function,
         function: &mut Function,
-        merge_id: spirv::Word,
+        exit_id: Option<Word>,
         loop_context: LoopContext,
-    ) -> Result<Block, Error> {
-        let mut block = self.create_block();
+    ) -> Result<(), Error> {
+        let mut block = Block::new(label_id);
 
         for statement in statements {
             assert!(
@@ -2100,23 +2096,21 @@ impl Writer {
             );
             match *statement {
                 crate::Statement::Block(ref block_statements) => {
-                    let merge_block = self.create_block();
-                    let scope_block = self.write_block(
+                    let scope_id = self.generate_id();
+                    function.consume(block, super::instructions::instruction_branch(scope_id));
+
+                    let merge_id = self.generate_id();
+                    self.write_block(
+                        scope_id,
                         block_statements,
                         ir_module,
                         ir_function,
                         function,
-                        merge_block.label_id,
+                        Some(merge_id),
                         loop_context,
                     )?;
 
-                    block.termination = Some(super::instructions::instruction_branch(
-                        scope_block.label_id,
-                    ));
-
-                    function.blocks.push(block);
-                    function.blocks.push(scope_block);
-                    block = merge_block;
+                    block = Block::new(merge_id);
                 }
                 crate::Statement::If {
                     ref condition,
@@ -2131,94 +2125,94 @@ impl Writer {
                         function,
                     )?;
 
-                    let merge_block = self.create_block();
-
+                    let merge_id = self.generate_id();
                     block
                         .body
                         .push(super::instructions::instruction_selection_merge(
-                            merge_block.label_id,
+                            merge_id,
                             spirv::SelectionControl::NONE,
                         ));
 
-                    let accept_block = self.write_block(
+                    let accept_id = self.generate_id();
+                    let reject_id = self.generate_id();
+                    function.consume(
+                        block,
+                        super::instructions::instruction_branch_conditional(
+                            condition_id,
+                            accept_id,
+                            reject_id,
+                        ),
+                    );
+
+                    self.write_block(
+                        accept_id,
                         accept,
                         ir_module,
                         ir_function,
                         function,
-                        merge_block.label_id,
+                        Some(merge_id),
                         loop_context,
                     )?;
-                    let reject_block = self.write_block(
+                    self.write_block(
+                        reject_id,
                         reject,
                         ir_module,
                         ir_function,
                         function,
-                        merge_block.label_id,
+                        Some(merge_id),
                         loop_context,
                     )?;
 
-                    block.termination = Some(super::instructions::instruction_branch_conditional(
-                        condition_id,
-                        accept_block.label_id,
-                        reject_block.label_id,
-                    ));
-
-                    function.blocks.push(block);
-                    function.blocks.push(accept_block);
-                    function.blocks.push(reject_block);
-                    block = merge_block;
+                    block = Block::new(merge_id);
                 }
                 crate::Statement::Loop {
                     ref body,
                     ref continuing,
                 } => {
-                    let merge_block = self.create_block();
-                    let mut preamble_block = self.create_block();
-                    block.termination = Some(super::instructions::instruction_branch(
-                        preamble_block.label_id,
+                    let preamble_id = self.generate_id();
+                    function.consume(block, super::instructions::instruction_branch(preamble_id));
+
+                    let merge_id = self.generate_id();
+                    let body_id = self.generate_id();
+                    let continuing_id = self.generate_id();
+
+                    // SPIR-V requires the continuing to the `OpLoopMerge`,
+                    // so we have to start a new block with it.
+                    block = Block::new(preamble_id);
+                    block.body.push(super::instructions::instruction_loop_merge(
+                        merge_id,
+                        continuing_id,
+                        spirv::SelectionControl::NONE,
                     ));
+                    function.consume(block, super::instructions::instruction_branch(body_id));
 
-                    let continuing_block = self.write_block(
-                        continuing,
-                        ir_module,
-                        ir_function,
-                        function,
-                        preamble_block.label_id,
-                        LoopContext {
-                            continuing_id: None,
-                            break_id: Some(merge_block.label_id),
-                        },
-                    )?;
-
-                    let loop_block = self.write_block(
+                    self.write_block(
+                        body_id,
                         body,
                         ir_module,
                         ir_function,
                         function,
-                        continuing_block.label_id,
+                        Some(continuing_id),
                         LoopContext {
-                            continuing_id: Some(continuing_block.label_id),
-                            break_id: Some(merge_block.label_id),
+                            continuing_id: Some(continuing_id),
+                            break_id: Some(merge_id),
                         },
                     )?;
 
-                    // SPIR-V requires the continuing to the `OpLoopMerge`,
-                    // so we have to start a new block with it.
-                    preamble_block
-                        .body
-                        .push(super::instructions::instruction_loop_merge(
-                            merge_block.label_id,
-                            continuing_block.label_id,
-                            spirv::SelectionControl::NONE,
-                        ));
-                    preamble_block.termination =
-                        Some(super::instructions::instruction_branch(loop_block.label_id));
+                    self.write_block(
+                        continuing_id,
+                        continuing,
+                        ir_module,
+                        ir_function,
+                        function,
+                        Some(preamble_id),
+                        LoopContext {
+                            continuing_id: None,
+                            break_id: Some(merge_id),
+                        },
+                    )?;
 
-                    function.blocks.push(block);
-                    function.blocks.push(preamble_block);
-                    function.blocks.push(loop_block);
-                    function.blocks.push(continuing_block);
-                    block = merge_block;
+                    block = Block::new(merge_id);
                 }
                 crate::Statement::Break => {
                     block.termination = Some(super::instructions::instruction_branch(
@@ -2261,10 +2255,14 @@ impl Writer {
         }
 
         if block.termination.is_none() {
-            block.termination = Some(super::instructions::instruction_branch(merge_id));
+            block.termination = Some(match exit_id {
+                Some(id) => super::instructions::instruction_branch(id),
+                None => super::instructions::instruction_return(),
+            });
         }
 
-        Ok(block)
+        function.blocks.push(block);
+        Ok(())
     }
 
     fn write_physical_layout(&mut self) {
