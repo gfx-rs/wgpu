@@ -18,7 +18,7 @@
         CreateComputePipeline(Id(0, 1, Empty), (
             label: None,
             layout: Some(Id(0, 1, Empty)),
-            compute_stage: (
+            stage: (
                 module: Id(0, 1, Empty),
                 entry_point: "main",
             ),

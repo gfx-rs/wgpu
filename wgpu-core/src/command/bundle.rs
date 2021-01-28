@@ -233,7 +233,7 @@ impl RenderBundleEncoder {
                     pipeline_layout_id = Some(pipeline.layout_id.value);
 
                     state.set_pipeline(
-                        pipeline.index_format,
+                        pipeline.strip_index_format,
                         &pipeline.vertex_strides,
                         &layout.bind_group_layout_ids,
                         &layout.push_constant_ranges,

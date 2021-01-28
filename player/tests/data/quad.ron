@@ -56,42 +56,24 @@
         CreateRenderPipeline(Id(0, 1, Empty), (
             label: None,
             layout: Some(Id(0, 1, Empty)),
-            vertex_stage: (
-                module: Id(0, 1, Empty),
-                entry_point: "vs_main",
-            ),
-            fragment_stage: Some((
-                module: Id(0, 1, Empty),
-                entry_point: "fs_main",
-            )),
-            rasterization_state: None,
-            primitive_topology: TriangleList,
-            color_states: [
-                (
-                    format: Rgba8Unorm,
-                    alpha_blend: (
-                        src_factor: One,
-                        dst_factor: Zero,
-                        operation: Add,
-                    ),
-                    color_blend: (
-                        src_factor: One,
-                        dst_factor: Zero,
-                        operation: Add,
-                    ),
-                    write_mask: (
-                        bits: 15,
-                    ),
+            vertex: (
+                stage: (
+                    module: Id(0, 1, Empty),
+                    entry_point: "vs_main",
                 ),
-            ],
-            depth_stencil_state: None,
-            vertex_state: (
-                index_format: None,
-                vertex_buffers: [],
+                buffers: [],
             ),
-            sample_count: 1,
-            sample_mask: 4294967295,
-            alpha_to_coverage_enabled: false,
+            fragment: Some((
+                stage: (
+                    module: Id(0, 1, Empty),
+                    entry_point: "fs_main",
+                ),
+                targets: [
+                    (
+                        format: Rgba8Unorm,
+                    ),
+                ],
+            )),
         )),
         Submit(1, [
             RunRenderPass(

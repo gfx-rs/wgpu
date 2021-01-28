@@ -1248,7 +1248,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         }
 
-                        state.index.pipeline_format = pipeline.index_format;
+                        state.index.pipeline_format = pipeline.strip_index_format;
 
                         let vertex_strides_len = pipeline.vertex_strides.len();
                         state.vertex.buffers_required = vertex_strides_len as u32;
