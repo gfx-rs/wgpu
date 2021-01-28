@@ -38,6 +38,8 @@ typedef uint type5;
 
 typedef int type6;
 
+typedef metal::int2 type7;
+
 struct main1Input {
     type a_particlePos [[attribute(0)]];
     type a_particleVel [[attribute(1)]];
@@ -116,10 +118,10 @@ kernel void main3(
         }
     }
     if (cMassCount == 0) {
-        cMass = cMass / metal::float2(cMassCount, cMassCount) + vPos;
+        cMass = cMass / static_cast<float2>(metal::int2(cMassCount, cMassCount)) + vPos;
     }
     if (cVelCount == 0) {
-        cVel = cVel / metal::float2(cVelCount, cVelCount);
+        cVel = cVel / static_cast<float2>(metal::int2(cVelCount, cVelCount));
     }
     vVel = vVel + cMass * params.rule1Scale + colVel * params.rule2Scale + cVel * params.rule3Scale;
     vVel = metal::normalize(vVel) * metal::clamp(metal::length(vVel), 0.0, 0.1);

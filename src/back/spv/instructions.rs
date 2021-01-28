@@ -73,10 +73,10 @@ pub(super) fn instruction_ext_inst_import(id: Word, name: &str) -> Instruction {
 }
 
 pub(super) fn instruction_ext_inst(
+    set_id: Word,
     op: spirv::GLOp,
     result_type_id: Word,
     id: Word,
-    set_id: Word,
     operands: &[Word],
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::ExtInst);

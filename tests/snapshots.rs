@@ -168,7 +168,7 @@ fn convert_wgsl_empty() {
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_boids() {
-    convert_wgsl("boids", Language::METAL);
+    convert_wgsl("boids", Language::METAL | Language::SPIRV);
 }
 
 #[cfg(feature = "wgsl-in")]
@@ -180,5 +180,5 @@ fn convert_wgsl_skybox() {
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_collatz() {
-    convert_wgsl("collatz", Language::METAL);
+    convert_wgsl("collatz", Language::METAL | Language::SPIRV);
 }

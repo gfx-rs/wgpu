@@ -16,9 +16,11 @@ struct PrimeIndices {
 };
 
 type1 collatz_iterations(
-    type1 n
+    type1 n_base
 ) {
+    type1 n;
     type1 i = 0;
+    n = n_base;
     while(true) {
         if (n <= 1) {
             break;

@@ -113,10 +113,10 @@ fn main() {
     }
   }
   if (cMassCount > 0) {
-    cMass = (cMass / vec2<f32>(cMassCount, cMassCount)) + vPos;
+    cMass = (cMass / vec2<f32>(vec2<i32>(cMassCount, cMassCount))) + vPos;
   }
   if (cVelCount > 0) {
-    cVel = cVel / vec2<f32>(cVelCount, cVelCount);
+    cVel = cVel / vec2<f32>(vec2<i32>(cVelCount, cVelCount));
   }
 
   vVel = vVel + (cMass * params.rule1Scale) + (colVel * params.rule2Scale) +

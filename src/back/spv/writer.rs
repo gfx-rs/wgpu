@@ -1500,18 +1500,18 @@ impl Writer {
                         {
                             Some(crate::ScalarKind::Float) => {
                                 super::instructions::instruction_ext_inst(
+                                    self.gl450_ext_inst_id,
                                     spirv::GLOp::FAbs,
                                     arg0_type_id,
-                                    self.gl450_ext_inst_id,
                                     id,
                                     &[arg0_id],
                                 )
                             }
                             Some(crate::ScalarKind::Sint) => {
                                 super::instructions::instruction_ext_inst(
+                                    self.gl450_ext_inst_id,
                                     spirv::GLOp::SAbs,
                                     arg0_type_id,
-                                    self.gl450_ext_inst_id,
                                     id,
                                     &[arg0_id],
                                 )
@@ -1618,9 +1618,9 @@ impl Writer {
                             self.get_type_id(&ir_module.types, result_lookup_ty)?;
 
                         let inst = super::instructions::instruction_ext_inst(
+                            self.gl450_ext_inst_id,
                             spirv::GLOp::Distance,
                             result_type_id,
-                            self.gl450_ext_inst_id,
                             id,
                             &[arg0_id, arg1_id],
                         );
@@ -1641,11 +1641,11 @@ impl Writer {
                             self.get_type_id(&ir_module.types, result_lookup_ty)?;
 
                         let inst = super::instructions::instruction_ext_inst(
+                            self.gl450_ext_inst_id,
                             spirv::GLOp::Length,
                             result_type_id,
-                            self.gl450_ext_inst_id,
                             id,
-                            &[arg0_id, arg1_id],
+                            &[arg0_id],
                         );
                         MathOp::Other(inst, result_lookup_ty)
                     }
@@ -1685,30 +1685,30 @@ impl Writer {
                 let (instruction, result_lookup_ty) = match math_op {
                     MathOp::Single(op) => {
                         let inst = super::instructions::instruction_ext_inst(
+                            self.gl450_ext_inst_id,
                             op,
                             arg0_type_id,
                             id,
-                            self.gl450_ext_inst_id,
                             &[arg0_id],
                         );
                         (inst, arg0_lookup_ty)
                     }
                     MathOp::Double(op) => {
                         let inst = super::instructions::instruction_ext_inst(
+                            self.gl450_ext_inst_id,
                             op,
                             arg0_type_id,
                             id,
-                            self.gl450_ext_inst_id,
                             &[arg0_id, arg1_id],
                         );
                         (inst, arg0_lookup_ty)
                     }
                     MathOp::Triple(op) => {
                         let inst = super::instructions::instruction_ext_inst(
+                            self.gl450_ext_inst_id,
                             op,
                             arg0_type_id,
                             id,
-                            self.gl450_ext_inst_id,
                             &[arg0_id, arg1_id, arg2_id],
                         );
                         (inst, arg0_lookup_ty)
