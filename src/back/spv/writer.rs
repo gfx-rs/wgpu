@@ -1322,7 +1322,7 @@ impl Writer {
                             crate::ScalarKind::Float => spirv::Op::FAdd,
                             _ => spirv::Op::IAdd,
                         },
-                        _ => unreachable!(),
+                        _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Subtract => match *left_ty_inner {
                         crate::TypeInner::Scalar { kind, .. }
@@ -1330,7 +1330,7 @@ impl Writer {
                             crate::ScalarKind::Float => spirv::Op::FSub,
                             _ => spirv::Op::ISub,
                         },
-                        _ => unreachable!(),
+                        _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Multiply => {
                         // whenever there is a vector on the right,
@@ -1361,20 +1361,20 @@ impl Writer {
                             }
                             (Dimension::Vector, Dimension::Vector)
                             | (Dimension::Scalar, Dimension::Scalar) => spirv::Op::IMul,
-                            other => unreachable!("Mul {:?}", other),
+                            other => unimplemented!("Mul {:?}", other),
                         }
                     }
                     crate::BinaryOperator::Divide => match left_ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Sint) => spirv::Op::SDiv,
                         Some(crate::ScalarKind::Uint) => spirv::Op::UDiv,
                         Some(crate::ScalarKind::Float) => spirv::Op::FDiv,
-                        _ => unreachable!(),
+                        _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Modulo => match left_ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Sint) => spirv::Op::SMod,
                         Some(crate::ScalarKind::Uint) => spirv::Op::UMod,
                         Some(crate::ScalarKind::Float) => spirv::Op::FMod,
-                        _ => unreachable!(),
+                        _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Equal => match left_ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Sint) | Some(crate::ScalarKind::Uint) => {
@@ -1382,7 +1382,7 @@ impl Writer {
                         }
                         Some(crate::ScalarKind::Float) => spirv::Op::FOrdEqual,
                         Some(crate::ScalarKind::Bool) => spirv::Op::LogicalEqual,
-                        _ => unreachable!(),
+                        _ => unimplemented!(),
                     },
                     crate::BinaryOperator::NotEqual => match left_ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Sint) | Some(crate::ScalarKind::Uint) => {
@@ -1390,37 +1390,43 @@ impl Writer {
                         }
                         Some(crate::ScalarKind::Float) => spirv::Op::FOrdNotEqual,
                         Some(crate::ScalarKind::Bool) => spirv::Op::LogicalNotEqual,
-                        _ => unreachable!(),
+                        _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Less => match left_ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Sint) => spirv::Op::SLessThan,
                         Some(crate::ScalarKind::Uint) => spirv::Op::ULessThan,
                         Some(crate::ScalarKind::Float) => spirv::Op::FOrdLessThan,
-                        _ => unreachable!(),
+                        _ => unimplemented!(),
                     },
                     crate::BinaryOperator::LessEqual => match left_ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Sint) => spirv::Op::SLessThanEqual,
                         Some(crate::ScalarKind::Uint) => spirv::Op::ULessThanEqual,
                         Some(crate::ScalarKind::Float) => spirv::Op::FOrdLessThanEqual,
-                        _ => unreachable!(),
+                        _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Greater => match left_ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Sint) => spirv::Op::SGreaterThan,
                         Some(crate::ScalarKind::Uint) => spirv::Op::UGreaterThan,
                         Some(crate::ScalarKind::Float) => spirv::Op::FOrdGreaterThan,
-                        _ => unreachable!(),
+                        _ => unimplemented!(),
                     },
                     crate::BinaryOperator::GreaterEqual => match left_ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Sint) => spirv::Op::SGreaterThanEqual,
                         Some(crate::ScalarKind::Uint) => spirv::Op::UGreaterThanEqual,
                         Some(crate::ScalarKind::Float) => spirv::Op::FOrdGreaterThanEqual,
-                        _ => unreachable!(),
+                        _ => unimplemented!(),
                     },
                     crate::BinaryOperator::And => spirv::Op::BitwiseAnd,
-                    _ => {
-                        log::error!("unimplemented {:?}", op);
-                        return Err(Error::FeatureNotImplemented("binary operator"));
-                    }
+                    crate::BinaryOperator::ExclusiveOr => spirv::Op::BitwiseXor,
+                    crate::BinaryOperator::InclusiveOr => spirv::Op::BitwiseOr,
+                    crate::BinaryOperator::LogicalAnd => spirv::Op::LogicalAnd,
+                    crate::BinaryOperator::LogicalOr => spirv::Op::LogicalOr,
+                    crate::BinaryOperator::ShiftLeft => spirv::Op::ShiftLeftLogical,
+                    crate::BinaryOperator::ShiftRight => match left_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Sint) => spirv::Op::ShiftRightArithmetic,
+                        Some(crate::ScalarKind::Uint) => spirv::Op::ShiftRightLogical,
+                        _ => unimplemented!(),
+                    },
                 };
 
                 let is_comparison = match op {
