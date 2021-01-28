@@ -1256,6 +1256,34 @@ impl Writer {
                 let id = self.write_composite_construct(base_type_id, &constituent_ids, block);
                 Ok((RawExpression::Value(id), LookupType::Handle(ty)))
             }
+            crate::Expression::Unary { op, expr } => {
+                let id = self.generate_id();
+                let (expr_id, expr_lookup_ty) =
+                    self.write_expression(ir_module, ir_function, expr, block, function)?;
+                let expr_ty_inner = self.get_type_inner(&ir_module.types, expr_lookup_ty);
+                let result_type_id = self.get_type_id(&ir_module.types, expr_lookup_ty)?;
+
+                let spirv_op = match op {
+                    crate::UnaryOperator::Negate => match expr_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Float) => spirv::Op::FNegate,
+                        Some(crate::ScalarKind::Sint) => spirv::Op::SNegate,
+                        Some(crate::ScalarKind::Bool) => spirv::Op::LogicalNot,
+                        Some(crate::ScalarKind::Uint) | None => {
+                            log::error!("Unable to negate {:?}", &*expr_ty_inner);
+                            return Err(Error::FeatureNotImplemented("negation"));
+                        }
+                    },
+                    crate::UnaryOperator::Not => spirv::Op::Not,
+                };
+
+                block.body.push(super::instructions::instruction_unary(
+                    spirv_op,
+                    result_type_id,
+                    id,
+                    expr_id,
+                ));
+                Ok((RawExpression::Value(id), expr_lookup_ty))
+            }
             crate::Expression::Binary { op, left, right } => {
                 let id = self.generate_id();
                 let (left_id, left_lookup_ty) =
@@ -1415,14 +1443,25 @@ impl Writer {
                 ));
                 Ok((RawExpression::Value(id), result_lookup_ty))
             }
-            crate::Expression::Math { fun, arg, .. } => {
+            crate::Expression::Math {
+                fun,
+                arg,
+                arg1,
+                arg2: _,
+            } => {
                 use crate::MathFunction as Mf;
+                enum MathOp {
+                    Single(spirv::GLOp),
+                    Double(spirv::GLOp),
+                    Other(super::Instruction, LookupType),
+                }
 
                 let (arg0_id, arg0_lookup_ty) =
                     self.write_expression(ir_module, ir_function, arg, block, function)?;
+                let arg0_type_id = self.get_type_id(&ir_module.types, arg0_lookup_ty)?;
 
                 let id = self.generate_id();
-                match fun {
+                let math_op = match fun {
                     Mf::Transpose => {
                         let result_lookup_ty =
                             match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
@@ -1437,43 +1476,66 @@ impl Writer {
                                 }),
                                 _ => unreachable!(),
                             };
-                        let result_type_id =
-                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
 
-                        block.body.push(super::instructions::instruction_unary(
+                        let inst = super::instructions::instruction_unary(
                             spirv::Op::Transpose,
-                            result_type_id,
+                            arg0_type_id,
                             id,
                             arg0_id,
-                        ));
-                        Ok((RawExpression::Value(id), result_lookup_ty))
+                        );
+                        MathOp::Other(inst, result_lookup_ty)
                     }
-                    Mf::Ceil | Mf::Round | Mf::Floor | Mf::Fract | Mf::Trunc => {
-                        let result_lookup_ty = arg0_lookup_ty;
-                        let result_type_id =
-                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
-
-                        block.body.push(super::instructions::instruction_ext_inst(
-                            result_type_id,
-                            id,
-                            self.gl450_ext_inst_id,
-                            match fun {
-                                Mf::Ceil => spirv::GLOp::Ceil,
-                                Mf::Round => spirv::GLOp::Round,
-                                Mf::Floor => spirv::GLOp::Floor,
-                                Mf::Fract => spirv::GLOp::Fract,
-                                Mf::Trunc => spirv::GLOp::Trunc,
-                                _ => unreachable!(),
-                            } as u32,
-                            &[arg0_id],
-                        ));
-                        Ok((RawExpression::Value(id), result_lookup_ty))
-                    }
+                    Mf::Sin => MathOp::Single(spirv::GLOp::Sin),
+                    Mf::Asin => MathOp::Single(spirv::GLOp::Asin),
+                    Mf::Cos => MathOp::Single(spirv::GLOp::Cos),
+                    Mf::Acos => MathOp::Single(spirv::GLOp::Acos),
+                    Mf::Tan => MathOp::Single(spirv::GLOp::Tan),
+                    Mf::Atan => MathOp::Single(spirv::GLOp::Atan),
+                    Mf::Atan2 => MathOp::Double(spirv::GLOp::Atan2),
+                    Mf::Ceil => MathOp::Single(spirv::GLOp::Ceil),
+                    Mf::Round => MathOp::Single(spirv::GLOp::Round),
+                    Mf::Floor => MathOp::Single(spirv::GLOp::Floor),
+                    Mf::Fract => MathOp::Single(spirv::GLOp::Fract),
+                    Mf::Trunc => MathOp::Single(spirv::GLOp::Trunc),
                     _ => {
                         log::error!("unimplemented math function {:?}", fun);
-                        Err(Error::FeatureNotImplemented("math function"))
+                        return Err(Error::FeatureNotImplemented("math function"));
                     }
-                }
+                };
+
+                let (instruction, result_lookup_ty) = match math_op {
+                    MathOp::Single(op) => {
+                        let inst = super::instructions::instruction_ext_inst(
+                            arg0_type_id,
+                            id,
+                            self.gl450_ext_inst_id,
+                            op as u32,
+                            &[arg0_id],
+                        );
+                        (inst, arg0_lookup_ty)
+                    }
+                    MathOp::Double(op) => {
+                        let (arg1_id, _) = self.write_expression(
+                            ir_module,
+                            ir_function,
+                            arg1.unwrap(),
+                            block,
+                            function,
+                        )?;
+                        let inst = super::instructions::instruction_ext_inst(
+                            arg0_type_id,
+                            id,
+                            self.gl450_ext_inst_id,
+                            op as u32,
+                            &[arg0_id, arg1_id],
+                        );
+                        (inst, arg0_lookup_ty)
+                    }
+                    MathOp::Other(inst, result_lookup_ty) => (inst, result_lookup_ty),
+                };
+
+                block.body.push(instruction);
+                Ok((RawExpression::Value(id), result_lookup_ty))
             }
             crate::Expression::LocalVariable(variable) => {
                 let var = &ir_function.local_variables[variable];
