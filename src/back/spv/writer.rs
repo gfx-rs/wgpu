@@ -144,6 +144,12 @@ fn get_dimension(ty_inner: &crate::TypeInner) -> Dimension {
     }
 }
 
+#[derive(Clone, Copy, Default)]
+struct LoopContext {
+    continuing_id: Option<Word>,
+    break_id: Option<Word>,
+}
+
 pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
@@ -414,6 +420,7 @@ impl Writer {
             ir_function,
             &mut function,
             0, //isn't used
+            LoopContext::default(),
         )?;
         function.blocks.push(block);
 
@@ -1913,10 +1920,15 @@ impl Writer {
         ir_function: &crate::Function,
         function: &mut Function,
         merge_id: spirv::Word,
+        loop_context: LoopContext,
     ) -> Result<Block, Error> {
         let mut block = self.create_block();
 
         for statement in statements {
+            assert!(
+                block.termination.is_none(),
+                "No statements are expected after block termination"
+            );
             match *statement {
                 crate::Statement::Block(ref block_statements) => {
                     let merge_block = self.create_block();
@@ -1926,6 +1938,7 @@ impl Writer {
                         ir_function,
                         function,
                         merge_block.label_id,
+                        loop_context,
                     )?;
 
                     block.termination = Some(super::instructions::instruction_branch(
@@ -1964,6 +1977,7 @@ impl Writer {
                         ir_function,
                         function,
                         merge_block.label_id,
+                        loop_context,
                     )?;
                     let reject_block = self.write_block(
                         reject,
@@ -1971,6 +1985,7 @@ impl Writer {
                         ir_function,
                         function,
                         merge_block.label_id,
+                        loop_context,
                     )?;
 
                     block.termination = Some(super::instructions::instruction_branch_conditional(
@@ -1983,6 +1998,68 @@ impl Writer {
                     function.blocks.push(accept_block);
                     function.blocks.push(reject_block);
                     block = merge_block;
+                }
+                crate::Statement::Loop {
+                    ref body,
+                    ref continuing,
+                } => {
+                    let merge_block = self.create_block();
+                    let mut preamble_block = self.create_block();
+                    block.termination = Some(super::instructions::instruction_branch(
+                        preamble_block.label_id,
+                    ));
+
+                    let continuing_block = self.write_block(
+                        continuing,
+                        ir_module,
+                        ir_function,
+                        function,
+                        preamble_block.label_id,
+                        LoopContext {
+                            continuing_id: None,
+                            break_id: Some(merge_block.label_id),
+                        },
+                    )?;
+
+                    let loop_block = self.write_block(
+                        body,
+                        ir_module,
+                        ir_function,
+                        function,
+                        continuing_block.label_id,
+                        LoopContext {
+                            continuing_id: Some(continuing_block.label_id),
+                            break_id: Some(merge_block.label_id),
+                        },
+                    )?;
+
+                    // SPIR-V requires the continuing to the `OpLoopMerge`,
+                    // so we have to start a new block with it.
+                    preamble_block
+                        .body
+                        .push(super::instructions::instruction_loop_merge(
+                            merge_block.label_id,
+                            continuing_block.label_id,
+                            spirv::SelectionControl::NONE,
+                        ));
+                    preamble_block.termination =
+                        Some(super::instructions::instruction_branch(loop_block.label_id));
+
+                    function.blocks.push(block);
+                    function.blocks.push(preamble_block);
+                    function.blocks.push(loop_block);
+                    function.blocks.push(continuing_block);
+                    block = merge_block;
+                }
+                crate::Statement::Break => {
+                    block.termination = Some(super::instructions::instruction_branch(
+                        loop_context.break_id.unwrap(),
+                    ));
+                }
+                crate::Statement::Continue => {
+                    block.termination = Some(super::instructions::instruction_branch(
+                        loop_context.continuing_id.unwrap(),
+                    ));
                 }
                 crate::Statement::Return { value: Some(value) } => {
                     let (id, _) =

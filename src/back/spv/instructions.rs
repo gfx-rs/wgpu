@@ -657,11 +657,23 @@ pub(super) fn instruction_binary(
 //
 
 pub(super) fn instruction_selection_merge(
-    id: Word,
+    merge_id: Word,
     selection_control: spirv::SelectionControl,
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::SelectionMerge);
-    instruction.add_operand(id);
+    instruction.add_operand(merge_id);
+    instruction.add_operand(selection_control.bits());
+    instruction
+}
+
+pub(super) fn instruction_loop_merge(
+    merge_id: Word,
+    continuing_id: Word,
+    selection_control: spirv::SelectionControl,
+) -> Instruction {
+    let mut instruction = Instruction::new(Op::LoopMerge);
+    instruction.add_operand(merge_id);
+    instruction.add_operand(continuing_id);
     instruction.add_operand(selection_control.bits());
     instruction
 }
