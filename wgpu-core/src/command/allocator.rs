@@ -62,6 +62,13 @@ impl<B: hal::Backend> CommandPool<B> {
         }
         self.available.pop().unwrap()
     }
+
+    fn destroy(mut self, device: &B::Device) {
+        unsafe {
+            self.raw.free(self.available.into_iter());
+            device.destroy_command_pool(self.raw);
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -237,11 +244,8 @@ impl<B: hal::Backend> CommandAllocator<B> {
         }
         for thread_id in remove_threads {
             tracing::info!("Removing from thread {:?}", thread_id);
-            let mut pool = inner.pools.remove(&thread_id).unwrap();
-            unsafe {
-                pool.raw.free(pool.available);
-                device.destroy_command_pool(pool.raw);
-            }
+            let pool = inner.pools.remove(&thread_id).unwrap();
+            pool.destroy(device);
         }
     }
 
@@ -258,10 +262,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
                     pool.total
                 );
             }
-            unsafe {
-                pool.raw.free(pool.available);
-                device.destroy_command_pool(pool.raw);
-            }
+            pool.destroy(device);
         }
     }
 }
