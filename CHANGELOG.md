@@ -1,6 +1,6 @@
 # Change Log
 
-## v0.7 (TBD)
+## v0.7 (2020-08-30)
   - Major API changes:
     - `RenderPipelineDescriptor`
     - `BindingType`

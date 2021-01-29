@@ -1592,6 +1592,7 @@ pub struct DepthStencilState {
     /// Stencil state.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub stencil: StencilState,
+    /// Depth bias state.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub bias: DepthBiasState,
     /// If enabled polygon depth is clamped to 0-1 range instead of being clipped.
