@@ -217,19 +217,15 @@ pub(super) fn instruction_type_image(
     instruction.add_operand(sampled_type_id);
     instruction.add_operand(dim as u32);
 
-    instruction.add_operand(match image_class {
-        crate::ImageClass::Depth => 1,
-        _ => 0,
-    });
+    let (depth, multi, sampled) = match image_class {
+        crate::ImageClass::Sampled { kind: _, multi } => (false, multi, true),
+        crate::ImageClass::Depth => (true, false, true),
+        crate::ImageClass::Storage(_) => (false, false, false),
+    };
+    instruction.add_operand(depth as u32);
     instruction.add_operand(arrayed as u32);
-    instruction.add_operand(match image_class {
-        crate::ImageClass::Sampled { multi: true, .. } => 1,
-        _ => 0,
-    });
-    instruction.add_operand(match image_class {
-        crate::ImageClass::Sampled { .. } => 1,
-        _ => 0,
-    });
+    instruction.add_operand(multi as u32);
+    instruction.add_operand(sampled as u32);
 
     let format = match image_class {
         crate::ImageClass::Storage(format) => match format {
