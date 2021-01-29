@@ -288,7 +288,7 @@ pub fn map_depth_stencil_state(desc: &wgt::DepthStencilState) -> hal::pso::Depth
     }
 }
 
-fn map_stencil_face(stencil_state_face_desc: &wgt::StencilStateFace) -> hal::pso::StencilFace {
+fn map_stencil_face(stencil_state_face_desc: &wgt::StencilFaceState) -> hal::pso::StencilFace {
     hal::pso::StencilFace {
         fun: map_compare_function(stencil_state_face_desc.compare),
         op_fail: map_stencil_operation(stencil_state_face_desc.fail_op),
@@ -787,11 +787,11 @@ pub fn map_primitive_state_to_rasterizer(
     use hal::pso;
     let (depth_clamping, depth_bias) = match depth_stencil {
         Some(dsd) => {
-            let bias = if dsd.has_depth_bias() {
+            let bias = if dsd.bias.is_enabled() {
                 Some(pso::State::Static(pso::DepthBias {
-                    const_factor: dsd.depth_bias as f32,
-                    slope_factor: dsd.depth_bias_slope_scale,
-                    clamp: dsd.depth_bias_clamp,
+                    const_factor: dsd.bias.constant as f32,
+                    slope_factor: dsd.bias.slope_scale,
+                    clamp: dsd.bias.clamp,
                 }))
             } else {
                 None

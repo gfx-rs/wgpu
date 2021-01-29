@@ -1530,9 +1530,9 @@ impl Default for ColorWrite {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct StencilState {
     /// Front face mode.
-    pub front: StencilStateFace,
+    pub front: StencilFaceState,
     /// Back face mode.
-    pub back: StencilStateFace,
+    pub back: StencilFaceState,
     /// Stencil values are AND'd with this mask when reading and writing from the stencil buffer. Only low 8 bits are used.
     pub read_mask: u32,
     /// Stencil values are AND'd with this mask when writing to the stencil buffer. Only low 8 bits are used.
@@ -1542,7 +1542,7 @@ pub struct StencilState {
 impl StencilState {
     /// Returns true if the stencil test is enabled.
     pub fn is_enabled(&self) -> bool {
-        (self.front != StencilStateFace::IGNORE || self.back != StencilStateFace::IGNORE)
+        (self.front != StencilFaceState::IGNORE || self.back != StencilFaceState::IGNORE)
             && (self.read_mask != 0 || self.write_mask != 0)
     }
     /// Returns true if the state doesn't mutate the target values.
@@ -1552,6 +1552,27 @@ impl StencilState {
     /// Returns true if the stencil state uses the reference value for testing.
     pub fn needs_ref_value(&self) -> bool {
         self.front.compare.needs_ref_value() || self.back.compare.needs_ref_value()
+    }
+}
+
+/// Describes the biasing setting for the depth target.
+#[repr(C)]
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct DepthBiasState {
+    /// Constant depth biasing factor, in basic units of the depth format.
+    pub constant: i32,
+    /// Slope depth biasing factor.
+    pub slope_scale: f32,
+    /// Depth bias clamp value (absolute).
+    pub clamp: f32,
+}
+
+impl DepthBiasState {
+    /// Returns true if the depth biasing is enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.constant != 0 || self.slope_scale != 0.0
     }
 }
 
@@ -1571,17 +1592,8 @@ pub struct DepthStencilState {
     /// Stencil state.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub stencil: StencilState,
-
-    /// Constant depth biasing factor, in basic units of the depth format.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
-    pub depth_bias: i32,
-    /// Slope depth biasing factor.
-    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
-    pub depth_bias_slope_scale: f32,
-    /// Depth bias clamp value (absolute).
-    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
-    pub depth_bias_clamp: f32,
-
+    pub bias: DepthBiasState,
     /// If enabled polygon depth is clamped to 0-1 range instead of being clipped.
     ///
     /// Requires `Features::DEPTH_CLAMPING` enabled.
@@ -1597,10 +1609,6 @@ impl DepthStencilState {
     /// Returns true if the state doesn't mutate either depth or stencil of the target.
     pub fn is_read_only(&self) -> bool {
         !self.depth_write_enabled && self.stencil.is_read_only()
-    }
-    /// Returns true if the depth bias is applied.
-    pub fn has_depth_bias(&self) -> bool {
-        self.depth_bias != 0 || self.depth_bias_slope_scale != 0.0
     }
 }
 
@@ -1653,12 +1661,12 @@ impl Default for StencilOperation {
 
 /// Describes stencil state in a render pipeline.
 ///
-/// If you are not using stencil state, set this to [`StencilStateFace::IGNORE`].
+/// If you are not using stencil state, set this to [`StencilFaceState::IGNORE`].
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct StencilStateFace {
+pub struct StencilFaceState {
     /// Comparison function that determines if the fail_op or pass_op is used on the stencil buffer.
     pub compare: CompareFunction,
     /// Operation that is preformed when stencil test fails.
@@ -1669,9 +1677,9 @@ pub struct StencilStateFace {
     pub pass_op: StencilOperation,
 }
 
-impl StencilStateFace {
+impl StencilFaceState {
     /// Ignore the stencil state for the face.
-    pub const IGNORE: Self = StencilStateFace {
+    pub const IGNORE: Self = StencilFaceState {
         compare: CompareFunction::Always,
         fail_op: StencilOperation::Keep,
         depth_fail_op: StencilOperation::Keep,
@@ -1679,7 +1687,7 @@ impl StencilStateFace {
     };
 }
 
-impl Default for StencilStateFace {
+impl Default for StencilFaceState {
     fn default() -> Self {
         Self::IGNORE
     }
