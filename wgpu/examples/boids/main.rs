@@ -116,40 +116,30 @@ impl framework::Example for Example {
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&render_pipeline_layout),
-            vertex_stage: wgpu::ProgrammableStageDescriptor {
+            vertex: wgpu::VertexState {
                 module: &vs_module,
                 entry_point: "main",
-            },
-            fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
-                module: &fs_module,
-                entry_point: "main",
-            }),
-            rasterization_state: Some(wgpu::RasterizationStateDescriptor {
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: wgpu::CullMode::None,
-                ..Default::default()
-            }),
-            primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[sc_desc.format.into()],
-            depth_stencil_state: None,
-            vertex_state: wgpu::VertexStateDescriptor {
-                index_format: None,
-                vertex_buffers: &[
-                    wgpu::VertexBufferDescriptor {
-                        stride: 4 * 4,
+                buffers: &[
+                    wgpu::VertexBufferLayout {
+                        array_stride: 4 * 4,
                         step_mode: wgpu::InputStepMode::Instance,
                         attributes: &wgpu::vertex_attr_array![0 => Float2, 1 => Float2],
                     },
-                    wgpu::VertexBufferDescriptor {
-                        stride: 2 * 4,
+                    wgpu::VertexBufferLayout {
+                        array_stride: 2 * 4,
                         step_mode: wgpu::InputStepMode::Vertex,
                         attributes: &wgpu::vertex_attr_array![2 => Float2],
                     },
                 ],
             },
-            sample_count: 1,
-            sample_mask: !0,
-            alpha_to_coverage_enabled: false,
+            fragment: Some(wgpu::FragmentState {
+                module: &fs_module,
+                entry_point: "main",
+                targets: &[sc_desc.format.into()],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
         });
 
         // create compute pipeline
@@ -157,10 +147,8 @@ impl framework::Example for Example {
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Compute pipeline"),
             layout: Some(&compute_pipeline_layout),
-            compute_stage: wgpu::ProgrammableStageDescriptor {
-                module: &boids_module,
-                entry_point: "main",
-            },
+            module: &boids_module,
+            entry_point: "main",
         });
 
         // buffer for the three 2d triangle vertices of each instance

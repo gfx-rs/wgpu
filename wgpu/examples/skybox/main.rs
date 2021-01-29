@@ -27,7 +27,7 @@ pub struct Skybox {
 impl Skybox {
     fn generate_uniforms(aspect_ratio: f32) -> Uniforms {
         let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 10.0);
-        let mx_view = cgmath::Matrix4::look_at(
+        let mx_view = cgmath::Matrix4::look_at_rh(
             cgmath::Point3::new(1.5f32, -5.0, 3.0),
             cgmath::Point3::new(0f32, 0.0, 0.0),
             cgmath::Vector3::unit_z(),
@@ -107,29 +107,22 @@ impl framework::Example for Skybox {
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
-            vertex_stage: wgpu::ProgrammableStageDescriptor {
+            vertex: wgpu::VertexState {
                 module: &vs_module,
                 entry_point: "main",
+                buffers: &[],
             },
-            fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
+            fragment: Some(wgpu::FragmentState {
                 module: &fs_module,
                 entry_point: "main",
+                targets: &[sc_desc.format.into()],
             }),
-            rasterization_state: Some(wgpu::RasterizationStateDescriptor {
+            primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Cw,
-                cull_mode: wgpu::CullMode::None,
                 ..Default::default()
-            }),
-            primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[sc_desc.format.into()],
-            vertex_state: wgpu::VertexStateDescriptor {
-                index_format: None,
-                vertex_buffers: &[],
             },
-            depth_stencil_state: None,
-            sample_count: 1,
-            sample_mask: !0,
-            alpha_to_coverage_enabled: false,
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
