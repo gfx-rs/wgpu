@@ -1680,6 +1680,7 @@ impl Writer {
                         MathOp::Other(inst, result_lookup_ty)
                     }
                     Mf::Normalize => MathOp::Single(spirv::GLOp::Normalize),
+                    Mf::Pow => MathOp::Double(spirv::GLOp::Pow),
                     // computational
                     Mf::Transpose => {
                         let result_lookup_ty =
