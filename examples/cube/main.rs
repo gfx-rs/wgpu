@@ -2,6 +2,7 @@
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
+use std::{borrow::Cow, iter, mem};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -65,8 +66,6 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
 }
 
 fn create_texels(size: usize) -> Vec<u8> {
-    use std::iter;
-
     (0..size * size)
         .flat_map(|id| {
             // get high five for recognizing this ;)
@@ -117,12 +116,10 @@ impl framework::Example for Example {
 
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        _adapter: &wgpu::Adapter,
+        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        use std::mem;
-
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (vertex_data, index_data) = create_vertices();
@@ -251,9 +248,18 @@ impl framework::Example for Example {
             label: None,
         });
 
-        // Create the render pipeline
-        let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
-        let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
+        let mut flags = wgpu::ShaderFlags::VALIDATION;
+        match adapter.get_info().backend {
+            wgpu::Backend::Metal | wgpu::Backend::Vulkan => {
+                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION
+            }
+            _ => (), //TODO
+        }
+        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            flags,
+        });
 
         let vertex_buffers = [wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
@@ -276,13 +282,13 @@ impl framework::Example for Example {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &vs_module,
-                entry_point: "main",
+                module: &shader,
+                entry_point: "vs_main",
                 buffers: &vertex_buffers,
             },
             fragment: Some(wgpu::FragmentState {
-                module: &fs_module,
-                entry_point: "main",
+                module: &shader,
+                entry_point: "fs_main",
                 targets: &[sc_desc.format.into()],
             }),
             primitive: wgpu::PrimitiveState {
@@ -297,19 +303,17 @@ impl framework::Example for Example {
             .features()
             .contains(wgt::Features::NON_FILL_POLYGON_MODE)
         {
-            let fs_wire_module =
-                device.create_shader_module(&wgpu::include_spirv!("wire.frag.spv"));
             let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
-                    module: &vs_module,
-                    entry_point: "main",
+                    module: &shader,
+                    entry_point: "vs_main",
                     buffers: &vertex_buffers,
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &fs_wire_module,
-                    entry_point: "main",
+                    module: &shader,
+                    entry_point: "fs_wire",
                     targets: &[wgpu::ColorTargetState {
                         format: sc_desc.format,
                         color_blend: wgpu::BlendState {

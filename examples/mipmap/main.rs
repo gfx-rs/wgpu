@@ -2,7 +2,7 @@
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
-use std::{mem, num::NonZeroU32};
+use std::{borrow::Cow, mem, num::NonZeroU32};
 use wgpu::util::DeviceExt;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -102,21 +102,25 @@ impl Example {
         texture: &wgpu::Texture,
         query_sets: &Option<QuerySets>,
         mip_count: u32,
+        shader_flags: wgpu::ShaderFlags,
     ) {
-        let vs_module = device.create_shader_module(&wgpu::include_spirv!("blit.vert.spv"));
-        let fs_module = device.create_shader_module(&wgpu::include_spirv!("blit.frag.spv"));
+        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
+            flags: shader_flags,
+        });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("blit"),
             layout: None,
             vertex: wgpu::VertexState {
-                module: &vs_module,
-                entry_point: "main",
+                module: &shader,
+                entry_point: "vs_main",
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &fs_module,
-                entry_point: "main",
+                module: &shader,
+                entry_point: "fs_main",
                 targets: &[TEXTURE_FORMAT.into()],
             }),
             primitive: wgpu::PrimitiveState {
@@ -307,15 +311,25 @@ impl framework::Example for Example {
         });
 
         // Create the render pipeline
-        let vs_module = device.create_shader_module(&wgpu::include_spirv!("draw.vert.spv"));
-        let fs_module = device.create_shader_module(&wgpu::include_spirv!("draw.frag.spv"));
+        let mut flags = wgpu::ShaderFlags::VALIDATION;
+        match adapter.get_info().backend {
+            wgpu::Backend::Metal | wgpu::Backend::Vulkan => {
+                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION
+            }
+            _ => (), //TODO
+        }
+        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
+            flags,
+        });
 
         let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("draw"),
             layout: None,
             vertex: wgpu::VertexState {
-                module: &vs_module,
-                entry_point: "main",
+                module: &shader,
+                entry_point: "vs_main",
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
@@ -323,8 +337,8 @@ impl framework::Example for Example {
                 }],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &fs_module,
-                entry_point: "main",
+                module: &shader,
+                entry_point: "fs_main",
                 targets: &[sc_desc.format.into()],
             }),
             primitive: wgpu::PrimitiveState {
@@ -411,6 +425,7 @@ impl framework::Example for Example {
             &texture,
             &query_sets,
             MIP_LEVEL_COUNT,
+            flags,
         );
 
         queue.submit(Some(init_encoder.finish()));
