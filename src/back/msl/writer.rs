@@ -64,6 +64,7 @@ pub struct Writer<W> {
     out: W,
     names: FastHashMap<NameKey, String>,
     typifier: Typifier,
+    namer: Namer,
 }
 
 fn scalar_kind_string(kind: crate::ScalarKind) -> &'static str {
@@ -113,6 +114,7 @@ impl<W: Write> Writer<W> {
             out,
             names: FastHashMap::default(),
             typifier: Typifier::new(),
+            namer: Namer::default(),
         }
     }
 
@@ -348,7 +350,7 @@ impl<W: Write> Writer<W> {
                     crate::BinaryOperator::NotEqual => "!=",
                     crate::BinaryOperator::Less => "<",
                     crate::BinaryOperator::LessEqual => "<=",
-                    crate::BinaryOperator::Greater => "==",
+                    crate::BinaryOperator::Greater => ">",
                     crate::BinaryOperator::GreaterEqual => ">=",
                     crate::BinaryOperator::And => "&",
                     _ => return Err(Error::UnsupportedBinaryOp(op)),
@@ -365,11 +367,11 @@ impl<W: Write> Writer<W> {
                     self.put_expression(right, context)?;
                     write!(self.out, ")")?;
                 } else {
-                    //write!(self.out, "(")?;
+                    write!(self.out, "(")?;
                     self.put_expression(left, context)?;
                     write!(self.out, " {} ", op_str)?;
                     self.put_expression(right, context)?;
-                    //write!(self.out, ")")?;
+                    write!(self.out, ")")?;
                 }
             }
             crate::Expression::Select {
@@ -621,11 +623,19 @@ impl<W: Write> Writer<W> {
                     ref body,
                     ref continuing,
                 } => {
-                    writeln!(self.out, "{}while(true) {{", level)?;
-                    self.put_block(level.next(), body, context, return_value)?;
                     if !continuing.is_empty() {
-                        //TODO
+                        let gate_name = self.namer.call("loop_init");
+                        writeln!(self.out, "{}bool {} = true;", level, gate_name)?;
+                        writeln!(self.out, "{}while(true) {{", level)?;
+                        let lif = level.next();
+                        writeln!(self.out, "{}if (!loop_init) {{", lif)?;
+                        self.put_block(lif.next(), continuing, context, return_value)?;
+                        writeln!(self.out, "{}}}", lif)?;
+                        writeln!(self.out, "{}loop_init = false;", lif)?;
+                    } else {
+                        writeln!(self.out, "{}while(true) {{", level)?;
                     }
+                    self.put_block(level.next(), body, context, return_value)?;
                     writeln!(self.out, "{}}}", level)?;
                 }
                 crate::Statement::Break => {
@@ -642,9 +652,12 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, ";")?;
                 }
                 crate::Statement::Return { value: None } => {
-                    if let Some(string) = return_value {
-                        writeln!(self.out, "{}return {};", level, string)?;
-                    }
+                    writeln!(
+                        self.out,
+                        "{}return {};",
+                        level,
+                        return_value.unwrap_or_default(),
+                    )?;
                 }
                 crate::Statement::Kill => {
                     writeln!(self.out, "{}discard_fragment();", level)?;
@@ -668,7 +681,7 @@ impl<W: Write> Writer<W> {
         options: &Options,
     ) -> Result<TranslationInfo, Error> {
         self.names.clear();
-        Namer::process(module, RESERVED, &mut self.names);
+        self.namer.reset(module, RESERVED, &mut self.names);
 
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;

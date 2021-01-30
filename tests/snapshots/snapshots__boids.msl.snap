@@ -5,16 +5,16 @@ expression: msl
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-typedef metal::float2 type;
+typedef uint type;
 
-typedef metal::float4 type1;
-
-typedef float type2;
+typedef metal::float2 type1;
 
 struct Particle {
-    type pos;
-    type vel;
+    type1 pos;
+    type1 vel;
 };
+
+typedef float type2;
 
 struct SimParams {
     type2 deltaT;
@@ -26,7 +26,7 @@ struct SimParams {
     type2 rule3Scale;
 };
 
-typedef Particle type3[5];
+typedef Particle type3[1];
 
 struct Particles {
     type3 particles;
@@ -34,111 +34,81 @@ struct Particles {
 
 typedef metal::uint3 type4;
 
-typedef uint type5;
+typedef int type5;
 
-typedef int type6;
-
-typedef metal::int2 type7;
-
-struct main1Input {
-    type a_particlePos [[attribute(0)]];
-    type a_particleVel [[attribute(1)]];
-    type a_pos [[attribute(2)]];
-};
-
-struct main1Output {
-    type1 gl_Position [[position]];
-};
-
-vertex main1Output main1(
-    main1Input input [[stage_in]]
-) {
-    main1Output output;
-    output.gl_Position = metal::float4(metal::float2(input.a_pos.x * metal::cos(-metal::atan2(input.a_particleVel.x, input.a_particleVel.y)) - input.a_pos.y * metal::sin(-metal::atan2(input.a_particleVel.x, input.a_particleVel.y)), input.a_pos.x * metal::sin(-metal::atan2(input.a_particleVel.x, input.a_particleVel.y)) + input.a_pos.y * metal::cos(-metal::atan2(input.a_particleVel.x, input.a_particleVel.y))) + input.a_particlePos, 0.0, 1.0);
-    return output;
-}
-
-struct main2Input {
-};
-
-struct main2Output {
-    type1 fragColor [[color(0)]];
-};
-
-fragment main2Output main2(
-    main2Input input [[stage_in]]
-) {
-    main2Output output;
-    output.fragColor = metal::float4(1.0, 1.0, 1.0, 1.0);
-    return output;
-}
-
-kernel void main3(
+kernel void main1(
     constant SimParams& params [[buffer(0)]],
-    constant Particles& particlesA [[buffer(1)]],
-    device Particles& particlesB [[buffer(2)]],
+    constant Particles& particlesSrc [[buffer(1)]],
+    device Particles& particlesDst [[buffer(2)]],
     type4 gl_GlobalInvocationID [[thread_position_in_grid]]
 ) {
-    type vPos;
-    type vVel;
-    type cMass;
-    type cVel;
-    type colVel;
-    type6 cMassCount = 0;
-    type6 cVelCount = 0;
-    type pos1;
-    type vel1;
-    type5 i = 0;
-    if (gl_GlobalInvocationID.x >= 5) {
+    type1 vPos;
+    type1 vVel;
+    type1 cMass;
+    type1 cVel;
+    type1 colVel;
+    type5 cMassCount = 0;
+    type5 cVelCount = 0;
+    type1 pos1;
+    type1 vel1;
+    type i = 0;
+    if ((gl_GlobalInvocationID.x >= 1500)) {
+        return ;
     }
-    vPos = particlesA.particles[gl_GlobalInvocationID.x].pos;
-    vVel = particlesA.particles[gl_GlobalInvocationID.x].vel;
+    vPos = particlesSrc.particles[gl_GlobalInvocationID.x].pos;
+    vVel = particlesSrc.particles[gl_GlobalInvocationID.x].vel;
     cMass = metal::float2(0.0, 0.0);
     cVel = metal::float2(0.0, 0.0);
     colVel = metal::float2(0.0, 0.0);
+    bool loop_init = true;
     while(true) {
-        if (i >= 5) {
+        if (!loop_init) {
+            i = (i + 1);
+        }
+        loop_init = false;
+        if ((i >= 1500)) {
             break;
         }
-        if (i == gl_GlobalInvocationID.x) {
+        if ((i == gl_GlobalInvocationID.x)) {
             continue;
         }
-        pos1 = metal::float2(particlesA.particles[i].pos.x, particlesA.particles[i].pos.y);
-        vel1 = metal::float2(particlesA.particles[i].vel.x, particlesA.particles[i].vel.y);
-        if (metal::distance(pos1, vPos) < params.rule1Distance) {
-            cMass = cMass + pos1;
-            cMassCount = cMassCount + 1;
+        pos1 = particlesSrc.particles[i].pos;
+        vel1 = particlesSrc.particles[i].vel;
+        if ((metal::distance(pos1, vPos) < params.rule1Distance)) {
+            cMass = (cMass + pos1);
+            cMassCount = (cMassCount + 1);
         }
-        if (metal::distance(pos1, vPos) < params.rule2Distance) {
-            colVel = colVel - pos1 - vPos;
+        if ((metal::distance(pos1, vPos) < params.rule2Distance)) {
+            colVel = (colVel - (pos1 - vPos));
         }
-        if (metal::distance(pos1, vPos) < params.rule3Distance) {
-            cVel = cVel + vel1;
-            cVelCount = cVelCount + 1;
+        if ((metal::distance(pos1, vPos) < params.rule3Distance)) {
+            cVel = (cVel + vel1);
+            cVelCount = (cVelCount + 1);
         }
     }
-    if (cMassCount == 0) {
-        cMass = cMass / static_cast<float2>(metal::int2(cMassCount, cMassCount)) + vPos;
+    if ((cMassCount > 0)) {
+        cMass = ((cMass * (1.0 / static_cast<float>(cMassCount))) - vPos);
     }
-    if (cVelCount == 0) {
-        cVel = cVel / static_cast<float2>(metal::int2(cVelCount, cVelCount));
+    if ((cVelCount > 0)) {
+        cVel = (cVel * (1.0 / static_cast<float>(cVelCount)));
     }
-    vVel = vVel + cMass * params.rule1Scale + colVel * params.rule2Scale + cVel * params.rule3Scale;
-    vVel = metal::normalize(vVel) * metal::clamp(metal::length(vVel), 0.0, 0.1);
-    vPos = vPos + vVel * params.deltaT;
-    if (vPos.x < -1.0) {
+    vVel = (((vVel + (cMass * params.rule1Scale)) + (colVel * params.rule2Scale)) + (cVel * params.rule3Scale));
+    vVel = (metal::normalize(vVel) * metal::clamp(metal::length(vVel), 0.0, 0.1));
+    vPos = (vPos + (vVel * params.deltaT));
+    if ((vPos.x < -1.0)) {
         vPos.x = 1.0;
     }
-    if (vPos.x == 1.0) {
+    if ((vPos.x > 1.0)) {
         vPos.x = -1.0;
     }
-    if (vPos.y < -1.0) {
+    if ((vPos.y < -1.0)) {
         vPos.y = 1.0;
     }
-    if (vPos.y == 1.0) {
+    if ((vPos.y > 1.0)) {
         vPos.y = -1.0;
     }
-    particlesB.particles[gl_GlobalInvocationID.x].pos = vPos;
-    particlesB.particles[gl_GlobalInvocationID.x].vel = vVel;
+    particlesDst.particles[gl_GlobalInvocationID.x].pos = vPos;
+    particlesDst.particles[gl_GlobalInvocationID.x].vel = vVel;
+    return ;
 }
 

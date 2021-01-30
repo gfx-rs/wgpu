@@ -22,15 +22,15 @@ type1 collatz_iterations(
     type1 i = 0;
     n = n_base;
     while(true) {
-        if (n <= 1) {
+        if ((n <= 1)) {
             break;
         }
-        if (n % 2 == 0) {
-            n = n / 2;
+        if (((n % 2) == 0)) {
+            n = (n / 2);
         } else {
-            n = 3 * n + 1;
+            n = ((3 * n) + 1);
         }
-        i = i + 1;
+        i = (i + 1);
     }
     return i;
 }
@@ -40,5 +40,6 @@ kernel void main1(
     device PrimeIndices& v_indices [[buffer(0)]]
 ) {
     v_indices.data[global_id.x] = collatz_iterations(v_indices.data[global_id.x]);
+    return ;
 }
 

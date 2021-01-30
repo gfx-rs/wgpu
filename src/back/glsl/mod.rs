@@ -305,7 +305,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Generate a map with names required to write the module
         let mut names = FastHashMap::default();
-        Namer::process(module, keywords::RESERVED_KEYWORDS, &mut names);
+        Namer::default().reset(module, keywords::RESERVED_KEYWORDS, &mut names);
 
         // Generate a call graph for the entry point
         let call_graph = CallGraphBuilder {

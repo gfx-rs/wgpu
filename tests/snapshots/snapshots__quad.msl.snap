@@ -32,7 +32,7 @@ vertex main1Output main1(
 ) {
     main1Output output;
     output.v_uv = input.a_uv;
-    output.o_position = metal::float4(1.2 * input.a_pos, 0.0, 1.0);
+    output.o_position = metal::float4((1.2 * input.a_pos), 0.0, 1.0);
     return output;
 }
 
