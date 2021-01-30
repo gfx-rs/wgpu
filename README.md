@@ -9,23 +9,24 @@ This is an experimental shader translation library for the needs of gfx-rs proje
 
 ## Supported end-points
 
+Everything is still a work-in-progress, but some end-points are usable:
+
 Front-end       |       Status       | Notes |
 --------------- | ------------------ | ----- |
-SPIR-V (binary) | :construction:     |       |
-WGSL            | :construction:     |       |
-GLSL (Vulkan)   | :construction:     |       |
+SPIR-V (binary) | :heavy_check_mark: |       |
+WGSL            | :heavy_check_mark: |       |
+GLSL (Vulkan)   | :white_check_mark: |       |
 Rust            |                    |       |
 
 Back-end        |       Status       | Notes |
 --------------- | ------------------ | ----- |
-SPIR-V (binary) | :construction:     |       |
+SPIR-V (binary) | :heavy_check_mark: |       |
 WGSL            |                    |       |
-Metal           | :construction:     |       |
+Metal           | :heavy_check_mark: |       |
 HLSL            |                    |       |
-GLSL            | :construction:     |       |
+GLSL            | :white_check_mark: |       |
 AIR             |                    |       |
-DXIR            |                    |       |
-DXIL            |                    |       |
+DXIL/DXIR       |                    |       |
 DXBC            |                    |       |
 
 :heavy_check_mark: = Primary support — :white_check_mark: = Secondary support — :construction: = Unsupported, but support in progress
