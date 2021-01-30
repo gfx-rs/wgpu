@@ -39,7 +39,7 @@ All framework-based examples render to the window.
 | - compressed textures  |        |        |        |           |        | :star: |                |        |
 | - polygon mode         |        | :star: |        |           |        |        |                |        |
 | - queries              |        |        | :star: |           |        |        |                |        |
-| WGSL shaders           |        |        |        |           |        |        |                |        |
+| WGSL shaders           | :star: | :star: | :star: | :star:    | :star: | :star: |                |        |
 
 ## Hacking
 

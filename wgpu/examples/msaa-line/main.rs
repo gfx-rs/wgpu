@@ -10,7 +10,7 @@
 #[path = "../framework.rs"]
 mod framework;
 
-use std::iter;
+use std::{borrow::Cow, iter};
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
@@ -24,8 +24,7 @@ struct Vertex {
 
 struct Example {
     bundle: wgpu::RenderBundle,
-    vs_module: wgpu::ShaderModule,
-    fs_module: wgpu::ShaderModule,
+    shader: wgpu::ShaderModule,
     pipeline_layout: wgpu::PipelineLayout,
     multisampled_framebuffer: wgpu::TextureView,
     vertex_buffer: wgpu::Buffer,
@@ -39,8 +38,7 @@ impl Example {
     fn create_bundle(
         device: &wgpu::Device,
         sc_desc: &wgpu::SwapChainDescriptor,
-        vs_module: &wgpu::ShaderModule,
-        fs_module: &wgpu::ShaderModule,
+        shader: &wgpu::ShaderModule,
         pipeline_layout: &wgpu::PipelineLayout,
         sample_count: u32,
         vertex_buffer: &wgpu::Buffer,
@@ -51,8 +49,8 @@ impl Example {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: vs_module,
-                entry_point: "main",
+                module: shader,
+                entry_point: "vs_main",
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
@@ -60,8 +58,8 @@ impl Example {
                 }],
             },
             fragment: Some(wgpu::FragmentState {
-                module: fs_module,
-                entry_point: "main",
+                module: shader,
+                entry_point: "fs_main",
                 targets: &[sc_desc.format.into()],
             }),
             primitive: wgpu::PrimitiveState {
@@ -119,15 +117,25 @@ impl Example {
 impl framework::Example for Example {
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        _adapter: &wgpu::Adapter,
+        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
         log::info!("Press left/right arrow keys to change sample_count.");
         let sample_count = 4;
 
-        let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
-        let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
+        let mut flags = wgpu::ShaderFlags::VALIDATION;
+        match adapter.get_info().backend {
+            wgpu::Backend::Metal | wgpu::Backend::Vulkan => {
+                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION
+            }
+            _ => (), //TODO
+        }
+        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            flags,
+        });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
@@ -164,8 +172,7 @@ impl framework::Example for Example {
         let bundle = Example::create_bundle(
             device,
             &sc_desc,
-            &vs_module,
-            &fs_module,
+            &shader,
             &pipeline_layout,
             sample_count,
             &vertex_buffer,
@@ -174,8 +181,7 @@ impl framework::Example for Example {
 
         Example {
             bundle,
-            vs_module,
-            fs_module,
+            shader,
             pipeline_layout,
             multisampled_framebuffer,
             vertex_buffer,
@@ -235,8 +241,7 @@ impl framework::Example for Example {
             self.bundle = Example::create_bundle(
                 device,
                 &self.sc_desc,
-                &self.vs_module,
-                &self.fs_module,
+                &self.shader,
                 &self.pipeline_layout,
                 self.sample_count,
                 &self.vertex_buffer,
