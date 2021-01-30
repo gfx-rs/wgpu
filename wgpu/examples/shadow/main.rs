@@ -110,7 +110,7 @@ impl Light {
     fn to_raw(&self) -> LightRaw {
         use cgmath::{Deg, EuclideanSpace, Matrix4, PerspectiveFov, Point3, Vector3};
 
-        let mx_view = Matrix4::look_at(self.pos, Point3::origin(), Vector3::unit_z());
+        let mx_view = Matrix4::look_at_rh(self.pos, Point3::origin(), Vector3::unit_z());
         let projection = PerspectiveFov {
             fovy: Deg(self.fov).into(),
             aspect: 1.0,
@@ -182,7 +182,7 @@ impl Example {
 
     fn generate_matrix(aspect_ratio: f32) -> cgmath::Matrix4<f32> {
         let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 20.0);
-        let mx_view = cgmath::Matrix4::look_at(
+        let mx_view = cgmath::Matrix4::look_at_rh(
             cgmath::Point3::new(3.0f32, -10.0, 6.0),
             cgmath::Point3::new(0f32, 0.0, 0.0),
             cgmath::Vector3::unit_z(),
@@ -418,8 +418,8 @@ impl framework::Example for Example {
         });
 
         let vertex_attr = wgpu::vertex_attr_array![0 => Char4, 1 => Char4];
-        let vb_desc = wgpu::VertexBufferDescriptor {
-            stride: vertex_size as wgpu::BufferAddress,
+        let vb_desc = wgpu::VertexBufferLayout {
+            array_stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::InputStepMode::Vertex,
             attributes: &vertex_attr,
         };
@@ -470,35 +470,31 @@ impl framework::Example for Example {
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("shadow"),
                 layout: Some(&pipeline_layout),
-                vertex_stage: wgpu::ProgrammableStageDescriptor {
+                vertex: wgpu::VertexState {
                     module: &vs_module,
                     entry_point: "main",
+                    buffers: &[vb_desc.clone()],
                 },
-                fragment_stage: None,
-                rasterization_state: Some(wgpu::RasterizationStateDescriptor {
+                fragment: None,
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
                     front_face: wgpu::FrontFace::Ccw,
                     cull_mode: wgpu::CullMode::Back,
-                    polygon_mode: wgpu::PolygonMode::Fill,
-                    depth_bias: 2, // corresponds to bilinear filtering
-                    depth_bias_slope_scale: 2.0,
-                    depth_bias_clamp: 0.0,
-                    clamp_depth: device.features().contains(wgpu::Features::DEPTH_CLAMPING),
-                }),
-                primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-                color_states: &[],
-                depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
                     format: Self::SHADOW_FORMAT,
                     depth_write_enabled: true,
                     depth_compare: wgpu::CompareFunction::LessEqual,
-                    stencil: wgpu::StencilStateDescriptor::default(),
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState {
+                        constant: 2, // corresponds to bilinear filtering
+                        slope_scale: 2.0,
+                        clamp: 0.0,
+                    },
+                    clamp_depth: device.features().contains(wgpu::Features::DEPTH_CLAMPING),
                 }),
-                vertex_state: wgpu::VertexStateDescriptor {
-                    index_format: Some(index_format),
-                    vertex_buffers: &[vb_desc.clone()],
-                },
-                sample_count: 1,
-                sample_mask: !0,
-                alpha_to_coverage_enabled: false,
+                multisample: wgpu::MultisampleState::default(),
             });
 
             Pass {
@@ -607,34 +603,30 @@ impl framework::Example for Example {
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("main"),
                 layout: Some(&pipeline_layout),
-                vertex_stage: wgpu::ProgrammableStageDescriptor {
+                vertex: wgpu::VertexState {
                     module: &vs_module,
                     entry_point: "main",
+                    buffers: &[vb_desc],
                 },
-                fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
+                fragment: Some(wgpu::FragmentState {
                     module: &fs_module,
                     entry_point: "main",
+                    targets: &[sc_desc.format.into()],
                 }),
-                rasterization_state: Some(wgpu::RasterizationStateDescriptor {
+                primitive: wgpu::PrimitiveState {
                     front_face: wgpu::FrontFace::Ccw,
                     cull_mode: wgpu::CullMode::Back,
                     ..Default::default()
-                }),
-                primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-                color_states: &[sc_desc.format.into()],
-                depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
                     format: Self::DEPTH_FORMAT,
                     depth_write_enabled: true,
                     depth_compare: wgpu::CompareFunction::Less,
-                    stencil: wgpu::StencilStateDescriptor::default(),
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                    clamp_depth: false,
                 }),
-                vertex_state: wgpu::VertexStateDescriptor {
-                    index_format: Some(index_format),
-                    vertex_buffers: &[vb_desc],
-                },
-                sample_count: 1,
-                sample_mask: !0,
-                alpha_to_coverage_enabled: false,
+                multisample: wgpu::MultisampleState::default(),
             });
 
             Pass {

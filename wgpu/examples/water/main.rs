@@ -99,7 +99,7 @@ impl Example {
     ///
     fn generate_matrices(aspect_ratio: f32) -> Matrices {
         let projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 10.0, 400.0);
-        let reg_view = cgmath::Matrix4::look_at(
+        let reg_view = cgmath::Matrix4::look_at_rh(
             CAMERA,
             cgmath::Point3::new(0f32, 0.0, 0.0),
             cgmath::Vector3::unit_y(), //Note that y is up. Differs from other examples.
@@ -109,7 +109,7 @@ impl Example {
 
         let reg_view = reg_view * scale;
 
-        let flipped_view = cgmath::Matrix4::look_at(
+        let flipped_view = cgmath::Matrix4::look_at_rh(
             cgmath::Point3::new(CAMERA.x, -CAMERA.y, CAMERA.z),
             cgmath::Point3::new(0f32, 0.0, 0.0),
             cgmath::Vector3::unit_y(),
@@ -501,111 +501,102 @@ impl framework::Example for Example {
             label: Some("water"),
             // The "layout" is what uniforms will be needed.
             layout: Some(&water_pipeline_layout),
-            // Vertex & Fragment shaders
-            vertex_stage: wgpu::ProgrammableStageDescriptor {
+            // Vertex shader and input buffers
+            vertex: wgpu::VertexState {
                 module: &water_vs_module,
                 entry_point: "main",
+                // Layout of our vertices. This should match the structs
+                // which are uploaded to the GPU. This should also be
+                // ensured by tagging on either a `#[repr(C)]` onto a
+                // struct, or a `#[repr(transparent)]` if it only contains
+                // one item, which is itself `repr(C)`.
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: water_vertex_size as wgpu::BufferAddress,
+                    step_mode: wgpu::InputStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![0 => Short2, 1 => Char4],
+                }],
             },
-            fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
+            // Fragment shader and output targets
+            fragment: Some(wgpu::FragmentState {
                 module: &water_fs_module,
                 entry_point: "main",
+                // Describes how the colour will be interpolated
+                // and assigned to the output attachment.
+                targets: &[wgpu::ColorTargetState {
+                    format: sc_desc.format,
+                    color_blend: wgpu::BlendState {
+                        src_factor: wgpu::BlendFactor::SrcAlpha,
+                        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha_blend: wgpu::BlendState {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Max,
+                    },
+                    write_mask: wgpu::ColorWrite::ALL,
+                }],
             }),
             // How the triangles will be rasterized. This is more important
             // for the terrain because of the beneath-the water shot.
             // This is also dependent on how the triangles are being generated.
-            rasterization_state: Some(wgpu::RasterizationStateDescriptor {
+            primitive: wgpu::PrimitiveState {
+                // What kind of data are we passing in?
+                topology: wgpu::PrimitiveTopology::TriangleList,
                 front_face: wgpu::FrontFace::Cw,
-                cull_mode: wgpu::CullMode::None,
                 ..Default::default()
-            }),
-            // What kind of data are we passing in?
-            primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            // Describes how the colour will be interpolated
-            // and assigned to the output attachment.
-            color_states: &[wgpu::ColorStateDescriptor {
-                format: sc_desc.format,
-                color_blend: wgpu::BlendDescriptor {
-                    src_factor: wgpu::BlendFactor::SrcAlpha,
-                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                    operation: wgpu::BlendOperation::Add,
-                },
-                alpha_blend: wgpu::BlendDescriptor {
-                    src_factor: wgpu::BlendFactor::One,
-                    dst_factor: wgpu::BlendFactor::One,
-                    operation: wgpu::BlendOperation::Max,
-                },
-                write_mask: wgpu::ColorWrite::ALL,
-            }],
+            },
             // Describes how us writing to the depth/stencil buffer
             // will work. Since this is water, we need to read from the
             // depth buffer both as a texture in the shader, and as an
             // input attachment to do depth-testing. We don't write, so
             // depth_write_enabled is set to false. This is called
             // RODS or read-only depth stencil.
-            depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
+            depth_stencil: Some(wgpu::DepthStencilState {
                 // We don't use stencil.
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: false,
                 depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilStateDescriptor::default(),
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+                clamp_depth: false,
             }),
-            // Layout of our vertices. This should match the structs
-            // which are uploaded to the GPU. This should also be
-            // ensured by tagging on either a `#[repr(C)]` onto a
-            // struct, or a `#[repr(transparent)]` if it only contains
-            // one item, which is itself `repr(C)`.
-            vertex_state: wgpu::VertexStateDescriptor {
-                // We don't actually use indices, since it's unnecessary
-                // because we duplicate all the data anyway. This is
-                // necessary to achieve the low-poly effect.
-                index_format: None,
-                vertex_buffers: &[wgpu::VertexBufferDescriptor {
-                    stride: water_vertex_size as wgpu::BufferAddress,
-                    step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Short2, 1 => Char4],
-                }],
-            },
-            sample_count: 1,
-            sample_mask: !0,
-            alpha_to_coverage_enabled: false,
+            // No multisampling is used.
+            multisample: wgpu::MultisampleState::default(),
         });
 
         // Same idea as the water pipeline.
         let terrain_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("terrain"),
             layout: Some(&terrain_pipeline_layout),
-            vertex_stage: wgpu::ProgrammableStageDescriptor {
+            vertex: wgpu::VertexState {
                 module: &terrain_vs_module,
                 entry_point: "main",
-            },
-            fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
-                module: &terrain_fs_module,
-                entry_point: "main",
-            }),
-            rasterization_state: Some(wgpu::RasterizationStateDescriptor {
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: wgpu::CullMode::Front,
-                ..Default::default()
-            }),
-            primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[sc_desc.format.into()],
-            depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
-                format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilStateDescriptor::default(),
-            }),
-            vertex_state: wgpu::VertexStateDescriptor {
-                index_format: None,
-                vertex_buffers: &[wgpu::VertexBufferDescriptor {
-                    stride: terrain_vertex_size as wgpu::BufferAddress,
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: terrain_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Float3, 1 => Float3, 2 => Uchar4Norm],
                 }],
             },
-            sample_count: 1,
-            sample_mask: !0,
-            alpha_to_coverage_enabled: false,
+            fragment: Some(wgpu::FragmentState {
+                module: &terrain_fs_module,
+                entry_point: "main",
+                targets: &[sc_desc.format.into()],
+            }),
+            primitive: wgpu::PrimitiveState {
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: wgpu::CullMode::Front,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+                clamp_depth: false,
+            }),
+            multisample: wgpu::MultisampleState::default(),
         });
 
         // Done

@@ -990,31 +990,16 @@ impl crate::Context for Context {
         wgc::span!(_guard, TRACE, "Device::create_render_pipeline wrapper");
         use wgc::pipeline as pipe;
 
-        let vertex_stage = pipe::ProgrammableStageDescriptor {
-            module: desc.vertex_stage.module.id,
-            entry_point: Borrowed(&desc.vertex_stage.entry_point),
-        };
-        let fragment_stage =
-            desc.fragment_stage
-                .as_ref()
-                .map(|fs| pipe::ProgrammableStageDescriptor {
-                    module: fs.module.id,
-                    entry_point: Borrowed(&fs.entry_point),
-                });
         let vertex_buffers: ArrayVec<[_; wgc::device::MAX_VERTEX_BUFFERS]> = desc
-            .vertex_state
-            .vertex_buffers
+            .vertex
+            .buffers
             .iter()
-            .map(|vertex_buffer| pipe::VertexBufferDescriptor {
-                stride: vertex_buffer.stride,
-                step_mode: vertex_buffer.step_mode,
-                attributes: Borrowed(vertex_buffer.attributes),
+            .map(|vbuf| pipe::VertexBufferLayout {
+                array_stride: vbuf.array_stride,
+                step_mode: vbuf.step_mode,
+                attributes: Borrowed(vbuf.attributes),
             })
             .collect();
-        let vertex_state = pipe::VertexStateDescriptor {
-            index_format: desc.vertex_state.index_format,
-            vertex_buffers: Borrowed(&vertex_buffers),
-        };
 
         let implicit_pipeline_ids = match desc.layout {
             Some(_) => None,
@@ -1026,16 +1011,23 @@ impl crate::Context for Context {
         let descriptor = pipe::RenderPipelineDescriptor {
             label: desc.label.map(Borrowed),
             layout: desc.layout.map(|l| l.id),
-            vertex_stage,
-            fragment_stage,
-            rasterization_state: desc.rasterization_state.clone(),
-            primitive_topology: desc.primitive_topology,
-            color_states: Borrowed(&desc.color_states),
-            depth_stencil_state: desc.depth_stencil_state.clone(),
-            vertex_state: vertex_state,
-            sample_count: desc.sample_count,
-            sample_mask: desc.sample_mask,
-            alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
+            vertex: pipe::VertexState {
+                stage: pipe::ProgrammableStageDescriptor {
+                    module: desc.vertex.module.id,
+                    entry_point: Borrowed(desc.vertex.entry_point),
+                },
+                buffers: Borrowed(&vertex_buffers),
+            },
+            primitive: desc.primitive.clone(),
+            depth_stencil: desc.depth_stencil.clone(),
+            multisample: desc.multisample.clone(),
+            fragment: desc.fragment.as_ref().map(|frag| pipe::FragmentState {
+                stage: pipe::ProgrammableStageDescriptor {
+                    module: frag.module.id,
+                    entry_point: Borrowed(frag.entry_point),
+                },
+                targets: Borrowed(frag.targets),
+            }),
         };
 
         let global = &self.0;
@@ -1074,9 +1066,9 @@ impl crate::Context for Context {
         let descriptor = pipe::ComputePipelineDescriptor {
             label: desc.label.map(Borrowed),
             layout: desc.layout.map(|l| l.id),
-            compute_stage: pipe::ProgrammableStageDescriptor {
-                module: desc.compute_stage.module.id,
-                entry_point: Borrowed(&desc.compute_stage.entry_point),
+            stage: pipe::ProgrammableStageDescriptor {
+                module: desc.module.id,
+                entry_point: Borrowed(desc.entry_point),
             },
         };
 

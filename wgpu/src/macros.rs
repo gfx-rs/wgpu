@@ -1,13 +1,13 @@
 //! Convenience macros
 
-/// Macro to produce an array of [VertexAttributeDescriptor](crate::VertexAttributeDescriptor).
+/// Macro to produce an array of [VertexAttribute](crate::VertexAttribute).
 ///
-/// Output has type: `[VertexAttributeDescriptor; _]`. Usage is as follows:
+/// Output has type: `[VertexAttribute; _]`. Usage is as follows:
 /// ```
 /// # use wgpu::vertex_attr_array;
 /// let attrs = vertex_attr_array![0 => Float2, 1 => Float, 2 => Ushort4];
 /// ```
-/// This example specifies a list of three [VertexAttributeDescriptor](crate::VertexAttributeDescriptor),
+/// This example specifies a list of three [VertexAttribute](crate::VertexAttribute),
 /// each with the given `shader_location` and `format`.
 /// Offsets are calculated automatically.
 #[macro_export]
@@ -19,7 +19,7 @@ macro_rules! vertex_attr_array {
     ([$($t:expr,)*] ; $off:expr ; $loc:expr => $item:ident, $($ll:expr => $ii:ident ,)*) => {
         $crate::vertex_attr_array!(
             [$($t,)*
-            $crate::VertexAttributeDescriptor {
+            $crate::VertexAttribute {
                 format: $crate::VertexFormat :: $item,
                 offset: $off,
                 shader_location: $loc,
@@ -33,7 +33,7 @@ macro_rules! vertex_attr_array {
 #[test]
 fn test_vertex_attr_array() {
     let attrs = vertex_attr_array![0 => Float2, 3 => Ushort4];
-    // VertexAttributeDescriptor does not support PartialEq, so we cannot test directly
+    // VertexAttribute does not support PartialEq, so we cannot test directly
     assert_eq!(attrs.len(), 2);
     assert_eq!(attrs[0].offset, 0);
     assert_eq!(attrs[0].shader_location, 0);

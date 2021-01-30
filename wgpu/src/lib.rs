@@ -25,19 +25,18 @@ use std::{
 use parking_lot::Mutex;
 
 pub use wgt::{
-    AdapterInfo, AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType,
-    BlendDescriptor, BlendFactor, BlendOperation, BufferAddress, BufferBindingType, BufferSize,
-    BufferUsage, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction,
-    CullMode, DepthStencilStateDescriptor, DeviceType, DynamicOffset, Extent3d, Features,
-    FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, Origin3d, PipelineStatisticsTypes,
-    PolygonMode, PowerPreference, PresentMode, PrimitiveTopology, PushConstantRange,
-    QuerySetDescriptor, QueryType, RasterizationStateDescriptor, SamplerBorderColor, ShaderFlags,
-    ShaderLocation, ShaderStage, StencilOperation, StencilStateDescriptor,
-    StencilStateFaceDescriptor, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus,
-    TextureAspect, TextureDataLayout, TextureDimension, TextureFormat, TextureSampleType,
-    TextureUsage, TextureViewDimension, VertexAttributeDescriptor, VertexFormat,
-    BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT,
+    AdapterInfo, AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType, BlendFactor,
+    BlendOperation, BlendState, BufferAddress, BufferBindingType, BufferSize, BufferUsage, Color,
+    ColorTargetState, ColorWrite, CommandBufferDescriptor, CompareFunction, CullMode,
+    DepthBiasState, DepthStencilState, DeviceType, DynamicOffset, Extent3d, Features, FilterMode,
+    FrontFace, IndexFormat, InputStepMode, Limits, MultisampleState, Origin3d,
+    PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
+    PrimitiveTopology, PushConstantRange, QuerySetDescriptor, QueryType, SamplerBorderColor,
+    ShaderFlags, ShaderLocation, ShaderStage, StencilFaceState, StencilOperation, StencilState,
+    StorageTextureAccess, SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureDataLayout,
+    TextureDimension, TextureFormat, TextureSampleType, TextureUsage, TextureViewDimension,
+    VertexAttribute, VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C};
@@ -1152,25 +1151,53 @@ pub struct BindGroupDescriptor<'a> {
     pub entries: &'a [BindGroupEntry<'a>],
 }
 
-/// Describes a programmable pipeline stage.
+/// Describes the attachments of a render pass.
+///
+/// Note: separate lifetimes are needed because the texture views
+/// have to live as long as the pass is recorded, while everything else doesn't.
+#[derive(Clone, Debug, Default)]
+pub struct RenderPassDescriptor<'a, 'b> {
+    /// Debug label of the render pass. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'b str>,
+    /// The color attachments of the render pass.
+    pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],
+    /// The depth and stencil attachment of the render pass, if any.
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<'a>>,
+}
+
+/// Describes how the vertex buffer is interpreted.
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct VertexBufferLayout<'a> {
+    /// The stride, in bytes, between elements of this buffer.
+    pub array_stride: BufferAddress,
+    /// How often this vertex buffer is "stepped" forward.
+    pub step_mode: InputStepMode,
+    /// The list of attributes which comprise a single vertex.
+    pub attributes: &'a [VertexAttribute],
+}
+
+/// Describes the vertex process in a render pipeline.
 #[derive(Clone, Debug)]
-pub struct ProgrammableStageDescriptor<'a> {
+pub struct VertexState<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
     /// The name of the entry point in the compiled shader. There must be a function that returns
     /// void with this name in the shader.
     pub entry_point: &'a str,
+    /// The format of any vertex buffers used with this pipeline.
+    pub buffers: &'a [VertexBufferLayout<'a>],
 }
 
-/// Describes the attachments of a render pass.
-#[derive(Clone, Debug, Default)]
-pub struct RenderPassDescriptor<'a, 'b> {
-    /// Debug label of the render pass. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
-    /// The color attachments of the render pass.
-    pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],
-    /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<'a>>,
+/// Describes the fragment process in a render pipeline.
+#[derive(Clone, Debug)]
+pub struct FragmentState<'a> {
+    /// The compiled shader module for this stage.
+    pub module: &'a ShaderModule,
+    /// The name of the entry point in the compiled shader. There must be a function that returns
+    /// void with this name in the shader.
+    pub entry_point: &'a str,
+    /// The format of any vertex buffers used with this pipeline.
+    pub targets: &'a [ColorTargetState],
 }
 
 /// Describes a render (graphics) pipeline.
@@ -1180,33 +1207,16 @@ pub struct RenderPipelineDescriptor<'a> {
     pub label: Option<&'a str>,
     /// The layout of bind groups for this pipeline.
     pub layout: Option<&'a PipelineLayout>,
-    /// The compiled vertex stage and its entry point.
-    pub vertex_stage: ProgrammableStageDescriptor<'a>,
-    /// The compiled fragment stage and its entry point, if any.
-    pub fragment_stage: Option<ProgrammableStageDescriptor<'a>>,
-    /// The rasterization process for this pipeline.
-    pub rasterization_state: Option<RasterizationStateDescriptor>,
-    /// The primitive topology used to interpret vertices.
-    pub primitive_topology: PrimitiveTopology,
-    /// The effect of draw calls on the color aspect of the output target.
-    pub color_states: &'a [ColorStateDescriptor],
+    /// The compiled vertex stage, its entry point, and the input buffers layout.
+    pub vertex: VertexState<'a>,
+    /// The properties of the pipeline at the primitive assembly and rasterization level.
+    pub primitive: PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
-    pub depth_stencil_state: Option<DepthStencilStateDescriptor>,
-    /// The vertex input state for this pipeline.
-    pub vertex_state: VertexStateDescriptor<'a>,
-    /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
-    /// this should be `1`
-    pub sample_count: u32,
-    /// Bitmask that restricts the samples of a pixel modified by this pipeline. All samples
-    /// can be enabled using the value `!0`
-    pub sample_mask: u32,
-    /// When enabled, produces another sample mask per pixel based on the alpha output value, that
-    /// is ANDed with the sample_mask and the primitive coverage to restrict the set of samples
-    /// affected by a primitive.
-    ///
-    /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
-    /// is guaranteed to be all 1-s.
-    pub alpha_to_coverage_enabled: bool,
+    pub depth_stencil: Option<DepthStencilState>,
+    /// The multi-sampling properties of the pipeline.
+    pub multisample: MultisampleState,
+    /// The compiled fragment stage, its entry point, and the color targets.
+    pub fragment: Option<FragmentState<'a>>,
 }
 
 /// Describes the attachments of a compute pass.
@@ -1223,8 +1233,11 @@ pub struct ComputePipelineDescriptor<'a> {
     pub label: Option<&'a str>,
     /// The layout of bind groups for this pipeline.
     pub layout: Option<&'a PipelineLayout>,
-    /// The compiled compute stage and its entry point.
-    pub compute_stage: ProgrammableStageDescriptor<'a>,
+    /// The compiled shader module for this stage.
+    pub module: &'a ShaderModule,
+    /// The name of the entry point in the compiled shader. There must be a function that returns
+    /// void with this name in the shader.
+    pub entry_point: &'a str,
 }
 
 pub use wgt::BufferCopyView as BufferCopyViewBase;
@@ -1243,26 +1256,6 @@ pub struct BindGroupLayoutDescriptor<'a> {
 
     /// Array of entries in this BindGroupLayout
     pub entries: &'a [BindGroupLayoutEntry],
-}
-
-/// Describes how the vertex buffer is interpreted.
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
-pub struct VertexBufferDescriptor<'a> {
-    /// The stride, in bytes, between elements of this buffer.
-    pub stride: BufferAddress,
-    /// How often this vertex buffer is "stepped" forward.
-    pub step_mode: InputStepMode,
-    /// The list of attributes which comprise a single vertex.
-    pub attributes: &'a [VertexAttributeDescriptor],
-}
-
-/// Describes vertex input state for a render pipeline.
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
-pub struct VertexStateDescriptor<'a> {
-    /// The format of any index buffers used with this pipeline.
-    pub index_format: Option<IndexFormat>,
-    /// The format of any vertex buffers used with this pipeline.
-    pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
 }
 
 /// Describes a [`RenderBundleEncoder`].
