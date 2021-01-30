@@ -192,7 +192,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard
             .get_mut(queue_id)
             .map_err(|_| DeviceError::Invalid)?;
-        let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+        let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -274,6 +274,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         // Ensure the overwritten bytes are marked as initialized so they don't need to be nulled prior to mapping or binding.
         {
+            drop(buffer_guard);
+            let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+
             let dst = buffer_guard.get_mut(buffer_id).unwrap();
             dst.initialization_status
                 .clear(buffer_offset..(buffer_offset + data_size));
@@ -482,7 +485,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let mut required_buffer_inits = {
             let (command_buffer_guard, mut token) = hub.command_buffers.read(&mut token);
-            let (mut buffer_guard, _) = hub.buffers.write(&mut token);
 
             let mut required_buffer_inits: FastHashMap<
                 id::BufferId,
@@ -493,6 +495,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let cmdbuf = command_buffer_guard
                     .get(cmb_id)
                     .map_err(|_| QueueSubmitError::InvalidCommandBuffer(cmb_id))?;
+
+                if cmdbuf.buffer_memory_init_actions.len() == 0 {
+                    continue;
+                }
+
+                let (mut buffer_guard, _) = hub.buffers.write(&mut token);
 
                 for buffer_use in cmdbuf.buffer_memory_init_actions.iter() {
                     let buffer = buffer_guard
@@ -543,7 +551,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 assert!(ranges[i - 1].end <= ranges[i].start); // The memory init tracker made sure of this!
                 if ranges[i].start == ranges[i - 1].end {
                     ranges[i - 1].end = ranges[i].end;
-                    ranges.remove(i);
+                    ranges.swap_remove(i); // Ordering not important at this point
                 }
             }
 
@@ -563,12 +571,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
             for range in ranges {
+                let size = range.end - range.start;
+
+                assert!(range.start % 4 == 0, "Buffer {:?} has an uninitialized range with a start not aligned to 4 (start was {})", buffer, range.start);
+                assert!(size % 4 == 0, "Buffer {:?} has an uninitialized range with a size not aligned to 4 (size was {})", buffer, size);
+
                 unsafe {
                     pending_writes_cmd_buf.fill_buffer(
                         buffer_raw,
                         hal::buffer::SubRange {
                             offset: range.start,
-                            size: Some(range.end - range.start),
+                            size: Some(size),
                         },
                         0,
                     );
