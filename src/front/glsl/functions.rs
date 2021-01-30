@@ -164,6 +164,7 @@ impl Program {
     pub fn function_definition(&mut self, mut f: Function, mut block: Block) -> Function {
         std::mem::swap(&mut f.expressions, &mut self.context.expressions);
         std::mem::swap(&mut f.local_variables, &mut self.context.local_variables);
+        std::mem::swap(&mut f.arguments, &mut self.context.arguments);
         self.context.clear_scopes();
         self.context.lookup_global_var_exps.clear();
         self.context.typifier = Typifier::new();

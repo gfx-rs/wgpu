@@ -180,3 +180,54 @@ fn textures() {
     )
     .unwrap();
 }
+
+#[test]
+fn functions() {
+    // TODO: Add support for function prototypes
+    // parse_program(
+    //     r#"
+    //     #  version 450
+    //     void test1(float);
+    //     void test1(float) {}
+
+    //     void main() {}
+    //     "#,
+    //     ShaderStage::Vertex,
+    // )
+    // .unwrap();
+
+    parse_program(
+        r#"
+        #  version 450
+        void test2(float a) {}
+        void test3(float a, float b) {}
+        void test4(float, float) {}
+        
+        void main() {}
+        "#,
+        ShaderStage::Vertex,
+    )
+    .unwrap();
+
+    parse_program(
+        r#"
+        #  version 450
+        float test(float a) { return a; }
+        
+        void main() {}
+        "#,
+        ShaderStage::Vertex,
+    )
+    .unwrap();
+
+    parse_program(
+        r#"
+        #  version 450
+        float test(vec4 p) {
+            return p.x;
+        }
+        "#,
+        ShaderStage::Vertex,
+    )
+    .unwrap();
+}

@@ -1,8 +1,9 @@
 use super::error::ErrorKind;
 use crate::{
     proc::{ResolveContext, Typifier},
-    Arena, BinaryOperator, Binding, Expression, FastHashMap, Function, GlobalVariable, Handle,
-    Interpolation, LocalVariable, Module, ShaderStage, Statement, StorageClass, Type,
+    Arena, BinaryOperator, Binding, Expression, FastHashMap, Function, FunctionArgument,
+    GlobalVariable, Handle, Interpolation, LocalVariable, Module, ShaderStage, Statement,
+    StorageClass, Type,
 };
 
 #[derive(Debug)]
@@ -31,6 +32,7 @@ impl Program {
             context: Context {
                 expressions: Arena::<Expression>::new(),
                 local_variables: Arena::<LocalVariable>::new(),
+                arguments: Vec::new(),
                 scopes: vec![FastHashMap::default()],
                 lookup_global_var_exps: FastHashMap::default(),
                 typifier: Typifier::new(),
@@ -57,13 +59,12 @@ impl Program {
         handle: Handle<crate::Expression>,
     ) -> Result<&crate::TypeInner, ErrorKind> {
         let functions = Arena::new(); //TODO
-        let arguments = Vec::new(); //TODO
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
             global_vars: &self.module.global_variables,
             local_vars: &self.context.local_variables,
             functions: &functions,
-            arguments: &arguments,
+            arguments: &self.context.arguments,
         };
         match self.context.typifier.grow(
             handle,
@@ -87,6 +88,7 @@ pub enum Profile {
 pub struct Context {
     pub expressions: Arena<Expression>,
     pub local_variables: Arena<LocalVariable>,
+    pub arguments: Vec<FunctionArgument>,
     //TODO: Find less allocation heavy representation
     pub scopes: Vec<FastHashMap<String, Handle<Expression>>>,
     pub lookup_global_var_exps: FastHashMap<String, Handle<Expression>>,

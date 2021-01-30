@@ -13,7 +13,7 @@ use ast::Program;
 
 use lex::Lexer;
 mod error;
-use error::ParseError;
+pub use error::ParseError;
 mod functions;
 mod parser;
 #[cfg(test)]

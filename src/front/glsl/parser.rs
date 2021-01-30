@@ -10,7 +10,7 @@ pomelo! {
             Function, GlobalVariable, Handle, Interpolation,
             LocalVariable, ScalarValue,
             Statement, StorageAccess, StorageClass, StructMember,
-            SwitchCase, Type, TypeInner, UnaryOperator,
+            SwitchCase, Type, TypeInner, UnaryOperator, FunctionArgument
         };
     }
     %token #[derive(Debug)] #[cfg_attr(test, derive(PartialEq))] pub enum Token {};
@@ -47,6 +47,7 @@ pomelo! {
     %type function_prototype Function;
     %type function_declarator Function;
     %type function_header Function;
+    %type function_header_with_parameters (Function, Vec<FunctionArgument>);
     %type function_definition Function;
 
     // statements
@@ -79,6 +80,10 @@ pomelo! {
     %type function_call_header_with_parameters FunctionCall;
     %type function_call_header FunctionCall;
     %type function_identifier FunctionCallKind;
+
+    %type parameter_declarator FunctionArgument;
+    %type parameter_declaration FunctionArgument;
+    %type parameter_type_specifier Handle<Type>;
 
     %type multiplicative_expression ExpressionRule;
     %type additive_expression ExpressionRule;
@@ -941,6 +946,16 @@ pomelo! {
         f
     }
     function_declarator ::= function_header;
+    function_declarator ::= function_header_with_parameters((f, args)) {
+        for (pos, arg) in args.into_iter().enumerate() {
+            if let Some(name) = arg.name.clone() {
+                let exp = extra.context.expressions.append(Expression::FunctionArgument(pos as u32));
+                extra.context.add_local_var(name, exp);
+            }
+            extra.context.arguments.push(arg);
+        }
+        f
+    }
     function_header ::= fully_specified_type(t) Identifier(n) LeftParen {
         Function {
             name: Some(n.1),
@@ -950,6 +965,29 @@ pomelo! {
             local_variables: Arena::<LocalVariable>::new(),
             expressions: Arena::<Expression>::new(),
             body: vec![],
+        }
+    }
+    function_header_with_parameters ::= function_header(h) parameter_declaration(p) {
+        (h, vec![p])
+    }
+    function_header_with_parameters ::= function_header_with_parameters((h, mut args)) Comma parameter_declaration(p) {
+        args.push(p);
+        (h, args)
+    }
+    parameter_declarator ::= parameter_type_specifier(ty) Identifier(n) {
+        FunctionArgument { name: Some(n.1), ty }
+    }
+    // parameter_declarator ::= type_specifier(ty) Identifier(ident) array_specifier;
+    parameter_declaration ::= parameter_declarator;
+    parameter_declaration ::= parameter_type_specifier(ty) {
+        FunctionArgument { name: None, ty }
+    }
+
+    parameter_type_specifier ::= type_specifier(t) {
+        if let Some(ty) = t {
+            ty
+        } else {
+            return Err(ErrorKind::SemanticError("Function parameter can't be void".into()))
         }
     }
 
@@ -1002,7 +1040,7 @@ pomelo! {
         if let Some(d) = d {
             let class = d.type_qualifiers.iter().find_map(|tq| {
                 if let TypeQualifier::StorageClass(sc) = tq { Some(*sc) } else { None }
-            }).ok_or_else(|| ErrorKind::SemanticError(format!("Missing storage class for global var \"{:?}\"", d).into()))?;
+            }).unwrap_or(StorageClass::Private);
 
             let binding = d.type_qualifiers.iter().find_map(|tq| {
                 if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
