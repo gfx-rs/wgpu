@@ -208,10 +208,7 @@ fn map_buffer<B: hal::Backend>(
     //
     // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
     let zero_init_needs_flush_now = !block.is_coherent() && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
-    for uninitialized_range in buffer
-        .initialization_status
-        .drain_uninitialized_ranges(offset..(size + offset))
-    {
+    for uninitialized_range in buffer.initialization_status.drain(offset..(size + offset)) {
         let num_bytes = uninitialized_range.end - uninitialized_range.start;
         unsafe {
             ptr::write_bytes(
@@ -2606,14 +2603,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // Zero initialize memory and then mark both staging and buffer as initialized
                 // (it's guaranteed that this is the case by the time the buffer is usable)
                 unsafe { ptr::write_bytes(ptr.as_ptr(), 0, buffer.size as usize) };
-                buffer
-                    .initialization_status
-                    .drain_uninitialized_ranges(0..buffer.size)
-                    .for_each(drop);
-                stage
-                    .initialization_status
-                    .drain_uninitialized_ranges(0..buffer.size)
-                    .for_each(drop);
+                buffer.initialization_status.clear(0..buffer.size);
+                stage.initialization_status.clear(0..buffer.size);
 
                 buffer.map_state = resource::BufferMapState::Init {
                     ptr,
