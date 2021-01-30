@@ -2811,3 +2811,45 @@ bitflags::bitflags! {
         const COMPUTE_SHADER_INVOCATIONS = 0x10;
     }
 }
+
+/// Argument buffer layout for draw_indirect commands.
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct DrawIndirectArgs {
+    /// The number of vertices to draw.
+    pub vertex_count: u32,
+    /// The number of instances to draw.
+    pub instance_count: u32,
+    /// Offset into the vertex buffers, in vertices, to begin drawing from.
+    pub first_vertex: u32,
+    /// First instance to draw.
+    pub first_instance: u32,
+}
+
+/// Argument buffer layout for draw_indexed_indirect commands.
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct DrawIndexedIndirectArgs {
+    /// The number of indices to draw.
+    pub index_count: u32,
+    /// The number of instances to draw.
+    pub instance_count: u32,
+    /// Offset into the index buffer, in indices, begin drawing from.
+    pub first_index: u32,
+    /// Added to each index value before indexing into the vertex buffers.
+    pub base_vertex: i32,
+    /// First instance to draw.
+    pub first_instance: u32,
+}
+
+/// Argument buffer layout for dispatch_indirect commands.
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct DispatchIndirectArgs {
+    /// X dimension of the grid of workgroups to dispatch.
+    pub group_size_x: u32,
+    /// Y dimension of the grid of workgroups to dispatch.
+    pub group_size_y: u32,
+    /// Z dimension of the grid of workgroups to dispatch.
+    pub group_size_z: u32,
+}

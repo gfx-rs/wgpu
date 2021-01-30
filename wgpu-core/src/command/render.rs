@@ -45,6 +45,7 @@ use std::{
     collections::hash_map::Entry,
     fmt, iter,
     marker::PhantomData,
+    mem,
     num::NonZeroU32,
     ops::Range,
     str,
@@ -417,11 +418,10 @@ pub enum RenderPassErrorInner {
     InvalidValuesOffset,
     #[error("required device features not enabled: {0:?}")]
     MissingDeviceFeatures(wgt::Features),
-    #[error("indirect draw with offset {offset}{} uses bytes {begin_offset}..{end_offset} which overruns indirect buffer of size {buffer_size}", count.map_or_else(String::new, |v| format!(" and count {}", v)))]
+    #[error("indirect draw uses bytes {offset}..{end_offset} {} which overruns indirect buffer of size {buffer_size}", count.map_or_else(String::new, |v| format!("(using count {})", v)))]
     IndirectBufferOverrun {
-        offset: u64,
         count: Option<NonZeroU32>,
-        begin_offset: u64,
+        offset: u64,
         end_offset: u64,
         buffer_size: u64,
     },
@@ -1549,9 +1549,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         state.is_ready().map_pass_err(scope)?;
 
                         let stride = match indexed {
-                            false => 16,
-                            true => 20,
-                        };
+                            false => mem::size_of::<wgt::DrawIndirectArgs>(),
+                            true => mem::size_of::<wgt::DrawIndexedIndirectArgs>(),
+                        } as u64;
 
                         if count.is_some() {
                             check_device_features(
@@ -1577,13 +1577,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         let actual_count = count.map_or(1, |c| c.get());
 
-                        let begin_offset = offset;
                         let end_offset = offset + stride * actual_count as u64;
                         if end_offset > indirect_buffer.size {
                             return Err(RenderPassErrorInner::IndirectBufferOverrun {
-                                offset,
                                 count,
-                                begin_offset,
+                                offset,
                                 end_offset,
                                 buffer_size: indirect_buffer.size,
                             })
@@ -1625,9 +1623,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         state.is_ready().map_pass_err(scope)?;
 
                         let stride = match indexed {
-                            false => 16,
-                            true => 20,
-                        };
+                            false => mem::size_of::<wgt::DrawIndirectArgs>(),
+                            true => mem::size_of::<wgt::DrawIndexedIndirectArgs>(),
+                        } as u64;
 
                         check_device_features(
                             device.features,
@@ -1663,13 +1661,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .ok_or(RenderCommandError::DestroyedBuffer(count_buffer_id))
                             .map_pass_err(scope)?;
 
-                        let begin_offset = offset;
                         let end_offset = offset + stride * max_count as u64;
                         if end_offset > indirect_buffer.size {
                             return Err(RenderPassErrorInner::IndirectBufferOverrun {
-                                offset,
                                 count: None,
-                                begin_offset,
+                                offset,
                                 end_offset,
                                 buffer_size: indirect_buffer.size,
                             })
