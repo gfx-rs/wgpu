@@ -1,0 +1,87 @@
+---
+source: tests/snapshots.rs
+expression: msl
+---
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+typedef metal::uint4 type;
+
+struct Globals {
+    type num_lights;
+};
+
+typedef metal::float4x4 type1;
+
+typedef metal::float4 type2;
+
+struct Light {
+    type1 proj;
+    type2 pos;
+    type2 color;
+};
+
+typedef Light type3[1];
+
+struct Lights {
+    type3 data;
+};
+
+typedef metal::depth2d_array<float, metal::access::sample> type4;
+
+typedef metal::sampler type5;
+
+typedef uint type6;
+
+typedef float type7;
+
+typedef metal::float2 type8;
+
+typedef metal::int2 type9;
+
+typedef int type10;
+
+typedef metal::float3 type11;
+
+type7 fetch_shadow(
+    type6 light_id,
+    type2 homogeneous_coords
+) {
+    if ((homogeneous_coords.w <= 0.0)) {
+        return 1.0;
+    }
+    return t_shadow.sample_compare(sampler_shadow, (((metal::float2(homogeneous_coords.x, homogeneous_coords.y) * metal::float2(0.5, -0.5)) * (1.0 / homogeneous_coords.w)) + metal::float2(0.5, 0.5)), static_cast<int>(light_id), (homogeneous_coords.z * (1.0 / homogeneous_coords.w)));
+}
+
+struct fs_mainInput {
+    type11 in_normal_fs [[user(loc0)]];
+    type2 in_position_fs [[user(loc1)]];
+};
+
+struct fs_mainOutput {
+    type2 out_color_fs [[color(0)]];
+};
+
+fragment fs_mainOutput fs_main(
+    fs_mainInput input [[stage_in]],
+    constant Globals& u_globals [[buffer(0)]],
+    constant Lights& s_lights [[buffer(1)]]
+) {
+    fs_mainOutput output;
+    type11 color1 = type11(0.05, 0.05, 0.05);
+    type6 i = 0u;
+    bool loop_init = true;
+    while(true) {
+        if (!loop_init) {
+            i = (i + 1u);
+        }
+        loop_init = false;
+        if ((i >= metal::min(u_globals.num_lights.x, 10u))) {
+            break;
+        }
+        color1 = (color1 + ((fetch_shadow(i, (s_lights.data[i].proj * input.in_position_fs)) * metal::max(0.0, metal::dot(metal::normalize(input.in_normal_fs), metal::normalize((metal::float3(s_lights.data[i].pos.x, s_lights.data[i].pos.y, s_lights.data[i].pos.z) - metal::float3(input.in_position_fs.x, input.in_position_fs.y, input.in_position_fs.z)))))) * metal::float3(s_lights.data[i].color.x, s_lights.data[i].color.y, s_lights.data[i].color.z)));
+    }
+    output.out_color_fs = metal::float4(color1, 1.0);
+    return output;
+}
+

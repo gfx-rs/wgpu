@@ -182,3 +182,9 @@ fn convert_wgsl_skybox() {
 fn convert_wgsl_collatz() {
     convert_wgsl("collatz", Language::METAL | Language::SPIRV);
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn convert_wgsl_shadow() {
+    convert_wgsl("shadow", Language::METAL | Language::SPIRV);
+}

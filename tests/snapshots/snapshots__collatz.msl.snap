@@ -19,18 +19,18 @@ type1 collatz_iterations(
     type1 n_base
 ) {
     type1 n;
-    type1 i = 0;
+    type1 i = 0u;
     n = n_base;
     while(true) {
-        if ((n <= 1)) {
+        if ((n <= 1u)) {
             break;
         }
-        if (((n % 2) == 0)) {
-            n = (n / 2);
+        if (((n % 2u) == 0u)) {
+            n = (n / 2u);
         } else {
-            n = ((3 * n) + 1);
+            n = ((3u * n) + 1u);
         }
-        i = (i + 1);
+        i = (i + 1u);
     }
     return i;
 }

@@ -51,7 +51,7 @@ kernel void main1(
     type5 cVelCount = 0;
     type1 pos1;
     type1 vel1;
-    type i = 0;
+    type i = 0u;
     if ((gl_GlobalInvocationID.x >= 1500)) {
         return ;
     }
@@ -63,7 +63,7 @@ kernel void main1(
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            i = (i + 1);
+            i = (i + 1u);
         }
         loop_init = false;
         if ((i >= 1500)) {
