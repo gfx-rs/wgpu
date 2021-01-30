@@ -342,7 +342,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }
                                 Err(_) => false,
                             })
-                            .map(|action| action.clone()),
+                            .cloned(),
                     );
 
                     if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(

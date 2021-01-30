@@ -206,8 +206,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope);
                     }
 
-                    buffer_memory_init_actions
-                        .extend(bind_group.used_buffer_ranges.iter().map(|x| x.clone()));
+                    buffer_memory_init_actions.extend_from_slice(&bind_group.used_buffer_ranges);
 
                     state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
                     state

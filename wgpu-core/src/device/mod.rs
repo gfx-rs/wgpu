@@ -9,7 +9,7 @@ use crate::{
         GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, InvalidId, Storage, Token,
     },
     id, instance,
-    memory_init_tracker::*,
+    memory_init_tracker::{MemoryInitKind, MemoryInitTracker, MemoryInitTrackerAction},
     pipeline, resource, span, swap_chain,
     track::{BufferState, TextureSelector, TextureState, TrackerSet},
     validation::{self, check_buffer_usage, check_texture_usage},
