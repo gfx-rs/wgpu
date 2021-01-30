@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum MemoryInitKind {
     // The memory range is going to be written by an already initialized source, thus doesn't need extra attention other than marking as initialized.
     ImplicitlyInitialized,
@@ -18,6 +18,7 @@ pub(crate) struct MemoryInitTrackerAction<ResourceId> {
 /// Tracks initialization status of a linear range from 0..size
 #[derive(Debug)]
 pub(crate) struct MemoryInitTracker {
+    // Ordered, non overlapping list of all uninitialized ranges.
     uninitialized_ranges: Vec<Range<wgt::BufferAddress>>,
 }
 
@@ -80,15 +81,59 @@ impl MemoryInitTracker {
         }
     }
 
-    pub(crate) fn is_initialized(&self, query_range: &Range<wgt::BufferAddress>) -> bool {
-        match self
-            .uninitialized_ranges
-            .iter()
-            .find(|r| r.end > query_range.start)
-        {
-            Some(r) => r.start >= query_range.end,
-            None => true,
+    // Search smallest range.end which is bigger than bound in O(log n) (with n being number of uninitialized ranges)
+    fn lower_bound(&self, bound: wgt::BufferAddress) -> usize {
+        // This is equivalent to, except that it may return an out of bounds index instead of
+        //self.uninitialized_ranges.iter().position(|r| r.end > bound)
+
+        // In future Rust versions this operation can be done with partition_point
+        // See https://github.com/rust-lang/rust/pull/73577/
+        let mut left = 0;
+        let mut right = self.uninitialized_ranges.len();
+
+        while left != right {
+            let mid = left + (right - left) / 2;
+            let value = unsafe { self.uninitialized_ranges.get_unchecked(mid) };
+
+            if value.end <= bound {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
         }
+
+        left
+    }
+
+    // Checks if there's any uninitialized ranges within a query.
+    // If there are any, the range returned a the subrange of the query_range that contains all these uninitialized regions.
+    // Returned range may be larger than necessary (tradeoff for making this function O(log n))
+    pub(crate) fn check(
+        &self,
+        query_range: Range<wgt::BufferAddress>,
+    ) -> Option<Range<wgt::BufferAddress>> {
+        let index = self.lower_bound(query_range.start);
+        self.uninitialized_ranges
+            .get(index)
+            .map(|start_range| {
+                if start_range.start < query_range.end {
+                    let start = start_range.start.max(query_range.start);
+                    match self.uninitialized_ranges.get(index + 1) {
+                        Some(next_range) => {
+                            if next_range.start < query_range.end {
+                                // Would need to keep iterating for more accurate upper bound. Don't do that here.
+                                Some(start..query_range.end)
+                            } else {
+                                Some(start..start_range.end.min(query_range.end))
+                            }
+                        }
+                        None => Some(start..start_range.end.min(query_range.end)),
+                    }
+                } else {
+                    None
+                }
+            })
+            .flatten()
     }
 
     // Drains uninitialized ranges in a query range.
@@ -97,22 +142,16 @@ impl MemoryInitTracker {
         &'a mut self,
         drain_range: Range<wgt::BufferAddress>,
     ) -> MemoryInitTrackerDrain<'a> {
-        let next_index = self
-            .uninitialized_ranges
-            .iter()
-            .position(|r| r.end > drain_range.start)
-            .unwrap_or(std::usize::MAX);
-
         MemoryInitTrackerDrain {
-            next_index,
+            next_index: self.lower_bound(drain_range.start),
             drain_range,
             uninitialized_ranges: &mut self.uninitialized_ranges,
         }
     }
 
     // Clears uninitialized ranges in a query range.
-    pub(crate) fn clear(&mut self, drain_range: Range<wgt::BufferAddress>) {
-        self.drain(drain_range).for_each(drop);
+    pub(crate) fn clear(&mut self, range: Range<wgt::BufferAddress>) {
+        self.drain(range).for_each(drop);
     }
 }
 
@@ -122,36 +161,57 @@ mod test {
     use std::ops::Range;
 
     #[test]
-    fn is_initialized_for_empty_tracker() {
+    fn check_for_newly_created_tracker() {
         let tracker = MemoryInitTracker::new(10);
-        assert!(!tracker.is_initialized(&(0..10)));
-        assert!(!tracker.is_initialized(&(0..3)));
-        assert!(!tracker.is_initialized(&(3..4)));
-        assert!(!tracker.is_initialized(&(4..10)));
+        assert_eq!(tracker.check(0..10), Some(0..10));
+        assert_eq!(tracker.check(0..3), Some(0..3));
+        assert_eq!(tracker.check(3..4), Some(3..4));
+        assert_eq!(tracker.check(4..10), Some(4..10));
     }
 
     #[test]
-    fn is_initialized_for_filled_tracker() {
+    fn check_for_cleared_tracker() {
         let mut tracker = MemoryInitTracker::new(10);
         tracker.clear(0..10);
-        assert!(tracker.is_initialized(&(0..10)));
-        assert!(tracker.is_initialized(&(0..3)));
-        assert!(tracker.is_initialized(&(3..4)));
-        assert!(tracker.is_initialized(&(4..10)));
+        assert_eq!(tracker.check(0..10), None);
+        assert_eq!(tracker.check(0..3), None);
+        assert_eq!(tracker.check(3..4), None);
+        assert_eq!(tracker.check(4..10), None);
     }
 
     #[test]
-    fn is_initialized_for_partially_filled_tracker() {
-        let mut tracker = MemoryInitTracker::new(10);
-        tracker.clear(4..6);
-        assert!(!tracker.is_initialized(&(0..10))); // entire range
-        assert!(!tracker.is_initialized(&(0..4))); // left non-overlapping
-        assert!(!tracker.is_initialized(&(3..5))); // left overlapping
-        assert!(tracker.is_initialized(&(4..6))); // entire initialized range
-        assert!(tracker.is_initialized(&(4..5))); // left part
-        assert!(tracker.is_initialized(&(5..6))); // right part
-        assert!(!tracker.is_initialized(&(5..7))); // right overlapping
-        assert!(!tracker.is_initialized(&(7..10))); // right non-overlapping
+    fn check_for_partially_filled_tracker() {
+        let mut tracker = MemoryInitTracker::new(25);
+        // Two regions of uninitialized memory
+        tracker.clear(0..5);
+        tracker.clear(10..15);
+        tracker.clear(20..25);
+
+        assert_eq!(tracker.check(0..25), Some(5..25)); // entire range
+
+        assert_eq!(tracker.check(0..5), None); // left non-overlapping
+        assert_eq!(tracker.check(3..8), Some(5..8)); // left overlapping region
+        assert_eq!(tracker.check(3..17), Some(5..17)); // left overlapping region + contained region
+
+        assert_eq!(tracker.check(8..22), Some(8..22)); // right overlapping region + contained region (yes, doesn't fix range end!)
+        assert_eq!(tracker.check(17..22), Some(17..20)); // right overlapping region
+        assert_eq!(tracker.check(20..25), None); // right non-overlapping
+    }
+
+    #[test]
+    fn clear_already_cleared() {
+        let mut tracker = MemoryInitTracker::new(30);
+        tracker.clear(10..20);
+
+        // Overlapping with non-cleared
+        tracker.clear(5..15); // Left overlap
+        tracker.clear(15..25); // Right overlap
+        tracker.clear(0..30); // Inner overlap
+
+        // Clear fully cleared
+        tracker.clear(0..30);
+
+        assert_eq!(tracker.check(0..30), None);
     }
 
     #[test]

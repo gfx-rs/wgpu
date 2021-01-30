@@ -333,16 +333,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope)?;
 
                     cmd_buf.buffer_memory_init_actions.extend(
-                        bind_group
-                            .used_buffer_ranges
-                            .iter()
-                            .filter(|action| match buffer_guard.get(action.id) {
-                                Ok(buffer) => {
-                                    !buffer.initialization_status.is_initialized(&action.range)
-                                }
-                                Err(_) => false,
-                            })
-                            .cloned(),
+                        bind_group.used_buffer_ranges.iter().filter_map(
+                            |action| match buffer_guard.get(action.id) {
+                                Ok(buffer) => buffer
+                                    .initialization_status
+                                    .check(action.range.clone())
+                                    .map(|range| MemoryInitTrackerAction {
+                                        id: action.id,
+                                        range,
+                                        kind: action.kind,
+                                    }),
+                                Err(_) => None,
+                            },
+                        ),
                     );
 
                     if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
@@ -531,19 +534,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let stride = 3 * 4; // 3 integers, x/y/z group size
 
-                    let used_buffer_range = offset..(offset + stride);
-                    if !indirect_buffer
-                        .initialization_status
-                        .is_initialized(&used_buffer_range)
-                    {
-                        cmd_buf
-                            .buffer_memory_init_actions
-                            .push(MemoryInitTrackerAction {
+                    cmd_buf.buffer_memory_init_actions.extend(
+                        indirect_buffer
+                            .initialization_status
+                            .check(offset..(offset + stride))
+                            .map(|range| MemoryInitTrackerAction {
                                 id: buffer_id,
-                                range: used_buffer_range,
+                                range,
                                 kind: MemoryInitKind::NeedsInitializedMemory,
-                            });
-                    }
+                            }),
+                    );
 
                     state
                         .flush_states(

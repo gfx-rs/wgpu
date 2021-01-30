@@ -1119,16 +1119,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
 
                         cmd_buf.buffer_memory_init_actions.extend(
-                            bind_group
-                                .used_buffer_ranges
-                                .iter()
-                                .filter(|action| match buffer_guard.get(action.id) {
-                                    Ok(buffer) => {
-                                        !buffer.initialization_status.is_initialized(&action.range)
-                                    }
-                                    Err(_) => false,
-                                })
-                                .cloned(),
+                            bind_group.used_buffer_ranges.iter().filter_map(|action| {
+                                match buffer_guard.get(action.id) {
+                                    Ok(buffer) => buffer
+                                        .initialization_status
+                                        .check(action.range.clone())
+                                        .map(|range| MemoryInitTrackerAction {
+                                            id: action.id,
+                                            range,
+                                            kind: action.kind,
+                                        }),
+                                    Err(_) => None,
+                                }
+                            }),
                         );
 
                         if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
@@ -1307,15 +1310,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         state.index.format = Some(index_format);
                         state.index.update_limit();
 
-                        if !buffer.initialization_status.is_initialized(&(offset..end)) {
-                            cmd_buf
-                                .buffer_memory_init_actions
-                                .push(MemoryInitTrackerAction {
+                        cmd_buf.buffer_memory_init_actions.extend(
+                            buffer
+                                .initialization_status
+                                .check(offset..end)
+                                .map(|range| MemoryInitTrackerAction {
                                     id: buffer_id,
-                                    range: offset..end,
+                                    range,
                                     kind: MemoryInitKind::NeedsInitializedMemory,
-                                });
-                        }
+                                }),
+                        );
 
                         let range = hal::buffer::SubRange {
                             offset,
@@ -1360,16 +1364,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
                         vertex_state.bound = true;
 
-                        let used_range = offset..(offset + vertex_state.total_size);
-                        if !buffer.initialization_status.is_initialized(&used_range) {
-                            cmd_buf
-                                .buffer_memory_init_actions
-                                .push(MemoryInitTrackerAction {
+                        cmd_buf.buffer_memory_init_actions.extend(
+                            buffer
+                                .initialization_status
+                                .check(offset..(offset + vertex_state.total_size))
+                                .map(|range| MemoryInitTrackerAction {
                                     id: buffer_id,
-                                    range: used_range,
+                                    range,
                                     kind: MemoryInitKind::NeedsInitializedMemory,
-                                });
-                        }
+                                }),
+                        );
 
                         let range = hal::buffer::SubRange {
                             offset,
@@ -1623,18 +1627,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope);
                         }
 
-                        if !indirect_buffer
-                            .initialization_status
-                            .is_initialized(&(offset..end_offset))
-                        {
-                            cmd_buf
-                                .buffer_memory_init_actions
-                                .push(MemoryInitTrackerAction {
+                        cmd_buf.buffer_memory_init_actions.extend(
+                            indirect_buffer
+                                .initialization_status
+                                .check(offset..end_offset)
+                                .map(|range| MemoryInitTrackerAction {
                                     id: buffer_id,
-                                    range: offset..end_offset,
+                                    range,
                                     kind: MemoryInitKind::NeedsInitializedMemory,
-                                });
-                        }
+                                }),
+                        );
 
                         match indexed {
                             false => unsafe {
@@ -1719,18 +1721,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                             .map_pass_err(scope);
                         }
-                        if !indirect_buffer
-                            .initialization_status
-                            .is_initialized(&(offset..end_offset))
-                        {
-                            cmd_buf
-                                .buffer_memory_init_actions
-                                .push(MemoryInitTrackerAction {
+                        cmd_buf.buffer_memory_init_actions.extend(
+                            indirect_buffer
+                                .initialization_status
+                                .check(offset..end_offset)
+                                .map(|range| MemoryInitTrackerAction {
                                     id: buffer_id,
-                                    range: offset..end_offset,
+                                    range,
                                     kind: MemoryInitKind::NeedsInitializedMemory,
-                                });
-                        }
+                                }),
+                        );
 
                         let begin_count_offset = count_buffer_offset;
                         let end_count_offset = count_buffer_offset + 4;
@@ -1742,18 +1742,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                             .map_pass_err(scope);
                         }
-                        if !count_buffer
-                            .initialization_status
-                            .is_initialized(&(count_buffer_offset..end_count_offset))
-                        {
-                            cmd_buf
-                                .buffer_memory_init_actions
-                                .push(MemoryInitTrackerAction {
+                        cmd_buf.buffer_memory_init_actions.extend(
+                            count_buffer
+                                .initialization_status
+                                .check(count_buffer_offset..end_count_offset)
+                                .map(|range| MemoryInitTrackerAction {
                                     id: count_buffer_id,
-                                    range: count_buffer_offset..end_count_offset,
+                                    range,
                                     kind: MemoryInitKind::NeedsInitializedMemory,
-                                });
-                        }
+                                }),
+                        );
 
                         match indexed {
                             false => unsafe {
@@ -1891,13 +1889,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             bundle
                                 .buffer_memory_init_actions
                                 .iter()
-                                .filter(|action| match buffer_guard.get(action.id) {
-                                    Ok(buffer) => {
-                                        !buffer.initialization_status.is_initialized(&action.range)
-                                    }
-                                    Err(_) => false,
-                                })
-                                .cloned(),
+                                .filter_map(|action| match buffer_guard.get(action.id) {
+                                    Ok(buffer) => buffer
+                                        .initialization_status
+                                        .check(action.range.clone())
+                                        .map(|range| MemoryInitTrackerAction {
+                                            id: action.id,
+                                            range,
+                                            kind: action.kind,
+                                        }),
+                                    Err(_) => None,
+                                }),
                         );
 
                         unsafe {
