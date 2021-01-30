@@ -13,20 +13,20 @@ Everything is still a work-in-progress, but some end-points are usable:
 
 Front-end       |       Status       | Notes |
 --------------- | ------------------ | ----- |
-SPIR-V (binary) | :heavy_check_mark: |       |
-WGSL            | :heavy_check_mark: |       |
-GLSL (Vulkan)   | :white_check_mark: |       |
+SPIR-V (binary) | :white_check_mark: |       |
+WGSL            | :white_check_mark: |       |
+GLSL (Vulkan)   | :ok:               |       |
 Rust            |                    |       |
 
 Back-end        |       Status       | Notes |
 --------------- | ------------------ | ----- |
-SPIR-V (binary) | :heavy_check_mark: |       |
+SPIR-V (binary) | :white_check_mark: |       |
 WGSL            |                    |       |
-Metal           | :heavy_check_mark: |       |
+Metal           | :white_check_mark: |       |
 HLSL            |                    |       |
-GLSL            | :white_check_mark: |       |
+GLSL            | :ok:               |       |
 AIR             |                    |       |
 DXIL/DXIR       |                    |       |
 DXBC            |                    |       |
 
-:heavy_check_mark: = Primary support — :white_check_mark: = Secondary support — :construction: = Unsupported, but support in progress
+:white_check_mark: = Primary support — :ok: = Secondary support — :construction: = Unsupported, but support in progress
