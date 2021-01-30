@@ -93,21 +93,24 @@ impl<'a> Lexer<'a> {
                 }
             }
             '0'..='9' => {
-                let (number, _, pos) =
+                let (number, remainder, pos) =
                     consume_any(input, |c| (('0'..='9').contains(&c) || c == '.'));
+                let mut remainder_chars = remainder.chars();
+                let first = remainder_chars.next().and_then(|c| c.to_lowercase().next());
+
                 if number.find('.').is_some() {
-                    if (
-                        chars.next().map(|c| c.to_lowercase().next().unwrap()),
-                        chars.next().map(|c| c.to_lowercase().next().unwrap()),
-                    ) == (Some('l'), Some('f'))
-                    {
+                    let second = remainder_chars.next().and_then(|c| c.to_lowercase().next());
+
+                    if (first, second) == (Some('l'), Some('f')) {
                         meta.chars.end = start + pos + 2;
                         Some(Token::DoubleConstant((meta, number.parse().unwrap())))
                     } else {
                         meta.chars.end = start + pos;
-
                         Some(Token::FloatConstant((meta, number.parse().unwrap())))
                     }
+                } else if first == Some('u') {
+                    meta.chars.end = start + pos + 1;
+                    Some(Token::UintConstant((meta, number.parse().unwrap())))
                 } else {
                     meta.chars.end = start + pos;
                     Some(Token::IntConstant((meta, number.parse().unwrap())))

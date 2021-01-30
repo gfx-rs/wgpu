@@ -180,7 +180,19 @@ pomelo! {
             extra.context.expressions.append(Expression::Constant(ch))
         )
     }
-    // primary_expression ::= UintConstant;
+    primary_expression ::= UintConstant(i) {
+        let ch = extra.module.constants.fetch_or_append(Constant {
+            name: None,
+            specialization: None,
+            inner: ConstantInner::Scalar {
+                width: 4,
+                value: ScalarValue::Uint(i.1),
+            },
+        });
+        ExpressionRule::from_expression(
+            extra.context.expressions.append(Expression::Constant(ch))
+        )
+    }
     primary_expression ::= FloatConstant(f) {
         let ch = extra.module.constants.fetch_or_append(Constant {
             name: None,
@@ -207,7 +219,19 @@ pomelo! {
             extra.context.expressions.append(Expression::Constant(ch))
         )
     }
-    // primary_expression ::= DoubleConstant;
+    primary_expression ::= DoubleConstant(f) {
+        let ch = extra.module.constants.fetch_or_append(Constant {
+            name: None,
+            specialization: None,
+            inner: ConstantInner::Scalar {
+                width: 8,
+                value: ScalarValue::Float(f.1),
+            },
+        });
+        ExpressionRule::from_expression(
+            extra.context.expressions.append(Expression::Constant(ch))
+        )
+    }
     primary_expression ::= LeftParen expression(e) RightParen {
         e
     }
