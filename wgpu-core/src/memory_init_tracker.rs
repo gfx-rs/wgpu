@@ -25,6 +25,7 @@ pub(crate) struct MemoryInitTracker {
 pub(crate) struct MemoryInitTrackerDrain<'a> {
     uninitialized_ranges: &'a mut Vec<Range<wgt::BufferAddress>>,
     drain_range: Range<wgt::BufferAddress>,
+    first_index: usize,
     next_index: usize,
 }
 
@@ -32,44 +33,58 @@ impl<'a> Iterator for MemoryInitTrackerDrain<'a> {
     type Item = Range<wgt::BufferAddress>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let uninitialized_range = match self.uninitialized_ranges.get_mut(self.next_index) {
-            Some(range) => range,
-            None => return None,
-        };
-        if uninitialized_range.start >= self.drain_range.end {
-            // No more cuts possible (we're going left to right!)
-            None
-        } else if uninitialized_range.end > self.drain_range.end {
-            // cut-out / split
-            if uninitialized_range.start < self.drain_range.start {
-                let old_start = uninitialized_range.start;
-                uninitialized_range.start = self.drain_range.end;
-                self.uninitialized_ranges
-                    .insert(self.next_index, old_start..self.drain_range.start);
-                self.next_index = std::usize::MAX;
-                Some(self.drain_range.clone())
-            }
-            // right cut
-            else {
-                let result = uninitialized_range.start..self.drain_range.end;
-                self.next_index = std::usize::MAX;
-                uninitialized_range.start = self.drain_range.end;
-                Some(result)
-            }
+        if let Some(r) = self
+            .uninitialized_ranges
+            .get(self.next_index)
+            .and_then(|range| {
+                if range.start < self.drain_range.end {
+                    Some(range.clone())
+                } else {
+                    None
+                }
+            })
+        {
+            self.next_index += 1;
+            Some(r.start.max(self.drain_range.start)..r.end.min(self.drain_range.end))
         } else {
-            // left cut
-            if uninitialized_range.start < self.drain_range.start {
-                let result = self.drain_range.start..uninitialized_range.end;
-                uninitialized_range.end = self.drain_range.start;
-                self.next_index = self.next_index + 1;
-                Some(result)
+            let num_affected = self.next_index - self.first_index;
+            if num_affected == 0 {
+                return None;
             }
-            // fully contained.
+
+            let first_range = &mut self.uninitialized_ranges[self.first_index];
+
+            // Split one "big" uninitialized range?
+            if num_affected == 1
+                && first_range.start < self.drain_range.start
+                && first_range.end > self.drain_range.end
+            {
+                let old_start = first_range.start;
+                first_range.start = self.drain_range.end;
+                self.uninitialized_ranges
+                    .insert(self.first_index, old_start..self.drain_range.start);
+            }
+            // Adjust border ranges and delete everything in-between.
             else {
-                let result = uninitialized_range.clone();
-                self.uninitialized_ranges.remove(self.next_index);
-                Some(result)
+                let remove_start = if first_range.start >= self.drain_range.start {
+                    self.first_index
+                } else {
+                    first_range.end = self.drain_range.start;
+                    self.first_index + 1
+                };
+
+                let last_range = &mut self.uninitialized_ranges[self.next_index - 1];
+                let remove_end = if last_range.end <= self.drain_range.end {
+                    self.next_index
+                } else {
+                    last_range.start = self.drain_range.end;
+                    self.next_index - 1
+                };
+
+                self.uninitialized_ranges.drain(remove_start..remove_end);
             }
+
+            None
         }
     }
 }
@@ -142,10 +157,12 @@ impl MemoryInitTracker {
         &'a mut self,
         drain_range: Range<wgt::BufferAddress>,
     ) -> MemoryInitTrackerDrain<'a> {
+        let index = self.lower_bound(drain_range.start);
         MemoryInitTrackerDrain {
-            next_index: self.lower_bound(drain_range.start),
             drain_range,
             uninitialized_ranges: &mut self.uninitialized_ranges,
+            first_index: index,
+            next_index: index,
         }
     }
 
