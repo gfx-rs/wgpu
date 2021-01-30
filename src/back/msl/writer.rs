@@ -286,7 +286,7 @@ impl<W: Write> Writer<W> {
                 match level {
                     crate::SampleLevel::Auto => {}
                     crate::SampleLevel::Zero => {
-                        write!(self.out, ", level(0)")?;
+                        //TODO: do we support Zero on `Sampled` image classes?
                     }
                     crate::SampleLevel::Exact(h) => {
                         write!(self.out, ", level(")?;
@@ -538,7 +538,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "{}", value)?;
                 }
                 crate::ScalarValue::Uint(value) => {
-                    write!(self.out, "{}", value)?;
+                    write!(self.out, "{}u", value)?;
                 }
                 crate::ScalarValue::Float(value) => {
                     write!(self.out, "{}", value)?;
