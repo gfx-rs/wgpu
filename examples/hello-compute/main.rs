@@ -119,10 +119,8 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
-        compute_stage: wgpu::ProgrammableStageDescriptor {
-            module: &cs_module,
-            entry_point: "main",
-        },
+        module: &cs_module,
+        entry_point: "main",
     });
 
     // A command encoder executes one or many pipelines.
