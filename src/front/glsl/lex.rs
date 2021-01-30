@@ -93,8 +93,20 @@ impl<'a> Lexer<'a> {
                 }
             }
             '0'..='9' => {
-                let (number, remainder, pos) =
-                    consume_any(input, |c| (('0'..='9').contains(&c) || c == '.'));
+                let next = chars.next().and_then(|c| c.to_lowercase().next());
+
+                let hexadecimal = cur == '0' && next.map_or(false, |c| c == 'x');
+
+                let (number, remainder, pos) = if hexadecimal {
+                    consume_any(&input[2..], |c| {
+                        ('0'..='9').contains(&c)
+                            || ('a'..='f').contains(&c)
+                            || ('A'..='F').contains(&c)
+                    })
+                } else {
+                    consume_any(input, |c| (('0'..='9').contains(&c) || c == '.'))
+                };
+
                 let mut remainder_chars = remainder.chars();
                 let first = remainder_chars.next().and_then(|c| c.to_lowercase().next());
 
@@ -109,8 +121,22 @@ impl<'a> Lexer<'a> {
                         Some(Token::FloatConstant((meta, number.parse().unwrap())))
                     }
                 } else if first == Some('u') {
-                    meta.chars.end = start + pos + 1;
-                    Some(Token::UintConstant((meta, number.parse().unwrap())))
+                    if hexadecimal {
+                        meta.chars.end = start + pos + 3;
+                        Some(Token::UintConstant((
+                            meta,
+                            u64::from_str_radix(number, 16).unwrap(),
+                        )))
+                    } else {
+                        meta.chars.end = start + pos + 1;
+                        Some(Token::UintConstant((meta, number.parse().unwrap())))
+                    }
+                } else if hexadecimal {
+                    meta.chars.end = start + pos + 2;
+                    Some(Token::IntConstant((
+                        meta,
+                        i64::from_str_radix(number, 16).unwrap(),
+                    )))
                 } else {
                     meta.chars.end = start + pos;
                     Some(Token::IntConstant((meta, number.parse().unwrap())))

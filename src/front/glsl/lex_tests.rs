@@ -389,7 +389,7 @@ fn tokens() {
     assert_eq!(lex.next(), None);
 
     // Integer constants
-    let mut lex = Lexer::new("120 130u 140U 150");
+    let mut lex = Lexer::new("120 130u 140U 150 0x1f 0xf2U 0xF1u");
     assert_eq!(
         lex.next().unwrap(),
         IntConstant((
@@ -428,6 +428,36 @@ fn tokens() {
                 chars: 14..17
             },
             150,
+        ))
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        IntConstant((
+            TokenMetadata {
+                line: 0,
+                chars: 18..22
+            },
+            31,
+        ))
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        UintConstant((
+            TokenMetadata {
+                line: 0,
+                chars: 23..28
+            },
+            242,
+        ))
+    );
+    assert_eq!(
+        lex.next().unwrap(),
+        UintConstant((
+            TokenMetadata {
+                line: 0,
+                chars: 29..34
+            },
+            241,
         ))
     );
     assert_eq!(lex.next(), None);
