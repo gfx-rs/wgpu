@@ -57,7 +57,7 @@ use crate::{
     Label, LabelHelpers, LifeGuard, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Cow, iter, ops::Range};
+use std::{borrow::Cow, iter, mem, ops::Range};
 use thiserror::Error;
 
 /// Describes a [`RenderBundleEncoder`].
@@ -393,7 +393,7 @@ impl RenderBundleEncoder {
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
-                    offset: _,
+                    offset,
                     count: None,
                     indexed: false,
                 } => {
@@ -410,11 +410,18 @@ impl RenderBundleEncoder {
                     check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
                         .map_pass_err(scope)?;
 
-                    buffer_memory_init_actions.push(MemoryInitTrackerAction {
-                        id: buffer_id,
-                        range: 0..buffer.size,
-                        kind: MemoryInitKind::NeedsInitializedMemory,
-                    });
+                    buffer_memory_init_actions.extend(
+                        buffer
+                            .initialization_status
+                            .check(
+                                offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
+                            )
+                            .map(|range| MemoryInitTrackerAction {
+                                id: buffer_id,
+                                range,
+                                kind: MemoryInitKind::NeedsInitializedMemory,
+                            }),
+                    );
 
                     commands.extend(state.flush_vertices());
                     commands.extend(state.flush_binds());
@@ -422,7 +429,7 @@ impl RenderBundleEncoder {
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
-                    offset: _,
+                    offset,
                     count: None,
                     indexed: true,
                 } => {
@@ -440,12 +447,18 @@ impl RenderBundleEncoder {
                     check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
                         .map_pass_err(scope)?;
 
-                    let stride = 4 * 4; // 4 integers, vertexCount, instanceCount, firstVertex, firstInstance
-                    buffer_memory_init_actions.push(MemoryInitTrackerAction {
-                        id: buffer_id,
-                        range: 0..stride,
-                        kind: MemoryInitKind::NeedsInitializedMemory,
-                    });
+                    buffer_memory_init_actions.extend(
+                        buffer
+                            .initialization_status
+                            .check(
+                                offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
+                            )
+                            .map(|range| MemoryInitTrackerAction {
+                                id: buffer_id,
+                                range,
+                                kind: MemoryInitKind::NeedsInitializedMemory,
+                            }),
+                    );
 
                     commands.extend(state.index.flush());
                     commands.extend(state.flush_vertices());
