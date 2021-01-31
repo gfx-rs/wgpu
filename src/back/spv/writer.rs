@@ -255,22 +255,6 @@ impl Writer {
         }
     }
 
-    fn get_constant_id(
-        &mut self,
-        handle: crate::Handle<crate::Constant>,
-        ir_module: &crate::Module,
-    ) -> Result<Word, Error> {
-        if let Entry::Occupied(e) = self.lookup_constant.entry(handle) {
-            Ok(*e.get())
-        } else {
-            let id = self.generate_id();
-            self.lookup_constant.insert(handle, id);
-            let inner = &ir_module.constants[handle].inner;
-            self.write_constant_type(id, inner, ir_module)?;
-            Ok(id)
-        }
-    }
-
     fn get_global_variable_id(
         &mut self,
         ir_module: &crate::Module,
@@ -383,8 +367,7 @@ impl Writer {
 
             let init_word = variable
                 .init
-                .map(|constant| self.get_constant_id(constant, ir_module))
-                .transpose()?;
+                .map(|constant| self.lookup_constant[&constant]);
             let pointer_type_id =
                 self.get_pointer_id(&ir_module.types, variable.ty, crate::StorageClass::Function)?;
             let instruction = super::instructions::instruction_variable(
@@ -806,12 +789,12 @@ impl Writer {
         &mut self,
         id: Word,
         inner: &crate::ConstantInner,
-        ir_module: &crate::Module,
+        types: &crate::Arena<crate::Type>,
     ) -> Result<(), Error> {
         let instruction = match *inner {
             crate::ConstantInner::Scalar { width, ref value } => {
                 let type_id = self.get_type_id(
-                    &ir_module.types,
+                    types,
                     LookupType::Local(LocalType::Scalar {
                         kind: value.scalar_kind(),
                         width,
@@ -873,20 +856,11 @@ impl Writer {
             crate::ConstantInner::Composite { ty, ref components } => {
                 let mut constituent_ids = Vec::with_capacity(components.len());
                 for constituent in components.iter() {
-                    let constituent_id = self.get_constant_id(*constituent, &ir_module)?;
+                    let constituent_id = self.lookup_constant[constituent];
                     constituent_ids.push(constituent_id);
                 }
 
-                // Get the size constant for arrays
-                if let crate::TypeInner::Array {
-                    size: crate::ArraySize::Constant(const_handle),
-                    ..
-                } = ir_module.types[ty].inner
-                {
-                    self.get_constant_id(const_handle, &ir_module)?;
-                }
-
-                let type_id = self.get_type_id(&ir_module.types, LookupType::Handle(ty))?;
+                let type_id = self.get_type_id(types, LookupType::Handle(ty))?;
                 super::instructions::instruction_constant_composite(
                     type_id,
                     id,
@@ -912,8 +886,7 @@ impl Writer {
 
         let init_word = global_variable
             .init
-            .map(|constant| self.get_constant_id(constant, ir_module))
-            .transpose()?;
+            .map(|constant| self.lookup_constant[&constant]);
         let pointer_type_id =
             self.get_pointer_id(&ir_module.types, global_variable.ty, global_variable.class)?;
         let instruction =
@@ -1294,7 +1267,7 @@ impl Writer {
             }
             crate::Expression::Constant(handle) => {
                 let var = &ir_module.constants[handle];
-                let id = self.get_constant_id(handle, ir_module)?;
+                let id = self.lookup_constant[&handle];
                 let lookup_type = match var.inner {
                     crate::ConstantInner::Scalar { width, ref value } => {
                         LookupType::Local(LocalType::Scalar {
@@ -2043,7 +2016,7 @@ impl Writer {
                             width: 4,
                             value: crate::ScalarValue::Float(0.0),
                         };
-                        self.write_constant_type(zero_id, &zero_inner, ir_module)?;
+                        self.write_constant_type(zero_id, &zero_inner, &ir_module.types)?;
                         inst.add_operand(spirv::ImageOperands::LOD.bits());
                         inst.add_operand(zero_id);
 
@@ -2124,7 +2097,7 @@ impl Writer {
                 };
 
                 if let Some(offset_const) = offset {
-                    let offset_id = self.get_constant_id(offset_const, ir_module)?;
+                    let offset_id = self.lookup_constant[&offset_const];
                     main_instruction.add_operand(spirv::ImageOperands::CONST_OFFSET.bits());
                     main_instruction.add_operand(offset_id);
                 }
@@ -2341,6 +2314,12 @@ impl Writer {
                 spirv::SourceLanguage::GLSL,
                 450,
             ));
+        }
+
+        for (handle, constant) in ir_module.constants.iter() {
+            let id = self.generate_id();
+            self.lookup_constant.insert(handle, id);
+            self.write_constant_type(id, &constant.inner, &ir_module.types)?;
         }
 
         for (_, var) in ir_module.global_variables.iter() {

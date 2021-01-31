@@ -9,60 +9,60 @@ expression: dis
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %3 "main" %18 %10 %6 %13
+OpEntryPoint Vertex %7 "main" %20 %13 %10 %16
 OpEntryPoint Fragment %23 "main" %35 %25
 OpExecutionMode %23 OriginUpperLeft
-OpDecorate %6 Location 0
-OpDecorate %10 Location 1
-OpDecorate %13 BuiltIn Position
-OpDecorate %18 Location 0
+OpDecorate %10 Location 0
+OpDecorate %13 Location 1
+OpDecorate %16 BuiltIn Position
+OpDecorate %20 Location 0
 OpDecorate %25 Location 0
 OpDecorate %26 DescriptorSet 0
 OpDecorate %26 Binding 0
 OpDecorate %31 DescriptorSet 0
 OpDecorate %31 Binding 1
 OpDecorate %35 Location 0
-%2 = OpTypeVoid
-%4 = OpTypeFunction %2
-%8 = OpTypeFloat 32
-%7 = OpTypeVector %8 2
-%9 = OpTypePointer Output %7
-%6 = OpVariable  %9  Output
-%11 = OpTypePointer Input %7
-%10 = OpVariable  %11  Input
-%14 = OpTypeVector %8 4
-%15 = OpTypePointer Output %14
-%13 = OpVariable  %15  Output
-%17 = OpConstant  %8  1.2
-%18 = OpVariable  %11  Input
-%20 = OpConstant  %8  0.0
-%21 = OpConstant  %8  1.0
-%25 = OpVariable  %15  Output
-%27 = OpTypeImage %8 2D 0 0 0 1 Unknown
+%3 = OpTypeFloat 32
+%2 = OpConstant  %3  1.2
+%4 = OpConstant  %3  0.0
+%5 = OpConstant  %3  1.0
+%6 = OpTypeVoid
+%8 = OpTypeFunction %6
+%11 = OpTypeVector %3 2
+%12 = OpTypePointer Output %11
+%10 = OpVariable  %12  Output
+%14 = OpTypePointer Input %11
+%13 = OpVariable  %14  Input
+%17 = OpTypeVector %3 4
+%18 = OpTypePointer Output %17
+%16 = OpVariable  %18  Output
+%20 = OpVariable  %14  Input
+%25 = OpVariable  %18  Output
+%27 = OpTypeImage %3 2D 0 0 0 1 Unknown
 %28 = OpTypePointer UniformConstant %27
 %26 = OpVariable  %28  UniformConstant
 %30 = OpTypeSampledImage %27
 %32 = OpTypeSampler
 %33 = OpTypePointer UniformConstant %32
 %31 = OpVariable  %33  UniformConstant
-%35 = OpVariable  %11  Input
-%3 = OpFunction  %2  None %4
-%5 = OpLabel
-%12 = OpLoad  %7  %10
-OpStore %6 %12
-%19 = OpLoad  %7  %18
-%16 = OpVectorTimesScalar  %7  %19 %17
-%22 = OpCompositeConstruct  %14  %16 %20 %21
-OpStore %13 %22
+%35 = OpVariable  %14  Input
+%7 = OpFunction  %6  None %8
+%9 = OpLabel
+%15 = OpLoad  %11  %13
+OpStore %10 %15
+%21 = OpLoad  %11  %20
+%19 = OpVectorTimesScalar  %11  %21 %2
+%22 = OpCompositeConstruct  %17  %19 %4 %5
+OpStore %16 %22
 OpReturn
 OpFunctionEnd
-%23 = OpFunction  %2  None %4
+%23 = OpFunction  %6  None %8
 %24 = OpLabel
 %29 = OpLoad  %27  %26
 %34 = OpLoad  %32  %31
-%36 = OpLoad  %7  %35
+%36 = OpLoad  %11  %35
 %37 = OpSampledImage  %30  %29 %34
-%38 = OpImageSampleImplicitLod  %14  %37 %36
+%38 = OpImageSampleImplicitLod  %17  %37 %36
 OpStore %25 %38
 OpReturn
 OpFunctionEnd
