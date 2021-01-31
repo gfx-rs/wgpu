@@ -15,8 +15,6 @@ typedef metal::texture2d<float, metal::access::sample> type3;
 
 typedef metal::sampler type4;
 
-typedef metal::int2 type5;
-
 struct main1Input {
     type1 a_pos [[attribute(0)]];
     type1 a_uv [[attribute(1)]];

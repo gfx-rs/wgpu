@@ -151,7 +151,6 @@ impl<'a> StatementContext<'a, '_, '_> {
 struct SamplingContext {
     image: Handle<crate::Expression>,
     arrayed: bool,
-    offset_type: Handle<crate::Type>,
 }
 
 struct ExpressionContext<'input, 'temp, 'out> {
@@ -201,35 +200,14 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         }
     }
 
-    fn prepare_sampling(
-        &mut self,
-        image_name: &'a str,
-        coordinate: Handle<crate::Expression>,
-    ) -> Result<SamplingContext, Error<'a>> {
+    fn prepare_sampling(&mut self, image_name: &'a str) -> Result<SamplingContext, Error<'a>> {
         let image = self.lookup_ident.lookup(image_name)?;
-        let kind = crate::ScalarKind::Sint;
-        let offset_inner = match *self.resolve_type(coordinate)? {
-            crate::TypeInner::Scalar { width, kind: _ } => crate::TypeInner::Scalar { width, kind },
-            crate::TypeInner::Vector {
-                size,
-                width,
-                kind: _,
-            } => crate::TypeInner::Vector { size, width, kind },
-            ref other => {
-                log::error!("Unexpected coordinate type {:?}", other);
-                return Err(Error::BadCoordinate);
-            }
-        };
         Ok(SamplingContext {
             image,
             arrayed: match *self.resolve_type(image)? {
                 crate::TypeInner::Image { arrayed, .. } => arrayed,
                 _ => return Err(Error::BadTexture(image_name)),
             },
-            offset_type: self.types.fetch_or_append(crate::Type {
-                name: None,
-                inner: offset_inner,
-            }),
         })
     }
 
@@ -350,6 +328,7 @@ pub struct Parser {
     scopes: Vec<Scope>,
     lookup_type: FastHashMap<String, Handle<crate::Type>>,
     lookup_function: FastHashMap<String, Handle<crate::Function>>,
+    lookup_constant: FastHashMap<String, Handle<crate::Constant>>,
 }
 
 impl Parser {
@@ -358,29 +337,7 @@ impl Parser {
             scopes: Vec::new(),
             lookup_type: FastHashMap::default(),
             lookup_function: FastHashMap::default(),
-        }
-    }
-
-    fn deconstruct_composite_type(
-        type_arena: &mut Arena<crate::Type>,
-        ty: Handle<crate::Type>,
-        index: usize,
-    ) -> Result<Handle<crate::Type>, Error<'static>> {
-        match type_arena[ty].inner {
-            crate::TypeInner::Vector { kind, width, .. } => {
-                let inner = crate::TypeInner::Scalar { kind, width };
-                Ok(type_arena.fetch_or_append(crate::Type { name: None, inner }))
-            }
-            crate::TypeInner::Matrix { width, .. } => {
-                let inner = crate::TypeInner::Scalar {
-                    kind: crate::ScalarKind::Float,
-                    width,
-                };
-                Ok(type_arena.fetch_or_append(crate::Type { name: None, inner }))
-            }
-            crate::TypeInner::Array { base, .. } => Ok(base),
-            crate::TypeInner::Struct { ref members, .. } => Ok(members[index].ty),
-            _ => Err(Error::NotCompositeType(ty)),
+            lookup_constant: FastHashMap::default(),
         }
     }
 
@@ -466,7 +423,7 @@ impl Parser {
                     let sampler_name = lexer.next_ident()?;
                     lexer.expect(Token::Separator(','))?;
                     let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
-                    let sc = ctx.prepare_sampling(image_name, coordinate)?;
+                    let sc = ctx.prepare_sampling(image_name)?;
                     let array_index = if sc.arrayed {
                         lexer.expect(Token::Separator(','))?;
                         Some(self.parse_general_expression(lexer, ctx.reborrow())?)
@@ -474,12 +431,7 @@ impl Parser {
                         None
                     };
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(
-                            lexer,
-                            sc.offset_type,
-                            ctx.types,
-                            ctx.constants,
-                        )?)
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -501,7 +453,7 @@ impl Parser {
                     let sampler_name = lexer.next_ident()?;
                     lexer.expect(Token::Separator(','))?;
                     let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
-                    let sc = ctx.prepare_sampling(image_name, coordinate)?;
+                    let sc = ctx.prepare_sampling(image_name)?;
                     let array_index = if sc.arrayed {
                         lexer.expect(Token::Separator(','))?;
                         Some(self.parse_general_expression(lexer, ctx.reborrow())?)
@@ -511,12 +463,7 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let level = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(
-                            lexer,
-                            sc.offset_type,
-                            ctx.types,
-                            ctx.constants,
-                        )?)
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -538,7 +485,7 @@ impl Parser {
                     let sampler_name = lexer.next_ident()?;
                     lexer.expect(Token::Separator(','))?;
                     let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
-                    let sc = ctx.prepare_sampling(image_name, coordinate)?;
+                    let sc = ctx.prepare_sampling(image_name)?;
                     let array_index = if sc.arrayed {
                         lexer.expect(Token::Separator(','))?;
                         Some(self.parse_general_expression(lexer, ctx.reborrow())?)
@@ -548,12 +495,7 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let bias = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(
-                            lexer,
-                            sc.offset_type,
-                            ctx.types,
-                            ctx.constants,
-                        )?)
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -575,7 +517,7 @@ impl Parser {
                     let sampler_name = lexer.next_ident()?;
                     lexer.expect(Token::Separator(','))?;
                     let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
-                    let sc = ctx.prepare_sampling(image_name, coordinate)?;
+                    let sc = ctx.prepare_sampling(image_name)?;
                     let array_index = if sc.arrayed {
                         lexer.expect(Token::Separator(','))?;
                         Some(self.parse_general_expression(lexer, ctx.reborrow())?)
@@ -587,12 +529,7 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let y = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(
-                            lexer,
-                            sc.offset_type,
-                            ctx.types,
-                            ctx.constants,
-                        )?)
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -614,7 +551,7 @@ impl Parser {
                     let sampler_name = lexer.next_ident()?;
                     lexer.expect(Token::Separator(','))?;
                     let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
-                    let sc = ctx.prepare_sampling(image_name, coordinate)?;
+                    let sc = ctx.prepare_sampling(image_name)?;
                     let array_index = if sc.arrayed {
                         lexer.expect(Token::Separator(','))?;
                         Some(self.parse_general_expression(lexer, ctx.reborrow())?)
@@ -624,12 +561,7 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let reference = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(
-                            lexer,
-                            sc.offset_type,
-                            ctx.types,
-                            ctx.constants,
-                        )?)
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -710,54 +642,50 @@ impl Parser {
     fn parse_const_expression<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        self_ty: Handle<crate::Type>,
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<Handle<crate::Constant>, Error<'a>> {
         self.scopes.push(Scope::ConstantExpr);
-        let inner = match lexer.peek() {
-            Token::Word("true") => {
-                let _ = lexer.next();
-                crate::ConstantInner::Scalar {
-                    width: 1,
-                    value: crate::ScalarValue::Bool(true),
+        let inner = match lexer.next() {
+            Token::Word("true") => crate::ConstantInner::Scalar {
+                width: 1,
+                value: crate::ScalarValue::Bool(true),
+            },
+            Token::Word("false") => crate::ConstantInner::Scalar {
+                width: 1,
+                value: crate::ScalarValue::Bool(false),
+            },
+            Token::Number { value, ty, width } => Self::get_constant_inner(value, ty, width)?,
+            Token::Word(type_name) => {
+                if let Some(&handle) = self.lookup_constant.get(type_name) {
+                    self.scopes.pop();
+                    return Ok(handle);
                 }
-            }
-            Token::Word("false") => {
-                let _ = lexer.next();
-                crate::ConstantInner::Scalar {
-                    width: 1,
-                    value: crate::ScalarValue::Bool(false),
-                }
-            }
-            Token::Number { value, ty, width } => {
-                let _ = lexer.next();
-                Self::get_constant_inner(value, ty, width)?
-            }
-            _ => {
-                let (composite_ty, _access) =
-                    self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+                let composite_ty = self.parse_type_decl_name(
+                    lexer,
+                    type_name,
+                    None,
+                    TypeDecoration::default(),
+                    type_arena,
+                    const_arena,
+                )?;
                 lexer.expect(Token::Paren('('))?;
                 let mut components = Vec::new();
                 while !lexer.skip(Token::Paren(')')) {
                     if !components.is_empty() {
                         lexer.expect(Token::Separator(','))?;
                     }
-                    let ty = Self::deconstruct_composite_type(
-                        type_arena,
-                        composite_ty,
-                        components.len(),
-                    )?;
-                    let component =
-                        self.parse_const_expression(lexer, ty, type_arena, const_arena)?;
+                    let component = self.parse_const_expression(lexer, type_arena, const_arena)?;
                     components.push(component);
                 }
                 crate::ConstantInner::Composite {
-                    ty: self_ty,
+                    ty: composite_ty,
                     components,
                 }
             }
+            other => return Err(Error::Unexpected(other, "constant")),
         };
+
         let handle = const_arena.fetch_or_append(crate::Constant {
             name: None,
             specialization: None,
@@ -1140,7 +1068,7 @@ impl Parser {
         let (ty, access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
 
         let init = if lexer.skip(Token::Operation('=')) {
-            let handle = self.parse_const_expression(lexer, ty, type_arena, const_arena)?;
+            let handle = self.parse_const_expression(lexer, type_arena, const_arena)?;
             Some(handle)
         } else {
             None
@@ -1333,23 +1261,14 @@ impl Parser {
             "array" => {
                 lexer.expect(Token::Paren('<'))?;
                 let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
-                let size = match lexer.next() {
-                    Token::Separator(',') => {
-                        let value = lexer.next_uint_literal()?;
-                        lexer.expect(Token::Paren('>'))?;
-                        let const_handle = const_arena.fetch_or_append(crate::Constant {
-                            name: None,
-                            specialization: None,
-                            inner: crate::ConstantInner::Scalar {
-                                width: 4,
-                                value: crate::ScalarValue::Uint(value as u64),
-                            },
-                        });
-                        crate::ArraySize::Constant(const_handle)
-                    }
-                    Token::Paren('>') => crate::ArraySize::Dynamic,
-                    other => return Err(Error::Unexpected(other, "generic separator")),
+                let size = if lexer.skip(Token::Separator(',')) {
+                    let const_handle =
+                        self.parse_const_expression(lexer, type_arena, const_arena)?;
+                    crate::ArraySize::Constant(const_handle)
+                } else {
+                    crate::ArraySize::Dynamic
                 };
+                lexer.expect(Token::Paren('>'))?;
 
                 crate::TypeInner::Array {
                     base,
@@ -1495,10 +1414,33 @@ impl Parser {
         })
     }
 
+    /// Parse type declaration of a given name and decoration.
+    fn parse_type_decl_name<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        name: &'a str,
+        debug_name: Option<&'a str>,
+        decoration: TypeDecoration,
+        type_arena: &mut Arena<crate::Type>,
+        const_arena: &mut Arena<crate::Constant>,
+    ) -> Result<Handle<crate::Type>, Error<'a>> {
+        Ok(match self.lookup_type.get(name) {
+            Some(&handle) => handle,
+            None => {
+                let inner =
+                    self.parse_type_decl_impl(lexer, decoration, name, type_arena, const_arena)?;
+                type_arena.fetch_or_append(crate::Type {
+                    name: debug_name.map(|s| s.to_string()),
+                    inner,
+                })
+            }
+        })
+    }
+
     fn parse_type_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        self_name: Option<&'a str>,
+        debug_name: Option<&'a str>,
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<(Handle<crate::Type>, crate::StorageAccess), Error<'a>> {
@@ -1535,18 +1477,14 @@ impl Parser {
 
         let storage_access = decoration.access;
         let name = lexer.next_ident()?;
-        let handle = match self.lookup_type.get(name) {
-            Some(&handle) => handle,
-            None => {
-                let inner =
-                    self.parse_type_decl_impl(lexer, decoration, name, type_arena, const_arena)?;
-                type_arena.fetch_or_append(crate::Type {
-                    name: self_name.map(|s| s.to_string()),
-                    inner,
-                })
-            }
-        };
-
+        let handle = self.parse_type_decl_name(
+            lexer,
+            name,
+            debug_name,
+            decoration,
+            type_arena,
+            const_arena,
+        )?;
         self.scopes.pop();
         Ok((handle, storage_access))
     }
@@ -1989,19 +1927,17 @@ impl Parser {
                 lexer.expect(Token::Separator(';'))?;
             }
             Token::Word("const") => {
-                let (name, ty, _access) = self.parse_variable_ident_decl(
+                let (name, _ty, _access) = self.parse_variable_ident_decl(
                     lexer,
                     &mut module.types,
                     &mut module.constants,
                 )?;
                 lexer.expect(Token::Operation('='))?;
-                let const_handle = self.parse_const_expression(
-                    lexer,
-                    ty,
-                    &mut module.types,
-                    &mut module.constants,
-                )?;
+                let const_handle =
+                    self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
+                //TODO: check `ty` against `const_handle`.
                 lexer.expect(Token::Separator(';'))?;
+                self.lookup_constant.insert(name.to_string(), const_handle);
                 lookup_global_expression.insert(name, crate::Expression::Constant(const_handle));
             }
             Token::Word("var") => {
@@ -2079,6 +2015,8 @@ impl Parser {
     pub fn parse<'a>(&mut self, source: &'a str) -> Result<crate::Module, ParseError<'a>> {
         self.scopes.clear();
         self.lookup_type.clear();
+        self.lookup_function.clear();
+        self.lookup_constant.clear();
 
         let mut module = crate::Module::generate_empty();
         let mut lexer = Lexer::new(source);

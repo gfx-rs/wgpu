@@ -349,7 +349,8 @@ impl Validator {
                                 },
                             ..
                         }) => {}
-                        _ => {
+                        other => {
+                            log::warn!("Array size {:?}", other);
                             return Err(TypeError::InvalidArraySizeConstant(const_handle));
                         }
                     }
