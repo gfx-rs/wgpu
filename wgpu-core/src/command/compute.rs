@@ -23,7 +23,7 @@ use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, ShaderStage};
 
 use crate::track::UseExtendError;
-use std::{fmt, iter, str};
+use std::{fmt, iter, mem, str};
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
@@ -140,6 +140,12 @@ pub enum ComputePassErrorInner {
     InvalidQuerySet(id::QuerySetId),
     #[error("indirect buffer {0:?} is invalid or destroyed")]
     InvalidIndirectBuffer(id::BufferId),
+    #[error("indirect buffer uses bytes {offset}..{end_offset} which overruns indirect buffer of size {buffer_size}")]
+    IndirectBufferOverrun {
+        offset: u64,
+        end_offset: u64,
+        buffer_size: u64,
+    },
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
     #[error(transparent)]
@@ -490,6 +496,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope)?;
                     check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)
                         .map_pass_err(scope)?;
+
+                    let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;
+                    if end_offset > indirect_buffer.size {
+                        return Err(ComputePassErrorInner::IndirectBufferOverrun {
+                            offset,
+                            end_offset,
+                            buffer_size: indirect_buffer.size,
+                        })
+                        .map_pass_err(scope);
+                    }
+
                     let &(ref buf_raw, _) = indirect_buffer
                         .raw
                         .as_ref()
