@@ -623,12 +623,6 @@ impl Writer {
                 rows,
                 width,
             } => {
-                self.annotations
-                    .push(super::instructions::instruction_decorate(
-                        id,
-                        spirv::Decoration::ColMajor,
-                        &[],
-                    ));
                 let vector_id = self.get_type_id(
                     arena,
                     LookupType::Local(LocalType::Vector {
@@ -749,6 +743,13 @@ impl Writer {
                             crate::VectorSize::Bi => 2 * width,
                             crate::VectorSize::Tri | crate::VectorSize::Quad => 4 * width,
                         };
+                        self.annotations
+                            .push(super::instructions::instruction_member_decorate(
+                                id,
+                                index as u32,
+                                spirv::Decoration::ColMajor,
+                                &[],
+                            ));
                         self.annotations
                             .push(super::instructions::instruction_member_decorate(
                                 id,

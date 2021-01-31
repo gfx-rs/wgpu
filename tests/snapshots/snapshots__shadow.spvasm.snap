@@ -24,8 +24,8 @@ OpMemberDecorate %97 0 Offset 0
 OpDecorate %98 ArrayStride 96
 OpDecorate %99 Block
 OpMemberDecorate %99 0 Offset 0
+OpMemberDecorate %99 0 ColMajor
 OpMemberDecorate %99 0 MatrixStride 16
-OpDecorate %100 ColMajor
 OpMemberDecorate %99 1 Offset 64
 OpMemberDecorate %99 2 Offset 80
 OpDecorate %96 DescriptorSet 0
