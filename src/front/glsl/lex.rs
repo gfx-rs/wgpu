@@ -182,6 +182,7 @@ impl<'a> Lexer<'a> {
                     "for" => Some(Token::For(meta)),
                     // types
                     "void" => Some(Token::Void(meta)),
+                    "const" => Some(Token::Const(meta)),
                     word => {
                         let token = match parse_type(word) {
                             Some(t) => Token::TypeName((meta, t)),

@@ -1,7 +1,7 @@
 use super::error::ErrorKind;
 use crate::{
-    proc::{ResolveContext, Typifier},
-    Arena, BinaryOperator, Binding, Expression, FastHashMap, Function, FunctionArgument,
+    proc::{ConstantSolver, ResolveContext, Typifier},
+    Arena, BinaryOperator, Binding, Constant, Expression, FastHashMap, Function, FunctionArgument,
     GlobalVariable, Handle, Interpolation, LocalVariable, Module, ShaderStage, Statement,
     StorageClass, Type,
 };
@@ -15,6 +15,7 @@ pub struct Program {
     pub lookup_function: FastHashMap<String, Handle<Function>>,
     pub lookup_type: FastHashMap<String, Handle<Type>>,
     pub lookup_global_variables: FastHashMap<String, Handle<GlobalVariable>>,
+    pub lookup_constants: FastHashMap<String, Handle<Constant>>,
     pub context: Context,
     pub module: Module,
 }
@@ -29,12 +30,14 @@ impl Program {
             lookup_function: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
             lookup_global_variables: FastHashMap::default(),
+            lookup_constants: FastHashMap::default(),
             context: Context {
                 expressions: Arena::<Expression>::new(),
                 local_variables: Arena::<LocalVariable>::new(),
                 arguments: Vec::new(),
                 scopes: vec![FastHashMap::default()],
                 lookup_global_var_exps: FastHashMap::default(),
+                lookup_constant_exps: FastHashMap::default(),
                 typifier: Typifier::new(),
             },
             module: Module::generate_empty(),
@@ -76,6 +79,21 @@ impl Program {
             Ok(()) => Ok(self.context.typifier.get(handle, &self.module.types)),
         }
     }
+
+    pub fn solve_constant(
+        &mut self,
+        root: Handle<Expression>,
+    ) -> Result<Handle<Constant>, ErrorKind> {
+        let mut solver = ConstantSolver {
+            types: &self.module.types,
+            expressions: &self.context.expressions,
+            constants: &mut self.module.constants,
+        };
+
+        solver
+            .solve(root)
+            .map_err(|_| ErrorKind::SemanticError("Can't solve constant".into()))
+    }
 }
 
 #[derive(Debug)]
@@ -91,6 +109,7 @@ pub struct Context {
     //TODO: Find less allocation heavy representation
     pub scopes: Vec<FastHashMap<String, Handle<Expression>>>,
     pub lookup_global_var_exps: FastHashMap<String, Handle<Expression>>,
+    pub lookup_constant_exps: FastHashMap<String, Handle<Expression>>,
     pub typifier: Typifier,
 }
 
@@ -154,7 +173,7 @@ impl ExpressionRule {
 
 #[derive(Debug)]
 pub enum TypeQualifier {
-    StorageClass(StorageClass),
+    StorageQualifier(StorageQualifier),
     Binding(Binding),
     Interpolation(Interpolation),
 }
@@ -176,4 +195,10 @@ pub enum FunctionCallKind {
 pub struct FunctionCall {
     pub kind: FunctionCallKind,
     pub args: Vec<ExpressionRule>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum StorageQualifier {
+    StorageClass(StorageClass),
+    Const,
 }

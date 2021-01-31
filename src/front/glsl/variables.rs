@@ -15,6 +15,9 @@ impl Program {
         if let Some(global_var) = self.context.lookup_global_var_exps.get(name) {
             return Ok(Some(*global_var));
         }
+        if let Some(constant) = self.context.lookup_constant_exps.get(name) {
+            return Ok(Some(*constant));
+        }
         match name {
             "gl_Position" => {
                 #[cfg(feature = "glsl-validate")]

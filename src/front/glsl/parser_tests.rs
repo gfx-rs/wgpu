@@ -231,3 +231,59 @@ fn functions() {
     )
     .unwrap();
 }
+
+#[test]
+fn constants() {
+    use crate::{Constant, ConstantInner, ScalarValue};
+
+    let program = parse_program(
+        r#"
+        #  version 450
+        const float a = 1.0;
+        float global = a;
+        const flat float b = a;
+        "#,
+        ShaderStage::Vertex,
+    )
+    .unwrap();
+
+    let mut constants = program.module.constants.iter();
+
+    assert_eq!(
+        constants.next().unwrap().1,
+        &Constant {
+            name: None,
+            specialization: None,
+            inner: ConstantInner::Scalar {
+                width: 4,
+                value: ScalarValue::Float(1.0)
+            }
+        }
+    );
+
+    assert_eq!(
+        constants.next().unwrap().1,
+        &Constant {
+            name: Some(String::from("a")),
+            specialization: None,
+            inner: ConstantInner::Scalar {
+                width: 4,
+                value: ScalarValue::Float(1.0)
+            }
+        }
+    );
+
+    assert_eq!(
+        constants.next().unwrap().1,
+        &Constant {
+            name: Some(String::from("b")),
+            specialization: None,
+            inner: ConstantInner::Scalar {
+                width: 4,
+                value: ScalarValue::Float(1.0)
+            }
+        }
+    );
+
+    assert!(constants.next().is_none());
+}

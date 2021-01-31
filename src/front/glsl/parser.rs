@@ -114,7 +114,7 @@ pomelo! {
     %type layout_qualifier_id (String, u32);
     %type type_qualifier Vec<TypeQualifier>;
     %type single_type_qualifier TypeQualifier;
-    %type storage_qualifier StorageClass;
+    %type storage_qualifier StorageQualifier;
     %type interpolation_qualifier Interpolation;
     %type Interpolation Interpolation;
 
@@ -627,7 +627,7 @@ pomelo! {
     }
 
     single_type_qualifier ::= storage_qualifier(s) {
-        TypeQualifier::StorageClass(s)
+        TypeQualifier::StorageQualifier(s)
     }
     single_type_qualifier ::= layout_qualifier(l) {
         TypeQualifier::Binding(l)
@@ -639,19 +639,21 @@ pomelo! {
     // single_type_qualifier ::= invariant_qualifier;
     // single_type_qualifier ::= precise_qualifier;
 
-    // storage_qualifier ::= Const
+    storage_qualifier ::= Const {
+        StorageQualifier::Const
+    }
     // storage_qualifier ::= InOut;
     storage_qualifier ::= In {
-        StorageClass::Input
+        StorageQualifier::StorageClass(StorageClass::Input)
     }
     storage_qualifier ::= Out {
-        StorageClass::Output
+        StorageQualifier::StorageClass(StorageClass::Output)
     }
     // storage_qualifier ::= Centroid;
     // storage_qualifier ::= Patch;
     // storage_qualifier ::= Sample;
     storage_qualifier ::= Uniform {
-        StorageClass::Uniform
+        StorageQualifier::StorageClass(StorageClass::Uniform)
     }
     //TODO: other storage qualifiers
 
@@ -1062,32 +1064,63 @@ pomelo! {
     }
     external_declaration ::= declaration(d) {
         if let Some(d) = d {
-            let class = d.type_qualifiers.iter().find_map(|tq| {
-                if let TypeQualifier::StorageClass(sc) = tq { Some(*sc) } else { None }
-            }).unwrap_or(StorageClass::Private);
+            // TODO: handle multiple storage qualifiers
+            let storage = d.type_qualifiers.iter().find_map(|tq| {
+                if let TypeQualifier::StorageQualifier(sc) = tq { Some(*sc) } else { None }
+            }).unwrap_or(StorageQualifier::StorageClass(StorageClass::Private));
 
-            let binding = d.type_qualifiers.iter().find_map(|tq| {
-                if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
-            });
+            match storage {
+                StorageQualifier::StorageClass(class) => {
+                    // TODO: Check that the storage qualifiers allow for the bindings
+                    let binding = d.type_qualifiers.iter().find_map(|tq| {
+                        if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
+                    });
 
-            let interpolation = d.type_qualifiers.iter().find_map(|tq| {
-                if let TypeQualifier::Interpolation(i) = tq { Some(*i) } else { None }
-            });
+                    let interpolation = d.type_qualifiers.iter().find_map(|tq| {
+                        if let TypeQualifier::Interpolation(i) = tq { Some(*i) } else { None }
+                    });
 
-            for (id, initializer) in d.ids_initializers {
-                let h = extra.module.global_variables.fetch_or_append(
-                    GlobalVariable {
-                        name: id.clone(),
-                        class,
-                        binding: binding.clone(),
-                        ty: d.ty,
-                        init: None,
-                        interpolation,
-                        storage_access: StorageAccess::empty(), //TODO
-                    },
-                );
-                if let Some(id) = id {
-                    extra.lookup_global_variables.insert(id, h);
+                    for (id, initializer) in d.ids_initializers {
+                        let init = initializer.map(|init| extra.solve_constant(init.expression)).transpose()?;
+
+                        let h = extra.module.global_variables.fetch_or_append(
+                            GlobalVariable {
+                                name: id.clone(),
+                                class,
+                                binding: binding.clone(),
+                                ty: d.ty,
+                                init,
+                                interpolation,
+                                storage_access: StorageAccess::empty(), //TODO
+                            },
+                        );
+                        if let Some(id) = id {
+                            extra.lookup_global_variables.insert(id, h);
+                        }
+                    }
+                }
+                StorageQualifier::Const => {
+                    for (id, initializer) in d.ids_initializers {
+                        if let Some(init) = initializer {
+                            let constant = extra.solve_constant(init.expression)?;
+                            let inner = extra.module.constants[constant].inner.clone();
+
+                            let h = extra.module.constants.fetch_or_append(
+                                Constant {
+                                    name: id.clone(),
+                                    specialization: None, // TODO
+                                    inner
+                                },
+                            );
+                            if let Some(id) = id {
+                                extra.lookup_constants.insert(id.clone(), h);
+                                let expr = extra.context.expressions.append(Expression::Constant(h));
+                                extra.context.lookup_constant_exps.insert(id, expr);
+                            }
+                        } else {
+                            return Err(ErrorKind::SemanticError("Constants must have an initalizer".into()))
+                        }
+                    }
                 }
             }
         }

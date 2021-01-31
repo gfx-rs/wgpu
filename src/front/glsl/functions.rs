@@ -179,6 +179,16 @@ impl Program {
                 }
             }
         }
+
+        for (handle, constant) in self.module.constants.iter() {
+            if let Some(name) = constant.name.as_ref() {
+                let expr = self
+                    .context
+                    .expressions
+                    .append(Expression::Constant(handle));
+                self.context.lookup_constant_exps.insert(name.clone(), expr);
+            }
+        }
     }
 
     pub fn function_definition(&mut self, mut f: Function, mut block: Block) -> Function {

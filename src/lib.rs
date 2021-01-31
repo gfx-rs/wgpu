@@ -401,7 +401,7 @@ pub struct Constant {
 }
 
 /// A literal scalar value, used in constants.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ScalarValue {
@@ -412,7 +412,7 @@ pub enum ScalarValue {
 }
 
 /// Additional information, dependendent on the kind of constant.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ConstantInner {
