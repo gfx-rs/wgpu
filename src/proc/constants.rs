@@ -1,6 +1,6 @@
 use crate::{
     arena::{Arena, Handle},
-    ArraySize, Constant, ConstantInner, Expression, ScalarValue, Type,
+    ArraySize, Constant, ConstantInner, Expression, ScalarKind, ScalarValue, Type,
 };
 
 #[derive(Debug)]
@@ -40,6 +40,10 @@ pub enum ConstantSolvingError {
     InvalidAccessIndex,
     #[error("Cannot access with index of type")]
     InvalidAccessIndexTy,
+    #[error("Constants don't support bitcasts")]
+    Bitcast,
+    #[error("Cannot cast type")]
+    InvalidCastArg,
 }
 
 impl<'a> ConstantSolver<'a> {
@@ -70,7 +74,19 @@ impl<'a> ConstantSolver<'a> {
             Expression::Unary { .. } => todo!(),
             Expression::Binary { .. } => todo!(),
             Expression::Math { .. } => todo!(),
-            Expression::As { .. } => todo!(),
+            Expression::As {
+                convert,
+                expr,
+                kind,
+            } => {
+                let tgt = self.solve(expr)?;
+
+                if convert {
+                    self.cast(tgt, kind)
+                } else {
+                    Err(ConstantSolvingError::Bitcast)
+                }
+            }
             Expression::ArrayLength(expr) => {
                 let array = self.solve(expr)?;
 
@@ -153,5 +169,55 @@ impl<'a> ConstantSolver<'a> {
             } => Ok(index as usize),
             _ => Err(ConstantSolvingError::InvalidAccessIndexTy),
         }
+    }
+
+    fn cast(
+        &mut self,
+        constant: Handle<Constant>,
+        kind: ScalarKind,
+    ) -> Result<Handle<Constant>, ConstantSolvingError> {
+        fn inner_cast<A: num_traits::FromPrimitive>(value: ScalarValue) -> A {
+            match value {
+                ScalarValue::Sint(v) => A::from_i64(v),
+                ScalarValue::Uint(v) => A::from_u64(v),
+                ScalarValue::Float(v) => A::from_f64(v),
+                ScalarValue::Bool(v) => A::from_u64(v as u64),
+            }
+            .unwrap()
+        }
+
+        let mut inner = self.constants[constant].inner.clone();
+
+        match inner {
+            ConstantInner::Scalar { ref mut value, .. } => {
+                let intial = value.clone();
+
+                match kind {
+                    ScalarKind::Sint => *value = ScalarValue::Sint(inner_cast(intial)),
+                    ScalarKind::Uint => *value = ScalarValue::Uint(inner_cast(intial)),
+                    ScalarKind::Float => *value = ScalarValue::Float(inner_cast(intial)),
+                    ScalarKind::Bool => *value = ScalarValue::Bool(inner_cast::<u64>(intial) == 0),
+                }
+            }
+            ConstantInner::Composite {
+                ty,
+                ref mut components,
+            } => {
+                match self.types[ty].inner {
+                    crate::TypeInner::Vector { .. } | crate::TypeInner::Matrix { .. } => (),
+                    _ => return Err(ConstantSolvingError::InvalidCastArg),
+                }
+
+                for component in components {
+                    *component = self.cast(*component, kind)?;
+                }
+            }
+        }
+
+        Ok(self.constants.fetch_or_append(Constant {
+            name: None,
+            specialization: None,
+            inner,
+        }))
     }
 }
