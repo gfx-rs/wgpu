@@ -5,15 +5,3 @@ members = [
     "wgpu-core",
     "wgpu-types",
 ]
-
-[patch."https://github.com/gfx-rs/gfx"]
-#hal = { package = "gfx-hal", path = "../gfx/src/hal" }
-#gfx-backend-vulkan = { path = "../gfx/src/backend/vulkan", features = ["naga"] }
-#gfx-backend-metal = { path = "../gfx/src/backend/metal", features = ["naga"] }
-#gfx-backend-gl = { path = "../gfx/src/backend/gl", features = ["naga"] }
-#gfx-backend-dx12 = { path = "../gfx/src/backend/dx12" }
-#gfx-backend-dx11 = { path = "../gfx/src/backend/dx11" }
-#gfx-backend-empty = { path = "../gfx/src/backend/empty" }
-
-[patch."https://github.com/gfx-rs/naga"]
-#naga = { path = "../naga" }

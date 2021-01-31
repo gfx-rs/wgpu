@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "WebGPU core logic on gfx-hal"
@@ -35,35 +35,31 @@ thiserror = "1"
 
 gpu-alloc = { version = "0.3", features = ["tracing"] }
 gpu-descriptor = { version = "0.1", features = ["tracing"] }
+naga = { version = "0.3.1", features = ["spv-in", "spv-out", "wgsl-in"] }
 
-hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx", rev = "2fd74dbe1562a3eef05b11dcd300c1c9c9bc12a8" }
-gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "2fd74dbe1562a3eef05b11dcd300c1c9c9bc12a8" }
+hal = { package = "gfx-hal", version = "0.7" }
+gfx-backend-empty = "0.7"
 
 [target.'cfg(all(not(target_arch = "wasm32"), all(unix, not(target_os = "ios"), not(target_os = "macos"))))'.dependencies]
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "2fd74dbe1562a3eef05b11dcd300c1c9c9bc12a8", features = ["naga"] }
-gfx-backend-gl = { git = "https://github.com/gfx-rs/gfx", rev = "2fd74dbe1562a3eef05b11dcd300c1c9c9bc12a8", features = ["naga"] }
+gfx-backend-vulkan = { version = "0.7", features = ["naga"] }
+gfx-backend-gl = { version = "0.7", features = ["naga"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
-gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", rev = "2fd74dbe1562a3eef05b11dcd300c1c9c9bc12a8", features = ["naga"] }
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "2fd74dbe1562a3eef05b11dcd300c1c9c9bc12a8", optional = true }
+gfx-backend-metal = { version = "0.7", features = ["naga"] }
+gfx-backend-vulkan = { version = "0.7", optional = true }
 
 [target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
-gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", rev = "2fd74dbe1562a3eef05b11dcd300c1c9c9bc12a8" }
-gfx-backend-dx11 = { git = "https://github.com/gfx-rs/gfx", rev = "2fd74dbe1562a3eef05b11dcd300c1c9c9bc12a8" }
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "2fd74dbe1562a3eef05b11dcd300c1c9c9bc12a8", features = ["naga"] }
+gfx-backend-dx12 = "0.7"
+gfx-backend-dx11 = "0.7"
+gfx-backend-vulkan = { version = "0.7", features = ["naga"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-gfx-backend-gl = { git = "https://github.com/gfx-rs/gfx", rev = "2fd74dbe1562a3eef05b11dcd300c1c9c9bc12a8", features = ["naga"] }
-
-[dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-tag = "gfx-8"
-features = ["spv-in", "spv-out", "wgsl-in"]
+gfx-backend-gl = { version = "0.7", features = ["naga"] }
 
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.6"
+version = "0.7"
 
 [dev-dependencies]
 loom = "0.3"

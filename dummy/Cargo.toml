@@ -12,5 +12,5 @@ publish = false
 [dependencies.wgc]
 path = "../wgpu-core"
 package = "wgpu-core"
-version = "0.6"
+version = "0.7"
 features = ["serial-pass", "trace"]
