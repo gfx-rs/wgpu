@@ -81,7 +81,7 @@ impl Program {
                             Err(ErrorKind::SemanticError("Bad call to texture".into()))
                         }
                     }
-                    "ceil" | "round" | "floor" | "fract" | "trunc" => {
+                    "ceil" | "round" | "floor" | "fract" | "trunc" | "sin" | "abs" => {
                         if fc.args.len() != 1 {
                             return Err(ErrorKind::WrongNumberArgs(name, 1, fc.args.len()));
                         }
@@ -93,10 +93,30 @@ impl Program {
                                     "floor" => MathFunction::Floor,
                                     "fract" => MathFunction::Fract,
                                     "trunc" => MathFunction::Trunc,
+                                    "sin" => MathFunction::Sin,
+                                    "abs" => MathFunction::Abs,
                                     _ => unreachable!(),
                                 },
                                 arg: fc.args[0].expression,
                                 arg1: None,
+                                arg2: None,
+                            }),
+                            sampler: None,
+                            statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
+                        })
+                    }
+                    "mix" => {
+                        if fc.args.len() != 3 {
+                            return Err(ErrorKind::WrongNumberArgs(name, 3, fc.args.len()));
+                        }
+                        Ok(ExpressionRule {
+                            expression: self.context.expressions.append(Expression::Math {
+                                fun: match name.as_str() {
+                                    "mix" => MathFunction::Mix,
+                                    _ => unreachable!(),
+                                },
+                                arg: fc.args[0].expression,
+                                arg1: Some(fc.args[1].expression),
                                 arg2: None,
                             }),
                             sampler: None,

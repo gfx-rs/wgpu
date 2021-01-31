@@ -58,12 +58,11 @@ impl Program {
         &mut self,
         handle: Handle<crate::Expression>,
     ) -> Result<&crate::TypeInner, ErrorKind> {
-        let functions = Arena::new(); //TODO
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
             global_vars: &self.module.global_variables,
             local_vars: &self.context.local_variables,
-            functions: &functions,
+            functions: &self.module.functions,
             arguments: &self.context.arguments,
         };
         match self.context.typifier.grow(
