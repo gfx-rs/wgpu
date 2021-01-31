@@ -21,6 +21,7 @@ OpDecorate %71 DescriptorSet 0
 OpDecorate %71 Binding 0
 OpDecorate %97 BufferBlock
 OpMemberDecorate %97 0 Offset 0
+OpMemberDecorate %97 0 NonWritable
 OpDecorate %98 ArrayStride 96
 OpDecorate %99 Block
 OpMemberDecorate %99 0 Offset 0

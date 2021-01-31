@@ -180,7 +180,7 @@ pub struct Writer {
     lookup_constant: crate::FastHashMap<crate::Handle<crate::Constant>, Word>,
     lookup_global_variable:
         crate::FastHashMap<crate::Handle<crate::GlobalVariable>, (Word, spirv::StorageClass)>,
-    storage_type_handles: crate::FastHashSet<crate::Handle<crate::Type>>,
+    storage_type_handles: crate::FastHashMap<crate::Handle<crate::Type>, crate::StorageAccess>,
     gl450_ext_inst_id: Word,
     layouter: Layouter,
 }
@@ -209,7 +209,7 @@ impl Writer {
             lookup_function_type: crate::FastHashMap::default(),
             lookup_constant: crate::FastHashMap::default(),
             lookup_global_variable: crate::FastHashMap::default(),
-            storage_type_handles: crate::FastHashSet::default(),
+            storage_type_handles: crate::FastHashMap::default(),
             gl450_ext_inst_id: 0,
             layouter: Layouter::default(),
         }
@@ -693,10 +693,10 @@ impl Writer {
                 block: true,
                 ref members,
             } => {
-                let decoration = if self.storage_type_handles.contains(&handle) {
-                    spirv::Decoration::BufferBlock
-                } else {
-                    spirv::Decoration::Block
+                //TODO: put NonWritable/NonReadable on the global variable instead?
+                let (decoration, storage_access) = match self.storage_type_handles.get(&handle) {
+                    Some(&access) => (spirv::Decoration::BufferBlock, access),
+                    None => (spirv::Decoration::Block, crate::StorageAccess::empty()),
                 };
                 self.annotations
                     .push(super::instructions::instruction_decorate(
@@ -731,6 +731,16 @@ impl Writer {
                                     name,
                                 ));
                         }
+                    }
+
+                    if storage_access == crate::StorageAccess::LOAD {
+                        self.annotations
+                            .push(super::instructions::instruction_member_decorate(
+                                id,
+                                index as u32,
+                                spirv::Decoration::NonWritable,
+                                &[],
+                            ));
                     }
 
                     if let crate::TypeInner::Matrix {
@@ -913,6 +923,26 @@ impl Writer {
             if let Some(ref name) = global_variable.name {
                 self.debugs
                     .push(super::instructions::instruction_name(id, name));
+            }
+        }
+
+        if let crate::TypeInner::Image {
+            class: crate::ImageClass::Storage(_),
+            ..
+        } = ir_module.types[global_variable.ty].inner
+        {
+            let decoration = match global_variable.storage_access {
+                crate::StorageAccess::LOAD => Some(spirv::Decoration::NonWritable),
+                crate::StorageAccess::STORE => Some(spirv::Decoration::NonReadable),
+                _ => None,
+            };
+            if let Some(decoration) = decoration {
+                self.annotations
+                    .push(super::instructions::instruction_decorate(
+                        id,
+                        decoration,
+                        &[],
+                    ));
             }
         }
 
@@ -2315,7 +2345,7 @@ impl Writer {
 
         for (_, var) in ir_module.global_variables.iter() {
             if !var.storage_access.is_empty() {
-                self.storage_type_handles.insert(var.ty);
+                self.storage_type_handles.insert(var.ty, var.storage_access);
             }
         }
 
