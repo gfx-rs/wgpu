@@ -180,7 +180,9 @@ pub struct Writer {
     lookup_constant: crate::FastHashMap<crate::Handle<crate::Constant>, Word>,
     lookup_global_variable:
         crate::FastHashMap<crate::Handle<crate::GlobalVariable>, (Word, spirv::StorageClass)>,
-    storage_type_handles: crate::FastHashMap<crate::Handle<crate::Type>, crate::StorageAccess>,
+    // TODO: this is a type property that depends on the global variable that uses it
+    // so it may require us to duplicate the type!
+    struct_type_handles: crate::FastHashMap<crate::Handle<crate::Type>, crate::StorageAccess>,
     gl450_ext_inst_id: Word,
     layouter: Layouter,
 }
@@ -209,7 +211,7 @@ impl Writer {
             lookup_function_type: crate::FastHashMap::default(),
             lookup_constant: crate::FastHashMap::default(),
             lookup_global_variable: crate::FastHashMap::default(),
-            storage_type_handles: crate::FastHashMap::default(),
+            struct_type_handles: crate::FastHashMap::default(),
             gl450_ext_inst_id: 0,
             layouter: Layouter::default(),
         }
@@ -677,16 +679,23 @@ impl Writer {
                 ref members,
             } => {
                 //TODO: put NonWritable/NonReadable on the global variable instead?
-                let (decoration, storage_access) = match self.storage_type_handles.get(&handle) {
-                    Some(&access) => (spirv::Decoration::BufferBlock, access),
-                    None => (spirv::Decoration::Block, crate::StorageAccess::empty()),
+                let storage_access = match self.struct_type_handles.get(&handle) {
+                    Some(&access) => {
+                        let decoration = if access.is_empty() {
+                            spirv::Decoration::Block
+                        } else {
+                            spirv::Decoration::BufferBlock
+                        };
+                        self.annotations
+                            .push(super::instructions::instruction_decorate(
+                                id,
+                                decoration,
+                                &[],
+                            ));
+                        access
+                    }
+                    None => crate::StorageAccess::empty(),
                 };
-                self.annotations
-                    .push(super::instructions::instruction_decorate(
-                        id,
-                        decoration,
-                        &[],
-                    ));
 
                 let mut current_offset = 0;
                 let mut member_ids = Vec::with_capacity(members.len());
@@ -2323,8 +2332,8 @@ impl Writer {
         }
 
         for (_, var) in ir_module.global_variables.iter() {
-            if !var.storage_access.is_empty() {
-                self.storage_type_handles.insert(var.ty, var.storage_access);
+            if let crate::TypeInner::Struct { .. } = ir_module.types[var.ty].inner {
+                self.struct_type_handles.insert(var.ty, var.storage_access);
             }
         }
 

@@ -15,7 +15,6 @@ OpDecorate %34 BuiltIn GlobalInvocationId
 OpDecorate %48 BufferBlock
 OpMemberDecorate %48 0 Offset 0
 OpDecorate %49 ArrayStride 16
-OpDecorate %50 Block
 OpMemberDecorate %50 0 Offset 0
 OpMemberDecorate %50 1 Offset 8
 OpDecorate %47 DescriptorSet 0

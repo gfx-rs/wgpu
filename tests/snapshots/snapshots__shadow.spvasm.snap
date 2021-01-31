@@ -23,7 +23,6 @@ OpDecorate %98 BufferBlock
 OpMemberDecorate %98 0 Offset 0
 OpMemberDecorate %98 0 NonWritable
 OpDecorate %99 ArrayStride 96
-OpDecorate %100 Block
 OpMemberDecorate %100 0 Offset 0
 OpMemberDecorate %100 0 ColMajor
 OpMemberDecorate %100 0 MatrixStride 16
