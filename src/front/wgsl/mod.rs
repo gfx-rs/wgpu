@@ -327,8 +327,6 @@ pub struct ParseError<'a> {
 pub struct Parser {
     scopes: Vec<Scope>,
     lookup_type: FastHashMap<String, Handle<crate::Type>>,
-    lookup_function: FastHashMap<String, Handle<crate::Function>>,
-    lookup_constant: FastHashMap<String, Handle<crate::Constant>>,
 }
 
 impl Parser {
@@ -336,8 +334,6 @@ impl Parser {
         Parser {
             scopes: Vec::new(),
             lookup_type: FastHashMap::default(),
-            lookup_function: FastHashMap::default(),
-            lookup_constant: FastHashMap::default(),
         }
     }
 
@@ -431,7 +427,7 @@ impl Parser {
                         None
                     };
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
+                        Some(self.parse_const_expression(lexer, None, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -463,7 +459,7 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let level = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
+                        Some(self.parse_const_expression(lexer, None, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -495,7 +491,7 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let bias = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
+                        Some(self.parse_const_expression(lexer, None, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -529,7 +525,7 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let y = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
+                        Some(self.parse_const_expression(lexer, None, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -561,7 +557,7 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let reference = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
+                        Some(self.parse_const_expression(lexer, None, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -608,33 +604,39 @@ impl Parser {
                         index,
                     })
                 }
-                _ => match self.lookup_function.get(name) {
-                    Some(&function) => {
-                        let mut arguments = Vec::new();
-                        lexer.expect(Token::Paren('('))?;
-                        if !lexer.skip(Token::Paren(')')) {
-                            loop {
-                                let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
-                                arguments.push(arg);
-                                match lexer.next() {
-                                    Token::Paren(')') => break,
-                                    Token::Separator(',') => (),
-                                    other => {
-                                        return Err(Error::Unexpected(
-                                            other,
-                                            "argument list separator",
-                                        ))
+                _ => {
+                    match ctx.functions.iter().find(|(_, fun)| match fun.name {
+                        Some(ref string) => string == name,
+                        None => false,
+                    }) {
+                        Some((function, _)) => {
+                            let mut arguments = Vec::new();
+                            lexer.expect(Token::Paren('('))?;
+                            if !lexer.skip(Token::Paren(')')) {
+                                loop {
+                                    let arg =
+                                        self.parse_general_expression(lexer, ctx.reborrow())?;
+                                    arguments.push(arg);
+                                    match lexer.next() {
+                                        Token::Paren(')') => break,
+                                        Token::Separator(',') => (),
+                                        other => {
+                                            return Err(Error::Unexpected(
+                                                other,
+                                                "argument list separator",
+                                            ))
+                                        }
                                     }
                                 }
                             }
+                            Some(crate::Expression::Call {
+                                function,
+                                arguments,
+                            })
                         }
-                        Some(crate::Expression::Call {
-                            function,
-                            arguments,
-                        })
+                        None => None,
                     }
-                    None => None,
-                },
+                }
             }
         })
     }
@@ -642,6 +644,7 @@ impl Parser {
     fn parse_const_expression<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
+        register_name: Option<&'a str>,
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<Handle<crate::Constant>, Error<'a>> {
@@ -656,14 +659,20 @@ impl Parser {
                 value: crate::ScalarValue::Bool(false),
             },
             Token::Number { value, ty, width } => Self::get_constant_inner(value, ty, width)?,
-            Token::Word(type_name) => {
-                if let Some(&handle) = self.lookup_constant.get(type_name) {
-                    self.scopes.pop();
-                    return Ok(handle);
+            Token::Word(name) => {
+                // look for an existing constant first
+                for (handle, var) in const_arena.iter() {
+                    match var.name {
+                        Some(ref string) if string == name => {
+                            self.scopes.pop();
+                            return Ok(handle);
+                        }
+                        _ => {}
+                    }
                 }
                 let composite_ty = self.parse_type_decl_name(
                     lexer,
-                    type_name,
+                    name,
                     None,
                     TypeDecoration::default(),
                     type_arena,
@@ -675,7 +684,8 @@ impl Parser {
                     if !components.is_empty() {
                         lexer.expect(Token::Separator(','))?;
                     }
-                    let component = self.parse_const_expression(lexer, type_arena, const_arena)?;
+                    let component =
+                        self.parse_const_expression(lexer, None, type_arena, const_arena)?;
                     components.push(component);
                 }
                 crate::ConstantInner::Composite {
@@ -686,11 +696,20 @@ impl Parser {
             other => return Err(Error::Unexpected(other, "constant")),
         };
 
-        let handle = const_arena.fetch_or_append(crate::Constant {
-            name: None,
-            specialization: None,
-            inner,
-        });
+        let handle = if let Some(name) = register_name {
+            const_arena.append(crate::Constant {
+                name: Some(name.to_string()),
+                specialization: None,
+                inner,
+            })
+        } else {
+            const_arena.fetch_or_append(crate::Constant {
+                name: None,
+                specialization: None,
+                inner,
+            })
+        };
+
         self.scopes.pop();
         Ok(handle)
     }
@@ -1068,7 +1087,7 @@ impl Parser {
         let (ty, access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
 
         let init = if lexer.skip(Token::Operation('=')) {
-            let handle = self.parse_const_expression(lexer, type_arena, const_arena)?;
+            let handle = self.parse_const_expression(lexer, None, type_arena, const_arena)?;
             Some(handle)
         } else {
             None
@@ -1263,7 +1282,7 @@ impl Parser {
                 let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
                 let size = if lexer.skip(Token::Separator(',')) {
                     let const_handle =
-                        self.parse_const_expression(lexer, type_arena, const_arena)?;
+                        self.parse_const_expression(lexer, None, type_arena, const_arena)?;
                     crate::ArraySize::Constant(const_handle)
                 } else {
                     crate::ArraySize::Dynamic
@@ -1933,11 +1952,14 @@ impl Parser {
                     &mut module.constants,
                 )?;
                 lexer.expect(Token::Operation('='))?;
-                let const_handle =
-                    self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
+                let const_handle = self.parse_const_expression(
+                    lexer,
+                    Some(name),
+                    &mut module.types,
+                    &mut module.constants,
+                )?;
                 //TODO: check `ty` against `const_handle`.
                 lexer.expect(Token::Separator(';'))?;
-                self.lookup_constant.insert(name.to_string(), const_handle);
                 lookup_global_expression.insert(name, crate::Expression::Constant(const_handle));
             }
             Token::Word("var") => {
@@ -1991,10 +2013,15 @@ impl Parser {
                         )
                         .is_some(),
                     None => {
-                        let fun_handle = module.functions.append(function);
-                        self.lookup_function
-                            .insert(name.to_string(), fun_handle)
-                            .is_some()
+                        if module.functions.iter().any(|(_, fun)| match fun.name {
+                            Some(ref string) => string == name,
+                            None => false,
+                        }) {
+                            true
+                        } else {
+                            module.functions.append(function);
+                            false
+                        }
                     }
                 };
                 if already_declared {
@@ -2015,8 +2042,6 @@ impl Parser {
     pub fn parse<'a>(&mut self, source: &'a str) -> Result<crate::Module, ParseError<'a>> {
         self.scopes.clear();
         self.lookup_type.clear();
-        self.lookup_function.clear();
-        self.lookup_constant.clear();
 
         let mut module = crate::Module::generate_empty();
         let mut lexer = Lexer::new(source);
