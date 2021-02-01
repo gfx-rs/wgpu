@@ -37,7 +37,7 @@ impl framework::Example for Example {
         // load and compile the shader
         let mut flags = wgpu::ShaderFlags::VALIDATION;
         match adapter.get_info().backend {
-            wgt::Backend::Vulkan => {
+            wgt::Backend::Vulkan | wgt::Backend::Metal => {
                 flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION;
             }
             _ => {} //TODO

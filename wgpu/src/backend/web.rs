@@ -946,10 +946,6 @@ impl crate::Context for Context {
         )
     }
 
-    fn adapter_get_timestamp_period(&self, _adapter: &Self::AdapterId) -> f32 {
-        1.0 //TODO
-    }
-
     fn adapter_request_device(
         &self,
         adapter: &Self::AdapterId,
@@ -1882,6 +1878,10 @@ impl crate::Context for Context {
         let temp_command_buffers = command_buffers.map(|i| i.0).collect::<js_sys::Array>();
 
         queue.0.submit(&temp_command_buffers);
+    }
+
+    fn queue_get_timestamp_period(&self, _queue: &Self::QueueId) -> f32 {
+        1.0 //TODO
     }
 }
 
