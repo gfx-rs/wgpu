@@ -11,6 +11,7 @@ use crate::{
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
+    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, BufferUse, Texture},
     span,
     track::{TrackerSet, UsageConflict},
@@ -146,6 +147,8 @@ pub enum ComputePassErrorInner {
         end_offset: u64,
         buffer_size: u64,
     },
+    #[error("buffer {0:?} is invalid or destroyed")]
+    InvalidBuffer(id::BufferId),
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
     #[error(transparent)]
@@ -328,6 +331,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     bind_group
                         .validate_dynamic_bindings(&temp_offsets)
                         .map_pass_err(scope)?;
+
+                    cmd_buf.buffer_memory_init_actions.extend(
+                        bind_group.used_buffer_ranges.iter().filter_map(
+                            |action| match buffer_guard.get(action.id) {
+                                Ok(buffer) => buffer
+                                    .initialization_status
+                                    .check(action.range.clone())
+                                    .map(|range| MemoryInitTrackerAction {
+                                        id: action.id,
+                                        range,
+                                        kind: action.kind,
+                                    }),
+                                Err(_) => None,
+                            },
+                        ),
+                    );
 
                     if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
                         index as usize,
@@ -512,6 +531,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .as_ref()
                         .ok_or(ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
                         .map_pass_err(scope)?;
+
+                    let stride = 3 * 4; // 3 integers, x/y/z group size
+
+                    cmd_buf.buffer_memory_init_actions.extend(
+                        indirect_buffer
+                            .initialization_status
+                            .check(offset..(offset + stride))
+                            .map(|range| MemoryInitTrackerAction {
+                                id: buffer_id,
+                                range,
+                                kind: MemoryInitKind::NeedsInitializedMemory,
+                            }),
+                    );
 
                     state
                         .flush_states(

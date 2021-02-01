@@ -24,6 +24,7 @@ use crate::{
     device::{all_buffer_stages, all_image_stages},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
+    memory_init_tracker::MemoryInitTrackerAction,
     resource::{Buffer, Texture},
     span,
     track::TrackerSet,
@@ -46,6 +47,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
     pub(crate) used_swap_chains: SmallVec<[Stored<id::SwapChainId>; 1]>,
+    pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     limits: wgt::Limits,
     private_features: PrivateFeatures,
     has_labels: bool,
@@ -56,17 +58,6 @@ pub struct CommandBuffer<B: hal::Backend> {
 }
 
 impl<B: GfxBackend> CommandBuffer<B> {
-    fn get_encoder(
-        storage: &Storage<Self, id::CommandEncoderId>,
-        id: id::CommandEncoderId,
-    ) -> Result<&Self, CommandEncoderError> {
-        match storage.get(id) {
-            Ok(cmd_buf) if cmd_buf.is_recording => Ok(cmd_buf),
-            Ok(_) => Err(CommandEncoderError::NotRecording),
-            Err(_) => Err(CommandEncoderError::Invalid),
-        }
-    }
-
     fn get_encoder_mut(
         storage: &mut Storage<Self, id::CommandEncoderId>,
         id: id::CommandEncoderId,

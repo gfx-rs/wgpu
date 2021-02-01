@@ -8,7 +8,9 @@ use crate::{
     hub::{
         GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, InvalidId, Storage, Token,
     },
-    id, instance, pipeline, resource, span, swap_chain,
+    id, instance,
+    memory_init_tracker::{MemoryInitKind, MemoryInitTracker, MemoryInitTrackerAction},
+    pipeline, resource, span, swap_chain,
     track::{BufferState, TextureSelector, TextureState, TrackerSet},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, FastHashSet, Label, LabelHelpers, LifeGuard, MultiRefCount, PrivateFeatures,
@@ -196,6 +198,30 @@ fn map_buffer<B: hal::Backend>(
         }),
         _ => None,
     };
+
+    // Zero out uninitialized parts of the mapping. (Spec dictates all resources behave as if they were initialized with zero)
+    //
+    // If this is a read mapping, ideally we would use a `fill_buffer` command before reading the data from GPU (i.e. `invalidate_range`).
+    // However, this would require us to kick off and wait for a command buffer or piggy back on an existing one (the later is likely the only worthwhile option).
+    // As reading uninitialized memory isn't a particular important path to support,
+    // we instead just initialize the memory here and make sure it is GPU visible, so this happens at max only once for every buffer region.
+    //
+    // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
+    let zero_init_needs_flush_now = !block.is_coherent() && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
+    for uninitialized_range in buffer.initialization_status.drain(offset..(size + offset)) {
+        let num_bytes = uninitialized_range.end - uninitialized_range.start;
+        unsafe {
+            ptr::write_bytes(
+                ptr.as_ptr().offset(uninitialized_range.start as isize),
+                0,
+                num_bytes as usize,
+            )
+        };
+        if zero_init_needs_flush_now {
+            block.flush_range(raw, uninitialized_range.start, Some(num_bytes))?;
+        }
+    }
+
     Ok(ptr)
 }
 
@@ -470,6 +496,10 @@ impl<B: GfxBackend> Device<B> {
                 // we are going to be copying into it, internally
                 usage |= hal::buffer::Usage::TRANSFER_DST;
             }
+        } else {
+            // We are required to zero out (initialize) all memory.
+            // This is done on demand using fill_buffer which requires write transfer usage!
+            usage |= hal::buffer::Usage::TRANSFER_DST;
         }
 
         if desc.usage.is_empty() {
@@ -542,7 +572,7 @@ impl<B: GfxBackend> Device<B> {
             },
             usage: desc.usage,
             size: desc.size,
-            full_range: (),
+            initialization_status: MemoryInitTracker::new(desc.size),
             sync_mapped_writes: None,
             map_state: resource::BufferMapState::Idle,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
@@ -1237,6 +1267,7 @@ impl<B: GfxBackend> Device<B> {
         // `BTreeMap` has ordered bindings as keys, which allows us to coalesce
         // the descriptor writes into a single transaction.
         let mut write_map = BTreeMap::new();
+        let mut used_buffer_ranges = Vec::new();
         for entry in desc.entries.iter() {
             let binding = entry.binding;
             // Find the corresponding declaration in the layout
@@ -1328,6 +1359,12 @@ impl<B: GfxBackend> Device<B> {
                     } else if bind_size == 0 {
                         return Err(Error::BindingZeroSize(bb.buffer_id));
                     }
+
+                    used_buffer_ranges.push(MemoryInitTrackerAction {
+                        id: bb.buffer_id,
+                        range: bb.offset..(bb.offset + bind_size),
+                        kind: MemoryInitKind::NeedsInitializedMemory,
+                    });
 
                     let sub_range = hal::buffer::SubRange {
                         offset: bb.offset,
@@ -1544,6 +1581,7 @@ impl<B: GfxBackend> Device<B> {
             layout_id: id::Valid(desc.layout),
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
             used,
+            used_buffer_ranges,
             dynamic_binding_info,
         })
     }
@@ -2530,7 +2568,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     usage: wgt::BufferUsage::MAP_WRITE | wgt::BufferUsage::COPY_SRC,
                     mapped_at_creation: false,
                 };
-                let stage = match device.create_buffer(device_id, &stage_desc, true) {
+                let mut stage = match device.create_buffer(device_id, &stage_desc, true) {
                     Ok(stage) => stage,
                     Err(e) => {
                         let (raw, memory) = buffer.raw.unwrap();
@@ -2561,6 +2599,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         break e.into();
                     }
                 };
+
+                // Zero initialize memory and then mark both staging and buffer as initialized
+                // (it's guaranteed that this is the case by the time the buffer is usable)
+                unsafe { ptr::write_bytes(ptr.as_ptr(), 0, buffer.size as usize) };
+                buffer.initialization_status.clear(0..buffer.size);
+                stage.initialization_status.clear(0..buffer.size);
+
                 buffer.map_state = resource::BufferMapState::Init {
                     ptr,
                     needs_flush: !stage_memory.is_coherent(),

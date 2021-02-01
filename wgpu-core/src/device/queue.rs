@@ -13,13 +13,14 @@ use crate::{
     device::{alloc, DeviceError, WaitIdleError},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
+    memory_init_tracker::MemoryInitKind,
     resource::{BufferAccessError, BufferMapState, BufferUse, TextureUse},
-    span, FastHashSet,
+    span, FastHashMap, FastHashSet,
 };
 
 use hal::{command::CommandBuffer as _, device::Device as _, queue::CommandQueue as _};
 use smallvec::SmallVec;
-use std::{iter, ptr};
+use std::{iter, ops::Range, ptr};
 use thiserror::Error;
 
 struct StagingData<B: hal::Backend> {
@@ -271,6 +272,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device.pending_writes.consume(stage);
         device.pending_writes.dst_buffers.insert(buffer_id);
 
+        // Ensure the overwritten bytes are marked as initialized so they don't need to be nulled prior to mapping or binding.
+        {
+            drop(buffer_guard);
+            let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+
+            let dst = buffer_guard.get_mut(buffer_id).unwrap();
+            dst.initialization_status
+                .clear(buffer_offset..(buffer_offset + data_size));
+        }
+
         Ok(())
     }
 
@@ -458,6 +469,129 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
+    // Enacts all zero initializations required by the given command buffers
+    // Required commands are appended to device.pending_writes
+    fn initialize_used_uninitialized_memory<B: GfxBackend>(
+        &self,
+        queue_id: id::QueueId,
+        command_buffer_ids: &[id::CommandBufferId],
+    ) -> Result<(), QueueSubmitError> {
+        if command_buffer_ids.is_empty() {
+            return Ok(());
+        }
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let mut required_buffer_inits = {
+            let (command_buffer_guard, mut token) = hub.command_buffers.read(&mut token);
+
+            let mut required_buffer_inits: FastHashMap<
+                id::BufferId,
+                Vec<Range<wgt::BufferAddress>>,
+            > = FastHashMap::default();
+
+            for &cmb_id in command_buffer_ids {
+                let cmdbuf = command_buffer_guard
+                    .get(cmb_id)
+                    .map_err(|_| QueueSubmitError::InvalidCommandBuffer(cmb_id))?;
+
+                if cmdbuf.buffer_memory_init_actions.len() == 0 {
+                    continue;
+                }
+
+                let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+
+                for buffer_use in cmdbuf.buffer_memory_init_actions.iter() {
+                    let buffer = buffer_guard
+                        .get_mut(buffer_use.id)
+                        .map_err(|_| QueueSubmitError::DestroyedBuffer(buffer_use.id))?;
+
+                    let uninitialized_ranges =
+                        buffer.initialization_status.drain(buffer_use.range.clone());
+                    match buffer_use.kind {
+                        MemoryInitKind::ImplicitlyInitialized => {
+                            uninitialized_ranges.for_each(drop);
+                        }
+                        MemoryInitKind::NeedsInitializedMemory => {
+                            required_buffer_inits
+                                .entry(buffer_use.id)
+                                .or_default()
+                                .extend(uninitialized_ranges);
+                        }
+                    }
+                }
+            }
+            required_buffer_inits
+        };
+
+        // Memory init is expected to be rare (means user relies on default zero!), so most of the time we early here!
+        if required_buffer_inits.is_empty() {
+            return Ok(());
+        }
+
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        let (buffer_guard, _) = hub.buffers.read(&mut token);
+        let device = device_guard
+            .get_mut(queue_id)
+            .map_err(|_| DeviceError::Invalid)?;
+
+        device
+            .pending_writes
+            .dst_buffers
+            .extend(required_buffer_inits.keys());
+        device.borrow_pending_writes(); // Call ensures there is a pending_writes cmdbuffer, but using the reference returned would make the borrow checker unhappy!
+        let pending_writes_cmd_buf = device.pending_writes.command_buffer.as_mut().unwrap();
+        let mut trackers = device.trackers.lock();
+
+        for (buffer_id, mut ranges) in required_buffer_inits.drain() {
+            // Collapse touching ranges. We can't do this any earlier since we only now gathered ranges from several different command buffers!
+            ranges.sort_by(|a, b| a.start.cmp(&b.start));
+            for i in (1..ranges.len()).rev() {
+                assert!(ranges[i - 1].end <= ranges[i].start); // The memory init tracker made sure of this!
+                if ranges[i].start == ranges[i - 1].end {
+                    ranges[i - 1].end = ranges[i].end;
+                    ranges.swap_remove(i); // Ordering not important at this point
+                }
+            }
+
+            let (buffer, transition) = trackers
+                .buffers
+                .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST)
+                .map_err(|_| QueueSubmitError::DestroyedBuffer(buffer_id))?;
+            let &(ref buffer_raw, _) = buffer
+                .raw
+                .as_ref()
+                .ok_or(QueueSubmitError::DestroyedBuffer(buffer_id))?;
+            unsafe {
+                pending_writes_cmd_buf.pipeline_barrier(
+                    super::all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
+                    hal::memory::Dependencies::empty(),
+                    transition.map(|pending| pending.into_hal(buffer)),
+                );
+            }
+            for range in ranges {
+                let size = range.end - range.start;
+
+                assert!(range.start % 4 == 0, "Buffer {:?} has an uninitialized range with a start not aligned to 4 (start was {})", buffer, range.start);
+                assert!(size % 4 == 0, "Buffer {:?} has an uninitialized range with a size not aligned to 4 (size was {})", buffer, size);
+
+                unsafe {
+                    pending_writes_cmd_buf.fill_buffer(
+                        buffer_raw,
+                        hal::buffer::SubRange {
+                            offset: range.start,
+                            size: Some(size),
+                        },
+                        0,
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn queue_submit<B: GfxBackend>(
         &self,
         queue_id: id::QueueId,
@@ -465,10 +599,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueueSubmitError> {
         span!(_guard, INFO, "Queue::submit");
 
+        self.initialize_used_uninitialized_memory::<B>(queue_id, command_buffer_ids)?;
+
         let hub = B::hub(self);
+        let mut token = Token::root();
 
         let callbacks = {
-            let mut token = Token::root();
             let (mut device_guard, mut token) = hub.devices.write(&mut token);
             let device = device_guard
                 .get_mut(queue_id)
@@ -490,7 +626,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
                     let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
                     let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
-                    let (texture_guard, mut token) = hub.textures.read(&mut token);
+                    let (texture_guard, mut token) = hub.textures.write(&mut token);
                     let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
                     let (sampler_guard, _) = hub.samplers.read(&mut token);
 

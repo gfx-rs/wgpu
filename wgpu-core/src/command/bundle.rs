@@ -49,6 +49,7 @@ use crate::{
     },
     hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Resource, Storage, Token},
     id,
+    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::BufferUse,
     span,
     track::{TrackerSet, UsageConflict},
@@ -56,7 +57,7 @@ use crate::{
     Label, LabelHelpers, LifeGuard, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Cow, iter, ops::Range};
+use std::{borrow::Cow, iter, mem, ops::Range};
 use thiserror::Error;
 
 /// Describes a [`RenderBundleEncoder`].
@@ -159,6 +160,7 @@ impl RenderBundleEncoder {
         let mut commands = Vec::new();
         let mut base = self.base.as_ref();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
+        let mut buffer_memory_init_actions = Vec::new();
 
         for &command in base.commands {
             match command {
@@ -203,6 +205,8 @@ impl RenderBundleEncoder {
                         })
                         .map_pass_err(scope);
                     }
+
+                    buffer_memory_init_actions.extend_from_slice(&bind_group.used_buffer_ranges);
 
                     state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
                     state
@@ -262,6 +266,11 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
+                    buffer_memory_init_actions.push(MemoryInitTrackerAction {
+                        id: buffer_id,
+                        range: offset..end,
+                        kind: MemoryInitKind::NeedsInitializedMemory,
+                    });
                     state.index.set_format(index_format);
                     state.index.set_buffer(buffer_id, offset..end);
                 }
@@ -284,6 +293,11 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
+                    buffer_memory_init_actions.push(MemoryInitTrackerAction {
+                        id: buffer_id,
+                        range: offset..end,
+                        kind: MemoryInitKind::NeedsInitializedMemory,
+                    });
                     state.vertex[slot as usize].set_buffer(buffer_id, offset..end);
                 }
                 RenderCommand::SetPushConstant {
@@ -379,7 +393,7 @@ impl RenderBundleEncoder {
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
-                    offset: _,
+                    offset,
                     count: None,
                     indexed: false,
                 } => {
@@ -396,13 +410,26 @@ impl RenderBundleEncoder {
                     check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
                         .map_pass_err(scope)?;
 
+                    buffer_memory_init_actions.extend(
+                        buffer
+                            .initialization_status
+                            .check(
+                                offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
+                            )
+                            .map(|range| MemoryInitTrackerAction {
+                                id: buffer_id,
+                                range,
+                                kind: MemoryInitKind::NeedsInitializedMemory,
+                            }),
+                    );
+
                     commands.extend(state.flush_vertices());
                     commands.extend(state.flush_binds());
                     commands.push(command);
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
-                    offset: _,
+                    offset,
                     count: None,
                     indexed: true,
                 } => {
@@ -419,6 +446,19 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
                         .map_pass_err(scope)?;
+
+                    buffer_memory_init_actions.extend(
+                        buffer
+                            .initialization_status
+                            .check(
+                                offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
+                            )
+                            .map(|range| MemoryInitTrackerAction {
+                                id: buffer_id,
+                                range,
+                                kind: MemoryInitKind::NeedsInitializedMemory,
+                            }),
+                    );
 
                     commands.extend(state.index.flush());
                     commands.extend(state.flush_vertices());
@@ -454,6 +494,7 @@ impl RenderBundleEncoder {
                 ref_count: device.life_guard.add_ref(),
             },
             used: state.trackers,
+            buffer_memory_init_actions,
             context: self.context,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
@@ -502,6 +543,7 @@ pub struct RenderBundle {
     base: BasePass<RenderCommand>,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) used: TrackerSet,
+    pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     pub(crate) context: RenderPassContext,
     pub(crate) life_guard: LifeGuard,
 }

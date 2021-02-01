@@ -36,6 +36,7 @@ pub mod device;
 pub mod hub;
 pub mod id;
 pub mod instance;
+mod memory_init_tracker;
 pub mod pipeline;
 pub mod resource;
 pub mod swap_chain;
