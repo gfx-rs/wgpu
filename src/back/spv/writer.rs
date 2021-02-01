@@ -2339,6 +2339,9 @@ impl Writer {
                 crate::Statement::Return { value: None } => {
                     block.termination = Some(super::instructions::instruction_return());
                 }
+                crate::Statement::Kill => {
+                    block.termination = Some(super::instructions::instruction_kill());
+                }
                 crate::Statement::Store { pointer, value } => {
                     let (pointer_id, _, _) = self.write_expression_pointer(
                         ir_module,

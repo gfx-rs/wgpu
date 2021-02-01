@@ -707,6 +707,10 @@ pub(super) fn instruction_branch_conditional(
     instruction
 }
 
+pub(super) fn instruction_kill() -> Instruction {
+    Instruction::new(Op::Kill)
+}
+
 pub(super) fn instruction_return() -> Instruction {
     Instruction::new(Op::Return)
 }
