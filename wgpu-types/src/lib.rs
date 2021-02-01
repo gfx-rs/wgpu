@@ -847,9 +847,9 @@ impl Default for CullMode {
 pub enum PolygonMode {
     /// Polygons are filled
     Fill = 0,
-    /// Polygons are draw as line segments
+    /// Polygons are drawn as line segments
     Line = 1,
-    /// Polygons are draw as points
+    /// Polygons are drawn as points
     Point = 2,
 }
 
@@ -873,7 +873,7 @@ pub struct PrimitiveState {
     /// The face to consider the front for the purpose of culling and stencil operations.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub front_face: FrontFace,
-    /// The fact culling mode.
+    /// The face culling mode.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub cull_mode: CullMode,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
