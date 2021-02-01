@@ -100,7 +100,7 @@ tracing = { version = "0.1", features = ["log-always"] }
 If you need to test local fixes to gfx-rs or other dependencies, the simplest way is to add a Cargo patch. For example, when working on DX12 backend on Windows, you can check out the "hal-0.2" branch of gfx-rs repo and add this to the end of "Cargo.toml":
 
 ```toml
-[patch.crates-io]
+[patch."https://github.com/gfx-rs/gfx"]
 gfx-backend-dx12 = { path = "../gfx/src/backend/dx12" }
 gfx-hal = { path = "../gfx/src/hal" }
 ```

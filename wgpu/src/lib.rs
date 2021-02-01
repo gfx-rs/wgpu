@@ -203,7 +203,6 @@ trait Context: Debug + Send + Sized + Sync {
     ) -> TextureFormat;
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features;
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
-    fn adapter_get_timestamp_period(&self, adapter: &Self::AdapterId) -> f32;
     fn adapter_get_info(&self, adapter: &Self::AdapterId) -> AdapterInfo;
     fn adapter_get_texture_format_features(
         &self,
@@ -441,6 +440,7 @@ trait Context: Debug + Send + Sized + Sync {
         queue: &Self::QueueId,
         command_buffers: I,
     );
+    fn queue_get_timestamp_period(&self, queue: &Self::QueueId) -> f32;
 }
 
 /// Context for all other wgpu objects. Instance of wgpu.
@@ -1450,13 +1450,6 @@ impl Adapter {
     /// the values that you are allowed to use.
     pub fn limits(&self) -> Limits {
         Context::adapter_limits(&*self.context, &self.id)
-    }
-
-    /// Gets the amount of nanoseconds each tick of a timestamp query represents.
-    ///
-    /// Returns zero if timestamp queries are unsupported.
-    pub fn get_timestamp_period(&self) -> f32 {
-        Context::adapter_get_timestamp_period(&*self.context, &self.id)
     }
 
     /// Get info about the adapter itself.
@@ -2789,6 +2782,13 @@ impl Queue {
                 .into_iter()
                 .map(|mut comb| comb.id.take().unwrap()),
         );
+    }
+
+    /// Gets the amount of nanoseconds each tick of a timestamp query represents.
+    ///
+    /// Returns zero if timestamp queries are unsupported.
+    pub fn get_timestamp_period(&self) -> f32 {
+        Context::queue_get_timestamp_period(&*self.context, &self.id)
     }
 }
 
