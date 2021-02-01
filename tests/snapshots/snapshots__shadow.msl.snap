@@ -41,6 +41,8 @@ typedef int type9;
 
 typedef metal::float3 type10;
 
+typedef bool type11;
+
 type7 fetch_shadow(
     type6 light_id,
     type2 homogeneous_coords

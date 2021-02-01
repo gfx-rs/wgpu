@@ -258,7 +258,23 @@ impl Typifier {
                 | crate::BinaryOperator::Greater
                 | crate::BinaryOperator::GreaterEqual
                 | crate::BinaryOperator::LogicalAnd
-                | crate::BinaryOperator::LogicalOr => self.resolutions[left.index()].clone(),
+                | crate::BinaryOperator::LogicalOr => {
+                    let kind = crate::ScalarKind::Bool;
+                    let width = 1;
+                    let inner = match *self.get(left, types) {
+                        crate::TypeInner::Scalar { .. } => crate::TypeInner::Scalar { kind, width },
+                        crate::TypeInner::Vector { size, .. } => {
+                            crate::TypeInner::Vector { size, kind, width }
+                        }
+                        ref other => {
+                            return Err(ResolveError::IncompatibleOperand {
+                                op: "logical".to_string(),
+                                operand: format!("{:?}", other),
+                            })
+                        }
+                    };
+                    Resolution::Value(inner)
+                }
                 crate::BinaryOperator::And
                 | crate::BinaryOperator::ExclusiveOr
                 | crate::BinaryOperator::InclusiveOr
