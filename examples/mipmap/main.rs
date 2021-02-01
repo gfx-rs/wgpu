@@ -388,7 +388,7 @@ impl framework::Example for Example {
             });
             // Timestamp queries use an device-specific timestamp unit. We need to figure out how many
             // nanoseconds go by for the timestamp to be incremented by one. The period is this value.
-            let timestamp_period = adapter.get_timestamp_period();
+            let timestamp_period = queue.get_timestamp_period();
 
             // We only need one pipeline statistics query per pass.
             let pipeline_statistics = device.create_query_set(&wgpu::QuerySetDescriptor {

@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "Rusty WebGPU API wrapper"
@@ -26,20 +26,20 @@ webgl = ["wgc"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "ac81f3e7562eff96ca854b462b0893c38ea98de2"
+rev = "7c7501cab72fd01b14def06b9d9bc63a8dd44b45"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "ac81f3e7562eff96ca854b462b0893c38ea98de2"
+rev = "7c7501cab72fd01b14def06b9d9bc63a8dd44b45"
 features = ["raw-window-handle"]
 optional = true
 
 [dependencies.wgt]
 package = "wgpu-types"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "ac81f3e7562eff96ca854b462b0893c38ea98de2"
+rev = "7c7501cab72fd01b14def06b9d9bc63a8dd44b45"
 
 [dependencies]
 arrayvec = "0.5"
@@ -54,7 +54,7 @@ bytemuck = { version = "1.4", features = ["derive"] }
 cgmath = "0.18"
 ddsfile = "0.4"
 log = "0.4"
-naga = { git = "https://github.com/gfx-rs/naga", tag = "gfx-8", features = ["wgsl-in"] }
+naga = { git = "https://github.com/gfx-rs/naga", tag = "gfx-9", features = ["wgsl-in"] }
 noise = "0.7"
 png = "0.16"
 rand = { version = "0.7.2", features = ["wasm-bindgen"] }
@@ -67,7 +67,7 @@ wgpu-subscriber = "0.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-8"
+tag = "gfx-9"
 features = ["wgsl-in", "spv-out"]
 
 [[example]]
