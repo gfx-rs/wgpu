@@ -741,19 +741,6 @@ impl crate::Context for Context {
         }
     }
 
-    fn adapter_get_timestamp_period(&self, adapter: &Self::AdapterId) -> f32 {
-        let global = &self.0;
-        let res = wgc::gfx_select!(adapter => global.adapter_get_timestamp_period(
-            *adapter
-        ));
-        match res {
-            Ok(v) => v,
-            Err(cause) => {
-                self.handle_error_fatal(cause, "Adapter::get_timestamp_period");
-            }
-        }
-    }
-
     fn adapter_get_info(&self, adapter: &wgc::id::AdapterId) -> AdapterInfo {
         let global = &self.0;
         match wgc::gfx_select!(*adapter => global.adapter_get_info(*adapter)) {
@@ -1857,6 +1844,19 @@ impl crate::Context for Context {
         match wgc::gfx_select!(*queue => global.queue_submit(*queue, &temp_command_buffers)) {
             Ok(()) => (),
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
+        }
+    }
+
+    fn queue_get_timestamp_period(&self, queue: &Self::QueueId) -> f32 {
+        let global = &self.0;
+        let res = wgc::gfx_select!(queue => global.queue_get_timestamp_period(
+            *queue
+        ));
+        match res {
+            Ok(v) => v,
+            Err(cause) => {
+                self.handle_error_fatal(cause, "Queue::get_timestamp_period");
+            }
         }
     }
 }
