@@ -1609,10 +1609,13 @@ impl Writer {
                     }
                     // trigonometry
                     Mf::Sin => MathOp::Single(spirv::GLOp::Sin),
+                    Mf::Sinh => MathOp::Single(spirv::GLOp::Sinh),
                     Mf::Asin => MathOp::Single(spirv::GLOp::Asin),
                     Mf::Cos => MathOp::Single(spirv::GLOp::Cos),
+                    Mf::Cosh => MathOp::Single(spirv::GLOp::Cosh),
                     Mf::Acos => MathOp::Single(spirv::GLOp::Acos),
                     Mf::Tan => MathOp::Single(spirv::GLOp::Tan),
+                    Mf::Tanh => MathOp::Single(spirv::GLOp::Tanh),
                     Mf::Atan => MathOp::Single(spirv::GLOp::Atan),
                     Mf::Atan2 => MathOp::Double(spirv::GLOp::Atan2),
                     // decomposition
@@ -1621,6 +1624,9 @@ impl Writer {
                     Mf::Floor => MathOp::Single(spirv::GLOp::Floor),
                     Mf::Fract => MathOp::Single(spirv::GLOp::Fract),
                     Mf::Trunc => MathOp::Single(spirv::GLOp::Trunc),
+                    Mf::Modf => MathOp::Double(spirv::GLOp::Modf),
+                    Mf::Frexp => MathOp::Double(spirv::GLOp::Frexp),
+                    Mf::Ldexp => MathOp::Double(spirv::GLOp::Ldexp),
                     // geometry
                     Mf::Dot => {
                         let result_lookup_ty =
@@ -1693,8 +1699,41 @@ impl Writer {
                         MathOp::Other(inst, result_lookup_ty)
                     }
                     Mf::Normalize => MathOp::Single(spirv::GLOp::Normalize),
+                    Mf::FaceForward => MathOp::Triple(spirv::GLOp::FaceForward),
+                    Mf::Reflect => MathOp::Double(spirv::GLOp::Reflect),
+                    // exponent
+                    Mf::Exp => MathOp::Single(spirv::GLOp::Exp),
+                    Mf::Exp2 => MathOp::Single(spirv::GLOp::Exp2),
+                    Mf::Log => MathOp::Single(spirv::GLOp::Log),
+                    Mf::Log2 => MathOp::Single(spirv::GLOp::Log2),
                     Mf::Pow => MathOp::Double(spirv::GLOp::Pow),
                     // computational
+                    Mf::Sign => {
+                        let op = match self
+                            .get_type_inner(&ir_module.types, arg0_lookup_ty)
+                            .scalar_kind()
+                        {
+                            Some(crate::ScalarKind::Float) => spirv::GLOp::FSign,
+                            Some(crate::ScalarKind::Sint) => spirv::GLOp::SSign,
+                            other => unimplemented!("Unexpected sign({:?})", other),
+                        };
+                        MathOp::Single(op)
+                    }
+                    Mf::Fma => MathOp::Triple(spirv::GLOp::Fma),
+                    Mf::Mix => {
+                        let op = match self
+                            .get_type_inner(&ir_module.types, arg0_lookup_ty)
+                            .scalar_kind()
+                        {
+                            Some(crate::ScalarKind::Float) => spirv::GLOp::FMix,
+                            other => unimplemented!("Unexpected mix({:?})", other),
+                        };
+                        MathOp::Triple(op)
+                    }
+                    Mf::Step => MathOp::Triple(spirv::GLOp::Step),
+                    Mf::SmoothStep => MathOp::Triple(spirv::GLOp::SmoothStep),
+                    Mf::Sqrt => MathOp::Single(spirv::GLOp::Sqrt),
+                    Mf::InverseSqrt => MathOp::Single(spirv::GLOp::InverseSqrt),
                     Mf::Transpose => {
                         let result_lookup_ty =
                             match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
@@ -1720,7 +1759,31 @@ impl Writer {
                         );
                         MathOp::Other(inst, result_lookup_ty)
                     }
-                    _ => {
+                    Mf::Determinant => {
+                        let result_lookup_ty =
+                            match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
+                                crate::TypeInner::Matrix { width, .. } => {
+                                    LookupType::Local(LocalType::Scalar {
+                                        kind: crate::ScalarKind::Float,
+                                        width,
+                                    })
+                                }
+                                _ => unreachable!(),
+                            };
+                        let result_type_id =
+                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
+
+                        let inst = super::instructions::instruction_ext_inst(
+                            self.gl450_ext_inst_id,
+                            spirv::GLOp::Determinant,
+                            result_type_id,
+                            id,
+                            &[arg0_id],
+                        );
+                        MathOp::Other(inst, result_lookup_ty)
+                    }
+
+                    Mf::Outer | Mf::ReverseBits | Mf::CountOneBits => {
                         log::error!("unimplemented math function {:?}", fun);
                         return Err(Error::FeatureNotImplemented("math function"));
                     }
