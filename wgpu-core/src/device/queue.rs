@@ -18,7 +18,7 @@ use crate::{
     span, FastHashMap, FastHashSet,
 };
 
-use hal::{command::CommandBuffer as _, device::Device as _, queue::CommandQueue as _};
+use hal::{command::CommandBuffer as _, device::Device as _, queue::Queue as _};
 use smallvec::SmallVec;
 use std::{iter, ops::Range, ptr};
 use thiserror::Error;
@@ -147,6 +147,10 @@ impl<B: hal::Backend> super::Device<B> {
         })
     }
 }
+
+#[error("queue is invalid")]
+#[derive(Clone, Debug, Error)]
+pub struct InvalidQueue;
 
 #[derive(Clone, Debug, Error)]
 pub enum QueueWriteError {
@@ -808,6 +812,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         super::fire_map_callbacks(callbacks);
 
         Ok(())
+    }
+
+    pub fn queue_get_timestamp_period<B: GfxBackend>(
+        &self,
+        queue_id: id::QueueId,
+    ) -> Result<f32, InvalidQueue> {
+        span!(_guard, INFO, "Queue::get_timestamp_period");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, _) = hub.devices.read(&mut token);
+        match device_guard.get(queue_id) {
+            Ok(device) => Ok(device.queue_group.queues[0].timestamp_period()),
+            Err(_) => Err(InvalidQueue),
+        }
     }
 }
 

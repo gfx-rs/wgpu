@@ -44,7 +44,7 @@ use crate::{
     LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
 };
 
-use hal::{queue::CommandQueue as _, window::PresentationSurface as _};
+use hal::{queue::Queue as _, window::PresentationSurface as _};
 use thiserror::Error;
 use wgt::{SwapChainDescriptor, SwapChainStatus};
 

@@ -223,7 +223,6 @@ struct PrivateFeatures {
     anisotropic_filtering: bool,
     texture_d24: bool,
     texture_d24_s8: bool,
-    timestamp_period: f32,
 }
 
 #[macro_export]
