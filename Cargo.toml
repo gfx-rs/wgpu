@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "Rusty WebGPU API wrapper"
@@ -25,21 +25,18 @@ webgl = ["wgc"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
-git = "https://github.com/gfx-rs/wgpu"
-rev = "ac81f3e7562eff96ca854b462b0893c38ea98de2"
+version = "0.7"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
 package = "wgpu-core"
-git = "https://github.com/gfx-rs/wgpu"
-rev = "ac81f3e7562eff96ca854b462b0893c38ea98de2"
+version = "0.7"
 features = ["raw-window-handle"]
 optional = true
 
 [dependencies.wgt]
 package = "wgpu-types"
-git = "https://github.com/gfx-rs/wgpu"
-rev = "ac81f3e7562eff96ca854b462b0893c38ea98de2"
+version = "0.7"
 
 [dependencies]
 arrayvec = "0.5"
@@ -54,7 +51,7 @@ bytemuck = { version = "1.4", features = ["derive"] }
 cgmath = "0.18"
 ddsfile = "0.4"
 log = "0.4"
-naga = { git = "https://github.com/gfx-rs/naga", tag = "gfx-8", features = ["wgsl-in"] }
+naga = { version = "0.3", features = ["wgsl-in"] }
 noise = "0.7"
 png = "0.16"
 rand = { version = "0.7.2", features = ["wasm-bindgen"] }
@@ -66,8 +63,7 @@ pollster = "0.2"
 wgpu-subscriber = "0.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-tag = "gfx-8"
+version = "0.3"
 features = ["wgsl-in", "spv-out"]
 
 [[example]]
@@ -75,23 +71,15 @@ name="hello-compute"
 path="examples/hello-compute/main.rs"
 test = true
 
-[patch."https://github.com/gfx-rs/wgpu"]
-#wgpu-types = { version = "0.6", path = "../wgpu/wgpu-types" }
-#wgpu-core = { version = "0.6", path = "../wgpu/wgpu-core" }
-
 [patch."https://github.com/gfx-rs/subscriber"]
 #wgpu-subscriber = { version = "0.1", path = "../subscriber" }
 
-[patch."https://github.com/gfx-rs/naga"]
+[patch.crates-io]
+#wgpu-types = { path = "../wgpu/wgpu-types" }
+#wgpu-core = { path = "../wgpu/wgpu-core" }
 #naga = { path = "../naga" }
-
-[patch."https://github.com/zakarumych/gpu-descriptor"]
 #gpu-descriptor = { path = "../gpu-descriptor/gpu-descriptor" }
-
-[patch."https://github.com/zakarumych/gpu-alloc"]
 #gpu-alloc = { path = "../gpu-alloc/gpu-alloc" }
-
-[patch."https://github.com/gfx-rs/gfx"]
 #gfx-hal = { path = "../gfx/src/hal" }
 #gfx-backend-empty = { path = "../gfx/src/backend/empty" }
 #gfx-backend-vulkan = { path = "../gfx/src/backend/vulkan" }
