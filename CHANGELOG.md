@@ -1,6 +1,6 @@
 # Change Log
 
-## v0.7 (2020-08-30)
+## v0.7 (2021-01-31)
   - Major API changes:
     - `RenderPipelineDescriptor`
     - `BindingType`
