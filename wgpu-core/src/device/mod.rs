@@ -2004,6 +2004,18 @@ impl<B: GfxBackend> Device<B> {
             }
         }
 
+        if desc.primitive.strip_index_format.is_some()
+            && desc.primitive.topology != wgt::PrimitiveTopology::LineStrip
+            && desc.primitive.topology != wgt::PrimitiveTopology::TriangleStrip
+        {
+            return Err(
+                pipeline::CreateRenderPipelineError::StripIndexFormatForNonStripTopology {
+                    strip_index_format: desc.primitive.strip_index_format,
+                    topology: desc.primitive.topology,
+                },
+            );
+        }
+
         let input_assembler = conv::map_primitive_state_to_input_assembler(&desc.primitive);
 
         let blender = hal::pso::BlendDesc {

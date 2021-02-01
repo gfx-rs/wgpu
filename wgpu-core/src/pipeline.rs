@@ -191,7 +191,7 @@ pub struct RenderPipelineDescriptor<'a> {
 pub enum CreateRenderPipelineError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("pipelie layout is invalid")]
+    #[error("pipeline layout is invalid")]
     InvalidLayout,
     #[error("unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
@@ -210,6 +210,11 @@ pub enum CreateRenderPipelineError {
     InvalidVertexAttributeOffset {
         location: wgt::ShaderLocation,
         offset: wgt::BufferAddress,
+    },
+    #[error("strip index format was not set to None but to {strip_index_format:?} while using the non-strip topology {topology:?}")]
+    StripIndexFormatForNonStripTopology {
+        strip_index_format: Option<wgt::IndexFormat>,
+        topology: wgt::PrimitiveTopology,
     },
     #[error("missing required device features {0:?}")]
     MissingFeature(wgt::Features),
