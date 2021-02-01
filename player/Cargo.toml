@@ -25,13 +25,11 @@ winit = { version = "0.24", optional = true }
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.6"
 features = ["replay"]
 
 [dependencies.wgc]
 path = "../wgpu-core"
 package = "wgpu-core"
-version = "0.6"
 features = ["replay", "raw-window-handle"]
 
 #[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies.gfx-backend-metal]

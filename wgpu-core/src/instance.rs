@@ -208,7 +208,6 @@ impl<B: GfxBackend> Adapter<B> {
                 .format_properties(Some(hal::format::Format::D24UnormS8Uint))
                 .optimal_tiling
                 .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
-            timestamp_period: adapter_limits.timestamp_period,
         };
 
         let default_limits = wgt::Limits::default();
@@ -874,22 +873,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_guard
             .get(adapter_id)
             .map(|adapter| adapter.limits.clone())
-            .map_err(|_| InvalidAdapter)
-    }
-
-    pub fn adapter_get_timestamp_period<B: GfxBackend>(
-        &self,
-        adapter_id: AdapterId,
-    ) -> Result<f32, InvalidAdapter> {
-        span!(_guard, INFO, "Adapter::get_timestamp_period");
-
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let (adapter_guard, _) = hub.adapters.read(&mut token);
-
-        adapter_guard
-            .get(adapter_id)
-            .map(|adapter| adapter.private_features.timestamp_period)
             .map_err(|_| InvalidAdapter)
     }
 

@@ -42,7 +42,7 @@ use std::{
 pub mod alloc;
 pub mod descriptor;
 mod life;
-mod queue;
+pub mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 
@@ -353,7 +353,7 @@ impl<B: GfxBackend> Device<B> {
         tracker.lock()
     }
 
-    pub(crate) fn lock_life<'this, 'token: 'this>(
+    fn lock_life<'this, 'token: 'this>(
         &'this self,
         //TODO: fix this - the token has to be borrowed for the lock
         token: &mut Token<'token, Self>,

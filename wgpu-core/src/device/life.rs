@@ -28,7 +28,7 @@ const CLEANUP_WAIT_MS: u64 = 5000;
 
 /// A struct that keeps lists of resources that are no longer needed by the user.
 #[derive(Debug, Default)]
-pub struct SuspectedResources {
+pub(super) struct SuspectedResources {
     pub(crate) buffers: Vec<id::Valid<id::BufferId>>,
     pub(crate) textures: Vec<id::Valid<id::TextureId>>,
     pub(crate) texture_views: Vec<id::Valid<id::TextureViewId>>,
@@ -43,7 +43,7 @@ pub struct SuspectedResources {
 }
 
 impl SuspectedResources {
-    pub(crate) fn clear(&mut self) {
+    pub(super) fn clear(&mut self) {
         self.buffers.clear();
         self.textures.clear();
         self.texture_views.clear();
@@ -57,7 +57,7 @@ impl SuspectedResources {
         self.query_sets.clear();
     }
 
-    pub(crate) fn extend(&mut self, other: &Self) {
+    pub(super) fn extend(&mut self, other: &Self) {
         self.buffers.extend_from_slice(&other.buffers);
         self.textures.extend_from_slice(&other.textures);
         self.texture_views.extend_from_slice(&other.texture_views);
@@ -75,7 +75,7 @@ impl SuspectedResources {
         self.query_sets.extend_from_slice(&other.query_sets);
     }
 
-    pub(crate) fn add_trackers(&mut self, trackers: &TrackerSet) {
+    pub(super) fn add_trackers(&mut self, trackers: &TrackerSet) {
         self.buffers.extend(trackers.buffers.used());
         self.textures.extend(trackers.textures.used());
         self.texture_views.extend(trackers.views.used());
@@ -216,7 +216,7 @@ pub enum WaitIdleError {
 ///   3. When `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
 ///   4. Finally, `handle_mapping` issues all the callbacks.
 #[derive(Debug)]
-pub(crate) struct LifetimeTracker<B: hal::Backend> {
+pub(super) struct LifetimeTracker<B: hal::Backend> {
     /// Resources that the user has requested be mapped, but are still in use.
     mapped: Vec<Stored<id::BufferId>>,
     /// Buffers can be used in a submission that is yet to be made, by the
@@ -375,7 +375,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
 }
 
 impl<B: GfxBackend> LifetimeTracker<B> {
-    pub(crate) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
+    pub(super) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<B, G>,
         trackers: &Mutex<TrackerSet>,
@@ -636,7 +636,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
     }
 
-    pub(crate) fn triage_mapped<G: GlobalIdentityHandlerFactory>(
+    pub(super) fn triage_mapped<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<B, G>,
         token: &mut Token<super::Device<B>>,
@@ -666,7 +666,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
     }
 
-    pub(crate) fn handle_mapping<G: GlobalIdentityHandlerFactory>(
+    pub(super) fn handle_mapping<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<B, G>,
         raw: &B::Device,
