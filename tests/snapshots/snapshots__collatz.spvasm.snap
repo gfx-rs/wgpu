@@ -9,14 +9,14 @@ expression: dis
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %39 "main" %52
+OpEntryPoint GLCompute %39 "main" %53
 OpExecutionMode %39 LocalSize 1 1 1
+OpDecorate %43 ArrayStride 4
 OpDecorate %45 BufferBlock
 OpMemberDecorate %45 0 Offset 0
-OpDecorate %46 ArrayStride 4
-OpDecorate %44 DescriptorSet 0
-OpDecorate %44 Binding 0
-OpDecorate %52 BuiltIn GlobalInvocationId
+OpDecorate %46 DescriptorSet 0
+OpDecorate %46 Binding 0
+OpDecorate %53 BuiltIn GlobalInvocationId
 %3 = OpTypeInt 32 0
 %2 = OpConstant  %3  0
 %4 = OpConstant  %3  1
@@ -24,26 +24,26 @@ OpDecorate %52 BuiltIn GlobalInvocationId
 %6 = OpConstant  %3  3
 %8 = OpTypePointer Function %3
 %12 = OpTypeFunction %3 %3
-%20 = OpTypeBool
+%18 = OpTypeBool
 %38 = OpTypeVoid
 %40 = OpTypeFunction %38
-%46 = OpTypeRuntimeArray %3
-%45 = OpTypeStruct %46
+%43 = OpTypeRuntimeArray %3
+%45 = OpTypeStruct %43
 %47 = OpTypePointer Uniform %45
-%44 = OpVariable  %47  Uniform
-%48 = OpTypeInt 32 1
-%49 = OpConstant  %48  0
-%50 = OpTypePointer Uniform %46
-%53 = OpTypeVector %3 3
-%54 = OpTypePointer Input %53
-%52 = OpVariable  %54  Input
-%55 = OpConstant  %48  0
-%56 = OpTypePointer Input %3
+%46 = OpVariable  %47  Uniform
+%48 = OpTypePointer Uniform %43
+%49 = OpTypeInt 32 1
+%50 = OpConstant  %49  0
+%52 = OpTypeVector %3 3
+%54 = OpTypePointer Input %52
+%53 = OpVariable  %54  Input
+%55 = OpTypePointer Input %3
+%56 = OpConstant  %49  0
 %58 = OpTypePointer Uniform %3
-%62 = OpConstant  %48  0
-%63 = OpTypePointer Uniform %46
-%65 = OpConstant  %48  0
-%66 = OpTypePointer Input %3
+%62 = OpTypePointer Uniform %43
+%63 = OpConstant  %49  0
+%65 = OpTypePointer Input %3
+%66 = OpConstant  %49  0
 %68 = OpTypePointer Uniform %3
 %11 = OpFunction  %3  None %12
 %10 = OpFunctionParameter  %3
@@ -56,10 +56,10 @@ OpBranch %14
 OpLoopMerge %15 %17 None
 OpBranch %16
 %16 = OpLabel
-%19 = OpLoad  %3  %7
-%18 = OpULessThanEqual  %20  %19 %4
+%20 = OpLoad  %3  %7
+%19 = OpULessThanEqual  %18  %20 %4
 OpSelectionMerge %21 None
-OpBranchConditional %18 %22 %23
+OpBranchConditional %19 %22 %23
 %22 = OpLabel
 OpBranch %15
 %23 = OpLabel
@@ -67,7 +67,7 @@ OpBranch %21
 %21 = OpLabel
 %26 = OpLoad  %3  %7
 %25 = OpUMod  %3  %26 %5
-%24 = OpIEqual  %20  %25 %2
+%24 = OpIEqual  %18  %25 %2
 OpSelectionMerge %27 None
 OpBranchConditional %24 %28 %29
 %28 = OpLabel
@@ -94,12 +94,12 @@ OpReturnValue %37
 OpFunctionEnd
 %39 = OpFunction  %38  None %40
 %41 = OpLabel
-%43 = OpAccessChain  %50  %44 %49
-%51 = OpAccessChain  %56  %52 %55
+%44 = OpAccessChain  %48  %46 %50
+%51 = OpAccessChain  %55  %53 %56
 %57 = OpLoad  %3  %51
-%42 = OpAccessChain  %58  %43 %57
-%61 = OpAccessChain  %63  %44 %62
-%64 = OpAccessChain  %66  %52 %65
+%42 = OpAccessChain  %58  %44 %57
+%61 = OpAccessChain  %62  %46 %63
+%64 = OpAccessChain  %65  %53 %66
 %67 = OpLoad  %3  %64
 %60 = OpAccessChain  %68  %61 %67
 %69 = OpLoad  %3  %60

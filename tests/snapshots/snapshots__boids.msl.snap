@@ -36,6 +36,8 @@ typedef metal::uint3 type4;
 
 typedef int type5;
 
+typedef bool type6;
+
 kernel void main1(
     constant SimParams& params [[buffer(0)]],
     constant Particles& particlesSrc [[buffer(1)]],

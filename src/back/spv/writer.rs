@@ -1,8 +1,8 @@
 /*! Standard Portable Intermediate Representation (SPIR-V) backend !*/
 use super::{Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
-use crate::proc::Layouter;
+use crate::proc::{Layouter, ResolveContext, ResolveError, Typifier};
 use spirv::Word;
-use std::{collections::hash_map::Entry, ops};
+use std::collections::hash_map::Entry;
 use thiserror::Error;
 
 const BITS_PER_BYTE: crate::Bytes = 8;
@@ -13,6 +13,8 @@ pub enum Error {
     MissingCapabilities(Vec<spirv::Capability>),
     #[error("unimplemented {0:}")]
     FeatureNotImplemented(&'static str),
+    #[error(transparent)]
+    Resolve(#[from] ResolveError),
 }
 
 struct Block {
@@ -77,7 +79,6 @@ impl Function {
 
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
 enum LocalType {
-    Void,
     Scalar {
         kind: crate::ScalarKind,
         width: crate::Bytes,
@@ -99,6 +100,28 @@ enum LocalType {
     SampledImage {
         image_type: crate::Handle<crate::Type>,
     },
+}
+
+impl LocalType {
+    fn from_inner(inner: &crate::TypeInner) -> Option<Self> {
+        Some(match *inner {
+            crate::TypeInner::Scalar { kind, width } => LocalType::Scalar { kind, width },
+            crate::TypeInner::Vector { size, kind, width } => {
+                LocalType::Vector { size, kind, width }
+            }
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => LocalType::Matrix {
+                columns,
+                rows,
+                width,
+            },
+            crate::TypeInner::Pointer { base, class } => LocalType::Pointer { base, class },
+            _ => return None,
+        })
+    }
 }
 
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
@@ -128,21 +151,6 @@ struct LookupFunctionType {
     return_type_id: Word,
 }
 
-enum MaybeOwned<'a, T> {
-    Owned(T),
-    Borrowed(&'a T),
-}
-
-impl<'a, T> ops::Deref for MaybeOwned<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        match *self {
-            MaybeOwned::Owned(ref value) => value,
-            MaybeOwned::Borrowed(reference) => reference,
-        }
-    }
-}
-
 #[derive(Debug)]
 enum Dimension {
     Scalar,
@@ -150,8 +158,8 @@ enum Dimension {
     Matrix,
 }
 
-fn get_dimension(ty_inner: &crate::TypeInner) -> Dimension {
-    match *ty_inner {
+fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
+    match *type_inner {
         crate::TypeInner::Scalar { .. } => Dimension::Scalar,
         crate::TypeInner::Vector { .. } => Dimension::Vector,
         crate::TypeInner::Matrix { .. } => Dimension::Matrix,
@@ -185,11 +193,12 @@ pub struct Writer {
     struct_type_handles: crate::FastHashMap<crate::Handle<crate::Type>, crate::StorageAccess>,
     gl450_ext_inst_id: Word,
     layouter: Layouter,
+    typifier: Typifier,
 }
 
 // type alias, for success return of write_expression
-type WriteExpressionOutput = (Word, LookupType);
-type WritePointerExpressionOutput = (Word, LookupType, spirv::StorageClass);
+type ExpressionId = Word;
+type PointerExpressionId = (Word, spirv::StorageClass);
 
 impl Writer {
     pub fn new(
@@ -214,6 +223,7 @@ impl Writer {
             struct_type_handles: crate::FastHashMap::default(),
             gl450_ext_inst_id: 0,
             layouter: Layouter::default(),
+            typifier: Typifier::new(),
         }
     }
 
@@ -249,6 +259,18 @@ impl Writer {
                     crate::TypeInner::Vector { size, kind, width } => self.get_type_id(
                         arena,
                         LookupType::Local(LocalType::Vector { size, kind, width }),
+                    ),
+                    crate::TypeInner::Matrix {
+                        columns,
+                        rows,
+                        width,
+                    } => self.get_type_id(
+                        arena,
+                        LookupType::Local(LocalType::Matrix {
+                            columns,
+                            rows,
+                            width,
+                        }),
                     ),
                     _ => self.write_type_declaration_arena(arena, handle),
                 },
@@ -332,15 +354,13 @@ impl Writer {
 
     fn create_pointer_type(
         &mut self,
-        lookup_type: LookupType,
+        type_id: spirv::Word,
         class: spirv::StorageClass,
-        type_arena: &crate::Arena<crate::Type>,
-    ) -> Result<(Word, LookupType), Error> {
-        let type_id = self.get_type_id(type_arena, lookup_type)?;
+    ) -> Result<Word, Error> {
         let id = self.generate_id();
         let instruction = super::instructions::instruction_type_pointer(id, class, type_id);
         instruction.to_words(&mut self.logical_layout.declarations);
-        Ok((id, lookup_type))
+        Ok(id)
     }
 
     fn create_constant(&mut self, type_id: Word, value: &[Word]) -> Word {
@@ -356,6 +376,18 @@ impl Writer {
         ir_module: &crate::Module,
     ) -> Result<Word, Error> {
         let mut function = Function::default();
+
+        self.typifier.resolve_all(
+            &ir_function.expressions,
+            &ir_module.types,
+            &ResolveContext {
+                constants: &ir_module.constants,
+                global_vars: &ir_module.global_variables,
+                local_vars: &ir_function.local_variables,
+                functions: &ir_module.functions,
+                arguments: &ir_function.arguments,
+            },
+        )?;
 
         for (handle, variable) in ir_function.local_variables.iter() {
             let id = self.generate_id();
@@ -537,7 +569,6 @@ impl Writer {
     ) -> Result<Word, Error> {
         let id = self.generate_id();
         let instruction = match local_ty {
-            LocalType::Void => unreachable!(),
             LocalType::Scalar { kind, width } => self.write_scalar(id, kind, width),
             LocalType::Vector { size, kind, width } => {
                 let scalar_id =
@@ -1048,37 +1079,6 @@ impl Writer {
         id
     }
 
-    fn get_type_inner<'a>(
-        &self,
-        ty_arena: &'a crate::Arena<crate::Type>,
-        lookup_ty: LookupType,
-    ) -> MaybeOwned<'a, crate::TypeInner> {
-        match lookup_ty {
-            LookupType::Handle(handle) => MaybeOwned::Borrowed(&ty_arena[handle].inner),
-            LookupType::Local(local_ty) => match local_ty {
-                LocalType::Scalar { kind, width } => {
-                    MaybeOwned::Owned(crate::TypeInner::Scalar { kind, width })
-                }
-                LocalType::Vector { size, kind, width } => {
-                    MaybeOwned::Owned(crate::TypeInner::Vector { size, kind, width })
-                }
-                LocalType::Matrix {
-                    columns,
-                    rows,
-                    width,
-                } => MaybeOwned::Owned(crate::TypeInner::Matrix {
-                    columns,
-                    rows,
-                    width,
-                }),
-                LocalType::Pointer { base, class } => {
-                    MaybeOwned::Owned(crate::TypeInner::Pointer { base, class })
-                }
-                LocalType::Void | LocalType::SampledImage { .. } => unreachable!(),
-            },
-        }
-    }
-
     /// Write an expression and return a value ID.
     fn write_expression<'a>(
         &mut self,
@@ -1087,18 +1087,20 @@ impl Writer {
         handle: crate::Handle<crate::Expression>,
         block: &mut Block,
         function: &mut Function,
-    ) -> Result<WriteExpressionOutput, Error> {
-        let (raw_expression, lookup_ty) =
+    ) -> Result<ExpressionId, Error> {
+        let (raw_expression, result_type_id) =
             self.write_expression_raw(ir_module, ir_function, handle, block, function)?;
         Ok(match raw_expression {
-            RawExpression::Value(id) => (id, lookup_ty),
+            RawExpression::Value(id) => id,
             RawExpression::Pointer(id, _) => {
                 let load_id = self.generate_id();
-                let type_id = self.get_type_id(&ir_module.types, lookup_ty)?;
                 block.body.push(super::instructions::instruction_load(
-                    type_id, load_id, id, None,
+                    result_type_id,
+                    load_id,
+                    id,
+                    None,
                 ));
-                (load_id, lookup_ty)
+                load_id
             }
         })
     }
@@ -1111,15 +1113,15 @@ impl Writer {
         handle: crate::Handle<crate::Expression>,
         block: &mut Block,
         function: &mut Function,
-    ) -> Result<WritePointerExpressionOutput, Error> {
-        let (raw_expression, lookup_ty) =
+    ) -> Result<PointerExpressionId, Error> {
+        let (raw_expression, _) =
             self.write_expression_raw(ir_module, ir_function, handle, block, function)?;
         Ok(match raw_expression {
             RawExpression::Value(_id) => unimplemented!(
                 "Expression {:?} is not a pointer",
                 ir_function.expressions[handle]
             ),
-            RawExpression::Pointer(id, class) => (id, lookup_ty, class),
+            RawExpression::Pointer(id, class) => (id, class),
         })
     }
 
@@ -1131,40 +1133,30 @@ impl Writer {
         expr_handle: crate::Handle<crate::Expression>,
         block: &mut Block,
         function: &mut Function,
-    ) -> Result<(RawExpression, LookupType), Error> {
-        match ir_function.expressions[expr_handle] {
+    ) -> Result<(RawExpression, ExpressionId), Error> {
+        let result_lookup_ty = match self.typifier.get_handle(expr_handle) {
+            Ok(ty_handle) => LookupType::Handle(ty_handle),
+            Err(inner) => LookupType::Local(LocalType::from_inner(inner).unwrap()),
+        };
+        let result_type_id = self.get_type_id(&ir_module.types, result_lookup_ty)?;
+
+        let raw_expr = match ir_function.expressions[expr_handle] {
             crate::Expression::Access { base, index } => {
                 let id = self.generate_id();
-                let (raw_base_expression, base_lookup_ty) =
+                let (raw_base_expression, _) =
                     self.write_expression_raw(ir_module, ir_function, base, block, function)?;
-                let base_ty_inner = self.get_type_inner(&ir_module.types, base_lookup_ty);
-                let (index_id, _) =
+                let index_id =
                     self.write_expression(ir_module, ir_function, index, block, function)?;
+                let base_inner = self.typifier.get(base, &ir_module.types);
 
-                let lookup_ty = match *base_ty_inner {
-                    crate::TypeInner::Vector {
-                        size: _,
-                        kind,
-                        width,
-                    } => LookupType::Local(LocalType::Scalar { kind, width }),
-                    crate::TypeInner::Array { base, .. } => LookupType::Handle(base),
-                    ref other => {
-                        log::error!("Unable to index {:?}", other);
-                        return Err(Error::FeatureNotImplemented(
-                            "accessing index of non vector or array",
-                        ));
-                    }
-                };
-
-                Ok(match raw_base_expression {
+                match raw_base_expression {
                     RawExpression::Value(base_id) => {
-                        if let crate::TypeInner::Array { .. } = *base_ty_inner {
+                        if let crate::TypeInner::Array { .. } = *base_inner {
                             return Err(Error::FeatureNotImplemented(
                                 "accessing index of a value array",
                             ));
                         }
 
-                        let result_type_id = self.get_type_id(&ir_module.types, lookup_ty)?;
                         block
                             .body
                             .push(super::instructions::instruction_vector_extract_dynamic(
@@ -1174,11 +1166,10 @@ impl Writer {
                                 index_id,
                             ));
 
-                        (RawExpression::Value(id), lookup_ty)
+                        RawExpression::Value(id)
                     }
                     RawExpression::Pointer(base_id, class) => {
-                        let (pointer_type_id, pointer_lookup_ty) =
-                            self.create_pointer_type(lookup_ty, class, &ir_module.types)?;
+                        let pointer_type_id = self.create_pointer_type(result_type_id, class)?;
 
                         block
                             .body
@@ -1189,46 +1180,17 @@ impl Writer {
                                 &[index_id],
                             ));
 
-                        (RawExpression::Pointer(id, class), pointer_lookup_ty)
+                        RawExpression::Pointer(id, class)
                     }
-                })
+                }
             }
             crate::Expression::AccessIndex { base, index } => {
                 let id = self.generate_id();
-                let (raw_base_expression, base_lookup_ty) =
+                let (raw_base_expression, _) =
                     self.write_expression_raw(ir_module, ir_function, base, block, function)?;
-                let base_ty_inner = self.get_type_inner(&ir_module.types, base_lookup_ty);
 
-                let lookup_ty = match *base_ty_inner {
-                    crate::TypeInner::Vector {
-                        size: _,
-                        kind,
-                        width,
-                    } => LookupType::Local(LocalType::Scalar { kind, width }),
-                    crate::TypeInner::Matrix {
-                        columns: _,
-                        rows,
-                        width,
-                    } => LookupType::Local(LocalType::Vector {
-                        size: rows,
-                        kind: crate::ScalarKind::Float,
-                        width,
-                    }),
-                    crate::TypeInner::Struct {
-                        block: _,
-                        ref members,
-                    } => LookupType::Handle(members[index as usize].ty),
-                    ref other => {
-                        log::error!("Unable to access index {:?}", other);
-                        return Err(Error::FeatureNotImplemented(
-                            "accessing index of non vector or struct",
-                        ));
-                    }
-                };
-
-                Ok(match raw_base_expression {
+                match raw_base_expression {
                     RawExpression::Value(base_id) => {
-                        let result_type_id = self.get_type_id(&ir_module.types, lookup_ty)?;
                         block
                             .body
                             .push(super::instructions::instruction_composite_extract(
@@ -1238,9 +1200,11 @@ impl Writer {
                                 &[index],
                             ));
 
-                        (RawExpression::Value(id), lookup_ty)
+                        RawExpression::Value(id)
                     }
                     RawExpression::Pointer(base_id, class) => {
+                        let pointer_type_id = self.create_pointer_type(result_type_id, class)?;
+
                         let const_ty_id = self.get_type_id(
                             &ir_module.types,
                             LookupType::Local(LocalType::Scalar {
@@ -1249,8 +1213,6 @@ impl Writer {
                             }),
                         )?;
                         let const_id = self.create_constant(const_ty_id, &[index]);
-                        let (pointer_type_id, pointer_lookup_ty) =
-                            self.create_pointer_type(lookup_ty, class, &ir_module.types)?;
 
                         block
                             .body
@@ -1261,39 +1223,24 @@ impl Writer {
                                 &[const_id],
                             ));
 
-                        (RawExpression::Pointer(id, class), pointer_lookup_ty)
+                        RawExpression::Pointer(id, class)
                     }
-                })
+                }
             }
             crate::Expression::GlobalVariable(handle) => {
-                let var = &ir_module.global_variables[handle];
                 let (id, class) = self.get_global_variable_id(&ir_module, handle)?;
-
-                Ok((
-                    RawExpression::Pointer(id, class),
-                    LookupType::Handle(var.ty),
-                ))
+                RawExpression::Pointer(id, class)
             }
             crate::Expression::Constant(handle) => {
-                let var = &ir_module.constants[handle];
                 let id = self.lookup_constant[&handle];
-                let lookup_type = match var.inner {
-                    crate::ConstantInner::Scalar { width, ref value } => {
-                        LookupType::Local(LocalType::Scalar {
-                            kind: value.scalar_kind(),
-                            width,
-                        })
-                    }
-                    crate::ConstantInner::Composite { ty, components: _ } => LookupType::Handle(ty),
-                };
-                Ok((RawExpression::Value(id), lookup_type))
+                RawExpression::Value(id)
             }
             crate::Expression::Compose { ty, ref components } => {
                 let base_type_id = self.get_type_id(&ir_module.types, LookupType::Handle(ty))?;
 
                 let mut constituent_ids = Vec::with_capacity(components.len());
                 for component in components {
-                    let (component_id, _) = self.write_expression(
+                    let component_id = self.write_expression(
                         ir_module,
                         &ir_function,
                         *component,
@@ -1304,14 +1251,13 @@ impl Writer {
                 }
 
                 let id = self.write_composite_construct(base_type_id, &constituent_ids, block);
-                Ok((RawExpression::Value(id), LookupType::Handle(ty)))
+                RawExpression::Value(id)
             }
             crate::Expression::Unary { op, expr } => {
                 let id = self.generate_id();
-                let (expr_id, expr_lookup_ty) =
+                let expr_id =
                     self.write_expression(ir_module, ir_function, expr, block, function)?;
-                let expr_ty_inner = self.get_type_inner(&ir_module.types, expr_lookup_ty);
-                let result_type_id = self.get_type_id(&ir_module.types, expr_lookup_ty)?;
+                let expr_ty_inner = self.typifier.get(expr, &ir_module.types);
 
                 let spirv_op = match op {
                     crate::UnaryOperator::Negate => match expr_ty_inner.scalar_kind() {
@@ -1319,7 +1265,7 @@ impl Writer {
                         Some(crate::ScalarKind::Sint) => spirv::Op::SNegate,
                         Some(crate::ScalarKind::Bool) => spirv::Op::LogicalNot,
                         Some(crate::ScalarKind::Uint) | None => {
-                            log::error!("Unable to negate {:?}", &*expr_ty_inner);
+                            log::error!("Unable to negate {:?}", expr_ty_inner);
                             return Err(Error::FeatureNotImplemented("negation"));
                         }
                     },
@@ -1332,25 +1278,21 @@ impl Writer {
                     id,
                     expr_id,
                 ));
-                Ok((RawExpression::Value(id), expr_lookup_ty))
+                RawExpression::Value(id)
             }
             crate::Expression::Binary { op, left, right } => {
                 let id = self.generate_id();
-                let (left_id, left_lookup_ty) =
+                let left_id =
                     self.write_expression(ir_module, ir_function, left, block, function)?;
-                let (right_id, right_lookup_ty) =
+                let right_id =
                     self.write_expression(ir_module, ir_function, right, block, function)?;
 
-                let left_ty_inner = self.get_type_inner(&ir_module.types, left_lookup_ty);
-                let right_ty_inner = self.get_type_inner(&ir_module.types, right_lookup_ty);
+                let left_ty_inner = self.typifier.get(left, &ir_module.types);
+                let right_ty_inner = self.typifier.get(right, &ir_module.types);
 
-                let left_result_type_id = self.get_type_id(&ir_module.types, left_lookup_ty)?;
-                let right_result_type_id = self.get_type_id(&ir_module.types, right_lookup_ty)?;
+                let left_dimension = get_dimension(left_ty_inner);
+                let right_dimension = get_dimension(right_ty_inner);
 
-                let left_dimension = get_dimension(&left_ty_inner);
-                let right_dimension = get_dimension(&right_ty_inner);
-
-                let mut result_side_left = true;
                 let mut preserve_order = true;
 
                 let spirv_op = match op {
@@ -1370,38 +1312,30 @@ impl Writer {
                         },
                         _ => unimplemented!(),
                     },
-                    crate::BinaryOperator::Multiply => {
-                        // whenever there is a vector on the right,
-                        // the result type is a vector.
-                        if let Dimension::Vector = right_dimension {
-                            result_side_left = false;
+                    crate::BinaryOperator::Multiply => match (left_dimension, right_dimension) {
+                        (Dimension::Scalar, Dimension::Vector { .. }) => {
+                            preserve_order = false;
+                            spirv::Op::VectorTimesScalar
                         }
-                        match (left_dimension, right_dimension) {
-                            (Dimension::Scalar, Dimension::Vector { .. }) => {
-                                preserve_order = false;
-                                spirv::Op::VectorTimesScalar
-                            }
-                            (Dimension::Vector, Dimension::Scalar { .. }) => {
-                                spirv::Op::VectorTimesScalar
-                            }
-                            (Dimension::Vector, Dimension::Matrix) => spirv::Op::VectorTimesMatrix,
-                            (Dimension::Matrix, Dimension::Scalar { .. }) => {
-                                spirv::Op::MatrixTimesScalar
-                            }
-                            (Dimension::Matrix, Dimension::Vector) => spirv::Op::MatrixTimesVector,
-                            (Dimension::Matrix, Dimension::Matrix) => spirv::Op::MatrixTimesMatrix,
-                            (Dimension::Vector, Dimension::Vector)
-                            | (Dimension::Scalar, Dimension::Scalar)
-                                if left_ty_inner.scalar_kind()
-                                    == Some(crate::ScalarKind::Float) =>
-                            {
-                                spirv::Op::FMul
-                            }
-                            (Dimension::Vector, Dimension::Vector)
-                            | (Dimension::Scalar, Dimension::Scalar) => spirv::Op::IMul,
-                            other => unimplemented!("Mul {:?}", other),
+                        (Dimension::Vector, Dimension::Scalar { .. }) => {
+                            spirv::Op::VectorTimesScalar
                         }
-                    }
+                        (Dimension::Vector, Dimension::Matrix) => spirv::Op::VectorTimesMatrix,
+                        (Dimension::Matrix, Dimension::Scalar { .. }) => {
+                            spirv::Op::MatrixTimesScalar
+                        }
+                        (Dimension::Matrix, Dimension::Vector) => spirv::Op::MatrixTimesVector,
+                        (Dimension::Matrix, Dimension::Matrix) => spirv::Op::MatrixTimesMatrix,
+                        (Dimension::Vector, Dimension::Vector)
+                        | (Dimension::Scalar, Dimension::Scalar)
+                            if left_ty_inner.scalar_kind() == Some(crate::ScalarKind::Float) =>
+                        {
+                            spirv::Op::FMul
+                        }
+                        (Dimension::Vector, Dimension::Vector)
+                        | (Dimension::Scalar, Dimension::Scalar) => spirv::Op::IMul,
+                        other => unimplemented!("Mul {:?}", other),
+                    },
                     crate::BinaryOperator::Divide => match left_ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Sint) => spirv::Op::SDiv,
                         Some(crate::ScalarKind::Uint) => spirv::Op::UDiv,
@@ -1467,29 +1401,6 @@ impl Writer {
                     },
                 };
 
-                let is_comparison = match op {
-                    crate::BinaryOperator::Equal
-                    | crate::BinaryOperator::NotEqual
-                    | crate::BinaryOperator::Less
-                    | crate::BinaryOperator::LessEqual
-                    | crate::BinaryOperator::Greater
-                    | crate::BinaryOperator::GreaterEqual => true,
-                    _ => false,
-                };
-
-                let (result_type_id, result_lookup_ty) = if is_comparison {
-                    let local_ty = LookupType::Local(LocalType::Scalar {
-                        kind: crate::ScalarKind::Bool,
-                        width: 1,
-                    });
-                    let result_ty_id = self.get_type_id(&ir_module.types, local_ty)?;
-                    (result_ty_id, local_ty)
-                } else if result_side_left {
-                    (left_result_type_id, left_lookup_ty)
-                } else {
-                    (right_result_type_id, right_lookup_ty)
-                };
-
                 block.body.push(super::instructions::instruction_binary(
                     spirv_op,
                     result_type_id,
@@ -1497,7 +1408,7 @@ impl Writer {
                     if preserve_order { left_id } else { right_id },
                     if preserve_order { right_id } else { left_id },
                 ));
-                Ok((RawExpression::Value(id), result_lookup_ty))
+                RawExpression::Value(id)
             }
             crate::Expression::Math {
                 fun,
@@ -1507,28 +1418,22 @@ impl Writer {
             } => {
                 use crate::MathFunction as Mf;
                 enum MathOp {
-                    Single(spirv::GLOp),
-                    Double(spirv::GLOp),
-                    Triple(spirv::GLOp),
-                    Other(super::Instruction, LookupType),
+                    Ext(spirv::GLOp),
+                    Custom(super::Instruction),
                 }
 
-                let (arg0_id, arg0_lookup_ty) =
+                let arg0_id =
                     self.write_expression(ir_module, ir_function, arg, block, function)?;
-                let arg0_type_id = self.get_type_id(&ir_module.types, arg0_lookup_ty)?;
+                let arg_scalar_kind = self.typifier.get(arg, &ir_module.types).scalar_kind();
                 let arg1_id = match arg1 {
                     Some(id) => {
-                        let (arg1_id, _) =
-                            self.write_expression(ir_module, ir_function, id, block, function)?;
-                        arg1_id
+                        self.write_expression(ir_module, ir_function, id, block, function)?
                     }
                     None => 0,
                 };
                 let arg2_id = match arg2 {
                     Some(id) => {
-                        let (arg2_id, _) =
-                            self.write_expression(ir_module, ir_function, id, block, function)?;
-                        arg2_id
+                        self.write_expression(ir_module, ir_function, id, block, function)?
                     }
                     None => 0,
                 };
@@ -1537,339 +1442,147 @@ impl Writer {
                 let math_op = match fun {
                     // comparison
                     Mf::Abs => {
-                        let inst = match self
-                            .get_type_inner(&ir_module.types, arg0_lookup_ty)
-                            .scalar_kind()
-                        {
-                            Some(crate::ScalarKind::Float) => {
-                                super::instructions::instruction_ext_inst(
-                                    self.gl450_ext_inst_id,
-                                    spirv::GLOp::FAbs,
-                                    arg0_type_id,
-                                    id,
-                                    &[arg0_id],
-                                )
-                            }
-                            Some(crate::ScalarKind::Sint) => {
-                                super::instructions::instruction_ext_inst(
-                                    self.gl450_ext_inst_id,
-                                    spirv::GLOp::SAbs,
-                                    arg0_type_id,
-                                    id,
-                                    &[arg0_id],
-                                )
-                            }
+                        match arg_scalar_kind {
+                            Some(crate::ScalarKind::Float) => MathOp::Ext(spirv::GLOp::FAbs),
+                            Some(crate::ScalarKind::Sint) => MathOp::Ext(spirv::GLOp::SAbs),
                             Some(crate::ScalarKind::Uint) => {
-                                super::instructions::instruction_unary(
+                                MathOp::Custom(super::instructions::instruction_unary(
                                     spirv::Op::CopyObject, // do nothing
-                                    arg0_type_id,
+                                    result_type_id,
                                     id,
                                     arg0_id,
-                                )
+                                ))
                             }
                             other => unimplemented!("Unexpected abs({:?})", other),
-                        };
-                        MathOp::Other(inst, arg0_lookup_ty)
+                        }
                     }
-                    Mf::Min => {
-                        let op = match self
-                            .get_type_inner(&ir_module.types, arg0_lookup_ty)
-                            .scalar_kind()
-                        {
-                            Some(crate::ScalarKind::Float) => spirv::GLOp::FMin,
-                            Some(crate::ScalarKind::Sint) => spirv::GLOp::SMin,
-                            Some(crate::ScalarKind::Uint) => spirv::GLOp::UMin,
-                            other => unimplemented!("Unexpected min({:?})", other),
-                        };
-                        MathOp::Double(op)
-                    }
-                    Mf::Max => {
-                        let op = match self
-                            .get_type_inner(&ir_module.types, arg0_lookup_ty)
-                            .scalar_kind()
-                        {
-                            Some(crate::ScalarKind::Float) => spirv::GLOp::FMax,
-                            Some(crate::ScalarKind::Sint) => spirv::GLOp::SMax,
-                            Some(crate::ScalarKind::Uint) => spirv::GLOp::UMax,
-                            other => unimplemented!("Unexpected max({:?})", other),
-                        };
-                        MathOp::Double(op)
-                    }
-                    Mf::Clamp => {
-                        let op = match self
-                            .get_type_inner(&ir_module.types, arg0_lookup_ty)
-                            .scalar_kind()
-                        {
-                            Some(crate::ScalarKind::Float) => spirv::GLOp::FClamp,
-                            Some(crate::ScalarKind::Sint) => spirv::GLOp::SClamp,
-                            Some(crate::ScalarKind::Uint) => spirv::GLOp::UClamp,
-                            other => unimplemented!("Unexpected max({:?})", other),
-                        };
-                        MathOp::Triple(op)
-                    }
+                    Mf::Min => MathOp::Ext(match arg_scalar_kind {
+                        Some(crate::ScalarKind::Float) => spirv::GLOp::FMin,
+                        Some(crate::ScalarKind::Sint) => spirv::GLOp::SMin,
+                        Some(crate::ScalarKind::Uint) => spirv::GLOp::UMin,
+                        other => unimplemented!("Unexpected min({:?})", other),
+                    }),
+                    Mf::Max => MathOp::Ext(match arg_scalar_kind {
+                        Some(crate::ScalarKind::Float) => spirv::GLOp::FMax,
+                        Some(crate::ScalarKind::Sint) => spirv::GLOp::SMax,
+                        Some(crate::ScalarKind::Uint) => spirv::GLOp::UMax,
+                        other => unimplemented!("Unexpected max({:?})", other),
+                    }),
+                    Mf::Clamp => MathOp::Ext(match arg_scalar_kind {
+                        Some(crate::ScalarKind::Float) => spirv::GLOp::FClamp,
+                        Some(crate::ScalarKind::Sint) => spirv::GLOp::SClamp,
+                        Some(crate::ScalarKind::Uint) => spirv::GLOp::UClamp,
+                        other => unimplemented!("Unexpected max({:?})", other),
+                    }),
                     // trigonometry
-                    Mf::Sin => MathOp::Single(spirv::GLOp::Sin),
-                    Mf::Sinh => MathOp::Single(spirv::GLOp::Sinh),
-                    Mf::Asin => MathOp::Single(spirv::GLOp::Asin),
-                    Mf::Cos => MathOp::Single(spirv::GLOp::Cos),
-                    Mf::Cosh => MathOp::Single(spirv::GLOp::Cosh),
-                    Mf::Acos => MathOp::Single(spirv::GLOp::Acos),
-                    Mf::Tan => MathOp::Single(spirv::GLOp::Tan),
-                    Mf::Tanh => MathOp::Single(spirv::GLOp::Tanh),
-                    Mf::Atan => MathOp::Single(spirv::GLOp::Atan),
-                    Mf::Atan2 => MathOp::Double(spirv::GLOp::Atan2),
+                    Mf::Sin => MathOp::Ext(spirv::GLOp::Sin),
+                    Mf::Sinh => MathOp::Ext(spirv::GLOp::Sinh),
+                    Mf::Asin => MathOp::Ext(spirv::GLOp::Asin),
+                    Mf::Cos => MathOp::Ext(spirv::GLOp::Cos),
+                    Mf::Cosh => MathOp::Ext(spirv::GLOp::Cosh),
+                    Mf::Acos => MathOp::Ext(spirv::GLOp::Acos),
+                    Mf::Tan => MathOp::Ext(spirv::GLOp::Tan),
+                    Mf::Tanh => MathOp::Ext(spirv::GLOp::Tanh),
+                    Mf::Atan => MathOp::Ext(spirv::GLOp::Atan),
+                    Mf::Atan2 => MathOp::Ext(spirv::GLOp::Atan2),
                     // decomposition
-                    Mf::Ceil => MathOp::Single(spirv::GLOp::Ceil),
-                    Mf::Round => MathOp::Single(spirv::GLOp::Round),
-                    Mf::Floor => MathOp::Single(spirv::GLOp::Floor),
-                    Mf::Fract => MathOp::Single(spirv::GLOp::Fract),
-                    Mf::Trunc => MathOp::Single(spirv::GLOp::Trunc),
-                    Mf::Modf => MathOp::Double(spirv::GLOp::Modf),
-                    Mf::Frexp => MathOp::Double(spirv::GLOp::Frexp),
-                    Mf::Ldexp => MathOp::Double(spirv::GLOp::Ldexp),
+                    Mf::Ceil => MathOp::Ext(spirv::GLOp::Ceil),
+                    Mf::Round => MathOp::Ext(spirv::GLOp::Round),
+                    Mf::Floor => MathOp::Ext(spirv::GLOp::Floor),
+                    Mf::Fract => MathOp::Ext(spirv::GLOp::Fract),
+                    Mf::Trunc => MathOp::Ext(spirv::GLOp::Trunc),
+                    Mf::Modf => MathOp::Ext(spirv::GLOp::Modf),
+                    Mf::Frexp => MathOp::Ext(spirv::GLOp::Frexp),
+                    Mf::Ldexp => MathOp::Ext(spirv::GLOp::Ldexp),
                     // geometry
-                    Mf::Dot => {
-                        let result_lookup_ty =
-                            match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
-                                crate::TypeInner::Scalar { kind, width }
-                                | crate::TypeInner::Vector {
-                                    size: _,
-                                    kind,
-                                    width,
-                                } => LookupType::Local(LocalType::Scalar { kind, width }),
-                                _ => unreachable!(),
-                            };
-                        let result_type_id =
-                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
-
-                        let inst = super::instructions::instruction_binary(
-                            spirv::Op::Dot,
-                            result_type_id,
-                            id,
-                            arg0_id,
-                            arg1_id,
-                        );
-                        MathOp::Other(inst, result_lookup_ty)
-                    }
-                    Mf::Cross => MathOp::Double(spirv::GLOp::Cross),
-                    Mf::Distance => {
-                        let result_lookup_ty =
-                            match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
-                                crate::TypeInner::Scalar { kind, width }
-                                | crate::TypeInner::Vector {
-                                    size: _,
-                                    kind,
-                                    width,
-                                } => LookupType::Local(LocalType::Scalar { kind, width }),
-                                _ => unreachable!(),
-                            };
-                        let result_type_id =
-                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
-
-                        let inst = super::instructions::instruction_ext_inst(
-                            self.gl450_ext_inst_id,
-                            spirv::GLOp::Distance,
-                            result_type_id,
-                            id,
-                            &[arg0_id, arg1_id],
-                        );
-                        MathOp::Other(inst, result_lookup_ty)
-                    }
-                    Mf::Length => {
-                        let result_lookup_ty =
-                            match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
-                                crate::TypeInner::Scalar { kind, width }
-                                | crate::TypeInner::Vector {
-                                    size: _,
-                                    kind,
-                                    width,
-                                } => LookupType::Local(LocalType::Scalar { kind, width }),
-                                _ => unreachable!(),
-                            };
-                        let result_type_id =
-                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
-
-                        let inst = super::instructions::instruction_ext_inst(
-                            self.gl450_ext_inst_id,
-                            spirv::GLOp::Length,
-                            result_type_id,
-                            id,
-                            &[arg0_id],
-                        );
-                        MathOp::Other(inst, result_lookup_ty)
-                    }
-                    Mf::Normalize => MathOp::Single(spirv::GLOp::Normalize),
-                    Mf::FaceForward => MathOp::Triple(spirv::GLOp::FaceForward),
-                    Mf::Reflect => MathOp::Double(spirv::GLOp::Reflect),
+                    Mf::Dot => MathOp::Custom(super::instructions::instruction_binary(
+                        spirv::Op::Dot,
+                        result_type_id,
+                        id,
+                        arg0_id,
+                        arg1_id,
+                    )),
+                    Mf::Cross => MathOp::Ext(spirv::GLOp::Cross),
+                    Mf::Distance => MathOp::Ext(spirv::GLOp::Distance),
+                    Mf::Length => MathOp::Ext(spirv::GLOp::Length),
+                    Mf::Normalize => MathOp::Ext(spirv::GLOp::Normalize),
+                    Mf::FaceForward => MathOp::Ext(spirv::GLOp::FaceForward),
+                    Mf::Reflect => MathOp::Ext(spirv::GLOp::Reflect),
                     // exponent
-                    Mf::Exp => MathOp::Single(spirv::GLOp::Exp),
-                    Mf::Exp2 => MathOp::Single(spirv::GLOp::Exp2),
-                    Mf::Log => MathOp::Single(spirv::GLOp::Log),
-                    Mf::Log2 => MathOp::Single(spirv::GLOp::Log2),
-                    Mf::Pow => MathOp::Double(spirv::GLOp::Pow),
+                    Mf::Exp => MathOp::Ext(spirv::GLOp::Exp),
+                    Mf::Exp2 => MathOp::Ext(spirv::GLOp::Exp2),
+                    Mf::Log => MathOp::Ext(spirv::GLOp::Log),
+                    Mf::Log2 => MathOp::Ext(spirv::GLOp::Log2),
+                    Mf::Pow => MathOp::Ext(spirv::GLOp::Pow),
                     // computational
-                    Mf::Sign => {
-                        let op = match self
-                            .get_type_inner(&ir_module.types, arg0_lookup_ty)
-                            .scalar_kind()
-                        {
-                            Some(crate::ScalarKind::Float) => spirv::GLOp::FSign,
-                            Some(crate::ScalarKind::Sint) => spirv::GLOp::SSign,
-                            other => unimplemented!("Unexpected sign({:?})", other),
-                        };
-                        MathOp::Single(op)
-                    }
-                    Mf::Fma => MathOp::Triple(spirv::GLOp::Fma),
-                    Mf::Mix => {
-                        let op = match self
-                            .get_type_inner(&ir_module.types, arg0_lookup_ty)
-                            .scalar_kind()
-                        {
-                            Some(crate::ScalarKind::Float) => spirv::GLOp::FMix,
-                            other => unimplemented!("Unexpected mix({:?})", other),
-                        };
-                        MathOp::Triple(op)
-                    }
-                    Mf::Step => MathOp::Triple(spirv::GLOp::Step),
-                    Mf::SmoothStep => MathOp::Triple(spirv::GLOp::SmoothStep),
-                    Mf::Sqrt => MathOp::Single(spirv::GLOp::Sqrt),
-                    Mf::InverseSqrt => MathOp::Single(spirv::GLOp::InverseSqrt),
-                    Mf::Transpose => {
-                        let result_lookup_ty =
-                            match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
-                                crate::TypeInner::Matrix {
-                                    columns,
-                                    rows,
-                                    width,
-                                } => LookupType::Local(LocalType::Matrix {
-                                    columns: rows,
-                                    rows: columns,
-                                    width,
-                                }),
-                                _ => unreachable!(),
-                            };
-                        let result_type_id =
-                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
-
-                        let inst = super::instructions::instruction_unary(
-                            spirv::Op::Transpose,
-                            result_type_id,
-                            id,
-                            arg0_id,
-                        );
-                        MathOp::Other(inst, result_lookup_ty)
-                    }
-                    Mf::Determinant => {
-                        let result_lookup_ty =
-                            match *self.get_type_inner(&ir_module.types, arg0_lookup_ty) {
-                                crate::TypeInner::Matrix { width, .. } => {
-                                    LookupType::Local(LocalType::Scalar {
-                                        kind: crate::ScalarKind::Float,
-                                        width,
-                                    })
-                                }
-                                _ => unreachable!(),
-                            };
-                        let result_type_id =
-                            self.get_type_id(&ir_module.types, result_lookup_ty)?;
-
-                        let inst = super::instructions::instruction_ext_inst(
-                            self.gl450_ext_inst_id,
-                            spirv::GLOp::Determinant,
-                            result_type_id,
-                            id,
-                            &[arg0_id],
-                        );
-                        MathOp::Other(inst, result_lookup_ty)
-                    }
-
+                    Mf::Sign => MathOp::Ext(match arg_scalar_kind {
+                        Some(crate::ScalarKind::Float) => spirv::GLOp::FSign,
+                        Some(crate::ScalarKind::Sint) => spirv::GLOp::SSign,
+                        other => unimplemented!("Unexpected sign({:?})", other),
+                    }),
+                    Mf::Fma => MathOp::Ext(spirv::GLOp::Fma),
+                    Mf::Mix => MathOp::Ext(spirv::GLOp::FMix),
+                    Mf::Step => MathOp::Ext(spirv::GLOp::Step),
+                    Mf::SmoothStep => MathOp::Ext(spirv::GLOp::SmoothStep),
+                    Mf::Sqrt => MathOp::Ext(spirv::GLOp::Sqrt),
+                    Mf::InverseSqrt => MathOp::Ext(spirv::GLOp::InverseSqrt),
+                    Mf::Transpose => MathOp::Custom(super::instructions::instruction_unary(
+                        spirv::Op::Transpose,
+                        result_type_id,
+                        id,
+                        arg0_id,
+                    )),
+                    Mf::Determinant => MathOp::Ext(spirv::GLOp::Determinant),
                     Mf::Outer | Mf::ReverseBits | Mf::CountOneBits => {
                         log::error!("unimplemented math function {:?}", fun);
                         return Err(Error::FeatureNotImplemented("math function"));
                     }
                 };
 
-                let (instruction, result_lookup_ty) = match math_op {
-                    MathOp::Single(op) => {
-                        let inst = super::instructions::instruction_ext_inst(
-                            self.gl450_ext_inst_id,
-                            op,
-                            arg0_type_id,
-                            id,
-                            &[arg0_id],
-                        );
-                        (inst, arg0_lookup_ty)
-                    }
-                    MathOp::Double(op) => {
-                        let inst = super::instructions::instruction_ext_inst(
-                            self.gl450_ext_inst_id,
-                            op,
-                            arg0_type_id,
-                            id,
-                            &[arg0_id, arg1_id],
-                        );
-                        (inst, arg0_lookup_ty)
-                    }
-                    MathOp::Triple(op) => {
-                        let inst = super::instructions::instruction_ext_inst(
-                            self.gl450_ext_inst_id,
-                            op,
-                            arg0_type_id,
-                            id,
-                            &[arg0_id, arg1_id, arg2_id],
-                        );
-                        (inst, arg0_lookup_ty)
-                    }
-                    MathOp::Other(inst, result_lookup_ty) => (inst, result_lookup_ty),
-                };
-
-                block.body.push(instruction);
-                Ok((RawExpression::Value(id), result_lookup_ty))
+                block.body.push(match math_op {
+                    MathOp::Ext(op) => super::instructions::instruction_ext_inst(
+                        self.gl450_ext_inst_id,
+                        op,
+                        result_type_id,
+                        id,
+                        &[arg0_id, arg1_id, arg2_id][..fun.argument_count()],
+                    ),
+                    MathOp::Custom(inst) => inst,
+                });
+                RawExpression::Value(id)
             }
             crate::Expression::LocalVariable(variable) => {
-                let var = &ir_function.local_variables[variable];
                 let local_var = &function.variables[&variable];
-                Ok((
-                    RawExpression::Pointer(local_var.id, spirv::StorageClass::Function),
-                    LookupType::Handle(var.ty),
-                ))
+                RawExpression::Pointer(local_var.id, spirv::StorageClass::Function)
             }
             crate::Expression::FunctionArgument(index) => {
-                let ty_handle = ir_function.arguments[index as usize].ty;
                 let id = function.parameters[index as usize].result_id.unwrap();
-                Ok((RawExpression::Value(id), LookupType::Handle(ty_handle)))
+                RawExpression::Value(id)
             }
             crate::Expression::Call {
                 function: local_function,
                 ref arguments,
             } => {
-                let target_function = &ir_module.functions[local_function];
                 let id = self.generate_id();
+                //TODO: avoid heap allocation
                 let mut argument_ids = vec![];
 
                 for argument in arguments {
-                    let (arg_id, _) =
+                    let arg_id =
                         self.write_expression(ir_module, ir_function, *argument, block, function)?;
                     argument_ids.push(arg_id);
                 }
 
-                let return_type_id =
-                    self.get_function_return_type(target_function.return_type, &ir_module.types)?;
-
                 block
                     .body
                     .push(super::instructions::instruction_function_call(
-                        return_type_id,
+                        result_type_id,
                         id,
                         *self.lookup_function.get(&local_function).unwrap(),
                         argument_ids.as_slice(),
                     ));
 
-                let result_type = match target_function.return_type {
-                    Some(ty_handle) => LookupType::Handle(ty_handle),
-                    None => LookupType::Local(LocalType::Void),
-                };
-                Ok((RawExpression::Value(id), result_type))
+                RawExpression::Value(id)
             }
             crate::Expression::As {
                 expr,
@@ -1880,25 +1593,14 @@ impl Writer {
                     return Err(Error::FeatureNotImplemented("bitcast"));
                 }
 
-                let (expr_id, expr_type) =
+                let expr_id =
                     self.write_expression(ir_module, ir_function, expr, block, function)?;
+                let expr_kind = self
+                    .typifier
+                    .get(expr, &ir_module.types)
+                    .scalar_kind()
+                    .unwrap();
 
-                let expr_type_inner = self.get_type_inner(&ir_module.types, expr_type);
-
-                let (expr_kind, local_type) = match *expr_type_inner {
-                    crate::TypeInner::Scalar {
-                        kind: expr_kind,
-                        width,
-                    } => (expr_kind, LocalType::Scalar { kind, width }),
-                    crate::TypeInner::Vector {
-                        size,
-                        kind: expr_kind,
-                        width,
-                    } => (expr_kind, LocalType::Vector { size, kind, width }),
-                    _ => unreachable!(),
-                };
-
-                let lookup_type = LookupType::Local(local_type);
                 let op = match (expr_kind, kind) {
                     _ if !convert => spirv::Op::Bitcast,
                     (crate::ScalarKind::Float, crate::ScalarKind::Uint) => spirv::Op::ConvertFToU,
@@ -1906,17 +1608,15 @@ impl Writer {
                     (crate::ScalarKind::Sint, crate::ScalarKind::Float) => spirv::Op::ConvertSToF,
                     (crate::ScalarKind::Uint, crate::ScalarKind::Float) => spirv::Op::ConvertUToF,
                     // We assume it's either an identity cast, or int-uint.
-                    // In both cases no SPIR-V instructions need to be generated.
-                    _ => return Ok((RawExpression::Value(expr_id), lookup_type)),
+                    _ => spirv::Op::Bitcast,
                 };
 
                 let id = self.generate_id();
-                let kind_type_id = self.get_type_id(&ir_module.types, lookup_type)?;
                 let instruction =
-                    super::instructions::instruction_unary(op, kind_type_id, id, expr_id);
+                    super::instructions::instruction_unary(op, result_type_id, id, expr_id);
                 block.body.push(instruction);
 
-                Ok((RawExpression::Value(id), lookup_type))
+                RawExpression::Value(id)
             }
             crate::Expression::ImageSample {
                 image,
@@ -1929,28 +1629,22 @@ impl Writer {
             } => {
                 use super::instructions::SampleLod;
                 // image
-                let (image_id, image_lookup_ty) =
+                let image_id =
                     self.write_expression(ir_module, ir_function, image, block, function)?;
-
-                let image_ty = match image_lookup_ty {
-                    LookupType::Handle(handle) => handle,
-                    LookupType::Local(_) => unreachable!(),
-                };
+                let image_type = self.typifier.get_handle(image).unwrap();
 
                 // OpTypeSampledImage
                 let sampled_image_type_id = self.get_type_id(
                     &ir_module.types,
-                    LookupType::Local(LocalType::SampledImage {
-                        image_type: image_ty,
-                    }),
+                    LookupType::Local(LocalType::SampledImage { image_type }),
                 )?;
 
                 // sampler
-                let (sampler_id, _) =
+                let sampler_id =
                     self.write_expression(ir_module, ir_function, sampler, block, function)?;
 
                 // coordinate
-                let (mut coordinate_id, coordinate_lookup_ty) =
+                let mut coordinate_id =
                     self.write_expression(ir_module, ir_function, coordinate, block, function)?;
 
                 if let Some(array_index) = array_index {
@@ -1963,7 +1657,7 @@ impl Writer {
                     )?;
 
                     let mut constituent_ids = [0u32; 4];
-                    let size = match *self.get_type_inner(&ir_module.types, coordinate_lookup_ty) {
+                    let size = match *self.typifier.get(coordinate, &ir_module.types) {
                         crate::TypeInner::Scalar { .. } => {
                             constituent_ids[0] = coordinate_id;
                             crate::VectorSize::Bi
@@ -1995,7 +1689,7 @@ impl Writer {
                     let array_index_f32_id = self.generate_id();
                     constituent_ids[size as usize - 1] = array_index_f32_id;
 
-                    let (array_index_u32_id, _) = self.write_expression(
+                    let array_index_u32_id = self.write_expression(
                         ir_module,
                         ir_function,
                         array_index,
@@ -2026,29 +1720,6 @@ impl Writer {
                     );
                 }
 
-                // component kind
-                let image_type = &ir_module.types[image_ty];
-                let image_sample_result_type = match image_type.inner {
-                    crate::TypeInner::Image { class, .. } => {
-                        let width = 4;
-                        LookupType::Local(match class {
-                            crate::ImageClass::Sampled { kind, multi: _ } => LocalType::Vector {
-                                kind,
-                                width,
-                                size: crate::VectorSize::Quad,
-                            },
-                            crate::ImageClass::Depth => LocalType::Scalar {
-                                kind: crate::ScalarKind::Float,
-                                width,
-                            },
-                            crate::ImageClass::Storage(_) => {
-                                unimplemented!("Unexpected storage image being sampled")
-                            }
-                        })
-                    }
-                    ref other => unimplemented!("Unexpected image type {:?}", other),
-                };
-
                 let sampled_image_id = self.generate_id();
                 block
                     .body
@@ -2059,12 +1730,10 @@ impl Writer {
                         sampler_id,
                     ));
                 let id = self.generate_id();
-                let image_sample_result_type_id =
-                    self.get_type_id(&ir_module.types, image_sample_result_type)?;
 
                 let depth_id = match depth_ref {
                     Some(handle) => {
-                        let (expr_id, _) =
+                        let expr_id =
                             self.write_expression(ir_module, ir_function, handle, block, function)?;
                         Some(expr_id)
                     }
@@ -2074,7 +1743,7 @@ impl Writer {
                 let mut main_instruction = match level {
                     crate::SampleLevel::Zero => {
                         let mut inst = super::instructions::instruction_image_sample(
-                            image_sample_result_type_id,
+                            result_type_id,
                             id,
                             SampleLod::Explicit,
                             sampled_image_id,
@@ -2095,7 +1764,7 @@ impl Writer {
                         inst
                     }
                     crate::SampleLevel::Auto => super::instructions::instruction_image_sample(
-                        image_sample_result_type_id,
+                        result_type_id,
                         id,
                         SampleLod::Implicit,
                         sampled_image_id,
@@ -2104,7 +1773,7 @@ impl Writer {
                     ),
                     crate::SampleLevel::Exact(lod_handle) => {
                         let mut inst = super::instructions::instruction_image_sample(
-                            image_sample_result_type_id,
+                            result_type_id,
                             id,
                             SampleLod::Explicit,
                             sampled_image_id,
@@ -2112,7 +1781,7 @@ impl Writer {
                             depth_id,
                         );
 
-                        let (lod_id, _) = self.write_expression(
+                        let lod_id = self.write_expression(
                             ir_module,
                             ir_function,
                             lod_handle,
@@ -2126,7 +1795,7 @@ impl Writer {
                     }
                     crate::SampleLevel::Bias(bias_handle) => {
                         let mut inst = super::instructions::instruction_image_sample(
-                            image_sample_result_type_id,
+                            result_type_id,
                             id,
                             SampleLod::Implicit,
                             sampled_image_id,
@@ -2134,7 +1803,7 @@ impl Writer {
                             depth_id,
                         );
 
-                        let (bias_id, _) = self.write_expression(
+                        let bias_id = self.write_expression(
                             ir_module,
                             ir_function,
                             bias_handle,
@@ -2148,7 +1817,7 @@ impl Writer {
                     }
                     crate::SampleLevel::Gradient { x, y } => {
                         let mut inst = super::instructions::instruction_image_sample(
-                            image_sample_result_type_id,
+                            result_type_id,
                             id,
                             SampleLod::Explicit,
                             sampled_image_id,
@@ -2156,9 +1825,9 @@ impl Writer {
                             depth_id,
                         );
 
-                        let (x_id, _) =
+                        let x_id =
                             self.write_expression(ir_module, ir_function, x, block, function)?;
-                        let (y_id, _) =
+                        let y_id =
                             self.write_expression(ir_module, ir_function, y, block, function)?;
                         inst.add_operand(spirv::ImageOperands::GRAD.bits());
                         inst.add_operand(x_id);
@@ -2175,13 +1844,15 @@ impl Writer {
                 }
 
                 block.body.push(main_instruction);
-                Ok((RawExpression::Value(id), image_sample_result_type))
+                RawExpression::Value(id)
             }
             ref other => {
                 log::error!("unimplemented {:?}", other);
-                Err(Error::FeatureNotImplemented("expression"))
+                return Err(Error::FeatureNotImplemented("expression"));
             }
-        }
+        };
+
+        Ok((raw_expr, result_type_id))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2224,7 +1895,7 @@ impl Writer {
                     ref accept,
                     ref reject,
                 } => {
-                    let (condition_id, _) = self.write_expression(
+                    let condition_id = self.write_expression(
                         ir_module,
                         ir_function,
                         *condition,
@@ -2332,7 +2003,7 @@ impl Writer {
                     ));
                 }
                 crate::Statement::Return { value: Some(value) } => {
-                    let (id, _) =
+                    let id =
                         self.write_expression(ir_module, ir_function, value, &mut block, function)?;
                     block.termination = Some(super::instructions::instruction_return_value(id));
                 }
@@ -2343,14 +2014,14 @@ impl Writer {
                     block.termination = Some(super::instructions::instruction_kill());
                 }
                 crate::Statement::Store { pointer, value } => {
-                    let (pointer_id, _, _) = self.write_expression_pointer(
+                    let (pointer_id, _) = self.write_expression_pointer(
                         ir_module,
                         ir_function,
                         pointer,
                         &mut block,
                         function,
                     )?;
-                    let (value_id, _) =
+                    let value_id =
                         self.write_expression(ir_module, ir_function, value, &mut block, function)?;
 
                     block.body.push(super::instructions::instruction_store(

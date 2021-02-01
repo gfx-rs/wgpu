@@ -95,10 +95,10 @@ impl Typifier {
     pub fn get_handle(
         &self,
         expr_handle: Handle<crate::Expression>,
-    ) -> Option<Handle<crate::Type>> {
+    ) -> Result<Handle<crate::Type>, &crate::TypeInner> {
         match self.resolutions[expr_handle.index()] {
-            Resolution::Handle(ty_handle) => Some(ty_handle),
-            Resolution::Value(_) => None,
+            Resolution::Handle(ty_handle) => Ok(ty_handle),
+            Resolution::Value(ref inner) => Err(inner),
         }
     }
 
@@ -258,7 +258,23 @@ impl Typifier {
                 | crate::BinaryOperator::Greater
                 | crate::BinaryOperator::GreaterEqual
                 | crate::BinaryOperator::LogicalAnd
-                | crate::BinaryOperator::LogicalOr => self.resolutions[left.index()].clone(),
+                | crate::BinaryOperator::LogicalOr => {
+                    let kind = crate::ScalarKind::Bool;
+                    let width = 1;
+                    let inner = match *self.get(left, types) {
+                        crate::TypeInner::Scalar { .. } => crate::TypeInner::Scalar { kind, width },
+                        crate::TypeInner::Vector { size, .. } => {
+                            crate::TypeInner::Vector { size, kind, width }
+                        }
+                        ref other => {
+                            return Err(ResolveError::IncompatibleOperand {
+                                op: "logical".to_string(),
+                                operand: format!("{:?}", other),
+                            })
+                        }
+                    };
+                    Resolution::Value(inner)
+                }
                 crate::BinaryOperator::And
                 | crate::BinaryOperator::ExclusiveOr
                 | crate::BinaryOperator::InclusiveOr
