@@ -709,24 +709,19 @@ impl Writer {
                 block: true,
                 ref members,
             } => {
-                //TODO: put NonWritable/NonReadable on the global variable instead?
-                let storage_access = match self.struct_type_handles.get(&handle) {
-                    Some(&access) => {
-                        let decoration = if access.is_empty() {
-                            spirv::Decoration::Block
-                        } else {
-                            spirv::Decoration::BufferBlock
-                        };
-                        self.annotations
-                            .push(super::instructions::instruction_decorate(
-                                id,
-                                decoration,
-                                &[],
-                            ));
-                        access
-                    }
-                    None => crate::StorageAccess::empty(),
-                };
+                if let Some(&access) = self.struct_type_handles.get(&handle) {
+                    let decoration = if access.is_empty() {
+                        spirv::Decoration::Block
+                    } else {
+                        spirv::Decoration::BufferBlock
+                    };
+                    self.annotations
+                        .push(super::instructions::instruction_decorate(
+                            id,
+                            decoration,
+                            &[],
+                        ));
+                }
 
                 let mut current_offset = 0;
                 let mut member_ids = Vec::with_capacity(members.len());
@@ -754,16 +749,6 @@ impl Writer {
                                     name,
                                 ));
                         }
-                    }
-
-                    if storage_access == crate::StorageAccess::LOAD {
-                        self.annotations
-                            .push(super::instructions::instruction_member_decorate(
-                                id,
-                                index as u32,
-                                spirv::Decoration::NonWritable,
-                                &[],
-                            ));
                     }
 
                     if let crate::TypeInner::Matrix {
@@ -939,24 +924,18 @@ impl Writer {
             }
         }
 
-        if let crate::TypeInner::Image {
-            class: crate::ImageClass::Storage(_),
-            ..
-        } = ir_module.types[global_variable.ty].inner
-        {
-            let decoration = match global_variable.storage_access {
-                crate::StorageAccess::LOAD => Some(spirv::Decoration::NonWritable),
-                crate::StorageAccess::STORE => Some(spirv::Decoration::NonReadable),
-                _ => None,
-            };
-            if let Some(decoration) = decoration {
-                self.annotations
-                    .push(super::instructions::instruction_decorate(
-                        id,
-                        decoration,
-                        &[],
-                    ));
-            }
+        let access_decoration = match global_variable.storage_access {
+            crate::StorageAccess::LOAD => Some(spirv::Decoration::NonWritable),
+            crate::StorageAccess::STORE => Some(spirv::Decoration::NonReadable),
+            _ => None,
+        };
+        if let Some(decoration) = access_decoration {
+            self.annotations
+                .push(super::instructions::instruction_decorate(
+                    id,
+                    decoration,
+                    &[],
+                ));
         }
 
         if let Some(interpolation) = global_variable.interpolation {
