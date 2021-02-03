@@ -519,6 +519,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             log::debug!("\t\t{:?} [{}]", inst.op, inst.wc);
 
             match inst.op {
+                Op::Undef => {
+                    inst.expect(3)?;
+                    let _result_type_id = self.next()?;
+                    let _result_id = self.next()?;
+                    //TODO?
+                }
                 Op::Variable => {
                     inst.expect_at_least(4)?;
                     let result_type_id = self.next()?;
@@ -801,7 +807,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(5)?;
                     self.parse_expr_binary_op(expressions, crate::BinaryOperator::Divide)?;
                 }
-                Op::UMod | Op::FMod | Op::SRem | Op::FRem => {
+                Op::SMod | Op::UMod | Op::FMod | Op::SRem | Op::FRem => {
                     inst.expect(5)?;
                     self.parse_expr_binary_op(expressions, crate::BinaryOperator::Modulo)?;
                 }
@@ -1503,8 +1509,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::TypeImage => self.parse_type_image(inst, &mut module),
                 Op::TypeSampledImage => self.parse_type_sampled_image(inst),
                 Op::TypeSampler => self.parse_type_sampler(inst, &mut module),
+                Op::Undef => {
+                    inst.expect(3)?;
+                    let _result_type_id = self.next()?;
+                    let _result_id = self.next()?;
+                    Ok(()) //TODO?
+                }
                 Op::Constant | Op::SpecConstant => self.parse_constant(inst, &mut module),
                 Op::ConstantComposite => self.parse_composite_constant(inst, &mut module),
+                Op::ConstantNull => self.parse_null_constant(inst, &mut module),
                 Op::Variable => self.parse_global_variable(inst, &mut module),
                 Op::Function => self.parse_function(inst, &mut module),
                 _ => Err(Error::UnsupportedInstruction(self.state, inst.op)), //TODO
@@ -2170,6 +2183,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let id = self.next()?;
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
+
         let inner = match module.types[ty].inner {
             crate::TypeInner::Scalar {
                 kind: crate::ScalarKind::Uint,
@@ -2229,6 +2243,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
             _ => return Err(Error::UnsupportedType(type_lookup.handle)),
         };
+
         self.lookup_constant.insert(
             id,
             LookupConstant {
@@ -2273,7 +2288,61 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 type_id,
             },
         );
+        Ok(())
+    }
 
+    fn parse_null_constant(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(3)?;
+        let type_id = self.next()?;
+        let id = self.next()?;
+        let type_lookup = self.lookup_type.lookup(type_id)?;
+        let ty = type_lookup.handle;
+
+        fn make_scalar_inner(kind: crate::ScalarKind, width: crate::Bytes) -> crate::ConstantInner {
+            crate::ConstantInner::Scalar {
+                width,
+                value: match kind {
+                    crate::ScalarKind::Uint => crate::ScalarValue::Uint(0),
+                    crate::ScalarKind::Sint => crate::ScalarValue::Sint(0),
+                    crate::ScalarKind::Float => crate::ScalarValue::Float(0.0),
+                    crate::ScalarKind::Bool => crate::ScalarValue::Bool(false),
+                },
+            }
+        }
+
+        let inner = match module.types[ty].inner {
+            crate::TypeInner::Scalar { kind, width } => make_scalar_inner(kind, width),
+            crate::TypeInner::Vector { size, kind, width } => {
+                let mut components = Vec::with_capacity(size as usize);
+                for _ in 0..size as usize {
+                    components.push(module.constants.fetch_or_append(crate::Constant {
+                        name: None,
+                        specialization: None,
+                        inner: make_scalar_inner(kind, width),
+                    }));
+                }
+                crate::ConstantInner::Composite { ty, components }
+            }
+            //TODO: handle matrices, arrays, and structures
+            _ => return Err(Error::UnsupportedType(type_lookup.handle)),
+        };
+
+        self.lookup_constant.insert(
+            id,
+            LookupConstant {
+                handle: module.constants.append(crate::Constant {
+                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                    specialization: None, //TODO
+                    inner,
+                }),
+                type_id,
+            },
+        );
         Ok(())
     }
 
