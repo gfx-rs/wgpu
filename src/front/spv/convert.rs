@@ -30,7 +30,22 @@ pub fn map_binary_operator(word: spirv::Op) -> Result<crate::BinaryOperator, Err
         | Op::SGreaterThanEqual
         | Op::FOrdGreaterThanEqual
         | Op::FUnordGreaterThanEqual => Ok(BinaryOperator::GreaterEqual),
-        _ => Err(Error::UnknownInstruction(word as u16)),
+        _ => Err(Error::UnknownBinaryOperator(word)),
+    }
+}
+
+pub fn map_relational_fun(word: spirv::Op) -> Result<crate::RelationalFunction, Error> {
+    use crate::RelationalFunction as Rf;
+    use spirv::Op;
+
+    match word {
+        Op::All => Ok(Rf::All),
+        Op::Any => Ok(Rf::Any),
+        Op::IsNan => Ok(Rf::IsNan),
+        Op::IsInf => Ok(Rf::IsInf),
+        Op::IsFinite => Ok(Rf::IsFinite),
+        Op::IsNormal => Ok(Rf::IsNormal),
+        _ => Err(Error::UnknownRelationalFunction(word)),
     }
 }
 
