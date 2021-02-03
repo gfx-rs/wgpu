@@ -2,7 +2,8 @@
 	backends: (bits: 0xF),
 	tests: [
 		"buffer-copy.ron",
-		"buffer-zero-init.ron",
+		"buffer-zero-init-for-mapping-and-writing.ron",
+		"buffer-zero-init-for-binding.ron",
 		"bind-group.ron",
 		"quad.ron",
 	],
