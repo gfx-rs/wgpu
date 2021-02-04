@@ -257,7 +257,7 @@ fn built_in_usage(built_in: crate::BuiltIn) -> (crate::ShaderStage, crate::Globa
         Bi::Position => (Ss::Vertex, Gu::WRITE),
         Bi::VertexIndex => (Ss::Vertex, Gu::READ),
         Bi::FragCoord => (Ss::Fragment, Gu::READ),
-        Bi::FragDepth => (Ss::Fragment, Gu::READ),
+        Bi::FragDepth => (Ss::Fragment, Gu::WRITE),
         Bi::FrontFacing => (Ss::Fragment, Gu::READ),
         Bi::SampleIndex => (Ss::Fragment, Gu::READ),
         Bi::SampleMaskIn => (Ss::Fragment, Gu::READ),
