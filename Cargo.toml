@@ -56,9 +56,10 @@ ddsfile = "0.4"
 log = "0.4"
 naga = { git = "https://github.com/gfx-rs/naga", tag = "gfx-10", features = ["wgsl-in"] }
 noise = "0.7"
+obj = "0.10"
 png = "0.16"
 rand = { version = "0.7.2", features = ["wasm-bindgen"] }
-winit = { version = "0.24.0", features = ["web-sys"] }
+winit = { version = "0.24", features = ["web-sys"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 async-executor = "1.0"
@@ -76,8 +77,8 @@ path="examples/hello-compute/main.rs"
 test = true
 
 [patch."https://github.com/gfx-rs/wgpu"]
-#wgpu-types = { version = "0.6", path = "../wgpu/wgpu-types" }
-#wgpu-core = { version = "0.6", path = "../wgpu/wgpu-core" }
+#wgpu-types = { path = "../wgpu/wgpu-types" }
+#wgpu-core = { path = "../wgpu/wgpu-core" }
 
 [patch."https://github.com/gfx-rs/subscriber"]
 #wgpu-subscriber = { version = "0.1", path = "../subscriber" }
