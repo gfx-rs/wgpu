@@ -81,7 +81,8 @@ impl Program {
                             Err(ErrorKind::SemanticError("Bad call to texture".into()))
                         }
                     }
-                    "ceil" | "round" | "floor" | "fract" | "trunc" | "sin" | "abs" => {
+                    "ceil" | "round" | "floor" | "fract" | "trunc" | "sin" | "abs" | "sqrt"
+                    | "exp" | "sign" => {
                         if fc.args.len() != 1 {
                             return Err(ErrorKind::WrongNumberArgs(name, 1, fc.args.len()));
                         }
@@ -95,6 +96,9 @@ impl Program {
                                     "trunc" => MathFunction::Trunc,
                                     "sin" => MathFunction::Sin,
                                     "abs" => MathFunction::Abs,
+                                    "sqrt" => MathFunction::Sqrt,
+                                    "exp" => MathFunction::Exp,
+                                    "sign" => MathFunction::Sign,
                                     _ => unreachable!(),
                                 },
                                 arg: fc.args[0].expression,
@@ -123,7 +127,7 @@ impl Program {
                             statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
                         })
                     }
-                    "mix" => {
+                    "mix" | "clamp" => {
                         if fc.args.len() != 3 {
                             return Err(ErrorKind::WrongNumberArgs(name, 3, fc.args.len()));
                         }
@@ -131,6 +135,7 @@ impl Program {
                             expression: self.context.expressions.append(Expression::Math {
                                 fun: match name.as_str() {
                                     "mix" => MathFunction::Mix,
+                                    "clamp" => MathFunction::Clamp,
                                     _ => unreachable!(),
                                 },
                                 arg: fc.args[0].expression,
