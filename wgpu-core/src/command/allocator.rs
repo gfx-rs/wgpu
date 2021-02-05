@@ -98,26 +98,32 @@ impl<B: GfxBackend> CommandAllocator<B> {
         let mut inner = self.inner.lock();
 
         use std::collections::hash_map::Entry;
-        if let Entry::Vacant(e) = inner.pools.entry(thread_id) {
-            tracing::info!("Starting on thread {:?}", thread_id);
-            let raw = unsafe {
-                device
-                    .create_command_pool(
-                        self.queue_family,
-                        hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
-                    )
-                    .or(Err(DeviceError::OutOfMemory))?
-            };
-            e.insert(CommandPool {
-                raw,
-                total: 0,
-                available: Vec::new(),
-                pending: Vec::new(),
-            });
-        }
+        let pool = match inner.pools.entry(thread_id) {
+            Entry::Vacant(e) => {
+                tracing::info!("Starting on thread {:?}", thread_id);
+                let raw = unsafe {
+                    device
+                        .create_command_pool(
+                            self.queue_family,
+                            hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
+                        )
+                        .or(Err(DeviceError::OutOfMemory))?
+                };
+                e.insert(CommandPool {
+                    raw,
+                    total: 0,
+                    available: Vec::new(),
+                    pending: Vec::new(),
+                })
+            }
+            Entry::Occupied(e) => e.into_mut(),
+        };
+
+        //Note: we have to allocate the first buffer right here, or otherwise
+        // the pool may be cleaned up by maintenance called from another thread.
 
         Ok(CommandBuffer {
-            raw: Vec::new(),
+            raw: vec![pool.allocate()],
             is_recording: true,
             recorded_thread_id: thread_id,
             device_id,
