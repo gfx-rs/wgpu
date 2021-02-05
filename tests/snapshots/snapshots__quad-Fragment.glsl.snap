@@ -8,7 +8,7 @@ precision highp float;
 
 in vec2 _location_0_vs;
 
-uniform sampler2D u_texture;
+uniform sampler2D _group_0_binding_0;
 
 out vec4 _location_0;
 

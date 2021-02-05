@@ -455,11 +455,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                     // Finally write the name and end the global with a `;`
                     // The leading space is important
-                    writeln!(
-                        self.out,
-                        " {};",
-                        self.names[&NameKey::GlobalVariable(handle)]
-                    )?;
+                    writeln!(self.out, " {};", self.get_global_name(handle, global))?;
 
                     writeln!(self.out)?;
                 }

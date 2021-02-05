@@ -11,7 +11,7 @@ struct Data {
     mat4x4 view;
 };
 
-uniform samplerCube r_texture;
+uniform samplerCube _group_0_binding_1;
 
 in vec3 _location_0_vs;
 
