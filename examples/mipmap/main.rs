@@ -9,30 +9,6 @@ const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 const MIP_LEVEL_COUNT: u32 = 9;
 const MIP_PASS_COUNT: u32 = MIP_LEVEL_COUNT - 1;
 
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct Vertex {
-    #[allow(dead_code)]
-    pos: [f32; 4],
-}
-
-fn create_vertices() -> Vec<Vertex> {
-    vec![
-        Vertex {
-            pos: [100.0, 0.0, 0.0, 1.0],
-        },
-        Vertex {
-            pos: [100.0, 1000.0, 0.0, 1.0],
-        },
-        Vertex {
-            pos: [-100.0, 0.0, 0.0, 1.0],
-        },
-        Vertex {
-            pos: [-100.0, 1000.0, 0.0, 1.0],
-        },
-    ]
-}
-
 fn create_texels(size: usize, cx: f32, cy: f32) -> Vec<u8> {
     use std::iter;
 
@@ -78,7 +54,6 @@ struct QueryData {
 }
 
 struct Example {
-    vertex_buf: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     uniform_buf: wgpu::Buffer,
     draw_pipeline: wgpu::RenderPipeline,
@@ -238,15 +213,6 @@ impl framework::Example for Example {
         let mut init_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        // Create the vertex and index buffers
-        let vertex_size = mem::size_of::<Vertex>();
-        let vertex_data = create_vertices();
-        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertex_data),
-            usage: wgpu::BufferUsage::VERTEX,
-        });
-
         // Create the texture
         let size = 1 << MIP_LEVEL_COUNT;
         let texels = create_texels(size as usize, -0.8, 0.156);
@@ -330,11 +296,7 @@ impl framework::Example for Example {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: vertex_size as wgpu::BufferAddress,
-                    step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float4],
-                }],
+                buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -464,7 +426,6 @@ impl framework::Example for Example {
         }
 
         Example {
-            vertex_buf,
             bind_group,
             uniform_buf,
             draw_pipeline,
@@ -516,7 +477,6 @@ impl framework::Example for Example {
             });
             rpass.set_pipeline(&self.draw_pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
             rpass.draw(0..4, 0..1);
         }
 

@@ -13,7 +13,7 @@ All framework-based examples render to the window.
 | Feature                | boids  | cube   | mipmap | msaa-line | shadow | skybox | texture-arrays | water  |
 | ---------------------- | ------ | ------ | ------ | --------- | ------ | ------ | -------------- | ------ |
 | WGSL shaders           | :star: | :star: | :star: | :star:    | :star: | :star: |                |        |
-| vertex attributes      | :star: | :star: | :star: | :star:    | :star: | :star: | :star:         | :star: |
+| vertex attributes      | :star: | :star: |        | :star:    | :star: | :star: | :star:         | :star: |
 | instancing             | :star: |        |        |           |        |        |                |        |
 | lines and points       |        |        |        | :star:    |        |        |                |        |
 | dynamic buffer offsets |        |        |        |           | :star: |        |                |        |
@@ -41,6 +41,7 @@ All framework-based examples render to the window.
 | - polygon mode         |        | :star: |        |           |        |        |                |        |
 | - queries              |        |        | :star: |           |        |        |                |        |
 | *integrations*         |        |        |        |           |        |        |                |        |
+| - typed arena          |        |        |        |           |        |        |                |        |
 | - obj loading          |        |        |        |           |        | :star: |                |        |
 
 ## Hacking
