@@ -105,6 +105,24 @@ impl Program {
                             statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
                         })
                     }
+                    "pow" => {
+                        if fc.args.len() != 2 {
+                            return Err(ErrorKind::WrongNumberArgs(name, 3, fc.args.len()));
+                        }
+                        Ok(ExpressionRule {
+                            expression: self.context.expressions.append(Expression::Math {
+                                fun: match name.as_str() {
+                                    "pow" => MathFunction::Pow,
+                                    _ => unreachable!(),
+                                },
+                                arg: fc.args[0].expression,
+                                arg1: Some(fc.args[1].expression),
+                                arg2: None,
+                            }),
+                            sampler: None,
+                            statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
+                        })
+                    }
                     "mix" => {
                         if fc.args.len() != 3 {
                             return Err(ErrorKind::WrongNumberArgs(name, 3, fc.args.len()));
@@ -117,7 +135,7 @@ impl Program {
                                 },
                                 arg: fc.args[0].expression,
                                 arg1: Some(fc.args[1].expression),
-                                arg2: None,
+                                arg2: Some(fc.args[2].expression),
                             }),
                             sampler: None,
                             statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
