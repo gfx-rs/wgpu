@@ -1,6 +1,6 @@
-use super::error::ErrorKind;
+use super::{constants::ConstantSolver, error::ErrorKind};
 use crate::{
-    proc::{ConstantSolver, ResolveContext, Typifier},
+    proc::{ResolveContext, Typifier},
     Arena, BinaryOperator, Binding, Constant, Expression, FastHashMap, Function, FunctionArgument,
     GlobalVariable, Handle, Interpolation, LocalVariable, Module, ShaderStage, Statement,
     StorageClass, Type,

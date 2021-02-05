@@ -14,6 +14,7 @@ use ast::Program;
 use lex::Lexer;
 mod error;
 pub use error::ParseError;
+mod constants;
 mod functions;
 mod parser;
 #[cfg(test)]
