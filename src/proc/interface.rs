@@ -203,6 +203,15 @@ where
                     self.visitor.visit_lhs_expr(&self.expressions[left]);
                     self.traverse_expr(value);
                 }
+                S::Call {
+                    function,
+                    ref arguments,
+                } => {
+                    for &argument in arguments {
+                        self.traverse_expr(argument);
+                    }
+                    self.visitor.visit_fun(function);
+                }
             }
         }
     }

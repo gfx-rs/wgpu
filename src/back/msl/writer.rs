@@ -741,6 +741,15 @@ impl<W: Write> Writer<W> {
                     self.put_expression(value, context)?;
                     writeln!(self.out, ";")?;
                 }
+                crate::Statement::Call {
+                    function,
+                    ref arguments,
+                } => {
+                    let name = &self.names[&NameKey::Function(function)];
+                    write!(self.out, "{}", name)?;
+                    self.put_call("", arguments, context)?;
+                    writeln!(self.out, ";")?;
+                }
             }
         }
         Ok(())

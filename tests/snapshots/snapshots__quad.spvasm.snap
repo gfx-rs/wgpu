@@ -22,23 +22,23 @@ OpDecorate %27 Binding 0
 OpDecorate %32 DescriptorSet 0
 OpDecorate %32 Binding 1
 OpDecorate %35 Location 0
-%3 = OpTypeFloat 32
-%2 = OpConstant  %3  1.2
-%4 = OpConstant  %3  0.0
-%5 = OpConstant  %3  1.0
-%6 = OpTypeVoid
-%8 = OpTypeFunction %6
-%10 = OpTypeVector %3 2
+%0 = OpTypeVoid
+%4 = OpTypeFloat 32
+%3 = OpConstant  %4  1.2
+%5 = OpConstant  %4  0.0
+%6 = OpConstant  %4  1.0
+%8 = OpTypeFunction %0
+%10 = OpTypeVector %4 2
 %12 = OpTypePointer Output %10
 %11 = OpVariable  %12  Output
 %14 = OpTypePointer Input %10
 %13 = OpVariable  %14  Input
-%16 = OpTypeVector %3 4
+%16 = OpTypeVector %4 4
 %18 = OpTypePointer Output %16
 %17 = OpVariable  %18  Output
 %20 = OpVariable  %14  Input
 %25 = OpVariable  %18  Output
-%26 = OpTypeImage %3 2D 0 0 0 1 Unknown
+%26 = OpTypeImage %4 2D 0 0 0 1 Unknown
 %28 = OpTypePointer UniformConstant %26
 %27 = OpVariable  %28  UniformConstant
 %30 = OpTypeSampledImage %26
@@ -46,17 +46,17 @@ OpDecorate %35 Location 0
 %33 = OpTypePointer UniformConstant %31
 %32 = OpVariable  %33  UniformConstant
 %35 = OpVariable  %14  Input
-%7 = OpFunction  %6  None %8
+%7 = OpFunction  %0  None %8
 %9 = OpLabel
 %15 = OpLoad  %10  %13
 OpStore %11 %15
 %21 = OpLoad  %10  %20
-%19 = OpVectorTimesScalar  %10  %21 %2
-%22 = OpCompositeConstruct  %16  %19 %4 %5
+%19 = OpVectorTimesScalar  %10  %21 %3
+%22 = OpCompositeConstruct  %16  %19 %5 %6
 OpStore %17 %22
 OpReturn
 OpFunctionEnd
-%23 = OpFunction  %6  None %8
+%23 = OpFunction  %0  None %8
 %24 = OpLabel
 %29 = OpLoad  %26  %27
 %34 = OpLoad  %31  %32

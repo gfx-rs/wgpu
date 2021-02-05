@@ -35,6 +35,7 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
         | Some(&mut crate::Statement::Kill) => (),
         Some(&mut crate::Statement::Loop { .. })
         | Some(&mut crate::Statement::Store { .. })
+        | Some(&mut crate::Statement::Call { .. })
         | None => block.push(crate::Statement::Return { value: None }),
     }
 }

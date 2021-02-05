@@ -802,6 +802,11 @@ pub enum Statement {
         pointer: Handle<Expression>,
         value: Handle<Expression>,
     },
+    /// Calls a function with no return value.
+    Call {
+        function: Handle<Function>,
+        arguments: Vec<Handle<Expression>>,
+    },
 }
 
 /// A function argument.

@@ -979,11 +979,11 @@ impl<'a, W: Write> Writer<'a, W> {
         // The indentation is only for readability
         write!(self.out, "{}", INDENT.repeat(indent))?;
 
-        match sta {
+        match *sta {
             // Blocks are simple we just need to write the block statements between braces
             // We could also just print the statements but this is more readable and maps more
             // closely to the IR
-            Statement::Block(block) => {
+            Statement::Block(ref block) => {
                 writeln!(self.out, "{{")?;
                 for sta in block.iter() {
                     // Increase the indentation to help with readability
@@ -1001,11 +1001,11 @@ impl<'a, W: Write> Writer<'a, W> {
             // ```
             Statement::If {
                 condition,
-                accept,
-                reject,
+                ref accept,
+                ref reject,
             } => {
                 write!(self.out, "if(")?;
-                self.write_expr(*condition, ctx)?;
+                self.write_expr(condition, ctx)?;
                 writeln!(self.out, ") {{")?;
 
                 for sta in accept {
@@ -1044,12 +1044,12 @@ impl<'a, W: Write> Writer<'a, W> {
             //  so that we don't need to print a `break` for it
             Statement::Switch {
                 selector,
-                cases,
-                default,
+                ref cases,
+                ref default,
             } => {
                 // Start the switch
                 write!(self.out, "switch(")?;
-                self.write_expr(*selector, ctx)?;
+                self.write_expr(selector, ctx)?;
                 writeln!(self.out, ") {{")?;
 
                 // Write all cases
@@ -1091,7 +1091,10 @@ impl<'a, W: Write> Writer<'a, W> {
             //  continuing
             // }
             // ```
-            Statement::Loop { body, continuing } => {
+            Statement::Loop {
+                ref body,
+                ref continuing,
+            } => {
                 writeln!(self.out, "while(true) {{")?;
 
                 for sta in body.iter().chain(continuing.iter()) {
@@ -1111,7 +1114,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // Write the expression to be returned if needed
                 if let Some(expr) = value {
                     write!(self.out, " ")?;
-                    self.write_expr(*expr, ctx)?;
+                    self.write_expr(expr, ctx)?;
                 }
                 writeln!(self.out, ";")?;
             }
@@ -1121,10 +1124,19 @@ impl<'a, W: Write> Writer<'a, W> {
             Statement::Kill => writeln!(self.out, "discard;")?,
             // Stores in glsl are just variable assignments written as `pointer = value;`
             Statement::Store { pointer, value } => {
-                self.write_expr(*pointer, ctx)?;
+                self.write_expr(pointer, ctx)?;
                 write!(self.out, " = ")?;
-                self.write_expr(*value, ctx)?;
+                self.write_expr(value, ctx)?;
                 writeln!(self.out, ";")?
+            }
+            // A `Call` is written `name(arguments)` where `arguments` is a comma separated expressions list
+            Statement::Call {
+                function,
+                ref arguments,
+            } => {
+                write!(self.out, "{}(", &self.names[&NameKey::Function(function)])?;
+                self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
+                write!(self.out, ");")?
             }
         }
 

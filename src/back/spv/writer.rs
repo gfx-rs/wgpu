@@ -181,7 +181,7 @@ pub struct Writer {
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     flags: WriterFlags,
-    void_type: Option<u32>,
+    void_type: u32,
     lookup_type: crate::FastHashMap<LookupType, Word>,
     lookup_function: crate::FastHashMap<crate::Handle<crate::Function>, Word>,
     lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
@@ -209,19 +209,19 @@ impl Writer {
         Writer {
             physical_layout: PhysicalLayout::new(header),
             logical_layout: LogicalLayout::default(),
-            id_count: 0,
+            id_count: 2, // 0 is void type, 1 is the GLSL ext inst
             capabilities,
             debugs: vec![],
             annotations: vec![],
             flags,
-            void_type: None,
+            void_type: 0,
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
             lookup_function_type: crate::FastHashMap::default(),
             lookup_constant: crate::FastHashMap::default(),
             lookup_global_variable: crate::FastHashMap::default(),
             struct_type_handles: crate::FastHashMap::default(),
-            gl450_ext_inst_id: 0,
+            gl450_ext_inst_id: 1,
             layouter: Layouter::default(),
             typifier: Typifier::new(),
         }
@@ -293,26 +293,6 @@ impl Writer {
                 (id, class)
             }
         })
-    }
-
-    fn get_function_return_type(
-        &mut self,
-        ty: Option<crate::Handle<crate::Type>>,
-        arena: &crate::Arena<crate::Type>,
-    ) -> Result<Word, Error> {
-        match ty {
-            Some(handle) => self.get_type_id(arena, LookupType::Handle(handle)),
-            None => Ok(match self.void_type {
-                Some(id) => id,
-                None => {
-                    let id = self.generate_id();
-                    self.void_type = Some(id);
-                    super::instructions::instruction_type_void(id)
-                        .to_words(&mut self.logical_layout.declarations);
-                    id
-                }
-            }),
-        }
     }
 
     fn get_pointer_id(
@@ -415,8 +395,10 @@ impl Writer {
                 .insert(handle, LocalVariable { id, instruction });
         }
 
-        let return_type_id =
-            self.get_function_return_type(ir_function.return_type, &ir_module.types)?;
+        let return_type_id = match ir_function.return_type {
+            Some(handle) => self.get_type_id(&ir_module.types, LookupType::Handle(handle))?,
+            None => self.void_type,
+        };
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
 
         for argument in ir_function.arguments.iter() {
@@ -1922,6 +1904,10 @@ impl Writer {
 
                     block = Block::new(merge_id);
                 }
+                crate::Statement::Switch { .. } => {
+                    log::error!("unimplemented Switch");
+                    return Err(Error::FeatureNotImplemented("switch"));
+                }
                 crate::Statement::Loop {
                     ref body,
                     ref continuing,
@@ -2007,9 +1993,33 @@ impl Writer {
                         pointer_id, value_id, None,
                     ));
                 }
-                _ => {
-                    log::error!("unimplemented {:?}", statement);
-                    return Err(Error::FeatureNotImplemented("statement"));
+                crate::Statement::Call {
+                    function: local_function,
+                    ref arguments,
+                } => {
+                    let id = self.generate_id();
+                    //TODO: avoid heap allocation
+                    let mut argument_ids = vec![];
+
+                    for argument in arguments {
+                        let arg_id = self.write_expression(
+                            ir_module,
+                            ir_function,
+                            *argument,
+                            &mut block,
+                            function,
+                        )?;
+                        argument_ids.push(arg_id);
+                    }
+
+                    block
+                        .body
+                        .push(super::instructions::instruction_function_call(
+                            self.void_type,
+                            id,
+                            *self.lookup_function.get(&local_function).unwrap(),
+                            argument_ids.as_slice(),
+                        ));
                 }
             }
         }
@@ -2030,7 +2040,8 @@ impl Writer {
     }
 
     fn write_logical_layout(&mut self, ir_module: &crate::Module) -> Result<(), Error> {
-        self.gl450_ext_inst_id = self.generate_id();
+        super::instructions::instruction_type_void(self.void_type)
+            .to_words(&mut self.logical_layout.declarations);
         super::instructions::instruction_ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
             .to_words(&mut self.logical_layout.ext_inst_imports);
 
@@ -2113,9 +2124,9 @@ mod tests {
     fn test_writer_generate_id() {
         let mut writer = create_writer();
 
-        assert_eq!(writer.id_count, 0);
+        assert_eq!(writer.id_count, 2);
         writer.generate_id();
-        assert_eq!(writer.id_count, 1);
+        assert_eq!(writer.id_count, 3);
     }
 
     #[test]
@@ -2123,7 +2134,7 @@ mod tests {
         let mut writer = create_writer();
         assert_eq!(writer.physical_layout.bound, 0);
         writer.write_physical_layout();
-        assert_eq!(writer.physical_layout.bound, 1);
+        assert_eq!(writer.physical_layout.bound, 3);
     }
 
     fn create_writer() -> Writer {
