@@ -5,10 +5,9 @@
 use crate::{
     binding_model::BindError,
     command::{
-        bind::{Binder, LayoutChange},
-        end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer, CommandEncoderError,
-        DrawError, ExecutionError, MapPassErr, PassErrorScope, QueryResetMap, QueryUseError,
-        RenderCommand, RenderCommandError, StateChange,
+        bind::Binder, end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer,
+        CommandEncoderError, DrawError, ExecutionError, MapPassErr, PassErrorScope, QueryResetMap,
+        QueryUseError, RenderCommand, RenderCommandError, StateChange,
     },
     conv,
     device::{
@@ -1067,7 +1066,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut state = State {
                 pipeline_flags: PipelineFlags::empty(),
-                binder: Binder::new(cmd_buf.limits.max_bind_groups),
+                binder: Binder::new(),
                 blend_color: OptionalState::Unused,
                 stencil_reference: 0,
                 pipeline: StateChange::new(),
@@ -1134,27 +1133,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }),
                         );
 
-                        if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
+                        let pipeline_layout_id = state.binder.pipeline_layout_id;
+                        let entries = state.binder.assign_group(
                             index as usize,
                             id::Valid(bind_group_id),
                             bind_group,
                             &temp_offsets,
-                        ) {
-                            let bind_groups = iter::once(bind_group.raw.raw()).chain(
-                                follow_ups
-                                    .clone()
-                                    .map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()),
-                            );
-                            temp_offsets.extend(follow_ups.flat_map(|(_, offsets)| offsets));
+                        );
+                        if !entries.is_empty() {
+                            let pipeline_layout =
+                                &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
+                            let desc_sets = entries.iter().map(|e| {
+                                bind_group_guard[e.group_id.as_ref().unwrap().value]
+                                    .raw
+                                    .raw()
+                            });
+                            let offsets = entries.iter().flat_map(|e| &e.dynamic_offsets).cloned();
                             unsafe {
                                 raw.bind_graphics_descriptor_sets(
-                                    &pipeline_layout_guard[pipeline_layout_id].raw,
+                                    pipeline_layout,
                                     index as usize,
-                                    bind_groups,
-                                    temp_offsets.iter().cloned(),
+                                    desc_sets,
+                                    offsets,
                                 );
                             }
-                        };
+                        }
                     }
                     RenderCommand::SetPipeline(pipeline_id) => {
                         let scope = PassErrorScope::SetPipelineRender(pipeline_id);
@@ -1204,36 +1207,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         if state.binder.pipeline_layout_id != Some(pipeline.layout_id.value) {
                             let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id.value];
 
-                            state.binder.change_pipeline_layout(
+                            let (start_index, entries) = state.binder.change_pipeline_layout(
                                 &*pipeline_layout_guard,
                                 pipeline.layout_id.value,
                             );
-
-                            let mut is_compatible = true;
-
-                            for (index, (entry, &bgl_id)) in state
-                                .binder
-                                .entries
-                                .iter_mut()
-                                .zip(&pipeline_layout.bind_group_layout_ids)
-                                .enumerate()
-                            {
-                                match entry.expect_layout(bgl_id) {
-                                    LayoutChange::Match(bg_id, offsets) if is_compatible => {
-                                        let desc_set = bind_group_guard[bg_id].raw.raw();
-                                        unsafe {
-                                            raw.bind_graphics_descriptor_sets(
-                                                &pipeline_layout.raw,
-                                                index,
-                                                iter::once(desc_set),
-                                                offsets.iter().cloned(),
-                                            );
-                                        }
-                                    }
-                                    LayoutChange::Match(..) | LayoutChange::Unchanged => {}
-                                    LayoutChange::Mismatch => {
-                                        is_compatible = false;
-                                    }
+                            if !entries.is_empty() {
+                                let desc_sets = entries.iter().map(|e| {
+                                    bind_group_guard[e.group_id.as_ref().unwrap().value]
+                                        .raw
+                                        .raw()
+                                });
+                                let offsets =
+                                    entries.iter().flat_map(|e| &e.dynamic_offsets).cloned();
+                                unsafe {
+                                    raw.bind_graphics_descriptor_sets(
+                                        &pipeline_layout.raw,
+                                        start_index,
+                                        desc_sets,
+                                        offsets,
+                                    );
                                 }
                             }
 
