@@ -1,6 +1,6 @@
 use crate::{
     proc::{ensure_block_returns, Typifier},
-    Block, Expression, Function, MathFunction, SampleLevel, TypeInner,
+    BinaryOperator, Block, Expression, Function, MathFunction, SampleLevel, TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind};
@@ -118,6 +118,24 @@ impl Program {
                                 arg: fc.args[0].expression,
                                 arg1: Some(fc.args[1].expression),
                                 arg2: None,
+                            }),
+                            sampler: None,
+                            statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
+                        })
+                    }
+                    "lessThan" | "greaterThan" => {
+                        if fc.args.len() != 2 {
+                            return Err(ErrorKind::WrongNumberArgs(name, 2, fc.args.len()));
+                        }
+                        Ok(ExpressionRule {
+                            expression: self.context.expressions.append(Expression::Binary {
+                                op: match name.as_str() {
+                                    "lessThan" => BinaryOperator::Less,
+                                    "greaterThan" => BinaryOperator::Greater,
+                                    _ => unreachable!(),
+                                },
+                                left: fc.args[0].expression,
+                                right: fc.args[1].expression,
                             }),
                             sampler: None,
                             statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),

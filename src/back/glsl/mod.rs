@@ -1447,33 +1447,54 @@ impl<'a, W: Write> Writer<'a, W> {
             // `Binary` we just write `left op right`
             // Once again we wrap everything in parantheses to avoid precedence issues
             Expression::Binary { op, left, right } => {
-                write!(self.out, "(")?;
+                // Holds `Some(function_name)` if the binary operation is
+                // implemented as a function call
+                let function = if let (TypeInner::Vector { .. }, TypeInner::Vector { .. }) = (
+                    ctx.typifier.get(left, &self.module.types),
+                    ctx.typifier.get(right, &self.module.types),
+                ) {
+                    match op {
+                        BinaryOperator::Less => Some("lessThan"),
+                        BinaryOperator::LessEqual => Some("lessThanEqual"),
+                        BinaryOperator::Greater => Some("greaterThan"),
+                        BinaryOperator::GreaterEqual => Some("greaterThanEqual"),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+
+                write!(self.out, "{}(", function.unwrap_or(""))?;
                 self.write_expr(left, ctx)?;
 
-                write!(
-                    self.out,
-                    " {} ",
-                    match op {
-                        BinaryOperator::Add => "+",
-                        BinaryOperator::Subtract => "-",
-                        BinaryOperator::Multiply => "*",
-                        BinaryOperator::Divide => "/",
-                        BinaryOperator::Modulo => "%",
-                        BinaryOperator::Equal => "==",
-                        BinaryOperator::NotEqual => "!=",
-                        BinaryOperator::Less => "<",
-                        BinaryOperator::LessEqual => "<=",
-                        BinaryOperator::Greater => ">",
-                        BinaryOperator::GreaterEqual => ">=",
-                        BinaryOperator::And => "&",
-                        BinaryOperator::ExclusiveOr => "^",
-                        BinaryOperator::InclusiveOr => "|",
-                        BinaryOperator::LogicalAnd => "&&",
-                        BinaryOperator::LogicalOr => "||",
-                        BinaryOperator::ShiftLeft => "<<",
-                        BinaryOperator::ShiftRight => ">>",
-                    }
-                )?;
+                if function.is_some() {
+                    write!(self.out, ",")?
+                } else {
+                    write!(
+                        self.out,
+                        " {} ",
+                        match op {
+                            BinaryOperator::Add => "+",
+                            BinaryOperator::Subtract => "-",
+                            BinaryOperator::Multiply => "*",
+                            BinaryOperator::Divide => "/",
+                            BinaryOperator::Modulo => "%",
+                            BinaryOperator::Equal => "==",
+                            BinaryOperator::NotEqual => "!=",
+                            BinaryOperator::Less => "<",
+                            BinaryOperator::LessEqual => "<=",
+                            BinaryOperator::Greater => ">",
+                            BinaryOperator::GreaterEqual => ">=",
+                            BinaryOperator::And => "&",
+                            BinaryOperator::ExclusiveOr => "^",
+                            BinaryOperator::InclusiveOr => "|",
+                            BinaryOperator::LogicalAnd => "&&",
+                            BinaryOperator::LogicalOr => "||",
+                            BinaryOperator::ShiftLeft => "<<",
+                            BinaryOperator::ShiftRight => ">>",
+                        }
+                    )?;
+                }
 
                 self.write_expr(right, ctx)?;
 
