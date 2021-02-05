@@ -85,6 +85,16 @@ where
                     self.traverse_expr(index);
                 }
             }
+            E::ImageQuery { image, query } => {
+                self.traverse_expr(image);
+                match query {
+                    crate::ImageQuery::Size { level: Some(expr) } => self.traverse_expr(expr),
+                    crate::ImageQuery::Size { .. }
+                    | crate::ImageQuery::NumLevels
+                    | crate::ImageQuery::NumLayers
+                    | crate::ImageQuery::NumSamples => (),
+                }
+            }
             E::Unary { expr, .. } => {
                 self.traverse_expr(expr);
             }

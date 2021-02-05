@@ -204,6 +204,35 @@ impl Typifier {
                 }),
                 _ => unreachable!(),
             },
+            crate::Expression::ImageQuery { image, query } => Resolution::Value(match query {
+                crate::ImageQuery::Size { level: _ } => match *self.get(image, types) {
+                    crate::TypeInner::Image { dim, .. } => match dim {
+                        crate::ImageDimension::D1 => crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Sint,
+                            width: 4,
+                        },
+                        crate::ImageDimension::D2 => crate::TypeInner::Vector {
+                            size: crate::VectorSize::Bi,
+                            kind: crate::ScalarKind::Sint,
+                            width: 4,
+                        },
+                        crate::ImageDimension::D3 | crate::ImageDimension::Cube => {
+                            crate::TypeInner::Vector {
+                                size: crate::VectorSize::Tri,
+                                kind: crate::ScalarKind::Sint,
+                                width: 4,
+                            }
+                        }
+                    },
+                    _ => unreachable!(),
+                },
+                crate::ImageQuery::NumLevels
+                | crate::ImageQuery::NumLayers
+                | crate::ImageQuery::NumSamples => crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Sint,
+                    width: 4,
+                },
+            }),
             crate::Expression::Unary { expr, .. } => self.resolutions[expr.index()].clone(),
             crate::Expression::Binary { op, left, right } => match op {
                 crate::BinaryOperator::Add

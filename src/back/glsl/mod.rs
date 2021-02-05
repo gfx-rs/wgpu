@@ -1338,6 +1338,74 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 write!(self.out, ")")?;
             }
+            // Query translates into one of the:
+            // - textureSize/imageSize
+            // - textureQueryLevels
+            // - textureSamples/imageSamples
+            Expression::ImageQuery { image, query } => {
+                // This will only panic if the module is invalid
+                let (dim, class) = match ctx.typifier.get(image, &self.module.types) {
+                    TypeInner::Image {
+                        dim,
+                        arrayed: _,
+                        class,
+                    } => (dim, class),
+                    _ => unreachable!(),
+                };
+                let components = match dim {
+                    crate::ImageDimension::D1 => 1,
+                    crate::ImageDimension::D2 => 2,
+                    crate::ImageDimension::D3 => 3,
+                    crate::ImageDimension::Cube => 2,
+                };
+                match query {
+                    crate::ImageQuery::Size { level } => {
+                        match class {
+                            ImageClass::Sampled { .. } | ImageClass::Depth => {
+                                write!(self.out, "textureSize(")?;
+                                self.write_expr(image, ctx)?;
+                                write!(self.out, ",")?;
+                                if let Some(expr) = level {
+                                    self.write_expr(expr, ctx)?;
+                                } else {
+                                    write!(self.out, "0",)?;
+                                }
+                            }
+                            ImageClass::Storage(_) => {
+                                write!(self.out, "imageSize(")?;
+                                self.write_expr(image, ctx)?;
+                            }
+                        }
+                        write!(self.out, ").{}", &"xyz"[..components])?;
+                    }
+                    crate::ImageQuery::NumLevels => {
+                        write!(self.out, "textureQueryLevels(",)?;
+                        self.write_expr(image, ctx)?;
+                        write!(self.out, ")",)?;
+                    }
+                    crate::ImageQuery::NumLayers => {
+                        let selector = ['x', 'y', 'z', 'w'];
+                        let fun_name = match class {
+                            ImageClass::Sampled { .. } | ImageClass::Depth => "textureSize",
+                            ImageClass::Storage(_) => "imageSize",
+                        };
+                        write!(self.out, "{}(", fun_name)?;
+                        self.write_expr(image, ctx)?;
+                        write!(self.out, ",0).{}", selector[components])?;
+                    }
+                    crate::ImageQuery::NumSamples => {
+                        // assumes ARB_shader_texture_image_samples
+                        let fun_name = match class {
+                            ImageClass::Sampled { .. } | ImageClass::Depth => "textureSamples",
+                            ImageClass::Storage(_) => "imageSamples",
+                        };
+                        write!(self.out, "{}(", fun_name)?;
+                        self.write_expr(image, ctx)?;
+                        write!(self.out, ")",)?;
+                    }
+                }
+                return Err(Error::Custom("ImageQuery not implemented".to_string()));
+            }
             // `Unary` is pretty straightforward
             // "-" - for `Negate`
             // "~" - for `Not` if it's an integer

@@ -120,8 +120,9 @@ impl<'a> ConstantSolver<'a> {
             Expression::Call { .. } => Err(ConstantSolvingError::Call),
             Expression::FunctionArgument(_) => Err(ConstantSolvingError::FunctionArg),
             Expression::GlobalVariable(_) => Err(ConstantSolvingError::GlobalVariable),
-            Expression::ImageSample { .. } => Err(ConstantSolvingError::ImageExpression),
-            Expression::ImageLoad { .. } => Err(ConstantSolvingError::ImageExpression),
+            Expression::ImageSample { .. }
+            | Expression::ImageLoad { .. }
+            | Expression::ImageQuery { .. } => Err(ConstantSolvingError::ImageExpression),
         }
     }
 

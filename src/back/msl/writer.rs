@@ -143,6 +143,22 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn put_image_query(
+        &mut self,
+        image: Handle<crate::Expression>,
+        query: &str,
+        level: Option<Handle<crate::Expression>>,
+        context: &ExpressionContext,
+    ) -> Result<(), Error> {
+        self.put_expression(image, context)?;
+        write!(self.out, ".get_{}(", query)?;
+        if let Some(expr) = level {
+            self.put_expression(expr, context)?;
+        }
+        write!(self.out, ")")?;
+        Ok(())
+    }
+
     fn put_expression(
         &mut self,
         expr_handle: Handle<crate::Expression>,
@@ -331,6 +347,59 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, ")")?;
             }
+            //Note: for all the queries, the signed integers are expected,
+            // so a conversion is needed.
+            crate::Expression::ImageQuery { image, query } => match query {
+                crate::ImageQuery::Size { level } => {
+                    let dim = match *self.typifier.get(image, &context.module.types) {
+                        crate::TypeInner::Image { dim, .. } => dim,
+                        ref other => unreachable!("Unexpected type {:?}", other),
+                    };
+                    match dim {
+                        crate::ImageDimension::D1 => {
+                            write!(self.out, "int(")?;
+                            self.put_image_query(image, "width", level, context)?;
+                            write!(self.out, ")")?;
+                        }
+                        crate::ImageDimension::D2 => {
+                            write!(self.out, "int2(")?;
+                            self.put_image_query(image, "width", level, context)?;
+                            write!(self.out, ", ")?;
+                            self.put_image_query(image, "height", level, context)?;
+                            write!(self.out, ")")?;
+                        }
+                        crate::ImageDimension::D3 => {
+                            write!(self.out, "int3(")?;
+                            self.put_image_query(image, "width", level, context)?;
+                            write!(self.out, ", ")?;
+                            self.put_image_query(image, "height", level, context)?;
+                            write!(self.out, ", ")?;
+                            self.put_image_query(image, "depth", level, context)?;
+                            write!(self.out, ")")?;
+                        }
+                        crate::ImageDimension::Cube => {
+                            write!(self.out, "int(")?;
+                            self.put_image_query(image, "width", level, context)?;
+                            write!(self.out, ").xxx")?;
+                        }
+                    }
+                }
+                crate::ImageQuery::NumLevels => {
+                    write!(self.out, "int(")?;
+                    self.put_expression(image, context)?;
+                    write!(self.out, ".get_num_mip_levels())")?;
+                }
+                crate::ImageQuery::NumLayers => {
+                    write!(self.out, "int(")?;
+                    self.put_expression(image, context)?;
+                    write!(self.out, ".get_array_size())")?;
+                }
+                crate::ImageQuery::NumSamples => {
+                    write!(self.out, "int(")?;
+                    self.put_expression(image, context)?;
+                    write!(self.out, ".get_num_samples())")?;
+                }
+            },
             crate::Expression::Unary { op, expr } => {
                 let op_str = match op {
                     crate::UnaryOperator::Negate => "-",

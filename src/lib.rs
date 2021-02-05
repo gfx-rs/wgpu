@@ -621,6 +621,24 @@ pub enum SampleLevel {
     },
 }
 
+/// Type of an image query.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum ImageQuery {
+    /// Get the size at the specified level.
+    Size {
+        /// If `None`, the base level is considered.
+        level: Option<Handle<Expression>>,
+    },
+    /// Get the number of mipmap levels.
+    NumLevels,
+    /// Get the number of array layers.
+    NumLayers,
+    /// Get the number of samples.
+    NumSamples,
+}
+
 /// An expression that can be evaluated to obtain a value.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -670,6 +688,11 @@ pub enum Expression {
         /// For sampled images, this is the Some(Level).
         /// For multisampled images, this is Some(Sample).
         index: Option<Handle<Expression>>,
+    },
+    /// Query information from an image.
+    ImageQuery {
+        image: Handle<Expression>,
+        query: ImageQuery,
     },
     /// Apply an unary operator.
     Unary {
