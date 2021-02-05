@@ -351,6 +351,8 @@ impl<W: Write> Writer<W> {
             // so a conversion is needed.
             crate::Expression::ImageQuery { image, query } => match query {
                 crate::ImageQuery::Size { level } => {
+                    //Note: MSL only has separate width/height/depth queries,
+                    // so compose the result of them.
                     let dim = match *self.typifier.get(image, &context.module.types) {
                         crate::TypeInner::Image { dim, .. } => dim,
                         ref other => unreachable!("Unexpected type {:?}", other),

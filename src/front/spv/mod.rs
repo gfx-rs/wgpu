@@ -1113,6 +1113,90 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
+                Op::ImageQuerySize => {
+                    inst.expect(4)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let image_id = self.next()?;
+
+                    //TODO: handle arrays and cubes
+                    let image_lexp = self.lookup_expression.lookup(image_id)?.clone();
+
+                    let expr = crate::Expression::ImageQuery {
+                        image: image_lexp.handle,
+                        query: crate::ImageQuery::Size { level: None },
+                    };
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: expressions.append(expr),
+                            type_id: result_type_id,
+                        },
+                    );
+                }
+                Op::ImageQuerySizeLod => {
+                    inst.expect(5)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let image_id = self.next()?;
+                    let level_id = self.next()?;
+
+                    //TODO: handle arrays and cubes
+                    let image_lexp = self.lookup_expression.lookup(image_id)?.clone();
+                    let level_lexp = self.lookup_expression.lookup(level_id)?.clone();
+
+                    let expr = crate::Expression::ImageQuery {
+                        image: image_lexp.handle,
+                        query: crate::ImageQuery::Size {
+                            level: Some(level_lexp.handle),
+                        },
+                    };
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: expressions.append(expr),
+                            type_id: result_type_id,
+                        },
+                    );
+                }
+                Op::ImageQueryLevels => {
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let image_id = self.next()?;
+
+                    let image_lexp = self.lookup_expression.lookup(image_id)?.clone();
+
+                    let expr = crate::Expression::ImageQuery {
+                        image: image_lexp.handle,
+                        query: crate::ImageQuery::NumLevels,
+                    };
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: expressions.append(expr),
+                            type_id: result_type_id,
+                        },
+                    );
+                }
+                Op::ImageQuerySamples => {
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let image_id = self.next()?;
+
+                    let image_lexp = self.lookup_expression.lookup(image_id)?.clone();
+
+                    let expr = crate::Expression::ImageQuery {
+                        image: image_lexp.handle,
+                        query: crate::ImageQuery::NumSamples,
+                    };
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: expressions.append(expr),
+                            type_id: result_type_id,
+                        },
+                    );
+                }
                 Op::Select => {
                     inst.expect(6)?;
                     let result_type_id = self.next()?;

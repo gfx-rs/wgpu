@@ -604,6 +604,52 @@ impl Parser {
                         index,
                     })
                 }
+                "textureDimensions" => {
+                    lexer.expect(Token::Paren('('))?;
+                    let image_name = lexer.next_ident()?;
+                    let image = ctx.lookup_ident.lookup(image_name)?;
+                    let level = if lexer.skip(Token::Separator(',')) {
+                        let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
+                        Some(expr)
+                    } else {
+                        None
+                    };
+                    lexer.expect(Token::Paren(')'))?;
+                    Some(crate::Expression::ImageQuery {
+                        image,
+                        query: crate::ImageQuery::Size { level },
+                    })
+                }
+                "textureNumLevels" => {
+                    lexer.expect(Token::Paren('('))?;
+                    let image_name = lexer.next_ident()?;
+                    let image = ctx.lookup_ident.lookup(image_name)?;
+                    lexer.expect(Token::Paren(')'))?;
+                    Some(crate::Expression::ImageQuery {
+                        image,
+                        query: crate::ImageQuery::NumLevels,
+                    })
+                }
+                "textureNumLayers" => {
+                    lexer.expect(Token::Paren('('))?;
+                    let image_name = lexer.next_ident()?;
+                    let image = ctx.lookup_ident.lookup(image_name)?;
+                    lexer.expect(Token::Paren(')'))?;
+                    Some(crate::Expression::ImageQuery {
+                        image,
+                        query: crate::ImageQuery::NumLayers,
+                    })
+                }
+                "textureNumSamples" => {
+                    lexer.expect(Token::Paren('('))?;
+                    let image_name = lexer.next_ident()?;
+                    let image = ctx.lookup_ident.lookup(image_name)?;
+                    lexer.expect(Token::Paren(')'))?;
+                    Some(crate::Expression::ImageQuery {
+                        image,
+                        query: crate::ImageQuery::NumSamples,
+                    })
+                }
                 _ => {
                     match ctx.functions.iter().find(|(_, fun)| match fun.name {
                         Some(ref string) => string == name,
