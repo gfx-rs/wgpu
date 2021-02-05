@@ -1,4 +1,4 @@
-.PHONY: all clean validate-spv validate-msl
+.PHONY: all clean validate-spv validate-msl validate-glsl
 .SECONDARY: boids.metal quad.metal
 SNAPSHOTS_IN=tests/in
 SNAPSHOTS_OUT=tests/out
