@@ -315,6 +315,18 @@ impl<S: ResourceState> ResourceTracker<S> {
         }
     }
 
+    fn get<'a>(
+        self_backend: wgt::Backend,
+        map: &'a mut FastHashMap<Index, Resource<S>>,
+        id: Valid<S::Id>,
+    ) -> &'a mut Resource<S> {
+        let (index, epoch, backend) = id.0.unzip();
+        debug_assert_eq!(self_backend, backend);
+        let e = map.get_mut(&index).unwrap();
+        assert_eq!(e.epoch, epoch);
+        e
+    }
+
     /// Extend the usage of a specified resource.
     ///
     /// Returns conflicting transition as an error.
@@ -342,6 +354,21 @@ impl<S: ResourceState> ResourceTracker<S> {
         res.state
             .change(id, selector, usage, Some(&mut self.temp))
             .ok(); //TODO: unwrap?
+        self.temp.drain(..)
+    }
+
+    /// Replace the usage of a specified already tracked resource.
+    /// (panics if the resource is not yet tracked)
+    pub(crate) fn change_replace_tracked(
+        &mut self,
+        id: Valid<S::Id>,
+        selector: S::Selector,
+        usage: S::Usage,
+    ) -> Drain<PendingTransition<S>> {
+        let res = Self::get(self.backend, &mut self.map, id);
+        res.state
+            .change(id, selector, usage, Some(&mut self.temp))
+            .ok();
         self.temp.drain(..)
     }
 
