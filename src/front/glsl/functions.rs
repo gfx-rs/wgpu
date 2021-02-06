@@ -1,6 +1,7 @@
 use crate::{
     proc::{ensure_block_returns, Typifier},
-    BinaryOperator, Block, Expression, Function, MathFunction, SampleLevel, TypeInner,
+    BinaryOperator, Block, Expression, Function, MathFunction, RelationalFunction, SampleLevel,
+    TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind};
@@ -171,6 +172,10 @@ impl Program {
                             statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
                         })
                     }
+                    "isinf" => self.parse_relational_fun(name, fc.args, RelationalFunction::IsInf),
+                    "isnan" => self.parse_relational_fun(name, fc.args, RelationalFunction::IsNan),
+                    "all" => self.parse_relational_fun(name, fc.args, RelationalFunction::All),
+                    "any" => self.parse_relational_fun(name, fc.args, RelationalFunction::Any),
                     func_name => {
                         let function = *self.lookup_function.get(func_name).ok_or_else(|| {
                             ErrorKind::SemanticError(
@@ -189,6 +194,25 @@ impl Program {
                 }
             }
         }
+    }
+
+    pub fn parse_relational_fun(
+        &mut self,
+        name: String,
+        args: Vec<ExpressionRule>,
+        fun: RelationalFunction,
+    ) -> Result<ExpressionRule, ErrorKind> {
+        if args.len() != 1 {
+            return Err(ErrorKind::WrongNumberArgs(name, 1, args.len()));
+        }
+        Ok(ExpressionRule {
+            expression: self.context.expressions.append(Expression::Relational {
+                fun,
+                argument: args[0].expression,
+            }),
+            sampler: None,
+            statements: args.into_iter().flat_map(|a| a.statements).collect(),
+        })
     }
 
     pub fn add_function_prelude(&mut self) {
