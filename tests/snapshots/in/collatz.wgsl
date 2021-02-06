@@ -15,7 +15,7 @@ var<storage> v_indices: [[access(read_write)]] PrimeIndices;
 // And repeat this process for each new n, you will always eventually reach 1.
 // Though the conjecture has not been proven, no counterexample has ever been found.
 // This function returns how many times this recurrence needs to be applied to reach 1.
-fn collatz_iterations(n_base: u32) -> u32{
+fn collatz_iterations(n_base: u32) -> u32 {
     var n: u32 = n_base;
     var i: u32 = 0u;
     loop {

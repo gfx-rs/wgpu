@@ -85,6 +85,14 @@ fn parse_statement() {
     ",
     )
     .unwrap();
+
+    parse_str(
+        "
+        fn foo() {}
+        fn bar() { foo(); }
+    ",
+    )
+    .unwrap();
 }
 
 #[test]

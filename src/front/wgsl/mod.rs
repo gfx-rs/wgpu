@@ -91,6 +91,8 @@ pub enum Error<'a> {
     NotCompositeType(Handle<crate::Type>),
     #[error("function redefinition: `{0}`")]
     FunctionRedefinition(&'a str),
+    #[error("call to local `{0}(..)` can't be resolved")]
+    UnknownLocalFunction(&'a str),
     #[error("other error")]
     Other,
 }
@@ -307,6 +309,8 @@ pub enum Scope {
     GeneralExpr,
 }
 
+type LocalFunctionCall = (Handle<crate::Function>, Vec<Handle<crate::Expression>>);
+
 struct ParsedVariable<'a> {
     name: &'a str,
     class: Option<crate::StorageClass>,
@@ -368,6 +372,36 @@ impl Parser {
                 }
             },
         })
+    }
+
+    fn parse_local_function_call<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        name: &'a str,
+        mut ctx: ExpressionContext<'a, '_, '_>,
+    ) -> Result<Option<LocalFunctionCall>, Error<'a>> {
+        let fun_handle = match ctx.functions.iter().find(|(_, fun)| match fun.name {
+            Some(ref string) => string == name,
+            None => false,
+        }) {
+            Some((fun_handle, _)) => fun_handle,
+            None => return Ok(None),
+        };
+
+        let mut arguments = Vec::new();
+        lexer.expect(Token::Paren('('))?;
+        if !lexer.skip(Token::Paren(')')) {
+            loop {
+                let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
+                arguments.push(arg);
+                match lexer.next() {
+                    Token::Paren(')') => break,
+                    Token::Separator(',') => (),
+                    other => return Err(Error::Unexpected(other, "argument list separator")),
+                }
+            }
+        }
+        Ok(Some((fun_handle, arguments)))
     }
 
     fn parse_function_call_inner<'a>(
@@ -650,39 +684,12 @@ impl Parser {
                         query: crate::ImageQuery::NumSamples,
                     })
                 }
-                _ => {
-                    match ctx.functions.iter().find(|(_, fun)| match fun.name {
-                        Some(ref string) => string == name,
-                        None => false,
-                    }) {
-                        Some((function, _)) => {
-                            let mut arguments = Vec::new();
-                            lexer.expect(Token::Paren('('))?;
-                            if !lexer.skip(Token::Paren(')')) {
-                                loop {
-                                    let arg =
-                                        self.parse_general_expression(lexer, ctx.reborrow())?;
-                                    arguments.push(arg);
-                                    match lexer.next() {
-                                        Token::Paren(')') => break,
-                                        Token::Separator(',') => (),
-                                        other => {
-                                            return Err(Error::Unexpected(
-                                                other,
-                                                "argument list separator",
-                                            ))
-                                        }
-                                    }
-                                }
-                            }
-                            Some(crate::Expression::Call {
-                                function,
-                                arguments,
-                            })
-                        }
-                        None => None,
-                    }
-                }
+                _ => self.parse_local_function_call(lexer, name, ctx)?.map(
+                    |(function, arguments)| crate::Expression::Call {
+                        function,
+                        arguments,
+                    },
+                ),
             }
         })
     }
@@ -1748,8 +1755,8 @@ impl Parser {
             "break" => Some(crate::Statement::Break),
             "continue" => Some(crate::Statement::Continue),
             "discard" => Some(crate::Statement::Kill),
+            // assignment or a function call
             ident => {
-                // assignment
                 if let Some(&var_expr) = context.lookup_ident.get(ident) {
                     let left = self.parse_postfix(lexer, context.as_expression(), var_expr)?;
                     lexer.expect(Token::Operation('='))?;
@@ -1759,14 +1766,15 @@ impl Parser {
                         pointer: left,
                         value,
                     })
-                } else if let Some(expr) =
-                    self.parse_function_call_inner(lexer, ident, context.as_expression())?
-                {
-                    context.expressions.append(expr);
-                    lexer.expect(Token::Separator(';'))?;
-                    None
                 } else {
-                    return Err(Error::UnknownIdent(ident));
+                    let (function, arguments) = self
+                        .parse_local_function_call(lexer, ident, context.as_expression())?
+                        .ok_or(Error::UnknownLocalFunction(ident))?;
+                    lexer.expect(Token::Separator(';'))?;
+                    Some(crate::Statement::Call {
+                        function,
+                        arguments,
+                    })
                 }
             }
         };
