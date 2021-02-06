@@ -2,8 +2,8 @@ use super::{constants::ConstantSolver, error::ErrorKind};
 use crate::{
     proc::{ResolveContext, Typifier},
     Arena, BinaryOperator, Binding, Constant, Expression, FastHashMap, Function, FunctionArgument,
-    GlobalVariable, Handle, Interpolation, LocalVariable, Module, ShaderStage, Statement,
-    StorageClass, Type,
+    GlobalVariable, Handle, Interpolation, LocalVariable, Module, RelationalFunction, ShaderStage,
+    Statement, StorageClass, Type,
 };
 
 #[derive(Debug)]
@@ -55,6 +55,49 @@ impl Program {
             left: left.expression,
             right: right.expression,
         }))
+    }
+
+    /// Helper function to insert equality expressions, this handles the special
+    /// case of `vec1 == vec2` and `vec1 != vec2` since in the IR they are
+    /// represented as `all(equal(vec1, vec2))` and `any(notEqual(vec1, vec2))`
+    pub fn equality_expr(
+        &mut self,
+        equals: bool,
+        left: &ExpressionRule,
+        right: &ExpressionRule,
+    ) -> Result<ExpressionRule, ErrorKind> {
+        let left_is_vector = match self.resolve_type(left.expression)? {
+            crate::TypeInner::Vector { .. } => true,
+            _ => false,
+        };
+
+        let rigth_is_vector = match self.resolve_type(right.expression)? {
+            crate::TypeInner::Vector { .. } => true,
+            _ => false,
+        };
+
+        let (op, fun) = match equals {
+            true => (BinaryOperator::Equal, RelationalFunction::All),
+            false => (BinaryOperator::NotEqual, RelationalFunction::Any),
+        };
+
+        let expr =
+            ExpressionRule::from_expression(self.context.expressions.append(Expression::Binary {
+                op,
+                left: left.expression,
+                right: right.expression,
+            }));
+
+        Ok(if left_is_vector && rigth_is_vector {
+            ExpressionRule::from_expression(self.context.expressions.append(
+                Expression::Relational {
+                    fun,
+                    argument: expr.expression,
+                },
+            ))
+        } else {
+            expr
+        })
     }
 
     pub fn resolve_type(

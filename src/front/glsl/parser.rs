@@ -367,10 +367,10 @@ pomelo! {
     }
     equality_expression ::= relational_expression;
     equality_expression ::= equality_expression(left) EqOp relational_expression(right) {
-        extra.binary_expr(BinaryOperator::Equal, &left, &right)
+        extra.equality_expr(true, &left, &right)?
     }
     equality_expression ::= equality_expression(left) NeOp relational_expression(right) {
-        extra.binary_expr(BinaryOperator::NotEqual, &left, &right)
+        extra.equality_expr(false, &left, &right)?
     }
     and_expression ::= equality_expression;
     and_expression ::= and_expression(left) Ampersand equality_expression(right) {

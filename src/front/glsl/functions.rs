@@ -146,7 +146,8 @@ impl Program {
                             statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
                         })
                     }
-                    "lessThan" | "greaterThan" => {
+                    "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" | "equal"
+                    | "notEqual" => {
                         if fc.args.len() != 2 {
                             return Err(ErrorKind::WrongNumberArgs(name, 2, fc.args.len()));
                         }
@@ -155,6 +156,10 @@ impl Program {
                                 op: match name.as_str() {
                                     "lessThan" => BinaryOperator::Less,
                                     "greaterThan" => BinaryOperator::Greater,
+                                    "lessThanEqual" => BinaryOperator::LessEqual,
+                                    "greaterThanEqual" => BinaryOperator::GreaterEqual,
+                                    "equal" => BinaryOperator::Equal,
+                                    "notEqual" => BinaryOperator::NotEqual,
                                     _ => unreachable!(),
                                 },
                                 left: fc.args[0].expression,

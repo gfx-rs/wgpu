@@ -1456,7 +1456,9 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 write!(self.out, ")")?
             }
-            // `Binary` we just write `left op right`
+            // `Binary` we just write `left op right`, except when dealing with
+            // comparison operations on vectors as they are implemented with
+            // builtin functions.
             // Once again we wrap everything in parantheses to avoid precedence issues
             Expression::Binary { op, left, right } => {
                 // Holds `Some(function_name)` if the binary operation is
@@ -1470,6 +1472,8 @@ impl<'a, W: Write> Writer<'a, W> {
                         BinaryOperator::LessEqual => Some("lessThanEqual"),
                         BinaryOperator::Greater => Some("greaterThan"),
                         BinaryOperator::GreaterEqual => Some("greaterThanEqual"),
+                        BinaryOperator::Equal => Some("equal"),
+                        BinaryOperator::NotEqual => Some("notEqual"),
                         _ => None,
                     }
                 } else {
