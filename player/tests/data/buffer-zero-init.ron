@@ -1,9 +1,35 @@
 (
     features: (bits: 0x0),
     expectations: [
+        // Ensuring that mapping zero-inits buffers.
+        (
+            name: "mapped_at_creation: false, with MAP_WRITE",
+            buffer: (index: 0, epoch: 1),
+            offset: 0,
+            data: Raw([0x00, 0x00, 0x00, 0x00]),
+        ),
+        (
+            name: "mapped_at_creation: false, without MAP_WRITE",
+            buffer: (index: 1, epoch: 1),
+            offset: 0,
+            data: Raw([0x00, 0x00, 0x00, 0x00]),
+        ),
+        (
+            name: "partially written buffer",
+            buffer: (index: 2, epoch: 1),
+            offset: 0,
+            data: Raw([0x00, 0x00, 0x00, 0x00, 
+                       0x00, 0x00, 0x80, 0xBF,
+                       0x00, 0x00, 0x80, 0xBF,
+                       0x00, 0x00, 0x80, 0x3F,
+                       0x00, 0x00, 0x80, 0x3F,
+                       0x00, 0x00, 0x00, 0x00]),
+        ),
+        // Ensuring that binding zero-inits buffers
+        // (by observing correct side effects of compute shader reading & writing values)
         (
             name: "buffer has correct values",
-            buffer: (index: 0, epoch: 1),
+            buffer: (index: 3, epoch: 1),
             offset: 0,
             data: Raw([0x00, 0x00, 0x00, 0x00,
                        0x01, 0x00, 0x00, 0x00,
@@ -12,6 +38,48 @@
         )
     ],
     actions: [
+        CreateBuffer(
+            Id(0, 1, Empty),
+            (
+                label: Some("mapped_at_creation: false, with MAP_WRITE"),
+                size: 16,
+                usage: (
+                    bits: 131, // STORAGE + MAP_READ + MAP_WRITE
+                ),
+                mapped_at_creation: false,
+            ),
+        ),
+        CreateBuffer(
+            Id(1, 1, Empty),
+            (
+                label: Some("mapped_at_creation: false, without MAP_WRITE"),
+                size: 16,
+                usage: (
+                    bits: 129, // STORAGE + MAP_READ
+                ),
+                mapped_at_creation: false,
+            ),
+        ),
+        CreateBuffer(
+            Id(2, 1, Empty),
+            (
+                label: Some("partially written"),
+                size: 24,
+                usage: (
+                    bits: 9, // MAP_READ + COPY_DST
+                ),
+                mapped_at_creation: false,
+            ),
+        ),
+        WriteBuffer(
+            id: Id(2, 1, Empty),
+            data: "data1.bin",
+            range: (
+                start: 4,
+                end: 20,
+            ),
+            queued: true,
+        ),
         CreateShaderModule(
             id: Id(0, 1, Empty),
             desc: (
@@ -20,8 +88,8 @@
             ),
             data: "buffer-zero-init-for-binding.wgsl",
         ),
-        CreateBuffer(Id(0, 1, Empty), (
-            label: None,
+        CreateBuffer(Id(3, 1, Empty), (
+            label: Some("used in binding"),
             size: 16,
             usage: (
                 bits: 129, // STORAGE + MAP_READ
@@ -54,7 +122,7 @@
                 (
                     binding: 0,
                     resource: Buffer((
-                        buffer_id: Id(0, 1, Empty),
+                        buffer_id: Id(3, 1, Empty),
                         offset: 0,
                         size: Some(16),
                     )),
