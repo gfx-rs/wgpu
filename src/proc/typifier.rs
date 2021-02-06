@@ -48,6 +48,8 @@ pub enum ResolveError {
     InvalidAccessIndex,
     #[error("Function {name} not defined")]
     FunctionNotDefined { name: String },
+    #[error("Function without return type")]
+    FunctionReturnsVoid,
     #[error("Type is not found in the given immutable arena")]
     TypeNotFound,
     #[error("Incompatible operand: {op} {operand}")]
@@ -466,13 +468,10 @@ impl Typifier {
                 function,
                 arguments: _,
             } => {
-                match ctx.functions[function].return_type {
-                    Some(ty) => Resolution::Handle(ty),
-                    // return a type that can't ever be returned...
-                    // We don't have `void` in the IR, but we have to return something here.
-                    // This is also not a place to validate anything.
-                    None => Resolution::Value(crate::TypeInner::Sampler { comparison: false }),
-                }
+                let ty = ctx.functions[function]
+                    .return_type
+                    .ok_or(ResolveError::FunctionReturnsVoid)?;
+                Resolution::Handle(ty)
             }
             crate::Expression::ArrayLength(_) => Resolution::Value(crate::TypeInner::Scalar {
                 kind: crate::ScalarKind::Uint,
