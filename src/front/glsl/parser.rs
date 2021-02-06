@@ -8,7 +8,7 @@ pomelo! {
             Arena, BinaryOperator, Binding, Block, Constant,
             ConstantInner, EntryPoint, Expression,
             Function, GlobalVariable, Handle, Interpolation,
-            LocalVariable, ScalarValue,
+            LocalVariable, ScalarValue, ScalarKind,
             Statement, StorageAccess, StorageClass, StructMember,
             SwitchCase, Type, TypeInner, UnaryOperator, FunctionArgument
         };
@@ -319,15 +319,27 @@ pomelo! {
         //TODO
         return Err(ErrorKind::NotImplemented("--pre"))
     }
-    unary_expression ::= unary_operator unary_expression {
-        //TODO
-        return Err(ErrorKind::NotImplemented("unary_op"))
+    unary_expression ::= Plus unary_expression(tgt) {
+        tgt
+    }
+    unary_expression ::= Dash unary_expression(tgt) {
+        extra.unary_expr(UnaryOperator::Negate, &tgt)
+    }
+    unary_expression ::= Bang unary_expression(tgt) {
+        if let TypeInner::Scalar { kind: ScalarKind::Bool, .. } = extra.resolve_type(tgt.expression)? {
+            extra.unary_expr(UnaryOperator::Not, &tgt)
+        } else {
+            return Err(ErrorKind::SemanticError("Cannot apply '!' to non bool type".into()))
+        }
+    }
+    unary_expression ::= Tilde unary_expression(tgt) {
+        if extra.resolve_type(tgt.expression)?.scalar_kind() != Some(ScalarKind::Bool) {
+            extra.unary_expr(UnaryOperator::Not, &tgt)
+        } else {
+            return Err(ErrorKind::SemanticError("Cannot apply '~' to type".into()))
+        }
     }
 
-    unary_operator ::= Plus;
-    unary_operator ::= Dash;
-    unary_operator ::= Bang;
-    unary_operator ::= Tilde;
     multiplicative_expression ::= unary_expression;
     multiplicative_expression ::= multiplicative_expression(left) Star unary_expression(right) {
         extra.binary_expr(BinaryOperator::Multiply, &left, &right)

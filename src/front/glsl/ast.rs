@@ -3,7 +3,7 @@ use crate::{
     proc::{ResolveContext, Typifier},
     Arena, BinaryOperator, Binding, Constant, Expression, FastHashMap, Function, FunctionArgument,
     GlobalVariable, Handle, Interpolation, LocalVariable, Module, RelationalFunction, ShaderStage,
-    Statement, StorageClass, Type,
+    Statement, StorageClass, Type, UnaryOperator,
 };
 
 #[derive(Debug)]
@@ -54,6 +54,13 @@ impl Program {
             op,
             left: left.expression,
             right: right.expression,
+        }))
+    }
+
+    pub fn unary_expr(&mut self, op: UnaryOperator, tgt: &ExpressionRule) -> ExpressionRule {
+        ExpressionRule::from_expression(self.context.expressions.append(Expression::Unary {
+            op,
+            expr: tgt.expression,
         }))
     }
 
