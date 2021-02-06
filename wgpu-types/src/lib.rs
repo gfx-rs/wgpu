@@ -867,7 +867,8 @@ impl Default for PolygonMode {
 pub struct PrimitiveState {
     /// The primitive topology used to interpret vertices.
     pub topology: PrimitiveTopology,
-    /// The format of index buffers for strip topologies. Should be left `None` for non-strip.
+    /// When drawing strip topologies with indices, this is the required format for the index buffer.
+    /// This has no effect on non-indexed or non-strip draws.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub strip_index_format: Option<IndexFormat>,
     /// The face to consider the front for the purpose of culling and stencil operations.
