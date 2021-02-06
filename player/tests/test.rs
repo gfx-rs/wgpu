@@ -144,7 +144,10 @@ impl Test<'_> {
             };
 
             if &expected_data[..] != contents {
-                panic!("Test expectation is not met!");
+                panic!(
+                    "Test expectation is not met!\nBuffer content was:\n{:?}\nbut expected:\n{:?}",
+                    contents, expected_data
+                );
             }
         }
 
