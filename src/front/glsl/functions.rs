@@ -109,14 +109,16 @@ impl Program {
                             statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
                         })
                     }
-                    "pow" => {
+                    "pow" | "dot" | "max" => {
                         if fc.args.len() != 2 {
-                            return Err(ErrorKind::WrongNumberArgs(name, 3, fc.args.len()));
+                            return Err(ErrorKind::WrongNumberArgs(name, 2, fc.args.len()));
                         }
                         Ok(ExpressionRule {
                             expression: self.context.expressions.append(Expression::Math {
                                 fun: match name.as_str() {
                                     "pow" => MathFunction::Pow,
+                                    "dot" => MathFunction::Dot,
+                                    "max" => MathFunction::Max,
                                     _ => unreachable!(),
                                 },
                                 arg: fc.args[0].expression,
