@@ -1690,14 +1690,14 @@ trait BufferMappedRangeSlice {
 #[derive(Debug)]
 pub struct BufferView<'a> {
     slice: BufferSlice<'a>,
-    data: BufferMappedRange<'a>,
+    data: BufferMappedRange,
 }
 
 /// Write only view into mapped buffer.
 #[derive(Debug)]
 pub struct BufferViewMut<'a> {
     slice: BufferSlice<'a>,
-    data: BufferMappedRange<'a>,
+    data: BufferMappedRange,
     readable: bool,
 }
 

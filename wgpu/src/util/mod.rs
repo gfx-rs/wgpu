@@ -6,6 +6,7 @@ mod encoder;
 
 use std::{
     borrow::Cow,
+    future::Future,
     mem::{align_of, size_of},
     ptr::copy_nonoverlapping,
 };
@@ -53,4 +54,43 @@ pub fn make_spirv<'a>(data: &'a [u8]) -> super::ShaderSource<'a> {
         words[0]
     );
     super::ShaderSource::SpirV(words)
+}
+
+/// CPU accessible buffer used to download data back from the GPU.
+pub struct DownloadBuffer(super::Buffer, super::BufferMappedRange);
+
+impl DownloadBuffer {
+    /// Asynchronously read the contents of a buffer.
+    pub fn read_buffer(device: &super::Device, queue: &super::Queue, buffer: &super::BufferSlice) -> impl Future<Output=Result<Self, super::BufferAsyncError>> + Send {
+        let size = match buffer.size {
+            Some(size) => size.into(),
+            None => buffer.buffer.map_context.lock().total_size - buffer.offset,
+        };
+
+        let download = device.create_buffer(&super::BufferDescriptor {
+            size,
+            usage: super::BufferUsage::COPY_DST | super::BufferUsage::MAP_READ,
+            mapped_at_creation: false,
+            label: None,
+        });
+
+        let mut encoder = device.create_command_encoder(&super::CommandEncoderDescriptor { label: None });
+        encoder.copy_buffer_to_buffer(buffer.buffer, buffer.offset, &download, 0, size);
+        let command_buffer: super::CommandBuffer = encoder.finish();
+        queue.submit(Some(command_buffer));
+
+        let fut = download.slice(..).map_async(super::MapMode::Read);
+        async move {
+            fut.await?;
+            let mapped_range = super::Context::buffer_get_mapped_range(&*download.context,  &download.id, 0..size);
+            Ok(Self(download, mapped_range))
+        }
+    }
+}
+
+impl std::ops::Deref for DownloadBuffer{
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        super::BufferMappedRangeSlice::slice(&self.1)
+    }
 }
