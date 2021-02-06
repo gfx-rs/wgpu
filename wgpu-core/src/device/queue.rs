@@ -559,9 +559,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            let (buffer, transition) = trackers
-                .buffers
-                .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST)
+            // Don't do use_replace since the buffer may already no longer have a ref_count.
+            // However, we *know* that it is currently in use, so the tracker must already know about it.
+            let transition = trackers.buffers.change_replace_tracked(
+                id::Valid(buffer_id),
+                (),
+                BufferUse::COPY_DST,
+            );
+            let buffer = buffer_guard
+                .get(buffer_id)
                 .map_err(|_| QueueSubmitError::DestroyedBuffer(buffer_id))?;
             let &(ref buffer_raw, _) = buffer
                 .raw
