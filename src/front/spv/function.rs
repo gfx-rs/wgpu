@@ -57,23 +57,23 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
     ) -> Result<(), Error> {
         self.switch(ModuleState::Function, inst.op)?;
         inst.expect(5)?;
-        let result_type = self.next()?;
+        let result_type_id = self.next()?;
         let fun_id = self.next()?;
         let _fun_control = self.next()?;
-        let fun_type = self.next()?;
+        let fun_type_id = self.next()?;
 
         let mut fun = {
-            let ft = self.lookup_function_type.lookup(fun_type)?;
-            if ft.return_type_id != result_type {
-                return Err(Error::WrongFunctionResultType(result_type));
+            let ft = self.lookup_function_type.lookup(fun_type_id)?;
+            if ft.return_type_id != result_type_id {
+                return Err(Error::WrongFunctionResultType(result_type_id));
             }
             crate::Function {
                 name: self.future_decor.remove(&fun_id).and_then(|dec| dec.name),
                 arguments: Vec::with_capacity(ft.parameter_type_ids.len()),
-                return_type: if self.lookup_void_type.contains(&result_type) {
+                return_type: if self.lookup_void_type == Some(result_type_id) {
                     None
                 } else {
-                    Some(self.lookup_type.lookup(result_type)?.handle)
+                    Some(self.lookup_type.lookup(result_type_id)?.handle)
                 },
                 global_usage: Vec::new(),
                 local_variables: Arena::new(),
@@ -101,7 +101,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     if type_id
                         != self
                             .lookup_function_type
-                            .lookup(fun_type)?
+                            .lookup(fun_type_id)?
                             .parameter_type_ids[i]
                     {
                         return Err(Error::WrongFunctionArgumentType(type_id));
@@ -116,7 +116,6 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         // Read body
         let mut flow_graph = FlowGraph::new();
-        let base_deferred_call_index = self.deferred_function_calls.len();
 
         // Scan the blocks and add them as nodes
         loop {
@@ -156,39 +155,29 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         // done
         fun.fill_global_use(&module.global_variables);
 
-        let source = match self.lookup_entry_point.remove(&fun_id) {
+        let dump_suffix = match self.lookup_entry_point.remove(&fun_id) {
             Some(ep) => {
+                let dump_name = format!("flow.{:?}-{}.dot", ep.stage, ep.name);
                 module.entry_points.insert(
-                    (ep.stage, ep.name.clone()),
+                    (ep.stage, ep.name),
                     crate::EntryPoint {
                         early_depth_test: ep.early_depth_test,
                         workgroup_size: ep.workgroup_size,
                         function: fun,
                     },
                 );
-                DeferredSource::EntryPoint(ep.stage, ep.name)
+                dump_name
             }
             None => {
                 let handle = module.functions.append(fun);
                 self.lookup_function.insert(fun_id, handle);
-                DeferredSource::Function(handle)
+                format!("flow.Fun-{}.dot", handle.index())
             }
         };
 
-        for dfc in self.deferred_function_calls[base_deferred_call_index..].iter_mut() {
-            dfc.source = source.clone();
-        }
-
         if let Some(ref prefix) = self.options.flow_graph_dump_prefix {
             let dump = flow_graph.to_graphviz().unwrap_or_default();
-            let suffix = match source {
-                DeferredSource::Undefined => unreachable!(),
-                DeferredSource::EntryPoint(stage, ref name) => {
-                    format!("flow.{:?}-{}.dot", stage, name)
-                }
-                DeferredSource::Function(handle) => format!("flow.Fun-{}.dot", handle.index()),
-            };
-            let _ = std::fs::write(prefix.join(suffix), dump);
+            let _ = std::fs::write(prefix.join(dump_suffix), dump);
         }
 
         self.lookup_expression.clear();

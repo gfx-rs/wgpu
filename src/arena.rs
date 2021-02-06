@@ -126,6 +126,16 @@ impl<T> Arena<T> {
         })
     }
 
+    /// Returns a iterator over the items stored in this arena,
+    /// returning both the item's handle and a mutable reference to it.
+    pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = (Handle<T>, &mut T)> {
+        self.data.iter_mut().enumerate().map(|(i, v)| {
+            let position = i + 1;
+            let index = unsafe { Index::new_unchecked(position as u32) };
+            (Handle::new(index), v)
+        })
+    }
+
     /// Adds a new value to the arena, returning a typed handle.
     ///
     /// The value is not linked to any SPIR-V module.

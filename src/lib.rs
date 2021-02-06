@@ -821,7 +821,7 @@ pub struct FunctionArgument {
 }
 
 /// A function defined in the module.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct Function {
