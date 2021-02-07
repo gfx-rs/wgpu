@@ -53,4 +53,7 @@ pub enum Error {
     InvalidTerminator,
     InvalidEdgeClassification,
     UnexpectedComparisonType(Handle<crate::Type>),
+    // incomplete implementation error
+    UnsupportedRowMajorMatrix,
+    UnsupportedMatrixStride(spirv::Word),
 }

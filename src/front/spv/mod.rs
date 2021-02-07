@@ -156,6 +156,12 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Debug)]
+enum Majority {
+    Column,
+    Row,
+}
+
 #[derive(Debug, Default)]
 struct Decoration {
     name: Option<String>,
@@ -166,6 +172,8 @@ struct Decoration {
     block: Option<Block>,
     offset: Option<spirv::Word>,
     array_stride: Option<NonZeroU32>,
+    matrix_stride: Option<NonZeroU32>,
+    matrix_major: Option<Majority>,
     interpolation: Option<crate::Interpolation>,
     flags: DecorationFlags,
 }
@@ -407,6 +415,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 inst.expect(base_words + 2)?;
                 dec.array_stride = NonZeroU32::new(self.next()?);
             }
+            spirv::Decoration::MatrixStride => {
+                inst.expect(base_words + 2)?;
+                dec.matrix_stride = NonZeroU32::new(self.next()?);
+            }
             spirv::Decoration::NoPerspective => {
                 dec.interpolation = Some(crate::Interpolation::Linear);
             }
@@ -427,6 +439,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
             spirv::Decoration::NonWritable => {
                 dec.flags |= DecorationFlags::NON_WRITABLE;
+            }
+            spirv::Decoration::ColMajor => {
+                dec.matrix_major = Some(Majority::Column);
+            }
+            spirv::Decoration::RowMajor => {
+                dec.matrix_major = Some(Majority::Row);
             }
             other => {
                 log::warn!("Unknown decoration {:?}", other);
@@ -2080,20 +2098,45 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let id = self.next()?;
         let vector_type_id = self.next()?;
         let num_columns = self.next()?;
+        let decor = self.future_decor.remove(&id);
+
         let vector_type_lookup = self.lookup_type.lookup(vector_type_id)?;
         let inner = match module.types[vector_type_lookup.handle].inner {
-            crate::TypeInner::Vector { size, width, .. } => crate::TypeInner::Matrix {
-                columns: map_vector_size(num_columns)?,
-                rows: size,
-                width,
-            },
+            crate::TypeInner::Vector { size, width, .. } => {
+                if let Some(Decoration {
+                    matrix_stride: Some(stride),
+                    ..
+                }) = decor
+                {
+                    if stride.get() != (size as u32) * (width as u32) {
+                        return Err(Error::UnsupportedMatrixStride(stride.get()));
+                    }
+                }
+                crate::TypeInner::Matrix {
+                    columns: map_vector_size(num_columns)?,
+                    rows: size,
+                    width,
+                }
+            }
             _ => return Err(Error::InvalidInnerType(vector_type_id)),
         };
+
+        if let Some(Decoration {
+            matrix_major: Some(ref major),
+            ..
+        }) = decor
+        {
+            match *major {
+                Majority::Column => (),
+                Majority::Row => return Err(Error::UnsupportedRowMajorMatrix),
+            }
+        }
+
         self.lookup_type.insert(
             id,
             LookupType {
                 handle: module.types.append(crate::Type {
-                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                    name: decor.and_then(|dec| dec.name),
                     inner,
                 }),
                 base_id: Some(vector_type_id),
@@ -2541,13 +2584,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             None
         };
         let lookup_type = self.lookup_type.lookup(type_id)?;
-        let dec = match self.future_decor.remove(&id) {
-            Some(dec) => dec,
-            None => {
-                log::warn!("Missing decoration for global {:?}", id);
-                Decoration::default()
-            }
-        };
+        let dec = self.future_decor.remove(&id).unwrap_or_default();
 
         let class = {
             use spirv::StorageClass as Sc;
