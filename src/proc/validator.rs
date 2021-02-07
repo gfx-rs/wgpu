@@ -465,11 +465,7 @@ impl Validator {
                 (crate::StorageAccess::empty(), TypeFlags::empty())
             }
             crate::StorageClass::PushConstant => {
-                //TODO
-                return Err(GlobalVariableError::InvalidStorageAccess {
-                    allowed: crate::StorageAccess::empty(),
-                    seen: crate::StorageAccess::empty(),
-                });
+                (crate::StorageAccess::LOAD, TypeFlags::HOST_SHARED)
             }
         };
 

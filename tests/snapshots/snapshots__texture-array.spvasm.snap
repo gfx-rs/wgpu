@@ -1,0 +1,75 @@
+---
+source: tests/snapshots.rs
+expression: dis
+---
+; SPIR-V
+; Version: 1.0
+; Generator: rspirv
+; Bound: 46
+OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %5 "main" %35 %23
+OpExecutionMode %5 OriginUpperLeft
+OpDecorate %12 Block
+OpMemberDecorate %12 0 Offset 0
+OpDecorate %23 Location 1
+OpDecorate %26 DescriptorSet 0
+OpDecorate %26 Binding 0
+OpDecorate %31 DescriptorSet 0
+OpDecorate %31 Binding 2
+OpDecorate %35 Location 0
+OpDecorate %40 DescriptorSet 0
+OpDecorate %40 Binding 1
+%0 = OpTypeVoid
+%4 = OpTypeInt 32 1
+%3 = OpConstant  %4  0
+%6 = OpTypeFunction %0
+%8 = OpTypeBool
+%10 = OpTypeInt 32 0
+%12 = OpTypeStruct %10
+%14 = OpTypePointer PushConstant %12
+%13 = OpVariable  %14  PushConstant
+%15 = OpTypePointer PushConstant %10
+%16 = OpConstant  %4  0
+%22 = OpTypeFloat 32
+%21 = OpTypeVector %22 4
+%24 = OpTypePointer Output %21
+%23 = OpVariable  %24  Output
+%25 = OpTypeImage %22 2D 0 0 0 1 Unknown
+%27 = OpTypePointer UniformConstant %25
+%26 = OpVariable  %27  UniformConstant
+%29 = OpTypeSampledImage %25
+%30 = OpTypeSampler
+%32 = OpTypePointer UniformConstant %30
+%31 = OpVariable  %32  UniformConstant
+%34 = OpTypeVector %22 2
+%36 = OpTypePointer Input %34
+%35 = OpVariable  %36  Input
+%40 = OpVariable  %27  UniformConstant
+%5 = OpFunction  %0  None %6
+%7 = OpLabel
+%11 = OpAccessChain  %15  %13 %16
+%17 = OpLoad  %10  %11
+%9 = OpIEqual  %8  %17 %3
+OpSelectionMerge %18 None
+OpBranchConditional %9 %19 %20
+%19 = OpLabel
+%28 = OpLoad  %25  %26
+%33 = OpLoad  %30  %31
+%37 = OpLoad  %34  %35
+%38 = OpSampledImage  %29  %28 %33
+%39 = OpImageSampleImplicitLod  %21  %38 %37
+OpStore %23 %39
+OpReturn
+%20 = OpLabel
+%41 = OpLoad  %25  %40
+%42 = OpLoad  %30  %31
+%43 = OpLoad  %34  %35
+%44 = OpSampledImage  %29  %41 %42
+%45 = OpImageSampleImplicitLod  %21  %44 %43
+OpStore %23 %45
+OpReturn
+%18 = OpLabel
+OpReturn
+OpFunctionEnd

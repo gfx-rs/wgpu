@@ -109,7 +109,7 @@ pomelo! {
     %type declaration Option<VarDeclaration>;
     %type init_declarator_list VarDeclaration;
     %type single_declaration VarDeclaration;
-    %type layout_qualifier Binding;
+    %type layout_qualifier StructLayout;
     %type layout_qualifier_id_list Vec<(String, u32)>;
     %type layout_qualifier_id (String, u32);
     %type type_qualifier Vec<TypeQualifier>;
@@ -600,14 +600,16 @@ pomelo! {
 
     layout_qualifier ::= Layout LeftParen layout_qualifier_id_list(l) RightParen {
         if let Some(&(_, loc)) = l.iter().find(|&q| q.0.as_str() == "location") {
-            Binding::Location(loc)
+            StructLayout::Binding(Binding::Location(loc))
         } else if let Some(&(_, binding)) = l.iter().find(|&q| q.0.as_str() == "binding") {
             let group = if let Some(&(_, set)) = l.iter().find(|&q| q.0.as_str() == "set") {
                 set
             } else {
                 0
             };
-            Binding::Resource{ group, binding }
+            StructLayout::Binding(Binding::Resource{ group, binding })
+        } else if l.iter().any(|q| q.0.as_str() == "push_constant") {
+            StructLayout::PushConstant
         } else {
             return Err(ErrorKind::NotImplemented("unsupported layout qualifier(s)"));
         }
@@ -642,7 +644,10 @@ pomelo! {
         TypeQualifier::StorageQualifier(s)
     }
     single_type_qualifier ::= layout_qualifier(l) {
-        TypeQualifier::Binding(l)
+        match l {
+            StructLayout::Binding(b) => TypeQualifier::Binding(b),
+            StructLayout::PushConstant => TypeQualifier::StorageQualifier(StorageQualifier::StorageClass(StorageClass::PushConstant)),
+        }
     }
     // single_type_qualifier ::= precision_qualifier;
     single_type_qualifier ::= interpolation_qualifier(i) {

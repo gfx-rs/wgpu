@@ -188,3 +188,9 @@ fn convert_wgsl_collatz() {
 fn convert_wgsl_shadow() {
     convert_wgsl("shadow", Language::METAL | Language::SPIRV);
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn convert_wgsl_texture_array() {
+    convert_wgsl("texture-array", Language::SPIRV);
+}

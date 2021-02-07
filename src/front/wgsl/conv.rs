@@ -7,6 +7,7 @@ pub fn map_storage_class(word: &str) -> Result<crate::StorageClass, Error<'_>> {
         "private" => Ok(crate::StorageClass::Private),
         "uniform" => Ok(crate::StorageClass::Uniform),
         "storage" => Ok(crate::StorageClass::Storage),
+        "push_constant" => Ok(crate::StorageClass::PushConstant),
         _ => Err(Error::UnknownStorageClass(word)),
     }
 }
