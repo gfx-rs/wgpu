@@ -47,6 +47,13 @@ struct Parameters {
     mtl_bindings: naga::FastHashMap<BindSource, BindTarget>,
 }
 
+fn with_snapshot_settings<F: FnOnce() -> ()>(snapshot_assertion: F) {
+    let mut settings = insta::Settings::new();
+    settings.set_snapshot_path("out");
+    settings.set_prepend_module_to_snapshot(false);
+    settings.bind(|| snapshot_assertion());
+}
+
 #[cfg(feature = "spv-out")]
 fn check_output_spv(module: &naga::Module, name: &str, params: &Parameters) {
     use naga::back::spv;
@@ -62,7 +69,9 @@ fn check_output_spv(module: &naga::Module, name: &str, params: &Parameters) {
     let dis = rspirv::dr::load_words(spv)
         .expect("Produced invalid SPIR-V")
         .disassemble();
-    insta::assert_snapshot!(format!("{}.spvasm", name), dis);
+    with_snapshot_settings(|| {
+        insta::assert_snapshot!(format!("{}.spvasm", name), dis);
+    });
 }
 
 #[cfg(feature = "msl-out")]
@@ -96,7 +105,10 @@ fn check_output_msl(module: &naga::Module, name: &str, params: &Parameters) {
     };
 
     let (msl, _) = msl::write_string(&module, &options).unwrap();
-    insta::assert_snapshot!(format!("{}.msl", name), msl);
+
+    with_snapshot_settings(|| {
+        insta::assert_snapshot!(format!("{}.msl", name), msl);
+    });
 }
 
 #[cfg(feature = "glsl-out")]
@@ -113,19 +125,22 @@ fn check_output_glsl(module: &naga::Module, name: &str, stage: naga::ShaderStage
     writer.write().unwrap();
 
     let string = String::from_utf8(buffer).unwrap();
-    insta::assert_snapshot!(format!("{}-{:?}.glsl", name, stage), string);
+
+    with_snapshot_settings(|| {
+        insta::assert_snapshot!(format!("{}-{:?}.glsl", name, stage), string);
+    });
 }
 
 #[cfg(feature = "wgsl-in")]
 fn convert_wgsl(name: &str, language: Language) {
     let params =
-        match std::fs::read_to_string(format!("tests/snapshots/in/{}{}", name, ".param.ron")) {
+        match std::fs::read_to_string(format!("tests/in/{}{}", name, ".param.ron")) {
             Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
             Err(_) => Parameters::default(),
         };
 
     let module = naga::front::wgsl::parse_str(
-        &std::fs::read_to_string(format!("tests/snapshots/in/{}{}", name, ".wgsl"))
+        &std::fs::read_to_string(format!("tests/in/{}{}", name, ".wgsl"))
             .expect("Couldn't find wgsl file"),
     )
     .unwrap();
