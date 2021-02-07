@@ -509,6 +509,62 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    fn insert_composite(
+        &self,
+        root_expr: Handle<crate::Expression>,
+        root_type_id: spirv::Word,
+        object_expr: Handle<crate::Expression>,
+        selections: &[spirv::Word],
+        type_arena: &Arena<crate::Type>,
+        expressions: &mut Arena<crate::Expression>,
+    ) -> Result<Handle<crate::Expression>, Error> {
+        let selection = match selections.first() {
+            Some(&index) => index,
+            None => return Ok(object_expr),
+        };
+        let root_lookup = self.lookup_type.lookup(root_type_id)?;
+        let (count, child_type_id) = match type_arena[root_lookup.handle].inner {
+            crate::TypeInner::Struct { ref members, .. } => {
+                let child_type_id = *self
+                    .lookup_member_type_id
+                    .get(&(root_lookup.handle, selection))
+                    .ok_or(Error::InvalidAccess(root_expr))?;
+                (members.len(), child_type_id)
+            }
+            // crate::TypeInner::Array //TODO?
+            crate::TypeInner::Vector { size, .. }
+            | crate::TypeInner::Matrix { columns: size, .. } => {
+                let child_type_id = root_lookup
+                    .base_id
+                    .ok_or(Error::InvalidAccessType(root_type_id))?;
+                (size as usize, child_type_id)
+            }
+            _ => return Err(Error::InvalidAccessType(root_type_id)),
+        };
+
+        let mut components = Vec::with_capacity(count);
+        for index in 0..count as u32 {
+            let expr = expressions.append(crate::Expression::AccessIndex {
+                base: root_expr,
+                index,
+            });
+            components.push(expr);
+        }
+        components[selection as usize] = self.insert_composite(
+            components[selection as usize],
+            child_type_id,
+            object_expr,
+            &selections[1..],
+            type_arena,
+            expressions,
+        )?;
+
+        Ok(expressions.append(crate::Expression::Compose {
+            ty: root_lookup.handle,
+            components,
+        }))
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn next_block(
         &mut self,
@@ -699,13 +755,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result_id = self.next()?;
                     let base_id = self.next()?;
                     log::trace!("\t\t\tlooking up expr {:?}", base_id);
-                    let mut lexp = {
-                        let expr = self.lookup_expression.lookup(base_id)?;
-                        LookupExpression {
-                            handle: expr.handle,
-                            type_id: expr.type_id,
-                        }
-                    };
+                    let mut lexp = self.lookup_expression.lookup(base_id)?.clone();
                     for _ in 4..inst.wc {
                         let index = self.next()?;
                         log::trace!("\t\t\tlooking up type {:?}", lexp.type_id);
@@ -739,7 +789,36 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
-                //TODO: Op::CompositeInsert
+                Op::CompositeInsert => {
+                    inst.expect_at_least(5)?;
+                    let result_type_id = self.next()?;
+                    let id = self.next()?;
+                    let object_id = self.next()?;
+                    let composite_id = self.next()?;
+                    let mut selections = Vec::with_capacity(inst.wc as usize - 5);
+                    for _ in 5..inst.wc {
+                        selections.push(self.next()?);
+                    }
+
+                    let object_lexp = self.lookup_expression.lookup(object_id)?.clone();
+                    let root_lexp = self.lookup_expression.lookup(composite_id)?.clone();
+                    let handle = self.insert_composite(
+                        root_lexp.handle,
+                        result_type_id,
+                        object_lexp.handle,
+                        &selections,
+                        type_arena,
+                        expressions,
+                    )?;
+
+                    self.lookup_expression.insert(
+                        id,
+                        LookupExpression {
+                            handle,
+                            type_id: result_type_id,
+                        },
+                    );
+                }
                 Op::CompositeConstruct => {
                     inst.expect_at_least(3)?;
                     let result_type_id = self.next()?;
