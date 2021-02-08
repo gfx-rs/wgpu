@@ -699,10 +699,10 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, "{}bool {} = true;", level, gate_name)?;
                         writeln!(self.out, "{}while(true) {{", level)?;
                         let lif = level.next();
-                        writeln!(self.out, "{}if (!loop_init) {{", lif)?;
+                        writeln!(self.out, "{}if (!{}) {{", lif, gate_name)?;
                         self.put_block(lif.next(), continuing, context, return_value)?;
                         writeln!(self.out, "{}}}", lif)?;
-                        writeln!(self.out, "{}loop_init = false;", lif)?;
+                        writeln!(self.out, "{}{} = false;", lif, gate_name)?;
                     } else {
                         writeln!(self.out, "{}while(true) {{", level)?;
                     }
