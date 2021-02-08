@@ -206,22 +206,24 @@ impl Writer {
         flags: WriterFlags,
         capabilities: crate::FastHashSet<spirv::Capability>,
     ) -> Self {
+        let gl450_ext_inst_id = 1;
+        let void_type = 2;
         Writer {
             physical_layout: PhysicalLayout::new(header),
             logical_layout: LogicalLayout::default(),
-            id_count: 2, // 0 is void type, 1 is the GLSL ext inst
+            id_count: 2, // see `gl450_ext_inst_id` and `void_type`
             capabilities,
             debugs: vec![],
             annotations: vec![],
             flags,
-            void_type: 0,
+            void_type,
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
             lookup_function_type: crate::FastHashMap::default(),
             lookup_constant: crate::FastHashMap::default(),
             lookup_global_variable: crate::FastHashMap::default(),
             struct_type_handles: crate::FastHashMap::default(),
-            gl450_ext_inst_id: 1,
+            gl450_ext_inst_id,
             layouter: Layouter::default(),
             typifier: Typifier::new(),
         }

@@ -30,7 +30,7 @@ OpDecorate %174 Binding 1
 OpDecorate %179 DescriptorSet 0
 OpDecorate %179 Binding 2
 OpDecorate %182 Location 0
-%0 = OpTypeVoid
+%2 = OpTypeVoid
 %4 = OpTypeInt 32 1
 %3 = OpConstant  %4  2
 %5 = OpConstant  %4  1
@@ -41,7 +41,7 @@ OpDecorate %182 Location 0
 %11 = OpTypePointer Function %4
 %14 = OpTypeVector %7 4
 %15 = OpTypePointer Function %14
-%17 = OpTypeFunction %0
+%17 = OpTypeFunction %2
 %20 = OpTypeInt 32 0
 %22 = OpTypePointer Input %20
 %21 = OpVariable  %22  Input
@@ -127,7 +127,7 @@ OpDecorate %182 Location 0
 %179 = OpVariable  %180  UniformConstant
 %183 = OpTypePointer Input %46
 %182 = OpVariable  %183  Input
-%16 = OpFunction  %0  None %17
+%16 = OpFunction  %2  None %17
 %18 = OpLabel
 %10 = OpVariable  %11  Function
 %12 = OpVariable  %11  Function
@@ -215,7 +215,7 @@ OpStore %47 %49
 OpStore %159 %169
 OpReturn
 OpFunctionEnd
-%170 = OpFunction  %0  None %17
+%170 = OpFunction  %2  None %17
 %171 = OpLabel
 %176 = OpLoad  %173  %174
 %181 = OpLoad  %178  %179

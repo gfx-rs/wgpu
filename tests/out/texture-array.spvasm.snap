@@ -21,10 +21,10 @@ OpDecorate %31 Binding 2
 OpDecorate %35 Location 0
 OpDecorate %40 DescriptorSet 0
 OpDecorate %40 Binding 1
-%0 = OpTypeVoid
+%2 = OpTypeVoid
 %4 = OpTypeInt 32 1
 %3 = OpConstant  %4  0
-%6 = OpTypeFunction %0
+%6 = OpTypeFunction %2
 %8 = OpTypeBool
 %10 = OpTypeInt 32 0
 %12 = OpTypeStruct %10
@@ -47,7 +47,7 @@ OpDecorate %40 Binding 1
 %36 = OpTypePointer Input %34
 %35 = OpVariable  %36  Input
 %40 = OpVariable  %27  UniformConstant
-%5 = OpFunction  %0  None %6
+%5 = OpFunction  %2  None %6
 %7 = OpLabel
 %11 = OpAccessChain  %15  %13 %16
 %17 = OpLoad  %10  %11

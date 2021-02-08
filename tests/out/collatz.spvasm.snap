@@ -17,7 +17,7 @@ OpMemberDecorate %45 0 Offset 0
 OpDecorate %46 DescriptorSet 0
 OpDecorate %46 Binding 0
 OpDecorate %53 BuiltIn GlobalInvocationId
-%0 = OpTypeVoid
+%2 = OpTypeVoid
 %4 = OpTypeInt 32 0
 %3 = OpConstant  %4  0
 %5 = OpConstant  %4  1
@@ -26,7 +26,7 @@ OpDecorate %53 BuiltIn GlobalInvocationId
 %9 = OpTypePointer Function %4
 %13 = OpTypeFunction %4 %4
 %19 = OpTypeBool
-%40 = OpTypeFunction %0
+%40 = OpTypeFunction %2
 %43 = OpTypeRuntimeArray %4
 %45 = OpTypeStruct %43
 %47 = OpTypePointer Uniform %45
@@ -92,7 +92,7 @@ OpBranch %15
 %38 = OpLoad  %4  %10
 OpReturnValue %38
 OpFunctionEnd
-%39 = OpFunction  %0  None %40
+%39 = OpFunction  %2  None %40
 %41 = OpLabel
 %44 = OpAccessChain  %48  %46 %50
 %51 = OpAccessChain  %55  %53 %56

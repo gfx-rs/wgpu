@@ -11,9 +11,9 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %3 "main"
 OpExecutionMode %3 LocalSize 1 1 1
-%0 = OpTypeVoid
-%4 = OpTypeFunction %0
-%3 = OpFunction  %0  None %4
+%2 = OpTypeVoid
+%4 = OpTypeFunction %2
+%3 = OpFunction  %2  None %4
 %5 = OpLabel
 OpReturn
 OpFunctionEnd

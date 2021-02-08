@@ -33,7 +33,7 @@ OpDecorate %102 Binding 1
 OpDecorate %111 Location 1
 OpDecorate %114 Location 0
 OpDecorate %217 Location 0
-%0 = OpTypeVoid
+%2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpConstant  %4  0.0
 %5 = OpConstant  %4  1.0
@@ -61,7 +61,7 @@ OpDecorate %217 Location 0
 %59 = OpConstant  %4  0.0
 %61 = OpTypePointer Function %10
 %63 = OpTypePointer Function %12
-%65 = OpTypeFunction %0
+%65 = OpTypeFunction %2
 %74 = OpTypeVector %12 4
 %76 = OpTypeStruct %74
 %78 = OpTypePointer Uniform %76
@@ -173,7 +173,7 @@ OpBranch %24
 %54 = OpImageSampleDrefExplicitLod  %4  %53 %52 %55 Lod %59
 OpReturnValue %54
 OpFunctionEnd
-%64 = OpFunction  %0  None %65
+%64 = OpFunction  %2  None %65
 %66 = OpLabel
 %60 = OpVariable  %61  Function %9
 %62 = OpVariable  %63  Function %13
