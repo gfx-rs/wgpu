@@ -133,11 +133,10 @@ fn check_output_glsl(module: &naga::Module, name: &str, stage: naga::ShaderStage
 
 #[cfg(feature = "wgsl-in")]
 fn convert_wgsl(name: &str, language: Language) {
-    let params =
-        match std::fs::read_to_string(format!("tests/in/{}{}", name, ".param.ron")) {
-            Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
-            Err(_) => Parameters::default(),
-        };
+    let params = match std::fs::read_to_string(format!("tests/in/{}{}", name, ".param.ron")) {
+        Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
+        Err(_) => Parameters::default(),
+    };
 
     let module = naga::front::wgsl::parse_str(
         &std::fs::read_to_string(format!("tests/in/{}{}", name, ".wgsl"))
