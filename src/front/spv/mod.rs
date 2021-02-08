@@ -16,8 +16,6 @@ mod error;
 mod flow;
 mod function;
 mod image;
-#[cfg(all(test, feature = "serialize"))]
-mod rosetta;
 
 use convert::*;
 use error::Error;

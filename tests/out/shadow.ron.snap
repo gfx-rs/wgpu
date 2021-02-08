@@ -1,0 +1,1150 @@
+---
+source: tests/snapshots.rs
+expression: output
+---
+(
+    header: (
+        version: (1, 0, 0),
+        generator: 0,
+    ),
+    types: [
+        (
+            name: None,
+            inner: Scalar(
+                kind: Float,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Tri,
+                kind: Float,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar(
+                kind: Uint,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Quad,
+                kind: Float,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar(
+                kind: Bool,
+                width: 1,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                kind: Float,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: true,
+                class: Sampled(
+                    kind: Float,
+                    multi: false,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Sampler(
+                comparison: false,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                kind: Float,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar(
+                kind: Sint,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Quad,
+                kind: Uint,
+                width: 4,
+            ),
+        ),
+        (
+            name: Some("Globals"),
+            inner: Struct(
+                block: true,
+                members: [
+                    (
+                        name: Some("num_lights"),
+                        span: None,
+                        ty: 11,
+                    ),
+                ],
+            ),
+        ),
+        (
+            name: None,
+            inner: Matrix(
+                columns: Quad,
+                rows: Quad,
+                width: 4,
+            ),
+        ),
+        (
+            name: Some("Light"),
+            inner: Struct(
+                block: true,
+                members: [
+                    (
+                        name: Some("proj"),
+                        span: None,
+                        ty: 13,
+                    ),
+                    (
+                        name: Some("pos"),
+                        span: None,
+                        ty: 4,
+                    ),
+                    (
+                        name: Some("color"),
+                        span: None,
+                        ty: 4,
+                    ),
+                ],
+            ),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 14,
+                size: Dynamic,
+                stride: Some(96),
+            ),
+        ),
+        (
+            name: Some("Lights"),
+            inner: Struct(
+                block: true,
+                members: [
+                    (
+                        name: Some("data"),
+                        span: None,
+                        ty: 15,
+                    ),
+                ],
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: true,
+                class: Depth,
+            ),
+        ),
+        (
+            name: None,
+            inner: Sampler(
+                comparison: true,
+            ),
+        ),
+    ],
+    constants: [
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Float(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Float(1),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Float(0.5),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Float(-0.5),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Float(0.05000000074505806),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Composite(
+                ty: 2,
+                components: [
+                    5,
+                    5,
+                    5,
+                ],
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Uint(10),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Uint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Uint(1),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Float(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(1),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(1),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(1),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(1),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(2),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(1),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(2),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(2),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(2),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(1),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(2),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(2),
+            ),
+        ),
+    ],
+    global_variables: [
+        (
+            name: Some("t_shadow"),
+            class: Handle,
+            binding: Some(Resource(
+                group: 0,
+                binding: 2,
+            )),
+            ty: 17,
+            init: None,
+            interpolation: None,
+            storage_access: (
+                bits: 0,
+            ),
+        ),
+        (
+            name: Some("sampler_shadow"),
+            class: Handle,
+            binding: Some(Resource(
+                group: 0,
+                binding: 3,
+            )),
+            ty: 18,
+            init: None,
+            interpolation: None,
+            storage_access: (
+                bits: 0,
+            ),
+        ),
+        (
+            name: Some("u_globals"),
+            class: Uniform,
+            binding: Some(Resource(
+                group: 0,
+                binding: 0,
+            )),
+            ty: 12,
+            init: None,
+            interpolation: None,
+            storage_access: (
+                bits: 0,
+            ),
+        ),
+        (
+            name: Some("s_lights"),
+            class: Storage,
+            binding: Some(Resource(
+                group: 0,
+                binding: 1,
+            )),
+            ty: 16,
+            init: None,
+            interpolation: None,
+            storage_access: (
+                bits: 1,
+            ),
+        ),
+        (
+            name: Some("in_position_fs"),
+            class: Input,
+            binding: Some(Location(1)),
+            ty: 4,
+            init: None,
+            interpolation: None,
+            storage_access: (
+                bits: 0,
+            ),
+        ),
+        (
+            name: Some("in_normal_fs"),
+            class: Input,
+            binding: Some(Location(0)),
+            ty: 2,
+            init: None,
+            interpolation: None,
+            storage_access: (
+                bits: 0,
+            ),
+        ),
+        (
+            name: Some("out_color_fs"),
+            class: Output,
+            binding: Some(Location(0)),
+            ty: 4,
+            init: None,
+            interpolation: None,
+            storage_access: (
+                bits: 0,
+            ),
+        ),
+    ],
+    functions: [
+        (
+            name: None,
+            arguments: [
+                (
+                    name: None,
+                    ty: 3,
+                ),
+                (
+                    name: None,
+                    ty: 4,
+                ),
+            ],
+            return_type: Some(1),
+            global_usage: [
+                (
+                    bits: 1,
+                ),
+                (
+                    bits: 1,
+                ),
+                (
+                    bits: 0,
+                ),
+                (
+                    bits: 0,
+                ),
+                (
+                    bits: 0,
+                ),
+                (
+                    bits: 0,
+                ),
+                (
+                    bits: 0,
+                ),
+            ],
+            local_variables: [],
+            expressions: [
+                GlobalVariable(3),
+                GlobalVariable(6),
+                GlobalVariable(5),
+                GlobalVariable(1),
+                GlobalVariable(2),
+                GlobalVariable(4),
+                GlobalVariable(7),
+                Constant(16),
+                Constant(3),
+                Constant(29),
+                Constant(27),
+                Constant(25),
+                Constant(23),
+                Constant(21),
+                Constant(11),
+                Constant(8),
+                Constant(19),
+                Constant(4),
+                Constant(32),
+                Constant(30),
+                Constant(10),
+                Constant(28),
+                Constant(26),
+                Constant(13),
+                Constant(22),
+                Constant(35),
+                Constant(9),
+                Constant(7),
+                Constant(5),
+                Constant(2),
+                Constant(17),
+                Constant(31),
+                Constant(15),
+                Constant(33),
+                Constant(14),
+                Constant(24),
+                Constant(12),
+                Constant(20),
+                Constant(34),
+                Constant(18),
+                Constant(6),
+                Constant(1),
+                FunctionArgument(0),
+                FunctionArgument(1),
+                AccessIndex(
+                    base: 44,
+                    index: 3,
+                ),
+                Binary(
+                    op: LessEqual,
+                    left: 45,
+                    right: 42,
+                ),
+                AccessIndex(
+                    base: 44,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 44,
+                    index: 1,
+                ),
+                Compose(
+                    ty: 9,
+                    components: [
+                        47,
+                        48,
+                    ],
+                ),
+                Compose(
+                    ty: 9,
+                    components: [
+                        9,
+                        18,
+                    ],
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 49,
+                    right: 50,
+                ),
+                AccessIndex(
+                    base: 44,
+                    index: 3,
+                ),
+                Binary(
+                    op: Divide,
+                    left: 30,
+                    right: 52,
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 51,
+                    right: 53,
+                ),
+                Compose(
+                    ty: 9,
+                    components: [
+                        9,
+                        9,
+                    ],
+                ),
+                Binary(
+                    op: Add,
+                    left: 54,
+                    right: 55,
+                ),
+                AccessIndex(
+                    base: 56,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 56,
+                    index: 1,
+                ),
+                As(
+                    expr: 43,
+                    kind: Sint,
+                    convert: false,
+                ),
+                As(
+                    expr: 59,
+                    kind: Float,
+                    convert: true,
+                ),
+                Compose(
+                    ty: 2,
+                    components: [
+                        57,
+                        58,
+                        60,
+                    ],
+                ),
+                AccessIndex(
+                    base: 44,
+                    index: 2,
+                ),
+                AccessIndex(
+                    base: 44,
+                    index: 3,
+                ),
+                Binary(
+                    op: Divide,
+                    left: 30,
+                    right: 63,
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 62,
+                    right: 64,
+                ),
+                AccessIndex(
+                    base: 61,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 61,
+                    index: 1,
+                ),
+                Compose(
+                    ty: 6,
+                    components: [
+                        66,
+                        67,
+                    ],
+                ),
+                AccessIndex(
+                    base: 61,
+                    index: 2,
+                ),
+                As(
+                    expr: 69,
+                    kind: Uint,
+                    convert: true,
+                ),
+                ImageSample(
+                    image: 4,
+                    sampler: 5,
+                    coordinate: 68,
+                    array_index: Some(70),
+                    offset: None,
+                    level: Exact(21),
+                    depth_ref: Some(65),
+                ),
+            ],
+            body: [
+                If(
+                    condition: 46,
+                    accept: [
+                        Return(
+                            value: Some(30),
+                        ),
+                    ],
+                    reject: [],
+                ),
+                Return(
+                    value: Some(71),
+                ),
+            ],
+        ),
+    ],
+    entry_points: {
+        (Fragment, "fs_main"): (
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            function: (
+                name: Some("fs_main"),
+                arguments: [],
+                return_type: None,
+                global_usage: [
+                    (
+                        bits: 0,
+                    ),
+                    (
+                        bits: 0,
+                    ),
+                    (
+                        bits: 1,
+                    ),
+                    (
+                        bits: 1,
+                    ),
+                    (
+                        bits: 1,
+                    ),
+                    (
+                        bits: 1,
+                    ),
+                    (
+                        bits: 2,
+                    ),
+                ],
+                local_variables: [
+                    (
+                        name: Some("color"),
+                        ty: 2,
+                        init: Some(6),
+                    ),
+                    (
+                        name: Some("i"),
+                        ty: 3,
+                        init: Some(8),
+                    ),
+                ],
+                expressions: [
+                    GlobalVariable(3),
+                    GlobalVariable(6),
+                    GlobalVariable(5),
+                    GlobalVariable(1),
+                    GlobalVariable(2),
+                    GlobalVariable(4),
+                    GlobalVariable(7),
+                    Constant(16),
+                    Constant(3),
+                    Constant(29),
+                    Constant(27),
+                    Constant(25),
+                    Constant(23),
+                    Constant(21),
+                    Constant(11),
+                    Constant(8),
+                    Constant(19),
+                    Constant(4),
+                    Constant(32),
+                    Constant(30),
+                    Constant(10),
+                    Constant(28),
+                    Constant(26),
+                    Constant(13),
+                    Constant(22),
+                    Constant(35),
+                    Constant(9),
+                    Constant(7),
+                    Constant(5),
+                    Constant(2),
+                    Constant(17),
+                    Constant(31),
+                    Constant(15),
+                    Constant(33),
+                    Constant(14),
+                    Constant(24),
+                    Constant(12),
+                    Constant(20),
+                    Constant(34),
+                    Constant(18),
+                    Constant(6),
+                    Constant(1),
+                    LocalVariable(1),
+                    LocalVariable(2),
+                    AccessIndex(
+                        base: 1,
+                        index: 0,
+                    ),
+                    Access(
+                        base: 45,
+                        index: 37,
+                    ),
+                    Math(
+                        fun: Min,
+                        arg: 46,
+                        arg1: Some(28),
+                        arg2: None,
+                    ),
+                    Binary(
+                        op: GreaterEqual,
+                        left: 44,
+                        right: 47,
+                    ),
+                    AccessIndex(
+                        base: 6,
+                        index: 0,
+                    ),
+                    Access(
+                        base: 49,
+                        index: 44,
+                    ),
+                    AccessIndex(
+                        base: 50,
+                        index: 0,
+                    ),
+                    Binary(
+                        op: Multiply,
+                        left: 51,
+                        right: 3,
+                    ),
+                    Call(
+                        function: 1,
+                        arguments: [
+                            44,
+                            52,
+                        ],
+                    ),
+                    Math(
+                        fun: Normalize,
+                        arg: 2,
+                        arg1: None,
+                        arg2: None,
+                    ),
+                    AccessIndex(
+                        base: 6,
+                        index: 0,
+                    ),
+                    Access(
+                        base: 55,
+                        index: 44,
+                    ),
+                    AccessIndex(
+                        base: 56,
+                        index: 1,
+                    ),
+                    Access(
+                        base: 57,
+                        index: 31,
+                    ),
+                    AccessIndex(
+                        base: 6,
+                        index: 0,
+                    ),
+                    Access(
+                        base: 59,
+                        index: 44,
+                    ),
+                    AccessIndex(
+                        base: 60,
+                        index: 1,
+                    ),
+                    Access(
+                        base: 61,
+                        index: 38,
+                    ),
+                    AccessIndex(
+                        base: 6,
+                        index: 0,
+                    ),
+                    Access(
+                        base: 63,
+                        index: 44,
+                    ),
+                    AccessIndex(
+                        base: 64,
+                        index: 1,
+                    ),
+                    Access(
+                        base: 65,
+                        index: 13,
+                    ),
+                    Compose(
+                        ty: 2,
+                        components: [
+                            58,
+                            62,
+                            66,
+                        ],
+                    ),
+                    Access(
+                        base: 3,
+                        index: 36,
+                    ),
+                    Access(
+                        base: 3,
+                        index: 12,
+                    ),
+                    Access(
+                        base: 3,
+                        index: 23,
+                    ),
+                    Compose(
+                        ty: 2,
+                        components: [
+                            68,
+                            69,
+                            70,
+                        ],
+                    ),
+                    Binary(
+                        op: Subtract,
+                        left: 67,
+                        right: 71,
+                    ),
+                    Math(
+                        fun: Normalize,
+                        arg: 72,
+                        arg1: None,
+                        arg2: None,
+                    ),
+                    Math(
+                        fun: Dot,
+                        arg: 54,
+                        arg1: Some(73),
+                        arg2: None,
+                    ),
+                    Math(
+                        fun: Max,
+                        arg: 42,
+                        arg1: Some(74),
+                        arg2: None,
+                    ),
+                    Binary(
+                        op: Multiply,
+                        left: 53,
+                        right: 75,
+                    ),
+                    AccessIndex(
+                        base: 6,
+                        index: 0,
+                    ),
+                    Access(
+                        base: 77,
+                        index: 44,
+                    ),
+                    AccessIndex(
+                        base: 78,
+                        index: 2,
+                    ),
+                    Access(
+                        base: 79,
+                        index: 10,
+                    ),
+                    AccessIndex(
+                        base: 6,
+                        index: 0,
+                    ),
+                    Access(
+                        base: 81,
+                        index: 44,
+                    ),
+                    AccessIndex(
+                        base: 82,
+                        index: 2,
+                    ),
+                    Access(
+                        base: 83,
+                        index: 19,
+                    ),
+                    AccessIndex(
+                        base: 6,
+                        index: 0,
+                    ),
+                    Access(
+                        base: 85,
+                        index: 44,
+                    ),
+                    AccessIndex(
+                        base: 86,
+                        index: 2,
+                    ),
+                    Access(
+                        base: 87,
+                        index: 26,
+                    ),
+                    Compose(
+                        ty: 2,
+                        components: [
+                            80,
+                            84,
+                            88,
+                        ],
+                    ),
+                    Binary(
+                        op: Multiply,
+                        left: 89,
+                        right: 76,
+                    ),
+                    Binary(
+                        op: Add,
+                        left: 43,
+                        right: 90,
+                    ),
+                    Binary(
+                        op: Add,
+                        left: 44,
+                        right: 27,
+                    ),
+                    Compose(
+                        ty: 4,
+                        components: [
+                            43,
+                            30,
+                        ],
+                    ),
+                ],
+                body: [
+                    Loop(
+                        body: [
+                            If(
+                                condition: 48,
+                                accept: [
+                                    Break,
+                                ],
+                                reject: [],
+                            ),
+                            Store(
+                                pointer: 43,
+                                value: 91,
+                            ),
+                            Store(
+                                pointer: 44,
+                                value: 92,
+                            ),
+                            Continue,
+                        ],
+                        continuing: [
+                            Store(
+                                pointer: 44,
+                                value: 92,
+                            ),
+                        ],
+                    ),
+                    Store(
+                        pointer: 7,
+                        value: 93,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+            ),
+        ),
+    },
+)

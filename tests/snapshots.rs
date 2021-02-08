@@ -208,3 +208,28 @@ fn convert_wgsl_shadow() {
 fn convert_wgsl_texture_array() {
     convert_wgsl("texture-array", Language::SPIRV);
 }
+
+#[cfg(feature = "spv-in")]
+fn convert_spv(name: &str) {
+    let module = naga::front::spv::parse_u8_slice(
+        &std::fs::read(format!("tests/in/{}{}", name, ".spv")).expect("Couldn't find spv file"),
+        &Default::default(),
+    )
+    .unwrap();
+    naga::proc::Validator::new().validate(&module).unwrap();
+
+    #[cfg(feature = "serialize")]
+    {
+        let config = ron::ser::PrettyConfig::default();
+        let output = ron::ser::to_string_pretty(&module, config).unwrap();
+        with_snapshot_settings(|| {
+            insta::assert_snapshot!(format!("{}.ron", name), output);
+        });
+    }
+}
+
+#[cfg(feature = "spv-in")]
+#[test]
+fn convert_spv_shadow() {
+    convert_spv("shadow");
+}
