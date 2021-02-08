@@ -63,6 +63,33 @@ impl Instruction {
         }
     }
 }
+
+impl crate::Expression {
+    fn as_global_var(&self) -> Result<Handle<crate::GlobalVariable>, Error> {
+        match *self {
+            crate::Expression::GlobalVariable(handle) => Ok(handle),
+            _ => Err(Error::InvalidGlobalVar(self.clone())),
+        }
+    }
+}
+
+impl crate::TypeInner {
+    fn can_comparison_sample(&self) -> bool {
+        match *self {
+            crate::TypeInner::Image {
+                class:
+                    crate::ImageClass::Sampled {
+                        kind: crate::ScalarKind::Float,
+                        multi: false,
+                    },
+                ..
+            } => true,
+            crate::TypeInner::Sampler { .. } => true,
+            _ => false,
+        }
+    }
+}
+
 /// OpPhi instruction.
 #[derive(Clone, Default, Debug)]
 struct PhiInstruction {
@@ -101,22 +128,6 @@ impl<T> LookupHelper for FastHashMap<spirv::Word, T> {
     }
 }
 
-//TODO: this method may need to be gone, depending on whether
-// WGSL allows treating images and samplers as expressions and pass them around.
-fn reach_global_type(
-    mut expr_handle: Handle<crate::Expression>,
-    expressions: &Arena<crate::Expression>,
-    globals: &Arena<crate::GlobalVariable>,
-) -> Option<Handle<crate::Type>> {
-    loop {
-        expr_handle = match expressions[expr_handle] {
-            crate::Expression::Load { pointer } => pointer,
-            crate::Expression::GlobalVariable(var) => return Some(globals[var].ty),
-            _ => return None,
-        };
-    }
-}
-
 fn check_sample_coordinates(
     ty: &crate::Type,
     expect_kind: crate::ScalarKind,
@@ -138,6 +149,113 @@ fn check_sample_coordinates(
             width: _,
         } => size as u8 == count && kind == expect_kind,
         _ => false,
+    }
+}
+
+impl crate::ImageDimension {
+    fn required_coordinate_size(&self) -> Option<crate::VectorSize> {
+        match *self {
+            crate::ImageDimension::D1 => None,
+            crate::ImageDimension::D2 => Some(crate::VectorSize::Bi),
+            crate::ImageDimension::D3 => Some(crate::VectorSize::Tri),
+            crate::ImageDimension::Cube => Some(crate::VectorSize::Tri),
+        }
+    }
+}
+
+/// Return the texture coordinates separated from the array layer,
+/// and/or divided by the projection term.
+///
+/// The Proj sampling ops expect an extra coordinate for the W.
+/// The arrayed (can't be Proj!) images expect an extra coordinate for the layer.
+fn extract_image_coordinates(
+    image_dim: crate::ImageDimension,
+    image_arrayed: bool,
+    base: Handle<crate::Expression>,
+    coordinate_ty: Handle<crate::Type>,
+    type_arena: &Arena<crate::Type>,
+    expressions: &mut Arena<crate::Expression>,
+) -> (Handle<crate::Expression>, Option<Handle<crate::Expression>>) {
+    let (given_size, kind) = match type_arena[coordinate_ty].inner {
+        crate::TypeInner::Scalar { kind, .. } => (None, kind),
+        crate::TypeInner::Vector { size, kind, .. } => (Some(size), kind),
+        ref other => unreachable!("Unexpected texture coordinate {:?}", other),
+    };
+
+    let required_size = image_dim.required_coordinate_size();
+    let required_ty = required_size.map(|size| {
+        type_arena
+            .fetch_if(|ty| {
+                ty.inner
+                    == crate::TypeInner::Vector {
+                        size,
+                        kind,
+                        width: 4,
+                    }
+            })
+            .expect("Required coordinate type should have been set up by `parse_type_image`!")
+    });
+    let extra_expr = crate::Expression::AccessIndex {
+        base,
+        index: required_size.map_or(1, |size| size as u32),
+    };
+
+    if given_size == required_size {
+        // fast path, no complications
+        (base, None)
+    } else if image_arrayed {
+        // extra coordinate for the array index
+        let extracted = match required_size {
+            None => expressions.append(crate::Expression::AccessIndex { base, index: 0 }),
+            Some(size) => {
+                let mut components = Vec::with_capacity(size as usize);
+                for index in 0..size as u32 {
+                    let comp = expressions.append(crate::Expression::AccessIndex { base, index });
+                    components.push(comp);
+                }
+                expressions.append(crate::Expression::Compose {
+                    ty: required_ty.unwrap(),
+                    components,
+                })
+            }
+        };
+        let array_index_f32 = expressions.append(extra_expr);
+        let array_index = expressions.append(crate::Expression::As {
+            kind: crate::ScalarKind::Uint,
+            expr: array_index_f32,
+            convert: true,
+        });
+        (extracted, Some(array_index))
+    } else {
+        // extra coordinate for the projection W
+        let projection = expressions.append(extra_expr);
+        let divided = match required_size {
+            None => {
+                let temp = expressions.append(crate::Expression::AccessIndex { base, index: 0 });
+                expressions.append(crate::Expression::Binary {
+                    op: crate::BinaryOperator::Divide,
+                    left: temp,
+                    right: projection,
+                })
+            }
+            Some(size) => {
+                let mut components = Vec::with_capacity(size as usize);
+                for index in 0..size as u32 {
+                    let temp = expressions.append(crate::Expression::AccessIndex { base, index });
+                    let comp = expressions.append(crate::Expression::Binary {
+                        op: crate::BinaryOperator::Divide,
+                        left: temp,
+                        right: projection,
+                    });
+                    components.push(comp);
+                }
+                expressions.append(crate::Expression::Compose {
+                    ty: required_ty.unwrap(),
+                    components,
+                })
+            }
+        };
+        (divided, None)
     }
 }
 
@@ -296,7 +414,7 @@ pub struct Parser<I> {
     future_decor: FastHashMap<spirv::Word, Decoration>,
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member_type_id: FastHashMap<(Handle<crate::Type>, MemberIndex), spirv::Word>,
-    handle_sampling: FastHashMap<Handle<crate::Type>, SamplingFlags>,
+    handle_sampling: FastHashMap<Handle<crate::GlobalVariable>, SamplingFlags>,
     lookup_type: FastHashMap<spirv::Word, LookupType>,
     lookup_void_type: Option<spirv::Word>,
     lookup_storage_buffer_types: FastHashSet<Handle<crate::Type>>,
@@ -528,7 +646,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 let child_type_id = *self
                     .lookup_member_type_id
                     .get(&(root_lookup.handle, selection))
-                    .ok_or(Error::InvalidAccess(root_expr))?;
+                    .ok_or(Error::InvalidAccessType(root_type_id))?;
                 (members.len(), child_type_id)
             }
             // crate::TypeInner::Array //TODO?
@@ -563,105 +681,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             ty: root_lookup.handle,
             components,
         }))
-    }
-
-    /// Return the texture coordinates separated from the array layer,
-    /// and/or divided by the projection term.
-    ///
-    /// The Proj sampling ops expect an extra coordinate for the W.
-    /// The arrayed (can't be Proj!) images expect an extra coordinate for the layer.
-    fn extract_image_coordinates(
-        image_dim: crate::ImageDimension,
-        image_arrayed: bool,
-        base: Handle<crate::Expression>,
-        coordinate_ty: Handle<crate::Type>,
-        type_arena: &Arena<crate::Type>,
-        expressions: &mut Arena<crate::Expression>,
-    ) -> (Handle<crate::Expression>, Option<Handle<crate::Expression>>) {
-        let (given_size, kind) = match type_arena[coordinate_ty].inner {
-            crate::TypeInner::Scalar { kind, .. } => (None, kind),
-            crate::TypeInner::Vector { size, kind, .. } => (Some(size), kind),
-            ref other => unreachable!("Unexpected texture coordinate {:?}", other),
-        };
-
-        let required_size = Self::required_coordinate_size(image_dim);
-        let required_ty = required_size.map(|size| {
-            type_arena
-                .fetch_if(|ty| {
-                    ty.inner
-                        == crate::TypeInner::Vector {
-                            size,
-                            kind,
-                            width: 4,
-                        }
-                })
-                .expect("Required coordinate type should have been set up by `parse_type_image`!")
-        });
-        let extra_expr = crate::Expression::AccessIndex {
-            base,
-            index: required_size.map_or(1, |size| size as u32),
-        };
-
-        if given_size == required_size {
-            // fast path, no complications
-            (base, None)
-        } else if image_arrayed {
-            // extra coordinate for the array index
-            let extracted = match required_size {
-                None => expressions.append(crate::Expression::AccessIndex { base, index: 0 }),
-                Some(size) => {
-                    let mut components = Vec::with_capacity(size as usize);
-                    for index in 0..size as u32 {
-                        let comp =
-                            expressions.append(crate::Expression::AccessIndex { base, index });
-                        components.push(comp);
-                    }
-                    expressions.append(crate::Expression::Compose {
-                        ty: required_ty.unwrap(),
-                        components,
-                    })
-                }
-            };
-            let array_index_f32 = expressions.append(extra_expr);
-            let array_index = expressions.append(crate::Expression::As {
-                kind: crate::ScalarKind::Uint,
-                expr: array_index_f32,
-                convert: true,
-            });
-            (extracted, Some(array_index))
-        } else {
-            // extra coordinate for the projection W
-            let projection = expressions.append(extra_expr);
-            let divided = match required_size {
-                None => {
-                    let temp =
-                        expressions.append(crate::Expression::AccessIndex { base, index: 0 });
-                    expressions.append(crate::Expression::Binary {
-                        op: crate::BinaryOperator::Divide,
-                        left: temp,
-                        right: projection,
-                    })
-                }
-                Some(size) => {
-                    let mut components = Vec::with_capacity(size as usize);
-                    for index in 0..size as u32 {
-                        let temp =
-                            expressions.append(crate::Expression::AccessIndex { base, index });
-                        let comp = expressions.append(crate::Expression::Binary {
-                            op: crate::BinaryOperator::Divide,
-                            left: temp,
-                            right: projection,
-                        });
-                        components.push(comp);
-                    }
-                    expressions.append(crate::Expression::Compose {
-                        ty: required_ty.unwrap(),
-                        components,
-                    })
-                }
-            };
-            (divided, None)
-        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -808,11 +827,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                                 value: crate::ScalarValue::Sint(v),
                                             } => v as u32,
                                             _ => {
-                                                return Err(Error::InvalidAccess(index_expr.handle))
+                                                return Err(Error::InvalidAccess(
+                                                    crate::Expression::Constant(const_handle),
+                                                ))
                                             }
                                         }
                                     }
-                                    _ => return Err(Error::InvalidAccess(index_expr.handle)),
+                                    ref other => return Err(Error::InvalidAccess(other.clone())),
                                 };
                                 AccessExpression {
                                     base_handle: expressions.append(
@@ -1148,18 +1169,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
 
                     let image_lexp = self.lookup_expression.lookup(image_id)?;
-                    let image_type_handle =
-                        reach_global_type(image_lexp.handle, expressions, global_arena)
-                            .ok_or(Error::InvalidImageExpression(image_lexp.handle))?;
+                    let image_var_handle = expressions[image_lexp.handle].as_global_var()?;
+                    let image_var = &global_arena[image_var_handle];
 
                     let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
                     let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-                    let (coordinate, array_index) = match type_arena[image_type_handle].inner {
+                    let (coordinate, array_index) = match type_arena[image_var.ty].inner {
                         crate::TypeInner::Image {
                             dim,
                             arrayed,
                             class: _,
-                        } => Self::extract_image_coordinates(
+                        } => extract_image_coordinates(
                             dim,
                             arrayed,
                             coord_lexp.handle,
@@ -1167,7 +1187,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             type_arena,
                             expressions,
                         ),
-                        _ => return Err(Error::InvalidSampleImage(image_type_handle)),
+                        _ => return Err(Error::InvalidSampleImage(image_var.ty)),
                     };
 
                     let expr = crate::Expression::ImageLoad {
@@ -1226,28 +1246,26 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
                     let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
 
-                    let sampler_type_handle =
-                        reach_global_type(si_lexp.sampler, expressions, global_arena)
-                            .ok_or(Error::InvalidSamplerExpression(si_lexp.sampler))?;
-                    let image_type_handle =
-                        reach_global_type(si_lexp.image, expressions, global_arena)
-                            .ok_or(Error::InvalidImageExpression(si_lexp.image))?;
+                    let image_var_handle = expressions[si_lexp.image].as_global_var()?;
+                    let sampler_var_handle = expressions[si_lexp.sampler].as_global_var()?;
                     log::debug!(
-                        "\t\t\tImage {:?} with sampler {:?}",
-                        image_type_handle,
-                        sampler_type_handle
+                        "\t\t\tImage {:?} sampled with {:?}",
+                        image_var_handle,
+                        sampler_var_handle
                     );
-                    *self.handle_sampling.get_mut(&sampler_type_handle).unwrap() |=
-                        SamplingFlags::REGULAR;
-                    *self.handle_sampling.get_mut(&image_type_handle).unwrap() |=
+                    if let Some(flags) = self.handle_sampling.get_mut(&image_var_handle) {
+                        *flags |= SamplingFlags::REGULAR;
+                    }
+                    *self.handle_sampling.get_mut(&sampler_var_handle).unwrap() |=
                         SamplingFlags::REGULAR;
 
-                    let (coordinate, array_index) = match type_arena[image_type_handle].inner {
+                    let image_var = &global_arena[image_var_handle];
+                    let (coordinate, array_index) = match type_arena[image_var.ty].inner {
                         crate::TypeInner::Image {
                             dim,
                             arrayed,
                             class: _,
-                        } => Self::extract_image_coordinates(
+                        } => extract_image_coordinates(
                             dim,
                             arrayed,
                             coord_lexp.handle,
@@ -1255,7 +1273,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             type_arena,
                             expressions,
                         ),
-                        _ => return Err(Error::InvalidSampleImage(image_type_handle)),
+                        _ => return Err(Error::InvalidSampleImage(image_var.ty)),
                     };
 
                     let expr = crate::Expression::ImageSample {
@@ -1317,15 +1335,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
                     let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
                     let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-                    let sampler_type_handle =
-                        reach_global_type(si_lexp.sampler, expressions, global_arena)
-                            .ok_or(Error::InvalidSamplerExpression(si_lexp.sampler))?;
-                    let image_type_handle =
-                        reach_global_type(si_lexp.image, expressions, global_arena)
-                            .ok_or(Error::InvalidImageExpression(si_lexp.image))?;
-                    *self.handle_sampling.get_mut(&sampler_type_handle).unwrap() |=
-                        SamplingFlags::COMPARISON;
-                    *self.handle_sampling.get_mut(&image_type_handle).unwrap() |=
+                    let image_var_handle = expressions[si_lexp.image].as_global_var()?;
+                    let sampler_var_handle = expressions[si_lexp.sampler].as_global_var()?;
+                    log::debug!(
+                        "\t\t\tImage {:?} sampled with comparison {:?}",
+                        image_var_handle,
+                        sampler_var_handle
+                    );
+                    if let Some(flags) = self.handle_sampling.get_mut(&image_var_handle) {
+                        *flags |= SamplingFlags::COMPARISON;
+                    }
+                    *self.handle_sampling.get_mut(&sampler_var_handle).unwrap() |=
                         SamplingFlags::COMPARISON;
 
                     let dref_lexp = self.lookup_expression.lookup(dref_id)?;
@@ -1338,12 +1358,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         _ => return Err(Error::InvalidDepthReference(dref_type_handle)),
                     }
 
-                    let (coordinate, array_index) = match type_arena[image_type_handle].inner {
+                    let image_var = &global_arena[image_var_handle];
+                    let (coordinate, array_index) = match type_arena[image_var.ty].inner {
                         crate::TypeInner::Image {
                             dim,
                             arrayed,
                             class: _,
-                        } => Self::extract_image_coordinates(
+                        } => extract_image_coordinates(
                             dim,
                             arrayed,
                             coord_lexp.handle,
@@ -1351,7 +1372,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             type_arena,
                             expressions,
                         ),
-                        _ => return Err(Error::InvalidSampleImage(image_type_handle)),
+                        _ => return Err(Error::InvalidSampleImage(image_var.ty)),
                     };
 
                     let expr = crate::Expression::ImageSample {
@@ -1987,15 +2008,27 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             if flags == SamplingFlags::all() {
                 return Err(Error::InconsistentComparisonSampling(handle));
             }
-            let ty = module.types.get_mut(handle);
-            match ty.inner {
-                crate::TypeInner::Sampler { ref mut comparison } => {
-                    *comparison = true;
-                }
-                _ => {
-                    return Err(Error::UnexpectedComparisonType(handle));
-                }
-            }
+            log::debug!("Flipping comparison for {:?}", handle);
+            let var = module.global_variables.get_mut(handle);
+            let original_ty = &module.types[var.ty];
+            let ty_inner = match original_ty.inner {
+                crate::TypeInner::Image {
+                    class: _,
+                    dim,
+                    arrayed,
+                } => crate::TypeInner::Image {
+                    class: crate::ImageClass::Depth,
+                    dim,
+                    arrayed,
+                },
+                crate::TypeInner::Sampler { .. } => crate::TypeInner::Sampler { comparison: true },
+                ref other => unreachable!("Unexpected type for comparison mutation: {:?}", other),
+            };
+            let name = original_ty.name.clone();
+            var.ty = module.types.append(crate::Type {
+                name,
+                inner: ty_inner,
+            });
         }
 
         for (_, func) in module.functions.iter_mut() {
@@ -2542,15 +2575,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
-    fn required_coordinate_size(dim: crate::ImageDimension) -> Option<crate::VectorSize> {
-        match dim {
-            crate::ImageDimension::D1 => None,
-            crate::ImageDimension::D2 => Some(crate::VectorSize::Bi),
-            crate::ImageDimension::D3 => Some(crate::VectorSize::Tri),
-            crate::ImageDimension::Cube => Some(crate::VectorSize::Tri),
-        }
-    }
-
     fn parse_type_image(
         &mut self,
         inst: Instruction,
@@ -2577,7 +2601,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             inner: {
                 let kind = crate::ScalarKind::Float;
                 let width = 4;
-                match Self::required_coordinate_size(dim) {
+                match dim.required_coordinate_size() {
                     None => crate::TypeInner::Scalar { kind, width },
                     Some(size) => crate::TypeInner::Vector { size, kind, width },
                 }
@@ -2590,26 +2614,24 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             .scalar_kind()
             .ok_or(Error::InvalidImageBaseType(base_handle))?;
 
-        let class = if format != 0 {
-            crate::ImageClass::Storage(map_image_format(format)?)
-        } else {
-            crate::ImageClass::Sampled {
-                kind,
-                multi: is_msaa,
-            }
-        };
-
         let inner = crate::TypeInner::Image {
-            class,
+            class: if format != 0 {
+                crate::ImageClass::Storage(map_image_format(format)?)
+            } else {
+                crate::ImageClass::Sampled {
+                    kind,
+                    multi: is_msaa,
+                }
+            },
             dim,
             arrayed: is_array,
         };
+
         let handle = module.types.append(crate::Type {
             name: decor.name,
             inner,
         });
-        log::debug!("\t\ttracking {:?} for sampling properties", handle);
-        self.handle_sampling.insert(handle, SamplingFlags::empty());
+
         self.lookup_type.insert(
             id,
             LookupType {
@@ -2644,15 +2666,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect(2)?;
         let id = self.next()?;
         let decor = self.future_decor.remove(&id).unwrap_or_default();
-        // The comparison bit is temporary, will be overwritten based on the
-        // accumulated sampling flags at the end.
-        let inner = crate::TypeInner::Sampler { comparison: false };
         let handle = module.types.append(crate::Type {
             name: decor.name,
-            inner,
+            inner: crate::TypeInner::Sampler { comparison: false },
         });
-        log::debug!("\t\ttracking {:?} for sampling properties", handle);
-        self.handle_sampling.insert(handle, SamplingFlags::empty());
         self.lookup_type.insert(
             id,
             LookupType {
@@ -2883,7 +2900,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         };
 
-        let is_storage = match module.types[lookup_type.handle].inner {
+        let ty_inner = &module.types[lookup_type.handle].inner;
+        let is_storage = match *ty_inner {
             crate::TypeInner::Struct { .. } => class == crate::StorageClass::Storage,
             crate::TypeInner::Image {
                 class: crate::ImageClass::Storage(_),
@@ -2910,7 +2928,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             // SPIR-V only cares about some of the built-in types being integer.
             // Naga requires them to be strictly unsigned, so we have to patch it.
             Some(crate::Binding::BuiltIn(built_in)) => {
-                let scalar_kind = module.types[lookup_type.handle].inner.scalar_kind();
+                let scalar_kind = ty_inner.scalar_kind();
                 let needs_uint = match built_in {
                     crate::BuiltIn::BaseInstance
                     | crate::BuiltIn::BaseVertex
@@ -2944,13 +2962,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             interpolation: dec.interpolation,
             storage_access,
         };
-        self.lookup_variable.insert(
-            id,
-            LookupVariable {
-                handle: module.global_variables.append(var),
-                type_id,
-            },
-        );
+        let handle = module.global_variables.append(var);
+        self.lookup_variable
+            .insert(id, LookupVariable { handle, type_id });
+
+        if module.types[lookup_type.handle]
+            .inner
+            .can_comparison_sample()
+        {
+            log::debug!("\t\ttracking {:?} for sampling properties", handle);
+            self.handle_sampling.insert(handle, SamplingFlags::empty());
+        }
         Ok(())
     }
 }
