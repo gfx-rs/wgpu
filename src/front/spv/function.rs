@@ -1,7 +1,6 @@
-use crate::arena::Handle;
+use crate::arena::{Arena, Handle};
 
-use super::flow::*;
-use super::*;
+use super::{flow::*, Error, Instruction, LookupExpression, LookupHelper as _};
 
 pub type BlockId = u32;
 
@@ -50,13 +49,7 @@ pub enum Terminator {
 }
 
 impl<I: Iterator<Item = u32>> super::Parser<I> {
-    pub fn parse_function(
-        &mut self,
-        inst: Instruction,
-        module: &mut crate::Module,
-    ) -> Result<(), Error> {
-        self.switch(ModuleState::Function, inst.op)?;
-        inst.expect(5)?;
+    pub fn parse_function(&mut self, module: &mut crate::Module) -> Result<(), Error> {
         let result_type_id = self.next()?;
         let fun_id = self.next()?;
         let _fun_control = self.next()?;
