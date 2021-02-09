@@ -56,7 +56,7 @@ pub struct DxgiLib {
 #[cfg(feature = "libloading")]
 impl DxgiLib {
     pub fn new() -> Result<Self, libloading::Error> {
-        libloading::Library::new("dxgi.dll").map(|lib| DxgiLib { lib })
+        unsafe { libloading::Library::new("dxgi.dll").map(|lib| DxgiLib { lib }) }
     }
 
     pub fn create_factory2(
