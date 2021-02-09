@@ -60,6 +60,8 @@ pub enum CreateShaderModuleError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     Validation(#[from] naga::proc::ValidationError),
+    #[error("missing required device features {0:?}")]
+    MissingFeature(wgt::Features),
 }
 
 /// Describes a programmable pipeline stage.

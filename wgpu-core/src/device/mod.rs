@@ -997,6 +997,16 @@ impl<B: GfxBackend> Device<B> {
             Some(module) => {
                 let interface = if desc.flags.contains(wgt::ShaderFlags::VALIDATION) {
                     naga::proc::Validator::new().validate(&module)?;
+                    if !self.features.contains(wgt::Features::PUSH_CONSTANTS)
+                        && module
+                            .global_variables
+                            .iter()
+                            .any(|(_, var)| var.class == naga::StorageClass::PushConstant)
+                    {
+                        return Err(pipeline::CreateShaderModuleError::MissingFeature(
+                            wgt::Features::PUSH_CONSTANTS,
+                        ));
+                    }
                     Some(validation::Interface::new(&module))
                 } else {
                     None

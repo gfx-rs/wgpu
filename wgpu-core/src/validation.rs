@@ -122,10 +122,11 @@ pub enum BindingError {
     WrongType,
     #[error("buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
     WrongBufferSize(wgt::BufferSize),
-    #[error("view dimension {dim:?} (is array: {is_array}) doesn't match the shader")]
+    #[error("view dimension {dim:?} (is array: {is_array}) doesn't match the binding {binding:?}")]
     WrongTextureViewDimension {
         dim: naga::ImageDimension,
         is_array: bool,
+        binding: BindingType,
     },
     #[error("texture class {binding:?} doesn't match the shader {shader:?}")]
     WrongTextureClass {
@@ -358,7 +359,8 @@ impl Resource {
                     _ => {
                         return Err(BindingError::WrongTextureViewDimension {
                             dim,
-                            is_array: true,
+                            is_array: false,
+                            binding: entry.ty,
                         })
                     }
                 };
@@ -370,6 +372,7 @@ impl Resource {
                             return Err(BindingError::WrongTextureViewDimension {
                                 dim,
                                 is_array: true,
+                                binding: entry.ty,
                             })
                         }
                     }
@@ -383,6 +386,7 @@ impl Resource {
                             return Err(BindingError::WrongTextureViewDimension {
                                 dim,
                                 is_array: false,
+                                binding: entry.ty,
                             })
                         }
                     }
