@@ -1565,6 +1565,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         mut context: StatementContext<'a, '_, '_>,
+        is_uniform_control_flow: bool,
     ) -> Result<Option<crate::Statement>, Error<'a>> {
         let word = match lexer.next() {
             Token::Separator(';') => return Ok(None),
@@ -1572,7 +1573,8 @@ impl Parser {
                 self.scopes.push(Scope::Block);
                 let mut statements = Vec::new();
                 while !lexer.skip(Token::Paren('}')) {
-                    let s = self.parse_statement(lexer, context.reborrow())?;
+                    let s =
+                        self.parse_statement(lexer, context.reborrow(), is_uniform_control_flow)?;
                     statements.extend(s);
                 }
                 self.scopes.pop();
@@ -1606,10 +1608,11 @@ impl Parser {
 
                 let init = if lexer.skip(Token::Operation('=')) {
                     let value = self.parse_general_expression(lexer, context.as_expression())?;
-                    if let crate::Expression::Constant(handle) = context.expressions[value] {
-                        Init::Constant(handle)
-                    } else {
-                        Init::Variable(value)
+                    match context.expressions[value] {
+                        crate::Expression::Constant(handle) if is_uniform_control_flow => {
+                            Init::Constant(handle)
+                        }
+                        _ => Init::Variable(value),
                     }
                 } else {
                     Init::Empty
@@ -1652,9 +1655,9 @@ impl Parser {
                 let condition = self.parse_general_expression(lexer, context.as_expression())?;
                 lexer.expect(Token::Paren(')'))?;
 
-                let accept = self.parse_block(lexer, context.reborrow())?;
+                let accept = self.parse_block(lexer, context.reborrow(), false)?;
                 let reject = if lexer.skip(Token::Word("else")) {
-                    self.parse_block(lexer, context.reborrow())?
+                    self.parse_block(lexer, context.reborrow(), false)?
                 } else {
                     Vec::new()
                 };
@@ -1707,7 +1710,7 @@ impl Parser {
                                 if lexer.skip(Token::Paren('}')) {
                                     break false;
                                 }
-                                let s = self.parse_statement(lexer, context.reborrow())?;
+                                let s = self.parse_statement(lexer, context.reborrow(), false)?;
                                 body.extend(s);
                             };
 
@@ -1719,7 +1722,7 @@ impl Parser {
                         }
                         Token::Word("default") => {
                             lexer.expect(Token::Separator(':'))?;
-                            default = self.parse_block(lexer, context.reborrow())?;
+                            default = self.parse_block(lexer, context.reborrow(), false)?;
                         }
                         Token::Paren('}') => break,
                         other => return Err(Error::Unexpected(other, "switch item")),
@@ -1739,14 +1742,14 @@ impl Parser {
 
                 loop {
                     if lexer.skip(Token::Word("continuing")) {
-                        continuing = self.parse_block(lexer, context.reborrow())?;
+                        continuing = self.parse_block(lexer, context.reborrow(), false)?;
                         lexer.expect(Token::Paren('}'))?;
                         break;
                     }
                     if lexer.skip(Token::Paren('}')) {
                         break;
                     }
-                    let s = self.parse_statement(lexer, context.reborrow())?;
+                    let s = self.parse_statement(lexer, context.reborrow(), false)?;
                     body.extend(s);
                 }
 
@@ -1786,12 +1789,13 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         mut context: StatementContext<'a, '_, '_>,
+        is_uniform_control_flow: bool,
     ) -> Result<Vec<crate::Statement>, Error<'a>> {
         self.scopes.push(Scope::Block);
         lexer.expect(Token::Paren('{'))?;
         let mut statements = Vec::new();
         while !lexer.skip(Token::Paren('}')) {
-            let s = self.parse_statement(lexer, context.reborrow())?;
+            let s = self.parse_statement(lexer, context.reborrow(), is_uniform_control_flow)?;
             statements.extend(s);
         }
         self.scopes.pop();
@@ -1866,6 +1870,7 @@ impl Parser {
                 functions: &module.functions,
                 arguments: &fun.arguments,
             },
+            true,
         )?;
         // fixup the IR
         ensure_block_returns(&mut fun.body);
