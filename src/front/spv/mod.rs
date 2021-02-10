@@ -321,6 +321,7 @@ pub struct Parser<I> {
     deferred_function_calls: FastHashMap<Handle<crate::Function>, spirv::Word>,
     dummy_functions: Arena<crate::Function>,
     options: Options,
+    index_constants: Vec<Handle<crate::Constant>>,
 }
 
 impl<I: Iterator<Item = u32>> Parser<I> {
@@ -347,6 +348,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             deferred_function_calls: FastHashMap::default(),
             dummy_functions: Arena::new(),
             options: options.clone(),
+            index_constants: Vec::new(),
         }
     }
 
@@ -759,6 +761,103 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         type_id: result_type_id,
                     };
                     self.lookup_expression.insert(result_id, lookup_expression);
+                }
+                Op::VectorExtractDynamic => {
+                    inst.expect(5)?;
+                    let result_type_id = self.next()?;
+                    let id = self.next()?;
+                    let composite_id = self.next()?;
+                    let index_id = self.next()?;
+
+                    let root_lexp = self.lookup_expression.lookup(composite_id)?;
+                    let root_type_lookup = self.lookup_type.lookup(root_lexp.type_id)?;
+                    let index_lexp = self.lookup_expression.lookup(index_id)?;
+
+                    let num_components = match type_arena[root_type_lookup.handle].inner {
+                        crate::TypeInner::Vector { size, .. } => size as usize,
+                        _ => return Err(Error::InvalidVectorType(root_type_lookup.handle)),
+                    };
+
+                    let mut index_expr =
+                        expressions.append(crate::Expression::Constant(self.index_constants[0]));
+                    let mut handle = expressions.append(crate::Expression::Access {
+                        base: root_lexp.handle,
+                        index: index_expr,
+                    });
+                    for &index in self.index_constants[1..num_components].iter() {
+                        index_expr = expressions.append(crate::Expression::Constant(index));
+                        let access_expr = expressions.append(crate::Expression::Access {
+                            base: root_lexp.handle,
+                            index: index_expr,
+                        });
+                        let cond = expressions.append(crate::Expression::Binary {
+                            op: crate::BinaryOperator::Equal,
+                            left: index_expr,
+                            right: index_lexp.handle,
+                        });
+                        handle = expressions.append(crate::Expression::Select {
+                            condition: cond,
+                            accept: access_expr,
+                            reject: handle,
+                        });
+                    }
+
+                    self.lookup_expression.insert(
+                        id,
+                        LookupExpression {
+                            handle,
+                            type_id: result_type_id,
+                        },
+                    );
+                }
+                Op::VectorInsertDynamic => {
+                    inst.expect(6)?;
+                    let result_type_id = self.next()?;
+                    let id = self.next()?;
+                    let composite_id = self.next()?;
+                    let object_id = self.next()?;
+                    let index_id = self.next()?;
+
+                    let object_lexp = self.lookup_expression.lookup(object_id)?;
+                    let root_lexp = self.lookup_expression.lookup(composite_id)?;
+                    let root_type_lookup = self.lookup_type.lookup(root_lexp.type_id)?;
+                    let index_lexp = self.lookup_expression.lookup(index_id)?;
+
+                    let num_components = match type_arena[root_type_lookup.handle].inner {
+                        crate::TypeInner::Vector { size, .. } => size as usize,
+                        _ => return Err(Error::InvalidVectorType(root_type_lookup.handle)),
+                    };
+                    let mut components = Vec::with_capacity(num_components);
+                    for &index in self.index_constants[..num_components].iter() {
+                        let index_expr = expressions.append(crate::Expression::Constant(index));
+                        let access_expr = expressions.append(crate::Expression::Access {
+                            base: root_lexp.handle,
+                            index: index_expr,
+                        });
+                        let cond = expressions.append(crate::Expression::Binary {
+                            op: crate::BinaryOperator::Equal,
+                            left: index_expr,
+                            right: index_lexp.handle,
+                        });
+                        let handle = expressions.append(crate::Expression::Select {
+                            condition: cond,
+                            accept: object_lexp.handle,
+                            reject: access_expr,
+                        });
+                        components.push(handle);
+                    }
+                    let handle = expressions.append(crate::Expression::Compose {
+                        ty: root_type_lookup.handle,
+                        components,
+                    });
+
+                    self.lookup_expression.insert(
+                        id,
+                        LookupExpression {
+                            handle,
+                            type_id: result_type_id,
+                        },
+                    );
                 }
                 Op::CompositeExtract => {
                     inst.expect_at_least(4)?;
@@ -1520,6 +1619,19 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             let _schema = self.next()?;
             crate::Module::generate_empty()
         };
+
+        self.index_constants.clear();
+        for i in 0..4 {
+            let handle = module.constants.append(crate::Constant {
+                name: None,
+                specialization: None,
+                inner: crate::ConstantInner::Scalar {
+                    width: 4,
+                    value: crate::ScalarValue::Uint(i),
+                },
+            });
+            self.index_constants.push(handle);
+        }
 
         while let Ok(inst) = self.next_inst() {
             use spirv::Op;

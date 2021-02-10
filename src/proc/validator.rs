@@ -194,7 +194,7 @@ impl crate::GlobalVariable {
                     },
                     Bi::FrontFacing => Ti::Scalar {
                         kind: Sk::Bool,
-                        width,
+                        width: 1,
                     },
                     Bi::GlobalInvocationId
                     | Bi::LocalInvocationId

@@ -43,6 +43,7 @@ pub enum Error {
     InvalidSampleImage(Handle<crate::Type>),
     InvalidDepthReference(Handle<crate::Type>),
     InvalidAsType(Handle<crate::Type>),
+    InvalidVectorType(Handle<crate::Type>),
     InconsistentComparisonSampling(Handle<crate::GlobalVariable>),
     WrongFunctionResultType(spirv::Word),
     WrongFunctionArgumentType(spirv::Word),
