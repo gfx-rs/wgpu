@@ -272,7 +272,7 @@ impl Program {
         self.context.typifier = Typifier::new();
         ensure_block_returns(&mut block);
         f.body = block;
-        f.fill_global_use(&self.module.global_variables);
+        f.fill_global_use(self.module.global_variables.len(), &self.module.functions);
         f
     }
 }

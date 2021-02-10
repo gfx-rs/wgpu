@@ -146,7 +146,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         fun.body = flow_graph.to_naga()?;
 
         // done
-        fun.fill_global_use(&module.global_variables);
+        fun.fill_global_use(module.global_variables.len(), &module.functions);
 
         let dump_suffix = match self.lookup_entry_point.remove(&fun_id) {
             Some(ep) => {

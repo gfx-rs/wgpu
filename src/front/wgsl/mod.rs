@@ -1875,7 +1875,7 @@ impl Parser {
         // fixup the IR
         ensure_block_returns(&mut fun.body);
         // done
-        fun.fill_global_use(&module.global_variables);
+        fun.fill_global_use(module.global_variables.len(), &module.functions);
         self.scopes.pop();
 
         Ok((fun, fun_name))

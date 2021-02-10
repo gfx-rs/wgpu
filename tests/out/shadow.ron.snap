@@ -799,10 +799,10 @@ expression: output
                 return_type: None,
                 global_usage: [
                     (
-                        bits: 0,
+                        bits: 1,
                     ),
                     (
-                        bits: 0,
+                        bits: 1,
                     ),
                     (
                         bits: 1,

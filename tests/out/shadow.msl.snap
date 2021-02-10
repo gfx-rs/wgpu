@@ -65,7 +65,9 @@ struct fs_mainOutput {
 fragment fs_mainOutput fs_main(
     fs_mainInput input [[stage_in]],
     constant Globals& u_globals [[buffer(0)]],
-    constant Lights& s_lights [[buffer(1)]]
+    constant Lights& s_lights [[buffer(1)]],
+    type4 t_shadow [[texture(0)]],
+    type5 sampler_shadow [[sampler(0)]]
 ) {
     fs_mainOutput output;
     type10 color1 = type10(0.05, 0.05, 0.05);
