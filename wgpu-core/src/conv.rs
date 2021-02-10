@@ -808,9 +808,9 @@ pub fn map_primitive_state_to_rasterizer(
             wgt::PolygonMode::Point => pso::PolygonMode::Point,
         },
         cull_face: match desc.cull_mode {
-            wgt::CullMode::None => pso::Face::empty(),
-            wgt::CullMode::Front => pso::Face::FRONT,
-            wgt::CullMode::Back => pso::Face::BACK,
+            None => pso::Face::empty(),
+            Some(wgt::Face::Front) => pso::Face::FRONT,
+            Some(wgt::Face::Back) => pso::Face::BACK,
         },
         front_face: match desc.front_face {
             wgt::FrontFace::Ccw => pso::FrontFace::CounterClockwise,
