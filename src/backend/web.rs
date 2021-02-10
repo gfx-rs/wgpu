@@ -945,6 +945,10 @@ impl crate::Context for Context {
         )
     }
 
+    fn instance_poll_all_devices(&self, _force_wait: bool) {
+        // Devices are automatically polled.
+    }
+
     fn adapter_request_device(
         &self,
         adapter: &Self::AdapterId,
