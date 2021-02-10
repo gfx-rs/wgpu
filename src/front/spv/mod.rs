@@ -1554,6 +1554,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::Constant | Op::SpecConstant => self.parse_constant(inst, &mut module),
                 Op::ConstantComposite => self.parse_composite_constant(inst, &mut module),
                 Op::ConstantNull | Op::Undef => self.parse_null_constant(inst, &mut module),
+                Op::ConstantTrue => self.parse_bool_constant(inst, true, &mut module),
+                Op::ConstantFalse => self.parse_bool_constant(inst, false, &mut module),
                 Op::Variable => self.parse_global_variable(inst, &mut module),
                 Op::Function => {
                     self.switch(ModuleState::Function, inst.op)?;
@@ -2391,6 +2393,34 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     name: self.future_decor.remove(&id).and_then(|dec| dec.name),
                     specialization: None, //TODO
                     inner,
+                }),
+                type_id,
+            },
+        );
+        Ok(())
+    }
+
+    fn parse_bool_constant(
+        &mut self,
+        inst: Instruction,
+        value: bool,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(3)?;
+        let type_id = self.next()?;
+        let id = self.next()?;
+
+        self.lookup_constant.insert(
+            id,
+            LookupConstant {
+                handle: module.constants.append(crate::Constant {
+                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                    specialization: None, //TODO
+                    inner: crate::ConstantInner::Scalar {
+                        width: 1,
+                        value: crate::ScalarValue::Bool(value),
+                    },
                 }),
                 type_id,
             },
