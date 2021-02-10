@@ -1,5 +1,6 @@
 //! Module processing functionality.
 
+pub mod analyzer;
 #[cfg(feature = "petgraph")]
 mod call_graph;
 mod interface;
