@@ -819,24 +819,16 @@ impl Default for FrontFace {
     }
 }
 
-/// Type of faces to be culled.
+/// Face of a vertex.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub enum CullMode {
-    /// No faces should be culled
-    None = 0,
-    /// Front faces should be culled
-    Front = 1,
-    /// Back faces should be culled
-    Back = 2,
-}
-
-impl Default for CullMode {
-    fn default() -> Self {
-        Self::None
-    }
+pub enum Face {
+    /// Front face
+    Front = 0,
+    /// Back face
+    Back = 1,
 }
 
 /// Type of drawing mode for polygons
@@ -876,7 +868,7 @@ pub struct PrimitiveState {
     pub front_face: FrontFace,
     /// The face culling mode.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
-    pub cull_mode: CullMode,
+    pub cull_mode: Option<Face>,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
     ///
     /// Setting this to something other than `Fill` requires `Features::NON_FILL_POLYGON_MODE` to be enabled.
