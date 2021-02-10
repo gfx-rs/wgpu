@@ -1087,7 +1087,7 @@ pomelo! {
             }).unwrap_or(StorageQualifier::StorageClass(StorageClass::Private));
 
             match storage {
-                StorageQualifier::StorageClass(class) => {
+                StorageQualifier::StorageClass(storage_class) => {
                     // TODO: Check that the storage qualifiers allow for the bindings
                     let binding = d.type_qualifiers.iter().find_map(|tq| {
                         if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
@@ -1099,6 +1099,16 @@ pomelo! {
 
                     for (id, initializer) in d.ids_initializers {
                         let init = initializer.map(|init| extra.solve_constant(init.expression)).transpose()?;
+
+                        // use StorageClass::Handle for texture and sampler uniforms
+                        let class = if storage_class == StorageClass::Uniform {
+                            match extra.module.types[d.ty].inner {
+                                TypeInner::Image{..} | TypeInner::Sampler{..} => StorageClass::Handle,
+                                _ => storage_class,
+                            }
+                        } else {
+                            storage_class
+                        };
 
                         let h = extra.module.global_variables.fetch_or_append(
                             GlobalVariable {
