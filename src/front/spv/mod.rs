@@ -32,9 +32,15 @@ use std::{convert::TryInto, num::NonZeroU32, path::PathBuf};
 
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Shader,
+    spirv::Capability::ClipDistance,
     spirv::Capability::CullDistance,
     spirv::Capability::ImageQuery,
+    spirv::Capability::Image1D,
+    spirv::Capability::ImageCubeArray,
+    spirv::Capability::ImageMSArray,
     spirv::Capability::StorageImageExtendedFormats,
+    spirv::Capability::Sampled1D,
+    spirv::Capability::SampledCubeArray,
 ];
 pub const SUPPORTED_EXTENSIONS: &[&str] = &[];
 pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
