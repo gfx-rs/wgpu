@@ -424,7 +424,12 @@ impl<W: Write> Writer<W> {
                     crate::BinaryOperator::Greater => ">",
                     crate::BinaryOperator::GreaterEqual => ">=",
                     crate::BinaryOperator::And => "&",
-                    _ => return Err(Error::UnsupportedBinaryOp(op)),
+                    crate::BinaryOperator::ExclusiveOr => "^",
+                    crate::BinaryOperator::InclusiveOr => "|",
+                    crate::BinaryOperator::LogicalAnd => "&&",
+                    crate::BinaryOperator::LogicalOr => "||",
+                    crate::BinaryOperator::ShiftLeft => "<<",
+                    crate::BinaryOperator::ShiftRight => ">>",
                 };
                 let kind = self
                     .typifier
