@@ -688,6 +688,14 @@ impl crate::Context for Context {
         ready(id.ok())
     }
 
+    fn instance_poll_all_devices(&self, force_wait: bool) {
+        let global = &self.0;
+        match global.poll_all_devices(force_wait) {
+            Ok(()) => (),
+            Err(err) => self.handle_error_fatal(err, "Device::poll"),
+        }
+    }
+
     fn adapter_request_device(
         &self,
         adapter: &Self::AdapterId,
