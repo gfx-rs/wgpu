@@ -179,9 +179,7 @@ impl Binder {
         if let Some(old_id) = old_id_opt {
             let old = &guard[old_id];
             // root constants are the base compatibility property
-            if old.push_constant_ranges != new.push_constant_ranges
-                && bind_range.end != bind_range.start
-            {
+            if old.push_constant_ranges != new.push_constant_ranges {
                 bind_range.start = 0;
             }
         }
