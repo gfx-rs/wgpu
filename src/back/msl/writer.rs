@@ -7,6 +7,7 @@ use crate::{
 use std::{
     fmt::{Display, Error as FmtError, Formatter},
     io::Write,
+    iter,
 };
 
 const NAMESPACE: &str = "metal";
@@ -96,6 +97,22 @@ fn separate(is_last: bool) -> &'static str {
     }
 }
 
+impl crate::StorageClass {
+    /// Returns true for storage classes, for which the global
+    /// variables are passed in function arguments.
+    /// These arguments need to be passed through any functions
+    /// called from the entry point.
+    fn needs_pass_through(&self) -> bool {
+        match *self {
+            crate::StorageClass::Input
+            | crate::StorageClass::Uniform
+            | crate::StorageClass::Storage
+            | crate::StorageClass::Handle => true,
+            _ => false,
+        }
+    }
+}
+
 enum FunctionOrigin {
     Handle(Handle<crate::Function>),
     EntryPoint(EntryPointIndex),
@@ -123,22 +140,57 @@ impl<W: Write> Writer<W> {
         self.out
     }
 
-    fn put_call(
+    fn put_call_parameters(
         &mut self,
-        name: &str,
+        parameters: impl Iterator<Item = Handle<crate::Expression>>,
+        context: &ExpressionContext,
+    ) -> Result<(), Error> {
+        write!(self.out, "(")?;
+        for (i, handle) in parameters.enumerate() {
+            if i != 0 {
+                write!(self.out, ", ")?;
+            }
+            self.put_expression(handle, context)?;
+        }
+        write!(self.out, ")")?;
+        Ok(())
+    }
+
+    fn put_local_call(
+        &mut self,
+        fun_handle: Handle<crate::Function>,
         parameters: &[Handle<crate::Expression>],
         context: &ExpressionContext,
     ) -> Result<(), Error> {
-        if !name.is_empty() {
-            write!(self.out, "metal::{}", name)?;
-        }
-        write!(self.out, "(")?;
+        let fun = &context.module.functions[fun_handle];
+        let fun_name = &self.names[&NameKey::Function(fun_handle)];
+        write!(self.out, "{}(", fun_name)?;
+        // first, write down the actual arguments
         for (i, &handle) in parameters.iter().enumerate() {
             if i != 0 {
                 write!(self.out, ", ")?;
             }
             self.put_expression(handle, context)?;
         }
+        // follow-up with any global resources used
+        let mut separate = !parameters.is_empty();
+        for ((handle, var), &usage) in context
+            .module
+            .global_variables
+            .iter()
+            .zip(&fun.global_usage)
+        {
+            if !usage.is_empty() && var.class.needs_pass_through() {
+                let name = &self.names[&NameKey::GlobalVariable(handle)];
+                if separate {
+                    write!(self.out, ", ")?;
+                } else {
+                    separate = true;
+                }
+                write!(self.out, "{}", name)?;
+            }
+        }
+        // done
         write!(self.out, ")")?;
         Ok(())
     }
@@ -201,8 +253,8 @@ impl<W: Write> Writer<W> {
                 let inner = &context.module.types[ty].inner;
                 match *inner {
                     crate::TypeInner::Scalar { width: 4, kind } if components.len() == 1 => {
-                        write!(self.out, "{}", scalar_kind_string(kind),)?;
-                        self.put_call("", components, context)?;
+                        write!(self.out, "{}", scalar_kind_string(kind))?;
+                        self.put_call_parameters(components.iter().cloned(), context)?;
                     }
                     crate::TypeInner::Vector { size, kind, .. } => {
                         write!(
@@ -212,7 +264,7 @@ impl<W: Write> Writer<W> {
                             scalar_kind_string(kind),
                             vector_size_string(size)
                         )?;
-                        self.put_call("", components, context)?;
+                        self.put_call_parameters(components.iter().cloned(), context)?;
                     }
                     crate::TypeInner::Matrix { columns, rows, .. } => {
                         let kind = crate::ScalarKind::Float;
@@ -224,7 +276,7 @@ impl<W: Write> Writer<W> {
                             vector_size_string(columns),
                             vector_size_string(rows)
                         )?;
-                        self.put_call("", components, context)?;
+                        self.put_call_parameters(components.iter().cloned(), context)?;
                     }
                     _ => return Err(Error::UnsupportedCompose(ty)),
                 }
@@ -469,7 +521,8 @@ impl<W: Write> Writer<W> {
                     crate::DerivativeAxis::Y => "dfdy",
                     crate::DerivativeAxis::Width => "fwidth",
                 };
-                self.put_call(op, &[expr], context)?;
+                write!(self.out, "{}::{}", NAMESPACE, op)?;
+                self.put_call_parameters(iter::once(expr), context)?;
             }
             crate::Expression::Relational { fun, argument } => {
                 let op = match fun {
@@ -480,7 +533,8 @@ impl<W: Write> Writer<W> {
                     crate::RelationalFunction::IsFinite => "isfinite",
                     crate::RelationalFunction::IsNormal => "isnormal",
                 };
-                self.put_call(op, &[argument], context)?;
+                write!(self.out, "{}::{}", NAMESPACE, op)?;
+                self.put_call_parameters(iter::once(argument), context)?;
             }
             crate::Expression::Math {
                 fun,
@@ -546,17 +600,8 @@ impl<W: Write> Writer<W> {
                     Mf::ReverseBits => "reverse_bits",
                 };
 
-                write!(self.out, "metal::{}(", fun_name)?;
-                self.put_expression(arg, context)?;
-                if let Some(arg) = arg1 {
-                    write!(self.out, ", ")?;
-                    self.put_expression(arg, context)?;
-                }
-                if let Some(arg) = arg2 {
-                    write!(self.out, ", ")?;
-                    self.put_expression(arg, context)?;
-                }
-                write!(self.out, ")")?;
+                write!(self.out, "{}::{}", NAMESPACE, fun_name)?;
+                self.put_call_parameters(iter::once(arg).chain(arg1).chain(arg2), context)?;
             }
             crate::Expression::As {
                 expr,
@@ -578,9 +623,7 @@ impl<W: Write> Writer<W> {
                 function,
                 ref arguments,
             } => {
-                let name = &self.names[&NameKey::Function(function)];
-                write!(self.out, "{}", name)?;
-                self.put_call("", arguments, context)?;
+                self.put_local_call(function, arguments, context)?;
             }
             crate::Expression::ArrayLength(expr) => match *self
                 .typifier
@@ -750,9 +793,7 @@ impl<W: Write> Writer<W> {
                     function,
                     ref arguments,
                 } => {
-                    let name = &self.names[&NameKey::Function(function)];
-                    write!(self.out, "{}", name)?;
-                    self.put_call("", arguments, context)?;
+                    self.put_local_call(function, arguments, context)?;
                     writeln!(self.out, ";")?;
                 }
             }
@@ -917,6 +958,7 @@ impl<W: Write> Writer<W> {
         module: &crate::Module,
         options: &Options,
     ) -> Result<TranslationInfo, Error> {
+        let mut pass_through_globals = Vec::new();
         for (fun_handle, fun) in module.functions.iter() {
             self.typifier.resolve_all(
                 &fun.expressions,
@@ -930,6 +972,13 @@ impl<W: Write> Writer<W> {
                 },
             )?;
 
+            pass_through_globals.clear();
+            for ((handle, var), &usage) in module.global_variables.iter().zip(&fun.global_usage) {
+                if !usage.is_empty() && var.class.needs_pass_through() {
+                    pass_through_globals.push(handle);
+                }
+            }
+
             let fun_name = &self.names[&NameKey::Function(fun_handle)];
             let result_type_name = match fun.return_type {
                 Some(ret_ty) => &self.names[&NameKey::Type(ret_ty)],
@@ -940,12 +989,25 @@ impl<W: Write> Writer<W> {
             for (index, arg) in fun.arguments.iter().enumerate() {
                 let name = &self.names[&NameKey::FunctionArgument(fun_handle, index as u32)];
                 let param_type_name = &self.names[&NameKey::Type(arg.ty)];
-                let separator = separate(index + 1 == fun.arguments.len());
+                let separator =
+                    separate(pass_through_globals.is_empty() && index + 1 == fun.arguments.len());
                 writeln!(
                     self.out,
                     "{}{} {}{}",
                     INDENT, param_type_name, name, separator
                 )?;
+            }
+            for (index, &handle) in pass_through_globals.iter().enumerate() {
+                let tyvar = TypedGlobalVariable {
+                    module,
+                    names: &self.names,
+                    handle,
+                    usage: fun.global_usage[handle.index()],
+                };
+                let separator = separate(index + 1 == pass_through_globals.len());
+                write!(self.out, "{}", INDENT)?;
+                tyvar.try_fmt(&mut self.out)?;
+                writeln!(self.out, "{}", separator)?;
             }
             writeln!(self.out, ") {{")?;
 
