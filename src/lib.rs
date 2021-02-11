@@ -641,6 +641,7 @@ pub enum ImageQuery {
 
 /// An expression that can be evaluated to obtain a value.
 #[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Expression {
