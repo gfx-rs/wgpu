@@ -14,7 +14,11 @@ fn check_glsl(name: &str) {
         panic!("Unknown extension in {:?}", name)
     };
 
-    match naga::front::glsl::parse_str(&input, "main", stage, Default::default()) {
+    match naga::front::glsl::parse_str(
+        &input,
+        vec![("main".to_string(), stage)],
+        Default::default(),
+    ) {
         Ok(m) => match naga::proc::Validator::new().validate(&m) {
             Ok(_analysis) => (),
             Err(e) => panic!("Unable to validate {}: {:?}", name, e),

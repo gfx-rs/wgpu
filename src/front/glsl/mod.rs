@@ -25,17 +25,14 @@ mod variables;
 
 pub fn parse_str(
     source: &str,
-    entry: &str,
-    stage: ShaderStage,
+    entry_points: Vec<(String, ShaderStage)>,
     defines: FastHashMap<String, String>,
 ) -> Result<Module, ParseError> {
-    let mut program = Program::new(stage, entry);
+    let mut program = Program::new(entry_points);
 
     let mut lex = Lexer::new(source);
     lex.pp.defines = defines;
-
     let mut parser = parser::Parser::new(&mut program);
-
     for token in lex {
         parser.parse(token)?;
     }

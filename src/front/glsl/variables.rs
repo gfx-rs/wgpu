@@ -21,19 +21,12 @@ impl Program {
         match name {
             "gl_Position" => {
                 #[cfg(feature = "glsl-validate")]
-                match self.shader_stage {
-                    ShaderStage::Vertex | ShaderStage::Fragment { .. } => {}
-                    _ => {
-                        return Err(ErrorKind::VariableNotAvailable(name.into()));
-                    }
+                if !self.has_stage(ShaderStage::Vertex) {
+                    return Err(ErrorKind::VariableNotAvailable(name.into()));
                 };
                 let h = self.module.global_variables.append(GlobalVariable {
                     name: Some(name.into()),
-                    class: if self.shader_stage == ShaderStage::Vertex {
-                        StorageClass::Output
-                    } else {
-                        StorageClass::Input
-                    },
+                    class: StorageClass::Output,
                     binding: Some(Binding::BuiltIn(BuiltIn::Position)),
                     ty: self.module.types.fetch_or_append(Type {
                         name: None,
@@ -58,11 +51,8 @@ impl Program {
             }
             "gl_VertexIndex" => {
                 #[cfg(feature = "glsl-validate")]
-                match self.shader_stage {
-                    ShaderStage::Vertex => {}
-                    _ => {
-                        return Err(ErrorKind::VariableNotAvailable(name.into()));
-                    }
+                if !self.has_stage(ShaderStage::Vertex) {
+                    return Err(ErrorKind::VariableNotAvailable(name.into()));
                 };
                 let h = self.module.global_variables.append(GlobalVariable {
                     name: Some(name.into()),
@@ -97,11 +87,8 @@ impl Program {
             }
             "gl_InstanceIndex" => {
                 #[cfg(feature = "glsl-validate")]
-                match self.shader_stage {
-                    ShaderStage::Vertex => {}
-                    _ => {
-                        return Err(ErrorKind::VariableNotAvailable(name.into()));
-                    }
+                if !self.has_stage(ShaderStage::Vertex) {
+                    return Err(ErrorKind::VariableNotAvailable(name.into()));
                 };
                 let h = self.module.global_variables.append(GlobalVariable {
                     name: Some(name.into()),

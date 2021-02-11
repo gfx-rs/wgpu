@@ -1,7 +1,7 @@
 use crate::{
     proc::{ensure_block_returns, Typifier},
-    BinaryOperator, Block, Expression, Function, MathFunction, RelationalFunction, SampleLevel,
-    TypeInner,
+    BinaryOperator, Block, EntryPoint, Expression, Function, MathFunction, RelationalFunction,
+    SampleLevel, TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind};
@@ -280,5 +280,29 @@ impl Program {
         f.body = block;
         f.fill_global_use(self.module.global_variables.len(), &self.module.functions);
         f
+    }
+
+    pub fn declare_function(&mut self, f: Function) {
+        let stage = if let Some(ref name) = f.name {
+            self.entry_points
+                .iter()
+                .find_map(|(n, s)| if *name == *n { Some(*s) } else { None })
+        } else {
+            None
+        };
+        let name = f.name.clone().unwrap();
+        if let Some(stage) = stage {
+            self.module.entry_points.insert(
+                (stage, name),
+                EntryPoint {
+                    early_depth_test: None,
+                    workgroup_size: [0; 3], //TODO
+                    function: f,
+                },
+            );
+        } else {
+            let handle = self.module.functions.append(f);
+            self.lookup_function.insert(name, handle);
+        }
     }
 }

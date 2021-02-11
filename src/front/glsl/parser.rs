@@ -6,7 +6,7 @@ pomelo! {
         use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{
             Arena, BinaryOperator, Binding, Block, Constant,
-            ConstantInner, EntryPoint, Expression,
+            ConstantInner, Expression,
             Function, GlobalVariable, Handle, Interpolation,
             LocalVariable, ScalarValue, ScalarKind,
             Statement, StorageAccess, StorageClass, StructMember,
@@ -1063,21 +1063,7 @@ pomelo! {
     translation_unit ::= translation_unit external_declaration;
 
     external_declaration ::= function_definition(f) {
-        if f.name == extra.entry {
-            let name = extra.entry.take().unwrap();
-            extra.module.entry_points.insert(
-                (extra.shader_stage, name),
-                EntryPoint {
-                    early_depth_test: None,
-                    workgroup_size: [0; 3], //TODO
-                    function: f,
-                },
-            );
-        } else {
-            let name = f.name.clone().unwrap();
-            let handle = extra.module.functions.append(f);
-            extra.lookup_function.insert(name, handle);
-        }
+        extra.declare_function(f)
     }
     external_declaration ::= declaration(d) {
         if let Some(d) = d {
