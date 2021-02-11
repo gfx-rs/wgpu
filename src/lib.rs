@@ -27,7 +27,7 @@ use parking_lot::Mutex;
 pub use wgt::{
     AdapterInfo, AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType, BlendFactor,
     BlendOperation, BlendState, BufferAddress, BufferBindingType, BufferSize, BufferUsage, Color,
-    ColorTargetState, ColorWrite, CommandBufferDescriptor, CompareFunction, CullMode,
+    ColorTargetState, ColorWrite, CommandBufferDescriptor, CompareFunction, Face,
     DepthBiasState, DepthStencilState, DeviceType, DynamicOffset, Extent3d, Features, FilterMode,
     FrontFace, IndexFormat, InputStepMode, Limits, MultisampleState, Origin3d,
     PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
