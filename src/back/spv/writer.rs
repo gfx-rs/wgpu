@@ -334,15 +334,11 @@ impl Writer {
         )
     }
 
-    fn create_pointer_type(
-        &mut self,
-        type_id: spirv::Word,
-        class: spirv::StorageClass,
-    ) -> Result<Word, Error> {
+    fn create_pointer_type(&mut self, type_id: spirv::Word, class: spirv::StorageClass) -> Word {
         let id = self.generate_id();
         let instruction = super::instructions::instruction_type_pointer(id, class, type_id);
         instruction.to_words(&mut self.logical_layout.declarations);
-        Ok(id)
+        id
     }
 
     fn create_constant(&mut self, type_id: Word, value: &[Word]) -> Word {
@@ -1132,7 +1128,7 @@ impl Writer {
                         RawExpression::Value(id)
                     }
                     RawExpression::Pointer(base_id, class) => {
-                        let pointer_type_id = self.create_pointer_type(result_type_id, class)?;
+                        let pointer_type_id = self.create_pointer_type(result_type_id, class);
 
                         block
                             .body
@@ -1166,7 +1162,7 @@ impl Writer {
                         RawExpression::Value(id)
                     }
                     RawExpression::Pointer(base_id, class) => {
-                        let pointer_type_id = self.create_pointer_type(result_type_id, class)?;
+                        let pointer_type_id = self.create_pointer_type(result_type_id, class);
 
                         let const_ty_id = self.get_type_id(
                             &ir_module.types,
