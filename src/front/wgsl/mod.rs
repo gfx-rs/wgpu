@@ -443,6 +443,19 @@ impl Parser {
                 arg1,
                 arg2,
             })
+        } else if name == "select" {
+            lexer.expect(Token::Paren('('))?;
+            let accept = self.parse_general_expression(lexer, ctx.reborrow())?;
+            lexer.expect(Token::Separator(','))?;
+            let reject = self.parse_general_expression(lexer, ctx.reborrow())?;
+            lexer.expect(Token::Separator(','))?;
+            let condition = self.parse_general_expression(lexer, ctx.reborrow())?;
+            lexer.expect(Token::Paren(')'))?;
+            Some(crate::Expression::Select {
+                condition,
+                accept,
+                reject,
+            })
         } else {
             // texture sampling
             match name {

@@ -197,7 +197,19 @@ fn parse_texture_query() {
 
 #[test]
 fn parse_postfix() {
-    parse_str("fn foo() { const x: f32 = vec4<f32>(1.0, 2.0, 3.0, 4.0).xyz.rgbr.aaaa.wz.g; }")
-        .unwrap();
-    parse_str("fn foo() { const x: f32 = fract(vec2<f32>(0.5, 1.0)).x; }").unwrap();
+    parse_str(
+        "fn foo() {
+        const x: f32 = vec4<f32>(1.0, 2.0, 3.0, 4.0).xyz.rgbr.aaaa.wz.g;
+        const y: f32 = fract(vec2<f32>(0.5, x)).x;
+    }",
+    )
+    .unwrap();
+}
+
+#[test]
+fn parse_expressions() {
+    parse_str("fn foo() {
+        const x: f32 = select(0.0, 1.0, true);
+        const y: vec2<f32> = select(vec2<f32>(1.0, 1.0), vec2<f32>(x, x), vec2<bool>(x < 0.5, x > 0.5));
+    }").unwrap();
 }
