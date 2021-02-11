@@ -585,7 +585,7 @@ impl framework::Example for Example {
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: wgpu::CullMode::Front,
+                cull_mode: Some(wgpu::Face::Front),
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {

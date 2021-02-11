@@ -292,7 +292,7 @@ impl framework::Example for Example {
                 targets: &[sc_desc.format.into()],
             }),
             primitive: wgpu::PrimitiveState {
-                cull_mode: wgpu::CullMode::Back,
+                cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
             depth_stencil: None,
@@ -327,7 +327,7 @@ impl framework::Example for Example {
                 }),
                 primitive: wgpu::PrimitiveState {
                     front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: wgpu::CullMode::Back,
+                    cull_mode: Some(wgpu::Face::Back),
                     polygon_mode: wgpu::PolygonMode::Line,
                     ..Default::default()
                 },
