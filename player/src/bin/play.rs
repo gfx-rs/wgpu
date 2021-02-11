@@ -51,7 +51,7 @@ fn main() {
     #[cfg(feature = "winit")]
     let window = WindowBuilder::new()
         .with_title("wgpu player")
-        .with_resizable(false)
+        .with_resizable(true)
         .build(&event_loop)
         .unwrap();
 
@@ -123,6 +123,7 @@ fn main() {
             event_loop::ControlFlow,
         };
 
+        let mut resize_desc = None;
         let mut frame_count = 0;
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
@@ -130,16 +131,22 @@ fn main() {
                 Event::MainEventsCleared => {
                     window.request_redraw();
                 }
-                Event::RedrawRequested(_) => loop {
+                Event::RedrawRequested(_) if resize_desc.is_none() => loop {
                     match actions.pop() {
                         Some(trace::Action::CreateSwapChain(id, desc)) => {
                             log::info!("Initializing the swapchain");
                             assert_eq!(id.to_surface_id(), surface);
-                            window.set_inner_size(winit::dpi::PhysicalSize::new(
-                                desc.width,
-                                desc.height,
-                            ));
-                            gfx_select!(device => global.device_create_swap_chain(device, surface, &desc)).unwrap();
+                            let current_size: (u32, u32) = window.inner_size().into();
+                            let size = (desc.width, desc.height);
+                            if current_size != size {
+                                window.set_inner_size(winit::dpi::PhysicalSize::new(
+                                    desc.width,
+                                    desc.height,
+                                ));
+                                resize_desc = Some(desc);
+                            } else {
+                                gfx_select!(device => global.device_create_swap_chain(device, surface, &desc)).unwrap();
+                            }
                         }
                         Some(trace::Action::PresentSwapChain(id)) => {
                             frame_count += 1;
@@ -154,6 +161,11 @@ fn main() {
                     }
                 },
                 Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::Resized(_) => {
+                        if let Some(desc) = resize_desc.take() {
+                            gfx_select!(device => global.device_create_swap_chain(device, surface, &desc)).unwrap();
+                        }
+                    }
                     WindowEvent::KeyboardInput {
                         input:
                             KeyboardInput {
