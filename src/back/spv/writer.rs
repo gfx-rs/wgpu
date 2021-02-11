@@ -1850,14 +1850,14 @@ impl Writer {
                     block = Block::new(merge_id);
                 }
                 crate::Statement::If {
-                    ref condition,
+                    condition,
                     ref accept,
                     ref reject,
                 } => {
                     let condition_id = self.write_expression(
                         ir_module,
                         ir_function,
-                        *condition,
+                        condition,
                         &mut block,
                         function,
                     )?;
@@ -1902,9 +1902,76 @@ impl Writer {
 
                     block = Block::new(merge_id);
                 }
-                crate::Statement::Switch { .. } => {
-                    log::error!("unimplemented Switch");
-                    return Err(Error::FeatureNotImplemented("switch"));
+                crate::Statement::Switch {
+                    selector,
+                    ref cases,
+                    ref default,
+                } => {
+                    let selector_id = self.write_expression(
+                        ir_module,
+                        ir_function,
+                        selector,
+                        &mut block,
+                        function,
+                    )?;
+
+                    let merge_id = self.generate_id();
+                    block
+                        .body
+                        .push(super::instructions::instruction_selection_merge(
+                            merge_id,
+                            spirv::SelectionControl::NONE,
+                        ));
+
+                    let default_id = self.generate_id();
+                    let raw_cases = cases
+                        .iter()
+                        .map(|c| super::instructions::Case {
+                            value: c.value as Word,
+                            label_id: self.generate_id(),
+                        })
+                        .collect::<Vec<_>>();
+
+                    function.consume(
+                        block,
+                        super::instructions::instruction_switch(
+                            selector_id,
+                            default_id,
+                            &raw_cases,
+                        ),
+                    );
+
+                    for (i, (case, raw_case)) in cases.iter().zip(raw_cases.iter()).enumerate() {
+                        let case_finish_id = if case.fall_through {
+                            match raw_cases.get(i + 1) {
+                                Some(rc) => rc.label_id,
+                                None => default_id,
+                            }
+                        } else {
+                            merge_id
+                        };
+                        self.write_block(
+                            raw_case.label_id,
+                            &case.body,
+                            ir_module,
+                            ir_function,
+                            function,
+                            Some(case_finish_id),
+                            LoopContext::default(),
+                        )?;
+                    }
+
+                    self.write_block(
+                        default_id,
+                        default,
+                        ir_module,
+                        ir_function,
+                        function,
+                        Some(merge_id),
+                        LoopContext::default(),
+                    )?;
+
+                    block = Block::new(merge_id);
                 }
                 crate::Statement::Loop {
                     ref body,

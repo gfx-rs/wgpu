@@ -707,6 +707,26 @@ pub(super) fn instruction_branch_conditional(
     instruction
 }
 
+pub struct Case {
+    pub value: Word,
+    pub label_id: Word,
+}
+
+pub(super) fn instruction_switch(
+    selector_id: Word,
+    default_id: Word,
+    cases: &[Case],
+) -> Instruction {
+    let mut instruction = Instruction::new(Op::Switch);
+    instruction.add_operand(selector_id);
+    instruction.add_operand(default_id);
+    for case in cases {
+        instruction.add_operand(case.value);
+        instruction.add_operand(case.label_id);
+    }
+    instruction
+}
+
 pub(super) fn instruction_kill() -> Instruction {
     Instruction::new(Op::Kill)
 }
