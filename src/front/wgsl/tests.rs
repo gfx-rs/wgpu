@@ -104,6 +104,11 @@ fn parse_if() {
                 discard;
             } else {}
             if (0 != 1) {}
+            if (false) {
+                return;
+            } elseif (true) {
+                return;
+            } else {}
         }
     ",
     )

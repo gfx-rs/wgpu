@@ -1669,11 +1669,29 @@ impl Parser {
                 lexer.expect(Token::Paren(')'))?;
 
                 let accept = self.parse_block(lexer, context.reborrow(), false)?;
-                let reject = if lexer.skip(Token::Word("else")) {
+                let mut elsif_stack = Vec::new();
+                while lexer.skip(Token::Word("elseif")) {
+                    lexer.expect(Token::Paren('('))?;
+                    let other_condition =
+                        self.parse_general_expression(lexer, context.as_expression())?;
+                    lexer.expect(Token::Paren(')'))?;
+                    let other_block = self.parse_block(lexer, context.reborrow(), false)?;
+                    elsif_stack.push((other_condition, other_block));
+                }
+                let mut reject = if lexer.skip(Token::Word("else")) {
                     self.parse_block(lexer, context.reborrow(), false)?
                 } else {
                     Vec::new()
                 };
+                // reverse-fold the else-if blocks
+                //Note: we may consider uplifting this to the IR
+                for (other_cond, other_block) in elsif_stack.drain(..).rev() {
+                    reject = vec![crate::Statement::If {
+                        condition: other_cond,
+                        accept: other_block,
+                        reject,
+                    }];
+                }
 
                 Some(crate::Statement::If {
                     condition,
