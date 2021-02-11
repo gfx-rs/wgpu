@@ -197,6 +197,7 @@ trait Context: Debug + Send + Sized + Sync {
         desc: &DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture;
+    fn instance_poll_all_devices(&self, force_wait: bool);
     fn adapter_get_swap_chain_preferred_format(
         &self,
         adapter: &Self::AdapterId,
@@ -1389,6 +1390,13 @@ impl Instance {
         layer: *mut std::ffi::c_void,
     ) -> Surface {
         self.context.create_surface_from_core_animation_layer(layer)
+    }
+
+    /// Polls all devices.
+    /// If `force_wait` is true and this is not running on the web,
+    /// then this function will block until all in-flight buffers have been mapped.
+    pub fn poll_all(&self, force_wait: bool) {
+        self.context.instance_poll_all_devices(force_wait);
     }
 }
 
