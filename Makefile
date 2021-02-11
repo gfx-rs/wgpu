@@ -26,27 +26,27 @@ clean:
 	glslangValidator $@
 
 validate-spv: $(SNAPSHOTS_OUT)/*.spvasm.snap
-	@for file in $^ ; do \
+	@set -e && for file in $^ ; do \
 		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/snapshots__"};	\
 		tail -n +5 $${file} | spirv-as --target-env vulkan1.0 -o - | spirv-val; \
 	done
 
 validate-msl: $(SNAPSHOTS_OUT)/*.msl.snap
-	@for file in $^ ; do \
+	@set -e && for file in $^ ; do \
 		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/snapshots__"};	\
 		tail -n +5 $${file} | xcrun -sdk macosx metal -mmacosx-version-min=10.11 -x metal - -o /dev/null; \
 	done
 
 validate-glsl: $(SNAPSHOTS_OUT)/*.glsl.snap
-	@for file in $(SNAPSHOTS_OUT)/*-Vertex.glsl.snap ; do \
+	@set -e && for file in $(SNAPSHOTS_OUT)/*-Vertex.glsl.snap ; do \
 		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/snapshots__"};\
 		tail -n +5 $${file} | glslangValidator --stdin -S vert; \
 	done
-	@for file in $(SNAPSHOTS_OUT)/*-Fragment.glsl.snap ; do \
+	@set -e && for file in $(SNAPSHOTS_OUT)/*-Fragment.glsl.snap ; do \
 		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/snapshots__"};\
 		tail -n +5 $${file} | glslangValidator --stdin -S frag; \
 	done
-	@for file in $(SNAPSHOTS_OUT)/*-Compute.glsl.snap ; do \
+	@set -e && for file in $(SNAPSHOTS_OUT)/*-Compute.glsl.snap ; do \
 		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/snapshots__"};\
 		tail -n +5 $${file} | glslangValidator --stdin -S comp; \
 	done

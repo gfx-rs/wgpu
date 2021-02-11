@@ -1,12 +1,13 @@
-name: validation
+name: validation-linux
 on:
   pull_request:
     paths:
-    - 'tests/snapshots/*.snap'
+    - 'tests/out/*.spvasm.snap'
+    - 'tests/out/*.glsl.snap'
 
 jobs:
-  linux:
-    name: SPIR-V and GLSL
+  validate-linux:
+    name: SPIR-V + GLSL
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2

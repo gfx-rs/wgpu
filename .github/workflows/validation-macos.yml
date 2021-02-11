@@ -1,0 +1,13 @@
+name: validation-macos
+on:
+  pull_request:
+    paths:
+    - 'tests/out/*.msl.snap'
+
+jobs:
+  validate-macos:
+    name: MSL
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: make validate-msl
