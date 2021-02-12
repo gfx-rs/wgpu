@@ -441,7 +441,7 @@ pub struct PipelineLayoutDescriptor<'a> {
     /// must define the range in push constant memory that corresponds to its single `layout(push_constant)`
     /// uniform block.
     ///
-    /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
+    /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`](wgt::Features::PUSH_CONSTANTS) must be enabled.
     pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
 }
 

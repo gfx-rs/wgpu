@@ -274,7 +274,7 @@ pub struct TextureViewDescriptor<'a> {
     /// The dimension of the texture view. For 1D textures, this must be `1D`. For 2D textures it must be one of
     /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `3D`
     pub dimension: Option<wgt::TextureViewDimension>,
-    /// Aspect of the texture. Color textures must be [`TextureAspect::All`].
+    /// Aspect of the texture. Color textures must be [`TextureAspect::All`](wgt::TextureAspect::All).
     pub aspect: wgt::TextureAspect,
     /// Base mip level.
     pub base_mip_level: u32,
@@ -394,7 +394,7 @@ pub struct SamplerDescriptor<'a> {
     pub compare: Option<wgt::CompareFunction>,
     /// Valid values: 1, 2, 4, 8, and 16.
     pub anisotropy_clamp: Option<NonZeroU8>,
-    /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
+    /// Border color to use when address_mode is [`AddressMode::ClampToBorder`](wgt::AddressMode::ClampToBorder)
     pub border_color: Option<wgt::SamplerBorderColor>,
 }
 
