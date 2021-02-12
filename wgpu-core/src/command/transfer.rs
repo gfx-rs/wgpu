@@ -220,7 +220,7 @@ pub(crate) fn validate_linear_texture_data(
     Ok(())
 }
 
-/// Function copied with minor modifications from webgpu standard https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
+/// Function copied with minor modifications from webgpu standard <https://gpuweb.github.io/gpuweb/#valid-texture-copy-range>
 pub(crate) fn validate_texture_copy_range(
     texture_copy_view: &TextureCopyView,
     texture_format: wgt::TextureFormat,
