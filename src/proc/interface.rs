@@ -7,8 +7,8 @@ pub struct Interface<'a, T> {
 }
 
 pub trait Visitor {
-    fn visit_expr(&mut self, _: &crate::Expression) {}
-    fn visit_lhs_expr(&mut self, _: &crate::Expression) {}
+    fn visit_expr(&mut self, _: Handle<crate::Expression>, _: &crate::Expression) {}
+    fn visit_lhs_expr(&mut self, _: Handle<crate::Expression>, _: &crate::Expression) {}
     fn visit_fun(&mut self, _: Handle<crate::Function>) {}
 }
 
@@ -16,12 +16,12 @@ impl<'a, T> Interface<'a, T>
 where
     T: Visitor,
 {
-    fn traverse_expr(&mut self, handle: Handle<crate::Expression>) {
+    pub fn traverse_expr(&mut self, handle: Handle<crate::Expression>) {
         use crate::Expression as E;
 
         let expr = &self.expressions[handle];
 
-        self.visitor.visit_expr(expr);
+        self.visitor.visit_expr(handle, expr);
 
         match *expr {
             E::Access { base, index } => {
@@ -200,7 +200,7 @@ where
                             _ => break,
                         }
                     }
-                    self.visitor.visit_lhs_expr(&self.expressions[left]);
+                    self.visitor.visit_lhs_expr(left, &self.expressions[left]);
                     self.traverse_expr(value);
                 }
                 S::Call {

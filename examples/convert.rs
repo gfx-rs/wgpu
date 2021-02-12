@@ -147,7 +147,8 @@ fn main() {
     };
 
     // validate the IR
-    naga::proc::Validator::new()
+    #[cfg_attr(not(feature = "msl-out"), allow(unused_variables))]
+    let analysis = naga::proc::Validator::new()
         .validate(&module)
         .unwrap_pretty();
 
@@ -190,7 +191,7 @@ fn main() {
                 spirv_cross_compatibility: false,
                 binding_map,
             };
-            let (msl, _) = msl::write_string(&module, &options).unwrap();
+            let (msl, _) = msl::write_string(&module, &analysis, &options).unwrap();
             fs::write(&args[2], msl).unwrap();
         }
         #[cfg(feature = "spv-out")]

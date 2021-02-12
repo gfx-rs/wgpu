@@ -9,13 +9,13 @@ struct GlobalUseVisitor<'a> {
 }
 
 impl Visitor for GlobalUseVisitor<'_> {
-    fn visit_expr(&mut self, expr: &crate::Expression) {
+    fn visit_expr(&mut self, _: Handle<crate::Expression>, expr: &crate::Expression) {
         if let crate::Expression::GlobalVariable(handle) = expr {
             self.usage[handle.index()] |= crate::GlobalUse::READ;
         }
     }
 
-    fn visit_lhs_expr(&mut self, expr: &crate::Expression) {
+    fn visit_lhs_expr(&mut self, _: Handle<crate::Expression>, expr: &crate::Expression) {
         if let crate::Expression::GlobalVariable(handle) = expr {
             self.usage[handle.index()] |= crate::GlobalUse::WRITE;
         }

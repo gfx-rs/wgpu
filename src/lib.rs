@@ -640,6 +640,8 @@ pub enum ImageQuery {
 }
 
 /// An expression that can be evaluated to obtain a value.
+///
+/// This is a Single Static Assignment (SSA) scheme similar to SPIR-V.
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]

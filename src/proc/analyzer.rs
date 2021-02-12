@@ -7,6 +7,7 @@ Figures out the following properties:
 !*/
 
 use crate::arena::{Arena, Handle};
+use std::ops;
 
 bitflags::bitflags! {
     #[derive(Default)]
@@ -35,7 +36,14 @@ pub struct ExpressionInfo {
 pub struct FunctionInfo {
     pub control_flags: ControlFlags,
     pub sampling_set: crate::FastHashSet<SamplingKey>,
-    pub expressions: Box<[ExpressionInfo]>,
+    expressions: Box<[ExpressionInfo]>,
+}
+
+impl ops::Index<Handle<crate::Expression>> for FunctionInfo {
+    type Output = ExpressionInfo;
+    fn index(&self, handle: Handle<crate::Expression>) -> &ExpressionInfo {
+        &self.expressions[handle.index()]
+    }
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -354,6 +362,22 @@ impl Analysis {
         }
 
         Ok(this)
+    }
+
+    pub fn get_entry_point(&self, stage: crate::ShaderStage, name: &str) -> &FunctionInfo {
+        let (_, info) = self
+            .entry_points
+            .iter()
+            .find(|(key, _)| key.0 == stage && key.1 == name)
+            .unwrap();
+        info
+    }
+}
+
+impl ops::Index<Handle<crate::Function>> for Analysis {
+    type Output = FunctionInfo;
+    fn index(&self, handle: Handle<crate::Function>) -> &FunctionInfo {
+        &self.functions[handle.index()]
     }
 }
 

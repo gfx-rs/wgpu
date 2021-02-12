@@ -14,7 +14,11 @@ the output struct. If there is a structure in the outputs, and it contains any b
 we move them up to the root output structure that we define ourselves.
 !*/
 
-use crate::{arena::Handle, proc::ResolveError, FastHashMap};
+use crate::{
+    arena::Handle,
+    proc::{analyzer::Analysis, ResolveError},
+    FastHashMap,
+};
 use std::{
     io::{Error as IoError, Write},
     string::FromUtf8Error,
@@ -66,6 +70,7 @@ pub enum Error {
     UnexpectedSampleLevel(crate::SampleLevel),
     UnsupportedCall(String),
     UnsupportedDynamicArrayLength,
+    FeatureNotImplemented(String),
     /// The source IR is not valid.
     Validation,
 }
@@ -222,10 +227,11 @@ pub struct TranslationInfo {
 
 pub fn write_string(
     module: &crate::Module,
+    analysis: &Analysis,
     options: &Options,
 ) -> Result<(String, TranslationInfo), Error> {
     let mut w = writer::Writer::new(Vec::new());
-    let info = w.write(module, options)?;
+    let info = w.write(module, analysis, options)?;
     let string = String::from_utf8(w.finish())?;
     Ok((string, info))
 }

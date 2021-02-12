@@ -75,7 +75,12 @@ fn check_output_spv(module: &naga::Module, name: &str, params: &Parameters) {
 }
 
 #[cfg(feature = "msl-out")]
-fn check_output_msl(module: &naga::Module, name: &str, params: &Parameters) {
+fn check_output_msl(
+    module: &naga::Module,
+    analysis: &naga::proc::analyzer::Analysis,
+    name: &str,
+    params: &Parameters,
+) {
     use naga::back::msl;
 
     let mut binding_map = msl::BindingMap::default();
@@ -104,7 +109,7 @@ fn check_output_msl(module: &naga::Module, name: &str, params: &Parameters) {
         binding_map,
     };
 
-    let (msl, _) = msl::write_string(&module, &options).unwrap();
+    let (msl, _) = msl::write_string(module, analysis, &options).unwrap();
 
     with_snapshot_settings(|| {
         insta::assert_snapshot!(format!("{}.msl", name), msl);
@@ -143,7 +148,8 @@ fn convert_wgsl(name: &str, language: Language) {
             .expect("Couldn't find wgsl file"),
     )
     .unwrap();
-    naga::proc::Validator::new().validate(&module).unwrap();
+    #[cfg_attr(not(feature = "msl-out"), allow(unused_variables))]
+    let analysis = naga::proc::Validator::new().validate(&module).unwrap();
 
     #[cfg(feature = "spv-out")]
     {
@@ -154,7 +160,7 @@ fn convert_wgsl(name: &str, language: Language) {
     #[cfg(feature = "msl-out")]
     {
         if language.contains(Language::METAL) {
-            check_output_msl(&module, name, &params);
+            check_output_msl(&module, &analysis, name, &params);
         }
     }
     #[cfg(feature = "glsl-out")]

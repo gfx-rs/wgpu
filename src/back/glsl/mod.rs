@@ -1908,7 +1908,7 @@ struct TextureMappingVisitor<'a> {
 }
 
 impl<'a> Visitor for TextureMappingVisitor<'a> {
-    fn visit_expr(&mut self, expr: &crate::Expression) {
+    fn visit_expr(&mut self, _: Handle<crate::Expression>, expr: &crate::Expression) {
         // We only care about `ImageSample` and `ImageLoad`
         //
         // Both `image` and `sampler` are `Expression::GlobalVariable` otherwise the module is

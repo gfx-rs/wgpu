@@ -47,9 +47,10 @@ vertex vs_mainOutput vs_main(
     type unprojected;
     tmp1_ = (static_cast<int>(in_vertex_index) / 2);
     tmp2_ = (static_cast<int>(in_vertex_index) & 1);
-    unprojected = (r_data.proj_inv * metal::float4(((static_cast<float>(tmp1_) * 4.0) - 1.0), ((static_cast<float>(tmp2_) * 4.0) - 1.0), 0.0, 1.0));
+    type expr24 = metal::float4(((static_cast<float>(tmp1_) * 4.0) - 1.0), ((static_cast<float>(tmp2_) * 4.0) - 1.0), 0.0, 1.0);
+    unprojected = (r_data.proj_inv * expr24);
     output.out_uv = (metal::transpose(metal::float3x3(metal::float3(r_data.view[0].x, r_data.view[0].y, r_data.view[0].z), metal::float3(r_data.view[1].x, r_data.view[1].y, r_data.view[1].z), metal::float3(r_data.view[2].x, r_data.view[2].y, r_data.view[2].z))) * metal::float3(unprojected.x, unprojected.y, unprojected.z));
-    output.out_position = metal::float4(((static_cast<float>(tmp1_) * 4.0) - 1.0), ((static_cast<float>(tmp2_) * 4.0) - 1.0), 0.0, 1.0);
+    output.out_position = expr24;
     return output;
 }
 
