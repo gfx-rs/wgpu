@@ -436,7 +436,7 @@ bitflags::bitflags! {
 /// implementation needs to support more than is needed. You should ideally only request exactly what
 /// you need.
 ///
-/// See also: https://gpuweb.github.io/gpuweb/#dictdef-gpulimits
+/// See also: <https://gpuweb.github.io/gpuweb/#dictdef-gpulimits>
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1361,7 +1361,7 @@ impl TextureFormat {
         let storage = basic | TextureUsage::STORAGE;
         let all_flags = TextureUsage::all();
 
-        // See https://gpuweb.github.io/gpuweb/#texture-format-caps for reference
+        // See <https://gpuweb.github.io/gpuweb/#texture-format-caps> for reference
         let (required_features, sample_type, srgb, block_dimensions, block_size, allowed_usages) =
             match self {
                 // Normal 8 bit textures
@@ -2455,7 +2455,7 @@ pub struct TextureDataLayout {
 
 /// Specific type of a buffer binding.
 ///
-/// WebGPU spec: https://gpuweb.github.io/gpuweb/#enumdef-gpubufferbindingtype
+/// WebGPU spec: <https://gpuweb.github.io/gpuweb/#enumdef-gpubufferbindingtype>
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
@@ -2501,7 +2501,7 @@ impl Default for BufferBindingType {
 
 /// Specific type of a sample in a texture binding.
 ///
-/// WebGPU spec: https://gpuweb.github.io/gpuweb/#enumdef-gputexturesampletype
+/// WebGPU spec: <https://gpuweb.github.io/gpuweb/#enumdef-gputexturesampletype>
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
@@ -2552,7 +2552,7 @@ impl Default for TextureSampleType {
 
 /// Specific type of a sample in a texture binding.
 ///
-/// WebGPU spec: https://gpuweb.github.io/gpuweb/#enumdef-gpustoragetextureaccess
+/// WebGPU spec: <https://gpuweb.github.io/gpuweb/#enumdef-gpustoragetextureaccess>
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
@@ -2572,7 +2572,7 @@ pub enum StorageTextureAccess {
     /// ```
     WriteOnly,
     /// The texture can be both read and written in the shader.
-    /// [`Features::STORAGE_TEXTURE_ACCESS_READ_WRITE`] must be enabled to use this access mode.
+    /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] must be enabled to use this access mode.
     ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
@@ -2584,10 +2584,10 @@ pub enum StorageTextureAccess {
 /// Specific type of a binding.
 ///
 /// WebGPU spec: the enum of
-/// - https://gpuweb.github.io/gpuweb/#dictdef-gpubufferbindinglayout
-/// - https://gpuweb.github.io/gpuweb/#dictdef-gpusamplerbindinglayout
-/// - https://gpuweb.github.io/gpuweb/#dictdef-gputexturebindinglayout
-/// - https://gpuweb.github.io/gpuweb/#dictdef-gpustoragetexturebindinglayout
+/// - <https://gpuweb.github.io/gpuweb/#dictdef-gpubufferbindinglayout>
+/// - <https://gpuweb.github.io/gpuweb/#dictdef-gpusamplerbindinglayout>
+/// - <https://gpuweb.github.io/gpuweb/#dictdef-gputexturebindinglayout>
+/// - <https://gpuweb.github.io/gpuweb/#dictdef-gpustoragetexturebindinglayout>
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
@@ -2621,7 +2621,7 @@ pub enum BindingType {
         /// A filtering sampler can only be used with a filterable texture.
         filtering: bool,
         /// Use as a comparison sampler instead of a normal sampler.
-        /// For more info take a look at the analogous functionality in OpenGL: https://www.khronos.org/opengl/wiki/Sampler_Object#Comparison_mode.
+        /// For more info take a look at the analogous functionality in OpenGL: <https://www.khronos.org/opengl/wiki/Sampler_Object#Comparison_mode>.
         comparison: bool,
     },
     /// A texture binding.
@@ -2648,7 +2648,7 @@ pub enum BindingType {
     /// layout(set=0, binding=0, r32f) uniform image2D myStorageImage;
     /// ```
     /// Note that the texture format must be specified in the shader as well.
-    /// A list of valid formats can be found in the specification here: https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#layout-qualifiers
+    /// A list of valid formats can be found in the specification here: <https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#layout-qualifiers>
     StorageTexture {
         /// Allowed access to this texture.
         access: StorageTextureAccess,
