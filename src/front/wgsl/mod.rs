@@ -1197,6 +1197,12 @@ impl Parser {
                             lexer.expect(Token::Paren(')'))?;
                             ready = false;
                         }
+                        Token::Word("offset") if ready => {
+                            lexer.expect(Token::Paren('('))?;
+                            let _offset = lexer.next_uint_literal()?;
+                            lexer.expect(Token::Paren(')'))?;
+                            ready = false;
+                        }
                         other => return Err(Error::Unexpected(other, "decoration separator")),
                     }
                 }
