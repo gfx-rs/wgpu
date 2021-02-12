@@ -1,4 +1,7 @@
-use super::typifier::{ResolveContext, ResolveError, Typifier};
+use super::{
+    analyzer::{Analysis, AnalysisError},
+    typifier::{ResolveContext, ResolveError, Typifier},
+};
 use crate::arena::{Arena, Handle};
 use bit_set::BitSet;
 
@@ -23,7 +26,7 @@ pub struct Validator {
     bind_group_masks: Vec<BitSet>,
 }
 
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum TypeError {
     #[error("The {0:?} scalar width {1} is not supported")]
     InvalidWidth(crate::ScalarKind, crate::Bytes),
@@ -37,7 +40,7 @@ pub enum TypeError {
     MissingBlockDecoration,
 }
 
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum ConstantError {
     #[error("The type doesn't match the constant")]
     InvalidType,
@@ -47,7 +50,7 @@ pub enum ConstantError {
     UnresolvedSize(Handle<crate::Constant>),
 }
 
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum GlobalVariableError {
     #[error("Usage isn't compatible with the storage class")]
     InvalidUsage,
@@ -66,13 +69,13 @@ pub enum GlobalVariableError {
     InvalidBuiltInType(crate::BuiltIn),
 }
 
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum LocalVariableError {
     #[error("Initializer doesn't match the variable type")]
     InitializerType,
 }
 
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum FunctionError {
     #[error(transparent)]
     Resolve(#[from] ResolveError),
@@ -90,7 +93,7 @@ pub enum FunctionError {
     InvalidArgumentType { index: usize, name: String },
 }
 
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum EntryPointError {
     #[error("Early depth test is not applicable")]
     UnexpectedEarlyDepthTest,
@@ -114,7 +117,7 @@ pub enum EntryPointError {
     Function(#[from] FunctionError),
 }
 
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum ValidationError {
     #[error("Type {handle:?} '{name}' is invalid: {error:?}")]
     Type {
@@ -142,6 +145,8 @@ pub enum ValidationError {
         name: String,
         error: EntryPointError,
     },
+    #[error(transparent)]
+    Analysis(#[from] AnalysisError),
     #[error("Module is corrupted")]
     Corrupted,
 }
@@ -690,7 +695,7 @@ impl Validator {
     }
 
     /// Check the given module to be valid.
-    pub fn validate(&mut self, module: &crate::Module) -> Result<(), ValidationError> {
+    pub fn validate(&mut self, module: &crate::Module) -> Result<Analysis, ValidationError> {
         self.typifier.clear();
         self.type_flags.clear();
         self.type_flags
@@ -742,6 +747,7 @@ impl Validator {
                 })?;
         }
 
-        Ok(())
+        let analysis = Analysis::new(module)?;
+        Ok(analysis)
     }
 }

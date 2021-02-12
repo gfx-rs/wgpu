@@ -79,19 +79,26 @@ impl FunctionInfo {
             E::FunctionArgument(_) => ControlFlags::NON_UNIFORM_RESULT, //TODO?
             E::GlobalVariable(handle) => {
                 let var = &global_var_arena[handle];
-                match var.binding {
-                    Some(crate::Binding::BuiltIn(built_in)) => match built_in {
+                let uniform = if let Some(crate::Binding::BuiltIn(built_in)) = var.binding {
+                    match built_in {
                         crate::BuiltIn::FrontFacing
                         | crate::BuiltIn::WorkGroupId
-                        | crate::BuiltIn::WorkGroupSize => ControlFlags::empty(),
-                        _ => ControlFlags::NON_UNIFORM_RESULT,
-                    },
-                    _ if var.class == crate::StorageClass::Input
-                        && var.interpolation == Some(crate::Interpolation::Flat) =>
-                    {
-                        ControlFlags::empty()
+                        | crate::BuiltIn::WorkGroupSize => true,
+                        _ => false,
                     }
-                    _ => ControlFlags::NON_UNIFORM_RESULT,
+                } else {
+                    use crate::StorageClass as Sc;
+                    match var.class {
+                        Sc::Input => var.interpolation == Some(crate::Interpolation::Flat),
+                        Sc::Output | Sc::Function | Sc::Private | Sc::WorkGroup => false,
+                        Sc::Uniform | Sc::Handle | Sc::PushConstant => true,
+                        Sc::Storage => !var.storage_access.contains(crate::StorageAccess::STORE),
+                    }
+                };
+                if uniform {
+                    ControlFlags::empty()
+                } else {
+                    ControlFlags::NON_UNIFORM_RESULT
                 }
             }
             E::LocalVariable(_) => {

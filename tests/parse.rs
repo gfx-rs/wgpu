@@ -16,7 +16,7 @@ fn check_glsl(name: &str) {
 
     match naga::front::glsl::parse_str(&input, "main", stage, Default::default()) {
         Ok(m) => match naga::proc::Validator::new().validate(&m) {
-            Ok(()) => (),
+            Ok(_analysis) => (),
             Err(e) => panic!("Unable to validate {}: {:?}", name, e),
         },
         Err(e) => panic!("Unable to parse {}: {:?}", name, e),
