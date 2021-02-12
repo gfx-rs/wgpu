@@ -1198,7 +1198,7 @@ pub struct FragmentState<'a> {
     /// The name of the entry point in the compiled shader. There must be a function that returns
     /// void with this name in the shader.
     pub entry_point: &'a str,
-    /// The format of any vertex buffers used with this pipeline.
+    /// The color state of the render targets.
     pub targets: &'a [ColorTargetState],
 }
 
