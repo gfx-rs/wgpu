@@ -38,6 +38,7 @@ pub enum Token<'a> {
     Arrow,
     Unknown(char),
     UnterminatedString,
+    Trivia,
     End,
 }
 
