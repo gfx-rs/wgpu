@@ -1689,13 +1689,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         }
 
-        for (_, func) in module.functions.iter_mut() {
-            self.patch_function_calls(func)?;
-        }
-        for (_, ep) in module.entry_points.iter_mut() {
-            self.patch_function_calls(&mut ep.function)?;
-        }
-
         if !self.future_decor.is_empty() {
             log::warn!("Unused item decorations: {:?}", self.future_decor);
             self.future_decor.clear();
