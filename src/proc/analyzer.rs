@@ -335,6 +335,21 @@ impl FunctionInfo {
                     ControlFlags::MAY_EXIT | flags
                 }
                 S::Store { pointer, value } => self.add_ref(pointer) | self.add_ref(value),
+                S::ImageStore {
+                    image,
+                    coordinate,
+                    array_index,
+                    value,
+                } => {
+                    let array_flags = match array_index {
+                        Some(expr) => self.add_ref(expr),
+                        None => ControlFlags::empty(),
+                    };
+                    array_flags
+                        | self.add_ref(image)
+                        | self.add_ref(coordinate)
+                        | self.add_ref(value)
+                }
                 S::Call {
                     function,
                     ref arguments,

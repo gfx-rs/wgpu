@@ -1582,7 +1582,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.patch_function_call_statements(body)?;
                     self.patch_function_call_statements(continuing)?;
                 }
-                S::Break | S::Continue | S::Return { .. } | S::Kill | S::Store { .. } => {}
+                S::Break
+                | S::Continue
+                | S::Return { .. }
+                | S::Kill
+                | S::Store { .. }
+                | S::ImageStore { .. } => {}
                 S::Call {
                     ref mut function, ..
                 } => {

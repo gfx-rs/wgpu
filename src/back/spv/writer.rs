@@ -1,6 +1,9 @@
 /*! Standard Portable Intermediate Representation (SPIR-V) backend !*/
 use super::{Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
-use crate::proc::{Layouter, ResolveContext, ResolveError, Typifier};
+use crate::{
+    arena::{Arena, Handle},
+    proc::{Layouter, ResolveContext, ResolveError, Typifier},
+};
 use spirv::Word;
 use std::collections::hash_map::Entry;
 use thiserror::Error;
@@ -47,7 +50,7 @@ enum RawExpression {
 struct Function {
     signature: Option<Instruction>,
     parameters: Vec<Instruction>,
-    variables: crate::FastHashMap<crate::Handle<crate::LocalVariable>, LocalVariable>,
+    variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
     blocks: Vec<Block>,
 }
 
@@ -94,11 +97,11 @@ enum LocalType {
         width: crate::Bytes,
     },
     Pointer {
-        base: crate::Handle<crate::Type>,
+        base: Handle<crate::Type>,
         class: crate::StorageClass,
     },
     SampledImage {
-        image_type: crate::Handle<crate::Type>,
+        image_type: Handle<crate::Type>,
     },
 }
 
@@ -126,7 +129,7 @@ impl LocalType {
 
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
 enum LookupType {
-    Handle(crate::Handle<crate::Type>),
+    Handle(Handle<crate::Type>),
     Local(LocalType),
 }
 
@@ -183,14 +186,14 @@ pub struct Writer {
     flags: WriterFlags,
     void_type: u32,
     lookup_type: crate::FastHashMap<LookupType, Word>,
-    lookup_function: crate::FastHashMap<crate::Handle<crate::Function>, Word>,
+    lookup_function: crate::FastHashMap<Handle<crate::Function>, Word>,
     lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
-    lookup_constant: crate::FastHashMap<crate::Handle<crate::Constant>, Word>,
+    lookup_constant: crate::FastHashMap<Handle<crate::Constant>, Word>,
     lookup_global_variable:
-        crate::FastHashMap<crate::Handle<crate::GlobalVariable>, (Word, spirv::StorageClass)>,
+        crate::FastHashMap<Handle<crate::GlobalVariable>, (Word, spirv::StorageClass)>,
     // TODO: this is a type property that depends on the global variable that uses it
     // so it may require us to duplicate the type!
-    struct_type_handles: crate::FastHashMap<crate::Handle<crate::Type>, crate::StorageAccess>,
+    struct_type_handles: crate::FastHashMap<Handle<crate::Type>, crate::StorageAccess>,
     gl450_ext_inst_id: Word,
     layouter: Layouter,
     typifier: Typifier,
@@ -248,7 +251,7 @@ impl Writer {
 
     fn get_type_id(
         &mut self,
-        arena: &crate::Arena<crate::Type>,
+        arena: &Arena<crate::Type>,
         lookup_ty: LookupType,
     ) -> Result<Word, Error> {
         if let Entry::Occupied(e) = self.lookup_type.entry(lookup_ty) {
@@ -284,7 +287,7 @@ impl Writer {
     fn get_global_variable_id(
         &mut self,
         ir_module: &crate::Module,
-        handle: crate::Handle<crate::GlobalVariable>,
+        handle: Handle<crate::GlobalVariable>,
     ) -> Result<(Word, spirv::StorageClass), Error> {
         Ok(match self.lookup_global_variable.entry(handle) {
             Entry::Occupied(e) => *e.get(),
@@ -299,8 +302,8 @@ impl Writer {
 
     fn get_pointer_id(
         &mut self,
-        arena: &crate::Arena<crate::Type>,
-        handle: crate::Handle<crate::Type>,
+        arena: &Arena<crate::Type>,
+        handle: Handle<crate::Type>,
         class: crate::StorageClass,
     ) -> Result<Word, Error> {
         let ty_id = self.get_type_id(arena, LookupType::Handle(handle))?;
@@ -539,7 +542,7 @@ impl Writer {
 
     fn write_type_declaration_local(
         &mut self,
-        arena: &crate::Arena<crate::Type>,
+        arena: &Arena<crate::Type>,
         local_ty: LocalType,
     ) -> Result<Word, Error> {
         let id = self.generate_id();
@@ -581,8 +584,8 @@ impl Writer {
 
     fn write_type_declaration_arena(
         &mut self,
-        arena: &crate::Arena<crate::Type>,
-        handle: crate::Handle<crate::Type>,
+        arena: &Arena<crate::Type>,
+        handle: Handle<crate::Type>,
     ) -> Result<Word, Error> {
         let ty = &arena[handle];
         let id = self.generate_id();
@@ -768,7 +771,7 @@ impl Writer {
         &mut self,
         id: Word,
         inner: &crate::ConstantInner,
-        types: &crate::Arena<crate::Type>,
+        types: &Arena<crate::Type>,
     ) -> Result<(), Error> {
         let instruction = match *inner {
             crate::ConstantInner::Scalar { width, ref value } => {
@@ -847,7 +850,7 @@ impl Writer {
     fn write_global_variable(
         &mut self,
         ir_module: &crate::Module,
-        handle: crate::Handle<crate::GlobalVariable>,
+        handle: Handle<crate::GlobalVariable>,
     ) -> Result<(Instruction, Word, spirv::StorageClass), Error> {
         let global_variable = &ir_module.global_variables[handle];
         let id = self.generate_id();
@@ -988,12 +991,93 @@ impl Writer {
         id
     }
 
+    fn write_texture_coordinates(
+        &mut self,
+        ir_module: &crate::Module,
+        ir_function: &crate::Function,
+        coordinates: Handle<crate::Expression>,
+        array_index: Option<Handle<crate::Expression>>,
+        block: &mut Block,
+        function: &mut Function,
+    ) -> Result<Word, Error> {
+        let coordinate_id =
+            self.write_expression(ir_module, ir_function, coordinates, block, function)?;
+
+        Ok(if let Some(array_index) = array_index {
+            let coordinate_scalar_type_id = self.get_type_id(
+                &ir_module.types,
+                LookupType::Local(LocalType::Scalar {
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                }),
+            )?;
+
+            let mut constituent_ids = [0u32; 4];
+            let size = match *self.typifier.get(coordinates, &ir_module.types) {
+                crate::TypeInner::Scalar { .. } => {
+                    constituent_ids[0] = coordinate_id;
+                    crate::VectorSize::Bi
+                }
+                crate::TypeInner::Vector { size, .. } => {
+                    for i in 0..size as u32 {
+                        let id = self.generate_id();
+                        constituent_ids[i as usize] = id;
+                        block.body.push(Instruction::composite_extract(
+                            coordinate_scalar_type_id,
+                            id,
+                            coordinate_id,
+                            &[i],
+                        ));
+                    }
+                    match size {
+                        crate::VectorSize::Bi => crate::VectorSize::Tri,
+                        crate::VectorSize::Tri => crate::VectorSize::Quad,
+                        crate::VectorSize::Quad => {
+                            unimplemented!("Unable to extend the vec4 coordinate")
+                        }
+                    }
+                }
+                ref other => unimplemented!("wrong coordinate type {:?}", other),
+            };
+
+            let array_index_f32_id = self.generate_id();
+            constituent_ids[size as usize - 1] = array_index_f32_id;
+
+            let array_index_u32_id =
+                self.write_expression(ir_module, ir_function, array_index, block, function)?;
+            let cast_instruction = Instruction::unary(
+                spirv::Op::ConvertUToF,
+                coordinate_scalar_type_id,
+                array_index_f32_id,
+                array_index_u32_id,
+            );
+            block.body.push(cast_instruction);
+
+            let extended_coordinate_type_id = self.get_type_id(
+                &ir_module.types,
+                LookupType::Local(LocalType::Vector {
+                    size,
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                }),
+            )?;
+
+            self.write_composite_construct(
+                extended_coordinate_type_id,
+                &constituent_ids[..size as usize],
+                block,
+            )
+        } else {
+            coordinate_id
+        })
+    }
+
     /// Write an expression and return a value ID.
     fn write_expression<'a>(
         &mut self,
         ir_module: &'a crate::Module,
         ir_function: &crate::Function,
-        handle: crate::Handle<crate::Expression>,
+        handle: Handle<crate::Expression>,
         block: &mut Block,
         function: &mut Function,
     ) -> Result<ExpressionId, Error> {
@@ -1016,7 +1100,7 @@ impl Writer {
         &mut self,
         ir_module: &'a crate::Module,
         ir_function: &crate::Function,
-        handle: crate::Handle<crate::Expression>,
+        handle: Handle<crate::Expression>,
         block: &mut Block,
         function: &mut Function,
     ) -> Result<PointerExpressionId, Error> {
@@ -1036,7 +1120,7 @@ impl Writer {
         &mut self,
         ir_module: &'a crate::Module,
         ir_function: &crate::Function,
-        expr_handle: crate::Handle<crate::Expression>,
+        expr_handle: Handle<crate::Expression>,
         block: &mut Block,
         function: &mut Function,
     ) -> Result<(RawExpression, ExpressionId), Error> {
@@ -1510,6 +1594,44 @@ impl Writer {
 
                 RawExpression::Value(id)
             }
+            crate::Expression::ImageLoad {
+                image,
+                coordinate,
+                array_index,
+                index,
+            } => {
+                let image_id =
+                    self.write_expression(ir_module, ir_function, image, block, function)?;
+                let coordinate_id = self.write_texture_coordinates(
+                    ir_module,
+                    ir_function,
+                    coordinate,
+                    array_index,
+                    block,
+                    function,
+                )?;
+
+                let id = self.generate_id();
+                let mut instruction =
+                    Instruction::image_read(result_type_id, id, image_id, coordinate_id);
+
+                if let Some(index) = index {
+                    let index_id =
+                        self.write_expression(ir_module, ir_function, index, block, function)?;
+                    let image_ops = match *self.typifier.get(image, &ir_module.types) {
+                        crate::TypeInner::Image {
+                            class: crate::ImageClass::Sampled { multi: true, .. },
+                            ..
+                        } => spirv::ImageOperands::SAMPLE,
+                        _ => spirv::ImageOperands::LOD,
+                    };
+                    instruction.add_operand(image_ops.bits());
+                    instruction.add_operand(index_id);
+                }
+
+                block.body.push(instruction);
+                RawExpression::Value(id)
+            }
             crate::Expression::ImageSample {
                 image,
                 sampler,
@@ -1531,84 +1653,16 @@ impl Writer {
                     LookupType::Local(LocalType::SampledImage { image_type }),
                 )?;
 
-                // sampler
                 let sampler_id =
                     self.write_expression(ir_module, ir_function, sampler, block, function)?;
-
-                // coordinate
-                let mut coordinate_id =
-                    self.write_expression(ir_module, ir_function, coordinate, block, function)?;
-
-                if let Some(array_index) = array_index {
-                    let coordinate_scalar_type_id = self.get_type_id(
-                        &ir_module.types,
-                        LookupType::Local(LocalType::Scalar {
-                            kind: crate::ScalarKind::Float,
-                            width: 4,
-                        }),
-                    )?;
-
-                    let mut constituent_ids = [0u32; 4];
-                    let size = match *self.typifier.get(coordinate, &ir_module.types) {
-                        crate::TypeInner::Scalar { .. } => {
-                            constituent_ids[0] = coordinate_id;
-                            crate::VectorSize::Bi
-                        }
-                        crate::TypeInner::Vector { size, .. } => {
-                            for i in 0..size as u32 {
-                                let id = self.generate_id();
-                                constituent_ids[i as usize] = id;
-                                block.body.push(Instruction::composite_extract(
-                                    coordinate_scalar_type_id,
-                                    id,
-                                    coordinate_id,
-                                    &[i],
-                                ));
-                            }
-                            match size {
-                                crate::VectorSize::Bi => crate::VectorSize::Tri,
-                                crate::VectorSize::Tri => crate::VectorSize::Quad,
-                                crate::VectorSize::Quad => {
-                                    unimplemented!("Unable to extend the vec4 coordinate")
-                                }
-                            }
-                        }
-                        ref other => unimplemented!("wrong coordinate type {:?}", other),
-                    };
-
-                    let array_index_f32_id = self.generate_id();
-                    constituent_ids[size as usize - 1] = array_index_f32_id;
-
-                    let array_index_u32_id = self.write_expression(
-                        ir_module,
-                        ir_function,
-                        array_index,
-                        block,
-                        function,
-                    )?;
-                    let cast_instruction = Instruction::unary(
-                        spirv::Op::ConvertUToF,
-                        coordinate_scalar_type_id,
-                        array_index_f32_id,
-                        array_index_u32_id,
-                    );
-                    block.body.push(cast_instruction);
-
-                    let extended_coordinate_type_id = self.get_type_id(
-                        &ir_module.types,
-                        LookupType::Local(LocalType::Vector {
-                            size,
-                            kind: crate::ScalarKind::Float,
-                            width: 4,
-                        }),
-                    )?;
-
-                    coordinate_id = self.write_composite_construct(
-                        extended_coordinate_type_id,
-                        &constituent_ids[..size as usize],
-                        block,
-                    );
-                }
+                let coordinate_id = self.write_texture_coordinates(
+                    ir_module,
+                    ir_function,
+                    coordinate,
+                    array_index,
+                    block,
+                    function,
+                )?;
 
                 let sampled_image_id = self.generate_id();
                 block.body.push(Instruction::sampled_image(
@@ -1994,6 +2048,29 @@ impl Writer {
                     block
                         .body
                         .push(Instruction::store(pointer_id, value_id, None));
+                }
+                crate::Statement::ImageStore {
+                    image,
+                    coordinate,
+                    array_index,
+                    value,
+                } => {
+                    let image_id =
+                        self.write_expression(ir_module, ir_function, image, &mut block, function)?;
+                    let coordinate_id = self.write_texture_coordinates(
+                        ir_module,
+                        ir_function,
+                        coordinate,
+                        array_index,
+                        &mut block,
+                        function,
+                    )?;
+                    let value_id =
+                        self.write_expression(ir_module, ir_function, value, &mut block, function)?;
+
+                    block
+                        .body
+                        .push(Instruction::image_write(image_id, coordinate_id, value_id));
                 }
                 crate::Statement::Call {
                     function: local_function,

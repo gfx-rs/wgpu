@@ -1798,6 +1798,32 @@ impl Parser {
             "break" => Some(crate::Statement::Break),
             "continue" => Some(crate::Statement::Continue),
             "discard" => Some(crate::Statement::Kill),
+            "textureStore" => {
+                lexer.expect(Token::Paren('('))?;
+                let image_name = lexer.next_ident()?;
+                let image = context.lookup_ident.lookup(image_name)?;
+                lexer.expect(Token::Separator(','))?;
+                let coordinate = self.parse_general_expression(lexer, context.as_expression())?;
+                let arrayed = match *context.as_expression().resolve_type(image)? {
+                    crate::TypeInner::Image { arrayed, .. } => arrayed,
+                    _ => return Err(Error::BadTexture(image_name)),
+                };
+                let array_index = if arrayed {
+                    lexer.expect(Token::Separator(','))?;
+                    Some(self.parse_general_expression(lexer, context.as_expression())?)
+                } else {
+                    None
+                };
+                lexer.expect(Token::Separator(','))?;
+                let value = self.parse_general_expression(lexer, context.as_expression())?;
+                lexer.expect(Token::Paren(')'))?;
+                Some(crate::Statement::ImageStore {
+                    image,
+                    coordinate,
+                    array_index,
+                    value,
+                })
+            }
             // assignment or a function call
             ident => {
                 if let Some(&var_expr) = context.lookup_ident.get(ident) {

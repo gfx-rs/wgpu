@@ -909,6 +909,23 @@ impl<W: Write> Writer<W> {
                     self.put_expression(value, &context.expression)?;
                     writeln!(self.out, ";")?;
                 }
+                crate::Statement::ImageStore {
+                    image,
+                    coordinate,
+                    array_index,
+                    value,
+                } => {
+                    self.put_expression(image, &context.expression)?;
+                    write!(self.out, ".write(")?;
+                    self.put_expression(value, &context.expression)?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(coordinate, &context.expression)?;
+                    if let Some(expr) = array_index {
+                        write!(self.out, ", ")?;
+                        self.put_expression(expr, &context.expression)?;
+                    }
+                    write!(self.out, ");")?;
+                }
                 crate::Statement::Call {
                     function,
                     ref arguments,

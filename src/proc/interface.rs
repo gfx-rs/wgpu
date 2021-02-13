@@ -203,6 +203,19 @@ where
                     self.visitor.visit_lhs_expr(left, &self.expressions[left]);
                     self.traverse_expr(value);
                 }
+                S::ImageStore {
+                    image,
+                    coordinate,
+                    array_index,
+                    value,
+                } => {
+                    self.visitor.visit_lhs_expr(image, &self.expressions[image]);
+                    self.traverse_expr(coordinate);
+                    if let Some(expr) = array_index {
+                        self.traverse_expr(expr);
+                    }
+                    self.traverse_expr(value);
+                }
                 S::Call {
                     function,
                     ref arguments,

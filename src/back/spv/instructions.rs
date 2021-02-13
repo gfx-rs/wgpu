@@ -233,7 +233,7 @@ impl super::Instruction {
         instruction.add_operand(depth as u32);
         instruction.add_operand(arrayed as u32);
         instruction.add_operand(multi as u32);
-        instruction.add_operand(sampled as u32);
+        instruction.add_operand(if sampled { 1 } else { 2 });
 
         let format = match image_class {
             crate::ImageClass::Storage(format) => match format {
@@ -549,6 +549,28 @@ impl super::Instruction {
             instruction.add_operand(dref);
         }
 
+        instruction
+    }
+
+    pub(super) fn image_read(
+        result_type_id: Word,
+        id: Word,
+        image: Word,
+        coordinates: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::ImageRead);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(image);
+        instruction.add_operand(coordinates);
+        instruction
+    }
+
+    pub(super) fn image_write(image: Word, coordinates: Word, value: Word) -> Self {
+        let mut instruction = Self::new(Op::ImageWrite);
+        instruction.add_operand(image);
+        instruction.add_operand(coordinates);
+        instruction.add_operand(value);
         instruction
     }
 

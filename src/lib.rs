@@ -805,6 +805,13 @@ pub enum Statement {
         pointer: Handle<Expression>,
         value: Handle<Expression>,
     },
+    /// Stores a value to an image.
+    ImageStore {
+        image: Handle<Expression>,
+        coordinate: Handle<Expression>,
+        array_index: Option<Handle<Expression>>,
+        value: Handle<Expression>,
+    },
     /// Calls a function with no return value.
     Call {
         function: Handle<Function>,

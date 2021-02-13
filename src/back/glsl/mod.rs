@@ -1129,6 +1129,27 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(value, ctx)?;
                 writeln!(self.out, ";")?
             }
+            // Stores a value into an image.
+            Statement::ImageStore {
+                image,
+                coordinate,
+                array_index,
+                value,
+            } => {
+                // This will only panic if the module is invalid
+                let dim = match *ctx.typifier.get(image, &self.module.types) {
+                    TypeInner::Image { dim, .. } => dim,
+                    _ => unreachable!(),
+                };
+
+                write!(self.out, "imageStore(")?;
+                self.write_expr(image, ctx)?;
+                write!(self.out, ", ")?;
+                self.write_texture_coordinates(coordinate, array_index, dim, ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(value, ctx)?;
+                writeln!(self.out, ");")?;
+            }
             // A `Call` is written `name(arguments)` where `arguments` is a comma separated expressions list
             Statement::Call {
                 function,
@@ -1136,7 +1157,7 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 write!(self.out, "{}(", &self.names[&NameKey::Function(function)])?;
                 self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
-                write!(self.out, ");")?
+                writeln!(self.out, ");")?
             }
         }
 
@@ -1162,7 +1183,7 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::AccessIndex { base, index } => {
                 self.write_expr(base, ctx)?;
 
-                match ctx.typifier.get(base, &self.module.types) {
+                match *ctx.typifier.get(base, &self.module.types) {
                     TypeInner::Vector { .. }
                     | TypeInner::Matrix { .. }
                     | TypeInner::Array { .. } => write!(self.out, "[{}]", index)?,
@@ -1306,7 +1327,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 index,
             } => {
                 // This will only panic if the module is invalid
-                let (dim, class) = match ctx.typifier.get(image, &self.module.types) {
+                let (dim, class) = match *ctx.typifier.get(image, &self.module.types) {
                     TypeInner::Image {
                         dim,
                         arrayed: _,
@@ -1324,25 +1345,8 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 write!(self.out, "{}(", fun_name)?;
                 self.write_expr(image, ctx)?;
-                match array_index {
-                    Some(layer_expr) => {
-                        let tex_coord_type = match dim {
-                            crate::ImageDimension::D1 => "ivec2",
-                            crate::ImageDimension::D2 => "ivec3",
-                            crate::ImageDimension::D3 => "ivec4",
-                            crate::ImageDimension::Cube => "ivec4",
-                        };
-                        write!(self.out, ", {}(", tex_coord_type)?;
-                        self.write_expr(coordinate, ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(layer_expr, ctx)?;
-                        write!(self.out, ")")?;
-                    }
-                    None => {
-                        write!(self.out, ", ")?;
-                        self.write_expr(coordinate, ctx)?;
-                    }
-                }
+                write!(self.out, ", ")?;
+                self.write_texture_coordinates(coordinate, array_index, dim, ctx)?;
 
                 if let Some(index_expr) = index {
                     write!(self.out, ", ")?;
@@ -1356,7 +1360,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // - textureSamples/imageSamples
             Expression::ImageQuery { image, query } => {
                 // This will only panic if the module is invalid
-                let (dim, class) = match ctx.typifier.get(image, &self.module.types) {
+                let (dim, class) = match *ctx.typifier.get(image, &self.module.types) {
                     TypeInner::Image {
                         dim,
                         arrayed: _,
@@ -1707,6 +1711,34 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
+        Ok(())
+    }
+
+    fn write_texture_coordinates(
+        &mut self,
+        coordinate: Handle<crate::Expression>,
+        array_index: Option<Handle<crate::Expression>>,
+        dim: crate::ImageDimension,
+        ctx: &FunctionCtx,
+    ) -> Result<(), Error> {
+        match array_index {
+            Some(layer_expr) => {
+                let tex_coord_type = match dim {
+                    crate::ImageDimension::D1 => "ivec2",
+                    crate::ImageDimension::D2 => "ivec3",
+                    crate::ImageDimension::D3 => "ivec4",
+                    crate::ImageDimension::Cube => "ivec4",
+                };
+                write!(self.out, "{}(", tex_coord_type)?;
+                self.write_expr(coordinate, ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(layer_expr, ctx)?;
+                write!(self.out, ")")?;
+            }
+            None => {
+                self.write_expr(coordinate, ctx)?;
+            }
+        }
         Ok(())
     }
 
