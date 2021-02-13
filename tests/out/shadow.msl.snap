@@ -37,11 +37,9 @@ typedef float type7;
 
 typedef metal::float2 type8;
 
-typedef int type9;
+typedef metal::float3 type9;
 
-typedef metal::float3 type10;
-
-typedef bool type11;
+typedef bool type10;
 
 type7 fetch_shadow(
     type6 light_id,
@@ -57,7 +55,7 @@ type7 fetch_shadow(
 }
 
 struct fs_mainInput {
-    type10 in_normal_fs [[user(loc0)]];
+    type9 in_normal_fs [[user(loc0)]];
     type2 in_position_fs [[user(loc1)]];
 };
 
@@ -73,7 +71,7 @@ fragment fs_mainOutput fs_main(
     type5 sampler_shadow [[sampler(0)]]
 ) {
     fs_mainOutput output;
-    type10 color1 = type10(0.05, 0.05, 0.05);
+    type9 color1 = type9(0.05, 0.05, 0.05);
     type6 i = 0u;
     bool loop_init = true;
     while(true) {

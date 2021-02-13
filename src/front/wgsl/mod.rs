@@ -844,7 +844,6 @@ impl Parser {
                         ctx.constants,
                     )?;
                     let kind = inner.scalar_kind();
-                    let ty = ctx.types.fetch_or_append(crate::Type { name: None, inner });
 
                     lexer.expect(Token::Paren('('))?;
                     let mut components = Vec::new();
@@ -856,13 +855,24 @@ impl Parser {
                     }
                     lexer.expect(Token::Paren(')'))?;
                     if components.is_empty() {
-                        crate::Expression::As {
-                            expr: last_component,
-                            kind: kind.ok_or(Error::BadTypeCast(word))?,
-                            convert: true,
+                        let last_component_inner = ctx.resolve_type(last_component)?;
+                        match (&inner, last_component_inner) {
+                            (crate::TypeInner::Scalar { .. }, crate::TypeInner::Scalar { .. })
+                            | (crate::TypeInner::Matrix { .. }, crate::TypeInner::Matrix { .. })
+                            | (crate::TypeInner::Vector { .. }, crate::TypeInner::Vector { .. }) => {
+                                crate::Expression::As {
+                                    expr: last_component,
+                                    kind: kind.ok_or(Error::BadTypeCast(word))?,
+                                    convert: true,
+                                }
+                            }
+                            _ => {
+                                return Err(Error::BadTypeCast(word));
+                            }
                         }
                     } else {
                         components.push(last_component);
+                        let ty = ctx.types.fetch_or_append(crate::Type { name: None, inner });
                         crate::Expression::Compose { ty, components }
                     }
                 }
