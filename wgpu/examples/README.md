@@ -12,7 +12,7 @@ All framework-based examples render to the window.
 ## Feature matrix
 | Feature                      | boids  | cube   | mipmap | msaa-line | shadow | skybox | texture-arrays | water  | conservative-raster |
 | ---------------------------- | ------ | ------ | ------ | --------- | ------ | ------ | -------------- | ------ | ------------------- |
-| WGSL shaders                 | :star: | :star: | :star: | :star:    | :star: | :star: |                |        | :star:              |
+| WGSL shaders                 | :star: | :star: | :star: | :star:    | :star: | :star: |                | :star: | :star:              |
 | vertex attributes            | :star: | :star: |        | :star:    | :star: | :star: | :star:         | :star: |                     |
 | instancing                   | :star: |        |        |           |        |        |                |        |                     |
 | lines and points             |        |        |        | :star:    |        |        |                |        | :star:              |
