@@ -184,3 +184,13 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         _ => return None,
     })
 }
+
+pub fn map_conservative_depth(word: &str) -> Result<crate::ConservativeDepth, Error<'_>> {
+    use crate::ConservativeDepth as Cd;
+    match word {
+        "greater_equal" => Ok(Cd::GreaterEqual),
+        "less_equal" => Ok(Cd::LessEqual),
+        "unchanged" => Ok(Cd::Unchanged),
+        _ => Err(Error::UnknownConservativeDepth(word)),
+    }
+}

@@ -86,6 +86,8 @@ pub enum Error<'a> {
     UnknownFunction(&'a str),
     #[error("unknown storage format: `{0}`")]
     UnknownStorageFormat(&'a str),
+    #[error("unknown conservative depth: `{0}`")]
+    UnknownConservativeDepth(&'a str),
     #[error("array stride must not be 0")]
     ZeroStride,
     #[error("not a composite type: {0:?}")]
@@ -1932,6 +1934,7 @@ impl Parser {
         let mut stage = None;
         let mut is_block = false;
         let mut workgroup_size = [0u32; 3];
+        let mut early_depth_test = None;
 
         if lexer.skip(Token::DoubleParen('[')) {
             let (mut bind_index, mut bind_group) = (None, None);
@@ -1993,6 +1996,16 @@ impl Parser {
                                 *size = 1;
                             }
                         }
+                    }
+                    "early_depth_test" => {
+                        let conservative = if lexer.skip(Token::Paren('(')) {
+                            let value = conv::map_conservative_depth(lexer.next_ident()?)?;
+                            lexer.expect(Token::Paren(')'))?;
+                            Some(value)
+                        } else {
+                            None
+                        };
+                        early_depth_test = Some(crate::EarlyDepthTest { conservative });
                     }
                     word => return Err(Error::UnknownDecoration(word)),
                 }
@@ -2103,7 +2116,7 @@ impl Parser {
                         .insert(
                             (stage, name.to_string()),
                             crate::EntryPoint {
-                                early_depth_test: None,
+                                early_depth_test,
                                 workgroup_size,
                                 function,
                             },
