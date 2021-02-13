@@ -301,7 +301,10 @@ impl<W: Write> Writer<W> {
                     }
                 }
             }
-            crate::Expression::Constant(handle) => self.put_constant(handle, context.module)?,
+            crate::Expression::Constant(handle) => {
+                let handle_name = &self.names[&NameKey::Constant(handle)];
+                write!(self.out, "{}", handle_name)?;
+            }
             crate::Expression::Compose { ty, ref components } => {
                 let inner = &context.module.types[ty].inner;
                 match *inner {
@@ -428,8 +431,8 @@ impl<W: Write> Writer<W> {
                     }
                 }
                 if let Some(constant) = offset {
-                    write!(self.out, ", ")?;
-                    self.put_constant(constant, context.module)?;
+                    let offset_str = &self.names[&NameKey::Constant(constant)];
+                    write!(self.out, ", {}", offset_str)?;
                 }
                 write!(self.out, ")")?;
             }
@@ -687,53 +690,12 @@ impl<W: Write> Writer<W> {
                     size: crate::ArraySize::Constant(const_handle),
                     ..
                 } => {
-                    self.put_constant(const_handle, context.module)?;
+                    let size_str = &self.names[&NameKey::Constant(const_handle)];
+                    write!(self.out, "{}", size_str)?;
                 }
                 crate::TypeInner::Array { .. } => return Err(Error::UnsupportedDynamicArrayLength),
                 _ => return Err(Error::Validation),
             },
-        }
-        Ok(())
-    }
-
-    fn put_constant(
-        &mut self,
-        handle: Handle<crate::Constant>,
-        module: &crate::Module,
-    ) -> Result<(), Error> {
-        let constant = &module.constants[handle];
-        match constant.inner {
-            crate::ConstantInner::Scalar {
-                width: _,
-                ref value,
-            } => match *value {
-                crate::ScalarValue::Sint(value) => {
-                    write!(self.out, "{}", value)?;
-                }
-                crate::ScalarValue::Uint(value) => {
-                    write!(self.out, "{}u", value)?;
-                }
-                crate::ScalarValue::Float(value) => {
-                    write!(self.out, "{}", value)?;
-                    if value.fract() == 0.0 {
-                        write!(self.out, ".0")?;
-                    }
-                }
-                crate::ScalarValue::Bool(value) => {
-                    write!(self.out, "{}", value)?;
-                }
-            },
-            crate::ConstantInner::Composite { ty, ref components } => {
-                let ty_name = &self.names[&NameKey::Type(ty)];
-                write!(self.out, "{}(", ty_name)?;
-                for (i, &handle) in components.iter().enumerate() {
-                    if i != 0 {
-                        write!(self.out, ", ")?;
-                    }
-                    self.put_constant(handle, module)?;
-                }
-                write!(self.out, ")")?;
-            }
         }
         Ok(())
     }
@@ -956,6 +918,7 @@ impl<W: Write> Writer<W> {
         writeln!(self.out)?;
 
         self.write_type_defs(module)?;
+        self.write_constants(module)?;
         self.write_functions(module, analysis, options)
     }
 
@@ -1008,14 +971,13 @@ impl<W: Write> Writer<W> {
                     stride: _,
                 } => {
                     let base_name = &self.names[&NameKey::Type(base)];
-                    write!(self.out, "typedef {} {}[", base_name, name)?;
-                    match size {
+                    let size_str = match size {
                         crate::ArraySize::Constant(const_handle) => {
-                            self.put_constant(const_handle, module)?;
-                            write!(self.out, "]")?;
+                            &self.names[&NameKey::Constant(const_handle)]
                         }
-                        crate::ArraySize::Dynamic => write!(self.out, "1]")?,
-                    }
+                        crate::ArraySize::Dynamic => "1",
+                    };
+                    write!(self.out, "typedef {} {}[{}]", base_name, name, size_str)?;
                 }
                 crate::TypeInner::Struct {
                     block: _,
@@ -1094,6 +1056,47 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn write_constants(&mut self, module: &crate::Module) -> Result<(), Error> {
+        for (handle, constant) in module.constants.iter() {
+            write!(self.out, "constexpr constant ")?;
+            let name = &self.names[&NameKey::Constant(handle)];
+            match constant.inner {
+                crate::ConstantInner::Scalar {
+                    width: _,
+                    ref value,
+                } => match *value {
+                    crate::ScalarValue::Sint(value) => {
+                        write!(self.out, "int {} = {}", name, value)?;
+                    }
+                    crate::ScalarValue::Uint(value) => {
+                        write!(self.out, "unsigned {} = {}u", name, value)?;
+                    }
+                    crate::ScalarValue::Float(value) => {
+                        write!(self.out, "float {} = {}", name, value)?;
+                        if value.fract() == 0.0 {
+                            write!(self.out, ".0")?;
+                        }
+                    }
+                    crate::ScalarValue::Bool(value) => {
+                        write!(self.out, "bool {} = {}", name, value)?;
+                    }
+                },
+                crate::ConstantInner::Composite { ty, ref components } => {
+                    let ty_name = &self.names[&NameKey::Type(ty)];
+                    write!(self.out, "{} {} = {}(", ty_name, name, ty_name)?;
+                    for (i, &sub_handle) in components.iter().enumerate() {
+                        let separator = if i != 0 { ", " } else { "" };
+                        let sub_name = &self.names[&NameKey::Constant(sub_handle)];
+                        write!(self.out, "{}{}", separator, sub_name)?;
+                    }
+                    write!(self.out, ")")?;
+                }
+            }
+            writeln!(self.out, ";")?;
+        }
+        Ok(())
+    }
+
     // Returns the array of mapped entry point names.
     fn write_functions(
         &mut self,
@@ -1159,8 +1162,8 @@ impl<W: Write> Writer<W> {
                 let local_name = &self.names[&NameKey::FunctionLocal(fun_handle, local_handle)];
                 write!(self.out, "{}{} {}", INDENT, ty_name, local_name)?;
                 if let Some(value) = local.init {
-                    write!(self.out, " = ")?;
-                    self.put_constant(value, module)?;
+                    let value_str = &self.names[&NameKey::Constant(value)];
+                    write!(self.out, " = {}", value_str)?;
                 }
                 writeln!(self.out, ";")?;
             }
@@ -1342,8 +1345,8 @@ impl<W: Write> Writer<W> {
                 tyvar.try_fmt(&mut self.out)?;
                 resolved.try_fmt_decorated(&mut self.out, separator)?;
                 if let Some(value) = var.init {
-                    write!(self.out, " = ")?;
-                    self.put_constant(value, module)?;
+                    let value_str = &self.names[&NameKey::Constant(value)];
+                    write!(self.out, " = {}", value_str)?;
                 }
                 writeln!(self.out)?;
             }
@@ -1364,8 +1367,8 @@ impl<W: Write> Writer<W> {
                 let ty_name = &self.names[&NameKey::Type(local.ty)];
                 write!(self.out, "{}{} {}", INDENT, ty_name, name)?;
                 if let Some(value) = local.init {
-                    write!(self.out, " = ")?;
-                    self.put_constant(value, module)?;
+                    let value_str = &self.names[&NameKey::Constant(value)];
+                    write!(self.out, " = {}", value_str)?;
                 }
                 writeln!(self.out, ";")?;
             }

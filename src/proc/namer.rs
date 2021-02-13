@@ -5,6 +5,7 @@ pub type EntryPointIndex = u16;
 
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub enum NameKey {
+    Constant(Handle<crate::Constant>),
     GlobalVariable(Handle<crate::GlobalVariable>),
     Type(Handle<crate::Type>),
     StructMember(Handle<crate::Type>, u32),
@@ -69,11 +70,7 @@ impl Namer {
         self.unique.clear();
         self.unique
             .extend(reserved.iter().map(|string| (string.to_string(), 0)));
-
-        for (handle, var) in module.global_variables.iter() {
-            let name = self.call_or(&var.name, "global");
-            output.insert(NameKey::GlobalVariable(handle), name);
-        }
+        let mut temp = String::new();
 
         for (ty_handle, ty) in module.types.iter() {
             let ty_name = self.call_or(&ty.name, "type");
@@ -89,6 +86,62 @@ impl Namer {
                     output.insert(NameKey::StructMember(ty_handle, index as u32), name);
                 }
             }
+        }
+
+        for (handle, var) in module.global_variables.iter() {
+            let name = self.call_or(&var.name, "global");
+            output.insert(NameKey::GlobalVariable(handle), name);
+        }
+
+        for (handle, constant) in module.constants.iter() {
+            let label = match constant.name {
+                Some(ref name) => name,
+                None => {
+                    use std::fmt::Write;
+                    // Try to be more descriptive about the constant values
+                    temp.clear();
+                    match constant.inner {
+                        crate::ConstantInner::Scalar {
+                            width: _,
+                            value: crate::ScalarValue::Sint(v),
+                        } => write!(temp, "const_{}i", v),
+                        crate::ConstantInner::Scalar {
+                            width: _,
+                            value: crate::ScalarValue::Uint(v),
+                        } => write!(temp, "const_{}u", v),
+                        crate::ConstantInner::Scalar {
+                            width: _,
+                            value: crate::ScalarValue::Float(v),
+                        } => {
+                            let abs = v.abs();
+                            write!(
+                                temp,
+                                "const_{}{}",
+                                if v < 0.0 { "n" } else { "" },
+                                abs.trunc(),
+                            )
+                            .unwrap();
+                            let fract = abs.fract();
+                            if fract == 0.0 {
+                                write!(temp, "f")
+                            } else {
+                                write!(temp, "_{:02}f", (fract * 100.0) as i8)
+                            }
+                        }
+                        crate::ConstantInner::Scalar {
+                            width: _,
+                            value: crate::ScalarValue::Bool(v),
+                        } => write!(temp, "const_{}", v),
+                        crate::ConstantInner::Composite { ty, components: _ } => {
+                            write!(temp, "const_{}", output[&NameKey::Type(ty)])
+                        }
+                    }
+                    .unwrap();
+                    &temp
+                }
+            };
+            let name = self.call(label);
+            output.insert(NameKey::Constant(handle), name);
         }
 
         for (fun_handle, fun) in module.functions.iter() {

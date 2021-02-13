@@ -15,22 +15,26 @@ struct PrimeIndices {
     type2 data;
 };
 
+constexpr constant unsigned const_0u = 0u;
+constexpr constant unsigned const_1u = 1u;
+constexpr constant unsigned const_2u = 2u;
+constexpr constant unsigned const_3u = 3u;
 type1 collatz_iterations(
     type1 n_base
 ) {
     type1 n;
-    type1 i = 0u;
+    type1 i = const_0u;
     n = n_base;
     while(true) {
-        if ((n <= 1u)) {
+        if ((n <= const_1u)) {
             break;
         }
-        if (((n % 2u) == 0u)) {
-            n = (n / 2u);
+        if (((n % const_2u) == const_0u)) {
+            n = (n / const_2u);
         } else {
-            n = ((3u * n) + 1u);
+            n = ((const_3u * n) + const_1u);
         }
-        i = (i + 1u);
+        i = (i + const_1u);
     }
     return i;
 }

@@ -28,6 +28,11 @@ typedef metal::texturecube<float, metal::access::sample> type7;
 
 typedef metal::sampler type8;
 
+constexpr constant int const_2i = 2;
+constexpr constant int const_1i = 1;
+constexpr constant float const_4f = 4.0;
+constexpr constant float const_1f = 1.0;
+constexpr constant float const_0f = 0.0;
 struct vs_mainInput {
 };
 
@@ -45,9 +50,9 @@ vertex vs_mainOutput vs_main(
     type4 tmp1_;
     type4 tmp2_;
     type unprojected;
-    tmp1_ = (static_cast<int>(in_vertex_index) / 2);
-    tmp2_ = (static_cast<int>(in_vertex_index) & 1);
-    type expr24 = metal::float4(((static_cast<float>(tmp1_) * 4.0) - 1.0), ((static_cast<float>(tmp2_) * 4.0) - 1.0), 0.0, 1.0);
+    tmp1_ = (static_cast<int>(in_vertex_index) / const_2i);
+    tmp2_ = (static_cast<int>(in_vertex_index) & const_1i);
+    type expr24 = metal::float4(((static_cast<float>(tmp1_) * const_4f) - const_1f), ((static_cast<float>(tmp2_) * const_4f) - const_1f), const_0f, const_1f);
     unprojected = (r_data.proj_inv * expr24);
     output.out_uv = (metal::transpose(metal::float3x3(metal::float3(r_data.view[0].x, r_data.view[0].y, r_data.view[0].z), metal::float3(r_data.view[1].x, r_data.view[1].y, r_data.view[1].z), metal::float3(r_data.view[2].x, r_data.view[2].y, r_data.view[2].z))) * metal::float3(unprojected.x, unprojected.y, unprojected.z));
     output.out_position = expr24;
