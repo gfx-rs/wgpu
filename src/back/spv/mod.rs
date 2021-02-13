@@ -44,7 +44,7 @@ struct LogicalLayout {
     function_definitions: Vec<Word>,
 }
 
-pub(self) struct Instruction {
+struct Instruction {
     op: spirv::Op,
     wc: u32,
     type_id: Option<Word>,
