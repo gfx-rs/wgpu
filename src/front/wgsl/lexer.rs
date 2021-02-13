@@ -162,6 +162,13 @@ impl<'a> Lexer<'a> {
         Lexer { input }
     }
 
+    fn peek_token_and_rest(&mut self) -> (Token<'a>, &'a str) {
+        let mut cloned = self.clone();
+        let token = cloned.next();
+        let rest = cloned.input;
+        (token, rest)
+    }
+
     #[must_use]
     pub(super) fn next(&mut self) -> Token<'a> {
         let original_len = self.input.len();
@@ -177,7 +184,8 @@ impl<'a> Lexer<'a> {
 
     #[must_use]
     pub(super) fn peek(&mut self) -> Token<'a> {
-        self.clone().next()
+        let (token, _) = self.peek_token_and_rest();
+        token
     }
 
     pub(super) fn expect(&mut self, expected: Token<'a>) -> Result<(), Error<'a>> {
@@ -207,8 +215,9 @@ impl<'a> Lexer<'a> {
     }
 
     pub(super) fn skip(&mut self, what: Token<'_>) -> bool {
-        if self.peek() == what {
-            let _ = self.next();
+        let (peeked_token, rest) = self.peek_token_and_rest();
+        if peeked_token == what {
+            self.input = rest;
             true
         } else {
             false
