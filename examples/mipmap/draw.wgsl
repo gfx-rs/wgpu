@@ -1,5 +1,5 @@
-[[location(0)]]
-var<in> in_position_vs: vec4<f32>;
+[[builtin(vertex_index)]]
+var<in> in_vertex_index: u32;
 [[builtin(position)]]
 var<out> out_position: vec4<f32>;
 [[location(0)]]
@@ -14,8 +14,12 @@ var r_data: Locals;
 
 [[stage(vertex)]]
 fn vs_main() {
-    out_tex_coords_vs = 0.05 * in_position_vs.xy + vec2<f32>(0.5, 0.5);
-    out_position = r_data.transform * in_position_vs;
+    var pos: vec2<f32> = vec2<f32>(
+        100.0 * (1.0 - f32(in_vertex_index & 2u)),
+        1000.0 * f32(in_vertex_index & 1u)
+    );
+    out_tex_coords_vs = 0.05 * pos + vec2<f32>(0.5, 0.5);
+    out_position = r_data.transform * vec4<f32>(pos, 0.0, 1.0);
 }
 
 [[location(0)]]

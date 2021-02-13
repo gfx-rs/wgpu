@@ -12,7 +12,8 @@ All framework-based examples render to the window.
 ## Feature matrix
 | Feature                | boids  | cube   | mipmap | msaa-line | shadow | skybox | texture-arrays | water  |
 | ---------------------- | ------ | ------ | ------ | --------- | ------ | ------ | -------------- | ------ |
-| vertex attributes      | :star: | :star: | :star: | :star:    | :star: |        | :star:         | :star: |
+| WGSL shaders           | :star: | :star: | :star: | :star:    | :star: | :star: |                |        |
+| vertex attributes      | :star: | :star: |        | :star:    | :star: | :star: | :star:         | :star: |
 | instancing             | :star: |        |        |           |        |        |                |        |
 | lines and points       |        |        |        | :star:    |        |        |                |        |
 | dynamic buffer offsets |        |        |        |           | :star: |        |                |        |
@@ -26,20 +27,22 @@ All framework-based examples render to the window.
 | multisampling          |        |        |        | :star:    |        |        |                |        |
 | off-screen rendering   |        |        |        |           | :star: |        |                | :star: |
 | stencil testing        |        |        |        |           |        |        |                |        |
-| depth testing          |        |        |        |           | :star: |        |                | :star: |
+| depth testing          |        |        |        |           | :star: | :star: |                | :star: |
 | depth biasing          |        |        |        |           | :star: |        |                |        |
 | read-only depth        |        |        |        |           |        |        |                | :star: |
 | blending               |        | :star: |        |           |        |        |                | :star: |
 | render bundles         |        |        |        | :star:    |        |        |                | :star: |
 | compute passes         | :star: |        |        |           |        |        |                |        |
-| optional extensions    |        |        |        |           |        |        | :star:         |        |
+| *optional extensions*  |        |        |        |           |        |        | :star:         |        |
 | - binding indexing     |        |        |        |           |        |        | :star:         |        |
 | - push constants       |        |        |        |           |        |        | :star:         |        |
 | - depth clamping       |        |        |        |           | :star: |        |                |        |
 | - compressed textures  |        |        |        |           |        | :star: |                |        |
 | - polygon mode         |        | :star: |        |           |        |        |                |        |
 | - queries              |        |        | :star: |           |        |        |                |        |
-| WGSL shaders           | :star: | :star: | :star: | :star:    | :star: | :star: |                |        |
+| *integrations*         |        |        |        |           |        |        |                |        |
+| - typed arena          |        |        |        |           |        |        |                |        |
+| - obj loading          |        |        |        |           |        | :star: |                |        |
 
 ## Hacking
 
