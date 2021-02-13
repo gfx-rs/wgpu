@@ -709,6 +709,22 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn select(
+        result_type_id: Word,
+        id: Word,
+        condition_id: Word,
+        accept_id: Word,
+        reject_id: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::Select);
+        instruction.add_operand(result_type_id);
+        instruction.add_operand(id);
+        instruction.add_operand(condition_id);
+        instruction.add_operand(accept_id);
+        instruction.add_operand(reject_id);
+        instruction
+    }
+
     pub(super) fn kill() -> Self {
         Self::new(Op::Kill)
     }

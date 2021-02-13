@@ -1734,6 +1734,29 @@ impl Writer {
                 block.body.push(main_instruction);
                 RawExpression::Value(id)
             }
+            crate::Expression::Select {
+                condition,
+                accept,
+                reject,
+            } => {
+                let id = self.generate_id();
+                let condition_id =
+                    self.write_expression(ir_module, ir_function, condition, block, function)?;
+                let accept_id =
+                    self.write_expression(ir_module, ir_function, accept, block, function)?;
+                let reject_id =
+                    self.write_expression(ir_module, ir_function, reject, block, function)?;
+
+                let instruction = Instruction::select(
+                    result_type_id,
+                    id,
+                    condition_id,
+                    accept_id,
+                    reject_id,
+                );
+                block.body.push(instruction);
+                RawExpression::Value(id)
+            }
             ref other => {
                 log::error!("unimplemented {:?}", other);
                 return Err(Error::FeatureNotImplemented("expression"));
