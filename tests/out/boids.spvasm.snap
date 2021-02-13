@@ -11,6 +11,37 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %29 "main" %36
 OpExecutionMode %29 LocalSize 64 1 1
+OpSource GLSL 450
+OpName %3 "NUM_PARTICLES"
+OpName %15 "vPos"
+OpName %18 "vVel"
+OpName %19 "cMass"
+OpName %20 "cVel"
+OpName %21 "colVel"
+OpName %22 "cMassCount"
+OpName %24 "cVelCount"
+OpName %25 "pos"
+OpName %26 "vel"
+OpName %27 "i"
+OpName %29 "main"
+OpName %36 "gl_GlobalInvocationID"
+OpName %45 "Particle"
+OpMemberName %45 0 "pos"
+OpMemberName %45 1 "vel"
+OpName %49 "Particles"
+OpMemberName %49 0 "particles"
+OpName %50 "particlesSrc"
+OpName %121 "SimParams"
+OpMemberName %121 0 "deltaT"
+OpMemberName %121 1 "rule1Distance"
+OpMemberName %121 2 "rule2Distance"
+OpMemberName %121 3 "rule3Distance"
+OpMemberName %121 4 "rule1Scale"
+OpMemberName %121 5 "rule2Scale"
+OpMemberName %121 6 "rule3Scale"
+OpName %122 "params"
+OpName %274 "particlesDst"
+OpName %29 "main"
 OpDecorate %36 BuiltIn GlobalInvocationId
 OpMemberDecorate %45 0 Offset 0
 OpMemberDecorate %45 1 Offset 8

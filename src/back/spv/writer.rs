@@ -413,6 +413,12 @@ impl Writer {
         };
 
         let function_id = self.generate_id();
+        if self.flags.contains(WriterFlags::DEBUG) {
+            if let Some(ref name) = ir_function.name {
+                self.debugs.push(Instruction::name(function_id, name));
+            }
+        }
+
         let function_type = self.get_function_type(lookup_function_type);
         function.signature = Some(Instruction::function(
             return_type_id,
@@ -2023,6 +2029,11 @@ impl Writer {
         for (handle, constant) in ir_module.constants.iter() {
             let id = self.generate_id();
             self.lookup_constant.insert(handle, id);
+            if self.flags.contains(WriterFlags::DEBUG) {
+                if let Some(ref name) = constant.name {
+                    self.debugs.push(Instruction::name(id, name));
+                }
+            }
             self.write_constant_type(id, &constant.inner, &ir_module.types)?;
         }
 

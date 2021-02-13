@@ -12,6 +12,20 @@ OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %7 "main" %20 %13 %11 %17
 OpEntryPoint Fragment %23 "main" %35 %25
 OpExecutionMode %23 OriginUpperLeft
+OpSource GLSL 450
+OpName %3 "c_scale"
+OpName %7 "main"
+OpName %11 "v_uv"
+OpName %13 "a_uv"
+OpName %17 "o_position"
+OpName %20 "a_pos"
+OpName %7 "main"
+OpName %23 "main"
+OpName %25 "o_color"
+OpName %27 "u_texture"
+OpName %32 "u_sampler"
+OpName %35 "v_uv"
+OpName %23 "main"
 OpDecorate %11 Location 0
 OpDecorate %13 Location 1
 OpDecorate %17 BuiltIn Position

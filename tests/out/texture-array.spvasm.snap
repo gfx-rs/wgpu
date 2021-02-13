@@ -11,6 +11,17 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %5 "main" %35 %23
 OpExecutionMode %5 OriginUpperLeft
+OpSource GLSL 450
+OpName %5 "main"
+OpName %12 "PushConstants"
+OpMemberName %12 0 "index"
+OpName %13 "pc"
+OpName %23 "color"
+OpName %26 "texture0"
+OpName %31 "sampler"
+OpName %35 "tex_coord"
+OpName %40 "texture1"
+OpName %5 "main"
 OpDecorate %12 Block
 OpMemberDecorate %12 0 Offset 0
 OpDecorate %23 Location 1

@@ -12,6 +12,25 @@ OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %16 "vs_main" %159 %47 %21
 OpEntryPoint Fragment %170 "fs_main" %182 %172
 OpExecutionMode %170 OriginUpperLeft
+OpSource GLSL 450
+OpName %10 "tmp1"
+OpName %12 "tmp2"
+OpName %13 "unprojected"
+OpName %16 "vs_main"
+OpName %21 "in_vertex_index"
+OpName %31 "Data"
+OpMemberName %31 0 "proj_inv"
+OpMemberName %31 1 "view"
+OpName %32 "r_data"
+OpName %47 "out_uv"
+OpName %159 "out_position"
+OpName %16 "vs_main"
+OpName %170 "fs_main"
+OpName %172 "out_color"
+OpName %174 "r_texture"
+OpName %179 "r_sampler"
+OpName %182 "in_uv"
+OpName %170 "fs_main"
 OpDecorate %21 BuiltIn VertexIndex
 OpDecorate %31 Block
 OpMemberDecorate %31 0 Offset 0

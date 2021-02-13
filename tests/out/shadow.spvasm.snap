@@ -11,6 +11,29 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %64 "fs_main" %114 %111 %217
 OpExecutionMode %64 OriginUpperLeft
+OpSource GLSL 450
+OpName %9 "c_ambient"
+OpName %11 "c_max_lights"
+OpName %18 "fetch_shadow"
+OpName %28 "t_shadow"
+OpName %33 "sampler_shadow"
+OpName %60 "color"
+OpName %62 "i"
+OpName %64 "fs_main"
+OpName %76 "Globals"
+OpMemberName %76 0 "num_lights"
+OpName %77 "u_globals"
+OpName %97 "Light"
+OpMemberName %97 0 "proj"
+OpMemberName %97 1 "pos"
+OpMemberName %97 2 "color"
+OpName %101 "Lights"
+OpMemberName %101 0 "data"
+OpName %102 "s_lights"
+OpName %111 "in_position_fs"
+OpName %114 "in_normal_fs"
+OpName %217 "out_color_fs"
+OpName %64 "fs_main"
 OpDecorate %28 DescriptorSet 0
 OpDecorate %28 Binding 2
 OpDecorate %33 DescriptorSet 0

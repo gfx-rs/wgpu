@@ -61,7 +61,7 @@ fn check_output_spv(module: &naga::Module, name: &str, params: &Parameters) {
 
     let spv = spv::write_vec(
         &module,
-        spv::WriterFlags::NONE,
+        spv::WriterFlags::DEBUG,
         params.spv_capabilities.clone(),
     )
     .unwrap();

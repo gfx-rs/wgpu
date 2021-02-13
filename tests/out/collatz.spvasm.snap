@@ -11,6 +11,16 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %39 "main" %53
 OpExecutionMode %39 LocalSize 1 1 1
+OpSource GLSL 450
+OpName %8 "n"
+OpName %10 "i"
+OpName %12 "collatz_iterations"
+OpName %39 "main"
+OpName %45 "PrimeIndices"
+OpMemberName %45 0 "data"
+OpName %46 "v_indices"
+OpName %53 "global_id"
+OpName %39 "main"
 OpDecorate %43 ArrayStride 4
 OpDecorate %45 BufferBlock
 OpMemberDecorate %45 0 Offset 0
