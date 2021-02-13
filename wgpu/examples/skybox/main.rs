@@ -1,45 +1,75 @@
 #[path = "../framework.rs"]
 mod framework;
 
+use bytemuck::{Pod, Zeroable};
+use cgmath::SquareMatrix;
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
 
 const IMAGE_SIZE: u32 = 128;
 
-type Uniform = cgmath::Matrix4<f32>;
-type Uniforms = [Uniform; 2];
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+struct Vertex {
+    pos: [f32; 3],
+    normal: [f32; 3],
+}
 
-fn raw_uniforms(uniforms: &Uniforms) -> [f32; 16 * 2] {
-    let mut raw = [0f32; 16 * 2];
-    raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&uniforms[0])[..]);
-    raw[16..].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&uniforms[1])[..]);
-    raw
+struct Entity {
+    vertex_count: u32,
+    vertex_buf: wgpu::Buffer,
+}
+
+// Note: we use the Y=up coordinate space in this example.
+struct Camera {
+    screen_size: (u32, u32),
+    angle_y: f32,
+    angle_xz: f32,
+    dist: f32,
+}
+
+const MODEL_CENTER_Y: f32 = 2.0;
+
+impl Camera {
+    fn to_uniform_data(&self) -> [f32; 16 * 3 + 4] {
+        let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
+        let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect, 1.0, 50.0);
+        let cam_pos = cgmath::Point3::new(
+            self.angle_xz.cos() * self.angle_y.sin() * self.dist,
+            self.angle_xz.sin() * self.dist + MODEL_CENTER_Y,
+            self.angle_xz.cos() * self.angle_y.cos() * self.dist,
+        );
+        let mx_view = cgmath::Matrix4::look_at_rh(
+            cam_pos,
+            cgmath::Point3::new(0f32, MODEL_CENTER_Y, 0.0),
+            cgmath::Vector3::unit_y(),
+        );
+        let proj = framework::OPENGL_TO_WGPU_MATRIX * mx_projection;
+        let proj_inv = proj.invert().unwrap();
+        let view = framework::OPENGL_TO_WGPU_MATRIX * mx_view;
+
+        let mut raw = [0f32; 16 * 3 + 4];
+        raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj)[..]);
+        raw[16..32].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj_inv)[..]);
+        raw[32..48].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&view)[..]);
+        raw[48..51].copy_from_slice(AsRef::<[f32; 3]>::as_ref(&cam_pos));
+        raw[51] = 1.0;
+        raw
+    }
 }
 
 pub struct Skybox {
-    aspect: f32,
-    pipeline: wgpu::RenderPipeline,
+    camera: Camera,
+    sky_pipeline: wgpu::RenderPipeline,
+    entity_pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     uniform_buf: wgpu::Buffer,
-    uniforms: Uniforms,
+    entities: Vec<Entity>,
+    depth_view: wgpu::TextureView,
     staging_belt: wgpu::util::StagingBelt,
 }
 
-impl Skybox {
-    fn generate_uniforms(aspect_ratio: f32) -> Uniforms {
-        use cgmath::SquareMatrix;
-
-        let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 10.0);
-        let mx_view = cgmath::Matrix4::look_at_rh(
-            cgmath::Point3::new(1.5f32, -5.0, 3.0),
-            cgmath::Point3::new(0f32, 0.0, 0.0),
-            cgmath::Vector3::unit_z(),
-        );
-        let mx_correction = framework::OPENGL_TO_WGPU_MATRIX;
-        let proj_inv = (mx_correction * mx_projection).invert().unwrap();
-        [proj_inv, mx_correction * mx_view]
-    }
-}
+const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
 
 impl framework::Example for Skybox {
     fn optional_features() -> wgpu::Features {
@@ -54,6 +84,39 @@ impl framework::Example for Skybox {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
+        let mut entities = Vec::new();
+        {
+            let source = include_bytes!("models/teslacyberv3.0.obj");
+            let data = obj::ObjData::load_buf(&source[..]).unwrap();
+            let mut vertices = Vec::new();
+            for object in data.objects {
+                for group in object.groups {
+                    vertices.clear();
+                    for poly in group.polys {
+                        for end_index in 2..poly.0.len() {
+                            for &index in &[0, end_index - 1, end_index] {
+                                let obj::IndexTuple(position_id, _texture_id, normal_id) =
+                                    poly.0[index];
+                                vertices.push(Vertex {
+                                    pos: data.position[position_id],
+                                    normal: data.normal[normal_id.unwrap()],
+                                })
+                            }
+                        }
+                    }
+                    let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Vertex"),
+                        contents: bytemuck::cast_slice(&vertices),
+                        usage: wgpu::BufferUsage::VERTEX,
+                    });
+                    entities.push(Entity {
+                        vertex_count: vertices.len() as u32,
+                        vertex_buf,
+                    });
+                }
+            }
+        }
+
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
@@ -103,11 +166,16 @@ impl framework::Example for Skybox {
             flags,
         });
 
-        let aspect = sc_desc.width as f32 / sc_desc.height as f32;
-        let uniforms = Self::generate_uniforms(aspect);
+        let camera = Camera {
+            screen_size: (sc_desc.width, sc_desc.height),
+            angle_xz: 0.2,
+            angle_y: 0.2,
+            dist: 30.0,
+        };
+        let raw_uniforms = camera.to_uniform_data();
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Buffer"),
-            contents: bytemuck::cast_slice(&raw_uniforms(&uniforms)),
+            contents: bytemuck::cast_slice(&raw_uniforms),
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         });
 
@@ -117,25 +185,63 @@ impl framework::Example for Skybox {
             push_constant_ranges: &[],
         });
 
-        // Create the render pipeline
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
+        // Create the render pipelines
+        let sky_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Sky"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: "vs_sky",
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: "fs_sky",
                 targets: &[sc_desc.format.into()],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Cw,
                 ..Default::default()
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+                clamp_depth: false,
+            }),
+            multisample: wgpu::MultisampleState::default(),
+        });
+        let entity_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Entity"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_entity",
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                    step_mode: wgpu::InputStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![0 => Float3, 1 => Float3],
+                }],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_entity",
+                targets: &[sc_desc.format.into()],
+            }),
+            primitive: wgpu::PrimitiveState {
+                front_face: wgpu::FrontFace::Cw,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+                clamp_depth: false,
+            }),
             multisample: wgpu::MultisampleState::default(),
         });
 
@@ -228,31 +334,51 @@ impl framework::Example for Skybox {
             label: None,
         });
 
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: sc_desc.width,
+                height: sc_desc.height,
+                depth: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEPTH_FORMAT,
+            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+            label: None,
+        });
+
         Skybox {
-            pipeline,
+            camera,
+            sky_pipeline,
+            entity_pipeline,
             bind_group,
             uniform_buf,
-            aspect,
-            uniforms,
+            entities,
+            depth_view: depth_texture.create_view(&wgpu::TextureViewDescriptor::default()),
             staging_belt: wgpu::util::StagingBelt::new(0x100),
         }
     }
 
-    fn update(&mut self, _event: winit::event::WindowEvent) {
-        //empty
+    fn update(&mut self, event: winit::event::WindowEvent) {
+        match event {
+            winit::event::WindowEvent::CursorMoved { position, .. } => {
+                let norm_x = position.x as f32 / self.camera.screen_size.0 as f32 - 0.5;
+                let norm_y = position.y as f32 / self.camera.screen_size.1 as f32 - 0.5;
+                self.camera.angle_y = norm_x * 5.0;
+                self.camera.angle_xz = norm_y;
+            }
+            _ => {}
+        }
     }
 
     fn resize(
         &mut self,
         sc_desc: &wgpu::SwapChainDescriptor,
         _device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        _queue: &wgpu::Queue,
     ) {
-        self.aspect = sc_desc.width as f32 / sc_desc.height as f32;
-        let uniforms = Skybox::generate_uniforms(self.aspect);
-        let mx_total = uniforms[0] * uniforms[1];
-        let mx_ref: &[f32; 16] = mx_total.as_ref();
-        queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref));
+        self.camera.screen_size = (sc_desc.width, sc_desc.height);
     }
 
     fn render(
@@ -266,9 +392,7 @@ impl framework::Example for Skybox {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         // update rotation
-        let rotation = cgmath::Matrix4::<f32>::from_angle_x(cgmath::Deg(0.25));
-        self.uniforms[1] = self.uniforms[1] * rotation;
-        let raw_uniforms = raw_uniforms(&self.uniforms);
+        let raw_uniforms = self.camera.to_uniform_data();
         self.staging_belt
             .write_buffer(
                 &mut encoder,
@@ -297,11 +421,25 @@ impl framework::Example for Skybox {
                         store: true,
                     },
                 }],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                    attachment: &self.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: false,
+                    }),
+                    stencil_ops: None,
+                }),
             });
 
-            rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.set_pipeline(&self.entity_pipeline);
+
+            for entity in self.entities.iter() {
+                rpass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
+                rpass.draw(0..entity.vertex_count, 0..1);
+            }
+
+            rpass.set_pipeline(&self.sky_pipeline);
             rpass.draw(0..3 as u32, 0..1);
         }
 
