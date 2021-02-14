@@ -1801,13 +1801,8 @@ impl Writer {
                 let reject_id =
                     self.write_expression(ir_module, ir_function, reject, block, function)?;
 
-                let instruction = Instruction::select(
-                    result_type_id,
-                    id,
-                    condition_id,
-                    accept_id,
-                    reject_id,
-                );
+                let instruction =
+                    Instruction::select(result_type_id, id, condition_id, accept_id, reject_id);
                 block.body.push(instruction);
                 RawExpression::Value(id)
             }

@@ -40,7 +40,7 @@ pub enum Error {
     InvalidBinding(spirv::Word),
     InvalidGlobalVar(crate::Expression),
     InvalidImageBaseType(Handle<crate::Type>),
-    InvalidSampleImage(Handle<crate::Type>),
+    InvalidImage(Handle<crate::Type>),
     InvalidDepthReference(Handle<crate::Type>),
     InvalidAsType(Handle<crate::Type>),
     InvalidVectorType(Handle<crate::Type>),

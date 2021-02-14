@@ -1100,9 +1100,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(5)?;
                     self.parse_image_couple()?;
                 }
-                Op::ImageFetch => {
+                Op::ImageWrite => {
+                    let extra = inst.expect_at_least(4)?;
+                    let stmt =
+                        self.parse_image_write(extra, type_arena, global_arena, expressions)?;
+                    block.push(stmt);
+                }
+                Op::ImageFetch | Op::ImageRead => {
                     let extra = inst.expect_at_least(5)?;
-                    self.parse_image_fetch(extra, type_arena, global_arena, expressions)?;
+                    self.parse_image_load(extra, type_arena, global_arena, expressions)?;
                 }
                 Op::ImageSampleImplicitLod
                 | Op::ImageSampleExplicitLod

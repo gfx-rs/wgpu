@@ -182,7 +182,59 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         Ok(())
     }
 
-    pub(super) fn parse_image_fetch(
+    pub(super) fn parse_image_write(
+        &mut self,
+        words_left: u16,
+        type_arena: &Arena<crate::Type>,
+        global_arena: &Arena<crate::GlobalVariable>,
+        expressions: &mut Arena<crate::Expression>,
+    ) -> Result<crate::Statement, Error> {
+        let image_id = self.next()?;
+        let coordinate_id = self.next()?;
+        let value_id = self.next()?;
+
+        if words_left != 0 {
+            let image_ops = self.next()?;
+            let other = spirv::ImageOperands::from_bits_truncate(image_ops);
+            log::warn!("Skipping {:?}", other);
+            for _ in 1..words_left {
+                self.next()?;
+            }
+        }
+
+        let image_lexp = self.lookup_expression.lookup(image_id)?;
+        let image_var_handle = expressions[image_lexp.handle].as_global_var()?;
+        let image_var = &global_arena[image_var_handle];
+
+        let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
+        let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
+        let (coordinate, array_index) = match type_arena[image_var.ty].inner {
+            crate::TypeInner::Image {
+                dim,
+                arrayed,
+                class: _,
+            } => extract_image_coordinates(
+                dim,
+                arrayed,
+                coord_lexp.handle,
+                coord_type_handle,
+                type_arena,
+                expressions,
+            ),
+            _ => return Err(Error::InvalidImage(image_var.ty)),
+        };
+
+        let value_lexp = self.lookup_expression.lookup(value_id)?;
+
+        Ok(crate::Statement::ImageStore {
+            image: image_lexp.handle,
+            coordinate,
+            array_index,
+            value: value_lexp.handle,
+        })
+    }
+
+    pub(super) fn parse_image_load(
         &mut self,
         mut words_left: u16,
         type_arena: &Arena<crate::Type>,
@@ -240,7 +292,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 type_arena,
                 expressions,
             ),
-            _ => return Err(Error::InvalidSampleImage(image_var.ty)),
+            _ => return Err(Error::InvalidImage(image_var.ty)),
         };
 
         let expr = crate::Expression::ImageLoad {
@@ -328,7 +380,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 type_arena,
                 expressions,
             ),
-            _ => return Err(Error::InvalidSampleImage(image_var.ty)),
+            _ => return Err(Error::InvalidImage(image_var.ty)),
         };
 
         let expr = crate::Expression::ImageSample {
@@ -429,7 +481,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 type_arena,
                 expressions,
             ),
-            _ => return Err(Error::InvalidSampleImage(image_var.ty)),
+            _ => return Err(Error::InvalidImage(image_var.ty)),
         };
 
         let expr = crate::Expression::ImageSample {
