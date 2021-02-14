@@ -1654,6 +1654,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::MemoryModel => self.parse_memory_model(inst),
                 Op::EntryPoint => self.parse_entry_point(inst),
                 Op::ExecutionMode => self.parse_execution_mode(inst),
+                Op::String => self.parse_string(inst),
                 Op::Source => self.parse_source(inst),
                 Op::SourceExtension => self.parse_source_extension(inst),
                 Op::Name => self.parse_name(inst),
@@ -1837,6 +1838,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         }
 
+        Ok(())
+    }
+
+    fn parse_string(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Source, inst.op)?;
+        inst.expect_at_least(3)?;
+        let (_name, _) = self.next_string(inst.wc - 1)?;
         Ok(())
     }
 
