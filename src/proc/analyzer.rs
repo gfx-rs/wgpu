@@ -12,11 +12,32 @@ use std::ops;
 bitflags::bitflags! {
     #[derive(Default)]
     pub struct ControlFlags: u8 {
-        /// The result is not dynamically uniform.
+        /// The result (of an expression) is not dynamically uniform.
+        ///
+        /// This means, when the relevant invocations are scheduled on a compute unit,
+        /// they have to use vector registers to store an individual value
+        /// per invocation.
+        ///
+        /// Whenever the control flow is conditioned on such value,
+        /// the hardware needs to keep track of the mask of invocations,
+        /// and process all branches of the control flow.
+        ///
+        /// Any operations that depend on non-uniform results also produce non-uniform.
         const NON_UNIFORM_RESULT = 0x1;
         /// Uniform control flow is required by the code.
+        ///
+        /// Some operations can only be done within uniform control flow:
+        /// derivatives and auto-level image sampling in fragment shaders,
+        /// and group barriers in compute shaders.
+        ///
+        /// This flag bubbles up from child expressions to parents.
         const REQUIRE_UNIFORM = 0x2;
         /// The code may exit the control flow.
+        ///
+        /// `Kill` and `Return` operations have an effect on all the other
+        /// expressions/statements that are evaluated after them. They act as
+        /// pervasive control flow branching. Thus, even after the remaining
+        /// merge together, we are blocked from considering the merged flow uniform.
         const MAY_EXIT = 0x4;
     }
 }
@@ -64,6 +85,9 @@ impl FunctionInfo {
         info.control_flags
     }
 
+    /// Computes the control flags of a given expression, and store them
+    /// in `self.expressions`. Also, bumps the reference counts on
+    /// dependent expressions.
     fn process_expression(
         &mut self,
         handle: Handle<crate::Expression>,
@@ -89,7 +113,9 @@ impl FunctionInfo {
                 let var = &global_var_arena[handle];
                 let uniform = if let Some(crate::Binding::BuiltIn(built_in)) = var.binding {
                     match built_in {
+                        // per-polygon built-ins are uniform
                         crate::BuiltIn::FrontFacing
+                        // per-work-group built-ins are uniform
                         | crate::BuiltIn::WorkGroupId
                         | crate::BuiltIn::WorkGroupSize => true,
                         _ => false,
@@ -97,10 +123,15 @@ impl FunctionInfo {
                 } else {
                     use crate::StorageClass as Sc;
                     match var.class {
+                        // only flat inputs are uniform
                         Sc::Input => var.interpolation == Some(crate::Interpolation::Flat),
                         Sc::Output | Sc::Function | Sc::Private | Sc::WorkGroup => false,
-                        Sc::Uniform | Sc::Handle | Sc::PushConstant => true,
-                        Sc::Storage => !var.storage_access.contains(crate::StorageAccess::STORE),
+                        // uniform data
+                        Sc::Uniform | Sc::PushConstant => true,
+                        // storage data is only uniform when read-only
+                        Sc::Handle | Sc::Storage => {
+                            !var.storage_access.contains(crate::StorageAccess::STORE)
+                        }
                     }
                 };
                 if uniform {
@@ -141,6 +172,7 @@ impl FunctionInfo {
                     None => ControlFlags::empty(),
                 };
                 let level_flags = match level {
+                    // implicit derivatives for LOD require uniform
                     Sl::Auto => ControlFlags::REQUIRE_UNIFORM,
                     Sl::Zero => ControlFlags::empty(),
                     Sl::Exact(h) | Sl::Bias(h) => self.add_ref(h),
@@ -187,6 +219,7 @@ impl FunctionInfo {
                 accept,
                 reject,
             } => self.add_ref(condition) | self.add_ref(accept) | self.add_ref(reject),
+            // explicit derivatives require uniform
             E::Derivative { expr, .. } => ControlFlags::REQUIRE_UNIFORM | self.add_ref(expr),
             E::Relational { argument, .. } => self.add_ref(argument),
             E::Math {
@@ -227,6 +260,11 @@ impl FunctionInfo {
         Ok(())
     }
 
+    /// Computes the control flags on the block (as a sequence of statements),
+    /// and returns them. The parent control flow is uniform if `is_uniform` is true.
+    ///
+    /// Returns a `NonUniformControlFlow` error if any of the expressions in the block
+    /// have `ControlFlags::REQUIRE_UNIFORM` flag, but the current flow is non-uniform.
     fn process_block(
         &mut self,
         statements: &[crate::Statement],
@@ -326,6 +364,8 @@ pub struct Analysis {
 }
 
 impl Analysis {
+    /// Builds the `FunctionInfo` based on the function, and validates the
+    /// uniform control flow if required by the expressions of this function.
     fn process_function(
         &self,
         fun: &crate::Function,
@@ -346,6 +386,7 @@ impl Analysis {
         Ok(info)
     }
 
+    /// Analyze a module and return the `Analysis`, if successful.
     pub fn new(module: &crate::Module) -> Result<Self, AnalysisError> {
         let mut this = Analysis {
             functions: Vec::with_capacity(module.functions.len()),
