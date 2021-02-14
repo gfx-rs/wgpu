@@ -149,7 +149,6 @@ fn main() {
     };
 
     // validate the IR
-    #[cfg_attr(not(feature = "msl-out"), allow(unused_variables))]
     let analysis = naga::proc::Validator::new()
         .validate(&module)
         .unwrap_pretty();
@@ -258,7 +257,7 @@ fn main() {
                 .open(&args[2])
                 .unwrap();
 
-            let mut writer = glsl::Writer::new(file, &module, &options).unwrap_pretty();
+            let mut writer = glsl::Writer::new(file, &module, &analysis, &options).unwrap_pretty();
 
             writer
                 .write()

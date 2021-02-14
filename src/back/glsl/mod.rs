@@ -45,8 +45,8 @@ pub use features::Features;
 
 use crate::{
     proc::{
-        CallGraph, CallGraphBuilder, Interface, NameKey, Namer, ResolveContext, ResolveError,
-        Typifier, Visitor,
+        analyzer::Analysis, CallGraph, CallGraphBuilder, NameKey, Namer, ResolveContext,
+        ResolveError, Typifier,
     },
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant,
     ConstantInner, DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle,
@@ -258,6 +258,8 @@ pub struct Writer<'a, W> {
     // Inputs
     /// The module being written
     module: &'a Module,
+    /// The module analysis.
+    analysis: &'a Analysis,
     /// The output writer
     out: W,
     /// User defined configuration to be used
@@ -286,7 +288,12 @@ impl<'a, W: Write> Writer<'a, W> {
     /// - If the version specified isn't supported (or invalid)
     /// - If the entry point couldn't be found on the module
     /// - If the version specified doesn't support some used features
-    pub fn new(out: W, module: &'a Module, options: &'a Options) -> Result<Self, Error> {
+    pub fn new(
+        out: W,
+        module: &'a Module,
+        analysis: &'a Analysis,
+        options: &'a Options,
+    ) -> Result<Self, Error> {
         // Check if the requested version is supported
         if !options.version.is_supported() {
             log::error!("Version {}", options.version);
@@ -316,6 +323,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // Build the instance
         let mut this = Self {
             module,
+            analysis,
             out,
             options,
 
@@ -495,14 +503,7 @@ impl<'a, W: Write> Writer<'a, W> {
         )?;
 
         // Collect all of the texture mappings and return them to the user
-        self.collect_texture_mapping(
-            // Create an iterator with all functions in the call graph and the entry point
-            self.call_graph
-                .raw_nodes()
-                .iter()
-                .map(|node| &self.module.functions[node.weight])
-                .chain(std::iter::once(&self.entry_point.function)),
-        )
+        self.collect_texture_mapping()
     }
 
     /// Helper method used to write non image/sampler types
@@ -1748,29 +1749,51 @@ impl<'a, W: Write> Writer<'a, W> {
     /// It takes an iterator of [`Function`](crate::Function) references instead of
     /// [`Handle`](crate::arena::Handle) because [`EntryPoint`](crate::EntryPoint) isn't in any
     /// [`Arena`](crate::arena::Arena) and we need to traverse it
-    fn collect_texture_mapping(
-        &self,
-        functions: impl Iterator<Item = &'a Function>,
-    ) -> Result<FastHashMap<String, TextureMapping>, Error> {
+    fn collect_texture_mapping(&self) -> Result<FastHashMap<String, TextureMapping>, Error> {
+        use std::collections::hash_map::Entry;
+        let info = self
+            .analysis
+            .get_entry_point(self.options.entry_point.0, &self.options.entry_point.1);
         let mut mappings = FastHashMap::default();
 
-        // Traverse each function in the `functions` iterator with `TextureMappingVisitor`
-        for func in functions {
-            let mut interface = Interface {
-                expressions: &func.expressions,
-                local_variables: &func.local_variables,
-                visitor: TextureMappingVisitor {
-                    names: &self.names,
-                    expressions: &func.expressions,
-                    map: &mut mappings,
-                    error: None,
-                },
-            };
-            interface.traverse(&func.body);
+        for sampling in info.sampling_set.iter() {
+            let tex_name = self.names[&NameKey::GlobalVariable(sampling.image)].clone();
 
-            // Check if any error occurred
-            if let Some(error) = interface.visitor.error {
-                return Err(error);
+            match mappings.entry(tex_name) {
+                Entry::Vacant(v) => {
+                    v.insert(TextureMapping {
+                        texture: sampling.image,
+                        sampler: Some(sampling.sampler),
+                    });
+                }
+                Entry::Occupied(e) => {
+                    if e.get().sampler != Some(sampling.sampler) {
+                        log::error!("Conflicting samplers for {}", e.key());
+                        return Err(Error::ImageMultipleSamplers);
+                    }
+                }
+            }
+        }
+
+        for ((handle, var), &usage) in self
+            .module
+            .global_variables
+            .iter()
+            .zip(&self.entry_point.function.global_usage)
+        {
+            if usage.is_empty() {
+                continue;
+            }
+            match self.module.types[var.ty].inner {
+                crate::TypeInner::Image { .. } => (),
+                _ => continue,
+            }
+            let tex_name = self.names[&NameKey::GlobalVariable(handle)].clone();
+            if let Entry::Vacant(e) = mappings.entry(tex_name) {
+                e.insert(TextureMapping {
+                    texture: handle,
+                    sampler: None,
+                });
             }
         }
 
@@ -1924,69 +1947,5 @@ fn glsl_storage_format(format: StorageFormat) -> &'static str {
         StorageFormat::Rgba32Uint => "rgba32ui",
         StorageFormat::Rgba32Sint => "rgba32i",
         StorageFormat::Rgba32Float => "rgba32f",
-    }
-}
-
-/// [`Visitor`](crate::proc::Visitor) used by [`collect_texture_mapping`](Writer::collect_texture_mapping)
-struct TextureMappingVisitor<'a> {
-    /// Names needed by the module (used to get the image name)
-    names: &'a FastHashMap<NameKey, String>,
-    /// [`Arena`](crate::arena::Arena) of expressions of the function being currently visited
-    expressions: &'a Arena<Expression>,
-    /// The mapping that we are building
-    map: &'a mut FastHashMap<String, TextureMapping>,
-    /// Used to return errors since [`visit_expr`](crate::proc::Visitor::visit_expr) doesn't allow
-    /// us to return anything
-    error: Option<Error>,
-}
-
-impl<'a> Visitor for TextureMappingVisitor<'a> {
-    fn visit_expr(&mut self, _: Handle<Expression>, expr: &Expression) {
-        // We only care about `ImageSample` and `ImageLoad`
-        //
-        // Both `image` and `sampler` are `Expression::GlobalVariable` otherwise the module is
-        // invalid so it's okay to panic
-        //
-        // A image can only be used with one sampler or with none at all
-        match expr {
-            Expression::ImageSample { image, sampler, .. } => {
-                let tex_handle = match self.expressions[*image] {
-                    Expression::GlobalVariable(global) => global,
-                    _ => unreachable!(),
-                };
-                let tex_name = self.names[&NameKey::GlobalVariable(tex_handle)].clone();
-
-                let sampler_handle = match self.expressions[*sampler] {
-                    Expression::GlobalVariable(global) => global,
-                    _ => unreachable!(),
-                };
-
-                let mapping = self.map.entry(tex_name).or_insert(TextureMapping {
-                    texture: tex_handle,
-                    sampler: Some(sampler_handle),
-                });
-
-                if mapping.sampler != Some(sampler_handle) {
-                    self.error = Some(Error::ImageMultipleSamplers);
-                }
-            }
-            Expression::ImageLoad { image, .. } => {
-                let tex_handle = match self.expressions[*image] {
-                    Expression::GlobalVariable(global) => global,
-                    _ => unreachable!(),
-                };
-                let tex_name = self.names[&NameKey::GlobalVariable(tex_handle)].clone();
-
-                let mapping = self.map.entry(tex_name).or_insert(TextureMapping {
-                    texture: tex_handle,
-                    sampler: None,
-                });
-
-                if mapping.sampler != None {
-                    self.error = Some(Error::ImageMultipleSamplers);
-                }
-            }
-            _ => {}
-        }
     }
 }

@@ -120,7 +120,13 @@ fn check_output_msl(
 }
 
 #[cfg(feature = "glsl-out")]
-fn check_output_glsl(module: &naga::Module, name: &str, stage: naga::ShaderStage, ep_name: &str) {
+fn check_output_glsl(
+    module: &naga::Module,
+    analysis: &naga::proc::analyzer::Analysis,
+    name: &str,
+    stage: naga::ShaderStage,
+    ep_name: &str,
+) {
     use naga::back::glsl;
 
     let options = glsl::Options {
@@ -129,7 +135,7 @@ fn check_output_glsl(module: &naga::Module, name: &str, stage: naga::ShaderStage
     };
 
     let mut buffer = Vec::new();
-    let mut writer = glsl::Writer::new(&mut buffer, &module, &options).unwrap();
+    let mut writer = glsl::Writer::new(&mut buffer, module, analysis, &options).unwrap();
     writer.write().unwrap();
 
     let string = String::from_utf8(buffer).unwrap();
@@ -151,7 +157,6 @@ fn convert_wgsl(name: &str, language: Language) {
             .expect("Couldn't find wgsl file"),
     )
     .unwrap();
-    #[cfg_attr(not(feature = "msl-out"), allow(unused_variables))]
     let analysis = naga::proc::Validator::new().validate(&module).unwrap();
 
     #[cfg(feature = "spv-out")]
@@ -170,7 +175,7 @@ fn convert_wgsl(name: &str, language: Language) {
     {
         if language.contains(Language::GLSL) {
             for &(stage, ref ep_name) in module.entry_points.keys() {
-                check_output_glsl(&module, name, stage, ep_name);
+                check_output_glsl(&module, &analysis, name, stage, ep_name);
             }
         }
     }
