@@ -226,7 +226,7 @@ fn convert_spv(name: &str) {
 
     #[cfg(feature = "serialize")]
     {
-        let config = ron::ser::PrettyConfig::default();
+        let config = ron::ser::PrettyConfig::default().with_new_line("\n".to_string());
         let output = ron::ser::to_string_pretty(&module, config).unwrap();
         with_snapshot_settings(|| {
             insta::assert_snapshot!(format!("{}.ron", name), output);
