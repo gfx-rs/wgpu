@@ -1,5 +1,6 @@
 (
 	spv_flow_dump_prefix: "",
+	spv_version: (1, 5),
 	spv_capabilities: [ Shader ],
 	mtl_bindings: {
 		(stage: Fragment, group: 0, binding: 0): (texture: Some(0)),

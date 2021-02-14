@@ -1,5 +1,6 @@
 (
 	spv_flow_dump_prefix: "",
+	spv_version: (1, 0),
 	spv_capabilities: [ Shader ],
 	mtl_bindings: {
 		(stage: Vertex, group: 0, binding: 0): (buffer: Some(0)),

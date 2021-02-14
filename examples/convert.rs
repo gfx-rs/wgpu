@@ -36,6 +36,8 @@ struct Parameters {
     #[cfg_attr(not(feature = "spv-in"), allow(dead_code))]
     spv_flow_dump_prefix: String,
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+    spv_version: (u8, u8),
+    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_capabilities: naga::FastHashSet<spirv::Capability>,
     #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     mtl_bindings: naga::FastHashMap<BindSource, BindTarget>,
@@ -142,7 +144,7 @@ fn main() {
                 // prevent "unreachable_code" warnings
                 panic!("Unknown input extension: {}", other);
             }
-            naga::Module::generate_empty()
+            naga::Module::default()
         }
     };
 
@@ -198,15 +200,19 @@ fn main() {
         "spv" => {
             use naga::back::spv;
 
-            let debug_flag = args.get(3).map_or(spv::WriterFlags::DEBUG, |arg| {
-                if arg.parse().unwrap() {
-                    spv::WriterFlags::DEBUG
-                } else {
-                    spv::WriterFlags::NONE
-                }
-            });
+            let options = spv::Options {
+                lang_version: params.spv_version,
+                flags: args.get(3).map_or(spv::WriterFlags::DEBUG, |arg| {
+                    if arg.parse().unwrap() {
+                        spv::WriterFlags::DEBUG
+                    } else {
+                        spv::WriterFlags::empty()
+                    }
+                }),
+                capabilities: params.spv_capabilities,
+            };
 
-            let spv = spv::write_vec(&module, debug_flag, params.spv_capabilities).unwrap_pretty();
+            let spv = spv::write_vec(&module, &options).unwrap_pretty();
 
             let bytes = spv
                 .iter()

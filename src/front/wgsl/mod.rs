@@ -2189,7 +2189,7 @@ impl Parser {
         self.scopes.clear();
         self.lookup_type.clear();
 
-        let mut module = crate::Module::generate_empty();
+        let mut module = crate::Module::default();
         let mut lexer = Lexer::new(source);
         let mut lookup_global_expression = FastHashMap::default();
         loop {

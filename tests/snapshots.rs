@@ -42,6 +42,8 @@ struct Parameters {
     #[allow(dead_code)]
     spv_flow_dump_prefix: String,
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+    spv_version: (u8, u8),
+    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_capabilities: naga::FastHashSet<spirv::Capability>,
     #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     mtl_bindings: naga::FastHashMap<BindSource, BindTarget>,
@@ -59,12 +61,13 @@ fn check_output_spv(module: &naga::Module, name: &str, params: &Parameters) {
     use naga::back::spv;
     use rspirv::binary::Disassemble;
 
-    let spv = spv::write_vec(
-        &module,
-        spv::WriterFlags::DEBUG,
-        params.spv_capabilities.clone(),
-    )
-    .unwrap();
+    let options = spv::Options {
+        lang_version: params.spv_version,
+        flags: spv::WriterFlags::DEBUG,
+        capabilities: params.spv_capabilities.clone(),
+    };
+
+    let spv = spv::write_vec(&module, &options).unwrap();
 
     let dis = rspirv::dr::load_words(spv)
         .expect("Produced invalid SPIR-V")

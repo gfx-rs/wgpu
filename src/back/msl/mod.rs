@@ -101,7 +101,7 @@ enum LocationMode {
     Uniform,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Options {
     /// (Major, Minor) target version of the Metal Shading Language.
     pub lang_version: (u8, u8),
@@ -109,6 +109,16 @@ pub struct Options {
     pub spirv_cross_compatibility: bool,
     /// Binding model mapping to Metal.
     pub binding_map: BindingMap,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            lang_version: (1, 0),
+            spirv_cross_compatibility: false,
+            binding_map: BindingMap::default(),
+        }
+    }
 }
 
 impl Options {

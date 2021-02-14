@@ -40,7 +40,7 @@ impl Program {
                 lookup_constant_exps: FastHashMap::default(),
                 typifier: Typifier::new(),
             },
-            module: Module::generate_empty(),
+            module: Module::default(),
         }
     }
 

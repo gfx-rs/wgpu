@@ -1,5 +1,5 @@
 /*! Standard Portable Intermediate Representation (SPIR-V) backend !*/
-use super::{Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
+use super::{Instruction, LogicalLayout, Options, PhysicalLayout, WriterFlags};
 use crate::{
     arena::{Arena, Handle},
     proc::{Layouter, ResolveContext, ResolveError, Typifier},
@@ -12,6 +12,8 @@ const BITS_PER_BYTE: crate::Bytes = 8;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
+    #[error("target SPIRV-{0}.{1} is not supported")]
+    UnsupportedVersion(u8, u8),
     #[error("one of the required capabilities {0:?} is missing")]
     MissingCapabilities(Vec<spirv::Capability>),
     #[error("unimplemented {0:}")]
@@ -204,21 +206,22 @@ type ExpressionId = Word;
 type PointerExpressionId = (Word, spirv::StorageClass);
 
 impl Writer {
-    pub fn new(
-        header: &crate::Header,
-        flags: WriterFlags,
-        capabilities: crate::FastHashSet<spirv::Capability>,
-    ) -> Self {
+    pub fn new(options: &Options) -> Result<Self, Error> {
+        let (major, minor) = options.lang_version;
+        if major != 1 {
+            return Err(Error::UnsupportedVersion(major, minor));
+        }
+        let raw_version = ((major as u32) << 16) | ((minor as u32) << 8);
         let gl450_ext_inst_id = 1;
         let void_type = 2;
-        Writer {
-            physical_layout: PhysicalLayout::new(header),
+        Ok(Writer {
+            physical_layout: PhysicalLayout::new(raw_version),
             logical_layout: LogicalLayout::default(),
             id_count: 2, // see `gl450_ext_inst_id` and `void_type`
-            capabilities,
+            capabilities: options.capabilities.clone(),
             debugs: vec![],
             annotations: vec![],
-            flags,
+            flags: options.flags,
             void_type,
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
@@ -229,7 +232,7 @@ impl Writer {
             gl450_ext_inst_id,
             layouter: Layouter::default(),
             typifier: Typifier::new(),
-        }
+        })
     }
 
     fn generate_id(&mut self) -> Word {
@@ -2187,35 +2190,18 @@ impl Writer {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::{
-        back::spv::{Writer, WriterFlags},
-        Header,
-    };
+#[test]
+fn test_writer_generate_id() {
+    let mut writer = Writer::new(&Options::default()).unwrap();
+    assert_eq!(writer.id_count, 2);
+    writer.generate_id();
+    assert_eq!(writer.id_count, 3);
+}
 
-    #[test]
-    fn test_writer_generate_id() {
-        let mut writer = create_writer();
-
-        assert_eq!(writer.id_count, 2);
-        writer.generate_id();
-        assert_eq!(writer.id_count, 3);
-    }
-
-    #[test]
-    fn test_write_physical_layout() {
-        let mut writer = create_writer();
-        assert_eq!(writer.physical_layout.bound, 0);
-        writer.write_physical_layout();
-        assert_eq!(writer.physical_layout.bound, 3);
-    }
-
-    fn create_writer() -> Writer {
-        let header = Header {
-            generator: 0,
-            version: (1, 0, 0),
-        };
-        Writer::new(&header, WriterFlags::NONE, Default::default())
-    }
+#[test]
+fn test_write_physical_layout() {
+    let mut writer = Writer::new(&Options::default()).unwrap();
+    assert_eq!(writer.physical_layout.bound, 0);
+    writer.write_physical_layout();
+    assert_eq!(writer.physical_layout.bound, 3);
 }

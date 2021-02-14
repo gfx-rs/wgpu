@@ -3,7 +3,7 @@ source: tests/snapshots.rs
 expression: dis
 ---
 ; SPIR-V
-; Version: 1.0
+; Version: 1.2
 ; Generator: rspirv
 ; Bound: 221
 OpCapability Shader

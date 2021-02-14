@@ -3,10 +3,6 @@ source: tests/snapshots.rs
 expression: output
 ---
 (
-    header: (
-        version: (1, 0, 0),
-        generator: 0,
-    ),
     types: [
         (
             name: None,

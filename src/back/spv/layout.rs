@@ -1,17 +1,16 @@
 use super::{Instruction, LogicalLayout, PhysicalLayout};
-use spirv::*;
+use spirv::{Op, Word, MAGIC_NUMBER};
 use std::iter;
 
-impl PhysicalLayout {
-    pub(super) fn new(header: &crate::Header) -> Self {
-        let version: Word = ((header.version.0 as u32) << 16)
-            | ((header.version.1 as u32) << 8)
-            | header.version.2 as u32;
+// https://github.com/KhronosGroup/SPIRV-Headers/pull/195
+const GENERATOR: Word = 28;
 
+impl PhysicalLayout {
+    pub(super) fn new(version: Word) -> Self {
         PhysicalLayout {
             magic_number: MAGIC_NUMBER,
             version,
-            generator: header.generator,
+            generator: GENERATOR,
             bound: 0,
             instruction_schema: 0x0u32,
         }
@@ -87,5 +86,101 @@ impl Instruction {
         sink.extend(self.type_id);
         sink.extend(self.result_id);
         sink.extend(self.operands.iter().cloned());
+    }
+}
+
+impl Instruction {
+    #[cfg(test)]
+    fn validate(&self, words: &[Word]) {
+        let mut inst_index = 0;
+        let (wc, op) = ((words[inst_index] >> 16) as u16, words[inst_index] as u16);
+        inst_index += 1;
+
+        assert_eq!(wc, words.len() as u16);
+        assert_eq!(op, self.op as u16);
+
+        if self.type_id.is_some() {
+            assert_eq!(words[inst_index], self.type_id.unwrap());
+            inst_index += 1;
+        }
+
+        if self.result_id.is_some() {
+            assert_eq!(words[inst_index], self.result_id.unwrap());
+            inst_index += 1;
+        }
+
+        let mut op_index = 0;
+        for i in inst_index..wc as usize {
+            assert_eq!(words[i], self.operands[op_index]);
+            op_index += 1;
+        }
+    }
+}
+
+#[test]
+fn test_physical_layout_in_words() {
+    let bound = 5;
+    let version = 0x10203;
+
+    let mut output = vec![];
+    let mut layout = PhysicalLayout::new(version);
+    layout.bound = bound;
+
+    layout.in_words(&mut output);
+
+    assert_eq!(&output, &[MAGIC_NUMBER, version, GENERATOR, bound, 0,]);
+}
+
+#[test]
+fn test_logical_layout_in_words() {
+    let mut output = vec![];
+    let mut layout = LogicalLayout::default();
+    let layout_vectors = 11;
+    let mut instructions = Vec::with_capacity(layout_vectors);
+
+    let vector_names = &[
+        "Capabilities",
+        "Extensions",
+        "External Instruction Imports",
+        "Memory Model",
+        "Entry Points",
+        "Execution Modes",
+        "Debugs",
+        "Annotations",
+        "Declarations",
+        "Function Declarations",
+        "Function Definitions",
+    ];
+
+    for i in 0..layout_vectors {
+        let mut dummy_instruction = Instruction::new(Op::Constant);
+        dummy_instruction.set_type((i + 1) as u32);
+        dummy_instruction.set_result((i + 2) as u32);
+        dummy_instruction.add_operand((i + 3) as u32);
+        dummy_instruction.add_operands(super::helpers::string_to_words(
+            format!("This is the vector: {}", vector_names[i]).as_str(),
+        ));
+        instructions.push(dummy_instruction);
+    }
+
+    instructions[0].to_words(&mut layout.capabilities);
+    instructions[1].to_words(&mut layout.extensions);
+    instructions[2].to_words(&mut layout.ext_inst_imports);
+    instructions[3].to_words(&mut layout.memory_model);
+    instructions[4].to_words(&mut layout.entry_points);
+    instructions[5].to_words(&mut layout.execution_modes);
+    instructions[6].to_words(&mut layout.debugs);
+    instructions[7].to_words(&mut layout.annotations);
+    instructions[8].to_words(&mut layout.declarations);
+    instructions[9].to_words(&mut layout.function_declarations);
+    instructions[10].to_words(&mut layout.function_definitions);
+
+    layout.in_words(&mut output);
+
+    let mut index: usize = 0;
+    for instruction in instructions {
+        let wc = instruction.wc as usize;
+        instruction.validate(&output[index..index + wc]);
+        index += wc;
     }
 }

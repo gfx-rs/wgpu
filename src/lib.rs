@@ -42,21 +42,6 @@ pub type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>
 /// Hash set that is faster but not resilient to DoS attacks.
 pub type FastHashSet<K> = HashSet<K, BuildHasherDefault<fxhash::FxHasher>>;
 
-/// Metadata for a given module.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-pub struct Header {
-    /// Major, minor and patch version.
-    ///
-    /// Currently used only for the SPIR-V back end.
-    pub version: (u8, u8, u8),
-    /// Magic number identifying the tool that generated the shader code.
-    ///
-    /// Can safely be set to 0.
-    pub generator: u32,
-}
-
 /// Early fragment tests. In a standard situation if a driver determines that it is possible to
 /// switch on early depth test it will. Typical situations when early depth test is switched off:
 ///   - Calling ```discard``` in a shader.
@@ -880,16 +865,14 @@ pub struct EntryPoint {
 ///
 /// Some functions are marked as entry points, to be used in a certain shader stage.
 ///
-/// To create a new module, use [`Module::from_header`] or [`Module::generate_empty`].
+/// To create a new module, use the `Default` implementation.
 /// Alternatively, you can load an existing shader using one of the [available front ends][front].
 ///
 /// When finished, you can export modules using one of the [available back ends][back].
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct Module {
-    /// Header containing module metadata.
-    pub header: Header,
     /// Storage for the types defined in this module.
     pub types: Arena<Type>,
     /// Storage for the constants defined in this module.
