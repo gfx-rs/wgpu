@@ -646,6 +646,7 @@ impl<W: Write> Writer<W> {
                     Mf::SmoothStep => "smoothstep",
                     Mf::Sqrt => "sqrt",
                     Mf::InverseSqrt => "rsqrt",
+                    Mf::Inverse => return Err(Error::UnsupportedCall(format!("{:?}", fun))),
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
                     // bits

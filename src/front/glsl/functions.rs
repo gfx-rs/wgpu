@@ -83,7 +83,8 @@ impl Program {
                         }
                     }
                     "ceil" | "round" | "floor" | "fract" | "trunc" | "sin" | "abs" | "sqrt"
-                    | "exp" | "sign" => {
+                    | "inversesqrt" | "exp" | "exp2" | "sign" | "transpose" | "inverse"
+                    | "normalize" => {
                         if fc.args.len() != 1 {
                             return Err(ErrorKind::WrongNumberArgs(name, 1, fc.args.len()));
                         }
@@ -98,8 +99,13 @@ impl Program {
                                     "sin" => MathFunction::Sin,
                                     "abs" => MathFunction::Abs,
                                     "sqrt" => MathFunction::Sqrt,
+                                    "inversesqrt" => MathFunction::InverseSqrt,
                                     "exp" => MathFunction::Exp,
+                                    "exp2" => MathFunction::Exp2,
                                     "sign" => MathFunction::Sign,
+                                    "transpose" => MathFunction::Transpose,
+                                    "inverse" => MathFunction::Inverse,
+                                    "normalize" => MathFunction::Normalize,
                                     _ => unreachable!(),
                                 },
                                 arg: fc.args[0].expression,

@@ -427,6 +427,23 @@ impl Typifier {
                             })
                         }
                     },
+                    Mf::Inverse => match *self.get(arg, types) {
+                        crate::TypeInner::Matrix {
+                            columns,
+                            rows,
+                            width,
+                        } if columns == rows => Resolution::Value(crate::TypeInner::Matrix {
+                            columns,
+                            rows,
+                            width,
+                        }),
+                        ref other => {
+                            return Err(ResolveError::IncompatibleOperand {
+                                op: "inverse".to_string(),
+                                operand: format!("{:?}", other),
+                            })
+                        }
+                    },
                     Mf::Determinant => match *self.get(arg, types) {
                         crate::TypeInner::Matrix {
                             width,

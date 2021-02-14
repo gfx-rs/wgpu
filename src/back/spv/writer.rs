@@ -1505,6 +1505,7 @@ impl Writer {
                     Mf::SmoothStep => MathOp::Ext(spirv::GLOp::SmoothStep),
                     Mf::Sqrt => MathOp::Ext(spirv::GLOp::Sqrt),
                     Mf::InverseSqrt => MathOp::Ext(spirv::GLOp::InverseSqrt),
+                    Mf::Inverse => MathOp::Ext(spirv::GLOp::MatrixInverse),
                     Mf::Transpose => MathOp::Custom(Instruction::unary(
                         spirv::Op::Transpose,
                         result_type_id,

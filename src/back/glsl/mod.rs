@@ -1624,6 +1624,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::SmoothStep => "smoothstep",
                     Mf::Sqrt => "sqrt",
                     Mf::InverseSqrt => "inversesqrt",
+                    Mf::Inverse => "inverse",
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
                     // bits

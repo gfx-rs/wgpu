@@ -605,6 +605,7 @@ pub enum MathFunction {
     SmoothStep,
     Sqrt,
     InverseSqrt,
+    Inverse,
     Transpose,
     Determinant,
     // bits

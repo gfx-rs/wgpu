@@ -125,7 +125,9 @@ impl Program {
             &resolve_ctx,
         ) {
             //TODO: better error report
-            Err(_) => Err(ErrorKind::SemanticError("Can't resolve type".into())),
+            Err(error) => Err(ErrorKind::SemanticError(
+                format!("Can't resolve type: {:?}", error).into(),
+            )),
             Ok(()) => Ok(self.context.typifier.get(handle, &self.module.types)),
         }
     }
