@@ -109,7 +109,7 @@ impl Program {
 
     pub fn resolve_type(
         &mut self,
-        handle: Handle<crate::Expression>,
+        handle: Handle<Expression>,
     ) -> Result<&crate::TypeInner, ErrorKind> {
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,

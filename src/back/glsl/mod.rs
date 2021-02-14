@@ -211,7 +211,7 @@ impl IdGenerator {
 }
 
 /// Shorthand result used internally by the backend
-type BackendResult = std::result::Result<(), Error>;
+type BackendResult = Result<(), Error>;
 
 /// A glsl compilation error.
 #[derive(Debug, Error)]
@@ -1716,8 +1716,8 @@ impl<'a, W: Write> Writer<'a, W> {
 
     fn write_texture_coordinates(
         &mut self,
-        coordinate: Handle<crate::Expression>,
-        array_index: Option<Handle<crate::Expression>>,
+        coordinate: Handle<Expression>,
+        array_index: Option<Handle<Expression>>,
         dim: crate::ImageDimension,
         ctx: &FunctionCtx,
     ) -> Result<(), Error> {
@@ -1793,7 +1793,7 @@ struct ScalarString<'a> {
 ///
 /// # Errors
 /// If a [`Float`](crate::ScalarKind::Float) with an width that isn't 4 or 8
-fn glsl_scalar(kind: ScalarKind, width: crate::Bytes) -> Result<ScalarString<'static>, Error> {
+fn glsl_scalar(kind: ScalarKind, width: Bytes) -> Result<ScalarString<'static>, Error> {
     Ok(match kind {
         ScalarKind::Sint => ScalarString {
             prefix: "i",
@@ -1940,7 +1940,7 @@ struct TextureMappingVisitor<'a> {
 }
 
 impl<'a> Visitor for TextureMappingVisitor<'a> {
-    fn visit_expr(&mut self, _: Handle<crate::Expression>, expr: &crate::Expression) {
+    fn visit_expr(&mut self, _: Handle<Expression>, expr: &Expression) {
         // We only care about `ImageSample` and `ImageLoad`
         //
         // Both `image` and `sampler` are `Expression::GlobalVariable` otherwise the module is

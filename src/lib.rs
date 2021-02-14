@@ -4,6 +4,12 @@
 //!
 //! To improve performance and reduce memory usage, most structures are stored
 //! in an [`Arena`], and can be retrieved using the corresponding [`Handle`].
+#![warn(
+    trivial_casts,
+    trivial_numeric_casts,
+    unused_extern_crates,
+    unused_qualifications
+)]
 #![allow(
     clippy::new_without_default,
     clippy::unneeded_field_pattern,

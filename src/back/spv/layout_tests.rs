@@ -18,7 +18,7 @@ fn test_physical_layout_in_words() {
 
     layout.in_words(&mut output);
 
-    assert_eq!(output[0], spirv::MAGIC_NUMBER);
+    assert_eq!(output[0], MAGIC_NUMBER);
     assert_eq!(
         output[1],
         to_word(&[header.version.0, header.version.1, header.version.2, 1])

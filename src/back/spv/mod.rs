@@ -55,7 +55,7 @@ struct Instruction {
 pub fn write_vec(
     module: &crate::Module,
     flags: WriterFlags,
-    capabilities: crate::FastHashSet<spirv::Capability>,
+    capabilities: crate::FastHashSet<Capability>,
 ) -> Result<Vec<u32>, Error> {
     let mut words = Vec::new();
     let mut w = Writer::new(&module.header, flags, capabilities);

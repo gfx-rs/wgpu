@@ -21,7 +21,7 @@ pub(super) fn validate_instruction(
 
     let mut op_index = 0;
     for i in inst_index..wc as usize {
-        assert_eq!(words[i as usize], instruction.operands[op_index]);
+        assert_eq!(words[i], instruction.operands[op_index]);
         op_index += 1;
     }
 }

@@ -336,7 +336,7 @@ impl Writer {
         )
     }
 
-    fn create_pointer_type(&mut self, type_id: spirv::Word, class: spirv::StorageClass) -> Word {
+    fn create_pointer_type(&mut self, type_id: Word, class: spirv::StorageClass) -> Word {
         let id = self.generate_id();
         let instruction = Instruction::type_pointer(id, class, type_id);
         instruction.to_words(&mut self.logical_layout.declarations);
@@ -1398,7 +1398,7 @@ impl Writer {
                 use crate::MathFunction as Mf;
                 enum MathOp {
                     Ext(spirv::GLOp),
-                    Custom(super::Instruction),
+                    Custom(Instruction),
                 }
 
                 let arg0_id =
