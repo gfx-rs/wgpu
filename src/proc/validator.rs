@@ -176,7 +176,7 @@ impl crate::GlobalVariable {
                 // Only validate the type here. Whether or not it's legal to access
                 // this builtin is up to the entry point.
                 let width = 4;
-                let ty_inner = match built_in {
+                let expected_ty_inner = match built_in {
                     Bi::BaseInstance
                     | Bi::BaseVertex
                     | Bi::InstanceIndex
@@ -184,35 +184,51 @@ impl crate::GlobalVariable {
                     | Bi::SampleIndex
                     | Bi::SampleMaskIn
                     | Bi::SampleMaskOut
-                    | Bi::LocalInvocationIndex => Ti::Scalar {
+                    | Bi::LocalInvocationIndex => Some(Ti::Scalar {
                         kind: Sk::Uint,
                         width,
-                    },
-                    Bi::ClipDistance | Bi::PointSize | Bi::FragDepth => Ti::Scalar {
+                    }),
+                    Bi::PointSize | Bi::FragDepth => Some(Ti::Scalar {
                         kind: Sk::Float,
                         width,
-                    },
-                    Bi::Position | Bi::FragCoord => Ti::Vector {
+                    }),
+                    Bi::Position | Bi::FragCoord => Some(Ti::Vector {
                         size: Vs::Quad,
                         kind: Sk::Float,
                         width,
-                    },
-                    Bi::FrontFacing => Ti::Scalar {
+                    }),
+                    Bi::FrontFacing => Some(Ti::Scalar {
                         kind: Sk::Bool,
                         width: 1,
-                    },
+                    }),
                     Bi::GlobalInvocationId
                     | Bi::LocalInvocationId
                     | Bi::WorkGroupId
-                    | Bi::WorkGroupSize => Ti::Vector {
+                    | Bi::WorkGroupSize => Some(Ti::Vector {
                         size: Vs::Tri,
                         kind: Sk::Uint,
                         width,
-                    },
+                    }),
+                    Bi::ClipDistance => None,
                 };
-                if types[self.ty].inner != ty_inner {
-                    log::warn!("Wrong builtin type: {:?}", types[self.ty]);
-                    return Err(GlobalVariableError::InvalidBuiltInType(built_in));
+
+                let ty_inner = &types[self.ty].inner;
+                if Some(ty_inner) != expected_ty_inner.as_ref() {
+                    match (built_in, &types[self.ty].inner) {
+                        (Bi::ClipDistance, &Ti::Array { base, .. }) => match types[base].inner {
+                            Ti::Scalar {
+                                kind: Sk::Float, ..
+                            } => {}
+                            ref other => {
+                                log::warn!("Wrong array base type: {:?}", other);
+                                return Err(GlobalVariableError::InvalidBuiltInType(built_in));
+                            }
+                        },
+                        (_, other) => {
+                            log::warn!("Wrong builtin type: {:?}", other);
+                            return Err(GlobalVariableError::InvalidBuiltInType(built_in));
+                        }
+                    }
                 }
                 self.forbid_interpolation()?
             }
