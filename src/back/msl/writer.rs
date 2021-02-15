@@ -1333,7 +1333,6 @@ impl<W: Write> Writer<W> {
                     }
                     _ => LocationMode::Uniform,
                 };
-                let resolved = options.resolve_binding(stage, var, loc_mode)?;
                 let tyvar = TypedGlobalVariable {
                     module,
                     names: &self.names,
@@ -1343,7 +1342,10 @@ impl<W: Write> Writer<W> {
                 let separator = separate(last_used_global == Some(handle));
                 write!(self.out, "{}", INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;
-                resolved.try_fmt_decorated(&mut self.out, separator)?;
+                if var.binding.is_some() {
+                    let resolved = options.resolve_binding(stage, var, loc_mode)?;
+                    resolved.try_fmt_decorated(&mut self.out, separator)?;
+                }
                 if let Some(value) = var.init {
                     let value_str = &self.names[&NameKey::Constant(value)];
                     write!(self.out, " = {}", value_str)?;
