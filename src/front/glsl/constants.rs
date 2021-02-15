@@ -189,13 +189,13 @@ impl<'a> ConstantSolver<'a> {
 
         match inner {
             ConstantInner::Scalar { ref mut value, .. } => {
-                let intial = value.clone();
+                let initial = value.clone();
 
                 *value = match kind {
-                    ScalarKind::Sint => ScalarValue::Sint(inner_cast(intial)),
-                    ScalarKind::Uint => ScalarValue::Uint(inner_cast(intial)),
-                    ScalarKind::Float => ScalarValue::Float(inner_cast(intial)),
-                    ScalarKind::Bool => ScalarValue::Bool(inner_cast::<u64>(intial) != 0),
+                    ScalarKind::Sint => ScalarValue::Sint(inner_cast(initial)),
+                    ScalarKind::Uint => ScalarValue::Uint(inner_cast(initial)),
+                    ScalarKind::Float => ScalarValue::Float(inner_cast(initial)),
+                    ScalarKind::Bool => ScalarValue::Bool(inner_cast::<u64>(initial) != 0),
                 }
             }
             ConstantInner::Composite {

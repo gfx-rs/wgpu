@@ -191,7 +191,7 @@ impl FlowGraph {
 
     /// Removes OpPhi instructions from the control flow graph and turns them into ordinary variables.
     ///
-    /// Phi instructions are not supported inside Naga nor do they exist as instructions on CPUs. It is neccessary
+    /// Phi instructions are not supported inside Naga nor do they exist as instructions on CPUs. It is necessary
     /// to remove them and turn into ordinary variables before converting to Naga's IR and shader code.
     pub(super) fn remove_phi_instructions(
         &mut self,

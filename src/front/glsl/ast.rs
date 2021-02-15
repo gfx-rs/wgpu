@@ -78,7 +78,7 @@ impl Program {
             _ => false,
         };
 
-        let rigth_is_vector = match self.resolve_type(right.expression)? {
+        let right_is_vector = match self.resolve_type(right.expression)? {
             crate::TypeInner::Vector { .. } => true,
             _ => false,
         };
@@ -95,7 +95,7 @@ impl Program {
                 right: right.expression,
             }));
 
-        Ok(if left_is_vector && rigth_is_vector {
+        Ok(if left_is_vector && right_is_vector {
             ExpressionRule::from_expression(self.context.expressions.append(
                 Expression::Relational {
                     fun,

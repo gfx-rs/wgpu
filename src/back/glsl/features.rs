@@ -6,7 +6,7 @@ use crate::{
 use std::io::Write;
 
 bitflags::bitflags! {
-    /// Structure used to encode a set of addittions to glsl that aren't supported by all versions
+    /// Structure used to encode a set of additions to glsl that aren't supported by all versions
     pub struct Features: u32 {
         /// Buffer storage class support
         const BUFFER_STORAGE = 1;

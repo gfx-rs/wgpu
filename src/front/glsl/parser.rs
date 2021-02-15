@@ -1145,7 +1145,7 @@ pomelo! {
                                 extra.context.lookup_constant_exps.insert(id, expr);
                             }
                         } else {
-                            return Err(ErrorKind::SemanticError("Constants must have an initalizer".into()))
+                            return Err(ErrorKind::SemanticError("Constants must have an initializer".into()))
                         }
                     }
                 }

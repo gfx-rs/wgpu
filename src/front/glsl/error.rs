@@ -47,7 +47,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::UnknownField(meta, val) => write!(f, "Unknown field {} at {:?}", val, meta),
             #[cfg(feature = "glsl-validate")]
             ErrorKind::VariableAlreadyDeclared(val) => {
-                write!(f, "Variable {} already decalred in current scope", val)
+                write!(f, "Variable {} already declared in current scope", val)
             }
             #[cfg(feature = "glsl-validate")]
             ErrorKind::VariableNotAvailable(val) => {

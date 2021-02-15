@@ -30,7 +30,7 @@ impl Clone for Resolution {
                     width,
                 },
                 #[allow(clippy::panic)]
-                _ => panic!("Unepxected clone type: {:?}", v),
+                _ => panic!("Unexpected clone type: {:?}", v),
             }),
         }
     }

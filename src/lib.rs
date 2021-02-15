@@ -402,7 +402,7 @@ pub enum ScalarValue {
     Bool(bool),
 }
 
-/// Additional information, dependendent on the kind of constant.
+/// Additional information, dependent on the kind of constant.
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]

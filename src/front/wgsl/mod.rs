@@ -1888,7 +1888,7 @@ impl Parser {
         // read function name
         let mut lookup_ident = FastHashMap::default();
         let fun_name = lexer.next_ident()?;
-        // populare initial expressions
+        // populate initial expressions
         let mut expressions = Arena::new();
         for (&name, expression) in lookup_global_expression.iter() {
             let expr_handle = expressions.append(expression.clone());

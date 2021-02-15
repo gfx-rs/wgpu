@@ -96,7 +96,7 @@ impl Version {
     ///
     /// # Notes
     /// As an invalid version number will never be added to the supported version list
-    /// so this also checks for verson validity
+    /// so this also checks for version validity
     fn is_supported(&self) -> bool {
         match self {
             Version::Desktop(v) => SUPPORTED_CORE_VERSIONS.contains(v),
@@ -131,7 +131,7 @@ pub struct Options {
     pub version: Version,
     /// The name and stage of the entry point
     ///
-    /// If no enty point that matches is found a error will be thrown while creating a new instance
+    /// If no entry point that matches is found a error will be thrown while creating a new instance
     /// of [`Writer`](struct.Writer.html)
     pub entry_point: (ShaderStage, String),
 }
@@ -293,7 +293,7 @@ impl<'a, W: Write> Writer<'a, W> {
             return Err(Error::VersionNotSupported);
         }
 
-        // Try to find the entry point and correspoding index
+        // Try to find the entry point and corresponding index
         let (ep_idx, ep) = module
             .entry_points
             .iter()
@@ -473,9 +473,9 @@ impl<'a, W: Write> Writer<'a, W> {
         // Write all regular functions that are in the call graph this is important
         // because other functions might require for example globals that weren't written
         for node in functions {
-            // We do this inside the loop instead of using `map` to sastify the borrow checker
+            // We do this inside the loop instead of using `map` to satisfy the borrow checker
             let handle = self.call_graph[node];
-            // We also `clone` to sastify the borrow checker
+            // We also `clone` to satisfy the borrow checker
             let name = self.names[&NameKey::Function(handle)].clone();
 
             // Write the function
@@ -508,7 +508,7 @@ impl<'a, W: Write> Writer<'a, W> {
     /// Helper method used to write non image/sampler types
     ///
     /// # Notes
-    /// Adds no trailing or leading whitespaces
+    /// Adds no trailing or leading whitespace
     ///
     /// # Panics
     /// - If type is either a image or sampler
@@ -608,7 +608,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // Panic if either Image or Sampler is being written
             //
             // Write all variants instead of `_` so that if new variants are added a
-            // no exhaustivenes error is thrown
+            // no exhaustiveness error is thrown
             TypeInner::Image { .. } | TypeInner::Sampler { .. } => unreachable!(),
         }
 
@@ -618,7 +618,7 @@ impl<'a, W: Write> Writer<'a, W> {
     /// Helper method to write a image type
     ///
     /// # Notes
-    /// Adds no leading or trailing whitespaces
+    /// Adds no leading or trailing whitespace
     fn write_image_type(
         &mut self,
         dim: crate::ImageDimension,
@@ -793,7 +793,7 @@ impl<'a, W: Write> Writer<'a, W> {
             write!(self.out, "void")?;
         }
 
-        // Write the function name and open parantheses for the argument list
+        // Write the function name and open parentheses for the argument list
         write!(self.out, " {}(", name.as_ref())?;
 
         // Write the comma separated argument list
@@ -812,7 +812,7 @@ impl<'a, W: Write> Writer<'a, W> {
             Ok(())
         })?;
 
-        // Close the parantheses and open braces to start the function body
+        // Close the parentheses and open braces to start the function body
         writeln!(self.out, ") {{")?;
 
         // Write all function locals
@@ -865,7 +865,7 @@ impl<'a, W: Write> Writer<'a, W> {
     /// a reference to the element `T` being written
     ///
     /// # Notes
-    /// - Adds no newlines or leading/trailing whitespaces
+    /// - Adds no newlines or leading/trailing whitespace
     /// - The last element won't have a trailing `,`
     fn write_slice<T, F: FnMut(&mut Self, u32, &T) -> BackendResult>(
         &mut self,
@@ -889,7 +889,7 @@ impl<'a, W: Write> Writer<'a, W> {
     /// Helper method used to write constants
     ///
     /// # Notes
-    /// Adds no newlines or leading/trailing whitespaces
+    /// Adds no newlines or leading/trailing whitespace
     fn write_constant(&mut self, constant: &Constant) -> BackendResult {
         match constant.inner {
             ConstantInner::Scalar {
@@ -903,7 +903,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // While `core` doesn't necessarily need it, it's allowed and since `es` needs it we
                 // always write it as the extra branch wouldn't have any benefit in readability
                 ScalarValue::Uint(int) => write!(self.out, "{}u", int)?,
-                // Floats are written using `Debug` insted of `Display` because it always appends the
+                // Floats are written using `Debug` instead of `Display` because it always appends the
                 // decimal part even it's zero which is needed for a valid glsl float constant
                 ScalarValue::Float(float) => write!(self.out, "{:?}", float)?,
                 // Booleans are either `true` or `false` so nothing special needs to be done
@@ -1029,7 +1029,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // Switch are written as in C:
             // ```
             // switch (selector) {
-            //      // Falltrough
+            //      // Fallthrough
             //      case label:
             //          block
             //      // Non fallthrough
@@ -1463,7 +1463,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // `Binary` we just write `left op right`, except when dealing with
             // comparison operations on vectors as they are implemented with
             // builtin functions.
-            // Once again we wrap everything in parantheses to avoid precedence issues
+            // Once again we wrap everything in parentheses to avoid precedence issues
             Expression::Binary { op, left, right } => {
                 // Holds `Some(function_name)` if the binary operation is
                 // implemented as a function call
@@ -1521,7 +1521,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, ")")?
             }
             // `Select` is written as `condition ? accept : reject`
-            // We wrap everything in parantheses to avoid precedence issues
+            // We wrap everything in parentheses to avoid precedence issues
             Expression::Select {
                 condition,
                 accept,
@@ -1849,7 +1849,7 @@ fn glsl_built_in(built_in: BuiltIn) -> &'static str {
     }
 }
 
-/// Helper function that returns the string correspoding to the storage class
+/// Helper function that returns the string corresponding to the storage class
 fn glsl_storage_class(class: StorageClass) -> &'static str {
     match class {
         StorageClass::Function => "",
@@ -1864,7 +1864,7 @@ fn glsl_storage_class(class: StorageClass) -> &'static str {
     }
 }
 
-/// Helper function that returns the string correspoding to the glsl interpolation qualifier
+/// Helper function that returns the string corresponding to the glsl interpolation qualifier
 ///
 /// # Errors
 /// If [`Patch`](crate::Interpolation::Patch) is passed, as it isn't supported in glsl
