@@ -57,7 +57,7 @@ fn consume_number(input: &str) -> (Token, &str) {
     }
 }
 
-fn consume_token(mut input: &str) -> (Token<'_>, &str) {
+fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
     let mut chars = input.chars();
     let cur = match chars.next() {
         Some(c) => c,
@@ -84,9 +84,9 @@ fn consume_token(mut input: &str) -> (Token<'_>, &str) {
         '<' | '>' => {
             input = chars.as_str();
             let next = chars.next();
-            if next == Some('=') {
+            if next == Some('=') && !generic {
                 (Token::LogicalOperation(cur), chars.as_str())
-            } else if next == Some(cur) {
+            } else if next == Some(cur) && !generic {
                 (Token::ShiftOperation(cur), chars.as_str())
             } else {
                 (Token::Paren(cur), input)
@@ -174,7 +174,20 @@ impl<'a> Lexer<'a> {
     pub(super) fn next(&mut self) -> Token<'a> {
         let original_len = self.input.len();
         loop {
-            let (token, rest) = consume_token(self.input);
+            let (token, rest) = consume_token(self.input, false);
+            self.input = rest;
+            if token != Token::Trivia {
+                let _bytes_read = original_len - self.input.len();
+                return token;
+            }
+        }
+    }
+
+    #[must_use]
+    pub(super) fn next_generic(&mut self) -> Token<'a> {
+        let original_len = self.input.len();
+        loop {
+            let (token, rest) = consume_token(self.input, true);
             self.input = rest;
             if token != Token::Trivia {
                 let _bytes_read = original_len - self.input.len();
@@ -212,6 +225,15 @@ impl<'a> Lexer<'a> {
                 Token::End => "",
             };
             Err(Error::Unexpected(token, description))
+        }
+    }
+
+    pub(super) fn expect_generic_paren(&mut self, expected: char) -> Result<(), Error<'a>> {
+        let token = self.next_generic();
+        if token == Token::Paren(expected) {
+            Ok(())
+        } else {
+            Err(Error::Unexpected(token, "paren"))
         }
     }
 
@@ -260,10 +282,10 @@ impl<'a> Lexer<'a> {
     pub(super) fn next_scalar_generic(
         &mut self,
     ) -> Result<(crate::ScalarKind, crate::Bytes), Error<'a>> {
-        self.expect(Token::Paren('<'))?;
+        self.expect_generic_paren('<')?;
         let word = self.next_ident()?;
         let pair = conv::get_scalar_type(word).ok_or(Error::UnknownScalarType(word))?;
-        self.expect(Token::Paren('>'))?;
+        self.expect_generic_paren('>')?;
         Ok(pair)
     }
 

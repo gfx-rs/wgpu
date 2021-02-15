@@ -1359,15 +1359,15 @@ impl Parser {
                 }
             }
             "ptr" => {
-                lexer.expect(Token::Paren('<'))?;
+                lexer.expect_generic_paren('<')?;
                 let class = conv::map_storage_class(lexer.next_ident()?)?;
                 lexer.expect(Token::Separator(','))?;
                 let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
-                lexer.expect(Token::Paren('>'))?;
+                lexer.expect_generic_paren('>')?;
                 crate::TypeInner::Pointer { base, class }
             }
             "array" => {
-                lexer.expect(Token::Paren('<'))?;
+                lexer.expect_generic_paren('<')?;
                 let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
                 let size = if lexer.skip(Token::Separator(',')) {
                     let const_handle =
@@ -1376,7 +1376,7 @@ impl Parser {
                 } else {
                     crate::ArraySize::Dynamic
                 };
-                lexer.expect(Token::Paren('>'))?;
+                lexer.expect_generic_paren('>')?;
 
                 crate::TypeInner::Array {
                     base,
