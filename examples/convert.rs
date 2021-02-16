@@ -74,6 +74,7 @@ fn main() {
             let mut param = Parameters::default();
             // very useful to have this by default
             param.spv_capabilities.insert(spirv::Capability::Shader);
+            param.spv_version = (1, 0);
             param
         }
     };
