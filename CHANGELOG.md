@@ -1,5 +1,14 @@
 # Change Log
 
+## v0.3.2 (2021-02-15)
+  - fix logical expression types
+  - fix _FragDepth_ semantics
+  - spv-in:
+    - derive block status of structures
+  - spv-out:
+    - add lots of missing math functions
+    - implement discard
+
 ## v0.3.1 (2021-01-31)
   - wgsl:
     - support constant array sizes
