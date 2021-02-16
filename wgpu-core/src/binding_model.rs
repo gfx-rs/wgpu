@@ -100,6 +100,30 @@ pub enum CreateBindGroupError {
         // Human-readable description of expected types
         expected: &'static str,
     },
+    #[error("texture binding {binding} expects multisampled = {layout_multisampled}, but given a view with samples = {view_samples}")]
+    InvalidTextureMultisample {
+        binding: u32,
+        layout_multisampled: bool,
+        view_samples: u32,
+    },
+    #[error("texture binding {binding} expects sample type = {layout_sample_type:?}, but given a view with format = {view_format:?}")]
+    InvalidTextureSampleType {
+        binding: u32,
+        layout_sample_type: wgt::TextureSampleType,
+        view_format: wgt::TextureFormat,
+    },
+    #[error("texture binding {binding} expects dimension = {layout_dimension:?}, but given a view with dimension = {view_dimension:?}")]
+    InvalidTextureDimension {
+        binding: u32,
+        layout_dimension: wgt::TextureViewDimension,
+        view_dimension: wgt::TextureViewDimension,
+    },
+    #[error("storage texture binding {binding} expects format = {layout_format:?}, but given a view with format = {view_format:?}")]
+    InvalidStorageTextureFormat {
+        binding: u32,
+        layout_format: wgt::TextureFormat,
+        view_format: wgt::TextureFormat,
+    },
     #[error("the given sampler is/is not a comparison sampler, while the layout type indicates otherwise")]
     WrongSamplerComparison,
     #[error("bound texture views can not have both depth and stencil aspects enabled")]
