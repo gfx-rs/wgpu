@@ -1258,6 +1258,10 @@ impl Parser {
                 kind: crate::ScalarKind::Uint,
                 width: 4,
             },
+            "bool" => crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Bool,
+                width: 1,
+            },
             "vec2" => {
                 let (kind, width) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Vector {
