@@ -1809,6 +1809,65 @@ impl Parser {
 
                 Some(crate::Statement::Loop { body, continuing })
             }
+            "for" => {
+                let mut block = Vec::new();
+
+                lexer.expect(Token::Paren('('))?;
+                let initialization =
+                    self.parse_statement(lexer, context.reborrow(), is_uniform_control_flow)?;
+                let condition = self.parse_general_expression(lexer, context.as_expression())?;
+                lexer.expect(Token::Separator(';'))?;
+                let mut continuing = None;
+                // manually parse the next statement here instead of calling parse_statement
+                // because the statement is not terminated with a semicolon
+                if let Token::Word(ident) = lexer.peek() {
+                    let _ = lexer.next();
+                    continuing = Some(match context.lookup_ident.get(ident) {
+                        Some(&var_expr) => {
+                            let left =
+                                self.parse_postfix(lexer, context.as_expression(), var_expr)?;
+                            lexer.expect(Token::Operation('='))?;
+                            let value =
+                                self.parse_general_expression(lexer, context.as_expression())?;
+                            crate::Statement::Store {
+                                pointer: left,
+                                value,
+                            }
+                        }
+                        None => {
+                            let (function, arguments) = self
+                                .parse_local_function_call(lexer, ident, context.as_expression())?
+                                .ok_or(Error::UnknownLocalFunction(ident))?;
+                            crate::Statement::Call {
+                                function,
+                                arguments,
+                            }
+                        }
+                    });
+                }
+                lexer.expect(Token::Paren(')'))?;
+                lexer.expect(Token::Paren('{'))?;
+
+                block.extend(initialization);
+
+                let mut body = [crate::Statement::If {
+                    condition,
+                    accept: Vec::new(),
+                    reject: [crate::Statement::Break].to_vec(),
+                }]
+                .to_vec();
+                while !lexer.skip(Token::Paren('}')) {
+                    let s = self.parse_statement(lexer, context.reborrow(), false)?;
+                    body.extend(s);
+                }
+
+                block.push(crate::Statement::Loop {
+                    body,
+                    continuing: continuing.into_iter().collect(),
+                });
+
+                Some(crate::Statement::Block(block))
+            }
             "break" => Some(crate::Statement::Break),
             "continue" => Some(crate::Statement::Continue),
             "discard" => Some(crate::Statement::Kill),

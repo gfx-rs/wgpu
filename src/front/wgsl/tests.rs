@@ -133,6 +133,17 @@ fn parse_loop() {
     ",
     )
     .unwrap();
+    parse_str(
+        "
+        fn main() {
+            var a: i32 = 0;
+            for(var i: i32 = 0; i < 4; i = i + 1) {
+                a = a + 2;
+            }
+        }
+    ",
+    )
+    .unwrap();
 }
 
 #[test]
