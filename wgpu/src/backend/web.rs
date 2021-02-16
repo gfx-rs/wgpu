@@ -1050,7 +1050,12 @@ impl crate::Context for Context {
                 let module = wgsl::parse_str(code).unwrap();
                 let mut capabilities = HashSet::default();
                 capabilities.insert(spv::Capability::Shader);
-                let words = spv::write_vec(&module, spv::WriterFlags::NONE, capabilities).unwrap();
+                let options = spv::Options {
+                    lang_version: (1, 0),
+                    flags: spv::WriterFlags::empty(),
+                    capabilities,
+                };
+                let words = spv::write_vec(&module, &options).unwrap();
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&words[..]))
             }
         };
