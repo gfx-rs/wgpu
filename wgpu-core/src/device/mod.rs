@@ -13,8 +13,8 @@ use crate::{
     pipeline, resource, span, swap_chain,
     track::{BufferState, TextureSelector, TextureState, TrackerSet},
     validation::{self, check_buffer_usage, check_texture_usage},
-    FastHashMap, FastHashSet, Label, LabelHelpers, LifeGuard, MultiRefCount, PrivateFeatures,
-    Stored, SubmissionIndex, MAX_BIND_GROUPS,
+    FastHashMap, Label, LabelHelpers, LifeGuard, MultiRefCount, PrivateFeatures, Stored,
+    SubmissionIndex, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -285,7 +285,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) private_features: PrivateFeatures,
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
-    spirv_capabilities: FastHashSet<naga::back::spv::Capability>,
+    spv_options: naga::back::spv::Options,
     //TODO: move this behind another mutex. This would allow several methods to switch
     // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
     pending_writes: queue::PendingWrites<B>,
@@ -310,8 +310,6 @@ impl<B: GfxBackend> Device<B> {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Self, CreateDeviceError> {
-        use naga::back::spv::Capability as C;
-
         let cmd_allocator = command::CommandAllocator::new(queue_group.family, &raw)
             .or(Err(CreateDeviceError::OutOfMemory))?;
 
@@ -323,11 +321,26 @@ impl<B: GfxBackend> Device<B> {
             None => (),
         }
 
-        let mut spirv_capabilities = FastHashSet::default();
-        spirv_capabilities.insert(C::Shader);
-        spirv_capabilities.insert(C::Matrix);
-        spirv_capabilities.insert(C::Sampled1D);
-        spirv_capabilities.insert(C::Image1D);
+        let spv_options = {
+            use naga::back::spv;
+            let mut flags = spv::WriterFlags::empty();
+            if cfg!(debug_assertions) {
+                flags |= spv::WriterFlags::DEBUG;
+            }
+            spv::Options {
+                lang_version: (1, 0),
+                capabilities: [
+                    spv::Capability::Shader,
+                    spv::Capability::Matrix,
+                    spv::Capability::Sampled1D,
+                    spv::Capability::Image1D,
+                ]
+                .iter()
+                .cloned()
+                .collect(),
+                flags,
+            }
+        };
 
         Ok(Self {
             raw,
@@ -363,7 +376,7 @@ impl<B: GfxBackend> Device<B> {
             private_features,
             limits: desc.limits.clone(),
             features: desc.features.clone(),
-            spirv_capabilities,
+            spv_options,
             pending_writes: queue::PendingWrites::new(),
         })
     }
@@ -995,41 +1008,39 @@ impl<B: GfxBackend> Device<B> {
 
         let (naga_result, interface) = match module {
             // If succeeded, then validate it and attempt to give it to gfx-hal directly.
-            Some(module) => {
-                let interface = if desc.flags.contains(wgt::ShaderFlags::VALIDATION) {
-                    naga::proc::Validator::new().validate(&module)?;
-                    if !self.features.contains(wgt::Features::PUSH_CONSTANTS)
-                        && module
-                            .global_variables
-                            .iter()
-                            .any(|(_, var)| var.class == naga::StorageClass::PushConstant)
-                    {
-                        return Err(pipeline::CreateShaderModuleError::MissingFeature(
-                            wgt::Features::PUSH_CONSTANTS,
-                        ));
-                    }
-                    Some(validation::Interface::new(&module))
-                } else {
-                    None
-                };
+            Some(module) if desc.flags.contains(wgt::ShaderFlags::VALIDATION) => {
+                let analysis = naga::proc::Validator::new().validate(&module)?;
+                if !self.features.contains(wgt::Features::PUSH_CONSTANTS)
+                    && module
+                        .global_variables
+                        .iter()
+                        .any(|(_, var)| var.class == naga::StorageClass::PushConstant)
+                {
+                    return Err(pipeline::CreateShaderModuleError::MissingFeature(
+                        wgt::Features::PUSH_CONSTANTS,
+                    ));
+                }
+                let interface = validation::Interface::new(&module);
                 let naga_result = if desc
                     .flags
                     .contains(wgt::ShaderFlags::EXPERIMENTAL_TRANSLATION)
                 {
-                    match unsafe { self.raw.create_shader_module_from_naga(module) } {
+                    let shader = hal::device::NagaShader { module, analysis };
+                    match unsafe { self.raw.create_shader_module_from_naga(shader) } {
                         Ok(raw) => Ok(raw),
-                        Err((hal::device::ShaderError::CompilationFailed(msg), module)) => {
+                        Err((hal::device::ShaderError::CompilationFailed(msg), shader)) => {
                             tracing::warn!("Shader module compilation failed: {}", msg);
-                            Err(Some(module))
+                            Err(Some(shader.module))
                         }
-                        Err((_, module)) => Err(Some(module)),
+                        Err((_, shader)) => Err(Some(shader.module)),
                     }
                 } else {
                     Err(Some(module))
                 };
-                (naga_result, interface)
+                (naga_result, Some(interface))
             }
-            None => (Err(None), None),
+            Some(module) => (Err(Some(module)), None),
+            _ => (Err(None), None),
         };
 
         // Otherwise, fall back to SPIR-V.
@@ -1041,12 +1052,7 @@ impl<B: GfxBackend> Device<B> {
                     None => {
                         // Produce a SPIR-V from the Naga module
                         let module = maybe_module.unwrap();
-                        let mut flags = naga::back::spv::WriterFlags::empty();
-                        if cfg!(debug_assertions) {
-                            flags |= naga::back::spv::WriterFlags::DEBUG;
-                        }
-                        naga::back::spv::write_vec(&module, flags, self.spirv_capabilities.clone())
-                            .map(Cow::Owned)
+                        naga::back::spv::write_vec(&module, &self.spv_options).map(Cow::Owned)
                     }
                 };
                 match spv {

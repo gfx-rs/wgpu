@@ -12,4 +12,4 @@ publish = false
 [dependencies.wgc]
 path = "../wgpu-core"
 package = "wgpu-core"
-features = ["serial-pass", "trace"]
+features = ["cross", "serial-pass", "trace"]

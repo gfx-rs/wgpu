@@ -58,7 +58,7 @@ version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c69a8137596e84c22d57f3da1b5de1d4230b1742a710091c85f4d7ce50f00f38"
 dependencies = [
- "libloading",
+ "libloading 0.6.5",
 ]
 
 [[package]]
@@ -304,11 +304,10 @@ dependencies = [
 [[package]]
 name = "d3d12"
 version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0a60cceb22c7c53035f8980524fdc7f17cf49681a3c154e6757d30afbec6ec4"
+source = "git+https://github.com/gfx-rs/d3d12-rs?rev=be19a243b86e0bafb9937d661fc8eabb3e42b44e#be19a243b86e0bafb9937d661fc8eabb3e42b44e"
 dependencies = [
  "bitflags",
- "libloading",
+ "libloading 0.7.0",
  "winapi 0.3.9",
 ]
 
@@ -370,7 +369,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b11f15d1e3268f140f68d390637d5e76d849782d971ae7063e0da69fe9709a76"
 dependencies = [
- "libloading",
+ "libloading 0.6.5",
 ]
 
 [[package]]
@@ -476,7 +475,7 @@ dependencies = [
 [[package]]
 name = "gfx-auxil"
 version = "0.8.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=f29dcc767cfeca8870061e82466b7431a0f57283#f29dcc767cfeca8870061e82466b7431a0f57283"
+source = "git+https://github.com/gfx-rs/gfx?rev=80655862ac4afc5efb6675eb9ac7c38e73544750#80655862ac4afc5efb6675eb9ac7c38e73544750"
 dependencies = [
  "fxhash",
  "gfx-hal",
@@ -486,13 +485,13 @@ dependencies = [
 [[package]]
 name = "gfx-backend-dx11"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=f29dcc767cfeca8870061e82466b7431a0f57283#f29dcc767cfeca8870061e82466b7431a0f57283"
+source = "git+https://github.com/gfx-rs/gfx?rev=80655862ac4afc5efb6675eb9ac7c38e73544750#80655862ac4afc5efb6675eb9ac7c38e73544750"
 dependencies = [
  "arrayvec",
  "bitflags",
  "gfx-auxil",
  "gfx-hal",
- "libloading",
+ "libloading 0.7.0",
  "log",
  "parking_lot",
  "range-alloc",
@@ -507,7 +506,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-dx12"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=f29dcc767cfeca8870061e82466b7431a0f57283#f29dcc767cfeca8870061e82466b7431a0f57283"
+source = "git+https://github.com/gfx-rs/gfx?rev=80655862ac4afc5efb6675eb9ac7c38e73544750#80655862ac4afc5efb6675eb9ac7c38e73544750"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -527,7 +526,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-empty"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=f29dcc767cfeca8870061e82466b7431a0f57283#f29dcc767cfeca8870061e82466b7431a0f57283"
+source = "git+https://github.com/gfx-rs/gfx?rev=80655862ac4afc5efb6675eb9ac7c38e73544750#80655862ac4afc5efb6675eb9ac7c38e73544750"
 dependencies = [
  "gfx-hal",
  "log",
@@ -537,16 +536,17 @@ dependencies = [
 [[package]]
 name = "gfx-backend-gl"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=f29dcc767cfeca8870061e82466b7431a0f57283#f29dcc767cfeca8870061e82466b7431a0f57283"
+source = "git+https://github.com/gfx-rs/gfx?rev=80655862ac4afc5efb6675eb9ac7c38e73544750#80655862ac4afc5efb6675eb9ac7c38e73544750"
 dependencies = [
  "arrayvec",
  "bitflags",
+ "fxhash",
  "gfx-auxil",
  "gfx-hal",
  "glow",
  "js-sys",
  "khronos-egl",
- "libloading",
+ "libloading 0.7.0",
  "log",
  "naga",
  "parking_lot",
@@ -559,7 +559,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-metal"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=f29dcc767cfeca8870061e82466b7431a0f57283#f29dcc767cfeca8870061e82466b7431a0f57283"
+source = "git+https://github.com/gfx-rs/gfx?rev=80655862ac4afc5efb6675eb9ac7c38e73544750#80655862ac4afc5efb6675eb9ac7c38e73544750"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -567,6 +567,7 @@ dependencies = [
  "cocoa-foundation",
  "copyless",
  "foreign-types",
+ "fxhash",
  "gfx-auxil",
  "gfx-hal",
  "log",
@@ -583,7 +584,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-vulkan"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=f29dcc767cfeca8870061e82466b7431a0f57283#f29dcc767cfeca8870061e82466b7431a0f57283"
+source = "git+https://github.com/gfx-rs/gfx?rev=80655862ac4afc5efb6675eb9ac7c38e73544750#80655862ac4afc5efb6675eb9ac7c38e73544750"
 dependencies = [
  "arrayvec",
  "ash",
@@ -603,7 +604,7 @@ dependencies = [
 [[package]]
 name = "gfx-hal"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=f29dcc767cfeca8870061e82466b7431a0f57283#f29dcc767cfeca8870061e82466b7431a0f57283"
+source = "git+https://github.com/gfx-rs/gfx?rev=80655862ac4afc5efb6675eb9ac7c38e73544750#80655862ac4afc5efb6675eb9ac7c38e73544750"
 dependencies = [
  "bitflags",
  "naga",
@@ -775,7 +776,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8020ff3b84f9ac87461216ad0501bc09b33c1cbe17404d8ea405160fd164bab"
 dependencies = [
  "libc",
- "libloading",
+ "libloading 0.6.5",
 ]
 
 [[package]]
@@ -801,6 +802,16 @@ name = "libloading"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1090080fe06ec2648d0da3881d9453d97e71a45f00eb179af7fdd7e3f686fdb0"
+dependencies = [
+ "cfg-if 1.0.0",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "libloading"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f84d96438c15fcd6c3f244c8fce01d1e2b9c6b5623e9c711dc9286d8fc92d6a"
 dependencies = [
  "cfg-if 1.0.0",
  "winapi 0.3.9",
@@ -935,7 +946,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.3.1"
-source = "git+https://github.com/gfx-rs/naga?tag=gfx-10#4f19903f465b6970054b29b1750235e5e9b83ca5"
+source = "git+https://github.com/gfx-rs/naga?tag=gfx-11#539db1a317d62c8c50e21ff908cf952c731a05b6"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -1201,7 +1212,7 @@ dependencies = [
 [[package]]
 name = "range-alloc"
 version = "0.1.2"
-source = "git+https://github.com/gfx-rs/gfx?rev=f29dcc767cfeca8870061e82466b7431a0f57283#f29dcc767cfeca8870061e82466b7431a0f57283"
+source = "git+https://github.com/gfx-rs/gfx?rev=80655862ac4afc5efb6675eb9ac7c38e73544750#80655862ac4afc5efb6675eb9ac7c38e73544750"
 
 [[package]]
 name = "raw-window-handle"
@@ -1254,7 +1265,7 @@ checksum = "58fd0c55a54ecce0889aaca4ee87831cfe8c83c275c439443162be1f0eab5fdc"
 dependencies = [
  "bitflags",
  "float-cmp",
- "libloading",
+ "libloading 0.6.5",
  "once_cell",
  "renderdoc-sys",
  "winapi 0.3.9",
