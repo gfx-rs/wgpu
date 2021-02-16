@@ -857,6 +857,7 @@ impl<B: GfxBackend> Device<B> {
             aspects,
             format: texture.format,
             format_features: texture.format_features,
+            dimension: view_dim,
             extent: wgt::Extent3d {
                 width: hal_extent.width,
                 height: hal_extent.height,
@@ -1414,11 +1415,65 @@ impl<B: GfxBackend> Device<B> {
                         .views
                         .use_extend(&*texture_view_guard, id, (), ())
                         .map_err(|_| Error::InvalidTextureView(id))?;
+                    let format_info = view.format.describe();
                     let (pub_usage, internal_use) = match decl.ty {
-                        wgt::BindingType::Texture { .. } => {
+                        wgt::BindingType::Texture {
+                            sample_type,
+                            view_dimension,
+                            multisampled,
+                        } => {
+                            use wgt::TextureSampleType as Tst;
+                            if multisampled != (view.samples != 1) {
+                                return Err(Error::InvalidTextureMultisample {
+                                    binding,
+                                    layout_multisampled: multisampled,
+                                    view_samples: view.samples as u32,
+                                });
+                            }
+                            match (sample_type, format_info.sample_type) {
+                                (Tst::Uint, Tst::Uint) |
+                                (Tst::Sint, Tst::Sint) |
+                                (Tst::Depth, Tst::Depth) |
+                                // if we expect non-fiterable, accept anything float
+                                (Tst::Float { filterable: false }, Tst::Float { .. }) |
+                                // if we expect fiterable, require it
+                                (Tst::Float { filterable: true }, Tst::Float { filterable: true }) |
+                                // if we expect float, also accept depth
+                                (Tst::Float { .. }, Tst::Depth) => {}
+                                _ => return Err(Error::InvalidTextureSampleType {
+                                    binding,
+                                    layout_sample_type: sample_type,
+                                    view_format: view.format,
+                                }),
+                            }
+                            if view_dimension != view.dimension {
+                                return Err(Error::InvalidTextureDimension {
+                                    binding,
+                                    layout_dimension: view_dimension,
+                                    view_dimension: view.dimension,
+                                });
+                            }
                             (wgt::TextureUsage::SAMPLED, view.sampled_internal_use)
                         }
-                        wgt::BindingType::StorageTexture { access, .. } => {
+                        wgt::BindingType::StorageTexture {
+                            access,
+                            format,
+                            view_dimension,
+                        } => {
+                            if format != view.format {
+                                return Err(Error::InvalidStorageTextureFormat {
+                                    binding,
+                                    layout_format: format,
+                                    view_format: view.format,
+                                });
+                            }
+                            if view_dimension != view.dimension {
+                                return Err(Error::InvalidTextureDimension {
+                                    binding,
+                                    layout_dimension: view_dimension,
+                                    view_dimension: view.dimension,
+                                });
+                            }
                             let internal_use = match access {
                                 wgt::StorageTextureAccess::ReadOnly => {
                                     resource::TextureUse::STORAGE_LOAD
