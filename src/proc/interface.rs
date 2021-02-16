@@ -1,9 +1,11 @@
 use crate::arena::{Arena, Handle};
+use bit_set::BitSet;
 
 pub struct Interface<'a, T> {
+    pub visitor: T,
     pub expressions: &'a Arena<crate::Expression>,
     pub local_variables: &'a Arena<crate::LocalVariable>,
-    pub visitor: T,
+    pub mask: &'a mut BitSet,
 }
 
 pub trait Visitor {
@@ -12,13 +14,13 @@ pub trait Visitor {
     fn visit_fun(&mut self, _: Handle<crate::Function>) {}
 }
 
-impl<'a, T> Interface<'a, T>
-where
-    T: Visitor,
-{
+impl<'a, T: Visitor> Interface<'a, T> {
     pub fn traverse_expr(&mut self, handle: Handle<crate::Expression>) {
         use crate::Expression as E;
 
+        if !self.mask.insert(handle.index()) {
+            return;
+        }
         let expr = &self.expressions[handle];
 
         self.visitor.visit_expr(handle, expr);

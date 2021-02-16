@@ -2,6 +2,7 @@ use crate::{
     arena::{Arena, Handle},
     proc::{Interface, Visitor},
 };
+use bit_set::BitSet;
 
 struct GlobalUseVisitor<'a> {
     usage: &'a mut [crate::GlobalUse],
@@ -30,6 +31,7 @@ impl Visitor for GlobalUseVisitor<'_> {
 
 impl crate::Function {
     pub fn fill_global_use(&mut self, globals_num: usize, functions: &Arena<crate::Function>) {
+        let mut mask = BitSet::with_capacity(self.expressions.len());
         self.global_usage.clear();
         self.global_usage
             .resize(globals_num, crate::GlobalUse::empty());
@@ -41,6 +43,7 @@ impl crate::Function {
                 usage: &mut self.global_usage,
                 functions,
             },
+            mask: &mut mask,
         };
         io.traverse(&self.body);
     }

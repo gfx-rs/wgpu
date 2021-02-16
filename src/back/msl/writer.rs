@@ -70,6 +70,7 @@ pub struct Writer<W> {
     out: W,
     names: FastHashMap<NameKey, String>,
     named_expressions: BitSet,
+    visit_mask: BitSet,
     typifier: Typifier,
     namer: Namer,
     temp_bake_handles: Vec<Handle<crate::Expression>>,
@@ -177,6 +178,7 @@ impl<W: Write> Writer<W> {
             out,
             names: FastHashMap::default(),
             named_expressions: BitSet::new(),
+            visit_mask: BitSet::new(),
             typifier: Typifier::new(),
             namer: Namer::default(),
             temp_bake_handles: Vec::new(),
@@ -709,6 +711,7 @@ impl<W: Write> Writer<W> {
         exclude_root: bool,
     ) -> Result<(), Error> {
         // set up the search
+        self.visit_mask.clear();
         let mut interface = Interface {
             expressions: &context.expression.function.expressions,
             local_variables: &context.expression.function.local_variables,
@@ -722,6 +725,7 @@ impl<W: Write> Writer<W> {
                     None
                 },
             },
+            mask: &mut self.visit_mask,
         };
         // populate the bake handles
         interface.traverse_expr(root_handle);
