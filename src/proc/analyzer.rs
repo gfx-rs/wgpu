@@ -566,13 +566,22 @@ fn uniform_control_flow() {
     });
 
     let mut expressions = Arena::new();
+    // checks the uniform control flow
     let constant_expr = expressions.append(E::Constant(constant));
+    // checks the non-uniform control flow
     let derivative_expr = expressions.append(E::Derivative {
         axis: crate::DerivativeAxis::X,
         expr: constant_expr,
     });
     let non_uniform_global_expr = expressions.append(E::GlobalVariable(non_uniform_global));
     let uniform_global_expr = expressions.append(E::GlobalVariable(uniform_global));
+    // checks the QUERY flag
+    let query_expr = expressions.append(E::ArrayLength(uniform_global_expr));
+    // checks the transitive WRITE flag
+    let access_expr = expressions.append(E::AccessIndex {
+        base: non_uniform_global_expr,
+        index: 1,
+    });
 
     let mut info = FunctionInfo {
         control_flags: ControlFlags::empty(),
@@ -584,8 +593,12 @@ fn uniform_control_flow() {
         info.process_expression(handle, &expressions, &global_var_arena, &[])
             .unwrap();
     }
-    assert_eq!(info.expressions[non_uniform_global.index()].ref_count, 1);
-    assert_eq!(info.expressions[uniform_global_expr.index()].ref_count, 0);
+    assert_eq!(info[non_uniform_global_expr].ref_count, 1);
+    assert_eq!(info[uniform_global_expr].ref_count, 1);
+    assert_eq!(info[query_expr].ref_count, 0);
+    assert_eq!(info[access_expr].ref_count, 0);
+    assert_eq!(info[non_uniform_global], GlobalUse::empty());
+    assert_eq!(info[uniform_global], GlobalUse::QUERY);
 
     let stmt_if_uniform = S::If {
         condition: uniform_global_expr,
@@ -599,7 +612,8 @@ fn uniform_control_flow() {
         info.process_block(&[stmt_if_uniform], &[], true),
         Ok(ControlFlags::REQUIRE_UNIFORM),
     );
-    assert_eq!(info.expressions[constant_expr.index()].ref_count, 2);
+    assert_eq!(info[constant_expr].ref_count, 2);
+    assert_eq!(info[uniform_global], GlobalUse::READ | GlobalUse::QUERY);
 
     let stmt_if_non_uniform = S::If {
         condition: non_uniform_global_expr,
@@ -613,7 +627,8 @@ fn uniform_control_flow() {
         info.process_block(&[stmt_if_non_uniform], &[], true),
         Err(AnalysisError::NonUniformControlFlow),
     );
-    assert_eq!(info.expressions[derivative_expr.index()].ref_count, 2);
+    assert_eq!(info[derivative_expr].ref_count, 2);
+    assert_eq!(info[non_uniform_global], GlobalUse::READ);
 
     let stmt_return_non_uniform = S::Return {
         value: Some(non_uniform_global_expr),
@@ -622,8 +637,15 @@ fn uniform_control_flow() {
         info.process_block(&[stmt_return_non_uniform], &[], false),
         Ok(ControlFlags::NON_UNIFORM_RESULT | ControlFlags::MAY_EXIT),
     );
+    assert_eq!(info[non_uniform_global_expr].ref_count, 3);
+
+    let stmt_assign = S::Store {
+        pointer: access_expr,
+        value: query_expr,
+    };
     assert_eq!(
-        info.expressions[non_uniform_global_expr.index()].ref_count,
-        2
+        info.process_block(&[stmt_assign], &[], false),
+        Ok(ControlFlags::NON_UNIFORM_RESULT),
     );
+    assert_eq!(info[non_uniform_global], GlobalUse::READ | GlobalUse::WRITE);
 }
