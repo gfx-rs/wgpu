@@ -1,13 +1,13 @@
 use crate::{
-    Binding, BuiltIn, Expression, GlobalVariable, Handle, ScalarKind, ShaderStage, StorageAccess,
-    StorageClass, Type, TypeInner, VectorSize,
+    Binding, BuiltIn, Expression, GlobalVariable, Handle, ScalarKind, StorageAccess, StorageClass,
+    Type, TypeInner, VectorSize,
 };
 
 use super::ast::*;
 use super::error::ErrorKind;
 use super::token::TokenMetadata;
 
-impl Program {
+impl Program<'_> {
     pub fn lookup_variable(&mut self, name: &str) -> Result<Option<Handle<Expression>>, ErrorKind> {
         if let Some(local_var) = self.context.lookup_local_var(name) {
             return Ok(Some(local_var));
@@ -20,10 +20,6 @@ impl Program {
         }
         match name {
             "gl_Position" => {
-                #[cfg(feature = "glsl-validate")]
-                if !self.has_stage(ShaderStage::Vertex) {
-                    return Err(ErrorKind::VariableNotAvailable(name.into()));
-                };
                 let h = self.module.global_variables.append(GlobalVariable {
                     name: Some(name.into()),
                     class: StorageClass::Output,
@@ -50,10 +46,6 @@ impl Program {
                 Ok(Some(exp))
             }
             "gl_VertexIndex" => {
-                #[cfg(feature = "glsl-validate")]
-                if !self.has_stage(ShaderStage::Vertex) {
-                    return Err(ErrorKind::VariableNotAvailable(name.into()));
-                };
                 let h = self.module.global_variables.append(GlobalVariable {
                     name: Some(name.into()),
                     class: StorageClass::Input,
@@ -86,10 +78,6 @@ impl Program {
                 Ok(Some(expr))
             }
             "gl_InstanceIndex" => {
-                #[cfg(feature = "glsl-validate")]
-                if !self.has_stage(ShaderStage::Vertex) {
-                    return Err(ErrorKind::VariableNotAvailable(name.into()));
-                };
                 let h = self.module.global_variables.append(GlobalVariable {
                     name: Some(name.into()),
                     class: StorageClass::Input,

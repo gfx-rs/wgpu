@@ -105,30 +105,42 @@ fn main() {
         #[cfg(feature = "glsl-in")]
         "vert" => {
             let input = fs::read_to_string(&args[1]).unwrap();
+            let mut entry_points = naga::FastHashMap::default();
+            entry_points.insert("main".to_string(), naga::ShaderStage::Vertex);
             naga::front::glsl::parse_str(
                 &input,
-                vec![("main".to_string(), naga::ShaderStage::Vertex)],
-                Default::default(),
+                &naga::front::glsl::Options {
+                    entry_points,
+                    defines: Default::default(),
+                },
             )
             .unwrap_pretty()
         }
         #[cfg(feature = "glsl-in")]
         "frag" => {
             let input = fs::read_to_string(&args[1]).unwrap();
+            let mut entry_points = naga::FastHashMap::default();
+            entry_points.insert("main".to_string(), naga::ShaderStage::Fragment);
             naga::front::glsl::parse_str(
                 &input,
-                vec![("main".to_string(), naga::ShaderStage::Fragment)],
-                Default::default(),
+                &naga::front::glsl::Options {
+                    entry_points,
+                    defines: Default::default(),
+                },
             )
             .unwrap_pretty()
         }
         #[cfg(feature = "glsl-in")]
         "comp" => {
             let input = fs::read_to_string(&args[1]).unwrap();
+            let mut entry_points = naga::FastHashMap::default();
+            entry_points.insert("main".to_string(), naga::ShaderStage::Compute);
             naga::front::glsl::parse_str(
                 &input,
-                vec![("main".to_string(), naga::ShaderStage::Compute)],
-                Default::default(),
+                &naga::front::glsl::Options {
+                    entry_points,
+                    defines: Default::default(),
+                },
             )
             .unwrap_pretty()
         }

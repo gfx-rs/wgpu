@@ -6,7 +6,7 @@ use crate::{
 
 use super::{ast::*, error::ErrorKind};
 
-impl Program {
+impl Program<'_> {
     pub fn function_call(&mut self, fc: FunctionCall) -> Result<ExpressionRule, ErrorKind> {
         match fc.kind {
             FunctionCallKind::TypeConstructor(ty) => {
@@ -282,15 +282,15 @@ impl Program {
         f
     }
 
-    pub fn declare_function(&mut self, f: Function) {
-        let stage = if let Some(ref name) = f.name {
-            self.entry_points
-                .iter()
-                .find_map(|(n, s)| if *name == *n { Some(*s) } else { None })
-        } else {
-            None
-        };
-        let name = f.name.clone().unwrap();
+    pub fn declare_function(&mut self, f: Function) -> Result<(), ErrorKind> {
+        let name = f
+            .name
+            .clone()
+            .ok_or_else(|| ErrorKind::SemanticError("Unnamed function".into()))?;
+        let stage = self
+            .entry_points
+            .iter()
+            .find_map(|(n, s)| if *name == *n { Some(*s) } else { None });
         if let Some(stage) = stage {
             self.module.entry_points.insert(
                 (stage, name),
@@ -304,5 +304,6 @@ impl Program {
             let handle = self.module.functions.append(f);
             self.lookup_function.insert(name, handle);
         }
+        Ok(())
     }
 }

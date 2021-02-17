@@ -7,10 +7,10 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Program {
+pub struct Program<'a> {
     pub version: u16,
     pub profile: Profile,
-    pub entry_points: Vec<(String, ShaderStage)>,
+    pub entry_points: &'a FastHashMap<String, ShaderStage>,
     pub lookup_function: FastHashMap<String, Handle<Function>>,
     pub lookup_type: FastHashMap<String, Handle<Type>>,
     pub lookup_global_variables: FastHashMap<String, Handle<GlobalVariable>>,
@@ -19,8 +19,8 @@ pub struct Program {
     pub module: Module,
 }
 
-impl Program {
-    pub fn new(entry_points: Vec<(String, ShaderStage)>) -> Program {
+impl<'a> Program<'a> {
+    pub fn new(entry_points: &'a FastHashMap<String, ShaderStage>) -> Program<'a> {
         Program {
             version: 0,
             profile: Profile::Core,
@@ -40,10 +40,6 @@ impl Program {
             },
             module: Module::default(),
         }
-    }
-
-    pub fn has_stage(&self, stage: ShaderStage) -> bool {
-        self.entry_points.iter().any(|(_, s)| *s == stage)
     }
 
     pub fn binary_expr(

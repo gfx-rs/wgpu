@@ -249,7 +249,7 @@ fn convert_spv_shadow() {
 }
 
 #[cfg(feature = "glsl-in")]
-fn convert_glsl(name: &str, entry_points: Vec<(String, naga::ShaderStage)>) {
+fn convert_glsl(name: &str, entry_points: naga::FastHashMap<String, naga::ShaderStage>) {
     let params = match std::fs::read_to_string(format!("tests/in/{}{}", name, ".param.ron")) {
         Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
         Err(_) => Parameters::default(),
@@ -258,8 +258,10 @@ fn convert_glsl(name: &str, entry_points: Vec<(String, naga::ShaderStage)>) {
     let module = naga::front::glsl::parse_str(
         &std::fs::read_to_string(format!("tests/in/{}{}", name, ".glsl"))
             .expect("Couldn't find glsl file"),
-        entry_points,
-        Default::default(),
+        &naga::front::glsl::Options {
+            entry_points,
+            defines: Default::default(),
+        },
     )
     .unwrap();
     naga::proc::Validator::new().validate(&module).unwrap();
@@ -281,11 +283,8 @@ fn convert_glsl(name: &str, entry_points: Vec<(String, naga::ShaderStage)>) {
 #[cfg(feature = "glsl-in")]
 #[test]
 fn convert_glsl_quad() {
-    convert_glsl(
-        "quad-glsl",
-        vec![
-            ("vert_main".to_string(), naga::ShaderStage::Vertex),
-            ("frag_main".to_string(), naga::ShaderStage::Fragment),
-        ],
-    );
+    let mut entry_points = naga::FastHashMap::default();
+    entry_points.insert("vert_main".to_string(), naga::ShaderStage::Vertex);
+    entry_points.insert("frag_main".to_string(), naga::ShaderStage::Fragment);
+    convert_glsl("quad-glsl", entry_points);
 }

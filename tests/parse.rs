@@ -14,10 +14,14 @@ fn check_glsl(name: &str) {
         panic!("Unknown extension in {:?}", name)
     };
 
+    let mut entry_points = naga::FastHashMap::default();
+    entry_points.insert("main".to_string(), stage);
     match naga::front::glsl::parse_str(
         &input,
-        vec![("main".to_string(), stage)],
-        Default::default(),
+        &naga::front::glsl::Options {
+            entry_points,
+            defines: Default::default(),
+        },
     ) {
         Ok(m) => match naga::proc::Validator::new().validate(&m) {
             Ok(_analysis) => (),

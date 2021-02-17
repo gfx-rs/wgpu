@@ -23,15 +23,15 @@ mod token;
 mod types;
 mod variables;
 
-pub fn parse_str(
-    source: &str,
-    entry_points: Vec<(String, ShaderStage)>,
-    defines: FastHashMap<String, String>,
-) -> Result<Module, ParseError> {
-    let mut program = Program::new(entry_points);
+pub struct Options {
+    pub entry_points: FastHashMap<String, ShaderStage>,
+    pub defines: FastHashMap<String, String>,
+}
 
-    let mut lex = Lexer::new(source);
-    lex.pp.defines = defines;
+pub fn parse_str(source: &str, options: &Options) -> Result<Module, ParseError> {
+    let mut program = Program::new(&options.entry_points);
+
+    let lex = Lexer::new(source, &options.defines);
     let mut parser = parser::Parser::new(&mut program);
     for token in lex {
         parser.parse(token)?;

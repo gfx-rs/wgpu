@@ -20,16 +20,16 @@ pub struct IfState {
 
 #[derive(Clone, Debug)]
 pub struct LinePreProcessor {
-    pub defines: FastHashMap<String, String>,
+    defines: FastHashMap<String, String>,
     if_stack: Vec<IfState>,
     inside_comment: bool,
     in_preprocess: bool,
 }
 
 impl LinePreProcessor {
-    pub fn new() -> Self {
+    pub fn new(defines: &FastHashMap<String, String>) -> Self {
         LinePreProcessor {
-            defines: FastHashMap::default(),
+            defines: defines.clone(),
             if_stack: vec![],
             inside_comment: false,
             in_preprocess: false,

@@ -1,5 +1,6 @@
 use super::parser::Token;
 use super::{preprocess::LinePreProcessor, token::TokenMetadata, types::parse_type};
+use crate::FastHashMap;
 use std::{iter::Enumerate, str::Lines};
 
 fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
@@ -23,7 +24,7 @@ pub struct Lexer<'a> {
     line: usize,
     offset: usize,
     inside_comment: bool,
-    pub pp: LinePreProcessor,
+    pp: LinePreProcessor,
 }
 
 impl<'a> Lexer<'a> {
@@ -324,14 +325,14 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn new(input: &'a str) -> Self {
+    pub fn new(input: &'a str, defines: &FastHashMap<String, String>) -> Self {
         let mut lexer = Lexer {
             lines: input.lines().enumerate(),
             input: "".to_string(),
             line: 0,
             offset: 0,
             inside_comment: false,
-            pp: LinePreProcessor::new(),
+            pp: LinePreProcessor::new(defines),
         };
         lexer.next_line();
         lexer

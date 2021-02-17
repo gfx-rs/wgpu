@@ -11,13 +11,13 @@ pub struct PreProcessor<'a> {
 }
 
 impl<'a> PreProcessor<'a> {
-    pub fn new(input: &'a str) -> Self {
+    pub fn new(input: &'a str, defines: crate::FastHashMap<String, String>) -> Self {
         let mut lexer = PreProcessor {
             lines: input.lines().enumerate(),
             input: "".to_string(),
             line: 0,
             offset: 0,
-            line_pp: LinePreProcessor::new(),
+            line_pp: LinePreProcessor::new(&defines),
         };
         lexer.next_line();
         lexer
@@ -69,6 +69,7 @@ fn preprocess() {
     let mut pp = PreProcessor::new(
         "void main my_\
         func",
+        Default::default(),
     );
     assert_eq!(pp.process().unwrap(), "void main my_func");
 
@@ -76,6 +77,7 @@ fn preprocess() {
     let mut pp = PreProcessor::new(
         "#version 450 core\n\
         void main()",
+        Default::default(),
     );
     assert_eq!(pp.process().unwrap(), "#version 450 core\nvoid main()");
 
@@ -83,6 +85,7 @@ fn preprocess() {
     let mut pp = PreProcessor::new(
         "#define FOO 42 \n\
         fun=FOO",
+        Default::default(),
     );
     assert_eq!(pp.process().unwrap(), "\nfun=42");
 
@@ -99,6 +102,7 @@ fn preprocess() {
             mm=49\n\
         #endif\n\
         done=1",
+        Default::default(),
     );
     assert_eq!(
         pp.process().unwrap(),
@@ -133,6 +137,7 @@ fn preprocess() {
             mm=49\n\
         #endif\n\
         done=1",
+        Default::default(),
     );
     assert_eq!(
         pp.process().unwrap(),
@@ -166,6 +171,7 @@ fn preprocess() {
             nofoo=66\n\
         #endif\n\
         done=1",
+        Default::default(),
     );
     assert_eq!(
         pp.process().unwrap(),
@@ -183,6 +189,7 @@ fn preprocess() {
     let mut pp = PreProcessor::new(
         "#define FOO 42//1234\n\
         fun=FOO",
+        Default::default(),
     );
     assert_eq!(pp.process().unwrap(), "\nfun=42");
 
@@ -192,6 +199,7 @@ fn preprocess() {
         #define FOO 88\n\
         end of comment*/ /* one more comment */ #define FOO 56\n\
         fun=FOO",
+        Default::default(),
     );
     assert_eq!(pp.process().unwrap(), "\nfun=56");
 
@@ -201,6 +209,7 @@ fn preprocess() {
         foo=42\n\
         #endif\n\
         #endif",
+        Default::default(),
     );
     assert_eq!(pp.process(), Err(Error::UnmatchedEndif));
 
@@ -213,6 +222,7 @@ fn preprocess() {
         #else\n\
         bad=true\n\
         #endif",
+        Default::default(),
     );
     assert_eq!(pp.process(), Err(Error::UnmatchedElse));
 }

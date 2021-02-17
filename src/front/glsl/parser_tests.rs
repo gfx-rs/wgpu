@@ -4,9 +4,13 @@ use super::lex::Lexer;
 use super::parser;
 use crate::ShaderStage;
 
-fn parse_program(source: &str, stage: ShaderStage) -> Result<Program, ErrorKind> {
-    let mut program = Program::new(vec![("".to_string(), stage)]);
-    let lex = Lexer::new(source);
+fn parse_program<'a>(
+    source: &str,
+    entry_points: &'a crate::FastHashMap<String, ShaderStage>,
+) -> Result<Program<'a>, ErrorKind> {
+    let mut program = Program::new(entry_points);
+    let defines = crate::FastHashMap::default();
+    let lex = Lexer::new(source, &defines);
     let mut parser = parser::Parser::new(&mut program);
 
     for token in lex {
@@ -18,11 +22,13 @@ fn parse_program(source: &str, stage: ShaderStage) -> Result<Program, ErrorKind>
 
 #[test]
 fn version() {
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Vertex);
     // invalid versions
     assert_eq!(
         format!(
             "{:?}",
-            parse_program("#version 99000", ShaderStage::Vertex)
+            parse_program("#version 99000", &entry_points)
                 .err()
                 .unwrap()
         ),
@@ -32,9 +38,7 @@ fn version() {
     assert_eq!(
         format!(
             "{:?}",
-            parse_program("#version 449", ShaderStage::Vertex)
-                .err()
-                .unwrap()
+            parse_program("#version 449", &entry_points).err().unwrap()
         ),
         "InvalidVersion(TokenMetadata { line: 0, chars: 9..12 }, 449)"
     );
@@ -42,7 +46,7 @@ fn version() {
     assert_eq!(
         format!(
             "{:?}",
-            parse_program("#version 450 smart", ShaderStage::Vertex)
+            parse_program("#version 450 smart", &entry_points)
                 .err()
                 .unwrap()
         ),
@@ -52,7 +56,7 @@ fn version() {
     assert_eq!(
         format!(
             "{:?}",
-            parse_program("#version 450\nvoid f(){} #version 450", ShaderStage::Vertex)
+            parse_program("#version 450\nvoid f(){} #version 450", &entry_points)
                 .err()
                 .unwrap()
         ),
@@ -60,19 +64,19 @@ fn version() {
     );
 
     // valid versions
-    let program = parse_program("  #  version 450\nvoid main() {}", ShaderStage::Vertex).unwrap();
+    let program = parse_program("  #  version 450\nvoid main() {}", &entry_points).unwrap();
     assert_eq!(
         format!("{:?}", (program.version, program.profile)),
         "(450, Core)"
     );
 
-    let program = parse_program("#version 450\nvoid main() {}", ShaderStage::Vertex).unwrap();
+    let program = parse_program("#version 450\nvoid main() {}", &entry_points).unwrap();
     assert_eq!(
         format!("{:?}", (program.version, program.profile)),
         "(450, Core)"
     );
 
-    let program = parse_program("#version 450 core\nvoid main() {}", ShaderStage::Vertex).unwrap();
+    let program = parse_program("#version 450 core\nvoid main() {}", &entry_points).unwrap();
     assert_eq!(
         format!("{:?}", (program.version, program.profile)),
         "(450, Core)"
@@ -81,6 +85,9 @@ fn version() {
 
 #[test]
 fn control_flow() {
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Vertex);
+
     let _program = parse_program(
         r#"
         #  version 450
@@ -92,7 +99,7 @@ fn control_flow() {
             }
         }
         "#,
-        ShaderStage::Vertex,
+        &entry_points,
     )
     .unwrap();
 
@@ -105,7 +112,7 @@ fn control_flow() {
             }
         }
         "#,
-        ShaderStage::Vertex,
+        &entry_points,
     )
     .unwrap();
 
@@ -127,7 +134,7 @@ fn control_flow() {
             }
         }
         "#,
-        ShaderStage::Vertex,
+        &entry_points,
     )
     .unwrap();
     let _program = parse_program(
@@ -143,7 +150,7 @@ fn control_flow() {
             } while(x >= 4)
         }
         "#,
-        ShaderStage::Vertex,
+        &entry_points,
     )
     .unwrap();
 
@@ -158,13 +165,16 @@ fn control_flow() {
             return x;
         }
         "#,
-        ShaderStage::Vertex,
+        &entry_points,
     )
     .unwrap();
 }
 
 #[test]
 fn textures() {
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Fragment);
+
     let _program = parse_program(
         r#"
         #version 450
@@ -176,13 +186,16 @@ fn textures() {
             o_color = texture(sampler2D(tex, tex_sampler), v_uv);
         }
         "#,
-        ShaderStage::Fragment,
+        &entry_points,
     )
     .unwrap();
 }
 
 #[test]
 fn functions() {
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Vertex);
+
     // TODO: Add support for function prototypes
     // parse_program(
     //     r#"
@@ -205,7 +218,7 @@ fn functions() {
         
         void main() {}
         "#,
-        ShaderStage::Vertex,
+        &entry_points,
     )
     .unwrap();
 
@@ -216,7 +229,7 @@ fn functions() {
         
         void main() {}
         "#,
-        ShaderStage::Vertex,
+        &entry_points,
     )
     .unwrap();
 
@@ -227,7 +240,7 @@ fn functions() {
             return p.x;
         }
         "#,
-        ShaderStage::Vertex,
+        &entry_points,
     )
     .unwrap();
 }
@@ -236,6 +249,9 @@ fn functions() {
 fn constants() {
     use crate::{Constant, ConstantInner, ScalarValue};
 
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Vertex);
+
     let program = parse_program(
         r#"
         #  version 450
@@ -243,7 +259,7 @@ fn constants() {
         float global = a;
         const flat float b = a;
         "#,
-        ShaderStage::Vertex,
+        &entry_points,
     )
     .unwrap();
 

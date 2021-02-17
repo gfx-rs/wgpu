@@ -17,8 +17,6 @@ pub enum ErrorKind {
     UnknownField(TokenMetadata, String),
     #[cfg(feature = "glsl-validate")]
     VariableAlreadyDeclared(String),
-    #[cfg(feature = "glsl-validate")]
-    VariableNotAvailable(String),
     ExpectedConstant,
     SemanticError(Cow<'static, str>),
     PreprocessorError(String),
@@ -48,10 +46,6 @@ impl fmt::Display for ErrorKind {
             #[cfg(feature = "glsl-validate")]
             ErrorKind::VariableAlreadyDeclared(val) => {
                 write!(f, "Variable {} already declared in current scope", val)
-            }
-            #[cfg(feature = "glsl-validate")]
-            ErrorKind::VariableNotAvailable(val) => {
-                write!(f, "Variable {} not available in this stage", val)
             }
             ErrorKind::ExpectedConstant => write!(f, "Expected constant"),
             ErrorKind::SemanticError(msg) => write!(f, "Semantic error: {}", msg),

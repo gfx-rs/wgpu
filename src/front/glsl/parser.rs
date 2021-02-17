@@ -14,8 +14,8 @@ pomelo! {
         };
     }
     %token #[derive(Debug)] #[cfg_attr(test, derive(PartialEq))] pub enum Token {};
-    %parser pub struct Parser<'a> {};
-    %extra_argument &'a mut Program;
+    %parser pub struct Parser<'a, 'b> {};
+    %extra_argument &'a mut Program<'b>;
     %extra_token TokenMetadata;
     %error ErrorKind;
     %syntax_error {
@@ -1063,7 +1063,7 @@ pomelo! {
     translation_unit ::= translation_unit external_declaration;
 
     external_declaration ::= function_definition(f) {
-        extra.declare_function(f)
+        extra.declare_function(f)?
     }
     external_declaration ::= declaration(d) {
         if let Some(d) = d {
