@@ -287,11 +287,8 @@ impl Program<'_> {
             .name
             .clone()
             .ok_or_else(|| ErrorKind::SemanticError("Unnamed function".into()))?;
-        let stage = self
-            .entry_points
-            .iter()
-            .find_map(|(n, s)| if *name == *n { Some(*s) } else { None });
-        if let Some(stage) = stage {
+        let stage = self.entry_points.get(&name);
+        if let Some(&stage) = stage {
             self.module.entry_points.insert(
                 (stage, name),
                 EntryPoint {
