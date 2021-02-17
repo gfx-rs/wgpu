@@ -1004,7 +1004,6 @@ pomelo! {
             name: Some(n.1),
             arguments: vec![],
             return_type: t.1,
-            global_usage: vec![],
             local_variables: Arena::<LocalVariable>::new(),
             expressions: Arena::<Expression>::new(),
             body: vec![],

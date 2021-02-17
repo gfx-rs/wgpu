@@ -49,6 +49,7 @@ struct Parameters {
     mtl_bindings: naga::FastHashMap<BindSource, BindTarget>,
 }
 
+#[allow(dead_code)]
 fn with_snapshot_settings<F: FnOnce() -> ()>(snapshot_assertion: F) {
     let mut settings = insta::Settings::new();
     settings.set_snapshot_path("out");
@@ -57,7 +58,12 @@ fn with_snapshot_settings<F: FnOnce() -> ()>(snapshot_assertion: F) {
 }
 
 #[cfg(feature = "spv-out")]
-fn check_output_spv(module: &naga::Module, name: &str, params: &Parameters) {
+fn check_output_spv(
+    module: &naga::Module,
+    analysis: &naga::proc::analyzer::Analysis,
+    name: &str,
+    params: &Parameters,
+) {
     use naga::back::spv;
     use rspirv::binary::Disassemble;
 
@@ -67,7 +73,7 @@ fn check_output_spv(module: &naga::Module, name: &str, params: &Parameters) {
         capabilities: params.spv_capabilities.clone(),
     };
 
-    let spv = spv::write_vec(&module, &options).unwrap();
+    let spv = spv::write_vec(module, analysis, &options).unwrap();
 
     let dis = rspirv::dr::load_words(spv)
         .expect("Produced invalid SPIR-V")
@@ -162,7 +168,7 @@ fn convert_wgsl(name: &str, language: Language) {
     #[cfg(feature = "spv-out")]
     {
         if language.contains(Language::SPIRV) {
-            check_output_spv(&module, name, &params);
+            check_output_spv(&module, &analysis, name, &params);
         }
     }
     #[cfg(feature = "msl-out")]
@@ -264,11 +270,11 @@ fn convert_glsl(name: &str, entry_points: naga::FastHashMap<String, naga::Shader
         },
     )
     .unwrap();
-    naga::proc::Validator::new().validate(&module).unwrap();
+    let analysis = naga::proc::Validator::new().validate(&module).unwrap();
 
     #[cfg(feature = "spv-out")]
     {
-        check_output_spv(&module, name, &params);
+        check_output_spv(&module, &analysis, name, &params);
     }
     #[cfg(feature = "serialize")]
     {

@@ -1988,7 +1988,6 @@ impl Parser {
             name: Some(fun_name.to_string()),
             arguments,
             return_type,
-            global_usage: Vec::new(),
             local_variables: Arena::new(),
             expressions,
             body: Vec::new(),
@@ -2014,7 +2013,6 @@ impl Parser {
         // fixup the IR
         ensure_block_returns(&mut fun.body);
         // done
-        fun.fill_global_use(module.global_variables.len(), &module.functions);
         self.scopes.pop();
 
         Ok((fun, fun_name))

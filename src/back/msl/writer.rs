@@ -2,7 +2,7 @@ use super::{keywords::RESERVED, Error, LocationMode, Options, TranslationInfo};
 use crate::{
     arena::Handle,
     proc::{
-        analyzer::{Analysis, FunctionInfo},
+        analyzer::{Analysis, FunctionInfo, GlobalUse},
         EntryPointIndex, Interface, NameKey, Namer, ResolveContext, Typifier, Visitor,
     },
     FastHashMap,
@@ -34,7 +34,7 @@ struct TypedGlobalVariable<'a> {
     module: &'a crate::Module,
     names: &'a FastHashMap<NameKey, String>,
     handle: Handle<crate::GlobalVariable>,
-    usage: crate::GlobalUse,
+    usage: GlobalUse,
 }
 
 impl<'a> TypedGlobalVariable<'a> {
@@ -47,7 +47,7 @@ impl<'a> TypedGlobalVariable<'a> {
         let (space_qualifier, reference) = match ty.inner {
             crate::TypeInner::Struct { .. } => match var.class {
                 crate::StorageClass::Uniform | crate::StorageClass::Storage => {
-                    let space = if self.usage.contains(crate::GlobalUse::WRITE) {
+                    let space = if self.usage.contains(GlobalUse::WRITE) {
                         "device "
                     } else {
                         "constant "
@@ -163,6 +163,7 @@ struct ExpressionContext<'a> {
     function: &'a crate::Function,
     origin: FunctionOrigin,
     module: &'a crate::Module,
+    analysis: &'a Analysis,
 }
 
 struct StatementContext<'a> {
@@ -212,7 +213,6 @@ impl<W: Write> Writer<W> {
         parameters: &[Handle<crate::Expression>],
         context: &ExpressionContext,
     ) -> Result<(), Error> {
-        let fun = &context.module.functions[fun_handle];
         let fun_name = &self.names[&NameKey::Function(fun_handle)];
         write!(self.out, "{}(", fun_name)?;
         // first, write down the actual arguments
@@ -224,13 +224,9 @@ impl<W: Write> Writer<W> {
         }
         // follow-up with any global resources used
         let mut separate = !parameters.is_empty();
-        for ((handle, var), &usage) in context
-            .module
-            .global_variables
-            .iter()
-            .zip(&fun.global_usage)
-        {
-            if !usage.is_empty() && var.class.needs_pass_through() {
+        let fun_info = &context.analysis[fun_handle];
+        for (handle, var) in context.module.global_variables.iter() {
+            if !fun_info[handle].is_empty() && var.class.needs_pass_through() {
                 let name = &self.names[&NameKey::GlobalVariable(handle)];
                 if separate {
                     write!(self.out, ", ")?;
@@ -1122,9 +1118,10 @@ impl<W: Write> Writer<W> {
                 },
             )?;
 
+            let fun_info = &analysis[fun_handle];
             pass_through_globals.clear();
-            for ((handle, var), &usage) in module.global_variables.iter().zip(&fun.global_usage) {
-                if !usage.is_empty() && var.class.needs_pass_through() {
+            for (handle, var) in module.global_variables.iter() {
+                if !fun_info[handle].is_empty() && var.class.needs_pass_through() {
                     pass_through_globals.push(handle);
                 }
             }
@@ -1152,7 +1149,7 @@ impl<W: Write> Writer<W> {
                     module,
                     names: &self.names,
                     handle,
-                    usage: fun.global_usage[handle.index()],
+                    usage: fun_info[handle],
                 };
                 let separator = separate(index + 1 == pass_through_globals.len());
                 write!(self.out, "{}", INDENT)?;
@@ -1177,8 +1174,9 @@ impl<W: Write> Writer<W> {
                     function: fun,
                     origin: FunctionOrigin::Handle(fun_handle),
                     module,
+                    analysis,
                 },
-                fun_info: &analysis[fun_handle],
+                fun_info,
                 return_value: None,
             };
             self.named_expressions.clear();
@@ -1192,6 +1190,7 @@ impl<W: Write> Writer<W> {
         };
         for (ep_index, (&(stage, ref ep_name), ep)) in module.entry_points.iter().enumerate() {
             let fun = &ep.function;
+            let fun_info = analysis.get_entry_point(stage, ep_name);
             self.typifier.resolve_all(
                 &fun.expressions,
                 &module.types,
@@ -1206,7 +1205,7 @@ impl<W: Write> Writer<W> {
 
             // find the entry point(s) and inputs/outputs
             let mut last_used_global = None;
-            for ((handle, var), &usage) in module.global_variables.iter().zip(&fun.global_usage) {
+            for (handle, var) in module.global_variables.iter() {
                 match var.class {
                     crate::StorageClass::Input => {
                         if let Some(crate::Binding::Location(_)) = var.binding {
@@ -1216,7 +1215,7 @@ impl<W: Write> Writer<W> {
                     crate::StorageClass::Output => continue,
                     _ => {}
                 }
-                if !usage.is_empty() {
+                if !fun_info[handle].is_empty() {
                     last_used_global = Some(handle);
                 }
             }
@@ -1246,11 +1245,9 @@ impl<W: Write> Writer<W> {
                 crate::ShaderStage::Vertex | crate::ShaderStage::Fragment => {
                     // make dedicated input/output structs
                     writeln!(self.out, "struct {} {{", location_input_name)?;
-                    for ((handle, var), &usage) in
-                        module.global_variables.iter().zip(&fun.global_usage)
-                    {
+                    for (handle, var) in module.global_variables.iter() {
                         if var.class != crate::StorageClass::Input
-                            || !usage.contains(crate::GlobalUse::READ)
+                            || !fun_info[handle].contains(GlobalUse::READ)
                         {
                             continue;
                         }
@@ -1262,7 +1259,7 @@ impl<W: Write> Writer<W> {
                             module,
                             names: &self.names,
                             handle,
-                            usage: crate::GlobalUse::empty(),
+                            usage: GlobalUse::empty(),
                         };
                         write!(self.out, "{}", INDENT)?;
                         tyvar.try_fmt(&mut self.out)?;
@@ -1274,11 +1271,9 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out)?;
 
                     writeln!(self.out, "struct {} {{", output_name)?;
-                    for ((handle, var), &usage) in
-                        module.global_variables.iter().zip(&fun.global_usage)
-                    {
+                    for (handle, var) in module.global_variables.iter() {
                         if var.class != crate::StorageClass::Output
-                            || !usage.contains(crate::GlobalUse::WRITE)
+                            || !fun_info[handle].contains(GlobalUse::WRITE)
                         {
                             continue;
                         }
@@ -1287,7 +1282,7 @@ impl<W: Write> Writer<W> {
                             module,
                             names: &self.names,
                             handle,
-                            usage: crate::GlobalUse::empty(),
+                            usage: GlobalUse::empty(),
                         };
                         write!(self.out, "{}", INDENT)?;
                         tyvar.try_fmt(&mut self.out)?;
@@ -1314,7 +1309,8 @@ impl<W: Write> Writer<W> {
                 }
             };
 
-            for ((handle, var), &usage) in module.global_variables.iter().zip(&fun.global_usage) {
+            for (handle, var) in module.global_variables.iter() {
+                let usage = fun_info[handle];
                 if usage.is_empty() || var.class == crate::StorageClass::Output {
                     continue;
                 }
@@ -1384,8 +1380,9 @@ impl<W: Write> Writer<W> {
                     function: fun,
                     origin: FunctionOrigin::EntryPoint(ep_index as _),
                     module,
+                    analysis,
                 },
-                fun_info: analysis.get_entry_point(stage, ep_name),
+                fun_info,
                 return_value,
             };
             self.named_expressions.clear();

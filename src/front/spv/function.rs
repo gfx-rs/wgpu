@@ -68,7 +68,6 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 } else {
                     Some(self.lookup_type.lookup(result_type_id)?.handle)
                 },
-                global_usage: Vec::new(),
                 local_variables: Arena::new(),
                 expressions: self.make_expression_storage(),
                 body: Vec::new(),
@@ -147,7 +146,6 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         // done
         self.patch_function_calls(&mut fun)?;
-        fun.fill_global_use(module.global_variables.len(), &module.functions);
 
         let dump_suffix = match self.lookup_entry_point.remove(&fun_id) {
             Some(ep) => {

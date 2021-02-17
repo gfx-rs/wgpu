@@ -592,29 +592,6 @@ expression: output
                 ),
             ],
             return_type: Some(1),
-            global_usage: [
-                (
-                    bits: 1,
-                ),
-                (
-                    bits: 1,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-            ],
             local_variables: [],
             expressions: [
                 GlobalVariable(3),
@@ -825,29 +802,6 @@ expression: output
                 name: Some("fs_main"),
                 arguments: [],
                 return_type: None,
-                global_usage: [
-                    (
-                        bits: 1,
-                    ),
-                    (
-                        bits: 1,
-                    ),
-                    (
-                        bits: 1,
-                    ),
-                    (
-                        bits: 1,
-                    ),
-                    (
-                        bits: 1,
-                    ),
-                    (
-                        bits: 1,
-                    ),
-                    (
-                        bits: 2,
-                    ),
-                ],
                 local_variables: [
                     (
                         name: Some("color"),

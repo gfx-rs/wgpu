@@ -405,18 +405,20 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
+        let ep_info = self
+            .analysis
+            .get_entry_point(self.options.entry_point.0, &self.options.entry_point.1);
+
         // Write the globals
         //
         // We filter all globals that aren't used by the selected entry point as they might be
         // interfere with each other (i.e. two globals with the same location but different with
         // different classes)
-        for (handle, global) in self
-            .module
-            .global_variables
-            .iter()
-            .zip(&self.entry_point.function.global_usage)
-            .filter_map(|(global, usage)| Some(global).filter(|_| !usage.is_empty()))
-        {
+        for (handle, global) in self.module.global_variables.iter() {
+            if ep_info[handle].is_empty() {
+                continue;
+            }
+
             // Skip builtins
             // TODO: Write them if they have modifiers
             if let Some(crate::Binding::BuiltIn(_)) = global.binding {
@@ -1775,13 +1777,8 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        for ((handle, var), &usage) in self
-            .module
-            .global_variables
-            .iter()
-            .zip(&self.entry_point.function.global_usage)
-        {
-            if usage.is_empty() {
+        for (handle, var) in self.module.global_variables.iter() {
+            if info[handle].is_empty() {
                 continue;
             }
             match self.module.types[var.ty].inner {

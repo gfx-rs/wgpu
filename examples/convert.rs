@@ -221,7 +221,7 @@ fn main() {
                 capabilities: params.spv_capabilities,
             };
 
-            let spv = spv::write_vec(&module, &options).unwrap_pretty();
+            let spv = spv::write_vec(&module, &analysis, &options).unwrap_pretty();
 
             let bytes = spv
                 .iter()

@@ -1,5 +1,5 @@
 use super::{
-    analyzer::{Analysis, AnalysisError},
+    analyzer::{Analysis, AnalysisError, FunctionInfo, GlobalUse},
     typifier::{ResolveContext, ResolveError, Typifier},
 };
 use crate::arena::{Arena, Handle};
@@ -81,8 +81,6 @@ pub enum FunctionError {
     Resolve(#[from] ResolveError),
     #[error("There are instructions after `return`/`break`/`continue`")]
     InvalidControlFlowExitTail,
-    #[error("The global use array has a different length from the global variables")]
-    InvalidGlobalUsageLength,
     #[error("Local variable {handle:?} '{name}' is invalid: {error:?}")]
     LocalVariable {
         handle: Handle<crate::LocalVariable>,
@@ -106,7 +104,7 @@ pub enum EntryPointError {
     #[error("Can't have a return value")]
     UnexpectedReturnValue,
     #[error("Global variable {0:?} is used incorrectly as {1:?}")]
-    InvalidGlobalUsage(Handle<crate::GlobalVariable>, crate::GlobalUse),
+    InvalidGlobalUsage(Handle<crate::GlobalVariable>, GlobalUse),
     #[error("Bindings for {0:?} conflict with other global variables")]
     BindingCollision(Handle<crate::GlobalVariable>),
     #[error("Built-in {0:?} is not applicable to this entry point")]
@@ -256,38 +254,38 @@ impl crate::GlobalVariable {
     }
 }
 
-fn storage_usage(access: crate::StorageAccess) -> crate::GlobalUse {
-    let mut storage_usage = crate::GlobalUse::empty();
+fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
+    let mut storage_usage = GlobalUse::QUERY;
     if access.contains(crate::StorageAccess::LOAD) {
-        storage_usage |= crate::GlobalUse::READ;
+        storage_usage |= GlobalUse::READ;
     }
     if access.contains(crate::StorageAccess::STORE) {
-        storage_usage |= crate::GlobalUse::WRITE;
+        storage_usage |= GlobalUse::WRITE;
     }
     storage_usage
 }
 
-fn built_in_usage(built_in: crate::BuiltIn) -> (crate::ShaderStage, crate::GlobalUse) {
-    use crate::{BuiltIn as Bi, GlobalUse as Gu, ShaderStage as Ss};
+fn built_in_usage(built_in: crate::BuiltIn) -> (crate::ShaderStage, GlobalUse) {
+    use crate::{BuiltIn as Bi, ShaderStage as Ss};
     match built_in {
-        Bi::BaseInstance => (Ss::Vertex, Gu::READ),
-        Bi::BaseVertex => (Ss::Vertex, Gu::READ),
-        Bi::ClipDistance => (Ss::Vertex, Gu::WRITE),
-        Bi::InstanceIndex => (Ss::Vertex, Gu::READ),
-        Bi::PointSize => (Ss::Vertex, Gu::WRITE),
-        Bi::Position => (Ss::Vertex, Gu::WRITE),
-        Bi::VertexIndex => (Ss::Vertex, Gu::READ),
-        Bi::FragCoord => (Ss::Fragment, Gu::READ),
-        Bi::FragDepth => (Ss::Fragment, Gu::WRITE),
-        Bi::FrontFacing => (Ss::Fragment, Gu::READ),
-        Bi::SampleIndex => (Ss::Fragment, Gu::READ),
-        Bi::SampleMaskIn => (Ss::Fragment, Gu::READ),
-        Bi::SampleMaskOut => (Ss::Fragment, Gu::WRITE),
-        Bi::GlobalInvocationId => (Ss::Compute, Gu::READ),
-        Bi::LocalInvocationId => (Ss::Compute, Gu::READ),
-        Bi::LocalInvocationIndex => (Ss::Compute, Gu::READ),
-        Bi::WorkGroupId => (Ss::Compute, Gu::READ),
-        Bi::WorkGroupSize => (Ss::Compute, Gu::READ),
+        Bi::BaseInstance => (Ss::Vertex, GlobalUse::READ),
+        Bi::BaseVertex => (Ss::Vertex, GlobalUse::READ),
+        Bi::ClipDistance => (Ss::Vertex, GlobalUse::WRITE),
+        Bi::InstanceIndex => (Ss::Vertex, GlobalUse::READ),
+        Bi::PointSize => (Ss::Vertex, GlobalUse::WRITE),
+        Bi::Position => (Ss::Vertex, GlobalUse::WRITE),
+        Bi::VertexIndex => (Ss::Vertex, GlobalUse::READ),
+        Bi::FragCoord => (Ss::Fragment, GlobalUse::READ),
+        Bi::FragDepth => (Ss::Fragment, GlobalUse::WRITE),
+        Bi::FrontFacing => (Ss::Fragment, GlobalUse::READ),
+        Bi::SampleIndex => (Ss::Fragment, GlobalUse::READ),
+        Bi::SampleMaskIn => (Ss::Fragment, GlobalUse::READ),
+        Bi::SampleMaskOut => (Ss::Fragment, GlobalUse::WRITE),
+        Bi::GlobalInvocationId => (Ss::Compute, GlobalUse::READ),
+        Bi::LocalInvocationId => (Ss::Compute, GlobalUse::READ),
+        Bi::LocalInvocationIndex => (Ss::Compute, GlobalUse::READ),
+        Bi::WorkGroupId => (Ss::Compute, GlobalUse::READ),
+        Bi::WorkGroupSize => (Ss::Compute, GlobalUse::READ),
     }
 }
 
@@ -531,6 +529,7 @@ impl Validator {
     fn validate_function(
         &mut self,
         fun: &crate::Function,
+        _info: &FunctionInfo,
         module: &crate::Module,
     ) -> Result<(), FunctionError> {
         let resolve_ctx = ResolveContext {
@@ -542,10 +541,6 @@ impl Validator {
         };
         self.typifier
             .resolve_all(&fun.expressions, &module.types, &resolve_ctx)?;
-
-        if fun.global_usage.len() > module.global_variables.len() {
-            return Err(FunctionError::InvalidGlobalUsageLength);
-        }
 
         for (var_handle, var) in fun.local_variables.iter() {
             self.validate_local_var(var, &module.types, &module.constants)
@@ -575,6 +570,7 @@ impl Validator {
         &mut self,
         ep: &crate::EntryPoint,
         stage: crate::ShaderStage,
+        info: &FunctionInfo,
         module: &crate::Module,
     ) -> Result<(), EntryPointError> {
         if ep.early_depth_test.is_some() && stage != crate::ShaderStage::Fragment {
@@ -598,11 +594,8 @@ impl Validator {
             bg.clear();
         }
 
-        for ((var_handle, var), &usage) in module
-            .global_variables
-            .iter()
-            .zip(&ep.function.global_usage)
-        {
+        for (var_handle, var) in module.global_variables.iter() {
+            let usage = info[var_handle];
             if usage.is_empty() {
                 continue;
             }
@@ -629,9 +622,7 @@ impl Validator {
                     match var.binding {
                         Some(crate::Binding::BuiltIn(built_in)) => {
                             let (allowed_stage, allowed_usage) = built_in_usage(built_in);
-                            if allowed_stage != stage
-                                || !allowed_usage.contains(crate::GlobalUse::READ)
-                            {
+                            if allowed_stage != stage || !allowed_usage.contains(GlobalUse::READ) {
                                 return Err(EntryPointError::InvalidBuiltIn(built_in));
                             }
                         }
@@ -643,15 +634,13 @@ impl Validator {
                         Some(crate::Binding::Resource { .. }) => unreachable!(),
                         None => (),
                     }
-                    crate::GlobalUse::READ
+                    GlobalUse::READ
                 }
                 crate::StorageClass::Output => {
                     match var.binding {
                         Some(crate::Binding::BuiltIn(built_in)) => {
                             let (allowed_stage, allowed_usage) = built_in_usage(built_in);
-                            if allowed_stage != stage
-                                || !allowed_usage.contains(crate::GlobalUse::WRITE)
-                            {
+                            if allowed_stage != stage || !allowed_usage.contains(GlobalUse::WRITE) {
                                 return Err(EntryPointError::InvalidBuiltIn(built_in));
                             }
                         }
@@ -663,21 +652,19 @@ impl Validator {
                         Some(crate::Binding::Resource { .. }) => unreachable!(),
                         None => (),
                     }
-                    crate::GlobalUse::READ | crate::GlobalUse::WRITE
+                    GlobalUse::READ | GlobalUse::WRITE
                 }
-                crate::StorageClass::Uniform => crate::GlobalUse::READ,
+                crate::StorageClass::Uniform => GlobalUse::READ | GlobalUse::QUERY,
                 crate::StorageClass::Storage => storage_usage(var.storage_access),
                 crate::StorageClass::Handle => match module.types[var.ty].inner {
                     crate::TypeInner::Image {
                         class: crate::ImageClass::Storage(_),
                         ..
                     } => storage_usage(var.storage_access),
-                    _ => crate::GlobalUse::READ,
+                    _ => GlobalUse::READ | GlobalUse::QUERY,
                 },
-                crate::StorageClass::Private | crate::StorageClass::WorkGroup => {
-                    crate::GlobalUse::all()
-                }
-                crate::StorageClass::PushConstant => crate::GlobalUse::READ,
+                crate::StorageClass::Private | crate::StorageClass::WorkGroup => GlobalUse::all(),
+                crate::StorageClass::PushConstant => GlobalUse::READ,
             };
             if !allowed_usage.contains(usage) {
                 log::warn!("\tUsage error for: {:?}", var);
@@ -706,7 +693,7 @@ impl Validator {
             return Err(EntryPointError::UnexpectedReturnValue);
         }
 
-        self.validate_function(&ep.function, module)?;
+        self.validate_function(&ep.function, info, module)?;
         Ok(())
     }
 
@@ -716,6 +703,8 @@ impl Validator {
         self.type_flags.clear();
         self.type_flags
             .resize(module.types.len(), TypeFlags::empty());
+
+        let analysis = Analysis::new(module)?;
 
         for (handle, constant) in module.constants.iter() {
             self.validate_constant(handle, &module.constants, &module.types)
@@ -750,12 +739,13 @@ impl Validator {
         }
 
         for (fun_handle, fun) in module.functions.iter() {
-            self.validate_function(fun, module)
+            self.validate_function(fun, &analysis[fun_handle], module)
                 .map_err(|e| ValidationError::Function(fun_handle, e))?;
         }
 
         for (&(stage, ref name), entry_point) in module.entry_points.iter() {
-            self.validate_entry_point(entry_point, stage, module)
+            let info = analysis.get_entry_point(stage, name);
+            self.validate_entry_point(entry_point, stage, info, module)
                 .map_err(|error| ValidationError::EntryPoint {
                     stage,
                     name: name.to_string(),
@@ -763,7 +753,6 @@ impl Validator {
                 })?;
         }
 
-        let analysis = Analysis::new(module)?;
         Ok(analysis)
     }
 }

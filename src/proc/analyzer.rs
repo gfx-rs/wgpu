@@ -42,6 +42,20 @@ bitflags::bitflags! {
     }
 }
 
+bitflags::bitflags! {
+    /// Indicates how a global variable is used.
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    pub struct GlobalUse: u8 {
+        /// Data will be read from the variable.
+        const READ = 0x1;
+        /// Data will be written to the variable.
+        const WRITE = 0x2;
+        /// The information about the data is queried.
+        const QUERY = 0x4;
+    }
+}
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct SamplingKey {
     pub image: Handle<crate::GlobalVariable>,
@@ -52,12 +66,38 @@ pub struct SamplingKey {
 pub struct ExpressionInfo {
     pub control_flags: ControlFlags,
     pub ref_count: usize,
+    assignable_global: Option<Handle<crate::GlobalVariable>>,
 }
 
 pub struct FunctionInfo {
+    /// Accumulated control flags of this function.
     pub control_flags: ControlFlags,
+    /// Set of image-sampler pais used with sampling.
     pub sampling_set: crate::FastHashSet<SamplingKey>,
+    /// Vector of global variable usages.
+    ///
+    /// Each item corresponds to a global variable in the module.
+    global_uses: Box<[GlobalUse]>,
+    /// Vector of expression infos.
+    ///
+    /// Each item corresponds to an expression in the function.
     expressions: Box<[ExpressionInfo]>,
+}
+
+impl FunctionInfo {
+    pub fn global_variable_count(&self) -> usize {
+        self.global_uses.len()
+    }
+    pub fn expression_count(&self) -> usize {
+        self.expressions.len()
+    }
+}
+
+impl ops::Index<Handle<crate::GlobalVariable>> for FunctionInfo {
+    type Output = GlobalUse;
+    fn index(&self, handle: Handle<crate::GlobalVariable>) -> &GlobalUse {
+        &self.global_uses[handle.index()]
+    }
 }
 
 impl ops::Index<Handle<crate::Expression>> for FunctionInfo {
@@ -78,11 +118,66 @@ pub enum AnalysisError {
 }
 
 impl FunctionInfo {
+    /// Adds a value-type reference to an expression.
     #[must_use]
-    fn add_ref(&mut self, handle: Handle<crate::Expression>) -> ControlFlags {
+    fn add_ref_impl(
+        &mut self,
+        handle: Handle<crate::Expression>,
+        global_use: GlobalUse,
+    ) -> ControlFlags {
         let info = &mut self.expressions[handle.index()];
         info.ref_count += 1;
+        // mark the used global as read
+        if let Some(global) = info.assignable_global {
+            self.global_uses[global.index()] |= global_use;
+        }
         info.control_flags
+    }
+
+    /// Adds a value-type reference to an expression.
+    #[must_use]
+    fn add_ref(&mut self, handle: Handle<crate::Expression>) -> ControlFlags {
+        self.add_ref_impl(handle, GlobalUse::READ)
+    }
+
+    /// Adds a potentially assignable reference to an expression.
+    /// These are destinations for `Store` and `ImageStore` statements,
+    /// which can transit through `Access` and `AccessIndex`.
+    #[must_use]
+    fn add_assignable_ref(
+        &mut self,
+        handle: Handle<crate::Expression>,
+        assignable_global: &mut Option<Handle<crate::GlobalVariable>>,
+    ) -> ControlFlags {
+        let info = &mut self.expressions[handle.index()];
+        info.ref_count += 1;
+        // propagate the assignable global up the chain, till it either hits
+        // a value-type expression, or the assignment statement.
+        if let Some(global) = info.assignable_global {
+            if let Some(_old) = assignable_global.replace(global) {
+                unreachable!()
+            }
+        }
+        info.control_flags
+    }
+
+    /// Inherit information from a called function.
+    fn process_call(
+        &mut self,
+        info: &Self,
+        arguments: &[Handle<crate::Expression>],
+    ) -> ControlFlags {
+        for key in info.sampling_set.iter() {
+            self.sampling_set.insert(key.clone());
+        }
+        for (mine, other) in self.global_uses.iter_mut().zip(info.global_uses.iter()) {
+            *mine |= *other;
+        }
+        let mut flags = info.control_flags;
+        for &argument in arguments {
+            flags |= self.add_ref(argument);
+        }
+        flags
     }
 
     /// Computes the control flags of a given expression, and store them
@@ -97,9 +192,12 @@ impl FunctionInfo {
     ) -> Result<(), AnalysisError> {
         use crate::{Expression as E, SampleLevel as Sl};
 
+        let mut assignable_global = None;
         let control_flags = match expression_arena[handle] {
-            E::Access { base, index } => self.add_ref(base) | self.add_ref(index),
-            E::AccessIndex { base, .. } => self.add_ref(base),
+            E::Access { base, index } => {
+                self.add_assignable_ref(base, &mut assignable_global) | self.add_ref(index)
+            }
+            E::AccessIndex { base, .. } => self.add_assignable_ref(base, &mut assignable_global),
             E::Constant(_) => ControlFlags::empty(),
             E::Compose { ref components, .. } => {
                 let mut accum = ControlFlags::empty();
@@ -110,6 +208,7 @@ impl FunctionInfo {
             }
             E::FunctionArgument(_) => ControlFlags::NON_UNIFORM_RESULT, //TODO?
             E::GlobalVariable(handle) => {
+                assignable_global = Some(handle);
                 let var = &global_var_arena[handle];
                 let uniform = if let Some(crate::Binding::BuiltIn(built_in)) = var.binding {
                     match built_in {
@@ -210,7 +309,7 @@ impl FunctionInfo {
                     crate::ImageQuery::Size { level: Some(h) } => self.add_ref(h),
                     _ => ControlFlags::empty(),
                 };
-                self.add_ref(image) | query_flags
+                self.add_ref_impl(image, GlobalUse::QUERY) | query_flags
             }
             E::Unary { expr, .. } => self.add_ref(expr),
             E::Binary { left, right, .. } => self.add_ref(left) | self.add_ref(right),
@@ -239,23 +338,14 @@ impl FunctionInfo {
             E::Call {
                 function,
                 ref arguments,
-            } => {
-                let other_info = &other_functions[function.index()];
-                for key in other_info.sampling_set.iter() {
-                    self.sampling_set.insert(key.clone());
-                }
-                let mut accum = other_info.control_flags;
-                for &argument in arguments {
-                    accum |= self.add_ref(argument);
-                }
-                accum
-            }
-            E::ArrayLength(expr) => self.add_ref(expr),
+            } => self.process_call(&other_functions[function.index()], arguments),
+            E::ArrayLength(expr) => self.add_ref_impl(expr, GlobalUse::QUERY),
         };
 
         self.expressions[handle.index()] = ExpressionInfo {
             control_flags,
             ref_count: 0,
+            assignable_global,
         };
         Ok(())
     }
@@ -334,7 +424,9 @@ impl FunctionInfo {
                     };
                     ControlFlags::MAY_EXIT | flags
                 }
-                S::Store { pointer, value } => self.add_ref(pointer) | self.add_ref(value),
+                S::Store { pointer, value } => {
+                    self.add_ref_impl(pointer, GlobalUse::WRITE) | self.add_ref(value)
+                }
                 S::ImageStore {
                     image,
                     coordinate,
@@ -346,20 +438,14 @@ impl FunctionInfo {
                         None => ControlFlags::empty(),
                     };
                     array_flags
-                        | self.add_ref(image)
+                        | self.add_ref_impl(image, GlobalUse::WRITE)
                         | self.add_ref(coordinate)
                         | self.add_ref(value)
                 }
                 S::Call {
                     function,
                     ref arguments,
-                } => {
-                    let mut flags = other_functions[function.index()].control_flags;
-                    for &argument in arguments {
-                        flags |= self.add_ref(argument);
-                    }
-                    flags
-                }
+                } => self.process_call(&other_functions[function.index()], arguments),
             };
 
             if flags.contains(ControlFlags::REQUIRE_UNIFORM) && !is_uniform {
@@ -389,6 +475,7 @@ impl Analysis {
         let mut info = FunctionInfo {
             control_flags: ControlFlags::empty(),
             sampling_set: crate::FastHashSet::default(),
+            global_uses: vec![GlobalUse::empty(); global_var_arena.len()].into_boxed_slice(),
             expressions: vec![ExpressionInfo::default(); fun.expressions.len()].into_boxed_slice(),
         };
 
@@ -490,6 +577,7 @@ fn uniform_control_flow() {
     let mut info = FunctionInfo {
         control_flags: ControlFlags::empty(),
         sampling_set: crate::FastHashSet::default(),
+        global_uses: vec![GlobalUse::empty(); global_var_arena.len()].into_boxed_slice(),
         expressions: vec![ExpressionInfo::default(); expressions.len()].into_boxed_slice(),
     };
     for (handle, _) in expressions.iter() {

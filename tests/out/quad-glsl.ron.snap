@@ -139,26 +139,6 @@ expression: output
                 name: Some("frag_main"),
                 arguments: [],
                 return_type: None,
-                global_usage: [
-                    (
-                        bits: 0,
-                    ),
-                    (
-                        bits: 0,
-                    ),
-                    (
-                        bits: 0,
-                    ),
-                    (
-                        bits: 0,
-                    ),
-                    (
-                        bits: 0,
-                    ),
-                    (
-                        bits: 2,
-                    ),
-                ],
                 local_variables: [],
                 expressions: [
                     GlobalVariable(1),
@@ -200,20 +180,6 @@ expression: output
                 name: Some("vert_main"),
                 arguments: [],
                 return_type: None,
-                global_usage: [
-                    (
-                        bits: 1,
-                    ),
-                    (
-                        bits: 1,
-                    ),
-                    (
-                        bits: 2,
-                    ),
-                    (
-                        bits: 2,
-                    ),
-                ],
                 local_variables: [],
                 expressions: [
                     Constant(1),

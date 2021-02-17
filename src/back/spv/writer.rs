@@ -2,7 +2,10 @@
 use super::{Instruction, LogicalLayout, Options, PhysicalLayout, WriterFlags};
 use crate::{
     arena::{Arena, Handle},
-    proc::{Layouter, ResolveContext, ResolveError, Typifier},
+    proc::{
+        analyzer::{Analysis, FunctionInfo},
+        Layouter, ResolveContext, ResolveError, Typifier,
+    },
 };
 use spirv::Word;
 use std::collections::hash_map::Entry;
@@ -456,18 +459,17 @@ impl Writer {
         entry_point: &crate::EntryPoint,
         stage: crate::ShaderStage,
         name: &str,
+        info: &FunctionInfo,
         ir_module: &crate::Module,
     ) -> Result<Instruction, Error> {
         let function_id = self.write_function(&entry_point.function, ir_module)?;
 
         let mut interface_ids = vec![];
-        for ((handle, var), &usage) in ir_module
-            .global_variables
-            .iter()
-            .zip(&entry_point.function.global_usage)
-        {
+        for (handle, var) in ir_module.global_variables.iter() {
             let is_io = match var.class {
-                crate::StorageClass::Input | crate::StorageClass::Output => !usage.is_empty(),
+                crate::StorageClass::Input | crate::StorageClass::Output => {
+                    !info[handle].is_empty()
+                }
                 _ => false,
             };
             if is_io {
@@ -2115,7 +2117,11 @@ impl Writer {
         self.physical_layout.bound = self.id_count + 1;
     }
 
-    fn write_logical_layout(&mut self, ir_module: &crate::Module) -> Result<(), Error> {
+    fn write_logical_layout(
+        &mut self,
+        ir_module: &crate::Module,
+        analysis: &Analysis,
+    ) -> Result<(), Error> {
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
             .to_words(&mut self.logical_layout.ext_inst_imports);
@@ -2148,7 +2154,8 @@ impl Writer {
         }
 
         for (&(stage, ref name), ir_ep) in ir_module.entry_points.iter() {
-            let ep_instruction = self.write_entry_point(ir_ep, stage, name, ir_module)?;
+            let info = analysis.get_entry_point(stage, name);
+            let ep_instruction = self.write_entry_point(ir_ep, stage, name, info, ir_module)?;
             ep_instruction.to_words(&mut self.logical_layout.entry_points);
         }
 
@@ -2177,11 +2184,16 @@ impl Writer {
         Ok(())
     }
 
-    pub fn write(&mut self, ir_module: &crate::Module, words: &mut Vec<Word>) -> Result<(), Error> {
+    pub fn write(
+        &mut self,
+        ir_module: &crate::Module,
+        analysis: &Analysis,
+        words: &mut Vec<Word>,
+    ) -> Result<(), Error> {
         self.layouter
             .initialize(&ir_module.types, &ir_module.constants);
 
-        self.write_logical_layout(ir_module)?;
+        self.write_logical_layout(ir_module, analysis)?;
         self.write_physical_layout();
 
         self.physical_layout.in_words(words);

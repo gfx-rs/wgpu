@@ -430,18 +430,6 @@ pub enum Binding {
     Resource { group: u32, binding: u32 },
 }
 
-bitflags::bitflags! {
-    /// Indicates how a global variable is used.
-    #[cfg_attr(feature = "serialize", derive(Serialize))]
-    #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-    pub struct GlobalUse: u8 {
-        /// Data will be read from the variable.
-        const READ = 0x1;
-        /// Data will be written to the variable.
-        const WRITE = 0x2;
-    }
-}
-
 /// Variable defined at module level.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -833,10 +821,6 @@ pub struct Function {
     pub arguments: Vec<FunctionArgument>,
     /// The return type of this function, if any.
     pub return_type: Option<Handle<Type>>,
-    /// Vector of global variable usages.
-    ///
-    /// Each item corresponds to a global variable in the module.
-    pub global_usage: Vec<GlobalUse>,
     /// Local variables defined and used in the function.
     pub local_variables: Arena<LocalVariable>,
     /// Expressions used inside this function.
