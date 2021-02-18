@@ -11,6 +11,8 @@ use std::ops;
 
 bitflags::bitflags! {
     #[derive(Default)]
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     pub struct ControlFlags: u8 {
         /// The result (of an expression) is not dynamically uniform.
         ///
@@ -57,18 +59,24 @@ bitflags::bitflags! {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct SamplingKey {
     pub image: Handle<crate::GlobalVariable>,
     pub sampler: Handle<crate::GlobalVariable>,
 }
 
 #[derive(Clone, Default)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct ExpressionInfo {
     pub control_flags: ControlFlags,
     pub ref_count: usize,
     assignable_global: Option<Handle<crate::GlobalVariable>>,
 }
 
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct FunctionInfo {
     /// Accumulated control flags of this function.
     pub control_flags: ControlFlags,
@@ -459,6 +467,8 @@ impl FunctionInfo {
 }
 
 #[derive(Default)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Analysis {
     functions: Vec<FunctionInfo>,
     entry_points: crate::FastHashMap<(crate::ShaderStage, String), FunctionInfo>,

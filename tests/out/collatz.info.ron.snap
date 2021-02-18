@@ -1,0 +1,245 @@
+---
+source: tests/snapshots.rs
+expression: output
+---
+(
+    functions: [
+        (
+            control_flags: (
+                bits: 5,
+            ),
+            sampling_set: [],
+            global_uses: [
+                (
+                    bits: 0,
+                ),
+                (
+                    bits: 0,
+                ),
+            ],
+            expressions: [
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 0,
+                    assignable_global: Some(1),
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 0,
+                    assignable_global: Some(2),
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 7,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 0,
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 3,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 0,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 0,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 0,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 0,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 0,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 0,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 0,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+            ],
+        ),
+    ],
+    entry_points: {
+        (Compute, "main"): (
+            control_flags: (
+                bits: 5,
+            ),
+            sampling_set: [],
+            global_uses: [
+                (
+                    bits: 1,
+                ),
+                (
+                    bits: 3,
+                ),
+            ],
+            expressions: [
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 2,
+                    assignable_global: Some(1),
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 2,
+                    assignable_global: Some(2),
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                ),
+                (
+                    control_flags: (
+                        bits: 5,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+            ],
+        ),
+    },
+)

@@ -1,8 +1,10 @@
 bitflags::bitflags! {
-    struct Language: u32 {
-        const SPIRV = 0x1;
-        const METAL = 0x2;
-        const GLSL = 0x4;
+    struct Targets: u32 {
+        const IR = 0x1;
+        const ANALYSIS = 0x2;
+        const SPIRV = 0x4;
+        const METAL = 0x8;
+        const GLSL = 0x10;
     }
 }
 
@@ -55,6 +57,54 @@ fn with_snapshot_settings<F: FnOnce() -> ()>(snapshot_assertion: F) {
     settings.set_snapshot_path("out");
     settings.set_prepend_module_to_snapshot(false);
     settings.bind(|| snapshot_assertion());
+}
+
+#[allow(unused_variables)]
+fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
+    let params = match std::fs::read_to_string(format!("tests/in/{}{}", name, ".param.ron")) {
+        Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
+        Err(_) => Parameters::default(),
+    };
+    let analysis = naga::proc::Validator::new().validate(module).unwrap();
+
+    #[cfg(feature = "serialize")]
+    {
+        if targets.contains(Targets::IR) {
+            let config = ron::ser::PrettyConfig::default().with_new_line("\n".to_string());
+            let output = ron::ser::to_string_pretty(module, config).unwrap();
+            with_snapshot_settings(|| {
+                insta::assert_snapshot!(format!("{}.ron", name), output);
+            });
+        }
+        if targets.contains(Targets::ANALYSIS) {
+            let config = ron::ser::PrettyConfig::default().with_new_line("\n".to_string());
+            let output = ron::ser::to_string_pretty(&analysis, config).unwrap();
+            with_snapshot_settings(|| {
+                insta::assert_snapshot!(format!("{}.info.ron", name), output);
+            });
+        }
+    }
+
+    #[cfg(feature = "spv-out")]
+    {
+        if targets.contains(Targets::SPIRV) {
+            check_output_spv(module, &analysis, name, &params);
+        }
+    }
+    #[cfg(feature = "msl-out")]
+    {
+        if targets.contains(Targets::METAL) {
+            check_output_msl(module, &analysis, name, &params);
+        }
+    }
+    #[cfg(feature = "glsl-out")]
+    {
+        if targets.contains(Targets::GLSL) {
+            for &(stage, ref ep_name) in module.entry_points.keys() {
+                check_output_glsl(module, &analysis, name, stage, ep_name);
+            }
+        }
+    }
 }
 
 #[cfg(feature = "spv-out")]
@@ -152,115 +202,83 @@ fn check_output_glsl(
 }
 
 #[cfg(feature = "wgsl-in")]
-fn convert_wgsl(name: &str, language: Language) {
-    let params = match std::fs::read_to_string(format!("tests/in/{}{}", name, ".param.ron")) {
-        Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
-        Err(_) => Parameters::default(),
-    };
-
+fn convert_wgsl(name: &str, targets: Targets) {
     let module = naga::front::wgsl::parse_str(
         &std::fs::read_to_string(format!("tests/in/{}{}", name, ".wgsl"))
             .expect("Couldn't find wgsl file"),
     )
     .unwrap();
-    let analysis = naga::proc::Validator::new().validate(&module).unwrap();
-
-    #[cfg(feature = "spv-out")]
-    {
-        if language.contains(Language::SPIRV) {
-            check_output_spv(&module, &analysis, name, &params);
-        }
-    }
-    #[cfg(feature = "msl-out")]
-    {
-        if language.contains(Language::METAL) {
-            check_output_msl(&module, &analysis, name, &params);
-        }
-    }
-    #[cfg(feature = "glsl-out")]
-    {
-        if language.contains(Language::GLSL) {
-            for &(stage, ref ep_name) in module.entry_points.keys() {
-                check_output_glsl(&module, &analysis, name, stage, ep_name);
-            }
-        }
-    }
+    check_targets(&module, name, targets);
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_quad() {
-    convert_wgsl("quad", Language::all());
+    convert_wgsl("quad", Targets::SPIRV | Targets::METAL | Targets::GLSL);
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_empty() {
-    convert_wgsl("empty", Language::all());
+    convert_wgsl("empty", Targets::SPIRV | Targets::METAL | Targets::GLSL);
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_boids() {
-    convert_wgsl("boids", Language::METAL | Language::SPIRV);
+    convert_wgsl("boids", Targets::SPIRV | Targets::METAL);
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_skybox() {
-    convert_wgsl("skybox", Language::all());
+    convert_wgsl("skybox", Targets::SPIRV | Targets::METAL | Targets::GLSL);
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_collatz() {
-    convert_wgsl("collatz", Language::METAL | Language::SPIRV);
+    convert_wgsl(
+        "collatz",
+        Targets::SPIRV | Targets::METAL | Targets::IR | Targets::ANALYSIS,
+    );
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_shadow() {
-    convert_wgsl("shadow", Language::METAL | Language::SPIRV);
+    convert_wgsl("shadow", Targets::SPIRV | Targets::METAL);
 }
 
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_texture_array() {
-    convert_wgsl("texture-array", Language::SPIRV);
+    convert_wgsl("texture-array", Targets::SPIRV);
 }
 
 #[cfg(feature = "spv-in")]
-fn convert_spv(name: &str) {
+fn convert_spv(name: &str, targets: Targets) {
     let module = naga::front::spv::parse_u8_slice(
         &std::fs::read(format!("tests/in/{}{}", name, ".spv")).expect("Couldn't find spv file"),
         &Default::default(),
     )
     .unwrap();
+    check_targets(&module, name, targets);
     naga::proc::Validator::new().validate(&module).unwrap();
-
-    #[cfg(feature = "serialize")]
-    {
-        let config = ron::ser::PrettyConfig::default().with_new_line("\n".to_string());
-        let output = ron::ser::to_string_pretty(&module, config).unwrap();
-        with_snapshot_settings(|| {
-            insta::assert_snapshot!(format!("{}.ron", name), output);
-        });
-    }
 }
 
 #[cfg(feature = "spv-in")]
 #[test]
 fn convert_spv_shadow() {
-    convert_spv("shadow");
+    convert_spv("shadow", Targets::IR | Targets::ANALYSIS);
 }
 
 #[cfg(feature = "glsl-in")]
-fn convert_glsl(name: &str, entry_points: naga::FastHashMap<String, naga::ShaderStage>) {
-    let params = match std::fs::read_to_string(format!("tests/in/{}{}", name, ".param.ron")) {
-        Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
-        Err(_) => Parameters::default(),
-    };
-
+fn convert_glsl(
+    name: &str,
+    entry_points: naga::FastHashMap<String, naga::ShaderStage>,
+    targets: Targets,
+) {
     let module = naga::front::glsl::parse_str(
         &std::fs::read_to_string(format!("tests/in/{}{}", name, ".glsl"))
             .expect("Couldn't find glsl file"),
@@ -270,20 +288,7 @@ fn convert_glsl(name: &str, entry_points: naga::FastHashMap<String, naga::Shader
         },
     )
     .unwrap();
-    let analysis = naga::proc::Validator::new().validate(&module).unwrap();
-
-    #[cfg(feature = "spv-out")]
-    {
-        check_output_spv(&module, &analysis, name, &params);
-    }
-    #[cfg(feature = "serialize")]
-    {
-        let config = ron::ser::PrettyConfig::default().with_new_line("\n".to_string());
-        let output = ron::ser::to_string_pretty(&module, config).unwrap();
-        with_snapshot_settings(|| {
-            insta::assert_snapshot!(format!("{}.ron", name), output);
-        });
-    }
+    check_targets(&module, name, targets);
 }
 
 #[cfg(feature = "glsl-in")]
@@ -292,5 +297,5 @@ fn convert_glsl_quad() {
     let mut entry_points = naga::FastHashMap::default();
     entry_points.insert("vert_main".to_string(), naga::ShaderStage::Vertex);
     entry_points.insert("frag_main".to_string(), naga::ShaderStage::Fragment);
-    convert_glsl("quad-glsl", entry_points);
+    convert_glsl("quad-glsl", entry_points, Targets::SPIRV | Targets::IR);
 }

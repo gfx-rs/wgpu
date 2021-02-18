@@ -1,0 +1,274 @@
+---
+source: tests/snapshots.rs
+expression: output
+---
+(
+    types: [
+        (
+            name: None,
+            inner: Vector(
+                size: Tri,
+                kind: Uint,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar(
+                kind: Uint,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 2,
+                size: Dynamic,
+                stride: Some(4),
+            ),
+        ),
+        (
+            name: Some("PrimeIndices"),
+            inner: Struct(
+                block: true,
+                members: [
+                    (
+                        name: Some("data"),
+                        span: None,
+                        ty: 3,
+                    ),
+                ],
+            ),
+        ),
+    ],
+    constants: [
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Uint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Uint(1),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Uint(2),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Uint(3),
+            ),
+        ),
+    ],
+    global_variables: [
+        (
+            name: Some("global_id"),
+            class: Input,
+            binding: Some(BuiltIn(GlobalInvocationId)),
+            ty: 1,
+            init: None,
+            interpolation: None,
+            storage_access: (
+                bits: 0,
+            ),
+        ),
+        (
+            name: Some("v_indices"),
+            class: Storage,
+            binding: Some(Resource(
+                group: 0,
+                binding: 0,
+            )),
+            ty: 4,
+            init: None,
+            interpolation: None,
+            storage_access: (
+                bits: 3,
+            ),
+        ),
+    ],
+    functions: [
+        (
+            name: Some("collatz_iterations"),
+            arguments: [
+                (
+                    name: Some("n_base"),
+                    ty: 2,
+                ),
+            ],
+            return_type: Some(2),
+            local_variables: [
+                (
+                    name: Some("n"),
+                    ty: 2,
+                    init: None,
+                ),
+                (
+                    name: Some("i"),
+                    ty: 2,
+                    init: Some(1),
+                ),
+            ],
+            expressions: [
+                GlobalVariable(1),
+                GlobalVariable(2),
+                FunctionArgument(0),
+                LocalVariable(1),
+                Constant(1),
+                LocalVariable(2),
+                Constant(2),
+                Binary(
+                    op: LessEqual,
+                    left: 4,
+                    right: 7,
+                ),
+                Constant(3),
+                Binary(
+                    op: Modulo,
+                    left: 4,
+                    right: 9,
+                ),
+                Constant(1),
+                Binary(
+                    op: Equal,
+                    left: 10,
+                    right: 11,
+                ),
+                Constant(3),
+                Binary(
+                    op: Divide,
+                    left: 4,
+                    right: 13,
+                ),
+                Constant(4),
+                Binary(
+                    op: Multiply,
+                    left: 15,
+                    right: 4,
+                ),
+                Constant(2),
+                Binary(
+                    op: Add,
+                    left: 16,
+                    right: 17,
+                ),
+                Constant(2),
+                Binary(
+                    op: Add,
+                    left: 6,
+                    right: 19,
+                ),
+            ],
+            body: [
+                Store(
+                    pointer: 4,
+                    value: 3,
+                ),
+                Loop(
+                    body: [
+                        If(
+                            condition: 8,
+                            accept: [
+                                Break,
+                            ],
+                            reject: [],
+                        ),
+                        If(
+                            condition: 12,
+                            accept: [
+                                Store(
+                                    pointer: 4,
+                                    value: 14,
+                                ),
+                            ],
+                            reject: [
+                                Store(
+                                    pointer: 4,
+                                    value: 18,
+                                ),
+                            ],
+                        ),
+                        Store(
+                            pointer: 6,
+                            value: 20,
+                        ),
+                    ],
+                    continuing: [],
+                ),
+                Return(
+                    value: Some(6),
+                ),
+            ],
+        ),
+    ],
+    entry_points: {
+        (Compute, "main"): (
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            function: (
+                name: Some("main"),
+                arguments: [],
+                return_type: None,
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(1),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 2,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 1,
+                        index: 0,
+                    ),
+                    Access(
+                        base: 3,
+                        index: 4,
+                    ),
+                    AccessIndex(
+                        base: 2,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 1,
+                        index: 0,
+                    ),
+                    Access(
+                        base: 6,
+                        index: 7,
+                    ),
+                    Call(
+                        function: 1,
+                        arguments: [
+                            8,
+                        ],
+                    ),
+                ],
+                body: [
+                    Store(
+                        pointer: 5,
+                        value: 9,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+            ),
+        ),
+    },
+)
