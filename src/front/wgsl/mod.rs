@@ -62,6 +62,8 @@ pub enum Error<'a> {
     BadTypeCast(&'a str),
     #[error(transparent)]
     InvalidResolve(ResolveError),
+    #[error("invalid statement {0:?}, expected {1}")]
+    InvalidStatement(crate::Statement, &'a str),
     #[error("unknown import: `{0}`")]
     UnknownImport(&'a str),
     #[error("unknown storage class: `{0}`")]
@@ -1816,7 +1818,19 @@ impl Parser {
                 let initialization = if lexer.skip(Token::Separator(';')) {
                     None
                 } else {
-                    self.parse_statement(lexer, context.reborrow(), is_uniform_control_flow)?
+                    let statement =
+                        self.parse_statement(lexer, context.reborrow(), is_uniform_control_flow)?;
+                    match statement {
+                        Some(crate::Statement::Store { .. })
+                        | Some(crate::Statement::Call { .. }) => statement,
+                        Some(other) => {
+                            return Err(Error::InvalidStatement(
+                                other,
+                                "variable, assignment or function call",
+                            ))
+                        }
+                        None => None,
+                    }
                 };
                 let condition = if lexer.skip(Token::Separator(';')) {
                     None
