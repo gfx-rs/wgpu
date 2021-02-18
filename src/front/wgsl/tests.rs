@@ -144,6 +144,16 @@ fn parse_loop() {
     ",
     )
     .unwrap();
+    parse_str(
+        "
+        fn main() {
+            for(;;) {
+                break;
+            }
+        }
+    ",
+    )
+    .unwrap();
 }
 
 #[test]
