@@ -187,7 +187,8 @@ fn check_output_glsl(
 
     let options = glsl::Options {
         version: glsl::Version::Embedded(310),
-        entry_point: (stage, ep_name.to_string()),
+        shader_stage: stage,
+        entry_point: ep_name.to_string(),
     };
 
     let mut buffer = Vec::new();

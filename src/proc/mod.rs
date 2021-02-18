@@ -1,8 +1,6 @@
 //! Module processing functionality.
 
 pub mod analyzer;
-#[cfg(feature = "petgraph")]
-mod call_graph;
 mod interface;
 mod layouter;
 mod namer;
@@ -10,8 +8,6 @@ mod terminator;
 mod typifier;
 mod validator;
 
-#[cfg(feature = "petgraph")]
-pub use call_graph::{CallGraph, CallGraphBuilder};
 pub use interface::{Interface, Visitor};
 pub use layouter::{Alignment, Layouter};
 pub use namer::{EntryPointIndex, NameKey, Namer};

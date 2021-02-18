@@ -175,8 +175,6 @@ impl<'a, W> Writer<'a, W> {
     /// If the version doesn't support any of the needed [`Features`](Features) a
     /// [`Error::MissingFeatures`](super::Error::MissingFeatures) will be returned
     pub(super) fn collect_required_features(&mut self) -> BackendResult {
-        let stage = self.options.entry_point.0;
-
         if let Some(depth_test) = self.entry_point.early_depth_test {
             self.features.request(Features::IMAGE_LOAD_STORE);
 
@@ -185,7 +183,7 @@ impl<'a, W> Writer<'a, W> {
             }
         }
 
-        if let ShaderStage::Compute = stage {
+        if let ShaderStage::Compute = self.options.shader_stage {
             self.features.request(Features::COMPUTE_SHADER)
         }
 

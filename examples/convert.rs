@@ -249,15 +249,13 @@ fn main() {
             let name = args.get(4).map_or("main", |p| p.as_str()).to_string();
             let options = glsl::Options {
                 version,
-                entry_point: (
-                    match stage {
-                        "vert" => naga::ShaderStage::Vertex,
-                        "frag" => naga::ShaderStage::Fragment,
-                        "comp" => naga::ShaderStage::Compute,
-                        _ => unreachable!(),
-                    },
-                    name,
-                ),
+                shader_stage: match stage {
+                    "vert" => naga::ShaderStage::Vertex,
+                    "frag" => naga::ShaderStage::Fragment,
+                    "comp" => naga::ShaderStage::Compute,
+                    _ => unreachable!(),
+                },
+                entry_point: name,
             };
 
             let file = fs::OpenOptions::new()

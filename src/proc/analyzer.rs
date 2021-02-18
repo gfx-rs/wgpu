@@ -99,6 +99,16 @@ impl FunctionInfo {
     pub fn expression_count(&self) -> usize {
         self.expressions.len()
     }
+    pub fn dominates_global_use(&self, other: &Self) -> bool {
+        for (self_global_uses, other_global_uses) in
+            self.global_uses.iter().zip(other.global_uses.iter())
+        {
+            if !self_global_uses.contains(*other_global_uses) {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 impl ops::Index<Handle<crate::GlobalVariable>> for FunctionInfo {

@@ -44,10 +44,7 @@
 pub use features::Features;
 
 use crate::{
-    proc::{
-        analyzer::Analysis, CallGraph, CallGraphBuilder, NameKey, Namer, ResolveContext,
-        ResolveError, Typifier,
-    },
+    proc::{analyzer::Analysis, NameKey, Namer, ResolveContext, ResolveError, Typifier},
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant,
     ConstantInner, DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle,
     ImageClass, Interpolation, LocalVariable, Module, RelationalFunction, ScalarKind, ScalarValue,
@@ -129,11 +126,13 @@ impl fmt::Display for Version {
 pub struct Options {
     /// The glsl version to be used
     pub version: Version,
-    /// The name and stage of the entry point
+    /// The stage of the entry point
+    pub shader_stage: ShaderStage,
+    /// The name of the entry point
     ///
     /// If no entry point that matches is found a error will be thrown while creating a new instance
     /// of [`Writer`](struct.Writer.html)
-    pub entry_point: (ShaderStage, String),
+    pub entry_point: String,
 }
 
 /// Structure that connects a texture to a sampler or not
@@ -275,8 +274,6 @@ pub struct Writer<'a, W> {
     entry_point: &'a crate::EntryPoint,
     /// The index of the selected entry point
     entry_point_idx: crate::proc::EntryPointIndex,
-    /// The current entry point call_graph (doesn't contain the entry point)
-    call_graph: CallGraph,
     /// Used to generate a unique number for blocks
     block_id: IdGenerator,
 }
@@ -301,24 +298,18 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         // Try to find the entry point and corresponding index
-        let (ep_idx, ep) = module
+        let (ep_idx, (_, ep)) = module
             .entry_points
             .iter()
             .enumerate()
-            .find_map(|(i, (key, entry_point))| {
-                Some((i as u16, entry_point)).filter(|_| &options.entry_point == key)
+            .find(|(_, ((stage, name), _))| {
+                options.shader_stage == *stage && &options.entry_point == name
             })
             .ok_or(Error::EntryPointNotFound)?;
 
         // Generate a map with names required to write the module
         let mut names = FastHashMap::default();
         Namer::default().reset(module, keywords::RESERVED_KEYWORDS, &mut names);
-
-        // Generate a call graph for the entry point
-        let call_graph = CallGraphBuilder {
-            functions: &module.functions,
-        }
-        .process(&ep.function);
 
         // Build the instance
         let mut this = Self {
@@ -330,8 +321,7 @@ impl<'a, W: Write> Writer<'a, W> {
             features: FeaturesManager::new(),
             names,
             entry_point: ep,
-            entry_point_idx: ep_idx,
-            call_graph,
+            entry_point_idx: ep_idx as u16,
 
             block_id: IdGenerator::default(),
         };
@@ -407,7 +397,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
         let ep_info = self
             .analysis
-            .get_entry_point(self.options.entry_point.0, &self.options.entry_point.1);
+            .get_entry_point(self.options.shader_stage, &self.options.entry_point);
 
         // Write the globals
         //
@@ -475,25 +465,19 @@ impl<'a, W: Write> Writer<'a, W> {
                 _ => self.write_global(handle, global)?,
             }
         }
+        // Write all regular functions
+        for (handle, function) in self.module.functions.iter() {
+            // Check that the function doesn't use globals that aren't supported
+            // by the current entry point
+            if !ep_info.dominates_global_use(&self.analysis[handle]) {
+                continue;
+            }
 
-        // Sort the graph topologically so that functions calls are valid
-        // It's impossible for this to panic because the IR forbids cycles
-        let functions = petgraph::algo::toposort(&self.call_graph, None).unwrap();
-
-        // Write all regular functions that are in the call graph this is important
-        // because other functions might require for example globals that weren't written
-        for node in functions {
-            // We do this inside the loop instead of using `map` to satisfy the borrow checker
-            let handle = self.call_graph[node];
             // We also `clone` to satisfy the borrow checker
             let name = self.names[&NameKey::Function(handle)].clone();
 
             // Write the function
-            self.write_function(
-                FunctionType::Function(handle),
-                &self.module.functions[handle],
-                name,
-            )?;
+            self.write_function(FunctionType::Function(handle), function, name)?;
 
             writeln!(self.out)?;
         }
@@ -692,7 +676,7 @@ impl<'a, W: Write> Writer<'a, W> {
         //
         // TODO: Should this throw an error?
         if let Some(interpolation) = global.interpolation {
-            match (self.options.entry_point.0, global.class) {
+            match (self.options.shader_stage, global.class) {
                 (ShaderStage::Fragment, StorageClass::Input)
                 | (ShaderStage::Vertex, StorageClass::Output) => {
                     write!(self.out, "{} ", glsl_interpolation(interpolation)?)?;
@@ -731,7 +715,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 format!(
                     "_location_{}{}",
                     location,
-                    match (self.options.entry_point.0, global.class) {
+                    match (self.options.shader_stage, global.class) {
                         (ShaderStage::Fragment, StorageClass::Input) => "_vs",
                         (ShaderStage::Vertex, StorageClass::Output) => "_vs",
                         _ => "",
@@ -1755,7 +1739,7 @@ impl<'a, W: Write> Writer<'a, W> {
         use std::collections::hash_map::Entry;
         let info = self
             .analysis
-            .get_entry_point(self.options.entry_point.0, &self.options.entry_point.1);
+            .get_entry_point(self.options.shader_stage, &self.options.entry_point);
         let mut mappings = FastHashMap::default();
 
         for sampling in info.sampling_set.iter() {
