@@ -40,7 +40,7 @@ struct Parameters {
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_capabilities: naga::FastHashSet<spirv::Capability>,
     #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
-    mtl_bindings: naga::FastHashMap<BindSource, BindTarget>,
+    mtl_bindings: Option<naga::FastHashMap<BindSource, BindTarget>>,
 }
 
 trait PrettyResult {
@@ -177,31 +177,36 @@ fn main() {
         #[cfg(feature = "msl-out")]
         "metal" => {
             use naga::back::msl;
-            let mut binding_map = msl::BindingMap::default();
-            for (key, value) in params.mtl_bindings {
-                binding_map.insert(
-                    msl::BindSource {
-                        stage: match key.stage {
-                            Stage::Vertex => naga::ShaderStage::Vertex,
-                            Stage::Fragment => naga::ShaderStage::Fragment,
-                            Stage::Compute => naga::ShaderStage::Compute,
-                        },
-                        group: key.group,
-                        binding: key.binding,
-                    },
-                    msl::BindTarget {
-                        buffer: value.buffer,
-                        texture: value.texture,
-                        sampler: value.sampler,
-                        mutable: value.mutable,
-                    },
-                );
-            }
-            let options = msl::Options {
+            let mut options = msl::Options {
                 lang_version: (1, 0),
+                binding_map: msl::BindingMap::default(),
                 spirv_cross_compatibility: false,
-                binding_map,
+                fake_missing_bindings: false,
             };
+            if let Some(map) = params.mtl_bindings {
+                for (key, value) in map {
+                    options.binding_map.insert(
+                        msl::BindSource {
+                            stage: match key.stage {
+                                Stage::Vertex => naga::ShaderStage::Vertex,
+                                Stage::Fragment => naga::ShaderStage::Fragment,
+                                Stage::Compute => naga::ShaderStage::Compute,
+                            },
+                            group: key.group,
+                            binding: key.binding,
+                        },
+                        msl::BindTarget {
+                            buffer: value.buffer,
+                            texture: value.texture,
+                            sampler: value.sampler,
+                            mutable: value.mutable,
+                        },
+                    );
+                }
+            } else {
+                log::warn!("Metal binding map is missing");
+                options.fake_missing_bindings = true;
+            }
             let (msl, _) = msl::write_string(&module, &analysis, &options).unwrap();
             fs::write(&args[2], msl).unwrap();
         }

@@ -164,8 +164,9 @@ fn check_output_msl(
     }
     let options = msl::Options {
         lang_version: (1, 0),
-        spirv_cross_compatibility: false,
         binding_map,
+        spirv_cross_compatibility: false,
+        fake_missing_bindings: false,
     };
 
     let (msl, _) = msl::write_string(module, analysis, &options).unwrap();

@@ -92,18 +92,21 @@ enum LocationMode {
 pub struct Options {
     /// (Major, Minor) target version of the Metal Shading Language.
     pub lang_version: (u8, u8),
-    /// Make it possible to link different stages via SPIRV-Cross.
-    pub spirv_cross_compatibility: bool,
     /// Binding model mapping to Metal.
     pub binding_map: BindingMap,
+    /// Make it possible to link different stages via SPIRV-Cross.
+    pub spirv_cross_compatibility: bool,
+    /// Don't panic on missing bindings, instead generate invalid MSL.
+    pub fake_missing_bindings: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Options {
             lang_version: (1, 0),
-            spirv_cross_compatibility: false,
             binding_map: BindingMap::default(),
+            spirv_cross_compatibility: false,
+            fake_missing_bindings: false,
         }
     }
 }
@@ -142,11 +145,14 @@ impl Options {
                     group,
                     binding,
                 };
-                self.binding_map
-                    .get(&source)
-                    .cloned()
-                    .map(ResolvedBinding::Resource)
-                    .ok_or(Error::MissingBindTarget(source))
+                match self.binding_map.get(&source) {
+                    Some(target) => Ok(ResolvedBinding::Resource(target.clone())),
+                    None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
+                        prefix: "fake",
+                        index: 0,
+                    }),
+                    None => Err(Error::MissingBindTarget(source)),
+                }
             }
             None => {
                 log::error!("Missing binding for {:?}", var.name);
