@@ -690,14 +690,12 @@ impl Default for BlendOperation {
     }
 }
 
-/// Describes the blend state of a pipeline.
-///
-/// Alpha blending is very complicated: see the OpenGL or Vulkan spec for more information.
+/// Describes the blend component of a pipeline.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct BlendState {
+pub struct BlendComponent {
     /// Multiplier for the source, which is produced by the fragment shader.
     pub src_factor: BlendFactor,
     /// Multiplier for the destination, which is stored in the target.
@@ -707,9 +705,9 @@ pub struct BlendState {
     pub operation: BlendOperation,
 }
 
-impl BlendState {
+impl BlendComponent {
     /// Default blending state that replaces destination with the source.
-    pub const REPLACE: Self = BlendState {
+    pub const REPLACE: Self = BlendComponent {
         src_factor: BlendFactor::One,
         dst_factor: BlendFactor::Zero,
         operation: BlendOperation::Add,
@@ -728,10 +726,24 @@ impl BlendState {
     }
 }
 
-impl Default for BlendState {
+impl Default for BlendComponent {
     fn default() -> Self {
         Self::REPLACE
     }
+}
+
+/// Describe the blend state of a render pipeline.
+///
+/// See the OpenGL or Vulkan spec for more information.
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct BlendState {
+    /// Color equation.
+    pub color: BlendComponent,
+    /// Alpha equation.
+    pub alpha: BlendComponent,
 }
 
 /// Describes the color state of a render pipeline.
@@ -743,12 +755,9 @@ pub struct ColorTargetState {
     /// The [`TextureFormat`] of the image that this pipeline will render to. Must match the the format
     /// of the corresponding color attachment in [`CommandEncoder::begin_render_pass`].
     pub format: TextureFormat,
-    /// The alpha blending that is used for this pipeline.
+    /// The blending that is used for this pipeline.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
-    pub alpha_blend: BlendState,
-    /// The color blending that is used for this pipeline.
-    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
-    pub color_blend: BlendState,
+    pub blend: Option<BlendState>,
     /// Mask which enables/disables writes to different color/alpha channel.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub write_mask: ColorWrite,
@@ -758,8 +767,7 @@ impl From<TextureFormat> for ColorTargetState {
     fn from(format: TextureFormat) -> Self {
         Self {
             format,
-            alpha_blend: BlendState::REPLACE,
-            color_blend: BlendState::REPLACE,
+            blend: None,
             write_mask: ColorWrite::ALL,
         }
     }
