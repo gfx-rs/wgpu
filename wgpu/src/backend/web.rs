@@ -594,7 +594,7 @@ fn map_depth_stencil_state_descriptor(
     mapped
 }
 
-fn map_blend_descriptor(desc: &wgt::BlendState) -> web_sys::GpuBlendDescriptor {
+fn map_blend_descriptor(desc: &wgt::BlendComponent) -> web_sys::GpuBlendDescriptor {
     let mut mapped = web_sys::GpuBlendDescriptor::new();
     mapped.dst_factor(map_blend_factor(desc.dst_factor));
     mapped.operation(map_blend_operation(desc.operation));
@@ -1226,8 +1226,10 @@ impl crate::Context for Context {
                 let mapped_format = map_texture_format(target.format);
                 let mut mapped_color_state_desc =
                     web_sys::GpuColorStateDescriptor::new(mapped_format);
-                mapped_color_state_desc.alpha_blend(&map_blend_descriptor(&target.alpha_blend));
-                mapped_color_state_desc.color_blend(&map_blend_descriptor(&target.color_blend));
+                if let Some(ref bs) = target.blend {
+                    mapped_color_state_desc.alpha_blend(&map_blend_descriptor(&bs.alpha));
+                    mapped_color_state_desc.color_blend(&map_blend_descriptor(&bs.color));
+                }
                 mapped_color_state_desc.write_mask(target.write_mask.bits());
                 mapped_color_state_desc
             })
