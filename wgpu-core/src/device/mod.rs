@@ -2386,8 +2386,10 @@ impl<B: GfxBackend> Device<B> {
 
         let mut flags = pipeline::PipelineFlags::empty();
         for state in color_states.iter() {
-            if state.color_blend.uses_color() | state.alpha_blend.uses_color() {
-                flags |= pipeline::PipelineFlags::BLEND_COLOR;
+            if let Some(ref bs) = state.blend {
+                if bs.color.uses_color() | bs.alpha.uses_color() {
+                    flags |= pipeline::PipelineFlags::BLEND_COLOR;
+                }
             }
         }
         if let Some(ds) = depth_stencil_state.as_ref() {

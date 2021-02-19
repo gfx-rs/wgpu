@@ -179,19 +179,13 @@ pub fn map_primitive_topology(primitive_topology: wgt::PrimitiveTopology) -> hal
 
 pub fn map_color_target_state(desc: &wgt::ColorTargetState) -> hal::pso::ColorBlendDesc {
     let color_mask = desc.write_mask;
-    let blend_state = if desc.color_blend != wgt::BlendState::REPLACE
-        || desc.alpha_blend != wgt::BlendState::REPLACE
-    {
-        Some(hal::pso::BlendState {
-            color: map_blend_state(&desc.color_blend),
-            alpha: map_blend_state(&desc.alpha_blend),
-        })
-    } else {
-        None
-    };
+    let blend = desc.blend.as_ref().map(|bs| hal::pso::BlendState {
+        color: map_blend_component(&bs.color),
+        alpha: map_blend_component(&bs.alpha),
+    });
     hal::pso::ColorBlendDesc {
         mask: map_color_write_flags(color_mask),
-        blend: blend_state,
+        blend,
     }
 }
 
@@ -215,21 +209,21 @@ fn map_color_write_flags(flags: wgt::ColorWrite) -> hal::pso::ColorMask {
     value
 }
 
-fn map_blend_state(blend_desc: &wgt::BlendState) -> hal::pso::BlendOp {
+fn map_blend_component(component: &wgt::BlendComponent) -> hal::pso::BlendOp {
     use hal::pso::BlendOp as H;
     use wgt::BlendOperation as Bo;
-    match blend_desc.operation {
+    match component.operation {
         Bo::Add => H::Add {
-            src: map_blend_factor(blend_desc.src_factor),
-            dst: map_blend_factor(blend_desc.dst_factor),
+            src: map_blend_factor(component.src_factor),
+            dst: map_blend_factor(component.dst_factor),
         },
         Bo::Subtract => H::Sub {
-            src: map_blend_factor(blend_desc.src_factor),
-            dst: map_blend_factor(blend_desc.dst_factor),
+            src: map_blend_factor(component.src_factor),
+            dst: map_blend_factor(component.dst_factor),
         },
         Bo::ReverseSubtract => H::RevSub {
-            src: map_blend_factor(blend_desc.src_factor),
-            dst: map_blend_factor(blend_desc.dst_factor),
+            src: map_blend_factor(component.src_factor),
+            dst: map_blend_factor(component.dst_factor),
         },
         Bo::Min => H::Min,
         Bo::Max => H::Max,
