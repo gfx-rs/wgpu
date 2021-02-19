@@ -62,6 +62,10 @@ pub enum ResolveError {
     },
 }
 
+#[derive(Clone, Debug, Error, PartialEq)]
+#[error("Type resolution of {0:?} failed: {1}")]
+pub struct TypifyError(Handle<crate::Expression>, #[source] ResolveError);
+
 pub struct ResolveContext<'a> {
     pub constants: &'a Arena<crate::Constant>,
     pub global_vars: &'a Arena<crate::GlobalVariable>,
@@ -527,10 +531,12 @@ impl Typifier {
         expressions: &Arena<crate::Expression>,
         types: &Arena<crate::Type>,
         ctx: &ResolveContext,
-    ) -> Result<(), ResolveError> {
+    ) -> Result<(), TypifyError> {
         self.clear();
-        for (_, expr) in expressions.iter() {
-            let resolution = self.resolve_impl(expr, types, ctx)?;
+        for (handle, expr) in expressions.iter() {
+            let resolution = self
+                .resolve_impl(expr, types, ctx)
+                .map_err(|err| TypifyError(handle, err))?;
             self.resolutions.push(resolution);
         }
         Ok(())

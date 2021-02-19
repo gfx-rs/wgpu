@@ -1,6 +1,6 @@
 use super::{
     analyzer::{Analysis, AnalysisError, FunctionInfo, GlobalUse},
-    typifier::{ResolveContext, ResolveError, Typifier},
+    typifier::{TypifyError, ResolveContext, Typifier},
 };
 use crate::arena::{Arena, Handle};
 use bit_set::BitSet;
@@ -78,7 +78,7 @@ pub enum LocalVariableError {
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum FunctionError {
     #[error(transparent)]
-    Resolve(#[from] ResolveError),
+    Resolve(#[from] TypifyError),
     #[error("There are instructions after `return`/`break`/`continue`")]
     InvalidControlFlowExitTail,
     #[error("Local variable {handle:?} '{name}' is invalid: {error:?}")]

@@ -44,7 +44,7 @@
 pub use features::Features;
 
 use crate::{
-    proc::{analyzer::Analysis, NameKey, Namer, ResolveContext, ResolveError, Typifier},
+    proc::{analyzer::Analysis, NameKey, Namer, ResolveContext, TypifyError, Typifier},
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant,
     ConstantInner, DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle,
     ImageClass, Interpolation, LocalVariable, Module, RelationalFunction, ScalarKind, ScalarValue,
@@ -220,7 +220,7 @@ pub enum Error {
     IoError(#[from] IoError),
     /// The [`Module`](crate::Module) failed type resolution
     #[error("Type error: {0}")]
-    Type(#[from] ResolveError),
+    Type(#[from] TypifyError),
     /// The specified [`Version`](Version) doesn't have all required [`Features`](super)
     ///
     /// Contains the missing [`Features`](Features)

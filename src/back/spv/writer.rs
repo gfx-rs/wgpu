@@ -4,7 +4,7 @@ use crate::{
     arena::{Arena, Handle},
     proc::{
         analyzer::{Analysis, FunctionInfo},
-        Layouter, ResolveContext, ResolveError, Typifier,
+        Layouter, ResolveContext, TypifyError, Typifier,
     },
 };
 use spirv::Word;
@@ -22,7 +22,7 @@ pub enum Error {
     #[error("unimplemented {0:}")]
     FeatureNotImplemented(&'static str),
     #[error(transparent)]
-    Resolve(#[from] ResolveError),
+    Resolve(#[from] TypifyError),
 }
 
 struct Block {

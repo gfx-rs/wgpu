@@ -16,7 +16,7 @@ we move them up to the root output structure that we define ourselves.
 
 use crate::{
     arena::Handle,
-    proc::{analyzer::Analysis, ResolveError},
+    proc::{analyzer::Analysis, TypifyError},
     FastHashMap,
 };
 use std::{
@@ -60,7 +60,7 @@ enum ResolvedBinding {
 pub enum Error {
     IO(IoError),
     Utf8(FromUtf8Error),
-    Type(ResolveError),
+    Type(TypifyError),
     MissingBindTarget(BindSource),
     InvalidImageAccess(crate::StorageAccess),
     BadName(String),
@@ -87,8 +87,8 @@ impl From<FromUtf8Error> for Error {
     }
 }
 
-impl From<ResolveError> for Error {
-    fn from(e: ResolveError) -> Self {
+impl From<TypifyError> for Error {
+    fn from(e: TypifyError) -> Self {
         Error::Type(e)
     }
 }
@@ -155,10 +155,8 @@ impl Options {
                     group,
                     binding,
                 };
-                self.binding_map
-                    .get(&source)
-                    .cloned()
-                    .map(ResolvedBinding::Resource)
+                ResolvedBinding::Resource(
+                    self.binding_map.get(&source).cloned().
                     .ok_or(Error::MissingBindTarget(source))
             }
             None => {

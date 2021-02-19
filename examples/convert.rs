@@ -158,15 +158,15 @@ fn main() {
         }
     };
 
-    // validate the IR
-    let analysis = naga::proc::Validator::new()
-        .validate(&module)
-        .unwrap_pretty();
-
     if args.len() <= 2 {
         println!("{:#?}", module);
         return;
     }
+
+    // validate the IR
+    let analysis = naga::proc::Validator::new()
+        .validate(&module)
+        .unwrap_pretty();
 
     match Path::new(&args[2])
         .extension()
