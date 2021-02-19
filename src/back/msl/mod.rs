@@ -56,41 +56,28 @@ enum ResolvedBinding {
 
 // Note: some of these should be removed in favor of proper IR validation.
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    IO(IoError),
-    Utf8(FromUtf8Error),
-    Type(TypifyError),
+    #[error(transparent)]
+    IO(#[from] IoError),
+    #[error(transparent)]
+    Utf8(#[from] FromUtf8Error),
+    #[error(transparent)]
+    Type(#[from] TypifyError),
+    #[error("bind source for {0:?} is missing from the map")]
     MissingBindTarget(BindSource),
-    InvalidImageAccess(crate::StorageAccess),
-    BadName(String),
+    #[error("bind target {0:?} is empty")]
     UnimplementedBindTarget(BindTarget),
+    #[error("composing of {0:?} is not implemented yet")]
     UnsupportedCompose(Handle<crate::Type>),
+    #[error("operation {0:?} is not implemented yet")]
     UnsupportedBinaryOp(crate::BinaryOperator),
-    UnexpectedSampleLevel(crate::SampleLevel),
+    #[error("standard function '{0}' is not implemented yet")]
     UnsupportedCall(String),
-    UnsupportedDynamicArrayLength,
+    #[error("feature '{0}' is not implemented yet")]
     FeatureNotImplemented(String),
-    /// The source IR is not valid.
+    #[error("module is not valid")]
     Validation,
-}
-
-impl From<IoError> for Error {
-    fn from(e: IoError) -> Self {
-        Error::IO(e)
-    }
-}
-
-impl From<FromUtf8Error> for Error {
-    fn from(e: FromUtf8Error) -> Self {
-        Error::Utf8(e)
-    }
-}
-
-impl From<TypifyError> for Error {
-    fn from(e: TypifyError) -> Self {
-        Error::Type(e)
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -155,8 +142,10 @@ impl Options {
                     group,
                     binding,
                 };
-                ResolvedBinding::Resource(
-                    self.binding_map.get(&source).cloned().
+                self.binding_map
+                    .get(&source)
+                    .cloned()
+                    .map(ResolvedBinding::Resource)
                     .ok_or(Error::MissingBindTarget(source))
             }
             None => {

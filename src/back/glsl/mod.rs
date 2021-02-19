@@ -44,7 +44,7 @@
 pub use features::Features;
 
 use crate::{
-    proc::{analyzer::Analysis, NameKey, Namer, ResolveContext, TypifyError, Typifier},
+    proc::{analyzer::Analysis, NameKey, Namer, ResolveContext, Typifier, TypifyError},
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant,
     ConstantInner, DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle,
     ImageClass, Interpolation, LocalVariable, Module, RelationalFunction, ScalarKind, ScalarValue,

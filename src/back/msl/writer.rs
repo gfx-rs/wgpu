@@ -680,20 +680,23 @@ impl<W: Write> Writer<W> {
             } => {
                 self.put_local_call(function, arguments, context)?;
             }
-            crate::Expression::ArrayLength(expr) => match *self
-                .typifier
-                .get(expr, &context.module.types)
-            {
-                crate::TypeInner::Array {
-                    size: crate::ArraySize::Constant(const_handle),
-                    ..
-                } => {
-                    let size_str = &self.names[&NameKey::Constant(const_handle)];
-                    write!(self.out, "{}", size_str)?;
+            crate::Expression::ArrayLength(expr) => {
+                match *self.typifier.get(expr, &context.module.types) {
+                    crate::TypeInner::Array {
+                        size: crate::ArraySize::Constant(const_handle),
+                        ..
+                    } => {
+                        let size_str = &self.names[&NameKey::Constant(const_handle)];
+                        write!(self.out, "{}", size_str)?;
+                    }
+                    crate::TypeInner::Array { .. } => {
+                        return Err(Error::FeatureNotImplemented(
+                            "dynamic array size".to_string(),
+                        ))
+                    }
+                    _ => return Err(Error::Validation),
                 }
-                crate::TypeInner::Array { .. } => return Err(Error::UnsupportedDynamicArrayLength),
-                _ => return Err(Error::Validation),
-            },
+            }
         }
         Ok(())
     }
@@ -1025,7 +1028,7 @@ impl<W: Write> Writer<W> {
                             } else if global.storage_access.contains(crate::StorageAccess::LOAD) {
                                 "read"
                             } else {
-                                return Err(Error::InvalidImageAccess(global.storage_access));
+                                return Err(Error::Validation);
                             };
                             ("texture", "", format.into(), access)
                         }

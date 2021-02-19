@@ -1,6 +1,6 @@
 use super::{
     analyzer::{Analysis, AnalysisError, FunctionInfo, GlobalUse},
-    typifier::{TypifyError, ResolveContext, Typifier},
+    typifier::{ResolveContext, Typifier, TypifyError},
 };
 use crate::arena::{Arena, Handle};
 use bit_set::BitSet;

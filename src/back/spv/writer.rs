@@ -4,7 +4,7 @@ use crate::{
     arena::{Arena, Handle},
     proc::{
         analyzer::{Analysis, FunctionInfo},
-        Layouter, ResolveContext, TypifyError, Typifier,
+        Layouter, ResolveContext, Typifier, TypifyError,
     },
 };
 use spirv::Word;
