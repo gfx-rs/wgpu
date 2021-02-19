@@ -25,14 +25,14 @@ use std::{
 use parking_lot::Mutex;
 
 pub use wgt::{
-    AdapterInfo, AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType, BlendFactor,
-    BlendOperation, BlendState, BufferAddress, BufferBindingType, BufferSize, BufferUsage, Color,
-    ColorTargetState, ColorWrite, CommandBufferDescriptor, CompareFunction, DepthBiasState,
-    DepthStencilState, DeviceType, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
-    IndexFormat, InputStepMode, Limits, MultisampleState, Origin3d, PipelineStatisticsTypes,
-    PolygonMode, PowerPreference, PresentMode, PrimitiveState, PrimitiveTopology,
-    PushConstantRange, QuerySetDescriptor, QueryType, SamplerBorderColor, ShaderFlags,
-    ShaderLocation, ShaderStage, StencilFaceState, StencilOperation, StencilState,
+    AdapterInfo, AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType,
+    BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, BufferBindingType,
+    BufferSize, BufferUsage, Color, ColorTargetState, ColorWrite, CommandBufferDescriptor,
+    CompareFunction, DepthBiasState, DepthStencilState, DeviceType, DynamicOffset, Extent3d, Face,
+    Features, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, MultisampleState,
+    Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
+    PrimitiveTopology, PushConstantRange, QuerySetDescriptor, QueryType, SamplerBorderColor,
+    ShaderFlags, ShaderLocation, ShaderStage, StencilFaceState, StencilOperation, StencilState,
     StorageTextureAccess, SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureDataLayout,
     TextureDimension, TextureFormat, TextureSampleType, TextureUsage, TextureViewDimension,
     VertexAttribute, VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT,
