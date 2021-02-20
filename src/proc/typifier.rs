@@ -255,24 +255,24 @@ impl Typifier {
                     } else if let crate::TypeInner::Scalar { .. } = *ty_right {
                         self.resolutions[left.index()].clone()
                     } else if let crate::TypeInner::Matrix {
-                        columns,
-                        rows: _,
+                        columns: _,
+                        rows,
                         width,
                     } = *ty_left
                     {
                         Resolution::Value(crate::TypeInner::Vector {
-                            size: columns,
+                            size: rows,
                             kind: crate::ScalarKind::Float,
                             width,
                         })
                     } else if let crate::TypeInner::Matrix {
-                        columns: _,
-                        rows,
+                        columns,
+                        rows: _,
                         width,
                     } = *ty_right
                     {
                         Resolution::Value(crate::TypeInner::Vector {
-                            size: rows,
+                            size: columns,
                             kind: crate::ScalarKind::Float,
                             width,
                         })
