@@ -4,6 +4,7 @@ use super::{
 };
 use crate::arena::{Arena, Handle};
 use bit_set::BitSet;
+use thiserror::Error;
 
 const MAX_WORKGROUP_SIZE: u32 = 0x4000;
 
@@ -26,7 +27,7 @@ pub struct Validator {
     bind_group_masks: Vec<BitSet>,
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, Error)]
 pub enum TypeError {
     #[error("The {0:?} scalar width {1} is not supported")]
     InvalidWidth(crate::ScalarKind, crate::Bytes),
@@ -40,7 +41,7 @@ pub enum TypeError {
     MissingBlockDecoration,
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, Error)]
 pub enum ConstantError {
     #[error("The type doesn't match the constant")]
     InvalidType,
@@ -50,7 +51,7 @@ pub enum ConstantError {
     UnresolvedSize(Handle<crate::Constant>),
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, Error)]
 pub enum GlobalVariableError {
     #[error("Usage isn't compatible with the storage class")]
     InvalidUsage,
@@ -58,7 +59,7 @@ pub enum GlobalVariableError {
     InvalidType,
     #[error("Interpolation is not valid")]
     InvalidInterpolation,
-    #[error("Storage access {seen:?} exceed the allowed {allowed:?}")]
+    #[error("Storage access {seen:?} exceeds the allowed {allowed:?}")]
     InvalidStorageAccess {
         allowed: crate::StorageAccess,
         seen: crate::StorageAccess,
@@ -69,29 +70,30 @@ pub enum GlobalVariableError {
     InvalidBuiltInType(crate::BuiltIn),
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, Error)]
 pub enum LocalVariableError {
     #[error("Initializer doesn't match the variable type")]
     InitializerType,
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, Error)]
 pub enum FunctionError {
     #[error(transparent)]
     Resolve(#[from] TypifyError),
     #[error("There are instructions after `return`/`break`/`continue`")]
     InvalidControlFlowExitTail,
-    #[error("Local variable {handle:?} '{name}' is invalid: {error:?}")]
+    #[error("Local variable {handle:?} '{name}' is invalid")]
     LocalVariable {
         handle: Handle<crate::LocalVariable>,
         name: String,
+        #[source]
         error: LocalVariableError,
     },
     #[error("Argument '{name}' at index {index} has a type that can't be passed into functions.")]
     InvalidArgumentType { index: usize, name: String },
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, Error)]
 pub enum EntryPointError {
     #[error("Early depth test is not applicable")]
     UnexpectedEarlyDepthTest,
@@ -115,32 +117,41 @@ pub enum EntryPointError {
     Function(#[from] FunctionError),
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, Error)]
 pub enum ValidationError {
-    #[error("Type {handle:?} '{name}' is invalid: {error:?}")]
+    #[error("Type {handle:?} '{name}' is invalid")]
     Type {
         handle: Handle<crate::Type>,
         name: String,
+        #[source]
         error: TypeError,
     },
-    #[error("Constant {handle:?} '{name}' is invalid: {error:?}")]
+    #[error("Constant {handle:?} '{name}' is invalid")]
     Constant {
         handle: Handle<crate::Constant>,
         name: String,
+        #[source]
         error: ConstantError,
     },
-    #[error("Global variable {handle:?} '{name}' is invalid: {error:?}")]
+    #[error("Global variable {handle:?} '{name}' is invalid")]
     GlobalVariable {
         handle: Handle<crate::GlobalVariable>,
         name: String,
+        #[source]
         error: GlobalVariableError,
     },
-    #[error("Function {0:?} is invalid: {1:?}")]
-    Function(Handle<crate::Function>, FunctionError),
-    #[error("Entry point {name} at {stage:?} is invalid: {error:?}")]
+    #[error("Function {handle:?} '{name}' is invalid")]
+    Function {
+        handle: Handle<crate::Function>,
+        name: String,
+        #[source]
+        error: FunctionError,
+    },
+    #[error("Entry point {name} at {stage:?} is invalid")]
     EntryPoint {
         stage: crate::ShaderStage,
         name: String,
+        #[source]
         error: EntryPointError,
     },
     #[error(transparent)]
@@ -738,9 +749,13 @@ impl Validator {
                 })?;
         }
 
-        for (fun_handle, fun) in module.functions.iter() {
-            self.validate_function(fun, &analysis[fun_handle], module)
-                .map_err(|e| ValidationError::Function(fun_handle, e))?;
+        for (handle, fun) in module.functions.iter() {
+            self.validate_function(fun, &analysis[handle], module)
+                .map_err(|error| ValidationError::Function {
+                    handle,
+                    name: fun.name.clone().unwrap_or_default(),
+                    error,
+                })?;
         }
 
         for (&(stage, ref name), entry_point) in module.entry_points.iter() {

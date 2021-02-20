@@ -2,6 +2,7 @@ use super::parser::Token;
 use super::token::TokenMetadata;
 use std::{borrow::Cow, fmt, io};
 
+//TODO: use `thiserror`
 #[derive(Debug)]
 pub enum ErrorKind {
     EndOfFile,

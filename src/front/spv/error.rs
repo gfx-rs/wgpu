@@ -1,6 +1,7 @@
 use super::ModuleState;
 use crate::arena::Handle;
 
+//TODO: use `thiserror`
 #[derive(Debug)]
 pub enum Error {
     InvalidHeader,

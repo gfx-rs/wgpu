@@ -1,4 +1,4 @@
-use std::{env, fmt, fs, path::Path};
+use std::{env, error::Error, fs, path::Path};
 
 #[derive(Hash, PartialEq, Eq, serde::Deserialize)]
 enum Stage {
@@ -40,7 +40,7 @@ struct Parameters {
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_capabilities: naga::FastHashSet<spirv::Capability>,
     #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
-    mtl_bindings: Option<naga::FastHashMap<BindSource, BindTarget>>,
+    mtl_bindings: naga::FastHashMap<BindSource, BindTarget>,
 }
 
 trait PrettyResult {
@@ -48,12 +48,20 @@ trait PrettyResult {
     fn unwrap_pretty(self) -> Self::Target;
 }
 
-impl<T, E: fmt::Display> PrettyResult for Result<T, E> {
+impl<T, E: Error> PrettyResult for Result<T, E> {
     type Target = T;
     fn unwrap_pretty(self) -> T {
         match self {
             Result::Ok(value) => value,
-            Result::Err(e) => panic!("{}", e),
+            Result::Err(error) => {
+                println!("{}:", error);
+                let mut e = error.source();
+                while let Some(source) = e {
+                    println!("\t{}", source);
+                    e = source.source();
+                }
+                std::process::exit(1);
+            }
         }
     }
 }
@@ -164,6 +172,7 @@ fn main() {
     }
 
     // validate the IR
+    #[allow(unused_variables)]
     let analysis = naga::proc::Validator::new()
         .validate(&module)
         .unwrap_pretty();
@@ -183,8 +192,11 @@ fn main() {
                 spirv_cross_compatibility: false,
                 fake_missing_bindings: false,
             };
-            if let Some(map) = params.mtl_bindings {
-                for (key, value) in map {
+            if params.mtl_bindings.is_empty() {
+                log::warn!("Metal binding map is missing");
+                options.fake_missing_bindings = true;
+            } else {
+                for (key, value) in params.mtl_bindings {
                     options.binding_map.insert(
                         msl::BindSource {
                             stage: match key.stage {
@@ -203,11 +215,8 @@ fn main() {
                         },
                     );
                 }
-            } else {
-                log::warn!("Metal binding map is missing");
-                options.fake_missing_bindings = true;
             }
-            let (msl, _) = msl::write_string(&module, &analysis, &options).unwrap();
+            let (msl, _) = msl::write_string(&module, &analysis, &options).unwrap_pretty();
             fs::write(&args[2], msl).unwrap();
         }
         #[cfg(feature = "spv-out")]

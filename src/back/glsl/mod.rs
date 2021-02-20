@@ -216,10 +216,10 @@ type BackendResult = Result<(), Error>;
 #[derive(Debug, Error)]
 pub enum Error {
     /// A error occurred while writing to the output
-    #[error("Io error: {0}")]
+    #[error("I/O error")]
     IoError(#[from] IoError),
     /// The [`Module`](crate::Module) failed type resolution
-    #[error("Type error: {0}")]
+    #[error("Type error")]
     Type(#[from] TypifyError),
     /// The specified [`Version`](Version) doesn't have all required [`Features`](super)
     ///

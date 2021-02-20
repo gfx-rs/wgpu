@@ -63,7 +63,7 @@ pub enum ResolveError {
 }
 
 #[derive(Clone, Debug, Error, PartialEq)]
-#[error("Type resolution of {0:?} failed: {1}")]
+#[error("Type resolution of {0:?} failed")]
 pub struct TypifyError(Handle<crate::Expression>, #[source] ResolveError);
 
 pub struct ResolveContext<'a> {
