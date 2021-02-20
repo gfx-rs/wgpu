@@ -250,7 +250,6 @@ impl FlowGraph {
                             accept: self.naga_traverse(true_node_index, Some(merge_node_index))?,
                             reject: self.naga_traverse(false_node_index, Some(merge_node_index))?,
                         });
-                        result.extend(self.naga_traverse(merge_node_index, stop_node_index)?);
                     } else {
                         result.push(crate::Statement::If {
                             condition,
@@ -258,9 +257,11 @@ impl FlowGraph {
                                 self.block_to_node[&true_id],
                                 Some(merge_node_index),
                             )?,
-                            reject: self.naga_traverse(merge_node_index, stop_node_index)?,
+                            reject: vec![],
                         });
                     }
+
+                    result.extend(self.naga_traverse(merge_node_index, stop_node_index)?);
 
                     Ok(result)
                 }
