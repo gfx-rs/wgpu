@@ -45,7 +45,7 @@ impl<T> Ord for Handle<T> {
 }
 impl<T> fmt::Debug for Handle<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "Handle({})", self.index)
+        write!(formatter, "[{}]", self.index)
     }
 }
 impl<T> hash::Hash for Handle<T> {
@@ -81,7 +81,6 @@ impl<T> Handle<T> {
 /// Adding new items to the arena produces a strongly-typed [`Handle`].
 /// The arena can be indexed using the given handle to obtain
 /// a reference to the stored item.
-#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(
@@ -97,6 +96,11 @@ pub struct Arena<T> {
 impl<T> Default for Arena<T> {
     fn default() -> Self {
         Self::new()
+    }
+}
+impl<T: fmt::Debug> fmt::Debug for Arena<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_map().entries(self.iter()).finish()
     }
 }
 
