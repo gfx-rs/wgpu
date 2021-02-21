@@ -26,20 +26,20 @@ webgl = ["wgc"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "53bab9d68f91d6802d6913ed2dde9cad8537ed2f"
+rev = "2d0142a2e784ee46c7922ea759bb05128e8ba957"
 features = ["raw-window-handle", "cross"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "53bab9d68f91d6802d6913ed2dde9cad8537ed2f"
+rev = "2d0142a2e784ee46c7922ea759bb05128e8ba957"
 features = ["raw-window-handle", "cross"]
 optional = true
 
 [dependencies.wgt]
 package = "wgpu-types"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "53bab9d68f91d6802d6913ed2dde9cad8537ed2f"
+rev = "2d0142a2e784ee46c7922ea759bb05128e8ba957"
 
 [dependencies]
 arrayvec = "0.5"
@@ -54,7 +54,6 @@ bytemuck = { version = "1.4", features = ["derive"] }
 cgmath = "0.18"
 ddsfile = "0.4"
 log = "0.4"
-naga = { git = "https://github.com/gfx-rs/naga", tag = "gfx-11", features = ["wgsl-in"] }
 noise = "0.7"
 obj = "0.10"
 png = "0.16"
@@ -66,9 +65,16 @@ async-executor = "1.0"
 pollster = "0.2"
 wgpu-subscriber = "0.1"
 
+# used to test all the example shaders
+[dev-dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-12"
+features = ["wgsl-in"]
+
+# used to generate SPIR-V for the Web target
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-11"
+tag = "gfx-12"
 features = ["wgsl-in", "spv-out"]
 
 [[example]]

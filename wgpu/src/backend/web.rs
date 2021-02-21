@@ -1046,7 +1046,7 @@ impl crate::Context for Context {
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&**spv))
             }
             crate::ShaderSource::Wgsl(ref code) => {
-                use naga::{back::spv, front::wgsl};
+                use naga::{back::spv, front::wgsl, proc::Validator};
                 let module = wgsl::parse_str(code).unwrap();
                 let mut capabilities = HashSet::default();
                 capabilities.insert(spv::Capability::Shader);
@@ -1055,7 +1055,8 @@ impl crate::Context for Context {
                     flags: spv::WriterFlags::empty(),
                     capabilities,
                 };
-                let words = spv::write_vec(&module, &options).unwrap();
+                let analysis = Validator::new().validate(&module).unwrap();
+                let words = spv::write_vec(&module, &analysis, &options).unwrap();
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&words[..]))
             }
         };
