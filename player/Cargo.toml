@@ -13,6 +13,7 @@ license = "MPL-2.0"
 publish = false
 
 [features]
+cross = ["wgc/cross"]
 
 [dependencies]
 env_logger = "0.8"

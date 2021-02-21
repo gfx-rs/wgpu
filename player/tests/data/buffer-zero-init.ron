@@ -84,7 +84,7 @@
             id: Id(0, 1, Empty),
             desc: (
                 label: None,
-                experimental_translation: true,
+                flags: (bits: 3),
             ),
             data: "buffer-zero-init-for-binding.wgsl",
         ),
