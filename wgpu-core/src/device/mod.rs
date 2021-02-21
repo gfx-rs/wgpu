@@ -1008,7 +1008,7 @@ impl<B: GfxBackend> Device<B> {
 
         let (naga_result, interface) = match module {
             // If succeeded, then validate it and attempt to give it to gfx-hal directly.
-            Some(module) if desc.flags.contains(wgt::ShaderFlags::VALIDATION) => {
+            Some(module) if desc.flags.contains(wgt::ShaderFlags::VALIDATION) || spv.is_none() => {
                 let analysis = naga::proc::Validator::new().validate(&module)?;
                 if !self.features.contains(wgt::Features::PUSH_CONSTANTS)
                     && module
@@ -1020,39 +1020,43 @@ impl<B: GfxBackend> Device<B> {
                         wgt::Features::PUSH_CONSTANTS,
                     ));
                 }
-                let interface = validation::Interface::new(&module);
+                let interface = validation::Interface::new(&module, &analysis);
+                let shader = hal::device::NagaShader { module, analysis };
                 let naga_result = if desc
                     .flags
                     .contains(wgt::ShaderFlags::EXPERIMENTAL_TRANSLATION)
                 {
-                    let shader = hal::device::NagaShader { module, analysis };
                     match unsafe { self.raw.create_shader_module_from_naga(shader) } {
                         Ok(raw) => Ok(raw),
                         Err((hal::device::ShaderError::CompilationFailed(msg), shader)) => {
                             tracing::warn!("Shader module compilation failed: {}", msg);
-                            Err(Some(shader.module))
+                            Err(Some(shader))
                         }
-                        Err((_, shader)) => Err(Some(shader.module)),
+                        Err((_, shader)) => Err(Some(shader)),
                     }
                 } else {
-                    Err(Some(module))
+                    Err(Some(shader))
                 };
                 (naga_result, Some(interface))
             }
-            Some(module) => (Err(Some(module)), None),
             _ => (Err(None), None),
         };
 
         // Otherwise, fall back to SPIR-V.
         let spv_result = match naga_result {
             Ok(raw) => Ok(raw),
-            Err(maybe_module) => {
+            Err(maybe_shader) => {
                 let spv = match spv {
                     Some(data) => Ok(data),
                     None => {
                         // Produce a SPIR-V from the Naga module
-                        let module = maybe_module.unwrap();
-                        naga::back::spv::write_vec(&module, &self.spv_options).map(Cow::Owned)
+                        let shader = maybe_shader.unwrap();
+                        naga::back::spv::write_vec(
+                            &shader.module,
+                            &shader.analysis,
+                            &self.spv_options,
+                        )
+                        .map(Cow::Owned)
                     }
                 };
                 match spv {

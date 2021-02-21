@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{binding_model::BindEntryMap, FastHashMap};
+use naga::proc::analyzer::GlobalUse;
 use std::collections::hash_map::Entry;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
@@ -60,7 +61,7 @@ struct SpecializationConstant {
 struct EntryPoint {
     inputs: Vec<Varying>,
     outputs: Vec<Varying>,
-    resources: Vec<(naga::Handle<Resource>, naga::GlobalUse)>,
+    resources: Vec<(naga::Handle<Resource>, GlobalUse)>,
     spec_constants: Vec<SpecializationConstant>,
 }
 
@@ -117,7 +118,7 @@ pub enum BindingError {
     #[error("visibility flags don't include the shader stage")]
     Invisible,
     #[error("load/store access flags {0:?} don't match the shader")]
-    WrongUsage(naga::GlobalUse),
+    WrongUsage(GlobalUse),
     #[error("type on the shader side does not match the pipeline binding")]
     WrongType,
     #[error("buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
@@ -304,7 +305,7 @@ impl Resource {
     fn check_binding_use(
         &self,
         entry: &BindGroupLayoutEntry,
-        shader_usage: naga::GlobalUse,
+        shader_usage: GlobalUse,
     ) -> Result<(), BindingError> {
         let allowed_usage = match self.ty {
             ResourceType::Buffer { size } => {
@@ -317,11 +318,9 @@ impl Resource {
                         let global_use = match ty {
                             wgt::BufferBindingType::Uniform
                             | wgt::BufferBindingType::Storage { read_only: true } => {
-                                naga::GlobalUse::READ
+                                GlobalUse::READ
                             }
-                            wgt::BufferBindingType::Storage { read_only: _ } => {
-                                naga::GlobalUse::all()
-                            }
+                            wgt::BufferBindingType::Storage { read_only: _ } => GlobalUse::all(),
                         };
                         (global_use, min_binding_size)
                     }
@@ -341,7 +340,7 @@ impl Resource {
                     comparison: cmp,
                 } => {
                     if cmp == comparison {
-                        naga::GlobalUse::READ
+                        GlobalUse::READ
                     } else {
                         return Err(BindingError::WrongSamplerComparison);
                     }
@@ -412,7 +411,7 @@ impl Resource {
                             },
                             wgt::TextureSampleType::Depth => naga::ImageClass::Depth,
                         };
-                        (class, naga::GlobalUse::READ)
+                        (class, GlobalUse::READ)
                     }
                     BindingType::StorageTexture {
                         access,
@@ -422,9 +421,9 @@ impl Resource {
                         let naga_format = map_storage_format_to_naga(format)
                             .ok_or(BindingError::BadStorageFormat(format))?;
                         let usage = match access {
-                            wgt::StorageTextureAccess::ReadOnly => naga::GlobalUse::READ,
-                            wgt::StorageTextureAccess::WriteOnly => naga::GlobalUse::WRITE,
-                            wgt::StorageTextureAccess::ReadWrite => naga::GlobalUse::all(),
+                            wgt::StorageTextureAccess::ReadOnly => GlobalUse::READ,
+                            wgt::StorageTextureAccess::WriteOnly => GlobalUse::WRITE,
+                            wgt::StorageTextureAccess::ReadWrite => GlobalUse::all(),
                         };
                         (naga::ImageClass::Storage(naga_format), usage)
                     }
@@ -447,16 +446,13 @@ impl Resource {
         }
     }
 
-    fn derive_binding_type(
-        &self,
-        shader_usage: naga::GlobalUse,
-    ) -> Result<BindingType, BindingError> {
+    fn derive_binding_type(&self, shader_usage: GlobalUse) -> Result<BindingType, BindingError> {
         Ok(match self.ty {
             ResourceType::Buffer { size } => BindingType::Buffer {
                 ty: match self.class {
                     naga::StorageClass::Uniform => wgt::BufferBindingType::Uniform,
                     naga::StorageClass::Storage => wgt::BufferBindingType::Storage {
-                        read_only: !shader_usage.contains(naga::GlobalUse::WRITE),
+                        read_only: !shader_usage.contains(GlobalUse::WRITE),
                     },
                     _ => return Err(BindingError::WrongType),
                 },
@@ -499,7 +495,7 @@ impl Resource {
                         multisampled: false,
                     },
                     naga::ImageClass::Storage(format) => BindingType::StorageTexture {
-                        access: if shader_usage.contains(naga::GlobalUse::WRITE) {
+                        access: if shader_usage.contains(GlobalUse::WRITE) {
                             wgt::StorageTextureAccess::WriteOnly
                         } else {
                             wgt::StorageTextureAccess::ReadOnly
@@ -686,7 +682,7 @@ pub fn check_texture_format(format: wgt::TextureFormat, output: &NumericType) ->
 pub type StageIo = FastHashMap<wgt::ShaderLocation, NumericType>;
 
 impl Interface {
-    pub fn new(module: &naga::Module) -> Self {
+    pub fn new(module: &naga::Module, analysis: &naga::proc::analyzer::Analysis) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
@@ -731,13 +727,11 @@ impl Interface {
 
         let mut entry_points = FastHashMap::default();
         entry_points.reserve(module.entry_points.len());
-        for (&(stage, ref ep_name), entry_point) in module.entry_points.iter() {
+        for (&(stage, ref ep_name), _entry_point) in module.entry_points.iter() {
+            let info = analysis.get_entry_point(stage, ep_name);
             let mut ep = EntryPoint::default();
-            for ((var_handle, var), &usage) in module
-                .global_variables
-                .iter()
-                .zip(&entry_point.function.global_usage)
-            {
+            for (var_handle, var) in module.global_variables.iter() {
+                let usage = info[var_handle];
                 if usage.is_empty() {
                     continue;
                 }

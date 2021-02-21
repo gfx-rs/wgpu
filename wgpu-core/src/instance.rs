@@ -130,7 +130,7 @@ impl<B: GfxBackend> Adapter<B> {
         span!(_guard, INFO, "Adapter::new");
 
         let adapter_features = raw.physical_device.features();
-        let adapter_limits = raw.physical_device.limits();
+        let properties = raw.physical_device.properties();
 
         let mut features = wgt::Features::default()
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
@@ -182,7 +182,7 @@ impl<B: GfxBackend> Adapter<B> {
         );
         features.set(
             wgt::Features::TIMESTAMP_QUERY,
-            adapter_limits.timestamp_compute_and_graphics,
+            properties.limits.timestamp_compute_and_graphics,
         );
         features.set(
             wgt::Features::PIPELINE_STATISTICS_QUERY,
@@ -215,40 +215,35 @@ impl<B: GfxBackend> Adapter<B> {
         // All these casts to u32 are safe as the underlying vulkan types are u32s.
         // If another backend provides larger limits than u32, we need to clamp them to u32::MAX.
         // TODO: fix all gfx-hal backends to produce limits we care about, and remove .max
+        let desc_limits = &properties.limits.descriptor_limits;
         let limits = wgt::Limits {
-            max_bind_groups: (adapter_limits.max_bound_descriptor_sets as u32)
+            max_bind_groups: (properties.limits.max_bound_descriptor_sets as u32)
                 .min(MAX_BIND_GROUPS as u32)
                 .max(default_limits.max_bind_groups),
-            max_dynamic_uniform_buffers_per_pipeline_layout: (adapter_limits
+            max_dynamic_uniform_buffers_per_pipeline_layout: desc_limits
                 .max_descriptor_set_uniform_buffers_dynamic
-                as u32)
                 .max(default_limits.max_dynamic_uniform_buffers_per_pipeline_layout),
-            max_dynamic_storage_buffers_per_pipeline_layout: (adapter_limits
+            max_dynamic_storage_buffers_per_pipeline_layout: desc_limits
                 .max_descriptor_set_storage_buffers_dynamic
-                as u32)
                 .max(default_limits.max_dynamic_storage_buffers_per_pipeline_layout),
-            max_sampled_textures_per_shader_stage: (adapter_limits
+            max_sampled_textures_per_shader_stage: desc_limits
                 .max_per_stage_descriptor_sampled_images
-                as u32)
                 .max(default_limits.max_sampled_textures_per_shader_stage),
-            max_samplers_per_shader_stage: (adapter_limits.max_per_stage_descriptor_samplers
-                as u32)
+            max_samplers_per_shader_stage: desc_limits
+                .max_per_stage_descriptor_samplers
                 .max(default_limits.max_samplers_per_shader_stage),
-            max_storage_buffers_per_shader_stage: (adapter_limits
+            max_storage_buffers_per_shader_stage: desc_limits
                 .max_per_stage_descriptor_storage_buffers
-                as u32)
                 .max(default_limits.max_storage_buffers_per_shader_stage),
-            max_storage_textures_per_shader_stage: (adapter_limits
+            max_storage_textures_per_shader_stage: desc_limits
                 .max_per_stage_descriptor_storage_images
-                as u32)
                 .max(default_limits.max_storage_textures_per_shader_stage),
-            max_uniform_buffers_per_shader_stage: (adapter_limits
+            max_uniform_buffers_per_shader_stage: desc_limits
                 .max_per_stage_descriptor_uniform_buffers
-                as u32)
                 .max(default_limits.max_uniform_buffers_per_shader_stage),
-            max_uniform_buffer_binding_size: (adapter_limits.max_uniform_buffer_range as u32)
+            max_uniform_buffer_binding_size: (properties.limits.max_uniform_buffer_range as u32)
                 .max(default_limits.max_uniform_buffer_binding_size),
-            max_push_constant_size: (adapter_limits.max_push_constants_size as u32)
+            max_push_constant_size: (properties.limits.max_push_constants_size as u32)
                 .max(MIN_PUSH_CONSTANT_SIZE), // As an extension, the default is always 0, so define a separate minimum.
         };
 
@@ -465,7 +460,7 @@ impl<B: GfxBackend> Adapter<B> {
             //TODO
         }
 
-        let limits = phd.limits();
+        let limits = phd.properties().limits;
         assert_eq!(
             0,
             BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
