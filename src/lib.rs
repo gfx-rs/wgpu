@@ -722,11 +722,8 @@ pub enum Expression {
         /// True = conversion needs to take place; False = bitcast.
         convert: bool,
     },
-    /// Call another function.
-    Call {
-        function: Handle<Function>,
-        arguments: Vec<Handle<Expression>>,
-    },
+    /// Result of calling another function.
+    Call(Handle<Function>),
     /// Get the length of an array.
     ArrayLength(Handle<Expression>),
 }
@@ -771,7 +768,6 @@ pub enum Statement {
     },
     /// Executes a block repeatedly.
     Loop { body: Block, continuing: Block },
-    //TODO: move terminator variations into a separate enum?
     /// Exits the loop.
     Break,
     /// Skips execution to the next iteration of the loop.
@@ -781,21 +777,35 @@ pub enum Statement {
     /// Aborts the current shader execution.
     Kill,
     /// Stores a value at an address.
+    ///
+    /// This statement is a barrier for any operations on the
+    /// `Expression::LocalVariable` or `Expression::GlobalVariable`
+    /// that is the destination of an access chain, started
+    /// from the `pointer`.
     Store {
         pointer: Handle<Expression>,
         value: Handle<Expression>,
     },
     /// Stores a value to an image.
+    ///
+    /// Image has to point into a global variable of type `TypeInner::Image`.
+    /// This statement is a barrier for any operations on the corresponding
+    /// `Expression::GlobalVariable` for this image.
     ImageStore {
         image: Handle<Expression>,
         coordinate: Handle<Expression>,
         array_index: Option<Handle<Expression>>,
         value: Handle<Expression>,
     },
-    /// Calls a function with no return value.
+    /// Calls a function.
+    ///
+    /// If the `result` is `Some`, the corresponding expression has to be
+    /// `Expression::Call`, and this statement serves as a barrier for any
+    /// operations on that expression.
     Call {
         function: Handle<Function>,
         arguments: Vec<Handle<Expression>>,
+        result: Option<Handle<Expression>>,
     },
 }
 

@@ -941,7 +941,7 @@ expression: output
                     control_flags: (
                         bits: 5,
                     ),
-                    ref_count: 1,
+                    ref_count: 2,
                     assignable_global: None,
                 ),
                 (

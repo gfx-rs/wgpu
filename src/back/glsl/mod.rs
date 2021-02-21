@@ -276,6 +276,8 @@ pub struct Writer<'a, W> {
     entry_point_idx: crate::proc::EntryPointIndex,
     /// Used to generate a unique number for blocks
     block_id: IdGenerator,
+    /// Set of expressions that have associated temporary variables
+    cached_expressions: FastHashMap<Handle<Expression>, String>,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -324,6 +326,7 @@ impl<'a, W: Write> Writer<'a, W> {
             entry_point_idx: ep_idx as u16,
 
             block_id: IdGenerator::default(),
+            cached_expressions: FastHashMap::default(),
         };
 
         // Find all features required to print this module
@@ -1141,7 +1144,15 @@ impl<'a, W: Write> Writer<'a, W> {
             Statement::Call {
                 function,
                 ref arguments,
+                result,
             } => {
+                if let Some(expr) = result {
+                    let name = format!("_expr{}", expr.index());
+                    let ty = self.module.functions[function].return_type.unwrap();
+                    self.write_type(ty)?;
+                    write!(self.out, "{} = ", name)?;
+                    self.cached_expressions.insert(expr, name);
+                }
                 write!(self.out, "{}(", &self.names[&NameKey::Function(function)])?;
                 self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
                 writeln!(self.out, ");")?
@@ -1682,14 +1693,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(expr, ctx)?;
                 write!(self.out, ")")?
             }
-            // A `Call` is written `name(arguments)` where `arguments` is a comma separated expressions list
-            Expression::Call {
-                function,
-                ref arguments,
-            } => {
-                write!(self.out, "{}(", &self.names[&NameKey::Function(function)])?;
-                self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
-                write!(self.out, ")")?
+            Expression::Call(_function) => {
+                let name = &self.cached_expressions[&expr];
+                write!(self.out, "{}", name)?;
             }
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {

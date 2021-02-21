@@ -252,14 +252,16 @@ expression: output
                         base: 6,
                         index: 7,
                     ),
+                    Call(1),
+                ],
+                body: [
                     Call(
                         function: 1,
                         arguments: [
                             8,
                         ],
+                        result: Some(9),
                     ),
-                ],
-                body: [
                     Store(
                         pointer: 5,
                         value: 9,

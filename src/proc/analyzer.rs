@@ -180,22 +180,14 @@ impl FunctionInfo {
     }
 
     /// Inherit information from a called function.
-    fn process_call(
-        &mut self,
-        info: &Self,
-        arguments: &[Handle<crate::Expression>],
-    ) -> ControlFlags {
+    fn process_call(&mut self, info: &Self) -> ControlFlags {
         for key in info.sampling_set.iter() {
             self.sampling_set.insert(key.clone());
         }
         for (mine, other) in self.global_uses.iter_mut().zip(info.global_uses.iter()) {
             *mine |= *other;
         }
-        let mut flags = info.control_flags;
-        for &argument in arguments {
-            flags |= self.add_ref(argument);
-        }
-        flags
+        info.control_flags
     }
 
     /// Computes the control flags of a given expression, and store them
@@ -353,10 +345,7 @@ impl FunctionInfo {
                 self.add_ref(arg) | arg1_flags | arg2_flags
             }
             E::As { expr, .. } => self.add_ref(expr),
-            E::Call {
-                function,
-                ref arguments,
-            } => self.process_call(&other_functions[function.index()], arguments),
+            E::Call(function) => self.process_call(&other_functions[function.index()]),
             E::ArrayLength(expr) => self.add_ref_impl(expr, GlobalUse::QUERY),
         };
 
@@ -463,7 +452,17 @@ impl FunctionInfo {
                 S::Call {
                     function,
                     ref arguments,
-                } => self.process_call(&other_functions[function.index()], arguments),
+                    result,
+                } => {
+                    let mut flags = self.process_call(&other_functions[function.index()]);
+                    for &argument in arguments {
+                        flags |= self.add_ref(argument);
+                    }
+                    if let Some(expr) = result {
+                        flags |= self.add_ref(expr);
+                    }
+                    flags
+                }
             };
 
             if flags.contains(ControlFlags::REQUIRE_UNIFORM) && !is_uniform {

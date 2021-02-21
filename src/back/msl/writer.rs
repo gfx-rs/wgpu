@@ -16,6 +16,7 @@ use std::{
 
 const NAMESPACE: &str = "metal";
 const INDENT: &str = "    ";
+const BAKE_PREFIX: &str = "_expr";
 
 #[derive(Clone)]
 struct Level(usize);
@@ -207,40 +208,6 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn put_local_call(
-        &mut self,
-        fun_handle: Handle<crate::Function>,
-        parameters: &[Handle<crate::Expression>],
-        context: &ExpressionContext,
-    ) -> Result<(), Error> {
-        let fun_name = &self.names[&NameKey::Function(fun_handle)];
-        write!(self.out, "{}(", fun_name)?;
-        // first, write down the actual arguments
-        for (i, &handle) in parameters.iter().enumerate() {
-            if i != 0 {
-                write!(self.out, ", ")?;
-            }
-            self.put_expression(handle, context)?;
-        }
-        // follow-up with any global resources used
-        let mut separate = !parameters.is_empty();
-        let fun_info = &context.analysis[fun_handle];
-        for (handle, var) in context.module.global_variables.iter() {
-            if !fun_info[handle].is_empty() && var.class.needs_pass_through() {
-                let name = &self.names[&NameKey::GlobalVariable(handle)];
-                if separate {
-                    write!(self.out, ", ")?;
-                } else {
-                    separate = true;
-                }
-                write!(self.out, "{}", name)?;
-            }
-        }
-        // done
-        write!(self.out, ")")?;
-        Ok(())
-    }
-
     fn put_image_query(
         &mut self,
         image: Handle<crate::Expression>,
@@ -263,7 +230,7 @@ impl<W: Write> Writer<W> {
         context: &ExpressionContext,
     ) -> Result<(), Error> {
         if self.named_expressions.contains(expr_handle.index()) {
-            write!(self.out, "expr{}", expr_handle.index())?;
+            write!(self.out, "{}{}", BAKE_PREFIX, expr_handle.index())?;
             return Ok(());
         }
 
@@ -674,12 +641,8 @@ impl<W: Write> Writer<W> {
                 self.put_expression(expr, context)?;
                 write!(self.out, ")")?;
             }
-            crate::Expression::Call {
-                function,
-                ref arguments,
-            } => {
-                self.put_local_call(function, arguments, context)?;
-            }
+            // has to be a named expression
+            crate::Expression::Call(_) => unreachable!(),
             crate::Expression::ArrayLength(expr) => {
                 match *self.typifier.get(expr, &context.module.types) {
                     crate::TypeInner::Array {
@@ -698,6 +661,35 @@ impl<W: Write> Writer<W> {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn start_baking_expression(&mut self, handle: Handle<crate::Expression>) -> Result<(), Error> {
+        match self.typifier.get_handle(handle) {
+            Ok(ty_handle) => {
+                let ty_name = &self.names[&NameKey::Type(ty_handle)];
+                write!(self.out, "{}", ty_name)?;
+            }
+            Err(&crate::TypeInner::Scalar { kind, .. }) => {
+                write!(self.out, "{}", scalar_kind_string(kind))?;
+            }
+            Err(&crate::TypeInner::Vector { size, kind, .. }) => {
+                write!(
+                    self.out,
+                    "{}::{}{}",
+                    NAMESPACE,
+                    scalar_kind_string(kind),
+                    vector_size_string(size)
+                )?;
+            }
+            Err(other) => {
+                log::error!("Type {:?} isn't a known local", other);
+                return Err(Error::FeatureNotImplemented("weird local type".to_string()));
+            }
+        }
+
+        //TODO: figure out the naming scheme that wouldn't collide with user names.
+        write!(self.out, " {}{} = ", BAKE_PREFIX, handle.index())?;
         Ok(())
     }
 
@@ -732,31 +724,7 @@ impl<W: Write> Writer<W> {
         let mut temp_bake_handles = mem::replace(&mut self.temp_bake_handles, Vec::new());
         for handle in temp_bake_handles.drain(..).rev() {
             write!(self.out, "{}", level)?;
-            match self.typifier.get_handle(handle) {
-                Ok(ty_handle) => {
-                    let ty_name = &self.names[&NameKey::Type(ty_handle)];
-                    write!(self.out, "{}", ty_name)?;
-                }
-                Err(&crate::TypeInner::Scalar { kind, .. }) => {
-                    write!(self.out, "{}", scalar_kind_string(kind))?;
-                }
-                Err(&crate::TypeInner::Vector { size, kind, .. }) => {
-                    write!(
-                        self.out,
-                        "{}::{}{}",
-                        NAMESPACE,
-                        scalar_kind_string(kind),
-                        vector_size_string(size)
-                    )?;
-                }
-                Err(other) => {
-                    log::error!("Type {:?} isn't a known local", other);
-                    return Err(Error::FeatureNotImplemented("weird local type".to_string()));
-                }
-            }
-
-            //TODO: figure out the naming scheme that wouldn't collide with user names.
-            write!(self.out, " expr{} = ", handle.index())?;
+            self.start_baking_expression(handle)?;
             // Make sure to temporarily unblock the expression before writing it down.
             self.named_expressions.remove(handle.index());
             self.put_expression(handle, &context.expression)?;
@@ -881,6 +849,12 @@ impl<W: Write> Writer<W> {
                     array_index,
                     value,
                 } => {
+                    self.prepare_expression(level.clone(), value, context, true)?;
+                    self.prepare_expression(level.clone(), coordinate, context, false)?;
+                    if let Some(expr) = array_index {
+                        self.prepare_expression(level.clone(), expr, context, false)?;
+                    }
+                    write!(self.out, "{}", level)?;
                     self.put_expression(image, &context.expression)?;
                     write!(self.out, ".write(")?;
                     self.put_expression(value, &context.expression)?;
@@ -890,17 +864,46 @@ impl<W: Write> Writer<W> {
                         write!(self.out, ", ")?;
                         self.put_expression(expr, &context.expression)?;
                     }
-                    write!(self.out, ");")?;
+                    writeln!(self.out, ");")?;
                 }
                 crate::Statement::Call {
                     function,
                     ref arguments,
+                    result,
                 } => {
                     for &arg in arguments {
                         self.prepare_expression(level.clone(), arg, context, false)?;
                     }
-                    self.put_local_call(function, arguments, &context.expression)?;
-                    writeln!(self.out, ";")?;
+                    write!(self.out, "{}", level)?;
+                    if let Some(expr) = result {
+                        self.start_baking_expression(expr)?;
+                        self.named_expressions.insert(expr.index());
+                    }
+                    let fun_name = &self.names[&NameKey::Function(function)];
+                    write!(self.out, "{}(", fun_name)?;
+                    // first, write down the actual arguments
+                    for (i, &handle) in arguments.iter().enumerate() {
+                        if i != 0 {
+                            write!(self.out, ", ")?;
+                        }
+                        self.put_expression(handle, &context.expression)?;
+                    }
+                    // follow-up with any global resources used
+                    let mut separate = !arguments.is_empty();
+                    let fun_info = &context.expression.analysis[function];
+                    for (handle, var) in context.expression.module.global_variables.iter() {
+                        if !fun_info[handle].is_empty() && var.class.needs_pass_through() {
+                            let name = &self.names[&NameKey::GlobalVariable(handle)];
+                            if separate {
+                                write!(self.out, ", ")?;
+                            } else {
+                                separate = true;
+                            }
+                            write!(self.out, "{}", name)?;
+                        }
+                    }
+                    // done
+                    writeln!(self.out, ");")?;
                 }
             }
         }

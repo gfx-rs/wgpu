@@ -895,13 +895,7 @@ expression: output
                         left: 51,
                         right: 3,
                     ),
-                    Call(
-                        function: 1,
-                        arguments: [
-                            44,
-                            52,
-                        ],
-                    ),
+                    Call(1),
                     Math(
                         fun: Normalize,
                         arg: 2,
@@ -1100,6 +1094,14 @@ expression: output
                                     Break,
                                 ],
                                 reject: [],
+                            ),
+                            Call(
+                                function: 1,
+                                arguments: [
+                                    44,
+                                    52,
+                                ],
+                                result: Some(53),
                             ),
                             Store(
                                 pointer: 43,

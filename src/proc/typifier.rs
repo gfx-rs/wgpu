@@ -485,10 +485,7 @@ impl Typifier {
                     })
                 }
             },
-            crate::Expression::Call {
-                function,
-                arguments: _,
-            } => {
+            crate::Expression::Call(function) => {
                 let ty = ctx.functions[function]
                     .return_type
                     .ok_or(ResolveError::FunctionReturnsVoid)?;

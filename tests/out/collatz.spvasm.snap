@@ -9,24 +9,24 @@ expression: dis
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %38 "main" %52
+OpEntryPoint GLCompute %38 "main" %53
 OpExecutionMode %38 LocalSize 1 1 1
 OpSource GLSL 450
 OpName %8 "n"
 OpName %10 "i"
 OpName %12 "collatz_iterations"
 OpName %38 "main"
-OpName %44 "PrimeIndices"
-OpMemberName %44 0 "data"
-OpName %45 "v_indices"
-OpName %52 "global_id"
+OpName %45 "PrimeIndices"
+OpMemberName %45 0 "data"
+OpName %46 "v_indices"
+OpName %53 "global_id"
 OpName %38 "main"
-OpDecorate %42 ArrayStride 4
-OpDecorate %44 BufferBlock
-OpMemberDecorate %44 0 Offset 0
-OpDecorate %45 DescriptorSet 0
-OpDecorate %45 Binding 0
-OpDecorate %52 BuiltIn GlobalInvocationId
+OpDecorate %43 ArrayStride 4
+OpDecorate %45 BufferBlock
+OpMemberDecorate %45 0 Offset 0
+OpDecorate %46 DescriptorSet 0
+OpDecorate %46 Binding 0
+OpDecorate %53 BuiltIn GlobalInvocationId
 %2 = OpTypeVoid
 %4 = OpTypeInt 32 0
 %3 = OpConstant  %4  0
@@ -37,24 +37,24 @@ OpDecorate %52 BuiltIn GlobalInvocationId
 %13 = OpTypeFunction %4 %4
 %19 = OpTypeBool
 %39 = OpTypeFunction %2
-%42 = OpTypeRuntimeArray %4
-%44 = OpTypeStruct %42
-%46 = OpTypePointer Uniform %44
-%45 = OpVariable  %46  Uniform
-%47 = OpTypePointer Uniform %42
-%48 = OpTypeInt 32 1
-%49 = OpConstant  %48  0
-%51 = OpTypeVector %4 3
-%53 = OpTypePointer Input %51
-%52 = OpVariable  %53  Input
-%54 = OpTypePointer Input %4
-%55 = OpConstant  %48  0
-%57 = OpTypePointer Uniform %4
-%61 = OpTypePointer Uniform %42
-%62 = OpConstant  %48  0
-%64 = OpTypePointer Input %4
-%65 = OpConstant  %48  0
-%67 = OpTypePointer Uniform %4
+%43 = OpTypeRuntimeArray %4
+%45 = OpTypeStruct %43
+%47 = OpTypePointer Uniform %45
+%46 = OpVariable  %47  Uniform
+%48 = OpTypePointer Uniform %43
+%49 = OpTypeInt 32 1
+%50 = OpConstant  %49  0
+%52 = OpTypeVector %4 3
+%54 = OpTypePointer Input %52
+%53 = OpVariable  %54  Input
+%55 = OpTypePointer Input %4
+%56 = OpConstant  %49  0
+%58 = OpTypePointer Uniform %4
+%62 = OpTypePointer Uniform %43
+%63 = OpConstant  %49  0
+%65 = OpTypePointer Input %4
+%66 = OpConstant  %49  0
+%68 = OpTypePointer Uniform %4
 %12 = OpFunction  %4  None %13
 %11 = OpFunctionParameter  %4
 %14 = OpLabel
@@ -102,16 +102,16 @@ OpReturnValue %37
 OpFunctionEnd
 %38 = OpFunction  %2  None %39
 %40 = OpLabel
-%43 = OpAccessChain  %47  %45 %49
-%50 = OpAccessChain  %54  %52 %55
-%56 = OpLoad  %4  %50
-%41 = OpAccessChain  %57  %43 %56
-%60 = OpAccessChain  %61  %45 %62
-%63 = OpAccessChain  %64  %52 %65
-%66 = OpLoad  %4  %63
-%59 = OpAccessChain  %67  %60 %66
-%68 = OpLoad  %4  %59
-%58 = OpFunctionCall  %4  %12 %68
-OpStore %41 %58
+%44 = OpAccessChain  %48  %46 %50
+%51 = OpAccessChain  %55  %53 %56
+%57 = OpLoad  %4  %51
+%42 = OpAccessChain  %58  %44 %57
+%59 = OpLoad  %4  %42
+%41 = OpFunctionCall  %4  %12 %59
+%61 = OpAccessChain  %62  %46 %63
+%64 = OpAccessChain  %65  %53 %66
+%67 = OpLoad  %4  %64
+%60 = OpAccessChain  %68  %61 %67
+OpStore %60 %41
 OpReturn
 OpFunctionEnd

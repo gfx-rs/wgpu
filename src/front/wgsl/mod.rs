@@ -125,7 +125,7 @@ struct StatementContext<'input, 'temp, 'out> {
     arguments: &'out [crate::FunctionArgument],
 }
 
-impl<'a> StatementContext<'a, '_, '_> {
+impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
     fn reborrow(&mut self) -> StatementContext<'a, '_, '_> {
         StatementContext {
             lookup_ident: self.lookup_ident,
@@ -140,7 +140,10 @@ impl<'a> StatementContext<'a, '_, '_> {
         }
     }
 
-    fn as_expression(&mut self) -> ExpressionContext<'a, '_, '_> {
+    fn as_expression<'t>(&'t mut self, block: &'t mut crate::Block) -> ExpressionContext<'a, 't, '_>
+    where
+        'temp: 't,
+    {
         ExpressionContext {
             lookup_ident: self.lookup_ident,
             typifier: self.typifier,
@@ -151,6 +154,7 @@ impl<'a> StatementContext<'a, '_, '_> {
             local_vars: self.variables,
             functions: self.functions,
             arguments: self.arguments,
+            block,
         }
     }
 }
@@ -170,6 +174,7 @@ struct ExpressionContext<'input, 'temp, 'out> {
     local_vars: &'out Arena<crate::LocalVariable>,
     arguments: &'out [crate::FunctionArgument],
     functions: &'out Arena<crate::Function>,
+    block: &'temp mut crate::Block,
 }
 
 impl<'a> ExpressionContext<'a, '_, '_> {
@@ -184,6 +189,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             local_vars: self.local_vars,
             functions: self.functions,
             arguments: self.arguments,
+            block: self.block,
         }
     }
 
@@ -414,17 +420,17 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         name: &'a str,
         mut ctx: ExpressionContext<'a, '_, '_>,
-    ) -> Result<Option<crate::Expression>, Error<'a>> {
-        Ok(if let Some(fun) = conv::map_relational_fun(name) {
+    ) -> Result<Option<Handle<crate::Expression>>, Error<'a>> {
+        let expr = if let Some(fun) = conv::map_relational_fun(name) {
             lexer.expect(Token::Paren('('))?;
             let argument = self.parse_general_expression(lexer, ctx.reborrow())?;
             lexer.expect(Token::Paren(')'))?;
-            Some(crate::Expression::Relational { fun, argument })
+            crate::Expression::Relational { fun, argument }
         } else if let Some(axis) = conv::map_derivative_axis(name) {
             lexer.expect(Token::Paren('('))?;
             let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
             lexer.expect(Token::Paren(')'))?;
-            Some(crate::Expression::Derivative { axis, expr })
+            crate::Expression::Derivative { axis, expr }
         } else if let Some(fun) = conv::map_standard_fun(name) {
             lexer.expect(Token::Paren('('))?;
             let arg_count = fun.argument_count();
@@ -442,12 +448,12 @@ impl Parser {
                 None
             };
             lexer.expect(Token::Paren(')'))?;
-            Some(crate::Expression::Math {
+            crate::Expression::Math {
                 fun,
                 arg,
                 arg1,
                 arg2,
-            })
+            }
         } else if name == "select" {
             lexer.expect(Token::Paren('('))?;
             let accept = self.parse_general_expression(lexer, ctx.reborrow())?;
@@ -456,11 +462,11 @@ impl Parser {
             lexer.expect(Token::Separator(','))?;
             let condition = self.parse_general_expression(lexer, ctx.reborrow())?;
             lexer.expect(Token::Paren(')'))?;
-            Some(crate::Expression::Select {
+            crate::Expression::Select {
                 condition,
                 accept,
                 reject,
-            })
+            }
         } else {
             // texture sampling
             match name {
@@ -484,7 +490,7 @@ impl Parser {
                         None
                     };
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::ImageSample {
+                    crate::Expression::ImageSample {
                         image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name)?,
                         coordinate,
@@ -492,7 +498,7 @@ impl Parser {
                         offset,
                         level: crate::SampleLevel::Auto,
                         depth_ref: None,
-                    })
+                    }
                 }
                 "textureSampleLevel" => {
                     lexer.expect(Token::Paren('('))?;
@@ -516,7 +522,7 @@ impl Parser {
                         None
                     };
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::ImageSample {
+                    crate::Expression::ImageSample {
                         image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name)?,
                         coordinate,
@@ -524,7 +530,7 @@ impl Parser {
                         offset,
                         level: crate::SampleLevel::Exact(level),
                         depth_ref: None,
-                    })
+                    }
                 }
                 "textureSampleBias" => {
                     lexer.expect(Token::Paren('('))?;
@@ -548,7 +554,7 @@ impl Parser {
                         None
                     };
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::ImageSample {
+                    crate::Expression::ImageSample {
                         image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name)?,
                         coordinate,
@@ -556,7 +562,7 @@ impl Parser {
                         offset,
                         level: crate::SampleLevel::Bias(bias),
                         depth_ref: None,
-                    })
+                    }
                 }
                 "textureSampleGrad" => {
                     lexer.expect(Token::Paren('('))?;
@@ -582,7 +588,7 @@ impl Parser {
                         None
                     };
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::ImageSample {
+                    crate::Expression::ImageSample {
                         image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name)?,
                         coordinate,
@@ -590,7 +596,7 @@ impl Parser {
                         offset,
                         level: crate::SampleLevel::Gradient { x, y },
                         depth_ref: None,
-                    })
+                    }
                 }
                 "textureSampleCompare" => {
                     lexer.expect(Token::Paren('('))?;
@@ -614,7 +620,7 @@ impl Parser {
                         None
                     };
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::ImageSample {
+                    crate::Expression::ImageSample {
                         image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name)?,
                         coordinate,
@@ -622,7 +628,7 @@ impl Parser {
                         offset,
                         level: crate::SampleLevel::Zero,
                         depth_ref: Some(reference),
-                    })
+                    }
                 }
                 "textureLoad" => {
                     lexer.expect(Token::Paren('('))?;
@@ -649,12 +655,12 @@ impl Parser {
                         }
                     };
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::ImageLoad {
+                    crate::Expression::ImageLoad {
                         image,
                         coordinate,
                         array_index,
                         index,
-                    })
+                    }
                 }
                 "textureDimensions" => {
                     lexer.expect(Token::Paren('('))?;
@@ -667,49 +673,61 @@ impl Parser {
                         None
                     };
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::ImageQuery {
+                    crate::Expression::ImageQuery {
                         image,
                         query: crate::ImageQuery::Size { level },
-                    })
+                    }
                 }
                 "textureNumLevels" => {
                     lexer.expect(Token::Paren('('))?;
                     let image_name = lexer.next_ident()?;
                     let image = ctx.lookup_ident.lookup(image_name)?;
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::ImageQuery {
+                    crate::Expression::ImageQuery {
                         image,
                         query: crate::ImageQuery::NumLevels,
-                    })
+                    }
                 }
                 "textureNumLayers" => {
                     lexer.expect(Token::Paren('('))?;
                     let image_name = lexer.next_ident()?;
                     let image = ctx.lookup_ident.lookup(image_name)?;
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::ImageQuery {
+                    crate::Expression::ImageQuery {
                         image,
                         query: crate::ImageQuery::NumLayers,
-                    })
+                    }
                 }
                 "textureNumSamples" => {
                     lexer.expect(Token::Paren('('))?;
                     let image_name = lexer.next_ident()?;
                     let image = ctx.lookup_ident.lookup(image_name)?;
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::ImageQuery {
+                    crate::Expression::ImageQuery {
                         image,
                         query: crate::ImageQuery::NumSamples,
-                    })
+                    }
                 }
-                _ => self.parse_local_function_call(lexer, name, ctx)?.map(
-                    |(function, arguments)| crate::Expression::Call {
-                        function,
-                        arguments,
-                    },
-                ),
+                _ => {
+                    let handle =
+                        match self.parse_local_function_call(lexer, name, ctx.reborrow())? {
+                            Some((function, arguments)) => {
+                                let result =
+                                    Some(ctx.expressions.append(crate::Expression::Call(function)));
+                                ctx.block.push(crate::Statement::Call {
+                                    function,
+                                    arguments,
+                                    result,
+                                });
+                                result
+                            }
+                            None => None,
+                        };
+                    return Ok(handle);
+                }
             }
-        })
+        };
+        Ok(Some(ctx.expressions.append(expr)))
     }
 
     fn parse_const_expression<'a>(
@@ -791,15 +809,14 @@ impl Parser {
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         self.scopes.push(Scope::PrimaryExpr);
-        let expression = match lexer.next() {
+        let handle = match lexer.next() {
             Token::Paren('(') => {
                 let expr = self.parse_general_expression(lexer, ctx)?;
                 lexer.expect(Token::Paren(')'))?;
-                self.scopes.pop();
-                return Ok(expr);
+                expr
             }
             Token::Word("true") => {
-                let handle = ctx.constants.fetch_or_append(crate::Constant {
+                let expr = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
                     specialization: None,
                     inner: crate::ConstantInner::Scalar {
@@ -807,10 +824,10 @@ impl Parser {
                         value: crate::ScalarValue::Bool(true),
                     },
                 });
-                crate::Expression::Constant(handle)
+                ctx.expressions.append(crate::Expression::Constant(expr))
             }
             Token::Word("false") => {
-                let handle = ctx.constants.fetch_or_append(crate::Constant {
+                let expr = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
                     specialization: None,
                     inner: crate::ConstantInner::Scalar {
@@ -818,24 +835,24 @@ impl Parser {
                         value: crate::ScalarValue::Bool(false),
                     },
                 });
-                crate::Expression::Constant(handle)
+                ctx.expressions.append(crate::Expression::Constant(expr))
             }
             Token::Number { value, ty, width } => {
                 let inner = Self::get_constant_inner(value, ty, width)?;
-                let handle = ctx.constants.fetch_or_append(crate::Constant {
+                let expr = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
                     specialization: None,
                     inner,
                 });
-                crate::Expression::Constant(handle)
+                ctx.expressions.append(crate::Expression::Constant(expr))
             }
             Token::Word(word) => {
-                if let Some(handle) = ctx.lookup_ident.get(word) {
-                    self.scopes.pop();
-                    return Ok(*handle);
-                }
-                //TODO: resolve the duplicate call in `parse_singular_expression`
-                if let Some(expr) = self.parse_function_call_inner(lexer, word, ctx.reborrow())? {
+                if let Some(&expr) = ctx.lookup_ident.get(word) {
+                    expr
+                } else if let Some(expr) =
+                    self.parse_function_call_inner(lexer, word, ctx.reborrow())?
+                {
+                    //TODO: resolve the duplicate call in `parse_singular_expression`
                     expr
                 } else {
                     let inner = self.parse_type_decl_impl(
@@ -856,7 +873,7 @@ impl Parser {
                         last_component = self.parse_general_expression(lexer, ctx.reborrow())?;
                     }
                     lexer.expect(Token::Paren(')'))?;
-                    if components.is_empty() {
+                    let expr = if components.is_empty() {
                         let last_component_inner = ctx.resolve_type(last_component)?;
                         match (&inner, last_component_inner) {
                             (crate::TypeInner::Scalar { .. }, crate::TypeInner::Scalar { .. })
@@ -876,13 +893,14 @@ impl Parser {
                         components.push(last_component);
                         let ty = ctx.types.fetch_or_append(crate::Type { name: None, inner });
                         crate::Expression::Compose { ty, components }
-                    }
+                    };
+                    ctx.expressions.append(expr)
                 }
             }
             other => return Err(Error::Unexpected(other, "primary expression")),
         };
         self.scopes.pop();
-        Ok(ctx.expressions.append(expression))
+        Ok(handle)
     }
 
     fn parse_postfix<'a>(
@@ -969,22 +987,31 @@ impl Parser {
         self.scopes.push(Scope::SingularExpr);
         //TODO: refactor this to avoid backing up
         let backup = lexer.clone();
-        let expression = match lexer.next() {
-            Token::Operation('-') => Some(crate::Expression::Unary {
-                op: crate::UnaryOperator::Negate,
-                expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
-            }),
-            Token::Operation('!') => Some(crate::Expression::Unary {
-                op: crate::UnaryOperator::Not,
-                expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
-            }),
-            Token::Word(word) => self.parse_function_call_inner(lexer, word, ctx.reborrow())?,
-            _ => None,
-        };
-
-        let handle = match expression {
-            Some(expr) => ctx.expressions.append(expr),
-            None => {
+        let handle = match lexer.next() {
+            Token::Operation('-') => {
+                let expr = crate::Expression::Unary {
+                    op: crate::UnaryOperator::Negate,
+                    expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
+                };
+                ctx.expressions.append(expr)
+            }
+            Token::Operation('!') => {
+                let expr = crate::Expression::Unary {
+                    op: crate::UnaryOperator::Not,
+                    expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
+                };
+                ctx.expressions.append(expr)
+            }
+            Token::Word(word) => {
+                match self.parse_function_call_inner(lexer, word, ctx.reborrow())? {
+                    Some(handle) => handle,
+                    None => {
+                        *lexer = backup;
+                        self.parse_primary_expression(lexer, ctx.reborrow())?
+                    }
+                }
+            }
+            _ => {
                 *lexer = backup;
                 self.parse_primary_expression(lexer, ctx.reborrow())?
             }
@@ -1599,40 +1626,43 @@ impl Parser {
         Ok((handle, storage_access))
     }
 
-    fn parse_statement<'a>(
+    fn parse_statement<'a, 'out>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        mut context: StatementContext<'a, '_, '_>,
+        mut context: StatementContext<'a, '_, 'out>,
+        block: &'out mut crate::Block,
         is_uniform_control_flow: bool,
-    ) -> Result<Option<crate::Statement>, Error<'a>> {
+    ) -> Result<(), Error<'a>> {
         let word = match lexer.next() {
-            Token::Separator(';') => return Ok(None),
+            Token::Separator(';') => return Ok(()),
             Token::Paren('{') => {
                 self.scopes.push(Scope::Block);
                 let mut statements = Vec::new();
                 while !lexer.skip(Token::Paren('}')) {
-                    let s =
-                        self.parse_statement(lexer, context.reborrow(), is_uniform_control_flow)?;
-                    statements.extend(s);
+                    self.parse_statement(
+                        lexer,
+                        context.reborrow(),
+                        &mut statements,
+                        is_uniform_control_flow,
+                    )?;
                 }
                 self.scopes.pop();
-                let block = crate::Statement::Block(statements);
-                return Ok(Some(block));
+                block.push(crate::Statement::Block(statements));
+                return Ok(());
             }
             Token::Word(word) => word,
             other => return Err(Error::Unexpected(other, "statement")),
         };
 
         self.scopes.push(Scope::Statement);
-        let statement = match word {
+        match word {
             "const" => {
                 let (name, _ty, _access) =
                     self.parse_variable_ident_decl(lexer, context.types, context.constants)?;
                 lexer.expect(Token::Operation('='))?;
-                let expr_id = self.parse_general_expression(lexer, context.as_expression())?;
+                let expr_id = self.parse_general_expression(lexer, context.as_expression(block))?;
                 lexer.expect(Token::Separator(';'))?;
                 context.lookup_ident.insert(name, expr_id);
-                None
             }
             "var" => {
                 enum Init {
@@ -1645,7 +1675,8 @@ impl Parser {
                     self.parse_variable_ident_decl(lexer, context.types, context.constants)?;
 
                 let init = if lexer.skip(Token::Operation('=')) {
-                    let value = self.parse_general_expression(lexer, context.as_expression())?;
+                    let value =
+                        self.parse_general_expression(lexer, context.as_expression(block))?;
                     match context.expressions[value] {
                         crate::Expression::Constant(handle) if is_uniform_control_flow => {
                             Init::Constant(handle)
@@ -1671,26 +1702,26 @@ impl Parser {
                     .append(crate::Expression::LocalVariable(var_id));
                 context.lookup_ident.insert(name, expr_id);
 
-                match init {
-                    Init::Variable(value) => Some(crate::Statement::Store {
+                if let Init::Variable(value) = init {
+                    block.push(crate::Statement::Store {
                         pointer: expr_id,
                         value,
-                    }),
-                    _ => None,
+                    });
                 }
             }
             "return" => {
                 let value = if lexer.peek() != Token::Separator(';') {
-                    Some(self.parse_general_expression(lexer, context.as_expression())?)
+                    Some(self.parse_general_expression(lexer, context.as_expression(block))?)
                 } else {
                     None
                 };
                 lexer.expect(Token::Separator(';'))?;
-                Some(crate::Statement::Return { value })
+                block.push(crate::Statement::Return { value });
             }
             "if" => {
                 lexer.expect(Token::Paren('('))?;
-                let condition = self.parse_general_expression(lexer, context.as_expression())?;
+                let condition =
+                    self.parse_general_expression(lexer, context.as_expression(block))?;
                 lexer.expect(Token::Paren(')'))?;
 
                 let accept = self.parse_block(lexer, context.reborrow(), false)?;
@@ -1698,7 +1729,7 @@ impl Parser {
                 while lexer.skip(Token::Word("elseif")) {
                     lexer.expect(Token::Paren('('))?;
                     let other_condition =
-                        self.parse_general_expression(lexer, context.as_expression())?;
+                        self.parse_general_expression(lexer, context.as_expression(block))?;
                     lexer.expect(Token::Paren(')'))?;
                     let other_block = self.parse_block(lexer, context.reborrow(), false)?;
                     elsif_stack.push((other_condition, other_block));
@@ -1718,15 +1749,16 @@ impl Parser {
                     }];
                 }
 
-                Some(crate::Statement::If {
+                block.push(crate::Statement::If {
                     condition,
                     accept,
                     reject,
-                })
+                });
             }
             "switch" => {
                 lexer.expect(Token::Paren('('))?;
-                let selector = self.parse_general_expression(lexer, context.as_expression())?;
+                let selector =
+                    self.parse_general_expression(lexer, context.as_expression(block))?;
                 lexer.expect(Token::Paren(')'))?;
                 lexer.expect(Token::Paren('{'))?;
                 let mut cases = Vec::new();
@@ -1766,8 +1798,7 @@ impl Parser {
                                 if lexer.skip(Token::Paren('}')) {
                                     break false;
                                 }
-                                let s = self.parse_statement(lexer, context.reborrow(), false)?;
-                                body.extend(s);
+                                self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
                             };
 
                             cases.push(crate::SwitchCase {
@@ -1785,11 +1816,11 @@ impl Parser {
                     }
                 }
 
-                Some(crate::Statement::Switch {
+                block.push(crate::Statement::Switch {
                     selector,
                     cases,
                     default,
-                })
+                });
             }
             "loop" => {
                 let mut body = Vec::new();
@@ -1805,41 +1836,43 @@ impl Parser {
                     if lexer.skip(Token::Paren('}')) {
                         break;
                     }
-                    let s = self.parse_statement(lexer, context.reborrow(), false)?;
-                    body.extend(s);
+                    self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
                 }
 
-                Some(crate::Statement::Loop { body, continuing })
+                block.push(crate::Statement::Loop { body, continuing });
             }
             "for" => {
-                let mut block = Vec::new();
-
                 lexer.expect(Token::Paren('('))?;
-                let initialization = if lexer.skip(Token::Separator(';')) {
-                    None
-                } else {
-                    let statement =
-                        self.parse_statement(lexer, context.reborrow(), is_uniform_control_flow)?;
-                    match statement {
-                        Some(crate::Statement::Store { .. })
-                        | Some(crate::Statement::Call { .. }) => statement,
-                        Some(other) => {
-                            return Err(Error::InvalidStatement(
-                                other,
-                                "variable, assignment or function call",
-                            ))
+                if !lexer.skip(Token::Separator(';')) {
+                    let num_statements = block.len();
+                    self.parse_statement(
+                        lexer,
+                        context.reborrow(),
+                        block,
+                        is_uniform_control_flow,
+                    )?;
+                    if block.len() != num_statements {
+                        match block.last().unwrap() {
+                            &crate::Statement::Store { .. } | &crate::Statement::Call { .. } => {}
+                            other => {
+                                return Err(Error::InvalidStatement(
+                                    other.clone(),
+                                    "variable, assignment or function call",
+                                ))
+                            }
                         }
-                        None => None,
                     }
                 };
+
                 let condition = if lexer.skip(Token::Separator(';')) {
                     None
                 } else {
                     let condition =
-                        Some(self.parse_general_expression(lexer, context.as_expression())?);
+                        Some(self.parse_general_expression(lexer, context.as_expression(block))?);
                     lexer.expect(Token::Separator(';'))?;
                     condition
                 };
+
                 let continuing = if let Token::Word(ident) = lexer.peek() {
                     // manually parse the next statement here instead of calling parse_statement
                     // because the statement is not terminated with a semicolon
@@ -1847,10 +1880,10 @@ impl Parser {
                     Some(match context.lookup_ident.get(ident) {
                         Some(&var_expr) => {
                             let left =
-                                self.parse_postfix(lexer, context.as_expression(), var_expr)?;
+                                self.parse_postfix(lexer, context.as_expression(block), var_expr)?;
                             lexer.expect(Token::Operation('='))?;
                             let value =
-                                self.parse_general_expression(lexer, context.as_expression())?;
+                                self.parse_general_expression(lexer, context.as_expression(block))?;
                             crate::Statement::Store {
                                 pointer: left,
                                 value,
@@ -1858,11 +1891,16 @@ impl Parser {
                         }
                         None => {
                             let (function, arguments) = self
-                                .parse_local_function_call(lexer, ident, context.as_expression())?
+                                .parse_local_function_call(
+                                    lexer,
+                                    ident,
+                                    context.as_expression(block),
+                                )?
                                 .ok_or(Error::UnknownLocalFunction(ident))?;
                             crate::Statement::Call {
                                 function,
                                 arguments,
+                                result: None,
                             }
                         }
                     })
@@ -1871,8 +1909,6 @@ impl Parser {
                 };
                 lexer.expect(Token::Paren(')'))?;
                 lexer.expect(Token::Paren('{'))?;
-
-                block.extend(initialization);
 
                 let mut body = Vec::new();
                 if let Some(condition) = condition {
@@ -1883,71 +1919,72 @@ impl Parser {
                     });
                 }
                 while !lexer.skip(Token::Paren('}')) {
-                    let s = self.parse_statement(lexer, context.reborrow(), false)?;
-                    body.extend(s);
+                    self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
                 }
 
                 block.push(crate::Statement::Loop {
                     body,
                     continuing: continuing.into_iter().collect(),
                 });
-
-                Some(crate::Statement::Block(block))
             }
-            "break" => Some(crate::Statement::Break),
-            "continue" => Some(crate::Statement::Continue),
-            "discard" => Some(crate::Statement::Kill),
+            "break" => block.push(crate::Statement::Break),
+            "continue" => block.push(crate::Statement::Continue),
+            "discard" => block.push(crate::Statement::Kill),
             "textureStore" => {
                 lexer.expect(Token::Paren('('))?;
                 let image_name = lexer.next_ident()?;
                 let image = context.lookup_ident.lookup(image_name)?;
                 lexer.expect(Token::Separator(','))?;
-                let coordinate = self.parse_general_expression(lexer, context.as_expression())?;
-                let arrayed = match *context.as_expression().resolve_type(image)? {
+                let coordinate =
+                    self.parse_general_expression(lexer, context.as_expression(block))?;
+                let arrayed = match *context.as_expression(block).resolve_type(image)? {
                     crate::TypeInner::Image { arrayed, .. } => arrayed,
                     _ => return Err(Error::BadTexture(image_name)),
                 };
                 let array_index = if arrayed {
                     lexer.expect(Token::Separator(','))?;
-                    Some(self.parse_general_expression(lexer, context.as_expression())?)
+                    Some(self.parse_general_expression(lexer, context.as_expression(block))?)
                 } else {
                     None
                 };
                 lexer.expect(Token::Separator(','))?;
-                let value = self.parse_general_expression(lexer, context.as_expression())?;
+                let value = self.parse_general_expression(lexer, context.as_expression(block))?;
                 lexer.expect(Token::Paren(')'))?;
-                Some(crate::Statement::ImageStore {
+                block.push(crate::Statement::ImageStore {
                     image,
                     coordinate,
                     array_index,
                     value,
-                })
+                });
             }
             // assignment or a function call
             ident => {
-                if let Some(&var_expr) = context.lookup_ident.get(ident) {
-                    let left = self.parse_postfix(lexer, context.as_expression(), var_expr)?;
+                let stmt = if let Some(&var_expr) = context.lookup_ident.get(ident) {
+                    let left = self.parse_postfix(lexer, context.as_expression(block), var_expr)?;
                     lexer.expect(Token::Operation('='))?;
-                    let value = self.parse_general_expression(lexer, context.as_expression())?;
+                    let value =
+                        self.parse_general_expression(lexer, context.as_expression(block))?;
                     lexer.expect(Token::Separator(';'))?;
-                    Some(crate::Statement::Store {
+                    crate::Statement::Store {
                         pointer: left,
                         value,
-                    })
+                    }
                 } else {
                     let (function, arguments) = self
-                        .parse_local_function_call(lexer, ident, context.as_expression())?
+                        .parse_local_function_call(lexer, ident, context.as_expression(block))?
                         .ok_or(Error::UnknownLocalFunction(ident))?;
                     lexer.expect(Token::Separator(';'))?;
-                    Some(crate::Statement::Call {
+                    crate::Statement::Call {
                         function,
                         arguments,
-                    })
-                }
+                        result: None,
+                    }
+                };
+                block.push(stmt);
             }
-        };
+        }
         self.scopes.pop();
-        Ok(statement)
+        Ok(())
     }
 
     fn parse_block<'a>(
@@ -1958,13 +1995,17 @@ impl Parser {
     ) -> Result<Vec<crate::Statement>, Error<'a>> {
         self.scopes.push(Scope::Block);
         lexer.expect(Token::Paren('{'))?;
-        let mut statements = Vec::new();
+        let mut block = Vec::new();
         while !lexer.skip(Token::Paren('}')) {
-            let s = self.parse_statement(lexer, context.reborrow(), is_uniform_control_flow)?;
-            statements.extend(s);
+            self.parse_statement(
+                lexer,
+                context.reborrow(),
+                &mut block,
+                is_uniform_control_flow,
+            )?;
         }
         self.scopes.pop();
-        Ok(statements)
+        Ok(block)
     }
 
     fn parse_function_decl<'a>(

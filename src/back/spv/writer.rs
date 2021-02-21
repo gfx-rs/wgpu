@@ -193,6 +193,7 @@ pub struct Writer {
     lookup_type: crate::FastHashMap<LookupType, Word>,
     lookup_function: crate::FastHashMap<Handle<crate::Function>, Word>,
     lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
+    lookup_function_call: crate::FastHashMap<Handle<crate::Expression>, Word>,
     lookup_constant: crate::FastHashMap<Handle<crate::Constant>, Word>,
     lookup_global_variable:
         crate::FastHashMap<Handle<crate::GlobalVariable>, (Word, spirv::StorageClass)>,
@@ -229,6 +230,7 @@ impl Writer {
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
             lookup_function_type: crate::FastHashMap::default(),
+            lookup_function_call: crate::FastHashMap::default(),
             lookup_constant: crate::FastHashMap::default(),
             lookup_global_variable: crate::FastHashMap::default(),
             struct_type_handles: crate::FastHashMap::default(),
@@ -1544,27 +1546,8 @@ impl Writer {
                 let id = function.parameters[index as usize].result_id.unwrap();
                 RawExpression::Value(id)
             }
-            crate::Expression::Call {
-                function: local_function,
-                ref arguments,
-            } => {
-                let id = self.generate_id();
-                //TODO: avoid heap allocation
-                let mut argument_ids = vec![];
-
-                for argument in arguments {
-                    let arg_id =
-                        self.write_expression(ir_module, ir_function, *argument, block, function)?;
-                    argument_ids.push(arg_id);
-                }
-
-                block.body.push(Instruction::function_call(
-                    result_type_id,
-                    id,
-                    *self.lookup_function.get(&local_function).unwrap(),
-                    argument_ids.as_slice(),
-                ));
-
+            crate::Expression::Call(_function) => {
+                let id = self.lookup_function_call[&expr_handle];
                 RawExpression::Value(id)
             }
             crate::Expression::As {
@@ -2093,6 +2076,7 @@ impl Writer {
                 crate::Statement::Call {
                     function: local_function,
                     ref arguments,
+                    result,
                 } => {
                     let id = self.generate_id();
                     //TODO: avoid heap allocation
@@ -2109,10 +2093,20 @@ impl Writer {
                         argument_ids.push(arg_id);
                     }
 
+                    let type_id = match result {
+                        Some(expr) => {
+                            self.lookup_function_call.insert(expr, id);
+                            let ty_handle =
+                                ir_module.functions[local_function].return_type.unwrap();
+                            self.get_type_id(&ir_module.types, LookupType::Handle(ty_handle))?
+                        }
+                        None => self.void_type,
+                    };
+
                     block.body.push(Instruction::function_call(
-                        self.void_type,
+                        type_id,
                         id,
-                        *self.lookup_function.get(&local_function).unwrap(),
+                        self.lookup_function[&local_function],
                         argument_ids.as_slice(),
                     ));
                 }
@@ -2207,6 +2201,10 @@ impl Writer {
         analysis: &Analysis,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
+        self.lookup_function.clear();
+        self.lookup_function_type.clear();
+        self.lookup_function_call.clear();
+
         self.layouter
             .initialize(&ir_module.types, &ir_module.constants);
 

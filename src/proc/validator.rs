@@ -135,6 +135,25 @@ pub enum LocalVariableError {
 }
 
 #[derive(Clone, Debug, Error)]
+pub enum CallError {
+    #[error("Bad function")]
+    Function,
+    #[error("Requires {required} arguments, but {seen} are provided")]
+    ArgumentCount { required: usize, seen: usize },
+    #[error("Argument {index} value {seen_expression:?} doesn't match the type {required:?}")]
+    ArgumentType {
+        index: usize,
+        required: Handle<crate::Type>,
+        seen_expression: Handle<crate::Expression>,
+    },
+    #[error("Return value {seen_expression:?} does not match the type {required:?}")]
+    ReturnType {
+        required: Option<Handle<crate::Type>>,
+        seen_expression: Option<Handle<crate::Expression>>,
+    },
+}
+
+#[derive(Clone, Debug, Error)]
 pub enum FunctionError {
     #[error(transparent)]
     Resolve(#[from] TypifyError),
@@ -174,22 +193,11 @@ pub enum FunctionError {
     InvalidExpression(Handle<crate::Expression>),
     #[error("The expression {0:?} is not an image")]
     InvalidImage(Handle<crate::Expression>),
-    #[error("The called function {0:?} is invalid")]
-    InvalidCall(Handle<crate::Function>),
-    #[error(
-        "The called function {function:?} requires {required} arguments, but {seen} are provided"
-    )]
-    InvalidCallArgumentCount {
+    #[error("Call to {function:?} is invalid")]
+    InvalidCall {
         function: Handle<crate::Function>,
-        required: usize,
-        seen: usize,
-    },
-    #[error("The called function {function:?} argument {index} requires {required:?} type, but {seen:?} type is provided")]
-    InvalidCallArgumentType {
-        function: Handle<crate::Function>,
-        index: usize,
-        required: Handle<crate::Type>,
-        seen: Option<Handle<crate::Type>>,
+        #[source]
+        error: CallError,
     },
 }
 
@@ -658,6 +666,49 @@ impl Validator {
         Ok(())
     }
 
+    fn validate_call(
+        &self,
+        function: Handle<crate::Function>,
+        arguments: &[Handle<crate::Expression>],
+        result: Option<Handle<crate::Expression>>,
+        context: &BlockContext,
+    ) -> Result<(), CallError> {
+        let fun = context
+            .functions
+            .try_get(function)
+            .ok_or(CallError::Function)?;
+        if fun.arguments.len() != arguments.len() {
+            return Err(CallError::ArgumentCount {
+                required: fun.arguments.len(),
+                seen: arguments.len(),
+            });
+        }
+        for (index, (arg, &expr)) in fun.arguments.iter().zip(arguments).enumerate() {
+            let ty = self.typifier.get(expr, context.types);
+            if ty != &context.types[arg.ty].inner {
+                return Err(CallError::ArgumentType {
+                    index,
+                    required: arg.ty,
+                    seen_expression: expr,
+                });
+            }
+        }
+        let result_ty = result.map(|expr| self.typifier.get(expr, context.types));
+        let expected_ty = fun.return_type.map(|ty| &context.types[ty].inner);
+        if result_ty != expected_ty {
+            log::error!(
+                "Called function returns {:?} where {:?} is expected",
+                result_ty,
+                expected_ty
+            );
+            return Err(CallError::ReturnType {
+                required: fun.return_type,
+                seen_expression: result,
+            });
+        }
+        Ok(())
+    }
+
     fn validate_block(
         &mut self,
         statements: &[crate::Statement],
@@ -788,28 +839,10 @@ impl Validator {
                 S::Call {
                     function,
                     ref arguments,
+                    result,
                 } => {
-                    let fun = context
-                        .functions
-                        .try_get(function)
-                        .ok_or(FunctionError::InvalidCall(function))?;
-                    if fun.arguments.len() != arguments.len() {
-                        return Err(FunctionError::InvalidCallArgumentCount {
-                            function,
-                            required: fun.arguments.len(),
-                            seen: arguments.len(),
-                        });
-                    }
-                    for (index, (arg, &expr)) in fun.arguments.iter().zip(arguments).enumerate() {
-                        let ty = self.typifier.get_handle(expr);
-                        if ty != Ok(arg.ty) {
-                            return Err(FunctionError::InvalidCallArgumentType {
-                                function,
-                                index,
-                                required: arg.ty,
-                                seen: ty.ok(),
-                            });
-                        }
+                    if let Err(error) = self.validate_call(function, arguments, result, context) {
+                        return Err(FunctionError::InvalidCall { function, error });
                     }
                 }
             }

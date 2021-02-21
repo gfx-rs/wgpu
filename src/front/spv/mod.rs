@@ -1268,16 +1268,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let function = self.dummy_functions.append(crate::Function::default());
                     self.deferred_function_calls.insert(function, func_id);
 
-                    if self.lookup_void_type == Some(result_type_id) {
-                        block.push(crate::Statement::Call {
-                            function,
-                            arguments,
-                        });
+                    let result = if self.lookup_void_type == Some(result_type_id) {
+                        None
                     } else {
-                        let expr_handle = expressions.append(crate::Expression::Call {
-                            function,
-                            arguments,
-                        });
+                        let expr_handle = expressions.append(crate::Expression::Call(function));
                         self.lookup_expression.insert(
                             result_id,
                             LookupExpression {
@@ -1285,7 +1279,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 type_id: result_type_id,
                             },
                         );
-                    }
+                        Some(expr_handle)
+                    };
+                    block.push(crate::Statement::Call {
+                        function,
+                        arguments,
+                        result,
+                    });
                 }
                 Op::ExtInst => {
                     use crate::MathFunction as Mf;
@@ -1611,10 +1611,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
     fn patch_function_calls(&self, fun: &mut crate::Function) -> Result<(), Error> {
         for (_, expr) in fun.expressions.iter_mut() {
-            if let crate::Expression::Call {
-                ref mut function, ..
-            } = *expr
-            {
+            if let crate::Expression::Call(ref mut function) = *expr {
                 let fun_id = self.deferred_function_calls[function];
                 *function = *self.lookup_function.lookup(fun_id)?;
             }

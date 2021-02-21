@@ -133,13 +133,7 @@ impl<'a, T: Visitor> Interface<'a, T> {
             E::As { expr, .. } => {
                 self.traverse_expr(expr);
             }
-            E::Call {
-                function,
-                ref arguments,
-            } => {
-                for &argument in arguments {
-                    self.traverse_expr(argument);
-                }
+            E::Call(function) => {
                 self.visitor.visit_fun(function);
             }
             E::ArrayLength(expr) => {
@@ -221,11 +215,15 @@ impl<'a, T: Visitor> Interface<'a, T> {
                 S::Call {
                     function,
                     ref arguments,
+                    result,
                 } => {
                     for &argument in arguments {
                         self.traverse_expr(argument);
                     }
                     self.visitor.visit_fun(function);
+                    if let Some(expr) = result {
+                        self.traverse_expr(expr);
+                    }
                 }
             }
         }
