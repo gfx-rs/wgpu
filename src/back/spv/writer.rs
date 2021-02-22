@@ -1875,31 +1875,48 @@ impl Writer {
                         spirv::SelectionControl::NONE,
                     ));
 
-                    let accept_id = self.generate_id();
-                    let reject_id = self.generate_id();
+                    let accept_id = if accept.is_empty() {
+                        None
+                    } else {
+                        Some(self.generate_id())
+                    };
+                    let reject_id = if reject.is_empty() {
+                        None
+                    } else {
+                        Some(self.generate_id())
+                    };
+
                     function.consume(
                         block,
-                        Instruction::branch_conditional(condition_id, accept_id, reject_id),
+                        Instruction::branch_conditional(
+                            condition_id,
+                            accept_id.unwrap_or(merge_id),
+                            reject_id.unwrap_or(merge_id),
+                        ),
                     );
 
-                    self.write_block(
-                        accept_id,
-                        accept,
-                        ir_module,
-                        ir_function,
-                        function,
-                        Some(merge_id),
-                        loop_context,
-                    )?;
-                    self.write_block(
-                        reject_id,
-                        reject,
-                        ir_module,
-                        ir_function,
-                        function,
-                        Some(merge_id),
-                        loop_context,
-                    )?;
+                    if let Some(block_id) = accept_id {
+                        self.write_block(
+                            block_id,
+                            accept,
+                            ir_module,
+                            ir_function,
+                            function,
+                            Some(merge_id),
+                            loop_context,
+                        )?;
+                    }
+                    if let Some(block_id) = reject_id {
+                        self.write_block(
+                            block_id,
+                            reject,
+                            ir_module,
+                            ir_function,
+                            function,
+                            Some(merge_id),
+                            loop_context,
+                        )?;
+                    }
 
                     block = Block::new(merge_id);
                 }
