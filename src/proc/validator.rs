@@ -10,9 +10,15 @@ const MAX_WORKGROUP_SIZE: u32 = 0x4000;
 
 bitflags::bitflags! {
     #[repr(transparent)]
-    struct TypeFlags: u8 {
-        const INTERFACE = 1;
-        const HOST_SHARED = 2;
+    pub struct TypeFlags: u8 {
+        /// Can be used for data variables.
+        const DATA = 0x1;
+        /// The data type has known size.
+        const SIZED = 0x2;
+        /// Can be be used for interfacing between pipeline stages.
+        const INTERFACE = 0x4;
+        /// Can be used for host-shareable structures.
+        const HOST_SHARED = 0x8;
     }
 }
 
@@ -33,12 +39,16 @@ pub enum TypeError {
     InvalidWidth(crate::ScalarKind, crate::Bytes),
     #[error("The base handle {0:?} can not be resolved")]
     UnresolvedBase(Handle<crate::Type>),
+    #[error("Expected data type, found {0:?}")]
+    InvalidData(Handle<crate::Type>),
+    #[error("Type {0:?} can not be a part of a host-shared structure")]
+    InvalidHostSharedType(Handle<crate::Type>),
+    #[error("Base type {0:?} for the array is invalid")]
+    InvalidArrayBaseType(Handle<crate::Type>),
     #[error("The constant {0:?} can not be used for an array size")]
     InvalidArraySizeConstant(Handle<crate::Constant>),
-    #[error("Array doesn't have a stride decoration, can't be host-shared")]
-    MissingStrideDecoration,
-    #[error("Structure doesn't have a block decoration, can't be host-shared")]
-    MissingBlockDecoration,
+    #[error("Field {0} can't be dynamically-sized, has type {1:?}")]
+    InvalidDynamicArray(String, Handle<crate::Type>),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -63,6 +73,11 @@ pub enum GlobalVariableError {
     InvalidStorageAccess {
         allowed: crate::StorageAccess,
         seen: crate::StorageAccess,
+    },
+    #[error("Type flags {seen:?} do not meet the required {required:?}")]
+    MissingTypeFlags {
+        required: TypeFlags,
+        seen: TypeFlags,
     },
     #[error("Binding decoration is missing or not applicable")]
     InvalidBinding,
@@ -319,94 +334,93 @@ impl Validator {
         }
     }
 
-    fn fill_type_flags(&mut self, arena: &Arena<crate::Type>) {
-        for (handle, ty) in arena.iter().rev() {
-            let flags = self.type_flags[handle.index()];
-            match ty.inner {
-                crate::TypeInner::Array { base, .. } => {
-                    //Note: don't assume anything about the indices,
-                    // they are checked in `validate_type` later on.
-                    if let Some(f) = self.type_flags.get_mut(base.index()) {
-                        *f |= flags;
-                    }
-                }
-                crate::TypeInner::Struct { ref members, .. } => {
-                    for member in members {
-                        if let Some(f) = self.type_flags.get_mut(member.ty.index()) {
-                            *f |= flags;
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
     fn validate_type(
         &self,
         ty: &crate::Type,
         handle: Handle<crate::Type>,
         constants: &Arena<crate::Constant>,
-    ) -> Result<(), TypeError> {
+    ) -> Result<TypeFlags, TypeError> {
         use crate::TypeInner as Ti;
-        match ty.inner {
+        Ok(match ty.inner {
             Ti::Scalar { kind, width } | Ti::Vector { kind, width, .. } => {
                 if !Self::check_width(kind, width) {
                     return Err(TypeError::InvalidWidth(kind, width));
                 }
+                TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::INTERFACE | TypeFlags::HOST_SHARED
             }
             Ti::Matrix { width, .. } => {
                 if !Self::check_width(crate::ScalarKind::Float, width) {
                     return Err(TypeError::InvalidWidth(crate::ScalarKind::Float, width));
                 }
+                TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::INTERFACE | TypeFlags::HOST_SHARED
             }
             Ti::Pointer { base, class: _ } => {
                 if base >= handle {
                     return Err(TypeError::UnresolvedBase(base));
                 }
+                TypeFlags::DATA | TypeFlags::SIZED
             }
             Ti::Array { base, size, stride } => {
                 if base >= handle {
                     return Err(TypeError::UnresolvedBase(base));
                 }
-                if let crate::ArraySize::Constant(const_handle) = size {
-                    match constants.try_get(const_handle) {
-                        Some(&crate::Constant {
-                            inner:
-                                crate::ConstantInner::Scalar {
-                                    width: _,
-                                    value: crate::ScalarValue::Uint(_),
-                                },
-                            ..
-                        }) => {}
-                        other => {
-                            log::warn!("Array size {:?}", other);
-                            return Err(TypeError::InvalidArraySizeConstant(const_handle));
+                let base_flags = self.type_flags[base.index()];
+                if !base_flags.contains(TypeFlags::DATA | TypeFlags::SIZED) {
+                    return Err(TypeError::InvalidArrayBaseType(base));
+                }
+
+                let sized_flag = match size {
+                    crate::ArraySize::Constant(const_handle) => {
+                        match constants.try_get(const_handle) {
+                            Some(&crate::Constant {
+                                inner:
+                                    crate::ConstantInner::Scalar {
+                                        width: _,
+                                        value: crate::ScalarValue::Uint(_),
+                                    },
+                                ..
+                            }) => {}
+                            other => {
+                                log::warn!("Array size {:?}", other);
+                                return Err(TypeError::InvalidArraySizeConstant(const_handle));
+                            }
                         }
+                        TypeFlags::SIZED
                     }
-                }
-                //TODO: check stride
-                if stride.is_none()
-                    && self.type_flags[handle.index()].contains(TypeFlags::HOST_SHARED)
-                {
-                    return Err(TypeError::MissingStrideDecoration);
-                }
+                    crate::ArraySize::Dynamic => TypeFlags::empty(),
+                };
+                let shared_flag = if stride.is_none() {
+                    TypeFlags::empty()
+                } else {
+                    base_flags & TypeFlags::HOST_SHARED
+                };
+                TypeFlags::DATA | sized_flag | shared_flag
             }
             Ti::Struct { block, ref members } => {
-                if !block && self.type_flags[handle.index()].contains(TypeFlags::HOST_SHARED) {
-                    return Err(TypeError::MissingBlockDecoration);
-                }
-                //TODO: check the spans
-                for member in members {
+                let mut flags = TypeFlags::all();
+                for (i, member) in members.iter().enumerate() {
                     if member.ty >= handle {
                         return Err(TypeError::UnresolvedBase(member.ty));
                     }
+                    let base_flags = self.type_flags[member.ty.index()];
+                    flags &= base_flags;
+                    if !base_flags.contains(TypeFlags::DATA) {
+                        return Err(TypeError::InvalidData(member.ty));
+                    }
+                    if block && !base_flags.contains(TypeFlags::HOST_SHARED) {
+                        return Err(TypeError::InvalidHostSharedType(member.ty));
+                    }
+                    // only the last field can be unsized
+                    if i + 1 != members.len() && !base_flags.contains(TypeFlags::SIZED) {
+                        let name = member.name.clone().unwrap_or_default();
+                        return Err(TypeError::InvalidDynamicArray(name, member.ty));
+                    }
                 }
+                //TODO: check the spans
+                flags
             }
-            Ti::Image { .. } => {}
-            Ti::Sampler { comparison: _ } => {}
-        }
-        Ok(())
+            Ti::Image { .. } | Ti::Sampler { .. } => TypeFlags::empty(),
+        })
     }
 
     fn validate_constant(
@@ -452,13 +466,16 @@ impl Validator {
         &self,
         var: &crate::GlobalVariable,
         types: &Arena<crate::Type>,
-    ) -> Result<TypeFlags, GlobalVariableError> {
+    ) -> Result<(), GlobalVariableError> {
         log::debug!("var {:?}", var);
-        let (allowed_storage_access, type_flags) = match var.class {
+        let (allowed_storage_access, required_type_flags) = match var.class {
             crate::StorageClass::Function => return Err(GlobalVariableError::InvalidUsage),
             crate::StorageClass::Input | crate::StorageClass::Output => {
                 var.check_varying(types)?;
-                (crate::StorageAccess::empty(), TypeFlags::INTERFACE)
+                (
+                    crate::StorageAccess::empty(),
+                    TypeFlags::DATA | TypeFlags::INTERFACE,
+                )
             }
             crate::StorageClass::Storage => {
                 var.check_resource()?;
@@ -466,7 +483,10 @@ impl Validator {
                     crate::TypeInner::Struct { .. } => (),
                     _ => return Err(GlobalVariableError::InvalidType),
                 }
-                (crate::StorageAccess::all(), TypeFlags::HOST_SHARED)
+                (
+                    crate::StorageAccess::all(),
+                    TypeFlags::DATA | TypeFlags::HOST_SHARED,
+                )
             }
             crate::StorageClass::Uniform => {
                 var.check_resource()?;
@@ -474,39 +494,54 @@ impl Validator {
                     crate::TypeInner::Struct { .. } => (),
                     _ => return Err(GlobalVariableError::InvalidType),
                 }
-                (crate::StorageAccess::empty(), TypeFlags::HOST_SHARED)
+                (
+                    crate::StorageAccess::empty(),
+                    TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::HOST_SHARED,
+                )
             }
             crate::StorageClass::Handle => {
                 var.check_resource()?;
-                let allowed_access = match types[var.ty].inner {
+                let access = match types[var.ty].inner {
                     crate::TypeInner::Image {
                         class: crate::ImageClass::Storage(_),
                         ..
                     } => crate::StorageAccess::all(),
-                    _ => crate::StorageAccess::empty(),
+                    crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
+                        crate::StorageAccess::empty()
+                    }
+                    _ => return Err(GlobalVariableError::InvalidType),
                 };
-                (allowed_access, TypeFlags::empty())
+                (access, TypeFlags::empty())
             }
             crate::StorageClass::Private | crate::StorageClass::WorkGroup => {
                 if var.binding.is_some() {
                     return Err(GlobalVariableError::InvalidBinding);
                 }
                 var.forbid_interpolation()?;
-                (crate::StorageAccess::empty(), TypeFlags::empty())
+                (crate::StorageAccess::empty(), TypeFlags::DATA)
             }
-            crate::StorageClass::PushConstant => {
-                (crate::StorageAccess::LOAD, TypeFlags::HOST_SHARED)
-            }
+            crate::StorageClass::PushConstant => (
+                crate::StorageAccess::LOAD,
+                TypeFlags::DATA | TypeFlags::HOST_SHARED,
+            ),
         };
 
         if !allowed_storage_access.contains(var.storage_access) {
             return Err(GlobalVariableError::InvalidStorageAccess {
-                allowed: allowed_storage_access,
                 seen: var.storage_access,
+                allowed: allowed_storage_access,
             });
         }
 
-        Ok(type_flags)
+        let type_flags = self.type_flags[var.ty.index()];
+        if !type_flags.contains(required_type_flags) {
+            return Err(GlobalVariableError::MissingTypeFlags {
+                seen: type_flags,
+                required: required_type_flags,
+            });
+        }
+
+        Ok(())
     }
 
     fn validate_local_var(
@@ -726,25 +761,23 @@ impl Validator {
                 })?;
         }
 
-        for (var_handle, var) in module.global_variables.iter() {
-            let ty_flags = self
-                .validate_global_var(var, &module.types)
-                .map_err(|error| ValidationError::GlobalVariable {
-                    handle: var_handle,
-                    name: var.name.clone().unwrap_or_default(),
-                    error,
-                })?;
-            self.type_flags[var.ty.index()] |= ty_flags;
-        }
-
-        self.fill_type_flags(&module.types);
-
         // doing after the globals, so that `type_flags` is ready
         for (handle, ty) in module.types.iter() {
-            self.validate_type(ty, handle, &module.constants)
+            let ty_flags = self
+                .validate_type(ty, handle, &module.constants)
                 .map_err(|error| ValidationError::Type {
                     handle,
                     name: ty.name.clone().unwrap_or_default(),
+                    error,
+                })?;
+            self.type_flags[handle.index()] = ty_flags;
+        }
+
+        for (var_handle, var) in module.global_variables.iter() {
+            self.validate_global_var(var, &module.types)
+                .map_err(|error| ValidationError::GlobalVariable {
+                    handle: var_handle,
+                    name: var.name.clone().unwrap_or_default(),
                     error,
                 })?;
         }

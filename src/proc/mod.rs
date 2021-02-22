@@ -13,7 +13,7 @@ pub use layouter::{Alignment, Layouter};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
 pub use typifier::{ResolveContext, ResolveError, Typifier, TypifyError};
-pub use validator::{ValidationError, Validator};
+pub use validator::{TypeFlags, ValidationError, Validator};
 
 impl From<super::StorageFormat> for super::ScalarKind {
     fn from(format: super::StorageFormat) -> Self {
