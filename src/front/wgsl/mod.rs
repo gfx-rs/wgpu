@@ -14,10 +14,12 @@ use crate::{
 };
 
 use self::lexer::Lexer;
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, ops::Range};
 use thiserror::Error;
 
 const SPACE: &str = "                                                                                                    ";
+
+type TokenSpan<'a> = (Token<'a>, Range<usize>);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Token<'a> {
@@ -44,8 +46,8 @@ pub enum Token<'a> {
 
 #[derive(Clone, Debug, Error)]
 pub enum Error<'a> {
-    #[error("unexpected token {0:?}, expected {1}")]
-    Unexpected(Token<'a>, &'a str),
+    #[error("unexpected token {:?}, expected {1}", (.0).0)]
+    Unexpected(TokenSpan<'a>, &'a str),
     #[error("unable to parse `{0}` as integer: {1}")]
     BadInteger(&'a str, std::num::ParseIntError),
     #[error("unable to parse `{1}` as float: {1}")]
@@ -234,7 +236,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         ) -> Result<Handle<crate::Expression>, Error<'a>>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         let mut left = parser(lexer, self.reborrow())?;
-        while let Some(op) = classifier(lexer.peek()) {
+        while let Some(op) = classifier(lexer.peek().0) {
             let _ = lexer.next();
             let expression = crate::Expression::Binary {
                 op,
@@ -406,8 +408,8 @@ impl Parser {
                 let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
                 arguments.push(arg);
                 match lexer.next() {
-                    Token::Paren(')') => break,
-                    Token::Separator(',') => (),
+                    (Token::Paren(')'), _) => break,
+                    (Token::Separator(','), _) => (),
                     other => return Err(Error::Unexpected(other, "argument list separator")),
                 }
             }
@@ -739,16 +741,16 @@ impl Parser {
     ) -> Result<Handle<crate::Constant>, Error<'a>> {
         self.scopes.push(Scope::ConstantExpr);
         let inner = match lexer.next() {
-            Token::Word("true") => crate::ConstantInner::Scalar {
+            (Token::Word("true"), _) => crate::ConstantInner::Scalar {
                 width: 1,
                 value: crate::ScalarValue::Bool(true),
             },
-            Token::Word("false") => crate::ConstantInner::Scalar {
+            (Token::Word("false"), _) => crate::ConstantInner::Scalar {
                 width: 1,
                 value: crate::ScalarValue::Bool(false),
             },
-            Token::Number { value, ty, width } => Self::get_constant_inner(value, ty, width)?,
-            Token::Word(name) => {
+            (Token::Number { value, ty, width }, _) => Self::get_constant_inner(value, ty, width)?,
+            (Token::Word(name), _) => {
                 // look for an existing constant first
                 for (handle, var) in const_arena.iter() {
                     match var.name {
@@ -810,12 +812,12 @@ impl Parser {
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         self.scopes.push(Scope::PrimaryExpr);
         let handle = match lexer.next() {
-            Token::Paren('(') => {
+            (Token::Paren('('), _) => {
                 let expr = self.parse_general_expression(lexer, ctx)?;
                 lexer.expect(Token::Paren(')'))?;
                 expr
             }
-            Token::Word("true") => {
+            (Token::Word("true"), _) => {
                 let expr = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
                     specialization: None,
@@ -826,7 +828,7 @@ impl Parser {
                 });
                 ctx.expressions.append(crate::Expression::Constant(expr))
             }
-            Token::Word("false") => {
+            (Token::Word("false"), _) => {
                 let expr = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
                     specialization: None,
@@ -837,7 +839,7 @@ impl Parser {
                 });
                 ctx.expressions.append(crate::Expression::Constant(expr))
             }
-            Token::Number { value, ty, width } => {
+            (Token::Number { value, ty, width }, _) => {
                 let inner = Self::get_constant_inner(value, ty, width)?;
                 let expr = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
@@ -846,7 +848,7 @@ impl Parser {
                 });
                 ctx.expressions.append(crate::Expression::Constant(expr))
             }
-            Token::Word(word) => {
+            (Token::Word(word), _) => {
                 if let Some(&expr) = ctx.lookup_ident.get(word) {
                     expr
                 } else if let Some(expr) =
@@ -910,7 +912,7 @@ impl Parser {
         mut handle: Handle<crate::Expression>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         loop {
-            match lexer.peek() {
+            match lexer.peek().0 {
                 Token::Separator('.') => {
                     let _ = lexer.next();
                     let name = lexer.next_ident()?;
@@ -987,7 +989,7 @@ impl Parser {
         self.scopes.push(Scope::SingularExpr);
         //TODO: refactor this to avoid backing up
         let backup = lexer.clone();
-        let handle = match lexer.next() {
+        let handle = match lexer.next().0 {
             Token::Operation('-') => {
                 let expr = crate::Expression::Unary {
                     op: crate::UnaryOperator::Negate,
@@ -1226,20 +1228,20 @@ impl Parser {
                 let mut ready = true;
                 loop {
                     match lexer.next() {
-                        Token::DoubleParen(']') => {
+                        (Token::DoubleParen(']'), _) => {
                             break;
                         }
-                        Token::Separator(',') if !ready => {
+                        (Token::Separator(','), _) if !ready => {
                             ready = true;
                         }
-                        Token::Word("span") if ready => {
+                        (Token::Word("span"), _) if ready => {
                             lexer.expect(Token::Paren('('))?;
                             //Note: 0 is not handled
                             span = lexer.next_uint_literal()?;
                             lexer.expect(Token::Paren(')'))?;
                             ready = false;
                         }
-                        Token::Word("offset") if ready => {
+                        (Token::Word("offset"), _) if ready => {
                             lexer.expect(Token::Paren('('))?;
                             let _offset = lexer.next_uint_literal()?;
                             lexer.expect(Token::Paren(')'))?;
@@ -1251,8 +1253,8 @@ impl Parser {
                 self.scopes.pop();
             }
             let name = match lexer.next() {
-                Token::Word(word) => word,
-                Token::Paren('}') => return Ok(members),
+                (Token::Word(word), _) => word,
+                (Token::Paren('}'), _) => return Ok(members),
                 other => return Err(Error::Unexpected(other, "field name")),
             };
             lexer.expect(Token::Separator(':'))?;
@@ -1588,7 +1590,7 @@ impl Parser {
             self.scopes.push(Scope::Decoration);
             loop {
                 match lexer.next() {
-                    Token::Word("access") => {
+                    (Token::Word("access"), _) => {
                         lexer.expect(Token::Paren('('))?;
                         decoration.access = match lexer.next_ident()? {
                             "read" => crate::StorageAccess::LOAD,
@@ -1598,14 +1600,14 @@ impl Parser {
                         };
                         lexer.expect(Token::Paren(')'))?;
                     }
-                    Token::Word("stride") => {
+                    (Token::Word("stride"), _) => {
                         lexer.expect(Token::Paren('('))?;
                         decoration.stride = Some(
                             NonZeroU32::new(lexer.next_uint_literal()?).ok_or(Error::ZeroStride)?,
                         );
                         lexer.expect(Token::Paren(')'))?;
                     }
-                    Token::DoubleParen(']') => break,
+                    (Token::DoubleParen(']'), _) => break,
                     other => return Err(Error::Unexpected(other, "type decoration")),
                 }
             }
@@ -1634,8 +1636,8 @@ impl Parser {
         is_uniform_control_flow: bool,
     ) -> Result<(), Error<'a>> {
         let word = match lexer.next() {
-            Token::Separator(';') => return Ok(()),
-            Token::Paren('{') => {
+            (Token::Separator(';'), _) => return Ok(()),
+            (Token::Paren('{'), _) => {
                 self.scopes.push(Scope::Block);
                 let mut statements = Vec::new();
                 while !lexer.skip(Token::Paren('}')) {
@@ -1650,7 +1652,7 @@ impl Parser {
                 block.push(crate::Statement::Block(statements));
                 return Ok(());
             }
-            Token::Word(word) => word,
+            (Token::Word(word), _) => word,
             other => return Err(Error::Unexpected(other, "statement")),
         };
 
@@ -1710,7 +1712,7 @@ impl Parser {
                 }
             }
             "return" => {
-                let value = if lexer.peek() != Token::Separator(';') {
+                let value = if lexer.peek().0 != Token::Separator(';') {
                     Some(self.parse_general_expression(lexer, context.as_expression(block))?)
                 } else {
                     None
@@ -1767,19 +1769,19 @@ impl Parser {
                 loop {
                     // cases + default
                     match lexer.next() {
-                        Token::Word("case") => {
+                        (Token::Word("case"), _) => {
                             let value = loop {
                                 // values
                                 let value = lexer.next_sint_literal()?;
                                 match lexer.next() {
-                                    Token::Separator(',') => {
+                                    (Token::Separator(','), _) => {
                                         cases.push(crate::SwitchCase {
                                             value,
                                             body: Vec::new(),
                                             fall_through: true,
                                         });
                                     }
-                                    Token::Separator(':') => break value,
+                                    (Token::Separator(':'), _) => break value,
                                     other => {
                                         return Err(Error::Unexpected(other, "case separator"))
                                     }
@@ -1807,11 +1809,11 @@ impl Parser {
                                 fall_through,
                             });
                         }
-                        Token::Word("default") => {
+                        (Token::Word("default"), _) => {
                             lexer.expect(Token::Separator(':'))?;
                             default = self.parse_block(lexer, context.reborrow(), false)?;
                         }
-                        Token::Paren('}') => break,
+                        (Token::Paren('}'), _) => break,
                         other => return Err(Error::Unexpected(other, "switch item")),
                     }
                 }
@@ -1873,7 +1875,7 @@ impl Parser {
                     condition
                 };
 
-                let continuing = if let Token::Word(ident) = lexer.peek() {
+                let continuing = if let Token::Word(ident) = lexer.peek().0 {
                     // manually parse the next statement here instead of calling parse_statement
                     // because the statement is not terminated with a semicolon
                     let _ = lexer.next();
@@ -2145,8 +2147,8 @@ impl Parser {
                         for (i, size) in workgroup_size.iter_mut().enumerate() {
                             *size = lexer.next_uint_literal()?;
                             match lexer.next() {
-                                Token::Paren(')') => break,
-                                Token::Separator(',') if i != 2 => (),
+                                (Token::Paren(')'), _) => break,
+                                (Token::Separator(','), _) if i != 2 => (),
                                 other => {
                                     return Err(Error::Unexpected(
                                         other,
@@ -2174,10 +2176,10 @@ impl Parser {
                     word => return Err(Error::UnknownDecoration(word)),
                 }
                 match lexer.next() {
-                    Token::DoubleParen(']') => {
+                    (Token::DoubleParen(']'), _) => {
                         break;
                     }
-                    Token::Separator(',') => {}
+                    (Token::Separator(','), _) => {}
                     other => return Err(Error::Unexpected(other, "decoration separator")),
                 }
             }
@@ -2192,8 +2194,8 @@ impl Parser {
 
         // read items
         match lexer.next() {
-            Token::Separator(';') => {}
-            Token::Word("struct") => {
+            (Token::Separator(';'), _) => {}
+            (Token::Word("struct"), _) => {
                 let name = lexer.next_ident()?;
                 let members =
                     self.parse_struct_body(lexer, &mut module.types, &mut module.constants)?;
@@ -2207,7 +2209,7 @@ impl Parser {
                 self.lookup_type.insert(name.to_owned(), ty);
                 lexer.expect(Token::Separator(';'))?;
             }
-            Token::Word("type") => {
+            (Token::Word("type"), _) => {
                 let name = lexer.next_ident()?;
                 lexer.expect(Token::Operation('='))?;
                 let (ty, _access) = self.parse_type_decl(
@@ -2219,7 +2221,7 @@ impl Parser {
                 self.lookup_type.insert(name.to_owned(), ty);
                 lexer.expect(Token::Separator(';'))?;
             }
-            Token::Word("const") => {
+            (Token::Word("const"), _) => {
                 let (name, _ty, _access) = self.parse_variable_ident_decl(
                     lexer,
                     &mut module.types,
@@ -2236,7 +2238,7 @@ impl Parser {
                 lexer.expect(Token::Separator(';'))?;
                 lookup_global_expression.insert(name, crate::Expression::Constant(const_handle));
             }
-            Token::Word("var") => {
+            (Token::Word("var"), _) => {
                 let pvar =
                     self.parse_variable_decl(lexer, &mut module.types, &mut module.constants)?;
                 let class = match pvar.class {
@@ -2271,7 +2273,7 @@ impl Parser {
                 lookup_global_expression
                     .insert(pvar.name, crate::Expression::GlobalVariable(var_handle));
             }
-            Token::Word("fn") => {
+            (Token::Word("fn"), _) => {
                 let (function, name) =
                     self.parse_function_decl(lexer, module, &lookup_global_expression)?;
                 let already_declared = match stage {
@@ -2302,7 +2304,7 @@ impl Parser {
                     return Err(Error::FunctionRedefinition(name));
                 }
             }
-            Token::End => return Ok(false),
+            (Token::End, _) => return Ok(false),
             other => return Err(Error::Unexpected(other, "global item")),
         }
 

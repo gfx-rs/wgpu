@@ -1,4 +1,4 @@
-use super::{conv, Error, Token};
+use super::{conv, Error, Token, TokenSpan};
 
 fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
     if input.starts_with(what) {
@@ -156,55 +156,63 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
 #[derive(Clone)]
 pub(super) struct Lexer<'a> {
     input: &'a str,
+    pub(super) source: &'a str,
 }
 
 impl<'a> Lexer<'a> {
     pub(super) fn new(input: &'a str) -> Self {
-        Lexer { input }
+        Lexer {
+            input,
+            source: input,
+        }
     }
 
-    fn peek_token_and_rest(&mut self) -> (Token<'a>, &'a str) {
+    fn peek_token_and_rest(&mut self) -> (TokenSpan<'a>, &'a str) {
         let mut cloned = self.clone();
         let token = cloned.next();
         let rest = cloned.input;
         (token, rest)
     }
 
+    fn current_byte_offset(&self) -> usize {
+        self.source.len() - self.input.len()
+    }
+
     #[must_use]
-    pub(super) fn next(&mut self) -> Token<'a> {
-        let original_len = self.input.len();
+    pub(super) fn next(&mut self) -> TokenSpan<'a> {
+        let mut start_byte_offset = self.current_byte_offset();
         loop {
             let (token, rest) = consume_token(self.input, false);
             self.input = rest;
-            if token != Token::Trivia {
-                let _bytes_read = original_len - self.input.len();
-                return token;
+            match token {
+                Token::Trivia => start_byte_offset = self.current_byte_offset(),
+                _ => return (token, start_byte_offset..self.current_byte_offset()),
             }
         }
     }
 
     #[must_use]
-    pub(super) fn next_generic(&mut self) -> Token<'a> {
-        let original_len = self.input.len();
+    pub(super) fn next_generic(&mut self) -> TokenSpan<'a> {
+        let mut start_byte_offset = self.current_byte_offset();
         loop {
             let (token, rest) = consume_token(self.input, true);
             self.input = rest;
-            if token != Token::Trivia {
-                let _bytes_read = original_len - self.input.len();
-                return token;
+            match token {
+                Token::Trivia => start_byte_offset = self.current_byte_offset(),
+                _ => return (token, start_byte_offset..self.current_byte_offset()),
             }
         }
     }
 
     #[must_use]
-    pub(super) fn peek(&mut self) -> Token<'a> {
+    pub(super) fn peek(&mut self) -> TokenSpan<'a> {
         let (token, _) = self.peek_token_and_rest();
         token
     }
 
     pub(super) fn expect(&mut self, expected: Token<'a>) -> Result<(), Error<'a>> {
-        let token = self.next();
-        if token == expected {
+        let next = self.next();
+        if next.0 == expected {
             Ok(())
         } else {
             let description = match expected {
@@ -224,22 +232,22 @@ impl<'a> Lexer<'a> {
                 Token::Trivia => "trivia",
                 Token::End => "",
             };
-            Err(Error::Unexpected(token, description))
+            Err(Error::Unexpected(next, description))
         }
     }
 
     pub(super) fn expect_generic_paren(&mut self, expected: char) -> Result<(), Error<'a>> {
-        let token = self.next_generic();
-        if token == Token::Paren(expected) {
+        let next = self.next_generic();
+        if next.0 == Token::Paren(expected) {
             Ok(())
         } else {
-            Err(Error::Unexpected(token, "paren"))
+            Err(Error::Unexpected(next, "paren"))
         }
     }
 
     pub(super) fn skip(&mut self, what: Token<'_>) -> bool {
         let (peeked_token, rest) = self.peek_token_and_rest();
-        if peeked_token == what {
+        if peeked_token.0 == what {
             self.input = rest;
             true
         } else {
@@ -249,21 +257,23 @@ impl<'a> Lexer<'a> {
 
     pub(super) fn next_ident(&mut self) -> Result<&'a str, Error<'a>> {
         match self.next() {
-            Token::Word(word) => Ok(word),
+            (Token::Word(word), _) => Ok(word),
             other => Err(Error::Unexpected(other, "ident")),
         }
     }
 
     fn _next_float_literal(&mut self) -> Result<f32, Error<'a>> {
         match self.next() {
-            Token::Number { value, .. } => value.parse().map_err(|err| Error::BadFloat(value, err)),
+            (Token::Number { value, .. }, _) => {
+                value.parse().map_err(|err| Error::BadFloat(value, err))
+            }
             other => Err(Error::Unexpected(other, "float literal")),
         }
     }
 
     pub(super) fn next_uint_literal(&mut self) -> Result<u32, Error<'a>> {
         match self.next() {
-            Token::Number { value, .. } => {
+            (Token::Number { value, .. }, _) => {
                 value.parse().map_err(|err| Error::BadInteger(value, err))
             }
             other => Err(Error::Unexpected(other, "uint literal")),
@@ -272,7 +282,7 @@ impl<'a> Lexer<'a> {
 
     pub(super) fn next_sint_literal(&mut self) -> Result<i32, Error<'a>> {
         match self.next() {
-            Token::Number { value, .. } => {
+            (Token::Number { value, .. }, _) => {
                 value.parse().map_err(|err| Error::BadInteger(value, err))
             }
             other => Err(Error::Unexpected(other, "sint literal")),
@@ -305,9 +315,9 @@ impl<'a> Lexer<'a> {
 fn sub_test(source: &str, expected_tokens: &[Token]) {
     let mut lex = Lexer::new(source);
     for &token in expected_tokens {
-        assert_eq!(lex.next(), token);
+        assert_eq!(lex.next().0, token);
     }
-    assert_eq!(lex.next(), Token::End);
+    assert_eq!(lex.next().0, Token::End);
 }
 
 #[test]
