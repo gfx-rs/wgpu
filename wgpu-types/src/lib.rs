@@ -348,7 +348,7 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const ADDRESS_MODE_CLAMP_TO_BORDER = 0x0000_0000_0100_0000;
-        /// Allows the user to set a non-fill polygon mode in [`RasterizationStateDescriptor::polygon_mode`]
+        /// Allows the user to set a non-fill polygon mode in [`PrimitiveState::polygon_mode`]
         ///
         /// This allows drawing polygons/triangles as lines (wireframe) or points instead of filled
         ///
@@ -807,7 +807,7 @@ impl Default for PrimitiveTopology {
 
 /// Winding order which classifies the "front" face.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum FrontFace {
@@ -829,7 +829,7 @@ impl Default for FrontFace {
 
 /// Face of a vertex.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum Face {
@@ -841,7 +841,7 @@ pub enum Face {
 
 /// Type of drawing mode for polygons
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum PolygonMode {
@@ -861,7 +861,7 @@ impl Default for PolygonMode {
 
 /// Describes the state of primitive assembly and rasterization in a render pipeline.
 #[repr(C)]
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct PrimitiveState {
@@ -886,7 +886,7 @@ pub struct PrimitiveState {
 
 /// Describes the multi-sampling state of a render pipeline.
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct MultisampleState {
