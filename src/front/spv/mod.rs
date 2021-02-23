@@ -599,6 +599,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             log::debug!("\t\t{:?} [{}]", inst.op, inst.wc);
 
             match inst.op {
+                Op::Line => {
+                    inst.expect(4)?;
+                    let _file_id = self.next()?;
+                    let _row_id = self.next()?;
+                    let _col_id = self.next()?;
+                }
                 Op::Undef => {
                     inst.expect(3)?;
                     let _result_type_id = self.next()?;
@@ -1646,9 +1652,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             self.index_constants.push(handle);
         }
 
-        while let Ok(inst) = self.next_inst() {
+        loop {
             use spirv::Op;
+
+            let inst = match self.next_inst() {
+                Ok(inst) => inst,
+                Err(Error::IncompleteData) => break,
+                Err(other) => return Err(other),
+            };
             log::debug!("\t{:?} [{}]", inst.op, inst.wc);
+
             match inst.op {
                 Op::Capability => self.parse_capability(inst),
                 Op::Extension => self.parse_extension(inst),
@@ -1846,7 +1859,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     fn parse_string(&mut self, inst: Instruction) -> Result<(), Error> {
         self.switch(ModuleState::Source, inst.op)?;
         inst.expect_at_least(3)?;
-        let (_name, _) = self.next_string(inst.wc - 1)?;
+        let _id = self.next()?;
+        let (_name, _) = self.next_string(inst.wc - 2)?;
         Ok(())
     }
 
