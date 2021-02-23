@@ -567,7 +567,7 @@ bitflags::bitflags! {
         /// Binding is visible from the fragment shader of a render pipeline.
         const FRAGMENT = 2;
         /// Binding is visible from the vertex and fragment shaders of a render pipeline.
-        const VERTEX_FRAGMENT = 3;
+        const VERTEX_FRAGMENT = Self::VERTEX.bits | Self::FRAGMENT.bits;
         /// Binding is visible from the compute shader of a compute pipeline.
         const COMPUTE = 4;
     }
