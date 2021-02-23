@@ -1440,21 +1440,26 @@ impl<B: GfxBackend> Device<B> {
                                     view_samples: view.samples as u32,
                                 });
                             }
-                            match (sample_type, format_info.sample_type) {
-                                (Tst::Uint, Tst::Uint) |
-                                (Tst::Sint, Tst::Sint) |
-                                (Tst::Depth, Tst::Depth) |
-                                // if we expect non-fiterable, accept anything float
-                                (Tst::Float { filterable: false }, Tst::Float { .. }) |
-                                // if we expect fiterable, require it
-                                (Tst::Float { filterable: true }, Tst::Float { filterable: true }) |
+                            match (sample_type, format_info.sample_type, view.format_features.filterable ) {
+                                (Tst::Uint, Tst::Uint, ..) |
+                                (Tst::Sint, Tst::Sint, ..) |
+                                (Tst::Depth, Tst::Depth, ..) |
+                                // if we expect non-filterable, accept anything float
+                                (Tst::Float { filterable: false }, Tst::Float { .. }, ..) |
+                                // if we expect filterable, require it
+                                (Tst::Float { filterable: true }, Tst::Float { filterable: true }, ..) |
+                                // if we expect filterable, also accept Float that is defined as unfilterable if filterable feature is explicitly enabled
+                                // (only hit if wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES is enabled)
+                                (Tst::Float { filterable: true }, Tst::Float { .. }, true) |
                                 // if we expect float, also accept depth
-                                (Tst::Float { .. }, Tst::Depth) => {}
-                                _ => return Err(Error::InvalidTextureSampleType {
+                                (Tst::Float { .. }, Tst::Depth, ..) => {}
+                                _ => {
+                                    return Err(Error::InvalidTextureSampleType {
                                     binding,
                                     layout_sample_type: sample_type,
                                     view_format: view.format,
-                                }),
+                                })
+                            },
                             }
                             if view_dimension != view.dimension {
                                 return Err(Error::InvalidTextureDimension {

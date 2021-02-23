@@ -329,9 +329,13 @@ impl<B: GfxBackend> Adapter<B> {
             flags |= wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE;
         }
 
+        let filterable =
+            texture_format_properties.contains(hal::format::ImageFeature::SAMPLED_LINEAR);
+
         wgt::TextureFormatFeatures {
             allowed_usages,
             flags,
+            filterable,
         }
     }
 
