@@ -1,9 +1,25 @@
-//! Universal shader translator.
-//!
-//! The central structure of the crate is [`Module`].
-//!
-//! To improve performance and reduce memory usage, most structures are stored
-//! in an [`Arena`], and can be retrieved using the corresponding [`Handle`].
+/*! Universal shader translator.
+
+The central structure of the crate is [`Module`].
+
+To improve performance and reduce memory usage, most structures are stored
+in an [`Arena`], and can be retrieved using the corresponding [`Handle`].
+
+Functions are described in terms of statement trees. A statement may have
+branching control flow, and it may be mutating. Statements refer to expressions.
+
+Expressions form a DAG, without any side effects. Expressions need to be
+emitted in order to take effect. This happens in one of the following ways:
+  1. Constants and function arguments are implicitly emitted at function start.
+      This corresponds to `expression.needs_pre_emit()` condition.
+  2. Local and global variables are implicitly emitted. However, in order to use parts
+      of them in right-hand-side expressions, the `Expression::Load` must be explicitly emitted,
+      with an exception of `StorageClass::Handle` global variables.
+  3. Result of `Statement::Call` is automatically emitted.
+  4. `Statement::Emit` range is explicitly emitted.
+
+!*/
+
 #![warn(
     trivial_casts,
     trivial_numeric_casts,
@@ -24,7 +40,7 @@ pub mod back;
 pub mod front;
 pub mod proc;
 
-pub use crate::arena::{Arena, Handle};
+pub use crate::arena::{Arena, Handle, Range};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -752,6 +768,8 @@ pub struct SwitchCase {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Statement {
+    /// Emit a range of expressions, visible to all statements that follow in this block.
+    Emit(Range<Expression>),
     /// A block containing more statements, to be executed sequentially.
     Block(Block),
     /// Conditionally executes one of two blocks, based on the value of the condition.

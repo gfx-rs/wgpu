@@ -372,7 +372,7 @@ impl FunctionInfo {
         let mut block_flags = ControlFlags::empty();
         for statement in statements {
             let flags = match *statement {
-                S::Break | S::Continue => ControlFlags::empty(),
+                S::Emit(_) | S::Break | S::Continue => ControlFlags::empty(),
                 S::Kill => ControlFlags::MAY_EXIT,
                 S::Block(ref b) => self.process_block(b, other_functions, is_uniform)?,
                 S::If {

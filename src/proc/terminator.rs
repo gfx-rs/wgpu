@@ -5,11 +5,12 @@
 /// to the end, because it may be either redundant or invalid,
 /// e.g. when the user already has returns in if/else branches.
 pub fn ensure_block_returns(block: &mut crate::Block) {
+    use crate::Statement as S;
     match block.last_mut() {
-        Some(&mut crate::Statement::Block(ref mut b)) => {
+        Some(&mut S::Block(ref mut b)) => {
             ensure_block_returns(b);
         }
-        Some(&mut crate::Statement::If {
+        Some(&mut S::If {
             condition: _,
             ref mut accept,
             ref mut reject,
@@ -17,7 +18,7 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
             ensure_block_returns(accept);
             ensure_block_returns(reject);
         }
-        Some(&mut crate::Statement::Switch {
+        Some(&mut S::Switch {
             selector: _,
             ref mut cases,
             ref mut default,
@@ -29,14 +30,15 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
             }
             ensure_block_returns(default);
         }
-        Some(&mut crate::Statement::Break)
-        | Some(&mut crate::Statement::Continue)
-        | Some(&mut crate::Statement::Return { .. })
-        | Some(&mut crate::Statement::Kill) => (),
-        Some(&mut crate::Statement::Loop { .. })
-        | Some(&mut crate::Statement::Store { .. })
-        | Some(&mut crate::Statement::ImageStore { .. })
-        | Some(&mut crate::Statement::Call { .. })
-        | None => block.push(crate::Statement::Return { value: None }),
+        Some(&mut S::Emit(_))
+        | Some(&mut S::Break)
+        | Some(&mut S::Continue)
+        | Some(&mut S::Return { .. })
+        | Some(&mut S::Kill) => (),
+        Some(&mut S::Loop { .. })
+        | Some(&mut S::Store { .. })
+        | Some(&mut S::ImageStore { .. })
+        | Some(&mut S::Call { .. })
+        | None => block.push(S::Return { value: None }),
     }
 }

@@ -96,6 +96,18 @@ impl Typifier {
         }
     }
 
+    pub fn try_get<'a>(
+        &'a self,
+        expr_handle: Handle<crate::Expression>,
+        types: &'a Arena<crate::Type>,
+    ) -> Option<&'a crate::TypeInner> {
+        let resolution = self.resolutions.get(expr_handle.index())?;
+        Some(match *resolution {
+            Resolution::Handle(ty_handle) => &types[ty_handle].inner,
+            Resolution::Value(ref inner) => inner,
+        })
+    }
+
     pub fn get_handle(
         &self,
         expr_handle: Handle<crate::Expression>,
@@ -106,6 +118,7 @@ impl Typifier {
         }
     }
 
+    //TODO: resolve `*Variable` and `Access*` expressions to `Pointer` type.
     fn resolve_impl(
         &self,
         expr: &crate::Expression,
@@ -189,7 +202,8 @@ impl Typifier {
             }
             crate::Expression::GlobalVariable(h) => Resolution::Handle(ctx.global_vars[h].ty),
             crate::Expression::LocalVariable(h) => Resolution::Handle(ctx.local_vars[h].ty),
-            crate::Expression::Load { .. } => unimplemented!(),
+            // we treat Load as a transparent operation for the type system
+            crate::Expression::Load { pointer } => self.resolutions[pointer.index()].clone(),
             crate::Expression::ImageSample { image, .. }
             | crate::Expression::ImageLoad { image, .. } => match *self.get(image, types) {
                 crate::TypeInner::Image { class, .. } => Resolution::Value(match class {

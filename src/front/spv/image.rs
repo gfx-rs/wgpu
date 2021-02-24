@@ -18,6 +18,18 @@ bitflags::bitflags! {
     }
 }
 
+impl Arena<crate::Expression> {
+    fn get_global_var(
+        &self,
+        handle: Handle<crate::Expression>,
+    ) -> Result<Handle<crate::GlobalVariable>, Error> {
+        match self[handle] {
+            crate::Expression::GlobalVariable(handle) => Ok(handle),
+            ref other => Err(Error::InvalidGlobalVar(other.clone())),
+        }
+    }
+}
+
 /// Return the texture coordinates separated from the array layer,
 /// and/or divided by the projection term.
 ///
@@ -203,7 +215,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         }
 
         let image_lexp = self.lookup_expression.lookup(image_id)?;
-        let image_var_handle = expressions[image_lexp.handle].as_global_var()?;
+        let image_var_handle = expressions.get_global_var(image_lexp.handle)?;
         let image_var = &global_arena[image_var_handle];
 
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
@@ -274,7 +286,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         }
 
         let image_lexp = self.lookup_expression.lookup(image_id)?;
-        let image_var_handle = expressions[image_lexp.handle].as_global_var()?;
+        let image_var_handle = expressions.get_global_var(image_lexp.handle)?;
         let image_var = &global_arena[image_var_handle];
 
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
@@ -354,8 +366,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
 
-        let image_var_handle = expressions[si_lexp.image].as_global_var()?;
-        let sampler_var_handle = expressions[si_lexp.sampler].as_global_var()?;
+        let image_var_handle = expressions.get_global_var(si_lexp.image)?;
+        let sampler_var_handle = expressions.get_global_var(si_lexp.sampler)?;
         log::debug!(
             "\t\t\tImage {:?} sampled with {:?}",
             image_var_handle,
@@ -445,8 +457,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-        let image_var_handle = expressions[si_lexp.image].as_global_var()?;
-        let sampler_var_handle = expressions[si_lexp.sampler].as_global_var()?;
+        let image_var_handle = expressions.get_global_var(si_lexp.image)?;
+        let sampler_var_handle = expressions.get_global_var(si_lexp.sampler)?;
         log::debug!(
             "\t\t\tImage {:?} sampled with comparison {:?}",
             image_var_handle,

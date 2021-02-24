@@ -60,7 +60,8 @@ type7 fetch_shadow(
         return const_1f;
     }
     float _expr15 = (const_1f / homogeneous_coords.w);
-    return t_shadow.sample_compare(sampler_shadow, (((metal::float2(homogeneous_coords.x, homogeneous_coords.y) * metal::float2(const_0_50f, const_n0_50f)) * _expr15) + metal::float2(const_0_50f, const_0_50f)), static_cast<int>(light_id), (homogeneous_coords.z * _expr15));
+    float _expr28 = t_shadow.sample_compare(sampler_shadow, (((metal::float2(homogeneous_coords.x, homogeneous_coords.y) * metal::float2(const_0_50f, const_n0_50f)) * _expr15) + metal::float2(const_0_50f, const_0_50f)), static_cast<int>(light_id), (homogeneous_coords.z * _expr15));
+    return _expr28;
 }
 
 struct fs_mainInput {
@@ -91,9 +92,10 @@ fragment fs_mainOutput fs_main(
         if ((i >= metal::min(u_globals.num_lights.x, c_max_lights))) {
             break;
         }
-        Light _expr18 = s_lights.data[i];
-        type7 _expr21 = fetch_shadow(i, (_expr18.proj * input.in_position_fs), t_shadow, sampler_shadow);
-        color1 = (color1 + ((_expr21 * metal::max(const_0f, metal::dot(metal::normalize(input.in_normal_fs), metal::normalize((metal::float3(_expr18.pos.x, _expr18.pos.y, _expr18.pos.z) - metal::float3(input.in_position_fs.x, input.in_position_fs.y, input.in_position_fs.z)))))) * metal::float3(_expr18.color.x, _expr18.color.y, _expr18.color.z)));
+        Light _expr23 = s_lights.data[i];
+        type7 _expr28 = fetch_shadow(i, (_expr23.proj * input.in_position_fs), t_shadow, sampler_shadow);
+        type2 _expr34 = input.in_position_fs;
+        color1 = (color1 + ((_expr28 * metal::max(const_0f, metal::dot(metal::normalize(input.in_normal_fs), metal::normalize((metal::float3(_expr23.pos.x, _expr23.pos.y, _expr23.pos.z) - metal::float3(_expr34.x, _expr34.y, _expr34.z)))))) * metal::float3(_expr23.color.x, _expr23.color.y, _expr23.color.z)));
     }
     output.out_color_fs = metal::float4(color1, const_1f);
     return output;

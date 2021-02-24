@@ -62,7 +62,21 @@ expression: output
                 ),
                 (
                     control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
                         bits: 0,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -104,13 +118,6 @@ expression: output
                 ),
                 (
                     control_flags: (
-                        bits: 0,
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                ),
-                (
-                    control_flags: (
                         bits: 1,
                     ),
                     ref_count: 1,
@@ -146,7 +153,42 @@ expression: output
                 ),
                 (
                     control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
                         bits: 0,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 0,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -202,7 +244,14 @@ expression: output
                         bits: 1,
                     ),
                     ref_count: 1,
-                    assignable_global: Some(1),
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
                 ),
                 (
                     control_flags: (
@@ -223,7 +272,14 @@ expression: output
                         bits: 1,
                     ),
                     ref_count: 1,
-                    assignable_global: Some(1),
+                    assignable_global: None,
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
                 ),
                 (
                     control_flags: (
@@ -231,6 +287,13 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                ),
+                (
+                    control_flags: (
+                        bits: 1,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
                 ),
                 (
                     control_flags: (

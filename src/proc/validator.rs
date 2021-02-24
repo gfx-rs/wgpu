@@ -74,6 +74,8 @@ pub struct Validator {
     location_out_mask: BitSet,
     bind_group_masks: Vec<BitSet>,
     select_cases: FastHashSet<i32>,
+    valid_expression_list: Vec<Handle<crate::Expression>>,
+    valid_expression_set: BitSet,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -135,9 +137,27 @@ pub enum LocalVariableError {
 }
 
 #[derive(Clone, Debug, Error)]
+pub enum ExpressionError {
+    #[error("Is invalid")]
+    Invalid,
+    #[error("Used by a statement before it was introduced into the scope by any of the dominating blocks")]
+    NotInScope,
+}
+
+#[derive(Clone, Debug, Error)]
 pub enum CallError {
     #[error("Bad function")]
     Function,
+    #[error("Argument {index} expression is invalid")]
+    Argument {
+        index: usize,
+        #[source]
+        error: ExpressionError,
+    },
+    #[error("Result expression {0:?} has already been introduced earlier")]
+    ResultAlreadyInScope(Handle<crate::Expression>),
+    #[error("Result value is invalid")]
+    ResultValue(#[source] ExpressionError),
     #[error("Requires {required} arguments, but {seen} are provided")]
     ArgumentCount { required: usize, seen: usize },
     #[error("Argument {index} value {seen_expression:?} doesn't match the type {required:?}")]
@@ -146,8 +166,8 @@ pub enum CallError {
         required: Handle<crate::Type>,
         seen_expression: Handle<crate::Expression>,
     },
-    #[error("Return value {seen_expression:?} does not match the type {required:?}")]
-    ReturnType {
+    #[error("Result value {seen_expression:?} does not match the type {required:?}")]
+    ResultType {
         required: Option<Handle<crate::Type>>,
         seen_expression: Option<Handle<crate::Expression>>,
     },
@@ -157,6 +177,14 @@ pub enum CallError {
 pub enum FunctionError {
     #[error(transparent)]
     Resolve(#[from] TypifyError),
+    #[error("Expression {handle:?} is invalid")]
+    Expression {
+        handle: Handle<crate::Expression>,
+        #[source]
+        error: ExpressionError,
+    },
+    #[error("Expression {0:?} can't be introduced - it's already in scope")]
+    ExpressionAlreadyInScope(Handle<crate::Expression>),
     #[error("Local variable {handle:?} '{name}' is invalid")]
     LocalVariable {
         handle: Handle<crate::LocalVariable>,
@@ -180,10 +208,12 @@ pub enum FunctionError {
     InvalidSwitchType(Handle<crate::Expression>),
     #[error("Multiple `switch` cases for {0} are present")]
     ConflictingSwitchCase(i32),
+    #[error("The pointer {0:?} doesn't relate to a valid destination for a store")]
+    InvalidStorePointer(Handle<crate::Expression>),
     #[error("The value {0:?} can not be stored")]
     InvalidStoreValue(Handle<crate::Expression>),
     #[error("Store of {value:?} into {pointer:?} doesn't have matching types")]
-    InvalidStore {
+    InvalidStoreTypes {
         pointer: Handle<crate::Expression>,
         value: Handle<crate::Expression>,
     },
@@ -418,6 +448,8 @@ impl Validator {
             location_out_mask: BitSet::new(),
             bind_group_masks: Vec::new(),
             select_cases: FastHashSet::default(),
+            valid_expression_list: Vec::new(),
+            valid_expression_set: BitSet::new(),
         }
     }
 
@@ -679,7 +711,7 @@ impl Validator {
     }
 
     fn validate_call(
-        &self,
+        &mut self,
         function: Handle<crate::Function>,
         arguments: &[Handle<crate::Expression>],
         result: Option<Handle<crate::Expression>>,
@@ -696,7 +728,9 @@ impl Validator {
             });
         }
         for (index, (arg, &expr)) in fun.arguments.iter().zip(arguments).enumerate() {
-            let ty = self.typifier.get(expr, context.types);
+            let ty = self
+                .resolve_type_impl(expr, context.types)
+                .map_err(|error| CallError::Argument { index, error })?;
             if ty != &context.types[arg.ty].inner {
                 return Err(CallError::ArgumentType {
                     index,
@@ -705,7 +739,19 @@ impl Validator {
                 });
             }
         }
-        let result_ty = result.map(|expr| self.typifier.get(expr, context.types));
+
+        if let Some(expr) = result {
+            if self.valid_expression_set.insert(expr.index()) {
+                self.valid_expression_list.push(expr);
+            } else {
+                return Err(CallError::ResultAlreadyInScope(expr));
+            }
+        }
+
+        let result_ty = result
+            .map(|expr| self.resolve_type_impl(expr, context.types))
+            .transpose()
+            .map_err(CallError::ResultValue)?;
         let expected_ty = fun.return_type.map(|ty| &context.types[ty].inner);
         if result_ty != expected_ty {
             log::error!(
@@ -713,7 +759,7 @@ impl Validator {
                 result_ty,
                 expected_ty
             );
-            return Err(CallError::ReturnType {
+            return Err(CallError::ResultType {
                 required: fun.return_type,
                 seen_expression: result,
             });
@@ -721,26 +767,56 @@ impl Validator {
         Ok(())
     }
 
-    fn validate_block(
+    fn resolve_type_impl<'a>(
+        &'a self,
+        handle: Handle<crate::Expression>,
+        types: &'a Arena<crate::Type>,
+    ) -> Result<&'a crate::TypeInner, ExpressionError> {
+        if !self.valid_expression_set.contains(handle.index()) {
+            return Err(ExpressionError::NotInScope);
+        }
+        self.typifier
+            .try_get(handle, types)
+            .ok_or(ExpressionError::Invalid)
+    }
+
+    fn resolve_type<'a>(
+        &'a self,
+        handle: Handle<crate::Expression>,
+        types: &'a Arena<crate::Type>,
+    ) -> Result<&'a crate::TypeInner, FunctionError> {
+        self.resolve_type_impl(handle, types)
+            .map_err(|error| FunctionError::Expression { handle, error })
+    }
+
+    fn validate_block_impl(
         &mut self,
         statements: &[crate::Statement],
         context: &BlockContext,
     ) -> Result<(), FunctionError> {
         use crate::{Statement as S, TypeInner as Ti};
-        //TODO: handle the cases of totally invalid expression handles
         let mut finished = false;
         for statement in statements {
             if finished {
                 return Err(FunctionError::InstructionsAfterReturn);
             }
             match *statement {
+                S::Emit(ref range) => {
+                    for handle in range.clone() {
+                        if self.valid_expression_set.insert(handle.index()) {
+                            self.valid_expression_list.push(handle);
+                        } else {
+                            return Err(FunctionError::ExpressionAlreadyInScope(handle));
+                        }
+                    }
+                }
                 S::Block(ref block) => self.validate_block(block, context)?,
                 S::If {
                     condition,
                     ref accept,
                     ref reject,
                 } => {
-                    match *self.typifier.get(condition, context.types) {
+                    match *self.resolve_type(condition, context.types)? {
                         Ti::Scalar {
                             kind: crate::ScalarKind::Bool,
                             width: _,
@@ -755,7 +831,7 @@ impl Validator {
                     ref cases,
                     ref default,
                 } => {
-                    match *self.typifier.get(selector, context.types) {
+                    match *self.resolve_type(selector, context.types)? {
                         Ti::Scalar {
                             kind: crate::ScalarKind::Sint,
                             width: _,
@@ -777,11 +853,17 @@ impl Validator {
                     ref body,
                     ref continuing,
                 } => {
-                    self.validate_block(
+                    // special handling for block scoping is needed here,
+                    // because the continuing{} block inherits the scope
+                    let base_expression_count = self.valid_expression_list.len();
+                    self.validate_block_impl(
                         body,
                         &context.with_flags(BlockFlags::CAN_JUMP | BlockFlags::IN_LOOP),
                     )?;
-                    self.validate_block(continuing, &context.with_flags(BlockFlags::empty()))?;
+                    self.validate_block_impl(continuing, &context.with_flags(BlockFlags::empty()))?;
+                    for handle in self.valid_expression_list.drain(base_expression_count..) {
+                        self.valid_expression_set.remove(handle.index());
+                    }
                 }
                 S::Break | S::Continue => {
                     if !context.flags.contains(BlockFlags::IN_LOOP) {
@@ -793,7 +875,9 @@ impl Validator {
                     if !context.flags.contains(BlockFlags::CAN_JUMP) {
                         return Err(FunctionError::InvalidReturnSpot);
                     }
-                    let value_ty = value.map(|expr| self.typifier.get(expr, context.types));
+                    let value_ty = value
+                        .map(|expr| self.resolve_type(expr, context.types))
+                        .transpose()?;
                     let expected_ty = context.return_type.map(|ty| &context.types[ty].inner);
                     if value_ty != expected_ty {
                         log::error!(
@@ -809,17 +893,33 @@ impl Validator {
                     finished = true;
                 }
                 S::Store { pointer, value } => {
-                    let value_ty = self.typifier.get(value, context.types);
+                    let mut current = pointer;
+                    loop {
+                        self.typifier.try_get(current, context.types).ok_or(
+                            FunctionError::Expression {
+                                handle: current,
+                                error: ExpressionError::Invalid,
+                            },
+                        )?;
+                        match context.expressions[current] {
+                            crate::Expression::Access { base, .. }
+                            | crate::Expression::AccessIndex { base, .. } => current = base,
+                            crate::Expression::LocalVariable(_)
+                            | crate::Expression::GlobalVariable(_) => break,
+                            _ => return Err(FunctionError::InvalidStorePointer(current)),
+                        }
+                    }
+
+                    let value_ty = self.resolve_type(value, context.types)?;
                     match *value_ty {
                         Ti::Image { .. } | Ti::Sampler { .. } => {
                             return Err(FunctionError::InvalidStoreValue(value));
                         }
                         _ => {}
                     }
-                    if self.typifier.get(pointer, context.types) != value_ty {
-                        return Err(FunctionError::InvalidStore { pointer, value });
+                    if self.typifier.try_get(pointer, context.types) != Some(value_ty) {
+                        return Err(FunctionError::InvalidStoreTypes { pointer, value });
                     }
-                    //TODO: validate that the `pointer` reaches a variable through a sequence of accessors
                 }
                 S::ImageStore {
                     image,
@@ -862,6 +962,19 @@ impl Validator {
         Ok(())
     }
 
+    fn validate_block(
+        &mut self,
+        statements: &[crate::Statement],
+        context: &BlockContext,
+    ) -> Result<(), FunctionError> {
+        let base_expression_count = self.valid_expression_list.len();
+        self.validate_block_impl(statements, context)?;
+        for handle in self.valid_expression_list.drain(base_expression_count..) {
+            self.valid_expression_set.remove(handle.index());
+        }
+        Ok(())
+    }
+
     fn validate_function(
         &mut self,
         fun: &crate::Function,
@@ -893,6 +1006,13 @@ impl Validator {
                     index,
                     name: argument.name.clone().unwrap_or_default(),
                 });
+            }
+        }
+
+        self.valid_expression_set.clear();
+        for (handle, expr) in fun.expressions.iter() {
+            if expr.needs_pre_emit() {
+                self.valid_expression_set.insert(handle.index());
             }
         }
 

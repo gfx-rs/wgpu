@@ -131,47 +131,65 @@ expression: output
                 LocalVariable(1),
                 Constant(1),
                 LocalVariable(2),
+                Load(
+                    pointer: 4,
+                ),
                 Constant(2),
                 Binary(
                     op: LessEqual,
-                    left: 4,
-                    right: 7,
+                    left: 7,
+                    right: 8,
+                ),
+                Load(
+                    pointer: 4,
                 ),
                 Constant(3),
                 Binary(
                     op: Modulo,
-                    left: 4,
-                    right: 9,
+                    left: 10,
+                    right: 11,
                 ),
                 Constant(1),
                 Binary(
                     op: Equal,
-                    left: 10,
-                    right: 11,
+                    left: 12,
+                    right: 13,
+                ),
+                Load(
+                    pointer: 4,
                 ),
                 Constant(3),
                 Binary(
                     op: Divide,
-                    left: 4,
-                    right: 13,
+                    left: 15,
+                    right: 16,
                 ),
                 Constant(4),
+                Load(
+                    pointer: 4,
+                ),
                 Binary(
                     op: Multiply,
-                    left: 15,
-                    right: 4,
-                ),
-                Constant(2),
-                Binary(
-                    op: Add,
-                    left: 16,
-                    right: 17,
-                ),
-                Constant(2),
-                Binary(
-                    op: Add,
-                    left: 6,
+                    left: 18,
                     right: 19,
+                ),
+                Constant(2),
+                Binary(
+                    op: Add,
+                    left: 20,
+                    right: 21,
+                ),
+                Load(
+                    pointer: 6,
+                ),
+                Constant(2),
+                Binary(
+                    op: Add,
+                    left: 23,
+                    right: 24,
+                ),
+                Load(
+                    pointer: 6,
                 ),
             ],
             body: [
@@ -181,37 +199,85 @@ expression: output
                 ),
                 Loop(
                     body: [
+                        Emit((
+                            start: 6,
+                            end: 7,
+                        )),
+                        Emit((
+                            start: 8,
+                            end: 9,
+                        )),
                         If(
-                            condition: 8,
+                            condition: 9,
                             accept: [
                                 Break,
                             ],
                             reject: [],
                         ),
+                        Emit((
+                            start: 9,
+                            end: 10,
+                        )),
+                        Emit((
+                            start: 11,
+                            end: 12,
+                        )),
+                        Emit((
+                            start: 13,
+                            end: 14,
+                        )),
                         If(
-                            condition: 12,
+                            condition: 14,
                             accept: [
+                                Emit((
+                                    start: 14,
+                                    end: 15,
+                                )),
+                                Emit((
+                                    start: 16,
+                                    end: 17,
+                                )),
                                 Store(
                                     pointer: 4,
-                                    value: 14,
+                                    value: 17,
                                 ),
                             ],
                             reject: [
+                                Emit((
+                                    start: 18,
+                                    end: 20,
+                                )),
+                                Emit((
+                                    start: 21,
+                                    end: 22,
+                                )),
                                 Store(
                                     pointer: 4,
-                                    value: 18,
+                                    value: 22,
                                 ),
                             ],
                         ),
+                        Emit((
+                            start: 22,
+                            end: 23,
+                        )),
+                        Emit((
+                            start: 24,
+                            end: 25,
+                        )),
                         Store(
                             pointer: 6,
-                            value: 20,
+                            value: 25,
                         ),
                     ],
                     continuing: [],
                 ),
+                Emit((
+                    start: 25,
+                    end: 26,
+                )),
                 Return(
-                    value: Some(6),
+                    value: Some(26),
                 ),
             ],
         ),
@@ -232,39 +298,52 @@ expression: output
                         base: 2,
                         index: 0,
                     ),
+                    Load(
+                        pointer: 1,
+                    ),
                     AccessIndex(
-                        base: 1,
+                        base: 4,
                         index: 0,
                     ),
                     Access(
                         base: 3,
-                        index: 4,
+                        index: 5,
                     ),
                     AccessIndex(
                         base: 2,
                         index: 0,
                     ),
+                    Load(
+                        pointer: 1,
+                    ),
                     AccessIndex(
-                        base: 1,
+                        base: 8,
                         index: 0,
                     ),
                     Access(
-                        base: 6,
-                        index: 7,
+                        base: 7,
+                        index: 9,
+                    ),
+                    Load(
+                        pointer: 10,
                     ),
                     Call(1),
                 ],
                 body: [
+                    Emit((
+                        start: 2,
+                        end: 11,
+                    )),
                     Call(
                         function: 1,
                         arguments: [
-                            8,
+                            11,
                         ],
-                        result: Some(9),
+                        result: Some(12),
                     ),
                     Store(
-                        pointer: 5,
-                        value: 9,
+                        pointer: 6,
+                        value: 12,
                     ),
                     Return(
                         value: None,

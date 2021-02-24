@@ -44,7 +44,10 @@
 pub use features::Features;
 
 use crate::{
-    proc::{analyzer::Analysis, NameKey, Namer, ResolveContext, Typifier, TypifyError},
+    proc::{
+        analyzer::{Analysis, FunctionInfo},
+        EntryPointIndex, NameKey, Namer, ResolveContext, Typifier, TypifyError,
+    },
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant,
     ConstantInner, DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle,
     ImageClass, Interpolation, LocalVariable, Module, RelationalFunction, ScalarKind, ScalarValue,
@@ -169,13 +172,15 @@ enum FunctionType {
     /// A regular function and it's handle
     Function(Handle<Function>),
     /// A entry point and it's index
-    EntryPoint(crate::proc::EntryPointIndex),
+    EntryPoint(EntryPointIndex),
 }
 
 /// Helper structure that stores data needed when writing the function
 struct FunctionCtx<'a, 'b> {
     /// The current function being written
     func: FunctionType,
+    /// Analysis about the function
+    info: &'a FunctionInfo,
     /// The expression arena of the current function being written
     expressions: &'a Arena<Expression>,
     /// A typifier that has already resolved all expressions in the function being written
@@ -283,7 +288,7 @@ pub struct Writer<'a, W> {
     /// The selected entry point
     entry_point: &'a crate::EntryPoint,
     /// The index of the selected entry point
-    entry_point_idx: crate::proc::EntryPointIndex,
+    entry_point_idx: EntryPointIndex,
     /// Used to generate a unique number for blocks
     block_id: IdGenerator,
     /// Set of expressions that have associated temporary variables
@@ -499,8 +504,10 @@ impl<'a, W: Write> Writer<'a, W> {
             // We also `clone` to satisfy the borrow checker
             let name = self.names[&NameKey::Function(handle)].clone();
 
+            let fun_info = &self.analysis[handle];
+
             // Write the function
-            self.write_function(FunctionType::Function(handle), function, name)?;
+            self.write_function(FunctionType::Function(handle), function, fun_info, name)?;
 
             writeln!(self.out)?;
         }
@@ -508,6 +515,7 @@ impl<'a, W: Write> Writer<'a, W> {
         self.write_function(
             FunctionType::EntryPoint(self.entry_point_idx),
             &self.entry_point.function,
+            ep_info,
             "main",
         )?;
 
@@ -762,6 +770,7 @@ impl<'a, W: Write> Writer<'a, W> {
         &mut self,
         ty: FunctionType,
         func: &Function,
+        info: &FunctionInfo,
         name: N,
     ) -> BackendResult {
         // Create a new typifier and resolve all types for the current function
@@ -781,6 +790,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // Create a function context for the function being written
         let ctx = FunctionCtx {
             func: ty,
+            info,
             expressions: &func.expressions,
             typifier: &typifier,
         };
@@ -991,6 +1001,30 @@ impl<'a, W: Write> Writer<'a, W> {
         write!(self.out, "{}", INDENT.repeat(indent))?;
 
         match *sta {
+            // This is where we can generate intermediate constants for some expression types.
+            Statement::Emit(ref range) => {
+                let mut indented = true;
+                for handle in range.clone() {
+                    if let Ok(ty_handle) = ctx.typifier.get_handle(handle) {
+                        let min_ref_count = ctx.expressions[handle].bake_ref_count();
+                        if min_ref_count <= ctx.info[handle].ref_count {
+                            if !indented {
+                                write!(self.out, "{}", INDENT.repeat(indent))?;
+                            }
+                            let name = format!("_expr{}", handle.index());
+                            self.write_type(ty_handle)?;
+                            write!(self.out, " {} = ", name)?;
+                            self.write_expr(handle, ctx)?;
+                            writeln!(self.out, ";")?;
+                            self.cached_expressions.insert(handle, name);
+                            indented = false;
+                        }
+                    }
+                }
+                if indented {
+                    writeln!(self.out, ";")?;
+                }
+            }
             // Blocks are simple we just need to write the block statements between braces
             // We could also just print the statements but this is more readable and maps more
             // closely to the IR
@@ -1171,7 +1205,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     let name = format!("_expr{}", expr.index());
                     let ty = self.module.functions[function].return_type.unwrap();
                     self.write_type(ty)?;
-                    write!(self.out, "{} = ", name)?;
+                    write!(self.out, " {} = ", name)?;
                     self.cached_expressions.insert(expr, name);
                 }
                 write!(self.out, "{}(", &self.names[&NameKey::Function(function)])?;
@@ -1188,6 +1222,10 @@ impl<'a, W: Write> Writer<'a, W> {
     /// # Notes
     /// Doesn't add any newlines or leading/trailing spaces
     fn write_expr(&mut self, expr: Handle<Expression>, ctx: &FunctionCtx<'_, '_>) -> BackendResult {
+        if let Some(name) = self.cached_expressions.get(&expr) {
+            write!(self.out, "{}", name)?;
+            return Ok(());
+        }
         match ctx.expressions[expr] {
             // `Access` is applied to arrays, vectors and matrices and is written as indexing
             Expression::Access { base, index } => {
@@ -1716,10 +1754,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(expr, ctx)?;
                 write!(self.out, ")")?
             }
-            Expression::Call(_function) => {
-                let name = &self.cached_expressions[&expr];
-                write!(self.out, "{}", name)?;
-            }
+            Expression::Call(_function) => unreachable!(),
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {
                 write!(self.out, "uint(")?;

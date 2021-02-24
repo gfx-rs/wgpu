@@ -9,78 +9,79 @@ expression: dis
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Fragment %5 "main" %35 %23
-OpExecutionMode %5 OriginUpperLeft
+OpEntryPoint Fragment %23 "main" %5 %20
+OpExecutionMode %23 OriginUpperLeft
 OpSource GLSL 450
-OpName %5 "main"
-OpName %12 "PushConstants"
-OpMemberName %12 0 "index"
-OpName %13 "pc"
-OpName %23 "color"
-OpName %26 "texture0"
-OpName %31 "sampler"
-OpName %35 "tex_coord"
-OpName %40 "texture1"
-OpName %5 "main"
-OpDecorate %12 Block
-OpMemberDecorate %12 0 Offset 0
-OpDecorate %23 Location 1
-OpDecorate %26 DescriptorSet 0
-OpDecorate %26 Binding 0
-OpDecorate %31 DescriptorSet 0
-OpDecorate %31 Binding 2
-OpDecorate %35 Location 0
-OpDecorate %40 DescriptorSet 0
-OpDecorate %40 Binding 1
+OpName %5 "tex_coord"
+OpName %9 "texture0"
+OpName %12 "texture1"
+OpName %13 "sampler"
+OpName %17 "PushConstants"
+OpMemberName %17 0 "index"
+OpName %16 "pc"
+OpName %20 "color"
+OpName %23 "main"
+OpName %23 "main"
+OpDecorate %5 Location 0
+OpDecorate %9 DescriptorSet 0
+OpDecorate %9 Binding 0
+OpDecorate %12 DescriptorSet 0
+OpDecorate %12 Binding 1
+OpDecorate %13 DescriptorSet 0
+OpDecorate %13 Binding 2
+OpDecorate %17 Block
+OpMemberDecorate %17 0 Offset 0
+OpDecorate %20 Location 1
 %2 = OpTypeVoid
 %4 = OpTypeInt 32 1
 %3 = OpConstant  %4  0
-%6 = OpTypeFunction %2
-%8 = OpTypeBool
-%10 = OpTypeInt 32 0
-%12 = OpTypeStruct %10
-%14 = OpTypePointer PushConstant %12
-%13 = OpVariable  %14  PushConstant
-%15 = OpTypePointer PushConstant %10
-%16 = OpConstant  %4  0
-%22 = OpTypeFloat 32
-%21 = OpTypeVector %22 4
-%24 = OpTypePointer Output %21
-%23 = OpVariable  %24  Output
-%25 = OpTypeImage %22 2D 0 0 0 1 Unknown
-%27 = OpTypePointer UniformConstant %25
-%26 = OpVariable  %27  UniformConstant
-%29 = OpTypeSampledImage %25
-%30 = OpTypeSampler
-%32 = OpTypePointer UniformConstant %30
-%31 = OpVariable  %32  UniformConstant
-%34 = OpTypeVector %22 2
-%36 = OpTypePointer Input %34
-%35 = OpVariable  %36  Input
-%40 = OpVariable  %27  UniformConstant
-%5 = OpFunction  %2  None %6
-%7 = OpLabel
-%11 = OpAccessChain  %15  %13 %16
-%17 = OpLoad  %10  %11
-%9 = OpIEqual  %8  %17 %3
-OpSelectionMerge %18 None
-OpBranchConditional %9 %19 %20
-%19 = OpLabel
-%28 = OpLoad  %25  %26
-%33 = OpLoad  %30  %31
-%37 = OpLoad  %34  %35
-%38 = OpSampledImage  %29  %28 %33
-%39 = OpImageSampleImplicitLod  %21  %38 %37
-OpStore %23 %39
+%7 = OpTypeFloat 32
+%6 = OpTypeVector %7 2
+%8 = OpTypePointer Input %6
+%5 = OpVariable  %8  Input
+%10 = OpTypeImage %7 2D 0 0 0 1 Unknown
+%11 = OpTypePointer UniformConstant %10
+%9 = OpVariable  %11  UniformConstant
+%12 = OpVariable  %11  UniformConstant
+%14 = OpTypeSampler
+%15 = OpTypePointer UniformConstant %14
+%13 = OpVariable  %15  UniformConstant
+%18 = OpTypeInt 32 0
+%17 = OpTypeStruct %18
+%19 = OpTypePointer PushConstant %17
+%16 = OpVariable  %19  PushConstant
+%21 = OpTypeVector %7 4
+%22 = OpTypePointer Output %21
+%20 = OpVariable  %22  Output
+%24 = OpTypeFunction %2
+%30 = OpConstant  %4  0
+%32 = OpTypePointer PushConstant %18
+%34 = OpTypeBool
+%40 = OpTypeSampledImage %10
+%23 = OpFunction  %2  None %24
+%25 = OpLabel
+%26 = OpLoad  %10  %9
+%27 = OpLoad  %10  %12
+%28 = OpLoad  %14  %13
+OpBranch %29
+%29 = OpLabel
+%31 = OpAccessChain  %32  %16 %30
+%33 = OpLoad  %18  %31
+%35 = OpIEqual  %34  %33 %3
+OpSelectionMerge %36 None
+OpBranchConditional %35 %37 %38
+%37 = OpLabel
+%39 = OpLoad  %6  %5
+%41 = OpSampledImage  %40  %26 %28
+%42 = OpImageSampleImplicitLod  %21  %41 %39
+OpStore %20 %42
 OpReturn
-%20 = OpLabel
-%41 = OpLoad  %25  %40
-%42 = OpLoad  %30  %31
-%43 = OpLoad  %34  %35
-%44 = OpSampledImage  %29  %41 %42
+%38 = OpLabel
+%43 = OpLoad  %6  %5
+%44 = OpSampledImage  %40  %27 %28
 %45 = OpImageSampleImplicitLod  %21  %44 %43
-OpStore %23 %45
+OpStore %20 %45
 OpReturn
-%18 = OpLabel
+%36 = OpLabel
 OpReturn
 OpFunctionEnd

@@ -138,3 +138,16 @@ impl super::MathFunction {
         }
     }
 }
+
+impl crate::Expression {
+    /// Returns true if the expression is considered emitted at the start of a function.
+    pub fn needs_pre_emit(&self) -> bool {
+        match *self {
+            Self::Constant(_)
+            | Self::FunctionArgument(_)
+            | Self::GlobalVariable(_)
+            | Self::LocalVariable(_) => true,
+            _ => false,
+        }
+    }
+}

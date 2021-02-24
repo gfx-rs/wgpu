@@ -146,7 +146,10 @@ impl<'a, T: Visitor> Interface<'a, T> {
         for statement in block {
             use crate::Statement as S;
             match *statement {
-                S::Break | S::Continue | S::Kill => (),
+                //TODO: we could make `traverse_expr` to work on the emitted expressions
+                // instead of recursive descend.
+                // Or we can just remove the whole `Interface` entirely.
+                S::Emit(_) | S::Break | S::Continue | S::Kill => (),
                 S::Block(ref b) => {
                     self.traverse(b);
                 }

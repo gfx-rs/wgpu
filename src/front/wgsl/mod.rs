@@ -24,6 +24,7 @@ use codespan_reporting::{
 };
 use std::{
     io::{self, Write},
+    iter,
     num::NonZeroU32,
     ops::Range,
 };
@@ -173,7 +174,11 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         }
     }
 
-    fn as_expression<'t>(&'t mut self, block: &'t mut crate::Block) -> ExpressionContext<'a, 't, '_>
+    fn as_expression<'t>(
+        &'t mut self,
+        block: &'t mut crate::Block,
+        emitter: &'t mut super::Emitter,
+    ) -> ExpressionContext<'a, 't, '_>
     where
         'temp: 't,
     {
@@ -188,6 +193,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             functions: self.functions,
             arguments: self.arguments,
             block,
+            emitter,
         }
     }
 }
@@ -208,6 +214,7 @@ struct ExpressionContext<'input, 'temp, 'out> {
     arguments: &'out [crate::FunctionArgument],
     functions: &'out Arena<crate::Function>,
     block: &'temp mut crate::Block,
+    emitter: &'temp mut super::Emitter,
 }
 
 impl<'a> ExpressionContext<'a, '_, '_> {
@@ -223,6 +230,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             functions: self.functions,
             arguments: self.arguments,
             block: self.block,
+            emitter: self.emitter,
         }
     }
 
@@ -560,7 +568,7 @@ impl Parser {
                         None
                     };
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(lexer, None, ctx.types, ctx.constants)?)
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -592,7 +600,7 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let level = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(lexer, None, ctx.types, ctx.constants)?)
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -624,7 +632,7 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let bias = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(lexer, None, ctx.types, ctx.constants)?)
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -658,7 +666,7 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let y = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(lexer, None, ctx.types, ctx.constants)?)
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -690,7 +698,7 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let reference = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
-                        Some(self.parse_const_expression(lexer, None, ctx.types, ctx.constants)?)
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
                         None
                     };
@@ -787,6 +795,7 @@ impl Parser {
                     let handle =
                         match self.parse_local_function_call(lexer, name, ctx.reborrow())? {
                             Some((function, arguments)) => {
+                                ctx.block.extend(ctx.emitter.finish(ctx.expressions));
                                 let result =
                                     Some(ctx.expressions.append(crate::Expression::Call(function)));
                                 ctx.block.push(crate::Statement::Call {
@@ -794,6 +803,8 @@ impl Parser {
                                     arguments,
                                     result,
                                 });
+                                // restart the emitter
+                                ctx.emitter.start(ctx.expressions);
                                 result
                             }
                             None => None,
@@ -805,15 +816,16 @@ impl Parser {
         Ok(Some(ctx.expressions.append(expr)))
     }
 
-    fn parse_const_expression<'a>(
+    fn parse_const_expression_impl<'a>(
         &mut self,
+        first_token_span: TokenSpan<'a>,
         lexer: &mut Lexer<'a>,
         register_name: Option<&'a str>,
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<Handle<crate::Constant>, Error<'a>> {
         self.scopes.push(Scope::ConstantExpr);
-        let inner = match lexer.next() {
+        let inner = match first_token_span {
             (Token::Word("true"), _) => crate::ConstantInner::Scalar {
                 width: 1,
                 value: crate::ScalarValue::Bool(true),
@@ -848,8 +860,7 @@ impl Parser {
                     if !components.is_empty() {
                         lexer.expect(Token::Separator(','))?;
                     }
-                    let component =
-                        self.parse_const_expression(lexer, None, type_arena, const_arena)?;
+                    let component = self.parse_const_expression(lexer, type_arena, const_arena)?;
                     components.push(component);
                 }
                 crate::ConstantInner::Composite {
@@ -878,6 +889,15 @@ impl Parser {
         Ok(handle)
     }
 
+    fn parse_const_expression<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        type_arena: &mut Arena<crate::Type>,
+        const_arena: &mut Arena<crate::Constant>,
+    ) -> Result<Handle<crate::Constant>, Error<'a>> {
+        self.parse_const_expression_impl(lexer.next(), lexer, None, type_arena, const_arena)
+    }
+
     fn parse_primary_expression<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -890,36 +910,18 @@ impl Parser {
                 lexer.expect(Token::Paren(')'))?;
                 expr
             }
-            (Token::Word("true"), _) => {
-                let expr = ctx.constants.fetch_or_append(crate::Constant {
-                    name: None,
-                    specialization: None,
-                    inner: crate::ConstantInner::Scalar {
-                        width: 1,
-                        value: crate::ScalarValue::Bool(true),
-                    },
-                });
-                ctx.expressions.append(crate::Expression::Constant(expr))
-            }
-            (Token::Word("false"), _) => {
-                let expr = ctx.constants.fetch_or_append(crate::Constant {
-                    name: None,
-                    specialization: None,
-                    inner: crate::ConstantInner::Scalar {
-                        width: 1,
-                        value: crate::ScalarValue::Bool(false),
-                    },
-                });
-                ctx.expressions.append(crate::Expression::Constant(expr))
-            }
-            (Token::Number { value, ty, width }, _) => {
-                let inner = Self::get_constant_inner(value, ty, width)?;
-                let expr = ctx.constants.fetch_or_append(crate::Constant {
-                    name: None,
-                    specialization: None,
-                    inner,
-                });
-                ctx.expressions.append(crate::Expression::Constant(expr))
+            token @ (Token::Word("true"), _)
+            | token @ (Token::Word("false"), _)
+            | token @ (Token::Number { .. }, _) => {
+                let const_handle =
+                    self.parse_const_expression_impl(token, lexer, None, ctx.types, ctx.constants)?;
+                // pause the emitter while generating this expression, since it's pre-emitted
+                ctx.block.extend(ctx.emitter.finish(ctx.expressions));
+                let expr = ctx
+                    .expressions
+                    .append(crate::Expression::Constant(const_handle));
+                ctx.emitter.start(ctx.expressions);
+                expr
             }
             (Token::Word(word), _) => {
                 if let Some(&expr) = ctx.lookup_ident.get(word) {
@@ -983,13 +985,27 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         mut ctx: ExpressionContext<'a, '_, '_>,
         mut handle: Handle<crate::Expression>,
+        allow_deref: bool,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
+        let mut needs_deref = match ctx.expressions[handle] {
+            crate::Expression::LocalVariable(_) | crate::Expression::GlobalVariable(_) => {
+                allow_deref
+            }
+            _ => false,
+        };
         loop {
-            match lexer.peek().0 {
+            // insert the E::Load when we reach a value
+            if needs_deref && ctx.resolve_type(handle)?.scalar_kind().is_some() {
+                let expression = crate::Expression::Load { pointer: handle };
+                handle = ctx.expressions.append(expression);
+                needs_deref = false;
+            }
+
+            let expression = match lexer.peek().0 {
                 Token::Separator('.') => {
                     let _ = lexer.next();
                     let name = lexer.next_ident()?;
-                    let expression = match *ctx.resolve_type(handle)? {
+                    match *ctx.resolve_type(handle)? {
                         crate::TypeInner::Struct { ref members, .. } => {
                             let index = members
                                 .iter()
@@ -1016,8 +1032,8 @@ impl Parser {
                             }
                         }
                         crate::TypeInner::Matrix {
-                            rows,
                             columns,
+                            rows,
                             width,
                         } => match Composition::make(handle, columns, name, ctx.expressions)? {
                             Composition::Multi(columns, components) => {
@@ -1036,21 +1052,29 @@ impl Parser {
                             Composition::Single(expr) => expr,
                         },
                         _ => return Err(Error::BadAccessor(name)),
-                    };
-                    handle = ctx.expressions.append(expression);
+                    }
                 }
                 Token::Paren('[') => {
                     let _ = lexer.next();
                     let index = self.parse_general_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Paren(']'))?;
-                    let expr = crate::Expression::Access {
+                    crate::Expression::Access {
                         base: handle,
                         index,
-                    };
-                    handle = ctx.expressions.append(expr);
+                    }
                 }
-                _ => return Ok(handle),
-            }
+                _ => {
+                    // after we reached for the value, load it
+                    return Ok(if needs_deref {
+                        let expression = crate::Expression::Load { pointer: handle };
+                        ctx.expressions.append(expression)
+                    } else {
+                        handle
+                    });
+                }
+            };
+
+            handle = ctx.expressions.append(expression);
         }
     }
 
@@ -1092,7 +1116,7 @@ impl Parser {
             }
         };
 
-        let post_handle = self.parse_postfix(lexer, ctx, handle)?;
+        let post_handle = self.parse_postfix(lexer, ctx, handle, true)?;
         self.scopes.pop();
         Ok(post_handle)
     }
@@ -1270,7 +1294,7 @@ impl Parser {
         let (ty, access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
 
         let init = if lexer.skip(Token::Operation('=')) {
-            let handle = self.parse_const_expression(lexer, None, type_arena, const_arena)?;
+            let handle = self.parse_const_expression(lexer, type_arena, const_arena)?;
             Some(handle)
         } else {
             None
@@ -1475,7 +1499,7 @@ impl Parser {
                 let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
                 let size = if lexer.skip(Token::Separator(',')) {
                     let const_handle =
-                        self.parse_const_expression(lexer, None, type_arena, const_arena)?;
+                        self.parse_const_expression(lexer, type_arena, const_arena)?;
                     crate::ArraySize::Constant(const_handle)
                 } else {
                     crate::ArraySize::Dynamic
@@ -1707,12 +1731,13 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ident: &'a str,
         mut context: ExpressionContext<'a, '_, 'out>,
-    ) -> Result<crate::Statement, Error<'a>> {
-        Ok(match context.lookup_ident.get(ident) {
+    ) -> Result<(), Error<'a>> {
+        context.emitter.start(context.expressions);
+        let stmt = match context.lookup_ident.get(ident) {
             Some(&expr) => {
-                let left = self.parse_postfix(lexer, context.reborrow(), expr)?;
+                let left = self.parse_postfix(lexer, context.reborrow(), expr, false)?;
                 lexer.expect(Token::Operation('='))?;
-                let value = self.parse_general_expression(lexer, context)?;
+                let value = self.parse_general_expression(lexer, context.reborrow())?;
                 crate::Statement::Store {
                     pointer: left,
                     value,
@@ -1720,7 +1745,7 @@ impl Parser {
             }
             None => {
                 let (function, arguments) = self
-                    .parse_local_function_call(lexer, ident, context)?
+                    .parse_local_function_call(lexer, ident, context.reborrow())?
                     .ok_or(Error::UnknownLocalFunction(ident))?;
                 crate::Statement::Call {
                     function,
@@ -1728,7 +1753,12 @@ impl Parser {
                     result: None,
                 }
             }
-        })
+        };
+        context
+            .block
+            .extend(context.emitter.finish(context.expressions));
+        context.block.push(stmt);
+        Ok(())
     }
 
     fn parse_statement<'a, 'out>(
@@ -1760,13 +1790,17 @@ impl Parser {
         };
 
         self.scopes.push(Scope::Statement);
+        let mut emitter = super::Emitter::default();
         match word {
             "const" => {
+                emitter.start(context.expressions);
                 let (name, _ty, _access) =
                     self.parse_variable_ident_decl(lexer, context.types, context.constants)?;
                 lexer.expect(Token::Operation('='))?;
-                let expr_id = self.parse_general_expression(lexer, context.as_expression(block))?;
+                let expr_id = self
+                    .parse_general_expression(lexer, context.as_expression(block, &mut emitter))?;
                 lexer.expect(Token::Separator(';'))?;
+                block.extend(emitter.finish(context.expressions));
                 context.lookup_ident.insert(name, expr_id);
             }
             "var" => {
@@ -1780,8 +1814,12 @@ impl Parser {
                     self.parse_variable_ident_decl(lexer, context.types, context.constants)?;
 
                 let init = if lexer.skip(Token::Operation('=')) {
-                    let value =
-                        self.parse_general_expression(lexer, context.as_expression(block))?;
+                    emitter.start(context.expressions);
+                    let value = self.parse_general_expression(
+                        lexer,
+                        context.as_expression(block, &mut emitter),
+                    )?;
+                    block.extend(emitter.finish(context.expressions));
                     match context.expressions[value] {
                         crate::Expression::Constant(handle) if is_uniform_control_flow => {
                             Init::Constant(handle)
@@ -1816,7 +1854,13 @@ impl Parser {
             }
             "return" => {
                 let value = if lexer.peek().0 != Token::Separator(';') {
-                    Some(self.parse_general_expression(lexer, context.as_expression(block))?)
+                    emitter.start(context.expressions);
+                    let handle = self.parse_general_expression(
+                        lexer,
+                        context.as_expression(block, &mut emitter),
+                    )?;
+                    block.extend(emitter.finish(context.expressions));
+                    Some(handle)
                 } else {
                     None
                 };
@@ -1824,20 +1868,27 @@ impl Parser {
                 block.push(crate::Statement::Return { value });
             }
             "if" => {
+                emitter.start(context.expressions);
                 lexer.expect(Token::Paren('('))?;
-                let condition =
-                    self.parse_general_expression(lexer, context.as_expression(block))?;
+                let condition = self
+                    .parse_general_expression(lexer, context.as_expression(block, &mut emitter))?;
                 lexer.expect(Token::Paren(')'))?;
+                block.extend(emitter.finish(context.expressions));
 
                 let accept = self.parse_block(lexer, context.reborrow(), false)?;
                 let mut elsif_stack = Vec::new();
                 while lexer.skip(Token::Word("elseif")) {
+                    let mut sub_emitter = super::Emitter::default();
+                    sub_emitter.start(context.expressions);
                     lexer.expect(Token::Paren('('))?;
-                    let other_condition =
-                        self.parse_general_expression(lexer, context.as_expression(block))?;
+                    let other_condition = self.parse_general_expression(
+                        lexer,
+                        context.as_expression(block, &mut sub_emitter),
+                    )?;
                     lexer.expect(Token::Paren(')'))?;
+                    let other_emit = sub_emitter.finish(context.expressions);
                     let other_block = self.parse_block(lexer, context.reborrow(), false)?;
-                    elsif_stack.push((other_condition, other_block));
+                    elsif_stack.push((other_condition, other_emit, other_block));
                 }
                 let mut reject = if lexer.skip(Token::Word("else")) {
                     self.parse_block(lexer, context.reborrow(), false)?
@@ -1846,12 +1897,15 @@ impl Parser {
                 };
                 // reverse-fold the else-if blocks
                 //Note: we may consider uplifting this to the IR
-                for (other_cond, other_block) in elsif_stack.drain(..).rev() {
-                    reject = vec![crate::Statement::If {
-                        condition: other_cond,
-                        accept: other_block,
-                        reject,
-                    }];
+                for (other_cond, other_emit, other_block) in elsif_stack.drain(..).rev() {
+                    reject = other_emit
+                        .into_iter()
+                        .chain(iter::once(crate::Statement::If {
+                            condition: other_cond,
+                            accept: other_block,
+                            reject,
+                        }))
+                        .collect();
                 }
 
                 block.push(crate::Statement::If {
@@ -1861,10 +1915,12 @@ impl Parser {
                 });
             }
             "switch" => {
+                emitter.start(context.expressions);
                 lexer.expect(Token::Paren('('))?;
-                let selector =
-                    self.parse_general_expression(lexer, context.as_expression(block))?;
+                let selector = self
+                    .parse_general_expression(lexer, context.as_expression(block, &mut emitter))?;
                 lexer.expect(Token::Paren(')'))?;
+                block.extend(emitter.finish(context.expressions));
                 lexer.expect(Token::Paren('{'))?;
                 let mut cases = Vec::new();
                 let mut default = Vec::new();
@@ -1969,70 +2025,71 @@ impl Parser {
                     }
                 };
 
-                let condition = if lexer.skip(Token::Separator(';')) {
-                    None
-                } else {
-                    let condition =
-                        Some(self.parse_general_expression(lexer, context.as_expression(block))?);
-                    lexer.expect(Token::Separator(';'))?;
-                    condition
-                };
-
-                let continuing = if let Token::Word(ident) = lexer.peek().0 {
-                    // manually parse the next statement here instead of calling parse_statement
-                    // because the statement is not terminated with a semicolon
-                    let _ = lexer.next();
-                    Some(self.parse_statement_restricted(
-                        lexer,
-                        ident,
-                        context.as_expression(block),
-                    )?)
-                } else {
-                    None
-                };
-                lexer.expect(Token::Paren(')'))?;
-                lexer.expect(Token::Paren('{'))?;
-
                 let mut body = Vec::new();
-                if let Some(condition) = condition {
+                if !lexer.skip(Token::Separator(';')) {
+                    emitter.start(context.expressions);
+                    let condition = self.parse_general_expression(
+                        lexer,
+                        context.as_expression(&mut body, &mut emitter),
+                    )?;
+                    lexer.expect(Token::Separator(';'))?;
+                    body.extend(emitter.finish(context.expressions));
                     body.push(crate::Statement::If {
                         condition,
                         accept: Vec::new(),
-                        reject: [crate::Statement::Break].to_vec(),
+                        reject: vec![crate::Statement::Break],
                     });
+                };
+
+                let mut continuing = Vec::new();
+                if let Token::Word(ident) = lexer.peek().0 {
+                    // manually parse the next statement here instead of calling parse_statement
+                    // because the statement is not terminated with a semicolon
+                    let _ = lexer.next();
+                    self.parse_statement_restricted(
+                        lexer,
+                        ident,
+                        context.as_expression(&mut continuing, &mut emitter),
+                    )?;
                 }
+                lexer.expect(Token::Paren(')'))?;
+                lexer.expect(Token::Paren('{'))?;
+
                 while !lexer.skip(Token::Paren('}')) {
                     self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
                 }
 
-                block.push(crate::Statement::Loop {
-                    body,
-                    continuing: continuing.into_iter().collect(),
-                });
+                block.push(crate::Statement::Loop { body, continuing });
             }
             "break" => block.push(crate::Statement::Break),
             "continue" => block.push(crate::Statement::Continue),
             "discard" => block.push(crate::Statement::Kill),
             "textureStore" => {
+                emitter.start(context.expressions);
                 lexer.expect(Token::Paren('('))?;
                 let image_name = lexer.next_ident()?;
                 let image = context.lookup_ident.lookup(image_name)?;
                 lexer.expect(Token::Separator(','))?;
-                let coordinate =
-                    self.parse_general_expression(lexer, context.as_expression(block))?;
-                let arrayed = match *context.as_expression(block).resolve_type(image)? {
+                let mut expr_context = context.as_expression(block, &mut emitter);
+                let arrayed = match *expr_context.resolve_type(image)? {
                     crate::TypeInner::Image { arrayed, .. } => arrayed,
                     _ => return Err(Error::BadTexture(image_name)),
                 };
+                let coordinate = self.parse_general_expression(lexer, expr_context)?;
                 let array_index = if arrayed {
                     lexer.expect(Token::Separator(','))?;
-                    Some(self.parse_general_expression(lexer, context.as_expression(block))?)
+                    Some(self.parse_general_expression(
+                        lexer,
+                        context.as_expression(block, &mut emitter),
+                    )?)
                 } else {
                     None
                 };
                 lexer.expect(Token::Separator(','))?;
-                let value = self.parse_general_expression(lexer, context.as_expression(block))?;
+                let value = self
+                    .parse_general_expression(lexer, context.as_expression(block, &mut emitter))?;
                 lexer.expect(Token::Paren(')'))?;
+                block.extend(emitter.finish(context.expressions));
                 block.push(crate::Statement::ImageStore {
                     image,
                     coordinate,
@@ -2042,10 +2099,12 @@ impl Parser {
             }
             // assignment or a function call
             ident => {
-                let stmt =
-                    self.parse_statement_restricted(lexer, ident, context.as_expression(block))?;
+                self.parse_statement_restricted(
+                    lexer,
+                    ident,
+                    context.as_expression(block, &mut emitter),
+                )?;
                 lexer.expect(Token::Separator(';'))?;
-                block.push(stmt);
             }
         }
         self.scopes.pop();
@@ -2291,7 +2350,9 @@ impl Parser {
                     &mut module.constants,
                 )?;
                 lexer.expect(Token::Operation('='))?;
-                let const_handle = self.parse_const_expression(
+                let first_token_span = lexer.next();
+                let const_handle = self.parse_const_expression_impl(
+                    first_token_span,
                     lexer,
                     Some(name),
                     &mut module.types,

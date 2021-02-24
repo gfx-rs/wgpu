@@ -43,8 +43,8 @@ kernel void main1(
     type global_id [[thread_position_in_grid]],
     device PrimeIndices& v_indices [[buffer(0)]]
 ) {
-    type1 _expr8 = collatz_iterations(v_indices.data[global_id.x]);
-    v_indices.data[global_id.x] = _expr8;
+    type1 _expr11 = collatz_iterations(v_indices.data[global_id.x]);
+    v_indices.data[global_id.x] = _expr11;
     return ;
 }
 

@@ -51,7 +51,8 @@ fragment main2Output main2(
     type4 u_sampler [[sampler(0)]]
 ) {
     main2Output output;
-    output.o_color = u_texture.sample(u_sampler, input.v_uv1);
+    metal::float4 _expr9 = u_texture.sample(u_sampler, input.v_uv1);
+    output.o_color = _expr9;
     return output;
 }
 

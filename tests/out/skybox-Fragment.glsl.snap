@@ -18,6 +18,7 @@ in vec3 _location_0_vs;
 out vec4 _location_0;
 
 void main() {
+    ;
     _location_0 = texture(_group_0_binding_1, vec3(_location_0_vs));
     return;
 }

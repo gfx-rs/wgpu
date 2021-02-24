@@ -67,15 +67,6 @@ impl Instruction {
     }
 }
 
-impl crate::Expression {
-    fn as_global_var(&self) -> Result<Handle<crate::GlobalVariable>, Error> {
-        match *self {
-            crate::Expression::GlobalVariable(handle) => Ok(handle),
-            _ => Err(Error::InvalidGlobalVar(self.clone())),
-        }
-    }
-}
-
 impl crate::TypeInner {
     fn can_comparison_sample(&self) -> bool {
         match *self {
@@ -592,6 +583,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     ) -> Result<ControlFlowNode, Error> {
         let mut block = Vec::new();
         let mut phis = Vec::new();
+        let mut emitter = super::Emitter::default();
+        emitter.start(expressions);
         let mut merge = None;
         let terminator = loop {
             use spirv::Op;
@@ -613,6 +606,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::Variable => {
                     inst.expect_at_least(4)?;
+                    block.extend(emitter.finish(expressions));
+
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let storage = self.next()?;
@@ -629,6 +624,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     } else {
                         None
                     };
+
                     let name = self
                         .future_decor
                         .remove(&result_id)
@@ -641,6 +637,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         ty: self.lookup_type.lookup(result_type_id)?.handle,
                         init,
                     });
+
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
@@ -649,9 +646,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             type_id: result_type_id,
                         },
                     );
+                    emitter.start(expressions);
                 }
                 Op::Phi => {
                     inst.expect_at_least(3)?;
+                    block.extend(emitter.finish(expressions));
 
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
@@ -680,13 +679,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
 
                     phis.push(phi);
+                    emitter.start(expressions);
                 }
                 Op::AccessChain => {
                     struct AccessExpression {
                         base_handle: Handle<crate::Expression>,
                         type_id: spirv::Word,
                     }
+
                     inst.expect_at_least(4)?;
+
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let base_id = self.next()?;
@@ -774,6 +776,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::VectorExtractDynamic => {
                     inst.expect(5)?;
+
                     let result_type_id = self.next()?;
                     let id = self.next()?;
                     let composite_id = self.next()?;
@@ -822,6 +825,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::VectorInsertDynamic => {
                     inst.expect(6)?;
+
                     let result_type_id = self.next()?;
                     let id = self.next()?;
                     let composite_id = self.next()?;
@@ -871,6 +875,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::CompositeExtract => {
                     inst.expect_at_least(4)?;
+
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let base_id = self.next()?;
@@ -911,6 +916,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::CompositeInsert => {
                     inst.expect_at_least(5)?;
+
                     let result_type_id = self.next()?;
                     let id = self.next()?;
                     let object_id = self.next()?;
@@ -941,6 +947,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::CompositeConstruct => {
                     inst.expect_at_least(3)?;
+
                     let result_type_id = self.next()?;
                     let id = self.next()?;
                     let mut components = Vec::with_capacity(inst.wc as usize - 2);
@@ -964,6 +971,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::Load => {
                     inst.expect_at_least(4)?;
+
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let pointer_id = self.next()?;
@@ -971,17 +979,30 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         inst.expect(5)?;
                         let _memory_access = self.next()?;
                     }
-                    let base_expr = self.lookup_expression.lookup(pointer_id)?.clone();
+
+                    let base_lexp = self.lookup_expression.lookup(pointer_id)?;
+                    let type_lookup = self.lookup_type.lookup(base_lexp.type_id)?;
+                    let handle = match type_arena[type_lookup.handle].inner {
+                        crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
+                            base_lexp.handle
+                        }
+                        _ => expressions.append(crate::Expression::Load {
+                            pointer: base_lexp.handle,
+                        }),
+                    };
+
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: base_expr.handle, // pass-through pointers
+                            handle,
                             type_id: result_type_id,
                         },
                     );
                 }
                 Op::Store => {
                     inst.expect_at_least(3)?;
+                    block.extend(emitter.finish(expressions));
+
                     let pointer_id = self.next()?;
                     let value_id = self.next()?;
                     if inst.wc != 3 {
@@ -994,6 +1015,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         pointer: base_expr.handle,
                         value: value_expr.handle,
                     });
+                    emitter.start(expressions);
                 }
                 // Arithmetic Instructions +, -, *, /, %
                 Op::SNegate | Op::FNegate => {
@@ -1030,6 +1052,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::Transpose => {
                     inst.expect(4)?;
+
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let matrix_id = self.next()?;
@@ -1050,6 +1073,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::Dot => {
                     inst.expect(5)?;
+
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let left_id = self.next()?;
@@ -1260,6 +1284,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::FunctionCall => {
                     inst.expect_at_least(4)?;
+                    block.extend(emitter.finish(expressions));
+
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let func_id = self.next()?;
@@ -1292,6 +1318,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         arguments,
                         result,
                     });
+                    emitter.start(expressions);
                 }
                 Op::ExtInst => {
                     use crate::MathFunction as Mf;
@@ -1299,6 +1326,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     let base_wc = 5;
                     inst.expect_at_least(base_wc)?;
+
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let set_id = self.next()?;
@@ -1464,7 +1492,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::Switch => {
                     inst.expect_at_least(3)?;
-
                     let selector = self.next()?;
                     let default = self.next()?;
 
@@ -1532,6 +1559,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         };
 
+        block.extend(emitter.finish(expressions));
         Ok(ControlFlowNode {
             id: block_id,
             ty: None,
@@ -1590,6 +1618,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         use crate::Statement as S;
         for statement in statements.iter_mut() {
             match *statement {
+                S::Emit(_) => {}
                 S::Block(ref mut block) => {
                     self.patch_function_call_statements(block)?;
                 }
