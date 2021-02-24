@@ -32,7 +32,7 @@ fn version() {
                 .err()
                 .unwrap()
         ),
-        "InvalidVersion(TokenMetadata { line: 0, chars: 9..14 }, 99000)"
+        "InvalidVersion(TokenMetadata { line: 1, chars: 9..10 }, 99000)" //TODO: location
     );
 
     assert_eq!(
@@ -40,7 +40,7 @@ fn version() {
             "{:?}",
             parse_program("#version 449", &entry_points).err().unwrap()
         ),
-        "InvalidVersion(TokenMetadata { line: 0, chars: 9..12 }, 449)"
+        "InvalidVersion(TokenMetadata { line: 1, chars: 9..10 }, 449)" //TODO: location
     );
 
     assert_eq!(
@@ -50,7 +50,7 @@ fn version() {
                 .err()
                 .unwrap()
         ),
-        "InvalidProfile(TokenMetadata { line: 0, chars: 13..18 }, \"smart\")"
+        "InvalidProfile(TokenMetadata { line: 1, chars: 13..14 }, \"smart\")" //TODO: location
     );
 
     assert_eq!(
@@ -60,7 +60,7 @@ fn version() {
                 .err()
                 .unwrap()
         ),
-        "InvalidToken(Unknown((TokenMetadata { line: 1, chars: 11..12 }, \"#\")))"
+        "InvalidToken(Unknown((TokenMetadata { line: 2, chars: 11..12 }, UnexpectedHash)))"
     );
 
     // valid versions

@@ -1,412 +1,248 @@
-use super::parser::Token;
-use super::{preprocess::LinePreProcessor, token::TokenMetadata, types::parse_type};
+use super::{parser::Token, token::TokenMetadata, types::parse_type};
 use crate::FastHashMap;
-use std::{iter::Enumerate, str::Lines};
+use pp_rs::{
+    pp::Preprocessor,
+    token::{Punct, Token as PPToken, TokenValue},
+};
+use std::collections::VecDeque;
 
-fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
-    if input.starts_with(what) {
-        Some(&input[what.len()..])
-    } else {
-        None
-    }
-}
-
-fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str, usize) {
-    let pos = input.find(|c| !what(c)).unwrap_or_else(|| input.len());
-    let (o, i) = input.split_at(pos);
-    (o, i, pos)
-}
-
-#[derive(Clone, Debug)]
 pub struct Lexer<'a> {
-    lines: Enumerate<Lines<'a>>,
-    input: String,
-    line: usize,
-    offset: usize,
-    inside_comment: bool,
-    pp: LinePreProcessor,
+    pp: Preprocessor<'a>,
+    tokens: VecDeque<PPToken>,
 }
 
 impl<'a> Lexer<'a> {
-    pub fn consume_token(&mut self) -> Option<Token> {
-        let start = self
-            .input
-            .find(|c: char| !c.is_whitespace())
-            .unwrap_or_else(|| self.input.chars().count());
-        let input = &self.input[start..];
-
-        let mut chars = input.chars();
-        let cur = match chars.next() {
-            Some(c) => c,
-            None => {
-                self.input = self.input[start..].into();
-                return None;
-            }
-        };
-        let mut meta = TokenMetadata {
-            line: 0,
-            chars: start..start + 1,
-        };
-        let mut consume_all = false;
-        let token = match cur {
-            ':' => Some(Token::Colon(meta)),
-            ';' => Some(Token::Semicolon(meta)),
-            ',' => Some(Token::Comma(meta)),
-            '.' => Some(Token::Dot(meta)),
-
-            '(' => Some(Token::LeftParen(meta)),
-            ')' => Some(Token::RightParen(meta)),
-            '{' => Some(Token::LeftBrace(meta)),
-            '}' => Some(Token::RightBrace(meta)),
-            '[' => Some(Token::LeftBracket(meta)),
-            ']' => Some(Token::RightBracket(meta)),
-            '<' | '>' => {
-                let n1 = chars.next();
-                let n2 = chars.next();
-                match (cur, n1, n2) {
-                    ('<', Some('<'), Some('=')) => {
-                        meta.chars.end = start + 3;
-                        Some(Token::LeftAssign(meta))
-                    }
-                    ('>', Some('>'), Some('=')) => {
-                        meta.chars.end = start + 3;
-                        Some(Token::RightAssign(meta))
-                    }
-                    ('<', Some('<'), _) => {
-                        meta.chars.end = start + 2;
-                        Some(Token::LeftOp(meta))
-                    }
-                    ('>', Some('>'), _) => {
-                        meta.chars.end = start + 2;
-                        Some(Token::RightOp(meta))
-                    }
-                    ('<', Some('='), _) => {
-                        meta.chars.end = start + 2;
-                        Some(Token::LeOp(meta))
-                    }
-                    ('>', Some('='), _) => {
-                        meta.chars.end = start + 2;
-                        Some(Token::GeOp(meta))
-                    }
-                    ('<', _, _) => Some(Token::LeftAngle(meta)),
-                    ('>', _, _) => Some(Token::RightAngle(meta)),
-                    _ => None,
-                }
-            }
-            '0'..='9' => {
-                let next = chars.next().and_then(|c| c.to_lowercase().next());
-
-                let hexadecimal = cur == '0' && next.map_or(false, |c| c == 'x');
-
-                let (number, remainder, pos) = if hexadecimal {
-                    consume_any(&input[2..], |c| {
-                        ('0'..='9').contains(&c)
-                            || ('a'..='f').contains(&c)
-                            || ('A'..='F').contains(&c)
-                    })
-                } else {
-                    consume_any(input, |c| (('0'..='9').contains(&c) || c == '.'))
-                };
-
-                let mut remainder_chars = remainder.chars();
-                let first = remainder_chars.next().and_then(|c| c.to_lowercase().next());
-
-                if number.find('.').is_some() {
-                    let second = remainder_chars.next().and_then(|c| c.to_lowercase().next());
-
-                    if (first, second) == (Some('l'), Some('f')) {
-                        meta.chars.end = start + pos + 2;
-                        Some(Token::DoubleConstant((meta, number.parse().unwrap())))
-                    } else {
-                        meta.chars.end = start + pos;
-                        Some(Token::FloatConstant((meta, number.parse().unwrap())))
-                    }
-                } else if first == Some('u') {
-                    if hexadecimal {
-                        meta.chars.end = start + pos + 3;
-                        Some(Token::UintConstant((
-                            meta,
-                            u64::from_str_radix(number, 16).unwrap(),
-                        )))
-                    } else {
-                        meta.chars.end = start + pos + 1;
-                        Some(Token::UintConstant((meta, number.parse().unwrap())))
-                    }
-                } else if hexadecimal {
-                    meta.chars.end = start + pos + 2;
-                    Some(Token::IntConstant((
-                        meta,
-                        i64::from_str_radix(number, 16).unwrap(),
-                    )))
-                } else {
-                    meta.chars.end = start + pos;
-                    Some(Token::IntConstant((meta, number.parse().unwrap())))
-                }
-            }
-            'a'..='z' | 'A'..='Z' | '_' => {
-                let (word, _, pos) = consume_any(input, |c| c.is_ascii_alphanumeric() || c == '_');
-                meta.chars.end = start + pos;
-                match word {
-                    "layout" => Some(Token::Layout(meta)),
-                    "in" => Some(Token::In(meta)),
-                    "out" => Some(Token::Out(meta)),
-                    "uniform" => Some(Token::Uniform(meta)),
-                    "flat" => Some(Token::Interpolation((meta, crate::Interpolation::Flat))),
-                    "noperspective" => {
-                        Some(Token::Interpolation((meta, crate::Interpolation::Linear)))
-                    }
-                    "smooth" => Some(Token::Interpolation((
-                        meta,
-                        crate::Interpolation::Perspective,
-                    ))),
-                    "centroid" => {
-                        Some(Token::Interpolation((meta, crate::Interpolation::Centroid)))
-                    }
-                    "sample" => Some(Token::Interpolation((meta, crate::Interpolation::Sample))),
-                    // values
-                    "true" => Some(Token::BoolConstant((meta, true))),
-                    "false" => Some(Token::BoolConstant((meta, false))),
-                    // jump statements
-                    "continue" => Some(Token::Continue(meta)),
-                    "break" => Some(Token::Break(meta)),
-                    "return" => Some(Token::Return(meta)),
-                    "discard" => Some(Token::Discard(meta)),
-                    // selection statements
-                    "if" => Some(Token::If(meta)),
-                    "else" => Some(Token::Else(meta)),
-                    "switch" => Some(Token::Switch(meta)),
-                    "case" => Some(Token::Case(meta)),
-                    "default" => Some(Token::Default(meta)),
-                    // iteration statements
-                    "while" => Some(Token::While(meta)),
-                    "do" => Some(Token::Do(meta)),
-                    "for" => Some(Token::For(meta)),
-                    // types
-                    "void" => Some(Token::Void(meta)),
-                    "const" => Some(Token::Const(meta)),
-                    word => {
-                        let token = match parse_type(word) {
-                            Some(t) => Token::TypeName((meta, t)),
-                            None => Token::Identifier((meta, String::from(word))),
-                        };
-                        Some(token)
-                    }
-                }
-            }
-            '+' | '-' | '&' | '|' | '^' => {
-                let next = chars.next();
-                if next == Some(cur) {
-                    meta.chars.end = start + 2;
-                    match cur {
-                        '+' => Some(Token::IncOp(meta)),
-                        '-' => Some(Token::DecOp(meta)),
-                        '&' => Some(Token::AndOp(meta)),
-                        '|' => Some(Token::OrOp(meta)),
-                        '^' => Some(Token::XorOp(meta)),
-                        _ => None,
-                    }
-                } else {
-                    match next {
-                        Some('=') => {
-                            meta.chars.end = start + 2;
-                            match cur {
-                                '+' => Some(Token::AddAssign(meta)),
-                                '-' => Some(Token::SubAssign(meta)),
-                                '&' => Some(Token::AndAssign(meta)),
-                                '|' => Some(Token::OrAssign(meta)),
-                                '^' => Some(Token::XorAssign(meta)),
-                                _ => None,
-                            }
-                        }
-                        _ => match cur {
-                            '+' => Some(Token::Plus(meta)),
-                            '-' => Some(Token::Dash(meta)),
-                            '&' => Some(Token::Ampersand(meta)),
-                            '|' => Some(Token::VerticalBar(meta)),
-                            '^' => Some(Token::Caret(meta)),
-                            _ => None,
-                        },
-                    }
-                }
-            }
-
-            '%' | '!' | '=' => match chars.next() {
-                Some('=') => {
-                    meta.chars.end = start + 2;
-                    match cur {
-                        '%' => Some(Token::ModAssign(meta)),
-                        '!' => Some(Token::NeOp(meta)),
-                        '=' => Some(Token::EqOp(meta)),
-                        _ => None,
-                    }
-                }
-                _ => match cur {
-                    '%' => Some(Token::Percent(meta)),
-                    '!' => Some(Token::Bang(meta)),
-                    '=' => Some(Token::Equal(meta)),
-                    _ => None,
-                },
-            },
-
-            '*' => match chars.next() {
-                Some('=') => {
-                    meta.chars.end = start + 2;
-                    Some(Token::MulAssign(meta))
-                }
-                Some('/') => {
-                    meta.chars.end = start + 2;
-                    Some(Token::CommentEnd((meta, ())))
-                }
-                _ => Some(Token::Star(meta)),
-            },
-            '/' => {
-                match chars.next() {
-                    Some('=') => {
-                        meta.chars.end = start + 2;
-                        Some(Token::DivAssign(meta))
-                    }
-                    Some('/') => {
-                        // consume rest of line
-                        consume_all = true;
-                        None
-                    }
-                    Some('*') => {
-                        meta.chars.end = start + 2;
-                        Some(Token::CommentStart((meta, ())))
-                    }
-                    _ => Some(Token::Slash(meta)),
-                }
-            }
-            '#' => {
-                if self.offset == 0 {
-                    let mut input = chars.as_str();
-
-                    // skip whitespace
-                    let word_start = input
-                        .find(|c: char| !c.is_whitespace())
-                        .unwrap_or_else(|| input.chars().count());
-                    input = &input[word_start..];
-
-                    let (word, _, pos) = consume_any(input, |c| c.is_alphanumeric() || c == '_');
-                    meta.chars.end = start + word_start + 1 + pos;
-                    match word {
-                        "version" => Some(Token::Version(meta)),
-                        w => Some(Token::Unknown((meta, w.into()))),
-                    }
-
-                //TODO: preprocessor
-                // if chars.next() == Some(cur) {
-                //     (Token::TokenPasting, chars.as_str(), start, start + 2)
-                // } else {
-                //     (Token::Preprocessor, input, start, start + 1)
-                // }
-                } else {
-                    Some(Token::Unknown((meta, '#'.to_string())))
-                }
-            }
-            '~' => Some(Token::Tilde(meta)),
-            '?' => Some(Token::Question(meta)),
-            ch => Some(Token::Unknown((meta, ch.to_string()))),
-        };
-        if let Some(token) = token {
-            let skip_bytes = input
-                .chars()
-                .take(token.extra().chars.end - start)
-                .fold(0, |acc, c| acc + c.len_utf8());
-            self.input = input[skip_bytes..].into();
-            Some(token)
-        } else {
-            if consume_all {
-                self.input = "".into();
-            } else {
-                self.input = self.input[start..].into();
-            }
-            None
+    pub fn new(input: &'a str, defines: &'a FastHashMap<String, String>) -> Self {
+        let mut pp = Preprocessor::new(input);
+        for (define, value) in defines {
+            pp.add_define(define, value).unwrap(); //TODO: handle error
+        }
+        Lexer {
+            pp,
+            tokens: Default::default(),
         }
     }
-
-    pub fn new(input: &'a str, defines: &FastHashMap<String, String>) -> Self {
-        let mut lexer = Lexer {
-            lines: input.lines().enumerate(),
-            input: "".to_string(),
-            line: 0,
-            offset: 0,
-            inside_comment: false,
-            pp: LinePreProcessor::new(defines),
-        };
-        lexer.next_line();
-        lexer
-    }
-
-    fn next_line(&mut self) -> bool {
-        if let Some((line, input)) = self.lines.next() {
-            let mut input = String::from(input);
-
-            while input.ends_with('\\') {
-                if let Some((_, next)) = self.lines.next() {
-                    input.pop();
-                    input.push_str(next);
-                } else {
-                    break;
-                }
-            }
-
-            if let Ok(processed) = self.pp.process_line(&input) {
-                self.input = processed.unwrap_or_default();
-                self.line = line;
-                self.offset = 0;
-                true
-            } else {
-                //TODO: handle preprocessor error
-                false
-            }
-        } else {
-            false
-        }
-    }
-
-    #[must_use]
-    pub fn next(&mut self) -> Option<Token> {
-        let token = self.consume_token();
-
-        if let Some(mut token) = token {
-            let meta = token.extra_mut();
-            let end = meta.chars.end;
-            meta.line = self.line;
-            meta.chars.start += self.offset;
-            meta.chars.end += self.offset;
-            self.offset += end;
-            if !self.inside_comment {
-                match token {
-                    Token::CommentStart(_) => {
-                        self.inside_comment = true;
-                        self.next()
-                    }
-                    _ => Some(token),
-                }
-            } else {
-                if let Token::CommentEnd(_) = token {
-                    self.inside_comment = false;
-                }
-                self.next()
-            }
-        } else {
-            if !self.next_line() {
-                return None;
-            }
-            self.next()
-        }
-    }
-
-    // #[must_use]
-    // pub fn peek(&mut self) -> Option<Token> {
-    //     self.clone().next()
-    // }
 }
 
 impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
-        self.next()
+        let mut meta = TokenMetadata {
+            line: 0,
+            chars: 0..0,
+        };
+        let pp_token = match self.tokens.pop_front() {
+            Some(t) => t,
+            None => match self.pp.next()? {
+                Ok(t) => t,
+                Err((err, loc)) => {
+                    meta.line = loc.line as usize;
+                    meta.chars.start = loc.pos as usize;
+                    //TODO: proper location end
+                    meta.chars.end = loc.pos as usize + 1;
+                    return Some(Token::Unknown((meta, err)));
+                }
+            },
+        };
+
+        meta.line = pp_token.location.line as usize;
+        meta.chars.start = pp_token.location.pos as usize;
+        //TODO: proper location end
+        meta.chars.end = pp_token.location.pos as usize + 1;
+        Some(match pp_token.value {
+            TokenValue::Extension(extension) => {
+                for t in extension.tokens {
+                    self.tokens.push_back(t);
+                }
+                Token::Extension((meta, ()))
+            }
+            TokenValue::Float(float) => Token::FloatConstant((meta, float.value)),
+            TokenValue::Ident(ident) => {
+                match ident.as_str() {
+                    "layout" => Token::Layout(meta),
+                    "in" => Token::In(meta),
+                    "out" => Token::Out(meta),
+                    "uniform" => Token::Uniform(meta),
+                    "flat" => Token::Interpolation((meta, crate::Interpolation::Flat)),
+                    "noperspective" => Token::Interpolation((meta, crate::Interpolation::Linear)),
+                    "smooth" => Token::Interpolation((meta, crate::Interpolation::Perspective)),
+                    "centroid" => Token::Interpolation((meta, crate::Interpolation::Centroid)),
+                    "sample" => Token::Interpolation((meta, crate::Interpolation::Sample)),
+                    // values
+                    "true" => Token::BoolConstant((meta, true)),
+                    "false" => Token::BoolConstant((meta, false)),
+                    // jump statements
+                    "continue" => Token::Continue(meta),
+                    "break" => Token::Break(meta),
+                    "return" => Token::Return(meta),
+                    "discard" => Token::Discard(meta),
+                    // selection statements
+                    "if" => Token::If(meta),
+                    "else" => Token::Else(meta),
+                    "switch" => Token::Switch(meta),
+                    "case" => Token::Case(meta),
+                    "default" => Token::Default(meta),
+                    // iteration statements
+                    "while" => Token::While(meta),
+                    "do" => Token::Do(meta),
+                    "for" => Token::For(meta),
+                    // types
+                    "void" => Token::Void(meta),
+                    "const" => Token::Const(meta),
+
+                    word => match parse_type(word) {
+                        Some(t) => Token::TypeName((meta, t)),
+                        None => Token::Identifier((meta, String::from(word))),
+                    },
+                }
+            }
+            //TODO: unsigned etc
+            TokenValue::Integer(integer) => Token::IntConstant((meta, integer.value as i64)),
+            TokenValue::Punct(punct) => match punct {
+                // Compound assignments
+                Punct::AddAssign => Token::AddAssign(meta),
+                Punct::SubAssign => Token::SubAssign(meta),
+                Punct::MulAssign => Token::MulAssign(meta),
+                Punct::DivAssign => Token::DivAssign(meta),
+                Punct::ModAssign => Token::ModAssign(meta),
+                Punct::LeftShiftAssign => Token::LeftAssign(meta),
+                Punct::RightShiftAssign => Token::RightAssign(meta),
+                Punct::AndAssign => Token::AndAssign(meta),
+                Punct::XorAssign => Token::XorAssign(meta),
+                Punct::OrAssign => Token::OrAssign(meta),
+
+                // Two character punctuation
+                Punct::Increment => Token::IncOp(meta),
+                Punct::Decrement => Token::DecOp(meta),
+                Punct::LogicalAnd => Token::AndOp(meta),
+                Punct::LogicalOr => Token::OrOp(meta),
+                Punct::LogicalXor => Token::XorOp(meta),
+                Punct::LessEqual => Token::LeOp(meta),
+                Punct::GreaterEqual => Token::GeOp(meta),
+                Punct::EqualEqual => Token::EqOp(meta),
+                Punct::NotEqual => Token::NeOp(meta),
+                Punct::LeftShift => Token::LeftOp(meta),
+                Punct::RightShift => Token::RightOp(meta),
+
+                // Parenthesis or similar
+                Punct::LeftBrace => Token::LeftBrace(meta),
+                Punct::RightBrace => Token::RightBrace(meta),
+                Punct::LeftParen => Token::LeftParen(meta),
+                Punct::RightParen => Token::RightParen(meta),
+                Punct::LeftBracket => Token::LeftBracket(meta),
+                Punct::RightBracket => Token::RightBracket(meta),
+
+                // Other one character punctuation
+                Punct::LeftAngle => Token::LeftAngle(meta),
+                Punct::RightAngle => Token::RightAngle(meta),
+                Punct::Semicolon => Token::Semicolon(meta),
+                Punct::Comma => Token::Comma(meta),
+                Punct::Colon => Token::Colon(meta),
+                Punct::Dot => Token::Dot(meta),
+                Punct::Equal => Token::Equal(meta),
+                Punct::Bang => Token::Bang(meta),
+                Punct::Minus => Token::Dash(meta),
+                Punct::Tilde => Token::Tilde(meta),
+                Punct::Plus => Token::Plus(meta),
+                Punct::Star => Token::Star(meta),
+                Punct::Slash => Token::Slash(meta),
+                Punct::Percent => Token::Percent(meta),
+                Punct::Pipe => Token::VerticalBar(meta),
+                Punct::Caret => Token::Caret(meta),
+                Punct::Ampersand => Token::Ampersand(meta),
+                Punct::Question => Token::Question(meta),
+            },
+            TokenValue::Pragma(pragma) => {
+                for t in pragma.tokens {
+                    self.tokens.push_back(t);
+                }
+                Token::Pragma((meta, ()))
+            }
+            TokenValue::Version(version) => {
+                for t in version.tokens {
+                    self.tokens.push_back(t);
+                }
+                Token::Version(meta)
+            }
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        super::{parser::Token::*, token::TokenMetadata},
+        Lexer,
+    };
+
+    #[test]
+    fn lex_tokens() {
+        let defines = crate::FastHashMap::default();
+
+        // line comments
+        let mut lex = Lexer::new("#version 450\nvoid main () {}", &defines);
+        assert_eq!(
+            lex.next().unwrap(),
+            Version(TokenMetadata {
+                line: 1,
+                chars: 1..2 //TODO
+            })
+        );
+        assert_eq!(
+            lex.next().unwrap(),
+            IntConstant((
+                TokenMetadata {
+                    line: 1,
+                    chars: 9..10 //TODO
+                },
+                450
+            ))
+        );
+        assert_eq!(
+            lex.next().unwrap(),
+            Void(TokenMetadata {
+                line: 2,
+                chars: 0..1 //TODO
+            })
+        );
+        assert_eq!(
+            lex.next().unwrap(),
+            Identifier((
+                TokenMetadata {
+                    line: 2,
+                    chars: 5..6 //TODO
+                },
+                "main".into()
+            ))
+        );
+        assert_eq!(
+            lex.next().unwrap(),
+            LeftParen(TokenMetadata {
+                line: 2,
+                chars: 10..11 //TODO
+            })
+        );
+        assert_eq!(
+            lex.next().unwrap(),
+            RightParen(TokenMetadata {
+                line: 2,
+                chars: 11..12 //TODO
+            })
+        );
+        assert_eq!(
+            lex.next().unwrap(),
+            LeftBrace(TokenMetadata {
+                line: 2,
+                chars: 13..14 //TODO
+            })
+        );
+        assert_eq!(
+            lex.next().unwrap(),
+            RightBrace(TokenMetadata {
+                line: 2,
+                chars: 14..15 //TODO
+            })
+        );
+        assert_eq!(lex.next(), None);
     }
 }

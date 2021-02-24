@@ -12,6 +12,7 @@ pomelo! {
             Statement, StorageAccess, StorageClass, StructMember,
             SwitchCase, Type, TypeInner, UnaryOperator, FunctionArgument
         };
+        use pp_rs::token::PreprocessorError;
     }
     %token #[derive(Debug)] #[cfg_attr(test, derive(PartialEq))] pub enum Token {};
     %parser pub struct Parser<'a, 'b> {};
@@ -31,9 +32,9 @@ pomelo! {
         ErrorKind::ParserStackOverflow
     }
 
-    %type Unknown String;
-    %type CommentStart ();
-    %type CommentEnd ();
+    %type Unknown PreprocessorError;
+    %type Pragma ();
+    %type Extension ();
 
     %type Identifier String;
     // constants
