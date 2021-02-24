@@ -187,6 +187,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     format_features: wgt::TextureFormatFeatures {
                         allowed_usages: wgt::TextureUsage::RENDER_ATTACHMENT,
                         flags: wgt::TextureFormatFeatureFlags::empty(),
+                        filterable: false,
                     },
                     dimension: wgt::TextureViewDimension::D2,
                     extent: wgt::Extent3d {

@@ -937,6 +937,9 @@ pub struct TextureFormatFeatures {
     pub allowed_usages: TextureUsage,
     /// Additional property flags for the format.
     pub flags: TextureFormatFeatureFlags,
+    /// If `filterable` is false, the texture can't be sampled with a filtering sampler.
+    /// This may overwrite TextureSampleType::Float.filterable
+    pub filterable: bool,
 }
 
 /// Information about a texture format.
@@ -1492,6 +1495,7 @@ impl TextureFormat {
             guaranteed_format_features: TextureFormatFeatures {
                 allowed_usages,
                 flags: TextureFormatFeatureFlags::empty(),
+                filterable: sample_type == TextureSampleType::Float { filterable: true },
             },
         }
     }
