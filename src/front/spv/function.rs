@@ -142,14 +142,26 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         flow_graph.classify();
         flow_graph.remove_phi_instructions(&self.lookup_expression);
+
+        if let Some(ref prefix) = self.options.flow_graph_dump_prefix {
+            let dump = flow_graph.to_graphviz().unwrap_or_default();
+            let dump_suffix = match self.lookup_entry_point.get(&fun_id) {
+                Some(ep) => format!("flow.{:?}-{}.dot", ep.stage, ep.name),
+                None => format!("flow.Fun-{}.dot", module.functions.len()),
+            };
+            let dest = prefix.join(dump_suffix);
+            if let Err(e) = std::fs::write(&dest, dump) {
+                log::error!("Unable to dump the flow graph into {:?}: {}", dest, e);
+            }
+        }
+
         fun.body = flow_graph.to_naga()?;
 
         // done
         self.patch_function_calls(&mut fun)?;
 
-        let dump_suffix = match self.lookup_entry_point.remove(&fun_id) {
+        match self.lookup_entry_point.remove(&fun_id) {
             Some(ep) => {
-                let dump_name = format!("flow.{:?}-{}.dot", ep.stage, ep.name);
                 module.entry_points.insert(
                     (ep.stage, ep.name),
                     crate::EntryPoint {
@@ -158,19 +170,12 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         function: fun,
                     },
                 );
-                dump_name
             }
             None => {
                 let handle = module.functions.append(fun);
                 self.lookup_function.insert(fun_id, handle);
-                format!("flow.Fun-{}.dot", handle.index())
             }
         };
-
-        if let Some(ref prefix) = self.options.flow_graph_dump_prefix {
-            let dump = flow_graph.to_graphviz().unwrap_or_default();
-            let _ = std::fs::write(prefix.join(dump_suffix), dump);
-        }
 
         self.lookup_expression.clear();
         self.lookup_sampled_image.clear();

@@ -76,9 +76,10 @@ fn main() {
     }
 
     let param_path = std::path::PathBuf::from(&args[1]).with_extension("param.ron");
-    let params = match fs::read_to_string(param_path) {
+    let params = match fs::read_to_string(&param_path) {
         Ok(string) => ron::de::from_str(&string).unwrap_pretty(),
         Err(_) => {
+            log::warn!("Param file {:?} not found, using defaults", param_path);
             let mut param = Parameters::default();
             // very useful to have this by default
             param.spv_capabilities.insert(spirv::Capability::Shader);
