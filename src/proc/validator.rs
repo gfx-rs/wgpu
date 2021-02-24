@@ -474,6 +474,18 @@ impl Validator {
                                     },
                                 ..
                             }) => {}
+                            // Accept a signed integer size to avoid
+                            // requiring an explicit uint
+                            // literal. Type inference should make
+                            // this unnecessary.
+                            Some(&crate::Constant {
+                                inner:
+                                    crate::ConstantInner::Scalar {
+                                        width: _,
+                                        value: crate::ScalarValue::Sint(_),
+                                    },
+                                ..
+                            }) => {}
                             other => {
                                 log::warn!("Array size {:?}", other);
                                 return Err(TypeError::InvalidArraySizeConstant(const_handle));

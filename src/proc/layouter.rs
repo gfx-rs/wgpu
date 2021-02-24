@@ -73,6 +73,14 @@ impl Layouter {
                                 width: _,
                                 value: crate::ScalarValue::Uint(value),
                             } => value as u32,
+                            // Accept a signed integer size to avoid
+                            // requiring an explicit uint
+                            // literal. Type inference should make
+                            // this unnecessary.
+                            crate::ConstantInner::Scalar {
+                                width: _,
+                                value: crate::ScalarValue::Sint(value),
+                            } => value as u32,
                             ref other => unreachable!("Unexpected array size {:?}", other),
                         },
                         crate::ArraySize::Dynamic => 1,
