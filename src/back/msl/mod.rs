@@ -106,7 +106,7 @@ impl Default for Options {
             lang_version: (1, 0),
             binding_map: BindingMap::default(),
             spirv_cross_compatibility: false,
-            fake_missing_bindings: false,
+            fake_missing_bindings: true,
         }
     }
 }

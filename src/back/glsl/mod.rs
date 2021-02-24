@@ -135,6 +135,16 @@ pub struct Options {
     pub entry_point: String,
 }
 
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            version: Version::Embedded(320),
+            shader_stage: ShaderStage::Compute,
+            entry_point: "main".to_string(),
+        }
+    }
+}
+
 /// Structure that connects a texture to a sampler or not
 ///
 /// glsl pre vulkan has no concept of separate textures and samplers instead everything is a

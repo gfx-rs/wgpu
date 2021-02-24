@@ -31,6 +31,15 @@ DXBC            |                    |       |
 
 :white_check_mark: = Primary support — :ok: = Secondary support — :construction: = Unsupported, but support in progress
 
+## Conversion tool
+
+Naga includes a default binary target "convert", which allows to test the conversion of different code paths.
+```bash
+cargo run --features spv-in -- my_shader.spv # dump the IR module to debug output
+cargo run --features spv-in,msl-out -- my_shader.spv my_shader.metal --flow-dir flow-dir # convert the SPV to Metal, also dump the SPIR-V flow graph to `flow-dir`
+cargo run --features wgsl-in,glsl-out -- my_shader.wgsl my_shader.vert --profile es310 # convert the WGSL to GLSL vertex stage under ES 3.20 profile
+```
+
 ## Development workflow
 
 The main instrument aiding the development is the good old `cargo test --all-features`,

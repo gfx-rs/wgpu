@@ -57,10 +57,16 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
+        let mut flags = WriterFlags::empty();
+        if cfg!(debug_assertions) {
+            flags |= WriterFlags::DEBUG;
+        }
+        let mut capabilities = crate::FastHashSet::default();
+        capabilities.insert(Capability::Shader);
         Options {
             lang_version: (1, 0),
-            flags: WriterFlags::empty(),
-            capabilities: Default::default(),
+            flags,
+            capabilities,
         }
     }
 }
