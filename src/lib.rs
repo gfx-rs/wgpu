@@ -1682,12 +1682,40 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
         Bound::Unbounded => 0,
     };
     let size = match bounds.end_bound() {
-        Bound::Included(&bound) => BufferSize::new(bound + 1 - offset),
-        Bound::Excluded(&bound) => BufferSize::new(bound - offset),
+        Bound::Included(&bound) => Some(bound + 1 - offset),
+        Bound::Excluded(&bound) => Some(bound - offset),
         Bound::Unbounded => None,
-    };
+    }
+    .map(|size| BufferSize::new(size).expect("Buffer slices can not be empty"));
 
     (offset, size)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::BufferSize;
+
+    #[test]
+    fn range_to_offset_size_works() {
+        assert_eq!(crate::range_to_offset_size(0..2), (0, BufferSize::new(2)));
+        assert_eq!(crate::range_to_offset_size(2..5), (2, BufferSize::new(3)));
+        assert_eq!(crate::range_to_offset_size(..), (0, None));
+        assert_eq!(crate::range_to_offset_size(21..), (21, None));
+        assert_eq!(crate::range_to_offset_size(0..), (0, None));
+        assert_eq!(crate::range_to_offset_size(..21), (0, BufferSize::new(21)));
+    }
+
+    #[test]
+    #[should_panic]
+    fn range_to_offset_size_panics_for_empty_range() {
+        crate::range_to_offset_size(123..123);
+    }
+
+    #[test]
+    #[should_panic]
+    fn range_to_offset_size_panics_for_unbounded_empty_range() {
+        crate::range_to_offset_size(..0);
+    }
 }
 
 trait BufferMappedRangeSlice {
