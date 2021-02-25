@@ -249,7 +249,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         }
     }
 
-    pub fn track_submission(
+    pub(super) fn track_submission(
         &mut self,
         index: SubmissionIndex,
         fence: B::Fence,
@@ -356,7 +356,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         }
     }
 
-    pub fn schedule_resource_destruction(
+    pub(super) fn schedule_resource_destruction(
         &mut self,
         temp_resource: TempResource<B>,
         memory: alloc::MemoryBlock<B>,

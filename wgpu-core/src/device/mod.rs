@@ -42,7 +42,7 @@ use std::{
 pub mod alloc;
 pub mod descriptor;
 mod life;
-mod queue;
+pub mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 
