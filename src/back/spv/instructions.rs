@@ -552,6 +552,20 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn image_fetch(
+        result_type_id: Word,
+        id: Word,
+        image: Word,
+        coordinates: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::ImageFetch);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(image);
+        instruction.add_operand(coordinates);
+        instruction
+    }
+
     pub(super) fn image_read(
         result_type_id: Word,
         id: Word,

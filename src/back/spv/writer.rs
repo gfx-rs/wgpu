@@ -1601,19 +1601,26 @@ impl Writer {
                 )?;
 
                 let id = self.generate_id();
-                let mut instruction =
-                    Instruction::image_read(result_type_id, id, image_id, coordinate_id);
+
+                let image_ty = self.typifier.get(image, &ir_module.types);
+                let mut instruction = match *image_ty {
+                    crate::TypeInner::Image {
+                        class: crate::ImageClass::Storage { .. },
+                        ..
+                    } => Instruction::image_read(result_type_id, id, image_id, coordinate_id),
+                    _ => Instruction::image_fetch(result_type_id, id, image_id, coordinate_id),
+                };
 
                 if let Some(index) = index {
-                    let index_id =
-                        self.write_expression(ir_module, ir_function, index, block, function)?;
-                    let image_ops = match *self.typifier.get(image, &ir_module.types) {
+                    let image_ops = match *image_ty {
                         crate::TypeInner::Image {
                             class: crate::ImageClass::Sampled { multi: true, .. },
                             ..
                         } => spirv::ImageOperands::SAMPLE,
                         _ => spirv::ImageOperands::LOD,
                     };
+                    let index_id =
+                        self.write_expression(ir_module, ir_function, index, block, function)?;
                     instruction.add_operand(image_ops.bits());
                     instruction.add_operand(index_id);
                 }
