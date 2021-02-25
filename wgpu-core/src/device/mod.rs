@@ -42,7 +42,7 @@ use std::{
 pub mod alloc;
 pub mod descriptor;
 mod life;
-mod queue;
+pub mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 
@@ -3549,14 +3549,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
 
-            let mut raw = device.cmd_allocator.extend(&command_buffer);
+            let mut raw = command_buffer.raw.first_mut().unwrap();
             unsafe {
                 if let Some(ref label) = desc.label {
                     device.raw.set_command_buffer_name(&mut raw, label);
                 }
                 raw.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
             }
-            command_buffer.raw.push(raw);
 
             let id = hub
                 .command_buffers

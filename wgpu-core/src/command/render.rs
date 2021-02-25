@@ -336,7 +336,7 @@ struct State {
 }
 
 impl State {
-    fn is_ready(&self) -> Result<(), DrawError> {
+    fn is_ready(&self, indexed: bool) -> Result<(), DrawError> {
         // Determine how many vertex buffers have already been bound
         let bound_buffers = self.vertex.inputs.iter().take_while(|v| v.bound).count() as u32;
         // Compare with the needed quantity
@@ -359,17 +359,19 @@ impl State {
         if self.blend_color == OptionalState::Required {
             return Err(DrawError::MissingBlendColor);
         }
-        // Pipeline expects an index buffer
-        if let Some(pipeline_index_format) = self.index.pipeline_format {
-            // We have a buffer bound
-            let buffer_index_format = self.index.format.ok_or(DrawError::MissingIndexBuffer)?;
+        if indexed {
+            // Pipeline expects an index buffer
+            if let Some(pipeline_index_format) = self.index.pipeline_format {
+                // We have a buffer bound
+                let buffer_index_format = self.index.format.ok_or(DrawError::MissingIndexBuffer)?;
 
-            // The buffers are different formats
-            if pipeline_index_format != buffer_index_format {
-                return Err(DrawError::UnmatchedIndexFormats {
-                    pipeline: pipeline_index_format,
-                    buffer: buffer_index_format,
-                });
+                // The buffers are different formats
+                if pipeline_index_format != buffer_index_format {
+                    return Err(DrawError::UnmatchedIndexFormats {
+                        pipeline: pipeline_index_format,
+                        buffer: buffer_index_format,
+                    });
+                }
             }
         }
         Ok(())
@@ -1458,12 +1460,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         first_vertex,
                         first_instance,
                     } => {
+                        let indexed = false;
                         let scope = PassErrorScope::Draw {
-                            indexed: false,
+                            indexed,
                             indirect: false,
                             pipeline: state.pipeline.last_state,
                         };
-                        state.is_ready().map_pass_err(scope)?;
+                        state.is_ready(indexed).map_pass_err(scope)?;
+
                         let last_vertex = first_vertex + vertex_count;
                         let vertex_limit = state.vertex.vertex_limit;
                         if last_vertex > vertex_limit {
@@ -1499,12 +1503,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         base_vertex,
                         first_instance,
                     } => {
+                        let indexed = true;
                         let scope = PassErrorScope::Draw {
-                            indexed: true,
+                            indexed,
                             indirect: false,
                             pipeline: state.pipeline.last_state,
                         };
-                        state.is_ready().map_pass_err(scope)?;
+                        state.is_ready(indexed).map_pass_err(scope)?;
 
                         //TODO: validate that base_vertex + max_index() is within the provided range
                         let last_index = first_index + index_count;
@@ -1546,7 +1551,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             indirect: true,
                             pipeline: state.pipeline.last_state,
                         };
-                        state.is_ready().map_pass_err(scope)?;
+                        state.is_ready(indexed).map_pass_err(scope)?;
 
                         let stride = match indexed {
                             false => mem::size_of::<wgt::DrawIndirectArgs>(),
@@ -1620,7 +1625,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             indirect: true,
                             pipeline: state.pipeline.last_state,
                         };
-                        state.is_ready().map_pass_err(scope)?;
+                        state.is_ready(indexed).map_pass_err(scope)?;
 
                         let stride = match indexed {
                             false => mem::size_of::<wgt::DrawIndirectArgs>(),

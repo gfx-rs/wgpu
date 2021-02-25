@@ -1,5 +1,10 @@
 # Change Log
 
+## v0.7.1 (2021-02-25)
+  - expose `wgc::device::queue` sub-module in public
+  - fix the indexed buffer check
+  - fix command allocator race condition
+
 ## v0.7 (2021-01-31)
   - Major API changes:
     - `RenderPipelineDescriptor`

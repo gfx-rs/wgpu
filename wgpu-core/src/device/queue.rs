@@ -29,13 +29,13 @@ struct StagingData<B: hal::Backend> {
 }
 
 #[derive(Debug)]
-pub enum TempResource<B: hal::Backend> {
+pub(super) enum TempResource<B: hal::Backend> {
     Buffer(B::Buffer),
     Image(B::Image),
 }
 
 #[derive(Debug)]
-pub(crate) struct PendingWrites<B: hal::Backend> {
+pub(super) struct PendingWrites<B: hal::Backend> {
     pub command_buffer: Option<B::CommandBuffer>,
     pub temp_resources: Vec<(TempResource<B>, alloc::MemoryBlock<B>)>,
     pub dst_buffers: FastHashSet<id::BufferId>,
