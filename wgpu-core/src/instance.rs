@@ -557,8 +557,8 @@ impl<I: Clone> AdapterInputs<'_, I> {
     }
 }
 
-#[error("adapter is invalid")]
 #[derive(Clone, Debug, Error)]
+#[error("adapter is invalid")]
 pub struct InvalidAdapter;
 
 #[derive(Clone, Debug, Error)]
