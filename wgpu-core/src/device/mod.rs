@@ -2507,8 +2507,8 @@ impl<B: hal::Backend> crate::hub::Resource for Device<B> {
     }
 }
 
-#[error("device is invalid")]
 #[derive(Clone, Debug, Error)]
+#[error("device is invalid")]
 pub struct InvalidDevice;
 
 #[derive(Clone, Debug, Error)]

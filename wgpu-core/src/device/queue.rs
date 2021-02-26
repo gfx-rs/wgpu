@@ -148,8 +148,8 @@ impl<B: hal::Backend> super::Device<B> {
     }
 }
 
-#[error("queue is invalid")]
 #[derive(Clone, Debug, Error)]
+#[error("queue is invalid")]
 pub struct InvalidQueue;
 
 #[derive(Clone, Debug, Error)]
