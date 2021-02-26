@@ -1466,8 +1466,28 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect_at_least(3)?;
 
                     let selector = self.next()?;
-                    let selector = self.lookup_expression[&selector].handle;
                     let default = self.next()?;
+
+                    let selector_lexp = &self.lookup_expression[&selector];
+                    let selector_lty = self.lookup_type.lookup(selector_lexp.type_id)?;
+                    let selector = match type_arena[selector_lty.handle].inner {
+                        crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Uint,
+                            width: _,
+                        } => {
+                            // IR expects a signed integer, so do a bitcast
+                            expressions.append(crate::Expression::As {
+                                kind: crate::ScalarKind::Sint,
+                                expr: selector_lexp.handle,
+                                convert: false,
+                            })
+                        }
+                        crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Sint,
+                            width: _,
+                        } => selector_lexp.handle,
+                        ref other => unimplemented!("Unexpected selector {:?}", other),
+                    };
 
                     let mut targets = Vec::new();
                     for _ in 0..(inst.wc - 3) / 2 {

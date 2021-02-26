@@ -1555,10 +1555,6 @@ impl Writer {
                 kind,
                 convert,
             } => {
-                if !convert {
-                    return Err(Error::FeatureNotImplemented("bitcast"));
-                }
-
                 let expr_id =
                     self.write_expression(ir_module, ir_function, expr, block, function)?;
                 let expr_kind = self
