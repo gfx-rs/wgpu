@@ -251,12 +251,21 @@ impl FlowGraph {
                             reject: self.naga_traverse(false_node_index, Some(merge_node_index))?,
                         });
                     } else {
+                        let true_merges_to_false = has_path_connecting(
+                            &self.flow,
+                            true_node_index,
+                            false_node_index,
+                            None,
+                        );
+                        let stop_node_index = if true_merges_to_false {
+                            Some(merge_node_index)
+                        } else {
+                            stop_node_index
+                        };
+
                         result.push(crate::Statement::If {
                             condition,
-                            accept: self.naga_traverse(
-                                self.block_to_node[&true_id],
-                                Some(merge_node_index),
-                            )?,
+                            accept: self.naga_traverse(true_node_index, stop_node_index)?,
                             reject: vec![],
                         });
                     }
