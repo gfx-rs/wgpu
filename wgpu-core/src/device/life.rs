@@ -698,6 +698,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     resource::BufferMapState::Idle,
                 ) {
                     resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
+                    // Mapping cancelled
+                    resource::BufferMapState::Idle => continue,
                     _ => panic!("No pending mapping."),
                 };
                 let status = if mapping.range.start != mapping.range.end {

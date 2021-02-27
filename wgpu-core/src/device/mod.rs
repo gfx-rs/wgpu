@@ -4560,10 +4560,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    pub fn buffer_unmap<B: GfxBackend>(
+    fn buffer_unmap_inner<B: GfxBackend>(
         &self,
         buffer_id: id::BufferId,
-    ) -> Result<(), resource::BufferAccessError> {
+    ) -> Result<Option<BufferMapPendingCallback>, resource::BufferAccessError> {
         span!(_guard, INFO, "Device::buffer_unmap");
 
         let hub = B::hub(self);
@@ -4645,7 +4645,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             resource::BufferMapState::Idle => {
                 return Err(resource::BufferAccessError::NotMapped);
             }
-            resource::BufferMapState::Waiting(_) => {}
+            resource::BufferMapState::Waiting(pending) => {
+                return Ok(Some((pending.op, resource::BufferMapAsyncStatus::Aborted)));
+            }
             resource::BufferMapState::Active {
                 ptr,
                 sub_range,
@@ -4671,6 +4673,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 unmap_buffer(&device.raw, buffer)?;
             }
         }
-        Ok(())
+        Ok(None)
+    }
+
+    pub fn buffer_unmap<B: GfxBackend>(
+        &self,
+        buffer_id: id::BufferId,
+    ) -> Result<(), resource::BufferAccessError> {
+        self.buffer_unmap_inner::<B>(buffer_id)
+            //Note: outside inner function so no locks are held when calling the callback
+            .map(|pending_callback| fire_map_callbacks(pending_callback.into_iter()))
     }
 }

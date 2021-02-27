@@ -76,6 +76,7 @@ bitflags::bitflags! {
 pub enum BufferMapAsyncStatus {
     Success,
     Error,
+    Aborted,
     Unknown,
     ContextLost,
 }
