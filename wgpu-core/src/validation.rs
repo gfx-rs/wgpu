@@ -521,32 +521,40 @@ impl NumericType {
         use wgt::VertexFormat as Vf;
 
         let (dim, kind, width) = match format {
-            Vf::Uchar2 | Vf::Ushort2 => (NumericDimension::Vector(Vs::Bi), Sk::Uint, 4),
-            Vf::Uchar4 | Vf::Ushort4 => (NumericDimension::Vector(Vs::Quad), Sk::Uint, 4),
-            Vf::Char2 | Vf::Short2 => (NumericDimension::Vector(Vs::Bi), Sk::Sint, 4),
-            Vf::Char4 | Vf::Short4 => (NumericDimension::Vector(Vs::Quad), Sk::Sint, 4),
-            Vf::Uchar2Norm | Vf::Char2Norm | Vf::Ushort2Norm | Vf::Short2Norm | Vf::Half2 => {
-                (NumericDimension::Vector(Vs::Bi), Sk::Float, 4)
+            Vf::Uint32 => (NumericDimension::Scalar, Sk::Uint, 4),
+            Vf::Uint8x2 | Vf::Uint16x2 | Vf::Uint32x2 => {
+                (NumericDimension::Vector(Vs::Bi), Sk::Uint, 4)
             }
-            Vf::Uchar4Norm | Vf::Char4Norm | Vf::Ushort4Norm | Vf::Short4Norm | Vf::Half4 => {
-                (NumericDimension::Vector(Vs::Quad), Sk::Float, 4)
+            Vf::Uint32x3 => (NumericDimension::Vector(Vs::Tri), Sk::Uint, 4),
+            Vf::Uint8x4 | Vf::Uint16x4 | Vf::Uint32x4 => {
+                (NumericDimension::Vector(Vs::Quad), Sk::Uint, 4)
             }
-            Vf::Float => (NumericDimension::Scalar, Sk::Float, 4),
-            Vf::Float2 => (NumericDimension::Vector(Vs::Bi), Sk::Float, 4),
-            Vf::Float3 => (NumericDimension::Vector(Vs::Tri), Sk::Float, 4),
-            Vf::Float4 => (NumericDimension::Vector(Vs::Quad), Sk::Float, 4),
-            Vf::Uint => (NumericDimension::Scalar, Sk::Uint, 4),
-            Vf::Uint2 => (NumericDimension::Vector(Vs::Bi), Sk::Uint, 4),
-            Vf::Uint3 => (NumericDimension::Vector(Vs::Tri), Sk::Uint, 4),
-            Vf::Uint4 => (NumericDimension::Vector(Vs::Quad), Sk::Uint, 4),
-            Vf::Int => (NumericDimension::Scalar, Sk::Sint, 4),
-            Vf::Int2 => (NumericDimension::Vector(Vs::Bi), Sk::Sint, 4),
-            Vf::Int3 => (NumericDimension::Vector(Vs::Tri), Sk::Sint, 4),
-            Vf::Int4 => (NumericDimension::Vector(Vs::Quad), Sk::Sint, 4),
-            Vf::Double => (NumericDimension::Scalar, Sk::Float, 8),
-            Vf::Double2 => (NumericDimension::Vector(Vs::Bi), Sk::Float, 8),
-            Vf::Double3 => (NumericDimension::Vector(Vs::Tri), Sk::Float, 8),
-            Vf::Double4 => (NumericDimension::Vector(Vs::Quad), Sk::Float, 8),
+            Vf::Sint32 => (NumericDimension::Scalar, Sk::Sint, 4),
+            Vf::Sint8x2 | Vf::Sint16x2 | Vf::Sint32x2 => {
+                (NumericDimension::Vector(Vs::Bi), Sk::Sint, 4)
+            }
+            Vf::Sint32x3 => (NumericDimension::Vector(Vs::Tri), Sk::Sint, 4),
+            Vf::Sint8x4 | Vf::Sint16x4 | Vf::Sint32x4 => {
+                (NumericDimension::Vector(Vs::Quad), Sk::Sint, 4)
+            }
+            Vf::Float32 => (NumericDimension::Scalar, Sk::Float, 4),
+            Vf::Unorm8x2
+            | Vf::Snorm8x2
+            | Vf::Unorm16x2
+            | Vf::Snorm16x2
+            | Vf::Float16x2
+            | Vf::Float32x2 => (NumericDimension::Vector(Vs::Bi), Sk::Float, 4),
+            Vf::Float32x3 => (NumericDimension::Vector(Vs::Tri), Sk::Float, 4),
+            Vf::Unorm8x4
+            | Vf::Snorm8x4
+            | Vf::Unorm16x4
+            | Vf::Snorm16x4
+            | Vf::Float16x4
+            | Vf::Float32x4 => (NumericDimension::Vector(Vs::Quad), Sk::Float, 4),
+            Vf::Float64 => (NumericDimension::Scalar, Sk::Float, 8),
+            Vf::Float64x2 => (NumericDimension::Vector(Vs::Bi), Sk::Float, 8),
+            Vf::Float64x3 => (NumericDimension::Vector(Vs::Tri), Sk::Float, 8),
+            Vf::Float64x4 => (NumericDimension::Vector(Vs::Quad), Sk::Float, 8),
         };
 
         NumericType {

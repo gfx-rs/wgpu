@@ -1776,105 +1776,105 @@ pub struct VertexAttribute {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum VertexFormat {
     /// Two unsigned bytes (u8). `uvec2` in shaders.
-    Uchar2 = 0,
+    Uint8x2 = 0,
     /// Four unsigned bytes (u8). `uvec4` in shaders.
-    Uchar4 = 1,
+    Uint8x4 = 1,
     /// Two signed bytes (i8). `ivec2` in shaders.
-    Char2 = 2,
+    Sint8x2 = 2,
     /// Four signed bytes (i8). `ivec4` in shaders.
-    Char4 = 3,
+    Sint8x4 = 3,
     /// Two unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec2` in shaders.
-    Uchar2Norm = 4,
+    Unorm8x2 = 4,
     /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4` in shaders.
-    Uchar4Norm = 5,
+    Unorm8x4 = 5,
     /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2` in shaders.
-    Char2Norm = 6,
+    Snorm8x2 = 6,
     /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4` in shaders.
-    Char4Norm = 7,
+    Snorm8x4 = 7,
     /// Two unsigned shorts (u16). `uvec2` in shaders.
-    Ushort2 = 8,
+    Uint16x2 = 8,
     /// Four unsigned shorts (u16). `uvec4` in shaders.
-    Ushort4 = 9,
+    Uint16x4 = 9,
     /// Two signed shorts (i16). `ivec2` in shaders.
-    Short2 = 10,
+    Sint16x2 = 10,
     /// Four signed shorts (i16). `ivec4` in shaders.
-    Short4 = 11,
+    Sint16x4 = 11,
     /// Two unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec2` in shaders.
-    Ushort2Norm = 12,
+    Unorm16x2 = 12,
     /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4` in shaders.
-    Ushort4Norm = 13,
+    Unorm16x4 = 13,
     /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2` in shaders.
-    Short2Norm = 14,
+    Snorm16x2 = 14,
     /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4` in shaders.
-    Short4Norm = 15,
+    Snorm16x4 = 15,
     /// Two half-precision floats (no Rust equiv). `vec2` in shaders.
-    Half2 = 16,
+    Float16x2 = 16,
     /// Four half-precision floats (no Rust equiv). `vec4` in shaders.
-    Half4 = 17,
+    Float16x4 = 17,
     /// One single-precision float (f32). `float` in shaders.
-    Float = 18,
+    Float32 = 18,
     /// Two single-precision floats (f32). `vec2` in shaders.
-    Float2 = 19,
+    Float32x2 = 19,
     /// Three single-precision floats (f32). `vec3` in shaders.
-    Float3 = 20,
+    Float32x3 = 20,
     /// Four single-precision floats (f32). `vec4` in shaders.
-    Float4 = 21,
+    Float32x4 = 21,
     /// One unsigned int (u32). `uint` in shaders.
-    Uint = 22,
+    Uint32 = 22,
     /// Two unsigned ints (u32). `uvec2` in shaders.
-    Uint2 = 23,
+    Uint32x2 = 23,
     /// Three unsigned ints (u32). `uvec3` in shaders.
-    Uint3 = 24,
+    Uint32x3 = 24,
     /// Four unsigned ints (u32). `uvec4` in shaders.
-    Uint4 = 25,
+    Uint32x4 = 25,
     /// One signed int (i32). `int` in shaders.
-    Int = 26,
+    Sint32 = 26,
     /// Two signed ints (i32). `ivec2` in shaders.
-    Int2 = 27,
+    Sint32x2 = 27,
     /// Three signed ints (i32). `ivec3` in shaders.
-    Int3 = 28,
+    Sint32x3 = 28,
     /// Four signed ints (i32). `ivec4` in shaders.
-    Int4 = 29,
+    Sint32x4 = 29,
     /// One double-precision float (f64). `double` in shaders. Requires VERTEX_ATTRIBUTE_64BIT features.
-    Double = 30,
+    Float64 = 30,
     /// Two double-precision floats (f64). `dvec2` in shaders. Requires VERTEX_ATTRIBUTE_64BIT features.
-    Double2 = 31,
+    Float64x2 = 31,
     /// Three double-precision floats (f64). `dvec3` in shaders. Requires VERTEX_ATTRIBUTE_64BIT features.
-    Double3 = 32,
+    Float64x3 = 32,
     /// Four double-precision floats (f64). `dvec4` in shaders. Requires VERTEX_ATTRIBUTE_64BIT features.
-    Double4 = 33,
+    Float64x4 = 33,
 }
 
 impl VertexFormat {
     /// Returns the byte size of the format.
     pub const fn size(&self) -> u64 {
         match self {
-            Self::Uchar2 | Self::Char2 | Self::Uchar2Norm | Self::Char2Norm => 2,
-            Self::Uchar4
-            | Self::Char4
-            | Self::Uchar4Norm
-            | Self::Char4Norm
-            | Self::Ushort2
-            | Self::Short2
-            | Self::Ushort2Norm
-            | Self::Short2Norm
-            | Self::Half2
-            | Self::Float
-            | Self::Uint
-            | Self::Int => 4,
-            Self::Ushort4
-            | Self::Short4
-            | Self::Ushort4Norm
-            | Self::Short4Norm
-            | Self::Half4
-            | Self::Float2
-            | Self::Uint2
-            | Self::Int2
-            | Self::Double => 8,
-            Self::Float3 | Self::Uint3 | Self::Int3 => 12,
-            Self::Float4 | Self::Uint4 | Self::Int4 | Self::Double2 => 16,
-            Self::Double3 => 24,
-            Self::Double4 => 32,
+            Self::Uint8x2 | Self::Sint8x2 | Self::Unorm8x2 | Self::Snorm8x2 => 2,
+            Self::Uint8x4
+            | Self::Sint8x4
+            | Self::Unorm8x4
+            | Self::Snorm8x4
+            | Self::Uint16x2
+            | Self::Sint16x2
+            | Self::Unorm16x2
+            | Self::Snorm16x2
+            | Self::Float16x2
+            | Self::Float32
+            | Self::Uint32
+            | Self::Sint32 => 4,
+            Self::Uint16x4
+            | Self::Sint16x4
+            | Self::Unorm16x4
+            | Self::Snorm16x4
+            | Self::Float16x4
+            | Self::Float32x2
+            | Self::Uint32x2
+            | Self::Sint32x2
+            | Self::Float64 => 8,
+            Self::Float32x3 | Self::Uint32x3 | Self::Sint32x3 => 12,
+            Self::Float32x4 | Self::Uint32x4 | Self::Sint32x4 | Self::Float64x2 => 16,
+            Self::Float64x3 => 24,
+            Self::Float64x4 => 32,
         }
     }
 }

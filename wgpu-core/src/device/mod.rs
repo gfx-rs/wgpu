@@ -2054,10 +2054,10 @@ impl<B: GfxBackend> Device<B> {
                     );
                 }
 
-                if let wgt::VertexFormat::Double
-                | wgt::VertexFormat::Double2
-                | wgt::VertexFormat::Double3
-                | wgt::VertexFormat::Double4 = attribute.format
+                if let wgt::VertexFormat::Float64
+                | wgt::VertexFormat::Float64x2
+                | wgt::VertexFormat::Float64x3
+                | wgt::VertexFormat::Float64x4 = attribute.format
                 {
                     if !self
                         .features
