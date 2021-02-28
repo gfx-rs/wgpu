@@ -647,40 +647,40 @@ fn map_vertex_format(format: wgt::VertexFormat) -> web_sys::GpuVertexFormat {
     use web_sys::GpuVertexFormat as vf;
     use wgt::VertexFormat;
     match format {
-        VertexFormat::Uchar2 => vf::Uchar2,
-        VertexFormat::Uchar4 => vf::Uchar4,
-        VertexFormat::Char2 => vf::Char2,
-        VertexFormat::Char4 => vf::Char4,
-        VertexFormat::Uchar2Norm => vf::Uchar2norm,
-        VertexFormat::Uchar4Norm => vf::Uchar4norm,
-        VertexFormat::Char2Norm => vf::Char2norm,
-        VertexFormat::Char4Norm => vf::Char4norm,
-        VertexFormat::Ushort2 => vf::Ushort2,
-        VertexFormat::Ushort4 => vf::Ushort4,
-        VertexFormat::Short2 => vf::Short2,
-        VertexFormat::Short4 => vf::Short4,
-        VertexFormat::Ushort2Norm => vf::Ushort2norm,
-        VertexFormat::Ushort4Norm => vf::Ushort4norm,
-        VertexFormat::Short2Norm => vf::Short2norm,
-        VertexFormat::Short4Norm => vf::Short4norm,
-        VertexFormat::Half2 => vf::Half2,
-        VertexFormat::Half4 => vf::Half4,
-        VertexFormat::Float => vf::Float,
-        VertexFormat::Float2 => vf::Float2,
-        VertexFormat::Float3 => vf::Float3,
-        VertexFormat::Float4 => vf::Float4,
-        VertexFormat::Uint => vf::Uint,
-        VertexFormat::Uint2 => vf::Uint2,
-        VertexFormat::Uint3 => vf::Uint3,
-        VertexFormat::Uint4 => vf::Uint4,
-        VertexFormat::Int => vf::Int,
-        VertexFormat::Int2 => vf::Int2,
-        VertexFormat::Int3 => vf::Int3,
-        VertexFormat::Int4 => vf::Int4,
-        VertexFormat::Double
-        | VertexFormat::Double2
-        | VertexFormat::Double3
-        | VertexFormat::Double4 => {
+        VertexFormat::Uint8x2 => vf::Uchar2,
+        VertexFormat::Uint8x4 => vf::Uchar4,
+        VertexFormat::Sint8x2 => vf::Char2,
+        VertexFormat::Sint8x4 => vf::Char4,
+        VertexFormat::Unorm8x2 => vf::Uchar2norm,
+        VertexFormat::Unorm8x4 => vf::Uchar4norm,
+        VertexFormat::Snorm8x2 => vf::Char2norm,
+        VertexFormat::Snorm8x4 => vf::Char4norm,
+        VertexFormat::Uint16x2 => vf::Ushort2,
+        VertexFormat::Uint16x4 => vf::Ushort4,
+        VertexFormat::Sint16x2 => vf::Short2,
+        VertexFormat::Sint16x4 => vf::Short4,
+        VertexFormat::Unorm16x2 => vf::Ushort2norm,
+        VertexFormat::Unorm16x4 => vf::Ushort4norm,
+        VertexFormat::Snorm16x2 => vf::Short2norm,
+        VertexFormat::Snorm16x4 => vf::Short4norm,
+        VertexFormat::Float16x2 => vf::Half2,
+        VertexFormat::Float16x4 => vf::Half4,
+        VertexFormat::Float32 => vf::Float,
+        VertexFormat::Float32x2 => vf::Float2,
+        VertexFormat::Float32x3 => vf::Float3,
+        VertexFormat::Float32x4 => vf::Float4,
+        VertexFormat::Uint32 => vf::Uint,
+        VertexFormat::Uint32x2 => vf::Uint2,
+        VertexFormat::Uint32x3 => vf::Uint3,
+        VertexFormat::Uint32x4 => vf::Uint4,
+        VertexFormat::Sint32 => vf::Int,
+        VertexFormat::Sint32x2 => vf::Int2,
+        VertexFormat::Sint32x3 => vf::Int3,
+        VertexFormat::Sint32x4 => vf::Int4,
+        VertexFormat::Float64
+        | VertexFormat::Float64x2
+        | VertexFormat::Float64x3
+        | VertexFormat::Float64x4 => {
             panic!("VERTEX_ATTRIBUTE_64BIT feature must be enabled to use Double formats")
         }
     }

@@ -222,7 +222,7 @@ impl framework::Example for Skybox {
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float3, 1 => Float3],
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3],
                 }],
             },
             fragment: Some(wgpu::FragmentState {
