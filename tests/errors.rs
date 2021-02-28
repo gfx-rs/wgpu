@@ -1,7 +1,12 @@
 #[cfg(feature = "wgsl-in")]
 macro_rules! err {
     ($value:expr, @$snapshot:literal) => {
-        ::insta::assert_snapshot!(naga::front::wgsl::parse_str($value).expect_err("expected parser error").to_string(), @$snapshot);
+        ::insta::assert_snapshot!(
+            naga::front::wgsl::parse_str($value)
+                .expect_err("expected parser error")
+                .emit_to_string(),
+            @$snapshot
+        );
     };
 }
 
@@ -10,6 +15,13 @@ macro_rules! err {
 fn function_without_identifier() {
     err!(
         "fn () {}",
-        @"error while parsing WGSL in scopes [FunctionDecl] at line 1 pos 4: unexpected token Paren('('), expected ident"
+        @r###"
+    error: expected identifier, found '('
+      ┌─ wgsl:1:4
+      │
+    1 │ fn () {}
+      │    ^ expected identifier
+
+    "###
     );
 }

@@ -100,7 +100,14 @@ fn main() {
         #[cfg(feature = "wgsl-in")]
         "wgsl" => {
             let input = fs::read_to_string(input_path).unwrap();
-            naga::front::wgsl::parse_str(&input).unwrap_pretty()
+            let result = naga::front::wgsl::parse_str(&input);
+            match result {
+                Ok(v) => v,
+                Err(ref e) => {
+                    e.emit_to_stderr();
+                    panic!("unable to parse WGSL");
+                }
+            }
         }
         #[cfg(feature = "glsl-in")]
         "vert" => {

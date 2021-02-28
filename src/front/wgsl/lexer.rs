@@ -258,7 +258,7 @@ impl<'a> Lexer<'a> {
     pub(super) fn next_ident(&mut self) -> Result<&'a str, Error<'a>> {
         match self.next() {
             (Token::Word(word), _) => Ok(word),
-            other => Err(Error::Unexpected(other, "ident")),
+            other => Err(Error::Unexpected(other, "identifier")),
         }
     }
 
@@ -304,10 +304,6 @@ impl<'a> Lexer<'a> {
         let format = conv::map_storage_format(self.next_ident()?)?;
         self.expect(Token::Paren('>'))?;
         Ok(format)
-    }
-
-    pub(super) fn offset_from(&self, source: &'a str) -> usize {
-        source.len() - self.input.len()
     }
 }
 

@@ -14,10 +14,20 @@ use crate::{
 };
 
 use self::lexer::Lexer;
-use std::{num::NonZeroU32, ops::Range};
+use codespan_reporting::{
+    diagnostic::{Diagnostic, Label},
+    files::SimpleFile,
+    term::{
+        self,
+        termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor},
+    },
+};
+use std::{
+    io::{self, Write},
+    num::NonZeroU32,
+    ops::Range,
+};
 use thiserror::Error;
-
-const SPACE: &str = "                                                                                                    ";
 
 type TokenSpan<'a> = (Token<'a>, Range<usize>);
 
@@ -42,6 +52,27 @@ pub enum Token<'a> {
     UnterminatedString,
     Trivia,
     End,
+}
+
+impl<'a> Error<'a> {
+    fn as_parse_error(&self, source: &'a str) -> ParseError<'a> {
+        match self {
+            Error::Unexpected((_, unexpected_span), expected) => ParseError {
+                message: format!(
+                    "expected {}, found '{}'",
+                    expected,
+                    &source[unexpected_span.clone()]
+                ),
+                labels: vec![(unexpected_span.clone(), format!("expected {}", expected))],
+                source,
+            },
+            error => ParseError {
+                message: error.to_string(),
+                labels: Vec::new(),
+                source,
+            },
+        }
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -332,13 +363,55 @@ struct ParsedVariable<'a> {
     init: Option<Handle<crate::Constant>>,
 }
 
-#[derive(Clone, Debug, Error)]
-#[error("error while parsing WGSL in scopes {scopes:?} at line {line} pos {pos}: {error}")]
+#[derive(Clone, Debug)]
 pub struct ParseError<'a> {
-    pub error: Error<'a>,
-    pub scopes: Vec<Scope>,
-    pub line: usize,
-    pub pos: usize,
+    message: String,
+    labels: Vec<(Range<usize>, String)>,
+    source: &'a str,
+}
+
+impl<'a> ParseError<'a> {
+    fn diagnostic(&self) -> Diagnostic<()> {
+        let diagnostic = Diagnostic::error()
+            .with_message(self.message.to_string())
+            .with_labels(
+                self.labels
+                    .iter()
+                    .map(|label| {
+                        Label::primary((), label.0.clone()).with_message(label.1.to_string())
+                    })
+                    .collect(),
+            );
+        diagnostic
+    }
+
+    pub fn emit_to_stderr(&self) {
+        let files = SimpleFile::new("wgsl", self.source);
+        let config = codespan_reporting::term::Config::default();
+        let writer = StandardStream::stderr(ColorChoice::Always);
+        term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
+            .expect("cannot write error");
+    }
+
+    pub fn emit_to_string(&self) -> String {
+        let files = SimpleFile::new("wgsl", self.source);
+        let config = codespan_reporting::term::Config::default();
+        let mut writer = StringErrorBuffer::new();
+        term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
+        writer.into_string()
+    }
+}
+
+impl<'a> std::fmt::Display for ParseError<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl<'a> std::error::Error for ParseError<'a> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
 }
 
 pub struct Parser {
@@ -2324,42 +2397,12 @@ impl Parser {
         let mut lookup_global_expression = FastHashMap::default();
         loop {
             match self.parse_global_decl(&mut lexer, &mut module, &mut lookup_global_expression) {
-                Err(error) => {
-                    let pos = lexer.offset_from(source);
-                    let (mut rows, mut cols) = (0, 1);
-                    let (mut prev_line, mut cur_line) = ("", "");
-                    for line in source[..pos].lines() {
-                        rows += 1;
-                        cols = line.len();
-                        prev_line = cur_line;
-                        cur_line = line;
-                    }
-                    log::error!("|\t{}", prev_line);
-                    log::error!(
-                        ">\t{}{}",
-                        cur_line,
-                        source[pos..].lines().next().unwrap_or_default()
-                    );
-                    if cols <= SPACE.len() {
-                        log::error!("|\t{}^", &SPACE[..cols]);
-                    }
-                    return Err(ParseError {
-                        error,
-                        scopes: std::mem::replace(&mut self.scopes, Vec::new()),
-                        line: rows,
-                        pos: cols,
-                    });
-                }
+                Err(error) => return Err(error.as_parse_error(lexer.source)),
                 Ok(true) => {}
                 Ok(false) => {
                     if !self.scopes.is_empty() {
                         log::error!("Reached the end of file, but scopes are not closed");
-                        return Err(ParseError {
-                            error: Error::Other,
-                            scopes: std::mem::replace(&mut self.scopes, Vec::new()),
-                            line: 0,
-                            pos: 0,
-                        });
+                        return Err(Error::Other.as_parse_error(lexer.source));
                     };
                     return Ok(module);
                 }
@@ -2370,4 +2413,43 @@ impl Parser {
 
 pub fn parse_str(source: &str) -> Result<crate::Module, ParseError> {
     Parser::new().parse(source)
+}
+
+pub struct StringErrorBuffer {
+    buf: Vec<u8>,
+}
+
+impl StringErrorBuffer {
+    pub fn new() -> Self {
+        Self { buf: Vec::new() }
+    }
+
+    pub fn into_string(self) -> String {
+        String::from_utf8(self.buf).unwrap()
+    }
+}
+
+impl Write for StringErrorBuffer {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.buf.extend(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl WriteColor for StringErrorBuffer {
+    fn supports_color(&self) -> bool {
+        false
+    }
+
+    fn set_color(&mut self, _spec: &ColorSpec) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn reset(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
