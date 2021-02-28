@@ -260,7 +260,7 @@ impl framework::Example for Example {
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float2, 1 => Float2, 2 => Int],
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Sint32],
                 }],
             },
             fragment: Some(wgpu::FragmentState {

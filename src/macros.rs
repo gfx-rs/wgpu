@@ -5,7 +5,7 @@
 /// Output has type: `[VertexAttribute; _]`. Usage is as follows:
 /// ```
 /// # use wgpu::vertex_attr_array;
-/// let attrs = vertex_attr_array![0 => Float2, 1 => Float, 2 => Ushort4];
+/// let attrs = vertex_attr_array![0 => Float32x2, 1 => Float32, 2 => Uint16x4];
 /// ```
 /// This example specifies a list of three [VertexAttribute](crate::VertexAttribute),
 /// each with the given `shader_location` and `format`.
@@ -32,7 +32,7 @@ macro_rules! vertex_attr_array {
 
 #[test]
 fn test_vertex_attr_array() {
-    let attrs = vertex_attr_array![0 => Float2, 3 => Ushort4];
+    let attrs = vertex_attr_array![0 => Float32x2, 3 => Uint16x4];
     // VertexAttribute does not support PartialEq, so we cannot test directly
     assert_eq!(attrs.len(), 2);
     assert_eq!(attrs[0].offset, 0);

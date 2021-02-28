@@ -513,7 +513,7 @@ impl framework::Example for Example {
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: water_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Short2, 1 => Char4],
+                    attributes: &wgpu::vertex_attr_array![0 => Sint16x2, 1 => Sint8x4],
                 }],
             },
             // Fragment shader and output targets
@@ -577,7 +577,7 @@ impl framework::Example for Example {
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: terrain_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float3, 1 => Float3, 2 => Uchar4Norm],
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Unorm8x4],
                 }],
             },
             fragment: Some(wgpu::FragmentState {
