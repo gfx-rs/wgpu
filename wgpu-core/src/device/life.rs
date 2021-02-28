@@ -700,6 +700,12 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
                     // Mapping cancelled
                     resource::BufferMapState::Idle => continue,
+                    // Mapping queued at least twice by map -> unmap -> map
+                    // and was already successfully mapped below
+                    active @ resource::BufferMapState::Active { .. } => {
+                        buffer.map_state = active;
+                        continue;
+                    }
                     _ => panic!("No pending mapping."),
                 };
                 let status = if mapping.range.start != mapping.range.end {
