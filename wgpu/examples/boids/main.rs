@@ -137,12 +137,12 @@ impl framework::Example for Example {
                     wgpu::VertexBufferLayout {
                         array_stride: 4 * 4,
                         step_mode: wgpu::InputStepMode::Instance,
-                        attributes: &wgpu::vertex_attr_array![0 => Float2, 1 => Float2],
+                        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2],
                     },
                     wgpu::VertexBufferLayout {
                         array_stride: 2 * 4,
                         step_mode: wgpu::InputStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![2 => Float2],
+                        attributes: &wgpu::vertex_attr_array![2 => Float32x2],
                     },
                 ],
             },

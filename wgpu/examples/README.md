@@ -41,6 +41,7 @@ All framework-based examples render to the window.
 | - polygon mode         |        | :star: |        |           |        |        |                |        |
 | - queries              |        |        | :star: |           |        |        |                |        |
 | *integrations*         |        |        |        |           |        |        |                |        |
+| - staging belt         |        |        |        |           |        |        |                |        |
 | - typed arena          |        |        |        |           |        |        |                |        |
 | - obj loading          |        |        |        |           |        | :star: |                |        |
 
