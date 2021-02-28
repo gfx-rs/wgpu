@@ -1701,6 +1701,36 @@ impl Parser {
         Ok((handle, storage_access))
     }
 
+    /// Parse a statement that is either an assignment or a function call.
+    fn parse_statement_restricted<'a, 'out>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ident: &'a str,
+        mut context: ExpressionContext<'a, '_, 'out>,
+    ) -> Result<crate::Statement, Error<'a>> {
+        Ok(match context.lookup_ident.get(ident) {
+            Some(&expr) => {
+                let left = self.parse_postfix(lexer, context.reborrow(), expr)?;
+                lexer.expect(Token::Operation('='))?;
+                let value = self.parse_general_expression(lexer, context)?;
+                crate::Statement::Store {
+                    pointer: left,
+                    value,
+                }
+            }
+            None => {
+                let (function, arguments) = self
+                    .parse_local_function_call(lexer, ident, context)?
+                    .ok_or(Error::UnknownLocalFunction(ident))?;
+                crate::Statement::Call {
+                    function,
+                    arguments,
+                    result: None,
+                }
+            }
+        })
+    }
+
     fn parse_statement<'a, 'out>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -1952,33 +1982,11 @@ impl Parser {
                     // manually parse the next statement here instead of calling parse_statement
                     // because the statement is not terminated with a semicolon
                     let _ = lexer.next();
-                    Some(match context.lookup_ident.get(ident) {
-                        Some(&var_expr) => {
-                            let left =
-                                self.parse_postfix(lexer, context.as_expression(block), var_expr)?;
-                            lexer.expect(Token::Operation('='))?;
-                            let value =
-                                self.parse_general_expression(lexer, context.as_expression(block))?;
-                            crate::Statement::Store {
-                                pointer: left,
-                                value,
-                            }
-                        }
-                        None => {
-                            let (function, arguments) = self
-                                .parse_local_function_call(
-                                    lexer,
-                                    ident,
-                                    context.as_expression(block),
-                                )?
-                                .ok_or(Error::UnknownLocalFunction(ident))?;
-                            crate::Statement::Call {
-                                function,
-                                arguments,
-                                result: None,
-                            }
-                        }
-                    })
+                    Some(self.parse_statement_restricted(
+                        lexer,
+                        ident,
+                        context.as_expression(block),
+                    )?)
                 } else {
                     None
                 };
@@ -2034,27 +2042,9 @@ impl Parser {
             }
             // assignment or a function call
             ident => {
-                let stmt = if let Some(&var_expr) = context.lookup_ident.get(ident) {
-                    let left = self.parse_postfix(lexer, context.as_expression(block), var_expr)?;
-                    lexer.expect(Token::Operation('='))?;
-                    let value =
-                        self.parse_general_expression(lexer, context.as_expression(block))?;
-                    lexer.expect(Token::Separator(';'))?;
-                    crate::Statement::Store {
-                        pointer: left,
-                        value,
-                    }
-                } else {
-                    let (function, arguments) = self
-                        .parse_local_function_call(lexer, ident, context.as_expression(block))?
-                        .ok_or(Error::UnknownLocalFunction(ident))?;
-                    lexer.expect(Token::Separator(';'))?;
-                    crate::Statement::Call {
-                        function,
-                        arguments,
-                        result: None,
-                    }
-                };
+                let stmt =
+                    self.parse_statement_restricted(lexer, ident, context.as_expression(block))?;
+                lexer.expect(Token::Separator(';'))?;
                 block.push(stmt);
             }
         }
