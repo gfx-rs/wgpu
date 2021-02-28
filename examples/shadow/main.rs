@@ -412,7 +412,7 @@ impl framework::Example for Example {
             mapped_at_creation: false,
         });
 
-        let vertex_attr = wgpu::vertex_attr_array![0 => Char4, 1 => Char4];
+        let vertex_attr = wgpu::vertex_attr_array![0 => Sint8x4, 1 => Sint8x4];
         let vb_desc = wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::InputStepMode::Vertex,
