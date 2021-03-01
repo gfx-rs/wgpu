@@ -521,49 +521,60 @@ pub fn map_texture_dimension_size(
         depth_or_array_layers,
     }: wgt::Extent3d,
     sample_size: u32,
+    limits: &wgt::Limits,
 ) -> Result<hal::image::Kind, resource::TextureDimensionError> {
     use hal::image::Kind as H;
-    use resource::TextureDimensionError as Tde;
+    use resource::{TextureDimensionError as Tde, TextureErrorDimension as Ted};
     use wgt::TextureDimension::*;
 
-    let zero_dim = if width == 0 {
-        Some(resource::TextureErrorDimension::X)
-    } else if height == 0 {
-        Some(resource::TextureErrorDimension::Y)
-    } else if depth_or_array_layers == 0 {
-        Some(resource::TextureErrorDimension::Z)
-    } else {
-        None
+    let layers = depth_or_array_layers.try_into().unwrap_or(!0);
+    let (kind, extent_limits, sample_limit) = match dimension {
+        D1 => (
+            H::D1(width, layers),
+            [
+                limits.max_texture_dimension_1d,
+                1,
+                limits.max_texture_array_layers,
+            ],
+            1,
+        ),
+        D2 => (
+            H::D2(width, height, layers, sample_size as u8),
+            [
+                limits.max_texture_dimension_2d,
+                limits.max_texture_dimension_2d,
+                limits.max_texture_array_layers,
+            ],
+            32,
+        ),
+        D3 => (
+            H::D3(width, height, depth_or_array_layers),
+            [
+                limits.max_texture_dimension_3d,
+                limits.max_texture_dimension_3d,
+                limits.max_texture_dimension_3d,
+            ],
+            1,
+        ),
     };
-    if let Some(dim) = zero_dim {
-        return Err(resource::TextureDimensionError::Zero(dim));
+
+    for (&dim, (&given, &limit)) in [Ted::X, Ted::Y, Ted::Z].iter().zip(
+        [width, height, depth_or_array_layers]
+            .iter()
+            .zip(extent_limits.iter()),
+    ) {
+        if given == 0 {
+            return Err(Tde::Zero(dim));
+        }
+        if given > limit {
+            return Err(Tde::LimitExceeded { dim, given, limit });
+        }
+    }
+    if sample_size == 0 || sample_size > sample_limit || !is_power_of_two(sample_size) {
+        return Err(Tde::InvalidSampleCount(sample_size));
     }
 
-    Ok(match dimension {
-        D1 => {
-            if height != 1 {
-                return Err(Tde::InvalidHeight);
-            }
-            if sample_size != 1 {
-                return Err(Tde::InvalidSampleCount(sample_size));
-            }
-            let layers = depth_or_array_layers.try_into().unwrap_or(!0);
-            H::D1(width, layers)
-        }
-        D2 => {
-            if sample_size > 32 || !is_power_of_two(sample_size) {
-                return Err(Tde::InvalidSampleCount(sample_size));
-            }
-            let layers = depth_or_array_layers.try_into().unwrap_or(!0);
-            H::D2(width, height, layers, sample_size as u8)
-        }
-        D3 => {
-            if sample_size != 1 {
-                return Err(Tde::InvalidSampleCount(sample_size));
-            }
-            H::D3(width, height, depth_or_array_layers)
-        }
-    })
+    Ok(kind)
 }
 
 pub fn map_texture_view_dimension(dimension: wgt::TextureViewDimension) -> hal::image::ViewKind {

@@ -442,6 +442,20 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct Limits {
+    /// Maximum allowed value for the `size.width` of a texture created with `TextureDimension::D1`.
+    /// Defaults to 8192. Higher is "better".
+    pub max_texture_dimension_1d: u32,
+    /// Maximum allowed value for the `size.width` and `size.height` of a texture created with `TextureDimension::D2`.
+    /// Defaults to 8192. Higher is "better".
+    pub max_texture_dimension_2d: u32,
+    /// Maximum allowed value for the `size.width`, `size.height`, and `size.depth_or_array_layers`
+    /// of a texture created with `TextureDimension::D3`.
+    /// Defaults to 2048. Higher is "better".
+    pub max_texture_dimension_3d: u32,
+    /// Maximum allowed value for the `size.depth_or_array_layers` of a texture created with
+    /// `TextureDimension::D1` or `TextureDimension::D2`.
+    /// Defaults to 2048. Higher is "better".
+    pub max_texture_array_layers: u32,
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
     /// Amount of uniform buffer bindings that can be dynamic in a single pipeline. Defaults to 8. Higher is "better".
@@ -460,6 +474,18 @@ pub struct Limits {
     pub max_uniform_buffers_per_shader_stage: u32,
     /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 16384. Higher is "better".
     pub max_uniform_buffer_binding_size: u32,
+    /// Maximum size in bytes of a binding to a storage buffer. Defaults to 128 MB. Higher is "better".
+    pub max_storage_buffer_binding_size: u32,
+    /// Maximum length of `VertexState::buffers` when creating a `RenderPipeline`.
+    /// Defaults to 8. Higher is "better".
+    pub max_vertex_buffers: u32,
+    /// Maximum length of `VertexBufferLayout::attributes`, summed over all `VertexState::buffers`,
+    /// when creating a `RenderPipeline`.
+    /// Defaults to 16. Higher is "better".
+    pub max_vertex_attributes: u32,
+    /// Maximum value for `VertexBufferLayout::array_stride` when creating a `RenderPipeline`.
+    /// Defaults to 2048. Higher is "better".
+    pub max_vertex_buffer_array_stride: u32,
     /// Amount of storage available for push constants in bytes. Defaults to 0. Higher is "better".
     /// Requesting more than 0 during device creation requires [`Features::PUSH_CONSTANTS`] to be enabled.
     ///
@@ -475,6 +501,10 @@ pub struct Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self {
+            max_texture_dimension_1d: 8192,
+            max_texture_dimension_2d: 8192,
+            max_texture_dimension_3d: 2048,
+            max_texture_array_layers: 2048,
             max_bind_groups: 4,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
@@ -484,6 +514,10 @@ impl Default for Limits {
             max_storage_textures_per_shader_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
             max_uniform_buffer_binding_size: 16384,
+            max_storage_buffer_binding_size: 128 << 20,
+            max_vertex_buffers: 8,
+            max_vertex_attributes: 16,
+            max_vertex_buffer_array_stride: 2048,
             max_push_constant_size: 0,
         }
     }
