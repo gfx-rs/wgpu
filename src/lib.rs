@@ -202,7 +202,7 @@ trait Context: Debug + Send + Sized + Sync {
         &self,
         adapter: &Self::AdapterId,
         surface: &Self::SurfaceId,
-    ) -> TextureFormat;
+    ) -> Option<TextureFormat>;
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features;
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
     fn adapter_get_info(&self, adapter: &Self::AdapterId) -> AdapterInfo;
@@ -1441,7 +1441,9 @@ impl Adapter {
     }
 
     /// Returns an optimal texture format to use for the [`SwapChain`] with this adapter.
-    pub fn get_swap_chain_preferred_format(&self, surface: &Surface) -> TextureFormat {
+    ///
+    /// Returns None if the surface is incompatible with the adapter.
+    pub fn get_swap_chain_preferred_format(&self, surface: &Surface) -> Option<TextureFormat> {
         Context::adapter_get_swap_chain_preferred_format(&*self.context, &self.id, &surface.id)
     }
 

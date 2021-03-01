@@ -724,11 +724,12 @@ impl crate::Context for Context {
         &self,
         adapter: &Self::AdapterId,
         surface: &Self::SurfaceId,
-    ) -> TextureFormat {
+    ) -> Option<TextureFormat> {
         let global = &self.0;
         match wgc::gfx_select!(adapter => global.adapter_get_swap_chain_preferred_format(*adapter, *surface))
         {
-            Ok(swap_chain_preferred_format) => swap_chain_preferred_format,
+            Ok(swap_chain_preferred_format) => Some(swap_chain_preferred_format),
+            Err(wgc::instance::GetSwapChainPreferredFormatError::UnsupportedQueueFamily) => None,
             Err(err) => self.handle_error_fatal(err, "Adapter::get_swap_chain_preferred_format"),
         }
     }
