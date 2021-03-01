@@ -1,6 +1,7 @@
 ---
 source: tests/snapshots.rs
 expression: output
+
 ---
 (
     functions: [
@@ -878,7 +879,7 @@ expression: output
                     control_flags: (
                         bits: 1,
                     ),
-                    ref_count: 12,
+                    ref_count: 11,
                     assignable_global: None,
                 ),
                 (
@@ -1214,7 +1215,7 @@ expression: output
                     control_flags: (
                         bits: 1,
                     ),
-                    ref_count: 2,
+                    ref_count: 1,
                     assignable_global: None,
                 ),
                 (

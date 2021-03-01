@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+ #![allow(dead_code)]
 
 use super::error::Error;
 ///! see https://en.wikipedia.org/wiki/Control-flow_graph
@@ -394,19 +394,7 @@ impl FlowGraph {
                 };
                 Ok(result)
             }
-            Some(ControlFlowNodeType::Continue) => {
-                let back_block = match node.terminator {
-                    Terminator::Branch { target_id } => {
-                        self.naga_traverse(self.block_to_node[&target_id], None)?
-                    }
-                    _ => return Err(Error::InvalidTerminator),
-                };
-
-                let mut result = node.block.clone();
-                result.extend(back_block);
-                result.push(crate::Statement::Continue);
-                Ok(result)
-            }
+            Some(ControlFlowNodeType::Continue) => Ok(node.block.clone()),
             Some(ControlFlowNodeType::Back) => Ok(node.block.clone()),
             Some(ControlFlowNodeType::Kill) => {
                 let mut result = node.block.clone();

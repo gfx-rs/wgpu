@@ -1107,11 +1107,6 @@ expression: output
                                 pointer: 43,
                                 value: 91,
                             ),
-                            Store(
-                                pointer: 44,
-                                value: 92,
-                            ),
-                            Continue,
                         ],
                         continuing: [
                             Store(
