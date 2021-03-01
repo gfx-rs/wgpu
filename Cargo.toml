@@ -41,7 +41,6 @@ path = "bin/convert.rs"
 
 [dev-dependencies]
 difference = "2.0"
-env_logger = "0.8"
 ron = "0.6"
 serde = { version = "1.0", features = ["derive"] }
 spirv = { package = "spirv_headers", version = "1.5", features = ["deserialize"] }

@@ -1,4 +1,4 @@
- #![allow(dead_code)]
+#![allow(dead_code)]
 
 use super::error::Error;
 ///! see https://en.wikipedia.org/wiki/Control-flow_graph

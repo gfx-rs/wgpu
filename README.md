@@ -23,7 +23,7 @@ Back-end        |       Status       | Notes |
 SPIR-V (binary) | :white_check_mark: |       |
 WGSL            |                    |       |
 Metal           | :white_check_mark: |       |
-HLSL            |                    |       |
+HLSL            | :construction:     |       |
 GLSL            | :ok:               |       |
 AIR             |                    |       |
 DXIL/DXIR       |                    |       |
