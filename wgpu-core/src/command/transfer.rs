@@ -122,7 +122,7 @@ pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
     let (layer, layer_count, z) = match texture.dimension {
         wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => (
             view.origin.z as hal::image::Layer,
-            size.depth as hal::image::Layer,
+            size.depth_or_array_layers as hal::image::Layer,
             0,
         ),
         wgt::TextureDimension::D3 => (0, 1, view.origin.z as i32),
@@ -162,7 +162,7 @@ pub(crate) fn validate_linear_texture_data(
     // Convert all inputs to BufferAddress (u64) to prevent overflow issues
     let copy_width = copy_size.width as BufferAddress;
     let copy_height = copy_size.height as BufferAddress;
-    let copy_depth = copy_size.depth as BufferAddress;
+    let copy_depth = copy_size.depth_or_array_layers as BufferAddress;
 
     let offset = layout.offset;
     let rows_per_image = layout.rows_per_image as BufferAddress;
@@ -244,7 +244,7 @@ pub(crate) fn validate_texture_copy_range(
 
     match texture_dimension {
         hal::image::Kind::D1(..) => {
-            if (copy_size.height, copy_size.depth) != (1, 1) {
+            if (copy_size.height, copy_size.depth_or_array_layers) != (1, 1) {
                 return Err(TransferError::InvalidCopySize);
             }
         }
@@ -274,7 +274,7 @@ pub(crate) fn validate_texture_copy_range(
             side: texture_side,
         });
     }
-    let z_copy_max = texture_copy_view.origin.z + copy_size.depth;
+    let z_copy_max = texture_copy_view.origin.z + copy_size.depth_or_array_layers;
     if z_copy_max > extent.depth {
         return Err(TransferError::TextureOverrun {
             start_offset: texture_copy_view.origin.z,
@@ -469,7 +469,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth == 0 {
+        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             tracing::trace!("Ignoring copy_buffer_to_texture of size 0");
             return Ok(());
         }
@@ -564,7 +564,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let image_extent = Extent3d {
             width: copy_size.width.min(max_image_extent.width),
             height: copy_size.height.min(max_image_extent.height),
-            depth: copy_size.depth,
+            depth_or_array_layers: copy_size.depth_or_array_layers,
         };
 
         let buffer_width = (source.layout.bytes_per_row / bytes_per_block) * block_width as u32;
@@ -620,7 +620,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth == 0 {
+        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             tracing::trace!("Ignoring copy_texture_to_buffer of size 0");
             return Ok(());
         }
@@ -718,7 +718,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let image_extent = Extent3d {
             width: copy_size.width.min(max_image_extent.width),
             height: copy_size.height.min(max_image_extent.height),
-            depth: copy_size.depth,
+            depth_or_array_layers: copy_size.depth_or_array_layers,
         };
 
         let buffer_width =
@@ -781,7 +781,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth == 0 {
+        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             tracing::trace!("Ignoring copy_texture_to_texture of size 0");
             return Ok(());
         }
@@ -859,7 +859,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             height: copy_size
                 .height
                 .min(max_src_image_extent.height.min(max_dst_image_extent.height)),
-            depth: copy_size.depth,
+            depth_or_array_layers: copy_size.depth_or_array_layers,
         };
 
         let region = hal::command::ImageCopy {

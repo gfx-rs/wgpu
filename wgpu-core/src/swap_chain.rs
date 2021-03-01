@@ -193,7 +193,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     extent: wgt::Extent3d {
                         width: sc.desc.width,
                         height: sc.desc.height,
-                        depth: 1,
+                        depth_or_array_layers: 1,
                     },
                     samples: 1,
                     framebuffer_attachment: sc.framebuffer_attachment.clone(),

@@ -2164,7 +2164,7 @@ pub struct Extent3d {
     ///
     pub height: u32,
     ///
-    pub depth: u32,
+    pub depth_or_array_layers: u32,
 }
 
 impl Default for Extent3d {
@@ -2172,7 +2172,7 @@ impl Default for Extent3d {
         Self {
             width: 1,
             height: 1,
-            depth: 1,
+            depth_or_array_layers: 1,
         }
     }
 }
@@ -2187,18 +2187,18 @@ impl Extent3d {
     /// # use wgpu_types as wgpu;
     /// let format = wgpu::TextureFormat::Bc1RgbaUnormSrgb; // 4x4 blocks
     /// assert_eq!(
-    ///     wgpu::Extent3d { width: 7, height: 7, depth: 1 }.physical_size(format),
-    ///     wgpu::Extent3d { width: 8, height: 8, depth: 1 }
+    ///     wgpu::Extent3d { width: 7, height: 7, depth_or_array_layers: 1 }.physical_size(format),
+    ///     wgpu::Extent3d { width: 8, height: 8, depth_or_array_layers: 1 }
     /// );
     /// // Doesn't change, already aligned
     /// assert_eq!(
-    ///     wgpu::Extent3d { width: 8, height: 8, depth: 1 }.physical_size(format),
-    ///     wgpu::Extent3d { width: 8, height: 8, depth: 1 }
+    ///     wgpu::Extent3d { width: 8, height: 8, depth_or_array_layers: 1 }.physical_size(format),
+    ///     wgpu::Extent3d { width: 8, height: 8, depth_or_array_layers: 1 }
     /// );
     /// let format = wgpu::TextureFormat::Astc8x5RgbaUnorm; // 8x5 blocks
     /// assert_eq!(
-    ///     wgpu::Extent3d { width: 7, height: 7, depth: 1 }.physical_size(format),
-    ///     wgpu::Extent3d { width: 8, height: 10, depth: 1 }
+    ///     wgpu::Extent3d { width: 7, height: 7, depth_or_array_layers: 1 }.physical_size(format),
+    ///     wgpu::Extent3d { width: 8, height: 10, depth_or_array_layers: 1 }
     /// );
     /// ```
     ///
@@ -2214,7 +2214,7 @@ impl Extent3d {
         Self {
             width,
             height,
-            depth: self.depth,
+            depth_or_array_layers: self.depth_or_array_layers,
         }
     }
 
@@ -2225,12 +2225,12 @@ impl Extent3d {
     ///
     /// ```rust
     /// # use wgpu_types as wgpu;
-    /// assert_eq!(wgpu::Extent3d { width: 1, height: 1, depth: 1 }.max_mips(), 1);
-    /// assert_eq!(wgpu::Extent3d { width: 60, height: 60, depth: 1 }.max_mips(), 6);
-    /// assert_eq!(wgpu::Extent3d { width: 240, height: 1, depth: 1 }.max_mips(), 8);
+    /// assert_eq!(wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }.max_mips(), 1);
+    /// assert_eq!(wgpu::Extent3d { width: 60, height: 60, depth_or_array_layers: 1 }.max_mips(), 6);
+    /// assert_eq!(wgpu::Extent3d { width: 240, height: 1, depth_or_array_layers: 1 }.max_mips(), 8);
     /// ```
     pub fn max_mips(&self) -> u8 {
-        let max_dim = self.width.max(self.height.max(self.depth));
+        let max_dim = self.width.max(self.height.max(self.depth_or_array_layers));
         let max_levels = 32 - max_dim.leading_zeros();
 
         max_levels as u8
@@ -2245,15 +2245,15 @@ impl Extent3d {
     ///
     /// ```rust
     /// # use wgpu_types as wgpu;
-    /// let extent = wgpu::Extent3d { width: 100, height: 60, depth: 1 };
+    /// let extent = wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 };
     ///
-    /// assert_eq!(extent.at_mip_level(0), Some(wgpu::Extent3d { width: 100, height: 60, depth: 1 }));
-    /// assert_eq!(extent.at_mip_level(1), Some(wgpu::Extent3d { width: 50, height: 30, depth: 1 }));
-    /// assert_eq!(extent.at_mip_level(2), Some(wgpu::Extent3d { width: 25, height: 15, depth: 1 }));
-    /// assert_eq!(extent.at_mip_level(3), Some(wgpu::Extent3d { width: 12, height: 7, depth: 1 }));
-    /// assert_eq!(extent.at_mip_level(4), Some(wgpu::Extent3d { width: 6, height: 3, depth: 1 }));
-    /// assert_eq!(extent.at_mip_level(5), Some(wgpu::Extent3d { width: 3, height: 1, depth: 1 }));
-    /// assert_eq!(extent.at_mip_level(6), Some(wgpu::Extent3d { width: 1, height: 1, depth: 1 }));
+    /// assert_eq!(extent.at_mip_level(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
+    /// assert_eq!(extent.at_mip_level(1), Some(wgpu::Extent3d { width: 50, height: 30, depth_or_array_layers: 1 }));
+    /// assert_eq!(extent.at_mip_level(2), Some(wgpu::Extent3d { width: 25, height: 15, depth_or_array_layers: 1 }));
+    /// assert_eq!(extent.at_mip_level(3), Some(wgpu::Extent3d { width: 12, height: 7, depth_or_array_layers: 1 }));
+    /// assert_eq!(extent.at_mip_level(4), Some(wgpu::Extent3d { width: 6, height: 3, depth_or_array_layers: 1 }));
+    /// assert_eq!(extent.at_mip_level(5), Some(wgpu::Extent3d { width: 3, height: 1, depth_or_array_layers: 1 }));
+    /// assert_eq!(extent.at_mip_level(6), Some(wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }));
     /// assert_eq!(extent.at_mip_level(7), None);
     /// ```
     pub fn at_mip_level(&self, level: u8) -> Option<Self> {
@@ -2263,10 +2263,10 @@ impl Extent3d {
             return None;
         }
 
-        Some(Extent3d {
+        Some(Self {
             width: u32::max(1, self.width >> level as u32),
             height: u32::max(1, self.height >> level as u32),
-            depth: u32::max(1, self.depth >> level as u32),
+            depth_or_array_layers: u32::max(1, self.depth_or_array_layers >> level as u32),
         })
     }
 }

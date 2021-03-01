@@ -160,7 +160,7 @@ pub fn map_extent(extent: &wgt::Extent3d, dim: wgt::TextureDimension) -> hal::im
         height: extent.height,
         depth: match dim {
             wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => 1,
-            wgt::TextureDimension::D3 => extent.depth,
+            wgt::TextureDimension::D3 => extent.depth_or_array_layers,
         },
     }
 }
@@ -518,7 +518,7 @@ pub fn map_texture_dimension_size(
     wgt::Extent3d {
         width,
         height,
-        depth,
+        depth_or_array_layers,
     }: wgt::Extent3d,
     sample_size: u32,
 ) -> Result<hal::image::Kind, resource::TextureDimensionError> {
@@ -530,7 +530,7 @@ pub fn map_texture_dimension_size(
         Some(resource::TextureErrorDimension::X)
     } else if height == 0 {
         Some(resource::TextureErrorDimension::Y)
-    } else if depth == 0 {
+    } else if depth_or_array_layers == 0 {
         Some(resource::TextureErrorDimension::Z)
     } else {
         None
@@ -547,21 +547,21 @@ pub fn map_texture_dimension_size(
             if sample_size != 1 {
                 return Err(Tde::InvalidSampleCount(sample_size));
             }
-            let layers = depth.try_into().unwrap_or(!0);
+            let layers = depth_or_array_layers.try_into().unwrap_or(!0);
             H::D1(width, layers)
         }
         D2 => {
             if sample_size > 32 || !is_power_of_two(sample_size) {
                 return Err(Tde::InvalidSampleCount(sample_size));
             }
-            let layers = depth.try_into().unwrap_or(!0);
+            let layers = depth_or_array_layers.try_into().unwrap_or(!0);
             H::D2(width, height, layers, sample_size as u8)
         }
         D3 => {
             if sample_size != 1 {
                 return Err(Tde::InvalidSampleCount(sample_size));
             }
-            H::D3(width, height, depth)
+            H::D3(width, height, depth_or_array_layers)
         }
     })
 }
