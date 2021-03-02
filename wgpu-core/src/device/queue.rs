@@ -816,6 +816,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             callbacks
         };
 
+        // the map callbacks should execute with nothing locked!
+        drop(token);
         super::fire_map_callbacks(callbacks);
 
         Ok(())
