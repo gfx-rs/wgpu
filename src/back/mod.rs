@@ -1,5 +1,7 @@
 //! Functions which export shader modules into binary and text formats.
 
+#[cfg(feature = "dot-out")]
+pub mod dot;
 #[cfg(feature = "glsl-out")]
 pub mod glsl;
 #[cfg(feature = "msl-out")]

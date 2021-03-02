@@ -15,3 +15,4 @@ jobs:
         run: sudo apt-get install spirv-tools glslang-tools
       - run: make validate-spv
       - run: make validate-glsl
+      - run: make validate-dot

@@ -1,4 +1,4 @@
-.PHONY: all clean validate-spv validate-msl validate-glsl
+.PHONY: all clean validate-spv validate-msl validate-glsl validate-dot
 .SECONDARY: boids.metal quad.metal
 SNAPSHOTS_IN=tests/in
 SNAPSHOTS_OUT=tests/out
@@ -9,7 +9,7 @@ clean:
 	rm *.metal *.air *.metallib *.vert *.frag *.comp *.spv
 
 %.metal: $(SNAPSHOTS_IN)/%.wgsl $(wildcard src/*.rs src/**/*.rs examples/*.rs)
-	cargo run --example convert --features wgsl-in,msl-out -- $< $@
+	cargo run --features wgsl-in,msl-out -- $< $@
 
 %.air: %.metal
 	xcrun -sdk macosx metal -c $< -mmacosx-version-min=10.11
@@ -17,13 +17,11 @@ clean:
 %.metallib: %.air
 	xcrun -sdk macosx metallib $< -o $@
 
-%.spv: test-data/%.wgsl $(wildcard src/*.rs src/**/*.rs examples/*.rs)
-	cargo run --example convert --features wgsl-in,spv-out -- $< $@
-	spirv-val $@
+%.dot: $(SNAPSHOTS_IN)/%.wgsl $(wildcard src/*.rs src/front/wgsl/*.rs src/back/dot/*.rs bin/convert.rs)
+	cargo run --features wgsl-in,dot-out -- $< $@
 
-%.vert %.frag %.comp: test-data/%.wgsl $(wildcard src/*.rs src/**/*.rs examples/*.rs)
-	cargo run --example convert --features wgsl-in,glsl-out -- $< $@
-	glslangValidator $@
+%.png: %.dot
+	dot -Tpng $< -o $@
 
 validate-spv: $(SNAPSHOTS_OUT)/*.spvasm.snap
 	@set -e && for file in $^ ; do \
@@ -49,4 +47,10 @@ validate-glsl: $(SNAPSHOTS_OUT)/*.glsl.snap
 	@set -e && for file in $(SNAPSHOTS_OUT)/*-Compute.glsl.snap ; do \
 		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/snapshots__"};\
 		tail -n +5 $${file} | glslangValidator --stdin -S comp; \
+	done
+
+validate-dot: $(SNAPSHOTS_OUT)/*.dot.snap
+	@set -e && for file in $^ ; do \
+		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/snapshots__"};	\
+		tail -n +5 $${file} | dot -o /dev/null; \
 	done

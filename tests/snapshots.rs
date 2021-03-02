@@ -5,6 +5,7 @@ bitflags::bitflags! {
         const SPIRV = 0x4;
         const METAL = 0x8;
         const GLSL = 0x10;
+        const DOT = 0x20;
     }
 }
 
@@ -100,6 +101,15 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
             for &(stage, ref ep_name) in module.entry_points.keys() {
                 check_output_glsl(module, &analysis, name, stage, ep_name);
             }
+        }
+    }
+    #[cfg(feature = "dot-out")]
+    {
+        if targets.contains(Targets::DOT) {
+            let string = naga::back::dot::write(module).unwrap();
+            with_snapshot_settings(|| {
+                insta::assert_snapshot!(format!("{}.dot", name), string);
+            });
         }
     }
 }
@@ -213,7 +223,10 @@ fn convert_wgsl(name: &str, targets: Targets) {
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_quad() {
-    convert_wgsl("quad", Targets::SPIRV | Targets::METAL | Targets::GLSL);
+    convert_wgsl(
+        "quad",
+        Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::DOT,
+    );
 }
 
 #[cfg(feature = "wgsl-in")]
@@ -278,7 +291,7 @@ fn convert_glsl(
     entry_points: naga::FastHashMap<String, naga::ShaderStage>,
     _targets: Targets,
 ) {
-    let module = naga::front::glsl::parse_str(
+    let _module = naga::front::glsl::parse_str(
         &std::fs::read_to_string(format!("tests/in/{}{}", name, ".glsl"))
             .expect("Couldn't find glsl file"),
         &naga::front::glsl::Options {

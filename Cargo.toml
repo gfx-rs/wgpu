@@ -25,6 +25,7 @@ pp-rs = { git = "https://github.com/Kangz/glslpp-rs", rev = "4f2f72a", optional 
 
 [features]
 default = []
+dot-out = []
 glsl-in = ["pomelo", "pp-rs"]
 glsl-validate = []
 glsl-out = ["petgraph"]
