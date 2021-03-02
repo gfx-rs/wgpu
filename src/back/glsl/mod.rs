@@ -376,6 +376,16 @@ impl<'a, W: Write> Writer<'a, W> {
             writeln!(self.out)?;
         }
 
+        if self.options.shader_stage == ShaderStage::Compute {
+            let workgroup_size = self.entry_point.workgroup_size;
+            writeln!(
+                self.out,
+                "layout(local_size_x = {}, local_size_y = {}, local_size_z = {}) in;",
+                workgroup_size[0], workgroup_size[1], workgroup_size[2]
+            )?;
+            writeln!(self.out)?;
+        }
+
         // Enable early depth tests if needed
         if let Some(depth_test) = self.entry_point.early_depth_test {
             writeln!(self.out, "layout(early_fragment_tests) in;")?;
