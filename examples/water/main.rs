@@ -187,7 +187,7 @@ impl Example {
         let texture_extent = wgpu::Extent3d {
             width: sc_desc.width,
             height: sc_desc.height,
-            depth: 1,
+            depth_or_array_layers: 1,
         };
 
         let reflection_texture = device.create_texture(&wgpu::TextureDescriptor {

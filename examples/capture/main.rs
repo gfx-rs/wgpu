@@ -61,7 +61,7 @@ async fn create_red_image_with_dimensions(
     let texture_extent = wgpu::Extent3d {
         width: buffer_dimensions.width as u32,
         height: buffer_dimensions.height as u32,
-        depth: 1,
+        depth_or_array_layers: 1,
     };
 
     // The render pipeline renders data into this texture

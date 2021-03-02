@@ -130,11 +130,7 @@ impl framework::Example for Example {
         let green_texture_data = create_texture_data(Color::GREEN);
 
         let texture_descriptor = wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth: 1,
-            },
+            size: wgpu::Extent3d::default(),
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -166,11 +162,7 @@ impl framework::Example for Example {
                 bytes_per_row: 4,
                 rows_per_image: 0,
             },
-            wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth: 1,
-            },
+            wgpu::Extent3d::default(),
         );
         queue.write_texture(
             wgpu::TextureCopyView {
@@ -184,11 +176,7 @@ impl framework::Example for Example {
                 bytes_per_row: 4,
                 rows_per_image: 0,
             },
-            wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth: 1,
-            },
+            wgpu::Extent3d::default(),
         );
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
