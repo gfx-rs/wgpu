@@ -89,8 +89,14 @@ pub enum CreateBindGroupError {
     SwapChainImage,
     #[error("buffer offset {0} does not respect `BIND_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(wgt::BufferAddress),
-    #[error("uniform buffer binding range exceeds `max_uniform_buffer_binding_size` limit")]
-    UniformBufferRangeTooLarge,
+    #[error(
+        "buffer binding {binding} range {given} exceeds `max_*_buffer_binding_size` limit {limit}"
+    )]
+    BufferRangeTooLarge {
+        binding: u32,
+        given: u32,
+        limit: u32,
+    },
     #[error("binding {binding} has a different type ({actual:?}) than the one in the layout ({expected:?})")]
     WrongBindingType {
         // Index of the binding

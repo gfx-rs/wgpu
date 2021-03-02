@@ -213,7 +213,7 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum TextureErrorDimension {
     X,
     Y,
@@ -224,8 +224,12 @@ pub enum TextureErrorDimension {
 pub enum TextureDimensionError {
     #[error("Dimension {0:?} is zero")]
     Zero(TextureErrorDimension),
-    #[error("1D textures must have height set to 1")]
-    InvalidHeight,
+    #[error("Dimension {0:?} value {given} exceeds the limit of {limit}")]
+    LimitExceeded {
+        dim: TextureErrorDimension,
+        given: u32,
+        limit: u32,
+    },
     #[error("sample count {0} is invalid")]
     InvalidSampleCount(u32),
 }

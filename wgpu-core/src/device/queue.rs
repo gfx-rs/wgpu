@@ -321,7 +321,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if size.width == 0 || size.height == 0 || size.depth == 0 {
+        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
             tracing::trace!("Ignoring write_texture of size 0");
             return Ok(());
         }
@@ -359,7 +359,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         let stage_bytes_per_row = align_to(bytes_per_block * width_blocks, bytes_per_row_alignment);
 
-        let block_rows_in_copy = (size.depth - 1) * block_rows_per_image + height_blocks;
+        let block_rows_in_copy =
+            (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
         let mut stage = device.prepare_stage(stage_size)?;
 
@@ -403,7 +404,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // Copy row by row into the optimal alignment.
                 let copy_bytes_per_row =
                     stage_bytes_per_row.min(data_layout.bytes_per_row) as usize;
-                for layer in 0..size.depth {
+                for layer in 0..size.depth_or_array_layers {
                     let rows_offset = layer * block_rows_per_image;
                     for row in 0..height_blocks {
                         ptr::copy_nonoverlapping(
@@ -432,7 +433,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let image_extent = wgt::Extent3d {
             width: size.width.min(max_image_extent.width),
             height: size.height.min(max_image_extent.height),
-            depth: size.depth,
+            depth_or_array_layers: size.depth_or_array_layers,
         };
 
         let region = hal::command::BufferImageCopy {

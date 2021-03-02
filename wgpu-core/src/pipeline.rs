@@ -203,6 +203,12 @@ pub enum CreateRenderPipelineError {
     IncompatibleOutputFormat { index: u8 },
     #[error("invalid sample count {0}")]
     InvalidSampleCount(u32),
+    #[error("the number of vertex buffers {given} exceeds the limit {limit}")]
+    TooManyVertexBuffers { given: u32, limit: u32 },
+    #[error("the total number of vertex attributes {given} exceeds the limit {limit}")]
+    TooManyVertexAttributes { given: u32, limit: u32 },
+    #[error("vertex buffer {index} stride {given} exceeds the limit {limit}")]
+    VertexStrideTooLarge { index: u32, given: u32, limit: u32 },
     #[error("vertex buffer {index} stride {stride} does not respect `VERTEX_STRIDE_ALIGNMENT`")]
     UnalignedVertexStride {
         index: u32,

@@ -442,6 +442,20 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct Limits {
+    /// Maximum allowed value for the `size.width` of a texture created with `TextureDimension::D1`.
+    /// Defaults to 8192. Higher is "better".
+    pub max_texture_dimension_1d: u32,
+    /// Maximum allowed value for the `size.width` and `size.height` of a texture created with `TextureDimension::D2`.
+    /// Defaults to 8192. Higher is "better".
+    pub max_texture_dimension_2d: u32,
+    /// Maximum allowed value for the `size.width`, `size.height`, and `size.depth_or_array_layers`
+    /// of a texture created with `TextureDimension::D3`.
+    /// Defaults to 2048. Higher is "better".
+    pub max_texture_dimension_3d: u32,
+    /// Maximum allowed value for the `size.depth_or_array_layers` of a texture created with
+    /// `TextureDimension::D1` or `TextureDimension::D2`.
+    /// Defaults to 2048. Higher is "better".
+    pub max_texture_array_layers: u32,
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
     /// Amount of uniform buffer bindings that can be dynamic in a single pipeline. Defaults to 8. Higher is "better".
@@ -460,6 +474,18 @@ pub struct Limits {
     pub max_uniform_buffers_per_shader_stage: u32,
     /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 16384. Higher is "better".
     pub max_uniform_buffer_binding_size: u32,
+    /// Maximum size in bytes of a binding to a storage buffer. Defaults to 128 MB. Higher is "better".
+    pub max_storage_buffer_binding_size: u32,
+    /// Maximum length of `VertexState::buffers` when creating a `RenderPipeline`.
+    /// Defaults to 8. Higher is "better".
+    pub max_vertex_buffers: u32,
+    /// Maximum length of `VertexBufferLayout::attributes`, summed over all `VertexState::buffers`,
+    /// when creating a `RenderPipeline`.
+    /// Defaults to 16. Higher is "better".
+    pub max_vertex_attributes: u32,
+    /// Maximum value for `VertexBufferLayout::array_stride` when creating a `RenderPipeline`.
+    /// Defaults to 2048. Higher is "better".
+    pub max_vertex_buffer_array_stride: u32,
     /// Amount of storage available for push constants in bytes. Defaults to 0. Higher is "better".
     /// Requesting more than 0 during device creation requires [`Features::PUSH_CONSTANTS`] to be enabled.
     ///
@@ -475,6 +501,10 @@ pub struct Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self {
+            max_texture_dimension_1d: 8192,
+            max_texture_dimension_2d: 8192,
+            max_texture_dimension_3d: 2048,
+            max_texture_array_layers: 2048,
             max_bind_groups: 4,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
@@ -484,6 +514,10 @@ impl Default for Limits {
             max_storage_textures_per_shader_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
             max_uniform_buffer_binding_size: 16384,
+            max_storage_buffer_binding_size: 128 << 20,
+            max_vertex_buffers: 8,
+            max_vertex_attributes: 16,
+            max_vertex_buffer_array_stride: 2048,
             max_push_constant_size: 0,
         }
     }
@@ -2164,7 +2198,7 @@ pub struct Extent3d {
     ///
     pub height: u32,
     ///
-    pub depth: u32,
+    pub depth_or_array_layers: u32,
 }
 
 impl Default for Extent3d {
@@ -2172,7 +2206,7 @@ impl Default for Extent3d {
         Self {
             width: 1,
             height: 1,
-            depth: 1,
+            depth_or_array_layers: 1,
         }
     }
 }
@@ -2187,18 +2221,18 @@ impl Extent3d {
     /// # use wgpu_types as wgpu;
     /// let format = wgpu::TextureFormat::Bc1RgbaUnormSrgb; // 4x4 blocks
     /// assert_eq!(
-    ///     wgpu::Extent3d { width: 7, height: 7, depth: 1 }.physical_size(format),
-    ///     wgpu::Extent3d { width: 8, height: 8, depth: 1 }
+    ///     wgpu::Extent3d { width: 7, height: 7, depth_or_array_layers: 1 }.physical_size(format),
+    ///     wgpu::Extent3d { width: 8, height: 8, depth_or_array_layers: 1 }
     /// );
     /// // Doesn't change, already aligned
     /// assert_eq!(
-    ///     wgpu::Extent3d { width: 8, height: 8, depth: 1 }.physical_size(format),
-    ///     wgpu::Extent3d { width: 8, height: 8, depth: 1 }
+    ///     wgpu::Extent3d { width: 8, height: 8, depth_or_array_layers: 1 }.physical_size(format),
+    ///     wgpu::Extent3d { width: 8, height: 8, depth_or_array_layers: 1 }
     /// );
     /// let format = wgpu::TextureFormat::Astc8x5RgbaUnorm; // 8x5 blocks
     /// assert_eq!(
-    ///     wgpu::Extent3d { width: 7, height: 7, depth: 1 }.physical_size(format),
-    ///     wgpu::Extent3d { width: 8, height: 10, depth: 1 }
+    ///     wgpu::Extent3d { width: 7, height: 7, depth_or_array_layers: 1 }.physical_size(format),
+    ///     wgpu::Extent3d { width: 8, height: 10, depth_or_array_layers: 1 }
     /// );
     /// ```
     ///
@@ -2214,7 +2248,7 @@ impl Extent3d {
         Self {
             width,
             height,
-            depth: self.depth,
+            depth_or_array_layers: self.depth_or_array_layers,
         }
     }
 
@@ -2225,12 +2259,12 @@ impl Extent3d {
     ///
     /// ```rust
     /// # use wgpu_types as wgpu;
-    /// assert_eq!(wgpu::Extent3d { width: 1, height: 1, depth: 1 }.max_mips(), 1);
-    /// assert_eq!(wgpu::Extent3d { width: 60, height: 60, depth: 1 }.max_mips(), 6);
-    /// assert_eq!(wgpu::Extent3d { width: 240, height: 1, depth: 1 }.max_mips(), 8);
+    /// assert_eq!(wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }.max_mips(), 1);
+    /// assert_eq!(wgpu::Extent3d { width: 60, height: 60, depth_or_array_layers: 1 }.max_mips(), 6);
+    /// assert_eq!(wgpu::Extent3d { width: 240, height: 1, depth_or_array_layers: 1 }.max_mips(), 8);
     /// ```
     pub fn max_mips(&self) -> u8 {
-        let max_dim = self.width.max(self.height.max(self.depth));
+        let max_dim = self.width.max(self.height.max(self.depth_or_array_layers));
         let max_levels = 32 - max_dim.leading_zeros();
 
         max_levels as u8
@@ -2245,15 +2279,15 @@ impl Extent3d {
     ///
     /// ```rust
     /// # use wgpu_types as wgpu;
-    /// let extent = wgpu::Extent3d { width: 100, height: 60, depth: 1 };
+    /// let extent = wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 };
     ///
-    /// assert_eq!(extent.at_mip_level(0), Some(wgpu::Extent3d { width: 100, height: 60, depth: 1 }));
-    /// assert_eq!(extent.at_mip_level(1), Some(wgpu::Extent3d { width: 50, height: 30, depth: 1 }));
-    /// assert_eq!(extent.at_mip_level(2), Some(wgpu::Extent3d { width: 25, height: 15, depth: 1 }));
-    /// assert_eq!(extent.at_mip_level(3), Some(wgpu::Extent3d { width: 12, height: 7, depth: 1 }));
-    /// assert_eq!(extent.at_mip_level(4), Some(wgpu::Extent3d { width: 6, height: 3, depth: 1 }));
-    /// assert_eq!(extent.at_mip_level(5), Some(wgpu::Extent3d { width: 3, height: 1, depth: 1 }));
-    /// assert_eq!(extent.at_mip_level(6), Some(wgpu::Extent3d { width: 1, height: 1, depth: 1 }));
+    /// assert_eq!(extent.at_mip_level(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
+    /// assert_eq!(extent.at_mip_level(1), Some(wgpu::Extent3d { width: 50, height: 30, depth_or_array_layers: 1 }));
+    /// assert_eq!(extent.at_mip_level(2), Some(wgpu::Extent3d { width: 25, height: 15, depth_or_array_layers: 1 }));
+    /// assert_eq!(extent.at_mip_level(3), Some(wgpu::Extent3d { width: 12, height: 7, depth_or_array_layers: 1 }));
+    /// assert_eq!(extent.at_mip_level(4), Some(wgpu::Extent3d { width: 6, height: 3, depth_or_array_layers: 1 }));
+    /// assert_eq!(extent.at_mip_level(5), Some(wgpu::Extent3d { width: 3, height: 1, depth_or_array_layers: 1 }));
+    /// assert_eq!(extent.at_mip_level(6), Some(wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }));
     /// assert_eq!(extent.at_mip_level(7), None);
     /// ```
     pub fn at_mip_level(&self, level: u8) -> Option<Self> {
@@ -2263,10 +2297,10 @@ impl Extent3d {
             return None;
         }
 
-        Some(Extent3d {
+        Some(Self {
             width: u32::max(1, self.width >> level as u32),
             height: u32::max(1, self.height >> level as u32),
-            depth: u32::max(1, self.depth >> level as u32),
+            depth_or_array_layers: u32::max(1, self.depth_or_array_layers >> level as u32),
         })
     }
 }

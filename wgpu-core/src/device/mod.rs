@@ -643,7 +643,12 @@ impl<B: GfxBackend> Device<B> {
             ));
         }
 
-        let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.sample_count)?;
+        let kind = conv::map_texture_dimension_size(
+            desc.dimension,
+            desc.size,
+            desc.sample_count,
+            &self.limits,
+        )?;
         let format = conv::map_texture_format(desc.format, self.private_features);
         let aspects = format.surface_desc().aspects;
         let usage = conv::map_texture_usage(desc.usage, aspects);
@@ -660,7 +665,7 @@ impl<B: GfxBackend> Device<B> {
         let mut view_caps = hal::image::ViewCapabilities::empty();
         // 2D textures with array layer counts that are multiples of 6 could be cubemaps
         // Following gpuweb/gpuweb#68 always add the hint in that case
-        if desc.dimension == TextureDimension::D2 && desc.size.depth % 6 == 0 {
+        if desc.dimension == TextureDimension::D2 && desc.size.depth_or_array_layers % 6 == 0 {
             view_caps |= hal::image::ViewCapabilities::KIND_CUBE;
         };
 
@@ -874,7 +879,7 @@ impl<B: GfxBackend> Device<B> {
             extent: wgt::Extent3d {
                 width: hal_extent.width,
                 height: hal_extent.height,
-                depth: view_layer_count,
+                depth_or_array_layers: view_layer_count,
             },
             samples: texture.kind.num_samples(),
             framebuffer_attachment: texture.framebuffer_attachment.clone(),
@@ -1312,10 +1317,12 @@ impl<B: GfxBackend> Device<B> {
                             })
                         }
                     };
-                    let (pub_usage, internal_use) = match binding_ty {
-                        wgt::BufferBindingType::Uniform => {
-                            (wgt::BufferUsage::UNIFORM, resource::BufferUse::UNIFORM)
-                        }
+                    let (pub_usage, internal_use, range_limit) = match binding_ty {
+                        wgt::BufferBindingType::Uniform => (
+                            wgt::BufferUsage::UNIFORM,
+                            resource::BufferUse::UNIFORM,
+                            self.limits.max_uniform_buffer_binding_size,
+                        ),
                         wgt::BufferBindingType::Storage { read_only } => (
                             wgt::BufferUsage::STORAGE,
                             if read_only {
@@ -1323,6 +1330,7 @@ impl<B: GfxBackend> Device<B> {
                             } else {
                                 resource::BufferUse::STORAGE_STORE
                             },
+                            self.limits.max_storage_buffer_binding_size,
                         ),
                     };
 
@@ -1355,10 +1363,12 @@ impl<B: GfxBackend> Device<B> {
                         None => (buffer.size - bb.offset, buffer.size),
                     };
 
-                    if binding_ty == wgt::BufferBindingType::Uniform
-                        && (self.limits.max_uniform_buffer_binding_size as u64) < bind_size
-                    {
-                        return Err(Error::UniformBufferRangeTooLarge);
+                    if bind_size > range_limit as u64 {
+                        return Err(Error::BufferRangeTooLarge {
+                            binding,
+                            given: bind_size as u32,
+                            limit: range_limit,
+                        });
                     }
 
                     // Record binding info for validating dynamic offsets
@@ -2029,6 +2039,13 @@ impl<B: GfxBackend> Device<B> {
             if vb_state.attributes.is_empty() {
                 continue;
             }
+            if vb_state.array_stride > self.limits.max_vertex_buffer_array_stride as u64 {
+                return Err(pipeline::CreateRenderPipelineError::VertexStrideTooLarge {
+                    index: i as u32,
+                    given: vb_state.array_stride as u32,
+                    limit: self.limits.max_vertex_buffer_array_stride,
+                });
+            }
             if vb_state.array_stride % wgt::VERTEX_STRIDE_ALIGNMENT != 0 {
                 return Err(pipeline::CreateRenderPipelineError::UnalignedVertexStride {
                     index: i as u32,
@@ -2082,6 +2099,21 @@ impl<B: GfxBackend> Device<B> {
                     validation::NumericType::from_vertex_format(attribute.format),
                 );
             }
+        }
+
+        if vertex_buffers.len() > self.limits.max_vertex_buffers as usize {
+            return Err(pipeline::CreateRenderPipelineError::TooManyVertexBuffers {
+                given: vertex_buffers.len() as u32,
+                limit: self.limits.max_vertex_buffers,
+            });
+        }
+        if attributes.len() > self.limits.max_vertex_attributes as usize {
+            return Err(
+                pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
+                    given: attributes.len() as u32,
+                    limit: self.limits.max_vertex_attributes,
+                },
+            );
         }
 
         if desc.primitive.strip_index_format.is_some()

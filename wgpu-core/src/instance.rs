@@ -217,6 +217,20 @@ impl<B: GfxBackend> Adapter<B> {
         // TODO: fix all gfx-hal backends to produce limits we care about, and remove .max
         let desc_limits = &properties.limits.descriptor_limits;
         let limits = wgt::Limits {
+            max_texture_dimension_1d: properties
+                .limits
+                .max_image_1d_size
+                .max(default_limits.max_texture_dimension_1d),
+            max_texture_dimension_2d: properties
+                .limits
+                .max_image_2d_size
+                .max(default_limits.max_texture_dimension_1d),
+            max_texture_dimension_3d: properties
+                .limits
+                .max_image_3d_size
+                .max(default_limits.max_texture_dimension_1d),
+            max_texture_array_layers: (properties.limits.max_image_array_layers as u32)
+                .max(default_limits.max_texture_array_layers),
             max_bind_groups: (properties.limits.max_bound_descriptor_sets as u32)
                 .min(MAX_BIND_GROUPS as u32)
                 .max(default_limits.max_bind_groups),
@@ -243,6 +257,15 @@ impl<B: GfxBackend> Adapter<B> {
                 .max(default_limits.max_uniform_buffers_per_shader_stage),
             max_uniform_buffer_binding_size: (properties.limits.max_uniform_buffer_range as u32)
                 .max(default_limits.max_uniform_buffer_binding_size),
+            max_storage_buffer_binding_size: (properties.limits.max_storage_buffer_range as u32)
+                .max(default_limits.max_storage_buffer_binding_size),
+            max_vertex_buffers: (properties.limits.max_vertex_input_bindings as u32)
+                .max(default_limits.max_vertex_buffers),
+            max_vertex_attributes: (properties.limits.max_vertex_input_attributes as u32)
+                .max(default_limits.max_vertex_attributes),
+            max_vertex_buffer_array_stride: (properties.limits.max_vertex_input_binding_stride
+                as u32)
+                .max(default_limits.max_vertex_buffer_array_stride),
             max_push_constant_size: (properties.limits.max_push_constants_size as u32)
                 .max(MIN_PUSH_CONSTANT_SIZE), // As an extension, the default is always 0, so define a separate minimum.
         };
