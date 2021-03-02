@@ -272,10 +272,13 @@ impl framework::Example for Skybox {
         let size = wgpu::Extent3d {
             width: IMAGE_SIZE,
             height: IMAGE_SIZE,
-            depth: 6,
+            depth_or_array_layers: 6,
         };
 
-        let layer_size = wgpu::Extent3d { depth: 1, ..size };
+        let layer_size = wgpu::Extent3d {
+            depth_or_array_layers: 1,
+            ..size
+        };
         let max_mips = layer_size.max_mips();
 
         log::debug!(
@@ -338,7 +341,7 @@ impl framework::Example for Skybox {
             size: wgpu::Extent3d {
                 width: sc_desc.width,
                 height: sc_desc.height,
-                depth: 1,
+                depth_or_array_layers: 1,
             },
             mip_level_count: 1,
             sample_count: 1,

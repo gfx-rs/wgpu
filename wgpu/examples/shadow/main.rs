@@ -171,7 +171,7 @@ impl Example {
     const SHADOW_SIZE: wgpu::Extent3d = wgpu::Extent3d {
         width: 512,
         height: 512,
-        depth: Self::MAX_LIGHTS as u32,
+        depth_or_array_layers: Self::MAX_LIGHTS as u32,
     };
     const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
@@ -641,7 +641,7 @@ impl framework::Example for Example {
             size: wgpu::Extent3d {
                 width: sc_desc.width,
                 height: sc_desc.height,
-                depth: 1,
+                depth_or_array_layers: 1,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -687,7 +687,7 @@ impl framework::Example for Example {
             size: wgpu::Extent3d {
                 width: sc_desc.width,
                 height: sc_desc.height,
-                depth: 1,
+                depth_or_array_layers: 1,
             },
             mip_level_count: 1,
             sample_count: 1,
