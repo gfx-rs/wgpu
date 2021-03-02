@@ -557,8 +557,9 @@ impl<'a, W: Write> Writer<'a, W> {
             TypeInner::Pointer { base, .. } => self.write_type(base)?,
             // Arrays are written as `base[size]`
             TypeInner::Array { base, size, .. } => {
-                self.write_type(base)?;
+                let ty_name = &self.names[&NameKey::Type(base)];
 
+                write!(self.out, "{}", ty_name)?;
                 write!(self.out, "[")?;
 
                 // Write the array size
