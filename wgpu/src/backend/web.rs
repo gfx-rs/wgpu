@@ -980,9 +980,9 @@ impl crate::Context for Context {
         &self,
         _adapter: &Self::AdapterId,
         _surface: &Self::SurfaceId,
-    ) -> wgt::TextureFormat {
+    ) -> Option<wgt::TextureFormat> {
         // TODO: web-sys bindings need to be updated to not return a promise
-        wgt::TextureFormat::Bgra8Unorm
+        Some(wgt::TextureFormat::Bgra8Unorm)
     }
 
     fn adapter_features(&self, _adapter: &Self::AdapterId) -> wgt::Features {
