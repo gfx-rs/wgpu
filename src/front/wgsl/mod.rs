@@ -16,7 +16,7 @@ use crate::{
 use self::lexer::Lexer;
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
-    files::SimpleFile,
+    files::{Files, SimpleFile},
     term::{
         self,
         termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor},
@@ -393,6 +393,7 @@ impl<'a> ParseError<'a> {
         diagnostic
     }
 
+    /// Emits a summary of the error to standard error stream.
     pub fn emit_to_stderr(&self) {
         let files = SimpleFile::new("wgsl", self.source);
         let config = codespan_reporting::term::Config::default();
@@ -401,12 +402,28 @@ impl<'a> ParseError<'a> {
             .expect("cannot write error");
     }
 
+    /// Emits a summary of the error to a string.
     pub fn emit_to_string(&self) -> String {
         let files = SimpleFile::new("wgsl", self.source);
         let config = codespan_reporting::term::Config::default();
         let mut writer = StringErrorBuffer::new();
         term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
         writer.into_string()
+    }
+
+    /// Returns the 1-based line number and column of the first label in the
+    /// error message.
+    pub fn location(&self) -> (usize, usize) {
+        let files = SimpleFile::new("wgsl", self.source);
+        match self.labels.get(0) {
+            Some(label) => {
+                let location = files
+                    .location((), label.0.start)
+                    .expect("invalid span location");
+                (location.line_number, location.column_number)
+            }
+            None => (1, 1),
+        }
     }
 }
 
