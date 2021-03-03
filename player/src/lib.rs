@@ -254,10 +254,21 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyShaderModule(id) => {
                 self.shader_module_drop::<B>(id);
             }
-            A::CreateComputePipeline(id, desc) => {
+            A::CreateComputePipeline {
+                id,
+                desc,
+                implicit_context,
+            } => {
                 self.device_maintain_ids::<B>(device).unwrap();
+                let implicit_ids =
+                    implicit_context
+                        .as_ref()
+                        .map(|ic| wgc::device::ImplicitPipelineIds {
+                            root_id: ic.root_id,
+                            group_ids: &ic.group_ids,
+                        });
                 let (_, _, error) =
-                    self.device_create_compute_pipeline::<B>(device, &desc, id, None);
+                    self.device_create_compute_pipeline::<B>(device, &desc, id, implicit_ids);
                 if let Some(e) = error {
                     panic!("{:?}", e);
                 }
@@ -265,10 +276,21 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyComputePipeline(id) => {
                 self.compute_pipeline_drop::<B>(id);
             }
-            A::CreateRenderPipeline(id, desc) => {
+            A::CreateRenderPipeline {
+                id,
+                desc,
+                implicit_context,
+            } => {
                 self.device_maintain_ids::<B>(device).unwrap();
+                let implicit_ids =
+                    implicit_context
+                        .as_ref()
+                        .map(|ic| wgc::device::ImplicitPipelineIds {
+                            root_id: ic.root_id,
+                            group_ids: &ic.group_ids,
+                        });
                 let (_, _, error) =
-                    self.device_create_render_pipeline::<B>(device, &desc, id, None);
+                    self.device_create_render_pipeline::<B>(device, &desc, id, implicit_ids);
                 if let Some(e) = error {
                     panic!("{:?}", e);
                 }

@@ -16,9 +16,9 @@ default = []
 # Enable SPIRV-Cross
 cross = ["gfx-backend-metal/cross", "gfx-backend-gl/cross"]
 # Enable API tracing
-trace = ["ron", "serde", "wgt/trace", "naga/serialize"]
+trace = ["ron", "serde", "wgt/trace", "arrayvec/serde"]
 # Enable API replaying
-replay = ["serde", "wgt/replay", "naga/deserialize"]
+replay = ["serde", "wgt/replay", "arrayvec/serde"]
 # Enable serializable compute/render passes, and bundle encoders.
 serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 

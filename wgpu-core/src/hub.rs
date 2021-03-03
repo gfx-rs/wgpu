@@ -451,6 +451,10 @@ impl<I: TypedId + Copy, T> FutureId<'_, I, T> {
         self.id
     }
 
+    pub fn into_id(self) -> I {
+        self.id
+    }
+
     pub fn assign<'a, A: Access<T>>(self, value: T, _: &'a mut Token<A>) -> Valid<I> {
         self.data.write().insert(self.id, value);
         Valid(self.id)
@@ -495,17 +499,6 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
         token: &mut Token<A>,
     ) -> Valid<I> {
         self.prepare(id_in).assign(value, token)
-    }
-
-    pub(crate) fn register_identity_locked(
-        &self,
-        id_in: <F::Filter as IdentityHandler<I>>::Input,
-        value: T,
-        guard: &mut Storage<T, I>,
-    ) -> Valid<I> {
-        let id = self.identity.process(id_in, self.backend);
-        guard.insert(id, value);
-        Valid(id)
     }
 
     //TODO: consider remove this once everything uses `prepare`

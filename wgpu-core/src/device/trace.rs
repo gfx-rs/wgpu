@@ -75,15 +75,19 @@ pub enum Action<'a> {
         data: FileName,
     },
     DestroyShaderModule(id::ShaderModuleId),
-    CreateComputePipeline(
-        id::ComputePipelineId,
-        crate::pipeline::ComputePipelineDescriptor<'a>,
-    ),
+    CreateComputePipeline {
+        id: id::ComputePipelineId,
+        desc: crate::pipeline::ComputePipelineDescriptor<'a>,
+        #[cfg_attr(feature = "replay", serde(default))]
+        implicit_context: Option<super::ImplicitPipelineContext>,
+    },
     DestroyComputePipeline(id::ComputePipelineId),
-    CreateRenderPipeline(
-        id::RenderPipelineId,
-        crate::pipeline::RenderPipelineDescriptor<'a>,
-    ),
+    CreateRenderPipeline {
+        id: id::RenderPipelineId,
+        desc: crate::pipeline::RenderPipelineDescriptor<'a>,
+        #[cfg_attr(feature = "replay", serde(default))]
+        implicit_context: Option<super::ImplicitPipelineContext>,
+    },
     DestroyRenderPipeline(id::RenderPipelineId),
     CreateRenderBundle {
         id: id::RenderBundleId,
