@@ -439,10 +439,37 @@ impl<T: Resource, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     }
 }
 
+#[must_use]
+pub(crate) struct FutureId<'a, I: TypedId, T> {
+    id: I,
+    data: &'a RwLock<Storage<T, I>>,
+}
+
+impl<I: TypedId + Copy, T> FutureId<'_, I, T> {
+    pub fn id(&self) -> I {
+        self.id
+    }
+
+    pub fn assign<'a, A: Access<T>>(self, value: T, _: &'a mut Token<A>) -> Valid<I> {
+        self.data.write().insert(self.id, value);
+        Valid(self.id)
+    }
+
+    pub fn assign_error<'a, A: Access<T>>(self, label: &str, _: &'a mut Token<A>) -> I {
+        self.data.write().insert_error(self.id, label);
+        self.id
+    }
+}
+
 impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
-    pub fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
-        debug_assert_eq!(id.unzip().2, self.backend);
-        self.data.write().insert(id, value);
+    pub(crate) fn prepare(
+        &self,
+        id_in: <F::Filter as IdentityHandler<I>>::Input,
+    ) -> FutureId<I, T> {
+        FutureId {
+            id: self.identity.process(id_in, self.backend),
+            data: &self.data,
+        }
     }
 
     pub fn read<'a, A: Access<T>>(
@@ -459,15 +486,14 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
         (self.data.write(), Token::new())
     }
 
+    //TODO: consider remove this once everything uses `prepare`
     pub(crate) fn register_identity<A: Access<T>>(
         &self,
         id_in: <F::Filter as IdentityHandler<I>>::Input,
         value: T,
         token: &mut Token<A>,
     ) -> Valid<I> {
-        let id = self.identity.process(id_in, self.backend);
-        self.register(id, value, token);
-        Valid(id)
+        self.prepare(id_in).assign(value, token)
     }
 
     pub(crate) fn register_identity_locked(
@@ -481,16 +507,14 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
         Valid(id)
     }
 
+    //TODO: consider remove this once everything uses `prepare`
     pub fn register_error<A: Access<T>>(
         &self,
         id_in: <F::Filter as IdentityHandler<I>>::Input,
         label: &str,
-        _token: &mut Token<A>,
+        token: &mut Token<A>,
     ) -> I {
-        let id = self.identity.process(id_in, self.backend);
-        debug_assert_eq!(id.unzip().2, self.backend);
-        self.data.write().insert_error(id, label);
-        id
+        self.prepare(id_in).assign_error(label, token)
     }
 
     pub fn unregister_locked(&self, id: I, guard: &mut Storage<T, I>) -> Option<T> {
@@ -511,10 +535,6 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
         self.identity.free(id);
         //Returning None is legal if it's an error ID
         (value, Token::new())
-    }
-
-    pub fn process_id(&self, id_in: <F::Filter as IdentityHandler<I>>::Input) -> I {
-        self.identity.process(id_in, self.backend)
     }
 
     pub fn free_id(&self, id: I) {

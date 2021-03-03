@@ -4018,40 +4018,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
+        let fid = hub.render_pipelines.prepare(id_in);
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
-            let (pipeline, derived_bind_group_count, layout_id) = match device
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateRenderPipeline(fid.id(), desc.clone()));
+            }
+
+            let (pipeline, derived_bind_group_count, _layout_id) = match device
                 .create_render_pipeline(device_id, desc, implicit_pipeline_ids, &hub, &mut token)
             {
                 Ok(pair) => pair,
                 Err(e) => break e,
             };
 
-            let id = hub
-                .render_pipelines
-                .register_identity(id_in, pipeline, &mut token);
-
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace.lock().add(trace::Action::CreateRenderPipeline(
-                    id.0,
-                    pipeline::RenderPipelineDescriptor {
-                        layout: Some(layout_id),
-                        ..desc.clone()
-                    },
-                ));
-            }
-            let _ = layout_id;
+            let id = fid.assign(pipeline, &mut token);
             return (id.0, derived_bind_group_count, None);
         };
 
-        let id =
-            hub.render_pipelines
-                .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, 0, Some(error))
     }
 
@@ -4149,40 +4141,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
+        let fid = hub.compute_pipelines.prepare(id_in);
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
-            let (pipeline, derived_bind_group_count, layout_id) = match device
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateComputePipeline(fid.id(), desc.clone()));
+            }
+
+            let (pipeline, derived_bind_group_count, _layout_id) = match device
                 .create_compute_pipeline(device_id, desc, implicit_pipeline_ids, &hub, &mut token)
             {
                 Ok(pair) => pair,
                 Err(e) => break e,
             };
 
-            let id = hub
-                .compute_pipelines
-                .register_identity(id_in, pipeline, &mut token);
-
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace.lock().add(trace::Action::CreateComputePipeline(
-                    id.0,
-                    pipeline::ComputePipelineDescriptor {
-                        layout: Some(layout_id),
-                        ..desc.clone()
-                    },
-                ));
-            }
-            let _ = layout_id;
+            let id = fid.assign(pipeline, &mut token);
             return (id.0, derived_bind_group_count, None);
         };
 
-        let id =
-            hub.compute_pipelines
-                .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, 0, Some(error))
     }
 
