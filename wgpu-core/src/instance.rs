@@ -631,6 +631,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
+    #[cfg(metal)]
+    pub fn instance_create_surface_metal(
+        &self,
+        layer: *mut std::ffi::c_void,
+        id_in: Input<G, SurfaceId>,
+    ) -> SurfaceId {
+        span!(_guard, INFO, "Instance::instance_create_surface_metal");
+
+        let surface =
+            Surface {
+                #[cfg(feature = "vulkan-portability")]
+                vulkan: None, //TODO: create_surface_from_layer ?
+                metal: self.instance.metal.as_ref().map(|inst| {
+                    inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
+                }),
+            };
+
+        let mut token = Token::root();
+        let id = self.surfaces.register_identity(id_in, surface, &mut token);
+        id.0
+    }
+
     pub fn surface_drop(&self, id: SurfaceId) {
         span!(_guard, INFO, "Surface::drop");
         let mut token = Token::root();

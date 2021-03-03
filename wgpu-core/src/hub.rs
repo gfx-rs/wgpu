@@ -302,7 +302,7 @@ thread_local! {
 ///
 /// Note: there can only be one non-borrowed `Token` alive on a thread
 /// at a time, which is enforced by `ACTIVE_TOKEN`.
-pub struct Token<'a, T: 'a> {
+pub(crate) struct Token<'a, T: 'a> {
     level: PhantomData<&'a T>,
 }
 
@@ -446,6 +446,7 @@ pub(crate) struct FutureId<'a, I: TypedId, T> {
 }
 
 impl<I: TypedId + Copy, T> FutureId<'_, I, T> {
+    #[cfg(feature = "trace")]
     pub fn id(&self) -> I {
         self.id
     }
@@ -472,14 +473,14 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
         }
     }
 
-    pub fn read<'a, A: Access<T>>(
+    pub(crate) fn read<'a, A: Access<T>>(
         &'a self,
         _token: &'a mut Token<A>,
     ) -> (RwLockReadGuard<'a, Storage<T, I>>, Token<'a, T>) {
         (self.data.read(), Token::new())
     }
 
-    pub fn write<'a, A: Access<T>>(
+    pub(crate) fn write<'a, A: Access<T>>(
         &'a self,
         _token: &'a mut Token<A>,
     ) -> (RwLockWriteGuard<'a, Storage<T, I>>, Token<'a, T>) {
@@ -508,7 +509,7 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
     }
 
     //TODO: consider remove this once everything uses `prepare`
-    pub fn register_error<A: Access<T>>(
+    pub(crate) fn register_error<A: Access<T>>(
         &self,
         id_in: <F::Filter as IdentityHandler<I>>::Input,
         label: &str,
@@ -525,7 +526,7 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
         value
     }
 
-    pub fn unregister<'a, A: Access<T>>(
+    pub(crate) fn unregister<'a, A: Access<T>>(
         &self,
         id: I,
         _token: &'a mut Token<A>,
