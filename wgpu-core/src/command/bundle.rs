@@ -128,6 +128,11 @@ impl RenderBundleEncoder {
         }
     }
 
+    #[cfg(feature = "trace")]
+    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand> {
+        BasePass::from_ref(self.base.as_ref())
+    }
+
     pub fn parent(&self) -> id::DeviceId {
         self.parent_id
     }
@@ -552,11 +557,6 @@ unsafe impl Send for RenderBundle {}
 unsafe impl Sync for RenderBundle {}
 
 impl RenderBundle {
-    #[cfg(feature = "trace")]
-    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand> {
-        BasePass::from_ref(self.base.as_ref())
-    }
-
     /// Actually encode the contents into a native command buffer.
     ///
     /// This is partially duplicating the logic of `command_encoder_run_render_pass`.

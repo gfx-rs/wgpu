@@ -15,11 +15,11 @@ pub const FILE_NAME: &str = "trace.ron";
 
 #[cfg(feature = "trace")]
 pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
-    label: Option<&'a str>,
+    label: crate::Label<'a>,
     context: &'a super::RenderPassContext,
 ) -> crate::command::RenderBundleEncoderDescriptor<'a> {
     crate::command::RenderBundleEncoderDescriptor {
-        label: label.map(Cow::Borrowed),
+        label,
         color_formats: Cow::Borrowed(&context.attachments.colors),
         depth_stencil_format: context.attachments.depth_stencil,
         sample_count: context.sample_count as u32,

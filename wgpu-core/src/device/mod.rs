@@ -3213,27 +3213,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let fid = hub.samplers.prepare(id_in);
 
+        let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateSampler(fid.id(), desc.clone()));
+            }
 
             let sampler = match device.create_sampler(device_id, desc) {
                 Ok(sampler) => sampler,
                 Err(e) => break e,
             };
             let ref_count = sampler.life_guard.add_ref();
-
-            let id = hub.samplers.register_identity(id_in, sampler, &mut token);
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace
-                    .lock()
-                    .add(trace::Action::CreateSampler(id.0, desc.clone()));
-            }
+            let id = fid.assign(sampler, &mut token);
 
             device
                 .trackers
@@ -3244,9 +3244,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id.0, None);
         };
 
-        let id = hub
-            .samplers
-            .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 
@@ -3296,8 +3294,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let mut token = Token::root();
         let hub = B::hub(self);
+        let fid = hub.bind_group_layouts.prepare(id_in);
 
         let error = 'outer: loop {
+            let (device_guard, mut token) = hub.devices.read(&mut token);
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateBindGroupLayout(fid.id(), desc.clone()));
+            }
+
             let mut entry_map = FastHashMap::default();
             for entry in desc.entries.iter() {
                 if entry_map.insert(entry.binding, entry.clone()).is_some() {
@@ -3306,12 +3317,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
                 }
             }
-
-            let (device_guard, mut token) = hub.devices.read(&mut token);
-            let device = match device_guard.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
-            };
 
             // If there is an equivalent BGL, just bump the refcount and return it.
             // This is only applicable for identity filters that are generating new IDs,
@@ -3334,23 +3339,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
 
-            let id = hub
-                .bind_group_layouts
-                .register_identity(id_in, layout, &mut token);
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace
-                    .lock()
-                    .add(trace::Action::CreateBindGroupLayout(id.0, desc.clone()));
-            }
+            let id = fid.assign(layout, &mut token);
             return (id.0, None);
         };
 
-        let id = hub.bind_group_layouts.register_error(
-            id_in,
-            desc.label.borrow_or_default(),
-            &mut token,
-        );
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 
@@ -3399,6 +3392,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
+        let fid = hub.pipeline_layouts.prepare(id_in);
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
@@ -3406,6 +3400,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreatePipelineLayout(fid.id(), desc.clone()));
+            }
 
             let layout = {
                 let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
@@ -3415,21 +3415,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
-            let id = hub
-                .pipeline_layouts
-                .register_identity(id_in, layout, &mut token);
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace
-                    .lock()
-                    .add(trace::Action::CreatePipelineLayout(id.0, desc.clone()));
-            }
+            let id = fid.assign(layout, &mut token);
             return (id.0, None);
         };
 
-        let id =
-            hub.pipeline_layouts
-                .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 
@@ -3478,6 +3468,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
+        let fid = hub.bind_groups.prepare(id_in);
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (bind_group_layout_guard, mut token) = hub.bind_group_layouts.read(&mut token);
@@ -3487,11 +3478,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
+            }
+
             let bind_group_layout = match bind_group_layout_guard.get(desc.layout) {
                 Ok(layout) => layout,
                 Err(_) => break binding_model::CreateBindGroupError::InvalidLayout,
             };
-
             let bind_group = match device.create_bind_group(
                 device_id,
                 bind_group_layout,
@@ -3504,20 +3501,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             let ref_count = bind_group.life_guard.add_ref();
 
-            let id = hub
-                .bind_groups
-                .register_identity(id_in, bind_group, &mut token);
+            let id = fid.assign(bind_group, &mut token);
             tracing::debug!(
                 "Bind group {:?} {:#?}",
                 id,
                 hub.bind_groups.read(&mut token).0[id].used
             );
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace
-                    .lock()
-                    .add(trace::Action::CreateBindGroup(id.0, desc.clone()));
-            }
 
             device
                 .trackers
@@ -3528,9 +3517,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id.0, None);
         };
 
-        let id = hub
-            .bind_groups
-            .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 
@@ -3581,6 +3568,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
+        let fid = hub.shader_modules.prepare(id_in);
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
@@ -3589,51 +3577,38 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             #[cfg(feature = "trace")]
-            let data = match device.trace {
-                Some(ref trace) => {
-                    let mut trace = trace.lock();
-                    match source {
-                        pipeline::ShaderModuleSource::SpirV(ref spv) => {
-                            trace.make_binary("spv", unsafe {
-                                std::slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)
-                            })
-                        }
-                        pipeline::ShaderModuleSource::Wgsl(ref code) => {
-                            trace.make_binary("wgsl", code.as_bytes())
-                        }
-                        pipeline::ShaderModuleSource::Naga(_) => {
-                            // we don't want to enable Naga serialization just for this alone
-                            trace.make_binary("ron", &[])
-                        }
+            if let Some(ref trace) = device.trace {
+                let mut trace = trace.lock();
+                let data = match source {
+                    pipeline::ShaderModuleSource::SpirV(ref spv) => {
+                        trace.make_binary("spv", unsafe {
+                            std::slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)
+                        })
                     }
-                }
-                None => String::new(),
+                    pipeline::ShaderModuleSource::Wgsl(ref code) => {
+                        trace.make_binary("wgsl", code.as_bytes())
+                    }
+                    pipeline::ShaderModuleSource::Naga(_) => {
+                        // we don't want to enable Naga serialization just for this alone
+                        trace.make_binary("ron", &[])
+                    }
+                };
+                trace.add(trace::Action::CreateShaderModule {
+                    id: fid.id(),
+                    desc: desc.clone(),
+                    data,
+                });
             };
 
             let shader = match device.create_shader_module(device_id, desc, source) {
                 Ok(shader) => shader,
                 Err(e) => break e,
             };
-            let id = hub
-                .shader_modules
-                .register_identity(id_in, shader, &mut token);
-
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                let mut trace = trace.lock();
-                trace.add(trace::Action::CreateShaderModule {
-                    id: id.0,
-                    desc: desc.clone(),
-                    data,
-                });
-            }
-
+            let id = fid.assign(shader, &mut token);
             return (id.0, None);
         };
 
-        let id =
-            hub.shader_modules
-                .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 
@@ -3672,6 +3647,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
+        let fid = hub.command_buffers.prepare(id_in);
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
@@ -3706,18 +3682,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 raw.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
             }
 
-            let id = hub
-                .command_buffers
-                .register_identity(id_in, command_buffer, &mut token);
-
+            let id = fid.assign(command_buffer, &mut token);
             return (id.0, None);
         };
 
-        let id = B::hub(self).command_buffers.register_error(
-            id_in,
-            desc.label.borrow_or_default(),
-            &mut token,
-        );
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 
@@ -3773,37 +3742,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let fid = hub.render_bundles.prepare(id_in);
 
+        let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
             let device = match device_guard.get(bundle_encoder.parent()) {
                 Ok(device) => device,
                 Err(_) => break command::RenderBundleError::INVALID_DEVICE,
             };
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace.lock().add(trace::Action::CreateRenderBundle {
+                    id: fid.id(),
+                    desc: trace::new_render_bundle_encoder_descriptor(
+                        desc.label.clone(),
+                        &bundle_encoder.context,
+                    ),
+                    base: bundle_encoder.to_base_pass(),
+                });
+            }
 
             let render_bundle = match bundle_encoder.finish(desc, device, &hub, &mut token) {
                 Ok(bundle) => bundle,
                 Err(e) => break e,
             };
 
-            tracing::debug!("Render bundle {:?} = {:#?}", id_in, render_bundle.used);
-
+            tracing::debug!("Render bundle {:#?}", render_bundle.used);
             let ref_count = render_bundle.life_guard.add_ref();
-            let id = hub
-                .render_bundles
-                .register_identity(id_in, render_bundle, &mut token);
-
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                let (bundle_guard, _) = hub.render_bundles.read(&mut token);
-                let bundle = &bundle_guard[id];
-                let label = desc.label.as_ref().map(|l| l.as_ref());
-                trace.lock().add(trace::Action::CreateRenderBundle {
-                    id: id.0,
-                    desc: trace::new_render_bundle_encoder_descriptor(label, &bundle.context),
-                    base: bundle.to_base_pass(),
-                });
-            }
+            let id = fid.assign(render_bundle, &mut token);
 
             device
                 .trackers
@@ -3814,11 +3780,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id.0, None);
         };
 
-        let id = B::hub(self).render_bundles.register_error(
-            id_in,
-            desc.label.borrow_or_default(),
-            &mut token,
-        );
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 
@@ -3864,14 +3826,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
+        let fid = hub.query_sets.prepare(id_in);
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace.lock().add(trace::Action::CreateQuerySet {
+                    id: fid.id(),
+                    desc: desc.clone(),
+                });
+            }
 
             match desc.ty {
                 wgt::QueryType::Timestamp => {
@@ -3920,18 +3889,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let ref_count = query_set.life_guard.add_ref();
-
-            let id = hub
-                .query_sets
-                .register_identity(id_in, query_set, &mut token);
-            #[cfg(feature = "trace")]
-            match device.trace {
-                Some(ref trace) => trace.lock().add(trace::Action::CreateQuerySet {
-                    id: id.0,
-                    desc: desc.clone(),
-                }),
-                None => (),
-            };
+            let id = fid.assign(query_set, &mut token);
 
             device
                 .trackers
@@ -3943,9 +3901,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id.0, None);
         };
 
-        let id = B::hub(self)
-            .query_sets
-            .register_error(id_in, "", &mut token);
+        let id = fid.assign_error("", &mut token);
         (id, Some(error))
     }
 
@@ -3966,12 +3922,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &device_guard[device_id];
 
         #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace
+        if let Some(ref trace) = device.trace {
+            trace
                 .lock()
-                .add(trace::Action::DestroyQuerySet(query_set_id)),
-            None => (),
-        };
+                .add(trace::Action::DestroyQuerySet(query_set_id));
+        }
 
         device
             .lock_life(&mut token)
