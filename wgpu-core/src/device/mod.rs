@@ -2630,8 +2630,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
-
-        tracing::info!("Create buffer {:?} with ID {:?}", desc, id_in);
+        let fid = hub.buffers.prepare(id_in);
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
@@ -2639,6 +2638,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                let mut desc = desc.clone();
+                let mapped_at_creation = mem::replace(&mut desc.mapped_at_creation, false);
+                if mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
+                    desc.usage |= wgt::BufferUsage::COPY_DST;
+                }
+                trace
+                    .lock()
+                    .add(trace::Action::CreateBuffer(fid.id(), desc));
+            }
+
             let mut buffer = match device.create_buffer(device_id, desc, false) {
                 Ok(buffer) => buffer,
                 Err(e) => break e,
@@ -2723,17 +2734,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 resource::BufferUse::COPY_DST
             };
 
-            let id = hub.buffers.register_identity(id_in, buffer, &mut token);
+            let id = fid.assign(buffer, &mut token);
             tracing::info!("Created buffer {:?} with {:?}", id, desc);
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                let mut desc = desc.clone();
-                let mapped_at_creation = mem::replace(&mut desc.mapped_at_creation, false);
-                if mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
-                    desc.usage |= wgt::BufferUsage::COPY_DST;
-                }
-                trace.lock().add(trace::Action::CreateBuffer(id.0, desc));
-            }
 
             device
                 .trackers
@@ -2744,9 +2746,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id.0, None);
         };
 
-        let id = hub
-            .buffers
-            .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 
@@ -2952,6 +2952,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
+        let fid = hub.textures.prepare(id_in);
 
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -2960,6 +2961,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateTexture(fid.id(), desc.clone()));
+            }
+
             let adapter = &adapter_guard[device.adapter_id.value];
             let texture = match device.create_texture(device_id, adapter, desc) {
                 Ok(texture) => texture,
@@ -2969,14 +2977,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let num_layers = texture.full_range.layers.end;
             let ref_count = texture.life_guard.add_ref();
 
-            let id = hub.textures.register_identity(id_in, texture, &mut token);
+            let id = fid.assign(texture, &mut token);
             tracing::info!("Created texture {:?} with {:?}", id, desc);
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace
-                    .lock()
-                    .add(trace::Action::CreateTexture(id.0, desc.clone()));
-            }
 
             device
                 .trackers
@@ -2987,9 +2989,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id.0, None);
         };
 
-        let id = hub
-            .textures
-            .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 
@@ -3102,6 +3102,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
+        let fid = hub.texture_views.prepare(id_in);
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (texture_guard, mut token) = hub.textures.read(&mut token);
@@ -3111,22 +3112,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break resource::CreateTextureViewError::InvalidTexture,
             };
             let device = &device_guard[texture.device_id.value];
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace.lock().add(trace::Action::CreateTextureView {
+                    id: fid.id(),
+                    parent_id: texture_id,
+                    desc: desc.clone(),
+                });
+            }
 
             let view = match device.create_texture_view(texture, texture_id, desc) {
                 Ok(view) => view,
                 Err(e) => break e,
             };
             let ref_count = view.life_guard.add_ref();
-
-            let id = hub.texture_views.register_identity(id_in, view, &mut token);
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace.lock().add(trace::Action::CreateTextureView {
-                    id: id.0,
-                    parent_id: texture_id,
-                    desc: desc.clone(),
-                });
-            }
+            let id = fid.assign(view, &mut token);
 
             device
                 .trackers
@@ -3137,9 +3137,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id.0, None);
         };
 
-        let id =
-            hub.texture_views
-                .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 
