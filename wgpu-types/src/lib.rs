@@ -2216,7 +2216,7 @@ impl Extent3d {
     /// This includes padding to the block width and height of the format.
     ///
     /// This is the texture extent that you must upload at when uploading to _mipmaps_ of compressed textures.
-    ///  
+    ///
     /// ```rust
     /// # use wgpu_types as wgpu;
     /// let format = wgpu::TextureFormat::Bc1RgbaUnormSrgb; // 4x4 blocks
