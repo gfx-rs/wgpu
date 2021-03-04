@@ -50,7 +50,7 @@ pub enum Action<'a> {
     DestroySampler(id::SamplerId),
     CreateSwapChain(id::SwapChainId, wgt::SwapChainDescriptor),
     GetSwapChainTexture {
-        id: Option<id::TextureViewId>,
+        id: id::TextureViewId,
         parent_id: id::SwapChainId,
     },
     PresentSwapChain(id::SwapChainId),

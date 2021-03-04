@@ -143,6 +143,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
+        let fid = hub.texture_views.prepare(view_id_in);
 
         let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
         let surface = surface_guard
@@ -153,8 +154,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let sc = swap_chain_guard
             .get_mut(swap_chain_id)
             .map_err(|_| SwapChainError::Invalid)?;
-        #[cfg_attr(not(feature = "trace"), allow(unused_variables))]
+
+        #[allow(unused_variables)]
         let device = &device_guard[sc.device_id.value];
+        #[cfg(feature = "trace")]
+        if let Some(ref trace) = device.trace {
+            trace.lock().add(Action::GetSwapChainTexture {
+                id: fid.id(),
+                parent_id: swap_chain_id,
+            });
+        }
 
         let suf = B::get_surface_mut(surface);
         let (image, status) = match unsafe { suf.acquire_image(FRAME_TIMEOUT_MS * 1_000_000) } {
@@ -206,9 +215,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
 
                 let ref_count = view.life_guard.add_ref();
-                let id = hub
-                    .texture_views
-                    .register_identity(view_id_in, view, &mut token);
+                let id = fid.assign(view, &mut token);
 
                 if sc.acquired_view_id.is_some() {
                     return Err(SwapChainError::AlreadyAcquired);
@@ -223,14 +230,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             None => None,
         };
-
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(Action::GetSwapChainTexture {
-                id: view_id,
-                parent_id: swap_chain_id,
-            });
-        }
 
         Ok(SwapChainOutput { status, view_id })
     }

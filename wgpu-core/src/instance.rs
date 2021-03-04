@@ -627,7 +627,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut token = Token::root();
-        let id = self.surfaces.register_identity(id_in, surface, &mut token);
+        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
         id.0
     }
 
@@ -649,7 +649,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
         let mut token = Token::root();
-        let id = self.surfaces.register_identity(id_in, surface, &mut token);
+        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
         id.0
     }
 
@@ -675,11 +675,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         for raw in inst.enumerate_adapters() {
                             let adapter = Adapter::new(raw);
                             tracing::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
-                            let id = hub.adapters.register_identity(
-                                id_backend.clone(),
-                                adapter,
-                                &mut token,
-                            );
+                            let id = hub.adapters
+                                .prepare(id_backend.clone())
+                                .assign(adapter, &mut token);
                             adapters.push(id.0);
                         }
                     }
@@ -825,11 +823,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if selected < adapters_backend.len() {
                     let adapter = Adapter::new(adapters_backend.swap_remove(selected));
                     tracing::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
-                    let id = backend_hub(self).adapters.register_identity(
-                        id_backend.take().unwrap(),
-                        adapter,
-                        &mut token,
-                    );
+                    let id = backend_hub(self).adapters
+                        .prepare(id_backend.take().unwrap())
+                        .assign(adapter, &mut token);
                     return Ok(id.0);
                 }
                 selected -= adapters_backend.len();
@@ -927,16 +923,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (mut adapter_guard, _) = hub.adapters.write(&mut token);
 
-        match adapter_guard.get_mut(adapter_id) {
-            Ok(adapter) => {
-                if adapter.life_guard.ref_count.take().unwrap().load() == 1 {
-                    hub.adapters
-                        .unregister_locked(adapter_id, &mut *adapter_guard);
-                }
-            }
-            Err(_) => {
-                hub.adapters.free_id(adapter_id);
-            }
+        let free = match adapter_guard.get_mut(adapter_id) {
+            Ok(adapter) => adapter.life_guard.ref_count.take().unwrap().load() == 1,
+            Err(_) => true,
+        };
+        if free {
+            hub.adapters
+                .unregister_locked(adapter_id, &mut *adapter_guard);
         }
     }
 }
@@ -953,6 +946,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
+        let fid = hub.devices.prepare(id_in);
 
         let error = loop {
             let (adapter_guard, mut token) = hub.adapters.read(&mut token);
@@ -964,13 +958,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(e) => break e,
             };
-            let id = hub.devices.register_identity(id_in, device, &mut token);
+            let id = fid.assign(device, &mut token);
             return (id.0, None);
         };
 
-        let id = hub
-            .devices
-            .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 }

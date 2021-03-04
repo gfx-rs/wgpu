@@ -4022,7 +4022,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = hub
             .bind_group_layouts
-            .register_error(id_in, "<derived>", &mut token);
+            .prepare(id_in)
+            .assign_error("<derived>", &mut token);
         (id, Some(error))
     }
 
@@ -4149,7 +4150,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = hub
             .bind_group_layouts
-            .register_error(id_in, "<derived>", &mut token);
+            .prepare(id_in)
+            .assign_error("<derived>", &mut token);
         (id, Some(error))
     }
 

@@ -491,26 +491,6 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
         (self.data.write(), Token::new())
     }
 
-    //TODO: consider remove this once everything uses `prepare`
-    pub(crate) fn register_identity<A: Access<T>>(
-        &self,
-        id_in: <F::Filter as IdentityHandler<I>>::Input,
-        value: T,
-        token: &mut Token<A>,
-    ) -> Valid<I> {
-        self.prepare(id_in).assign(value, token)
-    }
-
-    //TODO: consider remove this once everything uses `prepare`
-    pub(crate) fn register_error<A: Access<T>>(
-        &self,
-        id_in: <F::Filter as IdentityHandler<I>>::Input,
-        label: &str,
-        token: &mut Token<A>,
-    ) -> I {
-        self.prepare(id_in).assign_error(label, token)
-    }
-
     pub fn unregister_locked(&self, id: I, guard: &mut Storage<T, I>) -> Option<T> {
         let value = guard.remove(id);
         //Note: careful about the order here!
@@ -529,10 +509,6 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
         self.identity.free(id);
         //Returning None is legal if it's an error ID
         (value, Token::new())
-    }
-
-    pub fn free_id(&self, id: I) {
-        self.identity.free(id)
     }
 
     pub fn label_for_resource(&self, id: I) -> String {
