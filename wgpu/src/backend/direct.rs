@@ -1910,6 +1910,9 @@ pub struct BufferMappedRange {
     size: usize,
 }
 
+unsafe impl Send for BufferMappedRange {}
+unsafe impl Sync for BufferMappedRange {}
+
 impl crate::BufferMappedRangeSlice for BufferMappedRange {
     fn slice(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.ptr, self.size) }
