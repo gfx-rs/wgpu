@@ -5,6 +5,7 @@ use std::{env, error::Error, path::Path};
 
 #[derive(Default)]
 struct Parameters {
+    #[cfg(feature = "spv-in")]
     spv_flow_dump_prefix: Option<String>,
     #[cfg(feature = "spv-out")]
     spv: naga::back::spv::Options,
@@ -41,6 +42,7 @@ fn main() {
     let mut input_path = None;
     let mut output_path = None;
     //TODO: read the parameters from RON?
+    #[allow(unused_mut)]
     let mut params = Parameters::default();
 
     let mut args = env::args();
@@ -49,6 +51,7 @@ fn main() {
         //TODO: use `strip_prefix` when MSRV reaches 1.45.0
         if arg.starts_with("--") {
             match &arg[2..] {
+                #[cfg(feature = "spv-in")]
                 "flow-dir" => params.spv_flow_dump_prefix = args.next(),
                 #[cfg(feature = "glsl-out")]
                 "entry-point" => params.glsl.entry_point = args.next().unwrap(),
