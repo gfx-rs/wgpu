@@ -25,3 +25,75 @@ fn function_without_identifier() {
     "###
     );
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn invalid_integer() {
+    err!(
+        "[[location(1.)]] var<in> pos : vec2<f32>;",
+        @r###"
+    error: expected integer literal, found `1.`
+      ┌─ wgsl:1:12
+      │
+    1 │ [[location(1.)]] var<in> pos : vec2<f32>;
+      │            ^^ expected integer
+
+    "###
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn invalid_float() {
+    err!(
+        "const scale: f32 = 1.1.;",
+        @r###"
+    error: expected floating-point literal, found `1.1.`
+      ┌─ wgsl:1:20
+      │
+    1 │ const scale: f32 = 1.1.;
+      │                    ^^^^ expected floating-point literal
+
+    "###
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn invalid_scalar_width() {
+    err!(
+        "const scale: f32 = 1.1f1000;",
+        @r###"
+    error: invalid width of `1000` for literal
+      ┌─ wgsl:1:20
+      │
+    1 │ const scale: f32 = 1.1f1000;
+      │                    ^^^^^^^^ invalid width
+      │
+      = note: valid width is 32
+
+    "###
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn invalid_accessor() {
+    err!(
+        r###"
+        [[stage(vertex)]]
+        fn vs_main() {
+            var color: vec3<f32> = vec3<f32>(1.0, 2.0, 3.0);
+            var i: f32 = color.a;
+        }
+    "###,
+        @r###"
+    error: invalid field accessor `a`
+      ┌─ wgsl:5:32
+      │
+    5 │             var i: f32 = color.a;
+      │                                ^ invalid accessor
+
+    "###
+    );
+}

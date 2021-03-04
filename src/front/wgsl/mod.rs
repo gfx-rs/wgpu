@@ -62,14 +62,52 @@ impl<'a> Error<'a> {
                 message: format!(
                     "expected {}, found '{}'",
                     expected,
-                    &source[unexpected_span.clone()]
+                    &source[unexpected_span.clone()],
                 ),
                 labels: vec![(unexpected_span.clone(), format!("expected {}", expected))],
+                notes: vec![],
+                source,
+            },
+            Error::BadInteger(bad_span) => ParseError {
+                message: format!(
+                    "expected integer literal, found `{}`",
+                    &source[bad_span.clone()],
+                ),
+                labels: vec![(bad_span.clone(), "expected integer".to_string())],
+                notes: vec![],
+                source,
+            },
+            Error::BadFloat(bad_span) => ParseError {
+                message: format!(
+                    "expected floating-point literal, found `{}`",
+                    &source[bad_span.clone()],
+                ),
+                labels: vec![(
+                    bad_span.clone(),
+                    "expected floating-point literal".to_string(),
+                )],
+                notes: vec![],
+                source,
+            },
+            Error::BadScalarWidth(bad_span, width) => ParseError {
+                message: format!("invalid width of `{}` for literal", width,),
+                labels: vec![(bad_span.clone(), "invalid width".to_string())],
+                notes: vec!["valid width is 32".to_string()],
+                source,
+            },
+            Error::BadAccessor(accessor_span) => ParseError {
+                message: format!(
+                    "invalid field accessor `{}`",
+                    &source[accessor_span.clone()],
+                ),
+                labels: vec![(accessor_span.clone(), "invalid accessor".to_string())],
+                notes: vec![],
                 source,
             },
             error => ParseError {
                 message: error.to_string(),
-                labels: Vec::new(),
+                labels: vec![],
+                notes: vec![],
                 source,
             },
         }
@@ -78,16 +116,16 @@ impl<'a> Error<'a> {
 
 #[derive(Clone, Debug, Error)]
 pub enum Error<'a> {
-    #[error("unexpected token {:?}, expected {1}", (.0).0)]
+    #[error("")]
     Unexpected(TokenSpan<'a>, &'a str),
-    #[error("unable to parse `{0}` as integer: {1}")]
-    BadInteger(&'a str, std::num::ParseIntError),
-    #[error("unable to parse `{1}` as float: {1}")]
-    BadFloat(&'a str, std::num::ParseFloatError),
-    #[error("unable to parse `{0}{1}{2}` as scalar width: {3}")]
-    BadScalarWidth(&'a str, char, &'a str, std::num::ParseIntError),
-    #[error("bad field accessor `{0}`")]
-    BadAccessor(&'a str),
+    #[error("")]
+    BadInteger(Range<usize>),
+    #[error("")]
+    BadFloat(Range<usize>),
+    #[error("")]
+    BadScalarWidth(Range<usize>, &'a str),
+    #[error("")]
+    BadAccessor(Range<usize>),
     #[error("bad texture {0}`")]
     BadTexture(&'a str),
     #[error("bad texture coordinate")]
@@ -309,6 +347,7 @@ impl Composition {
         base: Handle<crate::Expression>,
         base_size: crate::VectorSize,
         name: &'a str,
+        name_span: Range<usize>,
         expressions: &mut Arena<crate::Expression>,
     ) -> Result<Self, Error<'a>> {
         Ok(if name.len() > 1 {
@@ -316,7 +355,7 @@ impl Composition {
             for ch in name.chars() {
                 let index = Self::letter_pos(ch);
                 if index >= base_size as u32 {
-                    return Err(Error::BadAccessor(name));
+                    return Err(Error::BadAccessor(name_span));
                 }
                 let expr = crate::Expression::AccessIndex { base, index };
                 components.push(expressions.append(expr));
@@ -326,14 +365,17 @@ impl Composition {
                 2 => crate::VectorSize::Bi,
                 3 => crate::VectorSize::Tri,
                 4 => crate::VectorSize::Quad,
-                _ => return Err(Error::BadAccessor(name)),
+                _ => return Err(Error::BadAccessor(name_span)),
             };
             Composition::Multi(size, components)
         } else {
-            let ch = name.chars().next().ok_or(Error::BadAccessor(name))?;
+            let ch = name
+                .chars()
+                .next()
+                .ok_or_else(|| Error::BadAccessor(name_span.clone()))?;
             let index = Self::letter_pos(ch);
             if index >= base_size as u32 {
-                return Err(Error::BadAccessor(name));
+                return Err(Error::BadAccessor(name_span));
             }
             Composition::Single(crate::Expression::AccessIndex { base, index })
         })
@@ -375,6 +417,7 @@ struct ParsedVariable<'a> {
 pub struct ParseError<'a> {
     message: String,
     labels: Vec<(Range<usize>, String)>,
+    notes: Vec<String>,
     source: &'a str,
 }
 
@@ -388,6 +431,12 @@ impl<'a> ParseError<'a> {
                     .map(|label| {
                         Label::primary((), label.0.clone()).with_message(label.1.to_string())
                     })
+                    .collect(),
+            )
+            .with_notes(
+                self.notes
+                    .iter()
+                    .map(|note| format!("note: {}", note))
                     .collect(),
             );
         diagnostic
@@ -456,20 +505,22 @@ impl Parser {
         word: &'a str,
         ty: char,
         width: &'a str,
+        token: TokenSpan<'a>,
     ) -> Result<crate::ConstantInner, Error<'a>> {
+        let span = token.1;
         let value = match ty {
             'i' => word
                 .parse()
                 .map(crate::ScalarValue::Sint)
-                .map_err(|err| Error::BadInteger(word, err))?,
+                .map_err(|_| Error::BadInteger(span.clone()))?,
             'u' => word
                 .parse()
                 .map(crate::ScalarValue::Uint)
-                .map_err(|err| Error::BadInteger(word, err))?,
+                .map_err(|_| Error::BadInteger(span.clone()))?,
             'f' => word
                 .parse()
                 .map(crate::ScalarValue::Float)
-                .map_err(|err| Error::BadFloat(word, err))?,
+                .map_err(|_| Error::BadFloat(span.clone()))?,
             _ => unreachable!(),
         };
         Ok(crate::ConstantInner::Scalar {
@@ -479,7 +530,7 @@ impl Parser {
             } else {
                 match width.parse::<crate::Bytes>() {
                     Ok(bits) => bits / 8,
-                    Err(e) => return Err(Error::BadScalarWidth(word, ty, width, e)),
+                    Err(_) => return Err(Error::BadScalarWidth(span, width)),
                 }
             },
         })
@@ -851,7 +902,14 @@ impl Parser {
                 width: 1,
                 value: crate::ScalarValue::Bool(false),
             },
-            (Token::Number { value, ty, width }, _) => Self::get_constant_inner(value, ty, width)?,
+            (
+                Token::Number {
+                    ref value,
+                    ref ty,
+                    ref width,
+                },
+                _,
+            ) => Self::get_constant_inner(*value, *ty, *width, first_token_span)?,
             (Token::Word(name), _) => {
                 // look for an existing constant first
                 for (handle, var) in const_arena.iter() {
@@ -1021,13 +1079,13 @@ impl Parser {
             let expression = match lexer.peek().0 {
                 Token::Separator('.') => {
                     let _ = lexer.next();
-                    let name = lexer.next_ident()?;
+                    let (name, name_span) = lexer.next_ident_with_span()?;
                     match *ctx.resolve_type(handle)? {
                         crate::TypeInner::Struct { ref members, .. } => {
                             let index = members
                                 .iter()
                                 .position(|m| m.name.as_deref() == Some(name))
-                                .ok_or(Error::BadAccessor(name))?
+                                .ok_or(Error::BadAccessor(name_span))?
                                 as u32;
                             crate::Expression::AccessIndex {
                                 base: handle,
@@ -1035,7 +1093,8 @@ impl Parser {
                             }
                         }
                         crate::TypeInner::Vector { size, kind, width } => {
-                            match Composition::make(handle, size, name, ctx.expressions)? {
+                            match Composition::make(handle, size, name, name_span, ctx.expressions)?
+                            {
                                 Composition::Multi(size, components) => {
                                     let inner = crate::TypeInner::Vector { size, kind, width };
                                     crate::Expression::Compose {
@@ -1052,7 +1111,13 @@ impl Parser {
                             columns,
                             rows,
                             width,
-                        } => match Composition::make(handle, columns, name, ctx.expressions)? {
+                        } => match Composition::make(
+                            handle,
+                            columns,
+                            name,
+                            name_span,
+                            ctx.expressions,
+                        )? {
                             Composition::Multi(columns, components) => {
                                 let inner = crate::TypeInner::Matrix {
                                     columns,
@@ -1068,7 +1133,7 @@ impl Parser {
                             }
                             Composition::Single(expr) => expr,
                         },
-                        _ => return Err(Error::BadAccessor(name)),
+                        _ => return Err(Error::BadAccessor(name_span)),
                     }
                 }
                 Token::Paren('[') => {

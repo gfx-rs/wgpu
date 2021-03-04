@@ -1,4 +1,5 @@
 use super::{conv, Error, Token, TokenSpan};
+use std::ops::Range;
 
 fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
     if input.starts_with(what) {
@@ -255,6 +256,13 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    pub(super) fn next_ident_with_span(&mut self) -> Result<(&'a str, Range<usize>), Error<'a>> {
+        match self.next() {
+            (Token::Word(word), span) => Ok((word, span)),
+            other => Err(Error::Unexpected(other, "identifier")),
+        }
+    }
+
     pub(super) fn next_ident(&mut self) -> Result<&'a str, Error<'a>> {
         match self.next() {
             (Token::Word(word), _) => Ok(word),
@@ -264,28 +272,26 @@ impl<'a> Lexer<'a> {
 
     fn _next_float_literal(&mut self) -> Result<f32, Error<'a>> {
         match self.next() {
-            (Token::Number { value, .. }, _) => {
-                value.parse().map_err(|err| Error::BadFloat(value, err))
-            }
-            other => Err(Error::Unexpected(other, "float literal")),
+            (Token::Number { value, .. }, span) => value.parse().map_err(|_| Error::BadFloat(span)),
+            other => Err(Error::Unexpected(other, "floating-point literal")),
         }
     }
 
     pub(super) fn next_uint_literal(&mut self) -> Result<u32, Error<'a>> {
         match self.next() {
-            (Token::Number { value, .. }, _) => {
-                value.parse().map_err(|err| Error::BadInteger(value, err))
+            (Token::Number { value, .. }, span) => {
+                value.parse().map_err(|_| Error::BadInteger(span))
             }
-            other => Err(Error::Unexpected(other, "uint literal")),
+            other => Err(Error::Unexpected(other, "unsigned integer literal")),
         }
     }
 
     pub(super) fn next_sint_literal(&mut self) -> Result<i32, Error<'a>> {
         match self.next() {
-            (Token::Number { value, .. }, _) => {
-                value.parse().map_err(|err| Error::BadInteger(value, err))
+            (Token::Number { value, .. }, span) => {
+                value.parse().map_err(|_| Error::BadInteger(span))
             }
-            other => Err(Error::Unexpected(other, "sint literal")),
+            other => Err(Error::Unexpected(other, "signed integer literal")),
         }
     }
 
