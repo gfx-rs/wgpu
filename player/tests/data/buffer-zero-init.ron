@@ -18,7 +18,7 @@
             name: "partially written buffer",
             buffer: (index: 2, epoch: 1),
             offset: 0,
-            data: Raw([0x00, 0x00, 0x00, 0x00, 
+            data: Raw([0x00, 0x00, 0x00, 0x00,
                        0x00, 0x00, 0x80, 0xBF,
                        0x00, 0x00, 0x80, 0xBF,
                        0x00, 0x00, 0x80, 0x3F,
@@ -136,14 +136,17 @@
             ],
             push_constant_ranges: [],
         )),
-        CreateComputePipeline(Id(0, 1, Empty), (
-            label: None,
-            layout: Some(Id(0, 1, Empty)),
-            stage: (
-                module: Id(0, 1, Empty),
-                entry_point: "main",
+        CreateComputePipeline(
+            id: Id(0, 1, Empty),
+            desc: (
+                label: None,
+                layout: Some(Id(0, 1, Empty)),
+                stage: (
+                    module: Id(0, 1, Empty),
+                    entry_point: "main",
+                ),
             ),
-        )),
+        ),
         Submit(1, [
             RunComputePass(
                 base: (

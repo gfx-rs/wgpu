@@ -956,7 +956,6 @@ dependencies = [
  "log",
  "num-traits",
  "petgraph",
- "serde",
  "spirv_headers",
  "thiserror",
 ]
