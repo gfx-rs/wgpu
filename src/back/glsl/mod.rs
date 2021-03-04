@@ -519,6 +519,9 @@ impl<'a, W: Write> Writer<'a, W> {
             "main",
         )?;
 
+        // Add newline at the end of file
+        writeln!(self.out)?;
+
         // Collect all of the texture mappings and return them to the user
         self.collect_texture_mapping()
     }
@@ -997,38 +1000,29 @@ impl<'a, W: Write> Writer<'a, W> {
         ctx: &FunctionCtx<'_, '_>,
         indent: usize,
     ) -> BackendResult {
-        // The indentation is only for readability
-        write!(self.out, "{}", INDENT.repeat(indent))?;
-
         match *sta {
             // This is where we can generate intermediate constants for some expression types.
             Statement::Emit(ref range) => {
-                let mut indented = true;
                 for handle in range.clone() {
                     if let Ok(ty_handle) = ctx.typifier.get_handle(handle) {
                         let min_ref_count = ctx.expressions[handle].bake_ref_count();
                         if min_ref_count <= ctx.info[handle].ref_count {
-                            if !indented {
-                                write!(self.out, "{}", INDENT.repeat(indent))?;
-                            }
+                            write!(self.out, "{}", INDENT.repeat(indent))?;
                             let name = format!("_expr{}", handle.index());
                             self.write_type(ty_handle)?;
                             write!(self.out, " {} = ", name)?;
                             self.write_expr(handle, ctx)?;
                             writeln!(self.out, ";")?;
                             self.cached_expressions.insert(handle, name);
-                            indented = false;
                         }
                     }
-                }
-                if indented {
-                    writeln!(self.out, ";")?;
                 }
             }
             // Blocks are simple we just need to write the block statements between braces
             // We could also just print the statements but this is more readable and maps more
             // closely to the IR
             Statement::Block(ref block) => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
                 writeln!(self.out, "{{")?;
                 for sta in block.iter() {
                     // Increase the indentation to help with readability
@@ -1049,6 +1043,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 ref accept,
                 ref reject,
             } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
                 write!(self.out, "if(")?;
                 self.write_expr(condition, ctx)?;
                 writeln!(self.out, ") {{")?;
@@ -1093,6 +1088,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 ref default,
             } => {
                 // Start the switch
+                write!(self.out, "{}", INDENT.repeat(indent))?;
                 write!(self.out, "switch(")?;
                 self.write_expr(selector, ctx)?;
                 writeln!(self.out, ") {{")?;
@@ -1140,6 +1136,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 ref body,
                 ref continuing,
             } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
                 writeln!(self.out, "while(true) {{")?;
 
                 for sta in body.iter().chain(continuing.iter()) {
@@ -1150,11 +1147,18 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             // Break, continue and return as written as in C
             // `break;`
-            Statement::Break => writeln!(self.out, "break;")?,
+            Statement::Break => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                writeln!(self.out, "break;")?
+            }
             // `continue;`
-            Statement::Continue => writeln!(self.out, "continue;")?,
+            Statement::Continue => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                writeln!(self.out, "continue;")?
+            }
             // `return expr;`, `expr` is optional
             Statement::Return { value } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
                 write!(self.out, "return")?;
                 // Write the expression to be returned if needed
                 if let Some(expr) = value {
@@ -1166,9 +1170,13 @@ impl<'a, W: Write> Writer<'a, W> {
             // This is one of the places were glsl adds to the syntax of C in this case the discard
             // keyword which ceases all further processing in a fragment shader, it's called OpKill
             // in spir-v that's why it's called `Statement::Kill`
-            Statement::Kill => writeln!(self.out, "discard;")?,
+            Statement::Kill => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                writeln!(self.out, "discard;")?
+            }
             // Stores in glsl are just variable assignments written as `pointer = value;`
             Statement::Store { pointer, value } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
                 self.write_expr(pointer, ctx)?;
                 write!(self.out, " = ")?;
                 self.write_expr(value, ctx)?;
@@ -1181,6 +1189,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 array_index,
                 value,
             } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
                 // This will only panic if the module is invalid
                 let dim = match *ctx.typifier.get(image, &self.module.types) {
                     TypeInner::Image { dim, .. } => dim,
@@ -1201,6 +1210,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 ref arguments,
                 result,
             } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
                 if let Some(expr) = result {
                     let name = format!("_expr{}", expr.index());
                     let ty = self.module.functions[function].return_type.unwrap();

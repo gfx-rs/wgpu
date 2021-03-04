@@ -22,24 +22,12 @@ void main() {
     int tmp1_;
     int tmp2_;
     vec4 unprojected;
-    ;
-    ;
     tmp1_ = (int(gl_VertexID) / 2);
-    ;
-    ;
     tmp2_ = (int(gl_VertexID) & 1);
-    ;
-    ;
-    ;
-    ;
-    ;
     vec4 _expr28 = vec4(((float(tmp1_) * 4.0) - 1.0), ((float(tmp2_) * 4.0) - 1.0), 0.0, 1.0);
-    ;
-    ;
     unprojected = (_group_0_binding_0.proj_inv * _expr28);
     vec4 _expr56 = unprojected;
     _location_0_vs = (transpose(mat3x3(vec3(_group_0_binding_0.view[0][0], _group_0_binding_0.view[0][1], _group_0_binding_0.view[0][2]), vec3(_group_0_binding_0.view[1][0], _group_0_binding_0.view[1][1], _group_0_binding_0.view[1][2]), vec3(_group_0_binding_0.view[2][0], _group_0_binding_0.view[2][1], _group_0_binding_0.view[2][2]))) * vec3(_expr56[0], _expr56[1], _expr56[2]));
     gl_Position = _expr28;
     return;
 }
-

@@ -13,11 +13,7 @@ in vec2 _location_1;
 out vec2 _location_0_vs;
 
 void main() {
-    ;
     _location_0_vs = _location_1;
-    ;
-    ;
     gl_Position = vec4((1.2 * _location_0), 0.0, 1.0);
     return;
 }
-
