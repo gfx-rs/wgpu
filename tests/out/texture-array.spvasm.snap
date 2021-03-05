@@ -54,8 +54,8 @@ OpDecorate %20 Location 1
 %22 = OpTypePointer Output %21
 %20 = OpVariable  %22  Output
 %24 = OpTypeFunction %2
-%30 = OpConstant  %4  0
-%32 = OpTypePointer PushConstant %18
+%30 = OpTypePointer PushConstant %18
+%31 = OpConstant  %4  0
 %34 = OpTypeBool
 %40 = OpTypeSampledImage %10
 %23 = OpFunction  %2  None %24
@@ -65,8 +65,8 @@ OpDecorate %20 Location 1
 %28 = OpLoad  %14  %13
 OpBranch %29
 %29 = OpLabel
-%31 = OpAccessChain  %32  %16 %30
-%33 = OpLoad  %18  %31
+%32 = OpAccessChain  %30  %16 %31
+%33 = OpLoad  %18  %32
 %35 = OpIEqual  %34  %33 %3
 OpSelectionMerge %36 None
 OpBranchConditional %35 %37 %38

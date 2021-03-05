@@ -20,13 +20,11 @@ struct Data {
 
 typedef int type4;
 
-typedef float type5;
+typedef metal::float3x3 type5;
 
-typedef metal::float3x3 type6;
+typedef metal::texturecube<float, metal::access::sample> type6;
 
-typedef metal::texturecube<float, metal::access::sample> type7;
-
-typedef metal::sampler type8;
+typedef metal::sampler type7;
 
 constexpr constant int const_2i = 2;
 constexpr constant int const_1i = 1;
@@ -70,8 +68,8 @@ struct fs_mainOutput {
 
 fragment fs_mainOutput fs_main(
     fs_mainInput input [[stage_in]],
-    type7 r_texture [[texture(0)]],
-    type8 r_sampler [[sampler(1)]]
+    type6 r_texture [[texture(0)]],
+    type7 r_sampler [[sampler(1)]]
 ) {
     fs_mainOutput output;
     metal::float4 _expr9 = r_texture.sample(r_sampler, input.in_uv);

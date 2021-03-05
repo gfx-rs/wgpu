@@ -39,6 +39,8 @@ impl<T, E: Error> PrettyResult for Result<T, E> {
 }
 
 fn main() {
+    //env_logger::init(); // uncomment during development
+
     let mut input_path = None;
     let mut output_path = None;
     //TODO: read the parameters from RON?

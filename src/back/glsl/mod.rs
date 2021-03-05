@@ -538,11 +538,21 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_type(&mut self, ty: Handle<Type>) -> BackendResult {
         match self.module.types[ty].inner {
             // Scalars are simple we just get the full name from `glsl_scalar`
-            TypeInner::Scalar { kind, width } => {
-                write!(self.out, "{}", glsl_scalar(kind, width)?.full)?
-            }
+            TypeInner::Scalar { kind, width }
+            | TypeInner::ValuePointer {
+                size: None,
+                kind,
+                width,
+                class: _,
+            } => write!(self.out, "{}", glsl_scalar(kind, width)?.full)?,
             // Vectors are just `gvecN` where `g` is the scalar prefix and `N` is the vector size
-            TypeInner::Vector { size, kind, width } => write!(
+            TypeInner::Vector { size, kind, width }
+            | TypeInner::ValuePointer {
+                size: Some(size),
+                kind,
+                width,
+                class: _,
+            } => write!(
                 self.out,
                 "{}vec{}",
                 glsl_scalar(kind, width)?.prefix,
@@ -1258,14 +1268,24 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::AccessIndex { base, index } => {
                 self.write_expr(base, ctx)?;
 
-                match *ctx.typifier.get(base, &self.module.types) {
+                let mut resolved = ctx.typifier.get(base, &self.module.types);
+                let base_ty_handle = match *resolved {
+                    TypeInner::Pointer { base, class: _ } => {
+                        resolved = &self.module.types[base].inner;
+                        Ok(base)
+                    }
+                    _ => ctx.typifier.get_handle(base),
+                };
+
+                match *resolved {
                     TypeInner::Vector { .. }
                     | TypeInner::Matrix { .. }
-                    | TypeInner::Array { .. } => write!(self.out, "[{}]", index)?,
+                    | TypeInner::Array { .. }
+                    | TypeInner::ValuePointer { .. } => write!(self.out, "[{}]", index)?,
                     TypeInner::Struct { .. } => {
                         // This will never panic in case the type is a `Struct`, this is not true
                         // for other types so we can only check while inside this match arm
-                        let ty = ctx.typifier.get_handle(base).unwrap();
+                        let ty = base_ty_handle.unwrap();
 
                         write!(
                             self.out,

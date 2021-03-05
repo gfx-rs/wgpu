@@ -82,14 +82,11 @@ impl Function {
 
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
 enum LocalType {
-    Scalar {
+    Value {
+        vector_size: Option<crate::VectorSize>,
         kind: crate::ScalarKind,
         width: crate::Bytes,
-    },
-    Vector {
-        size: crate::VectorSize,
-        kind: crate::ScalarKind,
-        width: crate::Bytes,
+        pointer_class: Option<crate::StorageClass>,
     },
     Matrix {
         columns: crate::VectorSize,
@@ -108,10 +105,18 @@ enum LocalType {
 impl LocalType {
     fn from_inner(inner: &crate::TypeInner) -> Option<Self> {
         Some(match *inner {
-            crate::TypeInner::Scalar { kind, width } => LocalType::Scalar { kind, width },
-            crate::TypeInner::Vector { size, kind, width } => {
-                LocalType::Vector { size, kind, width }
-            }
+            crate::TypeInner::Scalar { kind, width } => LocalType::Value {
+                vector_size: None,
+                kind,
+                width,
+                pointer_class: None,
+            },
+            crate::TypeInner::Vector { size, kind, width } => LocalType::Value {
+                vector_size: Some(size),
+                kind,
+                width,
+                pointer_class: None,
+            },
             crate::TypeInner::Matrix {
                 columns,
                 rows,
@@ -122,6 +127,17 @@ impl LocalType {
                 width,
             },
             crate::TypeInner::Pointer { base, class } => LocalType::Pointer { base, class },
+            crate::TypeInner::ValuePointer {
+                size,
+                kind,
+                width,
+                class,
+            } => LocalType::Value {
+                vector_size: size,
+                kind,
+                width,
+                pointer_class: Some(class),
+            },
             _ => return None,
         })
     }
@@ -302,26 +318,9 @@ impl Writer {
             Ok(*e.get())
         } else {
             match lookup_ty {
-                LookupType::Handle(handle) => match arena[handle].inner {
-                    crate::TypeInner::Scalar { kind, width } => self
-                        .get_type_id(arena, LookupType::Local(LocalType::Scalar { kind, width })),
-                    crate::TypeInner::Vector { size, kind, width } => self.get_type_id(
-                        arena,
-                        LookupType::Local(LocalType::Vector { size, kind, width }),
-                    ),
-                    crate::TypeInner::Matrix {
-                        columns,
-                        rows,
-                        width,
-                    } => self.get_type_id(
-                        arena,
-                        LookupType::Local(LocalType::Matrix {
-                            columns,
-                            rows,
-                            width,
-                        }),
-                    ),
-                    _ => self.write_type_declaration_arena(arena, handle),
+                LookupType::Handle(handle) => match LocalType::from_inner(&arena[handle].inner) {
+                    Some(local) => self.get_type_id(arena, LookupType::Local(local)),
+                    None => self.write_type_declaration_arena(arena, handle),
                 },
                 LookupType::Local(local_ty) => self.write_type_declaration_local(arena, local_ty),
             }
@@ -362,13 +361,6 @@ impl Writer {
                 }
             },
         )
-    }
-
-    fn create_pointer_type(&mut self, type_id: Word, class: spirv::StorageClass) -> Word {
-        let id = self.generate_id();
-        let instruction = Instruction::type_pointer(id, class, type_id);
-        instruction.to_words(&mut self.logical_layout.declarations);
-        id
     }
 
     fn create_constant(&mut self, type_id: Word, value: &[Word]) -> Word {
@@ -607,10 +599,27 @@ impl Writer {
     ) -> Result<Word, Error> {
         let id = self.generate_id();
         let instruction = match local_ty {
-            LocalType::Scalar { kind, width } => self.write_scalar(id, kind, width),
-            LocalType::Vector { size, kind, width } => {
-                let scalar_id =
-                    self.get_type_id(arena, LookupType::Local(LocalType::Scalar { kind, width }))?;
+            LocalType::Value {
+                vector_size: None,
+                kind,
+                width,
+                pointer_class: None,
+            } => self.write_scalar(id, kind, width),
+            LocalType::Value {
+                vector_size: Some(size),
+                kind,
+                width,
+                pointer_class: None,
+            } => {
+                let scalar_id = self.get_type_id(
+                    arena,
+                    LookupType::Local(LocalType::Value {
+                        vector_size: None,
+                        kind,
+                        width,
+                        pointer_class: None,
+                    }),
+                )?;
                 Instruction::type_vector(id, scalar_id, size)
             }
             LocalType::Matrix {
@@ -620,16 +629,35 @@ impl Writer {
             } => {
                 let vector_id = self.get_type_id(
                     arena,
-                    LookupType::Local(LocalType::Vector {
-                        size: rows,
+                    LookupType::Local(LocalType::Value {
+                        vector_size: Some(rows),
                         kind: crate::ScalarKind::Float,
                         width,
+                        pointer_class: None,
                     }),
                 )?;
                 Instruction::type_matrix(id, vector_id, columns)
             }
-            LocalType::Pointer { .. } => {
-                return Err(Error::FeatureNotImplemented("pointer declaration"))
+            LocalType::Pointer { base, class } => {
+                let type_id = self.get_type_id(arena, LookupType::Handle(base))?;
+                Instruction::type_pointer(id, self.parse_to_spirv_storage_class(class), type_id)
+            }
+            LocalType::Value {
+                vector_size,
+                kind,
+                width,
+                pointer_class: Some(class),
+            } => {
+                let type_id = self.get_type_id(
+                    arena,
+                    LookupType::Local(LocalType::Value {
+                        vector_size,
+                        kind,
+                        width,
+                        pointer_class: None,
+                    }),
+                )?;
+                Instruction::type_pointer(id, self.parse_to_spirv_storage_class(class), type_id)
             }
             LocalType::SampledImage { image_type } => {
                 let image_type_id = self.get_type_id(arena, LookupType::Handle(image_type))?;
@@ -658,15 +686,34 @@ impl Writer {
 
         let instruction = match ty.inner {
             crate::TypeInner::Scalar { kind, width } => {
-                self.lookup_type
-                    .insert(LookupType::Local(LocalType::Scalar { kind, width }), id);
+                self.lookup_type.insert(
+                    LookupType::Local(LocalType::Value {
+                        vector_size: None,
+                        kind,
+                        width,
+                        pointer_class: None,
+                    }),
+                    id,
+                );
                 self.write_scalar(id, kind, width)
             }
             crate::TypeInner::Vector { size, kind, width } => {
-                let scalar_id =
-                    self.get_type_id(arena, LookupType::Local(LocalType::Scalar { kind, width }))?;
+                let scalar_id = self.get_type_id(
+                    arena,
+                    LookupType::Local(LocalType::Value {
+                        vector_size: None,
+                        kind,
+                        width,
+                        pointer_class: None,
+                    }),
+                )?;
                 self.lookup_type.insert(
-                    LookupType::Local(LocalType::Vector { size, kind, width }),
+                    LookupType::Local(LocalType::Value {
+                        vector_size: Some(size),
+                        kind,
+                        width,
+                        pointer_class: None,
+                    }),
                     id,
                 );
                 Instruction::type_vector(id, scalar_id, size)
@@ -678,10 +725,11 @@ impl Writer {
             } => {
                 let vector_id = self.get_type_id(
                     arena,
-                    LookupType::Local(LocalType::Vector {
-                        size: columns,
+                    LookupType::Local(LocalType::Value {
+                        vector_size: Some(columns),
                         kind: crate::ScalarKind::Float,
                         width,
+                        pointer_class: None,
                     }),
                 )?;
                 self.lookup_type.insert(
@@ -699,19 +747,16 @@ impl Writer {
                 arrayed,
                 class,
             } => {
-                let width = 4;
-                let local_type = match class {
-                    crate::ImageClass::Sampled { kind, multi: _ } => {
-                        LocalType::Scalar { kind, width }
-                    }
-                    crate::ImageClass::Depth => LocalType::Scalar {
-                        kind: crate::ScalarKind::Float,
-                        width,
-                    },
-                    crate::ImageClass::Storage(format) => LocalType::Scalar {
-                        kind: format.into(),
-                        width,
-                    },
+                let kind = match class {
+                    crate::ImageClass::Sampled { kind, multi: _ } => kind,
+                    crate::ImageClass::Depth => crate::ScalarKind::Float,
+                    crate::ImageClass::Storage(format) => format.into(),
+                };
+                let local_type = LocalType::Value {
+                    vector_size: None,
+                    kind,
+                    width: 4,
+                    pointer_class: None,
                 };
                 let type_id = self.get_type_id(arena, LookupType::Local(local_type))?;
                 let dim = map_dim(dim);
@@ -820,6 +865,32 @@ impl Writer {
                     .insert(LookupType::Local(LocalType::Pointer { base, class }), id);
                 Instruction::type_pointer(id, self.parse_to_spirv_storage_class(class), type_id)
             }
+            crate::TypeInner::ValuePointer {
+                size,
+                kind,
+                width,
+                class,
+            } => {
+                let type_id = self.get_type_id(
+                    arena,
+                    LookupType::Local(LocalType::Value {
+                        vector_size: size,
+                        kind,
+                        width,
+                        pointer_class: None,
+                    }),
+                )?;
+                self.lookup_type.insert(
+                    LookupType::Local(LocalType::Value {
+                        vector_size: size,
+                        kind,
+                        width,
+                        pointer_class: Some(class),
+                    }),
+                    id,
+                );
+                Instruction::type_pointer(id, self.parse_to_spirv_storage_class(class), type_id)
+            }
         };
 
         self.lookup_type.insert(LookupType::Handle(handle), id);
@@ -837,9 +908,11 @@ impl Writer {
             crate::ConstantInner::Scalar { width, ref value } => {
                 let type_id = self.get_type_id(
                     types,
-                    LookupType::Local(LocalType::Scalar {
+                    LookupType::Local(LocalType::Value {
+                        vector_size: None,
                         kind: value.scalar_kind(),
                         width,
+                        pointer_class: None,
                     }),
                 )?;
                 let (solo, pair);
@@ -1061,9 +1134,11 @@ impl Writer {
         Ok(if let Some(array_index) = array_index {
             let coordinate_scalar_type_id = self.get_type_id(
                 &ir_module.types,
-                LookupType::Local(LocalType::Scalar {
+                LookupType::Local(LocalType::Value {
+                    vector_size: None,
                     kind: crate::ScalarKind::Float,
                     width: 4,
+                    pointer_class: None,
                 }),
             )?;
 
@@ -1109,10 +1184,11 @@ impl Writer {
 
             let extended_coordinate_type_id = self.get_type_id(
                 &ir_module.types,
-                LookupType::Local(LocalType::Vector {
-                    size,
+                LookupType::Local(LocalType::Value {
+                    vector_size: Some(size),
                     kind: crate::ScalarKind::Float,
                     width: 4,
+                    pointer_class: None,
                 }),
             )?;
 
@@ -1757,6 +1833,7 @@ impl Writer {
             Err(inner) => LookupType::Local(LocalType::from_inner(inner).unwrap()),
         };
         let result_type_id = self.get_type_id(&ir_module.types, result_lookup_ty)?;
+
         self.temp_chain.clear();
         let (root_id, class) = loop {
             expr_handle = match ir_function.expressions[expr_handle] {
@@ -1768,9 +1845,11 @@ impl Writer {
                 crate::Expression::AccessIndex { base, index } => {
                     let const_ty_id = self.get_type_id(
                         &ir_module.types,
-                        LookupType::Local(LocalType::Scalar {
+                        LookupType::Local(LocalType::Value {
+                            vector_size: None,
                             kind: crate::ScalarKind::Sint,
                             width: 4,
+                            pointer_class: None,
                         }),
                     )?;
                     let const_id = self.create_constant(const_ty_id, &[index]);
@@ -1794,9 +1873,8 @@ impl Writer {
         } else {
             self.temp_chain.reverse();
             let id = self.generate_id();
-            let pointer_type_id = self.create_pointer_type(result_type_id, class);
             block.body.push(Instruction::access_chain(
-                pointer_type_id,
+                result_type_id,
                 id,
                 root_id,
                 &self.temp_chain,

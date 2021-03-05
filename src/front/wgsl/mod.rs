@@ -136,6 +136,8 @@ pub enum Error<'a> {
     InvalidResolve(ResolveError),
     #[error("invalid statement {0:?}, expected {1}")]
     InvalidStatement(crate::Statement, &'a str),
+    #[error("resource type {0:?} is invalid")]
+    InvalidResourceType(Handle<crate::Type>),
     #[error("unknown import: `{0}`")]
     UnknownImport(&'a str),
     #[error("unknown storage class: `{0}`")]
@@ -170,6 +172,8 @@ pub enum Error<'a> {
     FunctionRedefinition(&'a str),
     #[error("call to local `{0}(..)` can't be resolved")]
     UnknownLocalFunction(&'a str),
+    #[error("builtin {0:?} is not implemented")]
+    UnimplementedBuiltin(crate::BuiltIn),
     #[error("other error")]
     Other,
 }
@@ -343,6 +347,23 @@ impl Composition {
         }
     }
 
+    fn extract(
+        base: Handle<crate::Expression>,
+        base_size: crate::VectorSize,
+        name: &str,
+        name_span: Range<usize>,
+    ) -> Result<crate::Expression, Error> {
+        let ch = name
+            .chars()
+            .next()
+            .ok_or_else(|| Error::BadAccessor(name_span.clone()))?;
+        let index = Self::letter_pos(ch);
+        if index >= base_size as u32 {
+            return Err(Error::BadAccessor(name_span));
+        }
+        Ok(crate::Expression::AccessIndex { base, index })
+    }
+
     fn make<'a>(
         base: Handle<crate::Expression>,
         base_size: crate::VectorSize,
@@ -350,7 +371,7 @@ impl Composition {
         name_span: Range<usize>,
         expressions: &mut Arena<crate::Expression>,
     ) -> Result<Self, Error<'a>> {
-        Ok(if name.len() > 1 {
+        if name.len() > 1 {
             let mut components = Vec::with_capacity(name.len());
             for ch in name.chars() {
                 let index = Self::letter_pos(ch);
@@ -367,18 +388,10 @@ impl Composition {
                 4 => crate::VectorSize::Quad,
                 _ => return Err(Error::BadAccessor(name_span)),
             };
-            Composition::Multi(size, components)
+            Ok(Composition::Multi(size, components))
         } else {
-            let ch = name
-                .chars()
-                .next()
-                .ok_or_else(|| Error::BadAccessor(name_span.clone()))?;
-            let index = Self::letter_pos(ch);
-            if index >= base_size as u32 {
-                return Err(Error::BadAccessor(name_span));
-            }
-            Composition::Single(crate::Expression::AccessIndex { base, index })
-        })
+            Self::extract(base, base_size, name, name_span).map(Composition::Single)
+        }
     }
 }
 
@@ -1070,10 +1083,19 @@ impl Parser {
         };
         loop {
             // insert the E::Load when we reach a value
-            if needs_deref && ctx.resolve_type(handle)?.scalar_kind().is_some() {
-                let expression = crate::Expression::Load { pointer: handle };
-                handle = ctx.expressions.append(expression);
-                needs_deref = false;
+            if needs_deref {
+                let now = match *ctx.resolve_type(handle)? {
+                    crate::TypeInner::Pointer { base, class: _ } => {
+                        ctx.types[base].inner.scalar_kind().is_some()
+                    }
+                    crate::TypeInner::ValuePointer { .. } => true,
+                    _ => false,
+                };
+                if now {
+                    let expression = crate::Expression::Load { pointer: handle };
+                    handle = ctx.expressions.append(expression);
+                    needs_deref = false;
+                }
             }
 
             let expression = match lexer.peek().0 {
@@ -1132,6 +1154,30 @@ impl Parser {
                                 }
                             }
                             Composition::Single(expr) => expr,
+                        },
+                        crate::TypeInner::ValuePointer {
+                            size: Some(size), ..
+                        } => Composition::extract(handle, size, name, name_span)?,
+                        crate::TypeInner::Pointer { base, class: _ } => match ctx.types[base].inner
+                        {
+                            crate::TypeInner::Struct { ref members, .. } => {
+                                let index = members
+                                    .iter()
+                                    .position(|m| m.name.as_deref() == Some(name))
+                                    .ok_or(Error::BadAccessor(name_span))?
+                                    as u32;
+                                crate::Expression::AccessIndex {
+                                    base: handle,
+                                    index,
+                                }
+                            }
+                            crate::TypeInner::Vector { size, .. } => {
+                                Composition::extract(handle, size, name, name_span)?
+                            }
+                            crate::TypeInner::Matrix { columns, .. } => {
+                                Composition::extract(handle, columns, name, name_span)?
+                            }
+                            _ => return Err(Error::BadAccessor(name_span)),
                         },
                         _ => return Err(Error::BadAccessor(name_span)),
                     }
@@ -2453,18 +2499,29 @@ impl Parser {
                         Some(crate::Binding::BuiltIn(builtin)) => match builtin {
                             crate::BuiltIn::GlobalInvocationId => crate::StorageClass::Input,
                             crate::BuiltIn::Position => crate::StorageClass::Output,
-                            _ => unimplemented!(),
+                            _ => return Err(Error::UnimplementedBuiltin(builtin)),
                         },
                         Some(crate::Binding::Resource { .. }) => {
                             match module.types[pvar.ty].inner {
                                 crate::TypeInner::Struct { .. } if pvar.access.is_empty() => {
                                     crate::StorageClass::Uniform
                                 }
-                                crate::TypeInner::Struct { .. } => crate::StorageClass::Storage,
-                                _ => crate::StorageClass::Handle,
+                                crate::TypeInner::Struct { .. }
+                                | crate::TypeInner::Array { .. } => crate::StorageClass::Storage,
+                                crate::TypeInner::Image { .. }
+                                | crate::TypeInner::Sampler { .. } => crate::StorageClass::Handle,
+                                ref other => {
+                                    log::error!("Resource type {:?}", other);
+                                    return Err(Error::InvalidResourceType(pvar.ty));
+                                }
                             }
                         }
-                        _ => crate::StorageClass::Private,
+                        _ => match module.types[pvar.ty].inner {
+                            crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
+                                crate::StorageClass::Handle
+                            }
+                            _ => crate::StorageClass::Private,
+                        },
                     },
                 };
                 let var_handle = module.global_variables.append(crate::GlobalVariable {

@@ -5,13 +5,13 @@ expression: dis
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 106
+; Bound: 103
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %37 "vs_main" %10 %13 %16
-OpEntryPoint Fragment %97 "fs_main" %29 %31
-OpExecutionMode %97 OriginUpperLeft
+OpEntryPoint Fragment %94 "fs_main" %29 %31
+OpExecutionMode %94 OriginUpperLeft
 OpSource GLSL 450
 OpName %10 "out_position"
 OpName %13 "out_uv"
@@ -29,8 +29,8 @@ OpName %34 "tmp2"
 OpName %35 "unprojected"
 OpName %37 "vs_main"
 OpName %37 "vs_main"
-OpName %97 "fs_main"
-OpName %97 "fs_main"
+OpName %94 "fs_main"
+OpName %94 "fs_main"
 OpDecorate %10 BuiltIn Position
 OpDecorate %13 Location 0
 OpDecorate %16 BuiltIn VertexIndex
@@ -82,16 +82,13 @@ OpDecorate %31 Location 0
 %33 = OpTypePointer Function %4
 %36 = OpTypePointer Function %11
 %38 = OpTypeFunction %2
-%56 = OpConstant  %4  1
-%58 = OpTypePointer Uniform %21
+%56 = OpTypePointer Uniform %21
+%57 = OpConstant  %4  1
 %65 = OpConstant  %4  1
-%67 = OpTypePointer Uniform %21
-%74 = OpConstant  %4  1
-%76 = OpTypePointer Uniform %21
-%83 = OpTypeMatrix %14 3
-%86 = OpConstant  %4  0
-%88 = OpTypePointer Uniform %21
-%103 = OpTypeSampledImage %24
+%73 = OpConstant  %4  1
+%81 = OpTypeMatrix %14 3
+%84 = OpConstant  %4  0
+%100 = OpTypeSampledImage %24
 %37 = OpFunction  %2  None %38
 %39 = OpLabel
 %32 = OpVariable  %33  Function
@@ -116,52 +113,52 @@ OpStore %34 %46
 %53 = OpFMul  %7  %52 %6
 %54 = OpFSub  %7  %53 %8
 %55 = OpCompositeConstruct  %11  %50 %54 %9 %8
-%57 = OpAccessChain  %58  %19 %56
-%59 = OpLoad  %21  %57
+%58 = OpAccessChain  %56  %19 %57
+%59 = OpLoad  %21  %58
 %60 = OpCompositeExtract  %11  %59 0
 %61 = OpCompositeExtract  %7  %60 0
 %62 = OpCompositeExtract  %7  %60 1
 %63 = OpCompositeExtract  %7  %60 2
 %64 = OpCompositeConstruct  %14  %61 %62 %63
-%66 = OpAccessChain  %67  %19 %65
-%68 = OpLoad  %21  %66
-%69 = OpCompositeExtract  %11  %68 1
-%70 = OpCompositeExtract  %7  %69 0
-%71 = OpCompositeExtract  %7  %69 1
-%72 = OpCompositeExtract  %7  %69 2
-%73 = OpCompositeConstruct  %14  %70 %71 %72
-%75 = OpAccessChain  %76  %19 %74
-%77 = OpLoad  %21  %75
-%78 = OpCompositeExtract  %11  %77 2
-%79 = OpCompositeExtract  %7  %78 0
-%80 = OpCompositeExtract  %7  %78 1
-%81 = OpCompositeExtract  %7  %78 2
-%82 = OpCompositeConstruct  %14  %79 %80 %81
-%84 = OpCompositeConstruct  %83  %64 %73 %82
-%85 = OpTranspose  %83  %84
-%87 = OpAccessChain  %88  %19 %86
-%89 = OpLoad  %21  %87
-%90 = OpMatrixTimesVector  %11  %89 %55
-OpStore %35 %90
-%91 = OpLoad  %11  %35
-%92 = OpCompositeExtract  %7  %91 0
-%93 = OpCompositeExtract  %7  %91 1
-%94 = OpCompositeExtract  %7  %91 2
-%95 = OpCompositeConstruct  %14  %92 %93 %94
-%96 = OpMatrixTimesVector  %14  %85 %95
-OpStore %13 %96
+%66 = OpAccessChain  %56  %19 %65
+%67 = OpLoad  %21  %66
+%68 = OpCompositeExtract  %11  %67 1
+%69 = OpCompositeExtract  %7  %68 0
+%70 = OpCompositeExtract  %7  %68 1
+%71 = OpCompositeExtract  %7  %68 2
+%72 = OpCompositeConstruct  %14  %69 %70 %71
+%74 = OpAccessChain  %56  %19 %73
+%75 = OpLoad  %21  %74
+%76 = OpCompositeExtract  %11  %75 2
+%77 = OpCompositeExtract  %7  %76 0
+%78 = OpCompositeExtract  %7  %76 1
+%79 = OpCompositeExtract  %7  %76 2
+%80 = OpCompositeConstruct  %14  %77 %78 %79
+%82 = OpCompositeConstruct  %81  %64 %72 %80
+%83 = OpTranspose  %81  %82
+%85 = OpAccessChain  %56  %19 %84
+%86 = OpLoad  %21  %85
+%87 = OpMatrixTimesVector  %11  %86 %55
+OpStore %35 %87
+%88 = OpLoad  %11  %35
+%89 = OpCompositeExtract  %7  %88 0
+%90 = OpCompositeExtract  %7  %88 1
+%91 = OpCompositeExtract  %7  %88 2
+%92 = OpCompositeConstruct  %14  %89 %90 %91
+%93 = OpMatrixTimesVector  %14  %83 %92
+OpStore %13 %93
 OpStore %10 %55
 OpReturn
 OpFunctionEnd
-%97 = OpFunction  %2  None %38
+%94 = OpFunction  %2  None %38
+%95 = OpLabel
+%96 = OpLoad  %24  %23
+%97 = OpLoad  %27  %26
+OpBranch %98
 %98 = OpLabel
-%99 = OpLoad  %24  %23
-%100 = OpLoad  %27  %26
-OpBranch %101
-%101 = OpLabel
-%102 = OpLoad  %14  %29
-%104 = OpSampledImage  %103  %99 %100
-%105 = OpImageSampleImplicitLod  %11  %104 %102
-OpStore %31 %105
+%99 = OpLoad  %14  %29
+%101 = OpSampledImage  %100  %96 %97
+%102 = OpImageSampleImplicitLod  %11  %101 %99
+OpStore %31 %102
 OpReturn
 OpFunctionEnd

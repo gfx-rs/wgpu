@@ -39,8 +39,6 @@ typedef metal::float2 type8;
 
 typedef metal::float3 type9;
 
-typedef bool type10;
-
 constexpr constant float const_0f = 0.0;
 constexpr constant float const_1f = 1.0;
 constexpr constant float const_0_50f = 0.5;

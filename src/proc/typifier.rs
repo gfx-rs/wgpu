@@ -11,26 +11,34 @@ enum Resolution {
 // Clone is only implemented for numeric variants of `TypeInner`.
 impl Clone for Resolution {
     fn clone(&self) -> Self {
+        use crate::TypeInner as Ti;
         match *self {
             Resolution::Handle(handle) => Resolution::Handle(handle),
             Resolution::Value(ref v) => Resolution::Value(match *v {
-                crate::TypeInner::Scalar { kind, width } => {
-                    crate::TypeInner::Scalar { kind, width }
-                }
-                crate::TypeInner::Vector { size, kind, width } => {
-                    crate::TypeInner::Vector { size, kind, width }
-                }
-                crate::TypeInner::Matrix {
+                Ti::Scalar { kind, width } => Ti::Scalar { kind, width },
+                Ti::Vector { size, kind, width } => Ti::Vector { size, kind, width },
+                Ti::Matrix {
                     rows,
                     columns,
                     width,
-                } => crate::TypeInner::Matrix {
+                } => Ti::Matrix {
                     rows,
                     columns,
                     width,
                 },
-                #[allow(clippy::panic)]
-                _ => panic!("Unexpected clone type: {:?}", v),
+                Ti::Pointer { base, class } => Ti::Pointer { base, class },
+                Ti::ValuePointer {
+                    size,
+                    kind,
+                    width,
+                    class,
+                } => Ti::ValuePointer {
+                    size,
+                    kind,
+                    width,
+                    class,
+                },
+                _ => unreachable!("Unexpected clone type: {:?}", v),
             }),
         }
     }
@@ -44,8 +52,25 @@ pub struct Typifier {
 
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum ResolveError {
-    #[error("Invalid index into array")]
-    InvalidAccessIndex,
+    #[error("Index {index} is out of bounds for expression {expr:?}")]
+    OutOfBoundsIndex {
+        expr: Handle<crate::Expression>,
+        index: u32,
+    },
+    #[error("Invalid access into expression {expr:?}, indexed: {indexed}")]
+    InvalidAccess {
+        expr: Handle<crate::Expression>,
+        indexed: bool,
+    },
+    #[error("Invalid sub-access into type {ty:?}, indexed: {indexed}")]
+    InvalidSubAccess {
+        ty: Handle<crate::Type>,
+        indexed: bool,
+    },
+    #[error("Invalid pointer {0:?}")]
+    InvalidPointer(Handle<crate::Expression>),
+    #[error("Invalid image {0:?}")]
+    InvalidImage(Handle<crate::Expression>),
     #[error("Function {name} not defined")]
     FunctionNotDefined { name: String },
     #[error("Function without return type")]
@@ -118,51 +143,74 @@ impl Typifier {
         }
     }
 
-    //TODO: resolve `*Variable` and `Access*` expressions to `Pointer` type.
     fn resolve_impl(
         &self,
         expr: &crate::Expression,
         types: &Arena<crate::Type>,
         ctx: &ResolveContext,
     ) -> Result<Resolution, ResolveError> {
+        use crate::TypeInner as Ti;
         Ok(match *expr {
             crate::Expression::Access { base, .. } => match *self.get(base, types) {
-                crate::TypeInner::Array { base, .. } => Resolution::Handle(base),
-                crate::TypeInner::Vector {
+                Ti::Array { base, .. } => Resolution::Handle(base),
+                Ti::Vector {
                     size: _,
                     kind,
                     width,
-                } => Resolution::Value(crate::TypeInner::Scalar { kind, width }),
-                crate::TypeInner::Matrix {
-                    rows: size,
-                    columns: _,
+                } => Resolution::Value(Ti::Scalar { kind, width }),
+                Ti::ValuePointer {
+                    size: Some(_),
+                    kind,
                     width,
-                } => Resolution::Value(crate::TypeInner::Vector {
-                    size,
-                    kind: crate::ScalarKind::Float,
+                    class,
+                } => Resolution::Value(Ti::ValuePointer {
+                    size: None,
+                    kind,
                     width,
+                    class,
+                }),
+                Ti::Pointer { base, class } => Resolution::Value(match types[base].inner {
+                    Ti::Array { base, .. } => Ti::Pointer { base, class },
+                    Ti::Vector {
+                        size: _,
+                        kind,
+                        width,
+                    } => Ti::ValuePointer {
+                        size: None,
+                        kind,
+                        width,
+                        class,
+                    },
+                    ref other => {
+                        log::error!("Access sub-type {:?}", other);
+                        return Err(ResolveError::InvalidSubAccess {
+                            ty: base,
+                            indexed: false,
+                        });
+                    }
                 }),
                 ref other => {
-                    return Err(ResolveError::IncompatibleOperand {
-                        op: "access".to_string(),
-                        operand: format!("{:?}", other),
-                    })
+                    log::error!("Access type {:?}", other);
+                    return Err(ResolveError::InvalidAccess {
+                        expr: base,
+                        indexed: false,
+                    });
                 }
             },
             crate::Expression::AccessIndex { base, index } => match *self.get(base, types) {
-                crate::TypeInner::Vector { size, kind, width } => {
+                Ti::Vector { size, kind, width } => {
                     if index >= size as u32 {
-                        return Err(ResolveError::InvalidAccessIndex);
+                        return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
                     }
-                    Resolution::Value(crate::TypeInner::Scalar { kind, width })
+                    Resolution::Value(Ti::Scalar { kind, width })
                 }
-                crate::TypeInner::Matrix {
+                Ti::Matrix {
                     columns,
                     rows,
                     width,
                 } => {
                     if index >= columns as u32 {
-                        return Err(ResolveError::InvalidAccessIndex);
+                        return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
                     }
                     Resolution::Value(crate::TypeInner::Vector {
                         size: rows,
@@ -170,26 +218,94 @@ impl Typifier {
                         width,
                     })
                 }
-                crate::TypeInner::Array { base, .. } => Resolution::Handle(base),
-                crate::TypeInner::Struct {
+                Ti::Array { base, .. } => Resolution::Handle(base),
+                Ti::Struct {
                     block: _,
                     ref members,
                 } => {
                     let member = members
                         .get(index as usize)
-                        .ok_or(ResolveError::InvalidAccessIndex)?;
+                        .ok_or(ResolveError::OutOfBoundsIndex { expr: base, index })?;
                     Resolution::Handle(member.ty)
                 }
-                ref other => {
-                    return Err(ResolveError::IncompatibleOperand {
-                        op: "access index".to_string(),
-                        operand: format!("{:?}", other),
+                Ti::ValuePointer {
+                    size: Some(size),
+                    kind,
+                    width,
+                    class,
+                } => {
+                    if index >= size as u32 {
+                        return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
+                    }
+                    Resolution::Value(Ti::ValuePointer {
+                        size: None,
+                        kind,
+                        width,
+                        class,
                     })
+                }
+                Ti::Pointer {
+                    base: ty_base,
+                    class,
+                } => Resolution::Value(match types[ty_base].inner {
+                    Ti::Array { base, .. } => Ti::Pointer { base, class },
+                    Ti::Vector { size, kind, width } => {
+                        if index >= size as u32 {
+                            return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
+                        }
+                        Ti::ValuePointer {
+                            size: None,
+                            kind,
+                            width,
+                            class,
+                        }
+                    }
+                    Ti::Matrix {
+                        rows,
+                        columns,
+                        width,
+                    } => {
+                        if index >= columns as u32 {
+                            return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
+                        }
+                        Ti::ValuePointer {
+                            size: Some(rows),
+                            kind: crate::ScalarKind::Float,
+                            width,
+                            class,
+                        }
+                    }
+                    Ti::Struct {
+                        block: _,
+                        ref members,
+                    } => {
+                        let member = members
+                            .get(index as usize)
+                            .ok_or(ResolveError::OutOfBoundsIndex { expr: base, index })?;
+                        Ti::Pointer {
+                            base: member.ty,
+                            class,
+                        }
+                    }
+                    ref other => {
+                        log::error!("Access index sub-type {:?}", other);
+                        return Err(ResolveError::InvalidSubAccess {
+                            ty: ty_base,
+                            indexed: true,
+                        });
+                    }
+                }),
+                ref other => {
+                    log::error!("Access index type {:?}", other);
+                    return Err(ResolveError::InvalidAccess {
+                        expr: base,
+                        indexed: true,
+                    });
                 }
             },
             crate::Expression::Constant(h) => match ctx.constants[h].inner {
                 crate::ConstantInner::Scalar { width, ref value } => {
-                    Resolution::Value(crate::TypeInner::Scalar {
+                    Resolution::Value(Ti::Scalar {
                         kind: value.scalar_kind(),
                         width,
                     })
@@ -200,55 +316,89 @@ impl Typifier {
             crate::Expression::FunctionArgument(index) => {
                 Resolution::Handle(ctx.arguments[index as usize].ty)
             }
-            crate::Expression::GlobalVariable(h) => Resolution::Handle(ctx.global_vars[h].ty),
-            crate::Expression::LocalVariable(h) => Resolution::Handle(ctx.local_vars[h].ty),
-            // we treat Load as a transparent operation for the type system
-            crate::Expression::Load { pointer } => self.resolutions[pointer.index()].clone(),
+            crate::Expression::GlobalVariable(h) => {
+                let var = &ctx.global_vars[h];
+                if var.class == crate::StorageClass::Handle {
+                    Resolution::Handle(var.ty)
+                } else {
+                    Resolution::Value(Ti::Pointer {
+                        base: var.ty,
+                        class: var.class,
+                    })
+                }
+            }
+            crate::Expression::LocalVariable(h) => {
+                let var = &ctx.local_vars[h];
+                Resolution::Value(Ti::Pointer {
+                    base: var.ty,
+                    class: crate::StorageClass::Function,
+                })
+            }
+            crate::Expression::Load { pointer } => match *self.get(pointer, types) {
+                Ti::Pointer { base, class: _ } => Resolution::Handle(base),
+                Ti::ValuePointer {
+                    size,
+                    kind,
+                    width,
+                    class: _,
+                } => Resolution::Value(match size {
+                    Some(size) => Ti::Vector { size, kind, width },
+                    None => Ti::Scalar { kind, width },
+                }),
+                ref other => {
+                    log::error!("Pointer type {:?}", other);
+                    return Err(ResolveError::InvalidPointer(pointer));
+                }
+            },
             crate::Expression::ImageSample { image, .. }
             | crate::Expression::ImageLoad { image, .. } => match *self.get(image, types) {
-                crate::TypeInner::Image { class, .. } => Resolution::Value(match class {
-                    crate::ImageClass::Depth => crate::TypeInner::Scalar {
+                Ti::Image { class, .. } => Resolution::Value(match class {
+                    crate::ImageClass::Depth => Ti::Scalar {
                         kind: crate::ScalarKind::Float,
                         width: 4,
                     },
-                    crate::ImageClass::Sampled { kind, multi: _ } => crate::TypeInner::Vector {
+                    crate::ImageClass::Sampled { kind, multi: _ } => Ti::Vector {
                         kind,
                         width: 4,
                         size: crate::VectorSize::Quad,
                     },
-                    crate::ImageClass::Storage(format) => crate::TypeInner::Vector {
+                    crate::ImageClass::Storage(format) => Ti::Vector {
                         kind: format.into(),
                         width: 4,
                         size: crate::VectorSize::Quad,
                     },
                 }),
-                _ => unreachable!(),
+                ref other => {
+                    log::error!("Image type {:?}", other);
+                    return Err(ResolveError::InvalidImage(image));
+                }
             },
             crate::Expression::ImageQuery { image, query } => Resolution::Value(match query {
                 crate::ImageQuery::Size { level: _ } => match *self.get(image, types) {
-                    crate::TypeInner::Image { dim, .. } => match dim {
-                        crate::ImageDimension::D1 => crate::TypeInner::Scalar {
+                    Ti::Image { dim, .. } => match dim {
+                        crate::ImageDimension::D1 => Ti::Scalar {
                             kind: crate::ScalarKind::Sint,
                             width: 4,
                         },
-                        crate::ImageDimension::D2 => crate::TypeInner::Vector {
+                        crate::ImageDimension::D2 => Ti::Vector {
                             size: crate::VectorSize::Bi,
                             kind: crate::ScalarKind::Sint,
                             width: 4,
                         },
-                        crate::ImageDimension::D3 | crate::ImageDimension::Cube => {
-                            crate::TypeInner::Vector {
-                                size: crate::VectorSize::Tri,
-                                kind: crate::ScalarKind::Sint,
-                                width: 4,
-                            }
-                        }
+                        crate::ImageDimension::D3 | crate::ImageDimension::Cube => Ti::Vector {
+                            size: crate::VectorSize::Tri,
+                            kind: crate::ScalarKind::Sint,
+                            width: 4,
+                        },
                     },
-                    _ => unreachable!(),
+                    ref other => {
+                        log::error!("Image type {:?}", other);
+                        return Err(ResolveError::InvalidImage(image));
+                    }
                 },
                 crate::ImageQuery::NumLevels
                 | crate::ImageQuery::NumLayers
-                | crate::ImageQuery::NumSamples => crate::TypeInner::Scalar {
+                | crate::ImageQuery::NumSamples => Ti::Scalar {
                     kind: crate::ScalarKind::Sint,
                     width: 4,
                 },
@@ -264,28 +414,28 @@ impl Typifier {
                     let ty_right = self.get(right, types);
                     if ty_left == ty_right {
                         self.resolutions[left.index()].clone()
-                    } else if let crate::TypeInner::Scalar { .. } = *ty_left {
+                    } else if let Ti::Scalar { .. } = *ty_left {
                         self.resolutions[right.index()].clone()
-                    } else if let crate::TypeInner::Scalar { .. } = *ty_right {
+                    } else if let Ti::Scalar { .. } = *ty_right {
                         self.resolutions[left.index()].clone()
-                    } else if let crate::TypeInner::Matrix {
+                    } else if let Ti::Matrix {
                         columns: _,
                         rows,
                         width,
                     } = *ty_left
                     {
-                        Resolution::Value(crate::TypeInner::Vector {
+                        Resolution::Value(Ti::Vector {
                             size: rows,
                             kind: crate::ScalarKind::Float,
                             width,
                         })
-                    } else if let crate::TypeInner::Matrix {
+                    } else if let Ti::Matrix {
                         columns,
                         rows: _,
                         width,
                     } = *ty_right
                     {
-                        Resolution::Value(crate::TypeInner::Vector {
+                        Resolution::Value(Ti::Vector {
                             size: columns,
                             kind: crate::ScalarKind::Float,
                             width,
@@ -309,10 +459,8 @@ impl Typifier {
                     let kind = crate::ScalarKind::Bool;
                     let width = 1;
                     let inner = match *self.get(left, types) {
-                        crate::TypeInner::Scalar { .. } => crate::TypeInner::Scalar { kind, width },
-                        crate::TypeInner::Vector { size, .. } => {
-                            crate::TypeInner::Vector { size, kind, width }
-                        }
+                        Ti::Scalar { .. } => Ti::Scalar { kind, width },
+                        Ti::Vector { size, .. } => Ti::Vector { size, kind, width },
                         ref other => {
                             return Err(ResolveError::IncompatibleOperand {
                                 op: "logical".to_string(),
@@ -332,7 +480,7 @@ impl Typifier {
             crate::Expression::Derivative { axis: _, expr } => {
                 self.resolutions[expr.index()].clone()
             }
-            crate::Expression::Relational { .. } => Resolution::Value(crate::TypeInner::Scalar {
+            crate::Expression::Relational { .. } => Resolution::Value(Ti::Scalar {
                 kind: crate::ScalarKind::Bool,
                 width: 4,
             }),
@@ -377,11 +525,11 @@ impl Typifier {
                     Mf::Pow => self.resolutions[arg.index()].clone(),
                     // geometry
                     Mf::Dot => match *self.get(arg, types) {
-                        crate::TypeInner::Vector {
+                        Ti::Vector {
                             kind,
                             size: _,
                             width,
-                        } => Resolution::Value(crate::TypeInner::Scalar { kind, width }),
+                        } => Resolution::Value(Ti::Scalar { kind, width }),
                         ref other => {
                             return Err(ResolveError::IncompatibleOperand {
                                 op: "dot product".to_string(),
@@ -395,7 +543,7 @@ impl Typifier {
                             operand: "".to_string(),
                         })?;
                         match (self.get(arg, types), self.get(arg1,types)) {
-                            (&crate::TypeInner::Vector {kind: _, size: columns,width}, &crate::TypeInner::Vector{ size: rows, .. }) => Resolution::Value(crate::TypeInner::Matrix { columns, rows, width }),
+                            (&Ti::Vector {kind: _, size: columns,width}, &Ti::Vector{ size: rows, .. }) => Resolution::Value(Ti::Matrix { columns, rows, width }),
                             (left, right) => {
                                 return Err(ResolveError::IncompatibleOperands {
                                     op: "outer product".to_string(),
@@ -408,8 +556,8 @@ impl Typifier {
                     Mf::Cross => self.resolutions[arg.index()].clone(),
                     Mf::Distance |
                     Mf::Length => match *self.get(arg, types) {
-                        crate::TypeInner::Scalar {width,kind} |
-                        crate::TypeInner::Vector {width,kind,size:_} => Resolution::Value(crate::TypeInner::Scalar { kind, width }),
+                        Ti::Scalar {width,kind} |
+                        Ti::Vector {width,kind,size:_} => Resolution::Value(Ti::Scalar { kind, width }),
                         ref other => {
                             return Err(ResolveError::IncompatibleOperand {
                                 op: format!("{:?}", fun),
@@ -429,11 +577,11 @@ impl Typifier {
                     Mf::Sqrt |
                     Mf::InverseSqrt => self.resolutions[arg.index()].clone(),
                     Mf::Transpose => match *self.get(arg, types) {
-                        crate::TypeInner::Matrix {
+                        Ti::Matrix {
                             columns,
                             rows,
                             width,
-                        } => Resolution::Value(crate::TypeInner::Matrix {
+                        } => Resolution::Value(Ti::Matrix {
                             columns: rows,
                             rows: columns,
                             width,
@@ -446,11 +594,11 @@ impl Typifier {
                         }
                     },
                     Mf::Inverse => match *self.get(arg, types) {
-                        crate::TypeInner::Matrix {
+                        Ti::Matrix {
                             columns,
                             rows,
                             width,
-                        } if columns == rows => Resolution::Value(crate::TypeInner::Matrix {
+                        } if columns == rows => Resolution::Value(Ti::Matrix {
                             columns,
                             rows,
                             width,
@@ -463,10 +611,10 @@ impl Typifier {
                         }
                     },
                     Mf::Determinant => match *self.get(arg, types) {
-                        crate::TypeInner::Matrix {
+                        Ti::Matrix {
                             width,
                             ..
-                        } => Resolution::Value(crate::TypeInner::Scalar { kind: crate::ScalarKind::Float, width }),
+                        } => Resolution::Value(Ti::Scalar { kind: crate::ScalarKind::Float, width }),
                         ref other => {
                             return Err(ResolveError::IncompatibleOperand {
                                 op: "determinant".to_string(),
@@ -484,14 +632,12 @@ impl Typifier {
                 kind,
                 convert: _,
             } => match *self.get(expr, types) {
-                crate::TypeInner::Scalar { kind: _, width } => {
-                    Resolution::Value(crate::TypeInner::Scalar { kind, width })
-                }
-                crate::TypeInner::Vector {
+                Ti::Scalar { kind: _, width } => Resolution::Value(Ti::Scalar { kind, width }),
+                Ti::Vector {
                     kind: _,
                     size,
                     width,
-                } => Resolution::Value(crate::TypeInner::Vector { kind, size, width }),
+                } => Resolution::Value(Ti::Vector { kind, size, width }),
                 ref other => {
                     return Err(ResolveError::IncompatibleOperand {
                         op: "as".to_string(),
@@ -505,7 +651,7 @@ impl Typifier {
                     .ok_or(ResolveError::FunctionReturnsVoid)?;
                 Resolution::Handle(ty)
             }
-            crate::Expression::ArrayLength(_) => Resolution::Value(crate::TypeInner::Scalar {
+            crate::Expression::ArrayLength(_) => Resolution::Value(Ti::Scalar {
                 kind: crate::ScalarKind::Uint,
                 width: 4,
             }),
@@ -523,15 +669,7 @@ impl Typifier {
             for (eh, expr) in expressions.iter().skip(self.resolutions.len()) {
                 let resolution = self.resolve_impl(expr, types, ctx)?;
                 log::debug!("Resolving {:?} = {:?} : {:?}", eh, expr, resolution);
-
-                let ty_handle = match resolution {
-                    Resolution::Handle(h) => h,
-                    Resolution::Value(inner) => types
-                        .fetch_if_or_append(crate::Type { name: None, inner }, |a, b| {
-                            a.inner == b.inner
-                        }),
-                };
-                self.resolutions.push(Resolution::Handle(ty_handle));
+                self.resolutions.push(resolution);
             }
         }
         Ok(())

@@ -455,7 +455,7 @@ impl Validator {
 
     fn check_width(kind: crate::ScalarKind, width: crate::Bytes) -> bool {
         match kind {
-            crate::ScalarKind::Bool => width == 1,
+            crate::ScalarKind::Bool => width == crate::BOOL_WIDTH,
             _ => width == 4,
         }
     }
@@ -485,6 +485,17 @@ impl Validator {
                     return Err(TypeError::UnresolvedBase(base));
                 }
                 TypeFlags::DATA | TypeFlags::SIZED
+            }
+            Ti::ValuePointer {
+                size: _,
+                kind,
+                width,
+                class: _,
+            } => {
+                if !Self::check_width(kind, width) {
+                    return Err(TypeError::InvalidWidth(kind, width));
+                }
+                TypeFlags::SIZED //TODO: `DATA`?
             }
             Ti::Array { base, size, stride } => {
                 if base >= handle {
@@ -917,7 +928,25 @@ impl Validator {
                         }
                         _ => {}
                     }
-                    if self.typifier.try_get(pointer, context.types) != Some(value_ty) {
+                    let good = match self.typifier.try_get(pointer, context.types) {
+                        Some(&Ti::Pointer { base, class: _ }) => {
+                            *value_ty == context.types[base].inner
+                        }
+                        Some(&Ti::ValuePointer {
+                            size: Some(size),
+                            kind,
+                            width,
+                            class: _,
+                        }) => *value_ty == Ti::Vector { size, kind, width },
+                        Some(&Ti::ValuePointer {
+                            size: None,
+                            kind,
+                            width,
+                            class: _,
+                        }) => *value_ty == Ti::Scalar { kind, width },
+                        _ => false,
+                    };
+                    if !good {
                         return Err(FunctionError::InvalidStoreTypes { pointer, value });
                     }
                 }

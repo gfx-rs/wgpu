@@ -62,7 +62,7 @@ impl Layouter {
                     size: (columns as u8 * rows as u8 * width) as u32,
                     alignment: Alignment::new((columns as u8 * width) as u32).unwrap(),
                 },
-                Ti::Pointer { .. } => TypeLayout {
+                Ti::Pointer { .. } | Ti::ValuePointer { .. } => TypeLayout {
                     size: 4,
                     alignment: Alignment::new(1).unwrap(),
                 },

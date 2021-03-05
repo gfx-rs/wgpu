@@ -118,6 +118,20 @@ impl crate::StorageClass {
             _ => false,
         }
     }
+
+    fn get_name(&self, global_use: GlobalUse) -> Option<&'static str> {
+        match *self {
+            Self::Input | Self::Output | Self::Handle => None,
+            Self::Uniform => Some("constant"),
+            //TODO: should still be "constant" for read-only buffers
+            Self::Storage => Some(if global_use.contains(GlobalUse::WRITE) {
+                "device"
+            } else {
+                "storage "
+            }),
+            Self::Private | Self::Function | Self::WorkGroup | Self::PushConstant => Some(""),
+        }
+    }
 }
 
 enum FunctionOrigin {
@@ -208,14 +222,21 @@ impl<W: Write> Writer<W> {
             }
             crate::Expression::AccessIndex { base, index } => {
                 self.put_expression(base, context)?;
-                let resolved = self.typifier.get(base, &context.module.types);
+                let mut resolved = self.typifier.get(base, &context.module.types);
+                let base_ty_handle = match *resolved {
+                    crate::TypeInner::Pointer { base, class: _ } => {
+                        resolved = &context.module.types[base].inner;
+                        Ok(base)
+                    }
+                    _ => self.typifier.get_handle(base),
+                };
                 match *resolved {
                     crate::TypeInner::Struct { .. } => {
-                        let base_ty = self.typifier.get_handle(base).unwrap();
+                        let base_ty = base_ty_handle.unwrap();
                         let name = &self.names[&NameKey::StructMember(base_ty, index)];
                         write!(self.out, ".{}", name)?;
                     }
-                    crate::TypeInner::Vector { .. } => {
+                    crate::TypeInner::ValuePointer { .. } | crate::TypeInner::Vector { .. } => {
                         write!(self.out, ".{}", COMPONENTS[index as usize])?;
                     }
                     crate::TypeInner::Matrix { .. } => {
@@ -852,6 +873,7 @@ impl<W: Write> Writer<W> {
     fn write_type_defs(&mut self, module: &crate::Module) -> Result<(), Error> {
         for (handle, ty) in module.types.iter() {
             let name = &self.names[&NameKey::Type(handle)];
+            let global_use = GlobalUse::all(); //TODO
             match ty.inner {
                 crate::TypeInner::Scalar { kind, .. } => {
                     write!(self.out, "typedef {} {}", scalar_kind_string(kind), name)?;
@@ -878,19 +900,50 @@ impl<W: Write> Writer<W> {
                     )?;
                 }
                 crate::TypeInner::Pointer { base, class } => {
-                    use crate::StorageClass as Sc;
                     let base_name = &self.names[&NameKey::Type(base)];
-                    let class_name = match class {
-                        Sc::Input | Sc::Output => continue,
-                        Sc::Uniform => "constant",
-                        Sc::Storage => "device",
-                        Sc::Handle
-                        | Sc::Private
-                        | Sc::Function
-                        | Sc::WorkGroup
-                        | Sc::PushConstant => "",
+                    let class_name = match class.get_name(global_use) {
+                        Some(name) => name,
+                        None => continue,
                     };
                     write!(self.out, "typedef {} {} *{}", class_name, base_name, name)?;
+                }
+                crate::TypeInner::ValuePointer {
+                    size: None,
+                    kind,
+                    width: _,
+                    class,
+                } => {
+                    let class_name = match class.get_name(global_use) {
+                        Some(name) => name,
+                        None => continue,
+                    };
+                    write!(
+                        self.out,
+                        "typedef {} {} *{}",
+                        class_name,
+                        scalar_kind_string(kind),
+                        name
+                    )?;
+                }
+                crate::TypeInner::ValuePointer {
+                    size: Some(size),
+                    kind,
+                    width: _,
+                    class,
+                } => {
+                    let class_name = match class.get_name(global_use) {
+                        Some(name) => name,
+                        None => continue,
+                    };
+                    write!(
+                        self.out,
+                        "typedef {} {}::{}{} {}",
+                        class_name,
+                        NAMESPACE,
+                        scalar_kind_string(kind),
+                        vector_size_string(size),
+                        name
+                    )?;
                 }
                 crate::TypeInner::Array {
                     base,

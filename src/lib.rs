@@ -53,6 +53,9 @@ use serde::Deserialize;
 #[cfg(feature = "serialize")]
 use serde::Serialize;
 
+/// Width of a boolean type, in bytes.
+pub const BOOL_WIDTH: Bytes = 1;
+
 /// Hash map that is faster but not resilient to DoS attacks.
 pub type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
 /// Hash set that is faster but not resilient to DoS attacks.
@@ -371,9 +374,16 @@ pub enum TypeInner {
         rows: VectorSize,
         width: Bytes,
     },
-    /// Pointer to a value.
+    /// Pointer to another type.
     Pointer {
         base: Handle<Type>,
+        class: StorageClass,
+    },
+    /// Pointer to a value.
+    ValuePointer {
+        size: Option<VectorSize>,
+        kind: ScalarKind,
+        width: Bytes,
         class: StorageClass,
     },
     /// Homogenous list of elements.

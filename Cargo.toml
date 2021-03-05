@@ -22,6 +22,7 @@ thiserror = "1.0.21"
 serde = { version = "1.0", features = ["derive"], optional = true }
 petgraph = { version ="0.5", optional = true }
 pp-rs = { git = "https://github.com/Kangz/glslpp-rs", rev = "4f2f72a", optional = true }
+#env_logger = "0.8" # uncomment temporarily for developing with `convert`
 
 [features]
 default = []

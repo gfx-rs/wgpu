@@ -44,11 +44,11 @@ OpDecorate %11 Binding 0
 %20 = OpTypeFunction %4 %4
 %28 = OpTypeBool
 %47 = OpTypeFunction %2
-%54 = OpTypeInt 32 1
-%55 = OpConstant  %54  0
-%57 = OpTypePointer Uniform %4
-%60 = OpConstant  %54  0
-%62 = OpTypePointer Uniform %4
+%50 = OpTypePointer Uniform %13
+%53 = OpTypePointer Uniform %4
+%56 = OpTypeInt 32 1
+%57 = OpConstant  %56  0
+%61 = OpConstant  %56  0
 %19 = OpFunction  %4  None %20
 %18 = OpFunctionParameter  %4
 %21 = OpLabel
@@ -100,14 +100,14 @@ OpFunctionEnd
 %48 = OpLabel
 OpBranch %49
 %49 = OpLabel
-%50 = OpLoad  %9  %8
-%51 = OpCompositeExtract  %4  %50 0
-%52 = OpLoad  %9  %8
-%53 = OpCompositeExtract  %4  %52 0
-%56 = OpAccessChain  %57  %11 %55 %53
-%58 = OpLoad  %4  %56
-%59 = OpFunctionCall  %4  %19 %58
-%61 = OpAccessChain  %62  %11 %60 %51
-OpStore %61 %59
+%51 = OpLoad  %9  %8
+%52 = OpCompositeExtract  %4  %51 0
+%54 = OpLoad  %9  %8
+%55 = OpCompositeExtract  %4  %54 0
+%58 = OpAccessChain  %53  %11 %57 %55
+%59 = OpLoad  %4  %58
+%60 = OpFunctionCall  %4  %19 %59
+%62 = OpAccessChain  %53  %11 %61 %52
+OpStore %62 %60
 OpReturn
 OpFunctionEnd
