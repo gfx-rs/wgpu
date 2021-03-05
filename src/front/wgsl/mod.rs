@@ -907,14 +907,8 @@ impl Parser {
     ) -> Result<Handle<crate::Constant>, Error<'a>> {
         self.scopes.push(Scope::ConstantExpr);
         let inner = match first_token_span {
-            (Token::Word("true"), _) => crate::ConstantInner::Scalar {
-                width: 1,
-                value: crate::ScalarValue::Bool(true),
-            },
-            (Token::Word("false"), _) => crate::ConstantInner::Scalar {
-                width: 1,
-                value: crate::ScalarValue::Bool(false),
-            },
+            (Token::Word("true"), _) => crate::ConstantInner::boolean(true),
+            (Token::Word("false"), _) => crate::ConstantInner::boolean(false),
             (
                 Token::Number {
                     ref value,
@@ -1516,7 +1510,7 @@ impl Parser {
             },
             "bool" => crate::TypeInner::Scalar {
                 kind: crate::ScalarKind::Bool,
-                width: 1,
+                width: crate::BOOL_WIDTH,
             },
             "vec2" => {
                 let (kind, width) = lexer.next_scalar_generic()?;

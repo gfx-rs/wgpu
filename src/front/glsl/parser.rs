@@ -5,12 +5,13 @@ pomelo! {
     %include {
         use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{
+            BOOL_WIDTH,
             Arena, BinaryOperator, Binding, Block, Constant,
             ConstantInner, Expression,
             Function, GlobalVariable, Handle, Interpolation,
             LocalVariable, ScalarValue, ScalarKind,
             Statement, StorageAccess, StorageClass, StructMember,
-            SwitchCase, Type, TypeInner, UnaryOperator, FunctionArgument
+            SwitchCase, Type, TypeInner, UnaryOperator, FunctionArgument,
         };
         use pp_rs::token::PreprocessorError;
     }
@@ -212,7 +213,7 @@ pomelo! {
             name: None,
             specialization: None,
             inner: ConstantInner::Scalar {
-                width: 1,
+                width: BOOL_WIDTH,
                 value: ScalarValue::Bool(b.1)
             },
         });

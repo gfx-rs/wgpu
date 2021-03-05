@@ -2000,7 +2000,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let id = self.next()?;
         let inner = crate::TypeInner::Scalar {
             kind: crate::ScalarKind::Bool,
-            width: 1,
+            width: crate::BOOL_WIDTH,
         };
         self.lookup_type.insert(
             id,
@@ -2608,10 +2608,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 handle: module.constants.append(crate::Constant {
                     name: self.future_decor.remove(&id).and_then(|dec| dec.name),
                     specialization: None, //TODO
-                    inner: crate::ConstantInner::Scalar {
-                        width: 1,
-                        value: crate::ScalarValue::Bool(value),
-                    },
+                    inner: crate::ConstantInner::boolean(value),
                 }),
                 type_id,
             },
