@@ -1008,8 +1008,16 @@ impl<'a, W: Write> Writer<'a, W> {
                         let min_ref_count = ctx.expressions[handle].bake_ref_count();
                         if min_ref_count <= ctx.info[handle].ref_count {
                             write!(self.out, "{}", INDENT.repeat(indent))?;
+                            match self.module.types[ty_handle].inner {
+                                TypeInner::Struct { .. } => {
+                                    let ty_name = &self.names[&NameKey::Type(ty_handle)];
+                                    write!(self.out, "{}", ty_name)?;
+                                }
+                                _ => {
+                                    self.write_type(ty_handle)?;
+                                }
+                            };
                             let name = format!("_expr{}", handle.index());
-                            self.write_type(ty_handle)?;
                             write!(self.out, " {} = ", name)?;
                             self.write_expr(handle, ctx)?;
                             writeln!(self.out, ";")?;
