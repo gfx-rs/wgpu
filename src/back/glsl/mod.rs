@@ -669,7 +669,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
         write!(
             self.out,
-            "{}{}{}{}{}{}",
+            "highp {}{}{}{}{}{}",
             glsl_scalar(kind, 4)?.prefix,
             base,
             glsl_dimension(dim),
