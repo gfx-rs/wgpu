@@ -4,6 +4,7 @@ SNAPSHOTS_IN=tests/in
 SNAPSHOTS_OUT=tests/out
 
 all:
+	cargo fmt
 	cargo test --all-features
 	cargo clippy --all-features
 

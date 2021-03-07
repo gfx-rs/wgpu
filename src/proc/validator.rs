@@ -249,8 +249,8 @@ pub enum EntryPointError {
     BindingCollision(Handle<crate::GlobalVariable>),
     #[error("Built-in {0:?} is not applicable to this entry point")]
     InvalidBuiltIn(crate::BuiltIn),
-    #[error("Interpolation of an integer has to be flat")]
-    InvalidIntegerInterpolation,
+    #[error("Location {location} onterpolation of an integer has to be flat")]
+    InvalidIntegerInterpolation { location: u32 },
     #[error(transparent)]
     Function(#[from] FunctionError),
 }
@@ -1091,19 +1091,16 @@ impl Validator {
                 continue;
             }
 
-            if let Some(crate::Binding::Location(_)) = var.binding {
-                match (stage, var.class) {
-                    (crate::ShaderStage::Vertex, crate::StorageClass::Output)
-                    | (crate::ShaderStage::Fragment, crate::StorageClass::Input) => {
-                        match module.types[var.ty].inner.scalar_kind() {
-                            Some(crate::ScalarKind::Float) => {}
-                            Some(_) if var.interpolation != Some(crate::Interpolation::Flat) => {
-                                return Err(EntryPointError::InvalidIntegerInterpolation);
-                            }
-                            _ => {}
+            if let Some(crate::Binding::Location(location)) = var.binding {
+                if stage == crate::ShaderStage::Fragment && var.class == crate::StorageClass::Input
+                {
+                    match module.types[var.ty].inner.scalar_kind() {
+                        Some(crate::ScalarKind::Float) => {}
+                        Some(_) if var.interpolation != Some(crate::Interpolation::Flat) => {
+                            return Err(EntryPointError::InvalidIntegerInterpolation { location });
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
 

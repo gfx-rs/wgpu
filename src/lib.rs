@@ -471,6 +471,8 @@ pub struct GlobalVariable {
     pub ty: Handle<Type>,
     /// Initial value for this variable.
     pub init: Option<Handle<Constant>>,
+    //TODO: require fragment input interpolation once the entry point I/O
+    // is refactored.
     /// The interpolation qualifier, if any.
     /// If the this `GlobalVariable` is a vertex output
     /// or fragment input, `None` corresponds to the
