@@ -4,6 +4,8 @@ SNAPSHOTS_IN=tests/in
 SNAPSHOTS_OUT=tests/out
 
 all:
+	cargo test --all-features
+	cargo clippy --all-features
 
 clean:
 	rm *.metal *.air *.metallib *.vert *.frag *.comp *.spv
