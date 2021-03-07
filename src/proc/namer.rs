@@ -157,8 +157,8 @@ impl Namer {
             }
         }
 
-        for (ep_index, (&(_, ref base_name), ep)) in module.entry_points.iter().enumerate() {
-            let ep_name = self.call(base_name);
+        for (ep_index, ep) in module.entry_points.iter().enumerate() {
+            let ep_name = self.call(&ep.name);
             output.insert(NameKey::EntryPoint(ep_index as _), ep_name);
             for (handle, var) in ep.function.local_variables.iter() {
                 let name = self.call_or(&var.name, "local");

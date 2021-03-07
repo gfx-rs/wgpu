@@ -480,7 +480,7 @@ impl FunctionInfo {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Analysis {
     functions: Vec<FunctionInfo>,
-    entry_points: crate::FastHashMap<(crate::ShaderStage, String), FunctionInfo>,
+    entry_points: Vec<FunctionInfo>,
 }
 
 impl Analysis {
@@ -511,28 +511,23 @@ impl Analysis {
     pub fn new(module: &crate::Module) -> Result<Self, AnalysisError> {
         let mut this = Analysis {
             functions: Vec::with_capacity(module.functions.len()),
-            entry_points: crate::FastHashMap::default(),
+            entry_points: Vec::with_capacity(module.entry_points.len()),
         };
         for (_, fun) in module.functions.iter() {
             let info = this.process_function(fun, &module.global_variables)?;
             this.functions.push(info);
         }
 
-        for (key, ep) in module.entry_points.iter() {
+        for ep in module.entry_points.iter() {
             let info = this.process_function(&ep.function, &module.global_variables)?;
-            this.entry_points.insert(key.clone(), info);
+            this.entry_points.push(info);
         }
 
         Ok(this)
     }
 
-    pub fn get_entry_point(&self, stage: crate::ShaderStage, name: &str) -> &FunctionInfo {
-        let (_, info) = self
-            .entry_points
-            .iter()
-            .find(|(key, _)| key.0 == stage && key.1 == name)
-            .unwrap();
-        info
+    pub fn get_entry_point(&self, index: usize) -> &FunctionInfo {
+        &self.entry_points[index]
     }
 }
 

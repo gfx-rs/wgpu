@@ -507,8 +507,6 @@ impl Writer {
     fn write_entry_point(
         &mut self,
         entry_point: &crate::EntryPoint,
-        stage: crate::ShaderStage,
-        name: &str,
         info: &FunctionInfo,
         ir_module: &crate::Module,
     ) -> Result<Instruction, Error> {
@@ -525,7 +523,7 @@ impl Writer {
             }
         }
 
-        let exec_model = match stage {
+        let exec_model = match entry_point.stage {
             crate::ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
             crate::ShaderStage::Fragment => {
                 let execution_mode = spirv::ExecutionMode::OriginUpperLeft;
@@ -549,13 +547,14 @@ impl Writer {
         self.check(exec_model.required_capabilities())?;
 
         if self.flags.contains(WriterFlags::DEBUG) {
-            self.debugs.push(Instruction::name(function_id, name));
+            self.debugs
+                .push(Instruction::name(function_id, &entry_point.name));
         }
 
         Ok(Instruction::entry_point(
             exec_model,
             function_id,
-            name,
+            &entry_point.name,
             interface_ids.as_slice(),
         ))
     }
@@ -2258,9 +2257,9 @@ impl Writer {
             self.lookup_function.insert(handle, id);
         }
 
-        for (&(stage, ref name), ir_ep) in ir_module.entry_points.iter() {
-            let info = analysis.get_entry_point(stage, name);
-            let ep_instruction = self.write_entry_point(ir_ep, stage, name, info, ir_module)?;
+        for (ep_index, ir_ep) in ir_module.entry_points.iter().enumerate() {
+            let info = analysis.get_entry_point(ep_index);
+            let ep_instruction = self.write_entry_point(ir_ep, info, ir_module)?;
             ep_instruction.to_words(&mut self.logical_layout.entry_points);
         }
 

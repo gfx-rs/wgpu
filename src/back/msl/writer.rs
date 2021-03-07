@@ -1168,9 +1168,9 @@ impl<W: Write> Writer<W> {
         let mut info = TranslationInfo {
             entry_point_names: Vec::with_capacity(module.entry_points.len()),
         };
-        for (ep_index, (&(stage, ref ep_name), ep)) in module.entry_points.iter().enumerate() {
+        for (ep_index, ep) in module.entry_points.iter().enumerate() {
             let fun = &ep.function;
-            let fun_info = analysis.get_entry_point(stage, ep_name);
+            let fun_info = analysis.get_entry_point(ep_index);
             self.typifier.resolve_all(
                 &fun.expressions,
                 &module.types,
@@ -1205,7 +1205,7 @@ impl<W: Write> Writer<W> {
             let output_name = format!("{}Output", fun_name);
             let location_input_name = format!("{}Input", fun_name);
 
-            let (em_str, in_mode, out_mode) = match stage {
+            let (em_str, in_mode, out_mode) = match ep.stage {
                 crate::ShaderStage::Vertex => (
                     "vertex",
                     LocationMode::VertexInput,
@@ -1221,7 +1221,7 @@ impl<W: Write> Writer<W> {
                 }
             };
 
-            let return_value = match stage {
+            let return_value = match ep.stage {
                 crate::ShaderStage::Vertex | crate::ShaderStage::Fragment => {
                     // make dedicated input/output structs
                     writeln!(self.out, "struct {} {{", location_input_name)?;
@@ -1243,7 +1243,7 @@ impl<W: Write> Writer<W> {
                         };
                         write!(self.out, "{}", INDENT)?;
                         tyvar.try_fmt(&mut self.out)?;
-                        let resolved = options.resolve_binding(stage, var, in_mode)?;
+                        let resolved = options.resolve_binding(ep.stage, var, in_mode)?;
                         resolved.try_fmt_decorated(&mut self.out, ";")?;
                         writeln!(self.out)?;
                     }
@@ -1266,7 +1266,7 @@ impl<W: Write> Writer<W> {
                         };
                         write!(self.out, "{}", INDENT)?;
                         tyvar.try_fmt(&mut self.out)?;
-                        let resolved = options.resolve_binding(stage, var, out_mode)?;
+                        let resolved = options.resolve_binding(ep.stage, var, out_mode)?;
                         resolved.try_fmt_decorated(&mut self.out, ";")?;
                         writeln!(self.out)?;
                     }
@@ -1300,7 +1300,7 @@ impl<W: Write> Writer<W> {
                         continue;
                     }
                 }
-                let loc_mode = match (stage, var.class) {
+                let loc_mode = match (ep.stage, var.class) {
                     (crate::ShaderStage::Vertex, crate::StorageClass::Input) => {
                         LocationMode::VertexInput
                     }
@@ -1323,7 +1323,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}", INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;
                 if var.binding.is_some() {
-                    let resolved = options.resolve_binding(stage, var, loc_mode)?;
+                    let resolved = options.resolve_binding(ep.stage, var, loc_mode)?;
                     resolved.try_fmt_decorated(&mut self.out, separator)?;
                 }
                 if let Some(value) = var.init {
@@ -1334,7 +1334,7 @@ impl<W: Write> Writer<W> {
             }
             writeln!(self.out, ") {{")?;
 
-            match stage {
+            match ep.stage {
                 crate::ShaderStage::Vertex | crate::ShaderStage::Fragment => {
                     writeln!(
                         self.out,

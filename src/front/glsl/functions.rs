@@ -295,14 +295,13 @@ impl Program<'_> {
             .ok_or_else(|| ErrorKind::SemanticError("Unnamed function".into()))?;
         let stage = self.entry_points.get(&name);
         if let Some(&stage) = stage {
-            self.module.entry_points.insert(
-                (stage, name),
-                EntryPoint {
-                    early_depth_test: None,
-                    workgroup_size: [0; 3], //TODO
-                    function: f,
-                },
-            );
+            self.module.entry_points.push(EntryPoint {
+                name,
+                stage,
+                early_depth_test: None,
+                workgroup_size: [0; 3], //TODO
+                function: f,
+            });
         } else {
             let handle = self.module.functions.append(f);
             self.lookup_function.insert(name, handle);

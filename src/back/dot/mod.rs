@@ -431,10 +431,10 @@ pub fn write(module: &crate::Module) -> Result<String, FmtError> {
         write_fun(&mut output, prefix, fun)?;
         writeln!(output, "\t}}")?;
     }
-    for (ep_index, (&(stage, ref name), ep)) in module.entry_points.iter().enumerate() {
+    for (ep_index, ep) in module.entry_points.iter().enumerate() {
         let prefix = format!("ep{}", ep_index);
         writeln!(output, "\tsubgraph cluster_{} {{", prefix)?;
-        writeln!(output, "\t\tlabel=\"{:?}/'{}'\"", stage, name)?;
+        writeln!(output, "\t\tlabel=\"{:?}/'{}'\"", ep.stage, ep.name)?;
         write_fun(&mut output, prefix, &ep.function)?;
         writeln!(output, "\t}}")?;
     }

@@ -538,8 +538,8 @@ expression: output
             ],
         ),
     ],
-    entry_points: {
-        (Fragment, "fs_main"): (
+    entry_points: [
+        (
             control_flags: (
                 bits: 5,
             ),
@@ -1401,5 +1401,5 @@ expression: output
                 ),
             ],
         ),
-    },
+    ],
 )

@@ -874,6 +874,10 @@ pub struct Function {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct EntryPoint {
+    /// Name of this entry point, visible externally.
+    pub name: String,
+    /// Shader stage.
+    pub stage: ShaderStage,
     /// Early depth test for fragment stages.
     pub early_depth_test: Option<EarlyDepthTest>,
     /// Workgroup size for compute stages
@@ -905,6 +909,6 @@ pub struct Module {
     pub global_variables: Arena<GlobalVariable>,
     /// Storage for the functions defined in this module.
     pub functions: Arena<Function>,
-    /// Exported entry points.
-    pub entry_points: FastHashMap<(ShaderStage, String), EntryPoint>,
+    /// Entry points.
+    pub entry_points: Vec<EntryPoint>,
 }

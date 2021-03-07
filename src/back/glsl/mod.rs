@@ -315,13 +315,10 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         // Try to find the entry point and corresponding index
-        let (ep_idx, (_, ep)) = module
+        let ep_idx = module
             .entry_points
             .iter()
-            .enumerate()
-            .find(|(_, ((stage, name), _))| {
-                options.shader_stage == *stage && &options.entry_point == name
-            })
+            .position(|ep| options.shader_stage == ep.stage && options.entry_point == ep.name)
             .ok_or(Error::EntryPointNotFound)?;
 
         // Generate a map with names required to write the module
@@ -337,7 +334,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
             features: FeaturesManager::new(),
             names,
-            entry_point: ep,
+            entry_point: &module.entry_points[ep_idx],
             entry_point_idx: ep_idx as u16,
 
             block_id: IdGenerator::default(),
@@ -423,9 +420,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        let ep_info = self
-            .analysis
-            .get_entry_point(self.options.shader_stage, &self.options.entry_point);
+        let ep_info = self.analysis.get_entry_point(self.entry_point_idx as usize);
 
         // Write the globals
         //
@@ -1839,9 +1834,7 @@ impl<'a, W: Write> Writer<'a, W> {
     /// [`Arena`](crate::arena::Arena) and we need to traverse it
     fn collect_texture_mapping(&self) -> Result<FastHashMap<String, TextureMapping>, Error> {
         use std::collections::hash_map::Entry;
-        let info = self
-            .analysis
-            .get_entry_point(self.options.shader_stage, &self.options.entry_point);
+        let info = self.analysis.get_entry_point(self.entry_point_idx as usize);
         let mut mappings = FastHashMap::default();
 
         for sampling in info.sampling_set.iter() {

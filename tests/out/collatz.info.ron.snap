@@ -203,8 +203,8 @@ expression: output
             ],
         ),
     ],
-    entry_points: {
-        (Compute, "main"): (
+    entry_points: [
+        (
             control_flags: (
                 bits: 5,
             ),
@@ -304,5 +304,5 @@ expression: output
                 ),
             ],
         ),
-    },
+    ],
 )

@@ -802,8 +802,10 @@ expression: output
             ],
         ),
     ],
-    entry_points: {
-        (Fragment, "fs_main"): (
+    entry_points: [
+        (
+            name: "fs_main",
+            stage: Fragment,
             early_depth_test: None,
             workgroup_size: (0, 0, 0),
             function: (
@@ -1228,5 +1230,5 @@ expression: output
                 ],
             ),
         ),
-    },
+    ],
 )

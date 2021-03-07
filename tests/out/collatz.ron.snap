@@ -282,8 +282,10 @@ expression: output
             ],
         ),
     ],
-    entry_points: {
-        (Compute, "main"): (
+    entry_points: [
+        (
+            name: "main",
+            stage: Compute,
             early_depth_test: None,
             workgroup_size: (1, 1, 1),
             function: (
@@ -351,5 +353,5 @@ expression: output
                 ],
             ),
         ),
-    },
+    ],
 )

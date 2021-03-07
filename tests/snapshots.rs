@@ -98,8 +98,8 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     #[cfg(feature = "glsl-out")]
     {
         if targets.contains(Targets::GLSL) {
-            for &(stage, ref ep_name) in module.entry_points.keys() {
-                check_output_glsl(module, &analysis, name, stage, ep_name);
+            for ep in module.entry_points.iter() {
+                check_output_glsl(module, &analysis, name, ep.stage, &ep.name);
             }
         }
     }

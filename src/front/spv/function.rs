@@ -162,14 +162,13 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         match self.lookup_entry_point.remove(&fun_id) {
             Some(ep) => {
-                module.entry_points.insert(
-                    (ep.stage, ep.name),
-                    crate::EntryPoint {
-                        early_depth_test: ep.early_depth_test,
-                        workgroup_size: ep.workgroup_size,
-                        function: fun,
-                    },
-                );
+                module.entry_points.push(crate::EntryPoint {
+                    name: ep.name,
+                    stage: ep.stage,
+                    early_depth_test: ep.early_depth_test,
+                    workgroup_size: ep.workgroup_size,
+                    function: fun,
+                });
             }
             None => {
                 let handle = module.functions.append(fun);

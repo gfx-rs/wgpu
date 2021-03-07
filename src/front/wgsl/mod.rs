@@ -168,8 +168,6 @@ pub enum Error<'a> {
     ZeroStride,
     #[error("not a composite type: {0:?}")]
     NotCompositeType(Handle<crate::Type>),
-    #[error("function redefinition: `{0}`")]
-    FunctionRedefinition(&'a str),
     #[error("call to local `{0}(..)` can't be resolved")]
     UnknownLocalFunction(&'a str),
     #[error("builtin {0:?} is not implemented")]
@@ -2533,32 +2531,17 @@ impl Parser {
             (Token::Word("fn"), _) => {
                 let (function, name) =
                     self.parse_function_decl(lexer, module, &lookup_global_expression)?;
-                let already_declared = match stage {
-                    Some(stage) => module
-                        .entry_points
-                        .insert(
-                            (stage, name.to_string()),
-                            crate::EntryPoint {
-                                early_depth_test,
-                                workgroup_size,
-                                function,
-                            },
-                        )
-                        .is_some(),
+                match stage {
+                    Some(stage) => module.entry_points.push(crate::EntryPoint {
+                        name: name.to_string(),
+                        stage,
+                        early_depth_test,
+                        workgroup_size,
+                        function,
+                    }),
                     None => {
-                        if module.functions.iter().any(|(_, fun)| match fun.name {
-                            Some(ref string) => string == name,
-                            None => false,
-                        }) {
-                            true
-                        } else {
-                            module.functions.append(function);
-                            false
-                        }
+                        module.functions.append(function);
                     }
-                };
-                if already_declared {
-                    return Err(Error::FunctionRedefinition(name));
                 }
             }
             (Token::End, _) => return Ok(false),

@@ -233,6 +233,8 @@ pub enum FunctionError {
 
 #[derive(Clone, Debug, Error)]
 pub enum EntryPointError {
+    #[error("Multiple conflicting entry points")]
+    Conflict,
     #[error("Early depth test is not applicable")]
     UnexpectedEarlyDepthTest,
     #[error("Workgroup size is not applicable")]
@@ -1060,14 +1062,13 @@ impl Validator {
     fn validate_entry_point(
         &mut self,
         ep: &crate::EntryPoint,
-        stage: crate::ShaderStage,
         info: &FunctionInfo,
         module: &crate::Module,
     ) -> Result<(), EntryPointError> {
-        if ep.early_depth_test.is_some() && stage != crate::ShaderStage::Fragment {
+        if ep.early_depth_test.is_some() && ep.stage != crate::ShaderStage::Fragment {
             return Err(EntryPointError::UnexpectedEarlyDepthTest);
         }
-        if stage == crate::ShaderStage::Compute {
+        if ep.stage == crate::ShaderStage::Compute {
             if ep
                 .workgroup_size
                 .iter()
@@ -1092,7 +1093,7 @@ impl Validator {
             }
 
             if let Some(crate::Binding::Location(location)) = var.binding {
-                if stage == crate::ShaderStage::Fragment && var.class == crate::StorageClass::Input
+                if ep.stage == crate::ShaderStage::Fragment && var.class == crate::StorageClass::Input
                 {
                     match module.types[var.ty].inner.scalar_kind() {
                         Some(crate::ScalarKind::Float) => {}
@@ -1110,7 +1111,8 @@ impl Validator {
                     match var.binding {
                         Some(crate::Binding::BuiltIn(built_in)) => {
                             let (allowed_stage, allowed_usage) = built_in_usage(built_in);
-                            if allowed_stage != stage || !allowed_usage.contains(GlobalUse::READ) {
+                            if allowed_stage != ep.stage || !allowed_usage.contains(GlobalUse::READ)
+                            {
                                 return Err(EntryPointError::InvalidBuiltIn(built_in));
                             }
                         }
@@ -1128,7 +1130,9 @@ impl Validator {
                     match var.binding {
                         Some(crate::Binding::BuiltIn(built_in)) => {
                             let (allowed_stage, allowed_usage) = built_in_usage(built_in);
-                            if allowed_stage != stage || !allowed_usage.contains(GlobalUse::WRITE) {
+                            if allowed_stage != ep.stage
+                                || !allowed_usage.contains(GlobalUse::WRITE)
+                            {
                                 return Err(EntryPointError::InvalidBuiltIn(built_in));
                             }
                         }
@@ -1233,12 +1237,20 @@ impl Validator {
                 })?;
         }
 
-        for (&(stage, ref name), entry_point) in module.entry_points.iter() {
-            let info = analysis.get_entry_point(stage, name);
-            self.validate_entry_point(entry_point, stage, info, module)
+        let mut ep_map = FastHashSet::default();
+        for (index, ep) in module.entry_points.iter().enumerate() {
+            if !ep_map.insert((ep.stage, &ep.name)) {
+                return Err(ValidationError::EntryPoint {
+                    stage: ep.stage,
+                    name: ep.name.clone(),
+                    error: EntryPointError::Conflict,
+                });
+            }
+            let info = analysis.get_entry_point(index);
+            self.validate_entry_point(ep, info, module)
                 .map_err(|error| ValidationError::EntryPoint {
-                    stage,
-                    name: name.to_string(),
+                    stage: ep.stage,
+                    name: ep.name.clone(),
                     error,
                 })?;
         }
