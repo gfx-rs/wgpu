@@ -11,6 +11,11 @@ typedef metal::float2 type1;
 
 typedef metal::float4 type2;
 
+struct VertexOutput {
+    type1 uv;
+    type2 position;
+};
+
 typedef metal::texture2d<float, metal::access::sample> type3;
 
 typedef metal::sampler type4;
@@ -19,43 +24,41 @@ constexpr constant float c_scale = 1.2;
 constexpr constant float const_0f = 0.0;
 constexpr constant float const_1f = 1.0;
 struct main1Input {
-    type1 a_pos [[attribute(0)]];
-    type1 a_uv [[attribute(1)]];
+    type1 pos [[attribute(0)]];
+    type1 uv1 [[attribute(1)]];
 };
-
 struct main1Output {
-    type1 v_uv [[user(loc0)]];
-    type2 o_position [[position]];
+    type1 uv [[user(loc0)]];
+    type2 position [[position]];
 };
-
 vertex main1Output main1(
-    main1Input input [[stage_in]]
+  main1Input varyings [[stage_in]]
 ) {
-    main1Output output;
-    output.v_uv = input.a_uv;
-    output.o_position = metal::float4((c_scale * input.a_pos), const_0f, const_1f);
-    return output;
+    const auto pos = varyings.pos;
+    const auto uv1 = varyings.uv1;
+    VertexOutput out;
+    out.uv = uv1;
+    out.position = metal::float4((c_scale * pos), const_0f, const_1f);
+    const auto _tmp = out;
+    return main1Output { _tmp.uv, _tmp.position };
 }
 
 struct main2Input {
-    type1 v_uv1 [[user(loc0)]];
+    type1 uv2 [[user(loc0)]];
 };
-
 struct main2Output {
-    type2 o_color [[color(0)]];
+    type2 member1 [[color(0)]];
 };
-
 fragment main2Output main2(
-    main2Input input [[stage_in]],
-    type3 u_texture [[texture(0)]],
-    type4 u_sampler [[sampler(0)]]
+  main2Input varyings1 [[stage_in]]
+, type3 u_texture [[texture(0)]]
+, type4 u_sampler [[sampler(0)]]
 ) {
-    main2Output output;
-    metal::float4 _expr9 = u_texture.sample(u_sampler, input.v_uv1);
-    if ((_expr9.w == const_0f)) {
+    const auto uv2 = varyings1.uv2;
+    metal::float4 _expr4 = u_texture.sample(u_sampler, uv2);
+    if ((_expr4.w == const_0f)) {
         metal::discard_fragment();
     }
-    output.o_color = (_expr9.w * _expr9);
-    return output;
+    return main2Output { (_expr4.w * _expr4) };
 }
 

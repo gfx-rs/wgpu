@@ -6,14 +6,24 @@ expression: string
 
 precision highp float;
 
-in vec2 _location_0;
+struct VertexOutput {
+    vec2 uv;
+    vec4 position;
+};
 
-in vec2 _location_1;
-
-out vec2 _location_0_vs;
+in vec2 _in_location_0;
+in vec2 _in_location_1;
+out vec2 _out_location_0;
 
 void main() {
-    _location_0_vs = _location_1;
-    gl_Position = vec4((1.2 * _location_0), 0.0, 1.0);
+    vec2 pos = _in_location_0;
+    vec2 uv1 = _in_location_1;
+    VertexOutput out1;
+    out1.uv = uv1;
+    out1.position = vec4((1.2 * pos), 0.0, 1.0);
+    _out_location_0 = out1.uv;
+    gl_Position = out1.position;
     return;
 }
+
+

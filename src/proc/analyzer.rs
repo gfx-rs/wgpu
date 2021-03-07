@@ -288,6 +288,7 @@ impl FunctionInfo {
         &mut self,
         handle: Handle<crate::Expression>,
         expression_arena: &Arena<crate::Expression>,
+        arguments: &[crate::FunctionArgument],
         global_var_arena: &Arena<crate::GlobalVariable>,
         other_functions: &[FunctionInfo],
     ) -> Result<(), AnalysisError> {
@@ -316,33 +317,39 @@ impl FunctionInfo {
                     requirement: None,
                 }
             }
-            // same as `LocalVariable` - generally non-uniform
-            E::FunctionArgument(_) => Uniformity::non_uniform_result(handle),
-            // depends on the builtin and storage class
-            E::GlobalVariable(gh) => {
-                assignable_global = Some(gh);
-                let var = &global_var_arena[gh];
-                let uniform = if let Some(crate::Binding::BuiltIn(built_in)) = var.binding {
-                    match built_in {
+            // depends on the builtin or interpolation
+            E::FunctionArgument(index) => {
+                let arg = &arguments[index as usize];
+                let uniform = match arg.binding {
+                    Some(crate::Binding::BuiltIn(built_in)) => match built_in {
                         // per-polygon built-ins are uniform
                         crate::BuiltIn::FrontFacing
                         // per-work-group built-ins are uniform
                         | crate::BuiltIn::WorkGroupId
                         | crate::BuiltIn::WorkGroupSize => true,
                         _ => false,
-                    }
-                } else {
-                    use crate::StorageClass as Sc;
-                    match var.class {
-                        // only flat inputs are uniform
-                        Sc::Input => var.interpolation == Some(crate::Interpolation::Flat),
-                        Sc::Output | Sc::Function | Sc::Private | Sc::WorkGroup => false,
-                        // uniform data
-                        Sc::Uniform | Sc::PushConstant => true,
-                        // storage data is only uniform when read-only
-                        Sc::Handle | Sc::Storage => {
-                            !var.storage_access.contains(crate::StorageAccess::STORE)
-                        }
+                    },
+                    // only flat inputs are uniform
+                    Some(crate::Binding::Location(_, Some(crate::Interpolation::Flat))) => true,
+                    _ => false,
+                };
+                Uniformity {
+                    non_uniform_result: if uniform { None } else { Some(handle) },
+                    requirement: None,
+                }
+            }
+            // depends on the storage class
+            E::GlobalVariable(gh) => {
+                use crate::StorageClass as Sc;
+                assignable_global = Some(gh);
+                let var = &global_var_arena[gh];
+                let uniform = match var.class {
+                    Sc::Function | Sc::Private | Sc::WorkGroup => false,
+                    // uniform data
+                    Sc::Uniform | Sc::PushConstant => true,
+                    // storage data is only uniform when read-only
+                    Sc::Handle | Sc::Storage => {
+                        !var.storage_access.contains(crate::StorageAccess::STORE)
                     }
                 };
                 Uniformity {
@@ -660,7 +667,13 @@ impl Analysis {
         };
 
         for (handle, _) in fun.expressions.iter() {
-            info.process_expression(handle, &fun.expressions, global_var_arena, &self.functions)?;
+            info.process_expression(
+                handle,
+                &fun.expressions,
+                &fun.arguments,
+                global_var_arena,
+                &self.functions,
+            )?;
         }
 
         let uniformity = info.process_block(&fun.body, &self.functions, None)?;
@@ -727,18 +740,16 @@ fn uniform_control_flow() {
         name: None,
         init: None,
         ty,
-        binding: Some(crate::Binding::BuiltIn(crate::BuiltIn::VertexIndex)),
-        class: crate::StorageClass::Input,
-        interpolation: None,
-        storage_access: crate::StorageAccess::empty(),
+        class: crate::StorageClass::Handle,
+        binding: None,
+        storage_access: crate::StorageAccess::STORE,
     });
     let uniform_global = global_var_arena.append(crate::GlobalVariable {
         name: None,
         init: None,
         ty,
-        binding: Some(crate::Binding::Location(0)),
-        class: crate::StorageClass::Input,
-        interpolation: Some(crate::Interpolation::Flat),
+        binding: None,
+        class: crate::StorageClass::Uniform,
         storage_access: crate::StorageAccess::empty(),
     });
 
@@ -772,7 +783,7 @@ fn uniform_control_flow() {
         expressions: vec![ExpressionInfo::default(); expressions.len()].into_boxed_slice(),
     };
     for (handle, _) in expressions.iter() {
-        info.process_expression(handle, &expressions, &global_var_arena, &[])
+        info.process_expression(handle, &expressions, &[], &global_var_arena, &[])
             .unwrap();
     }
     assert_eq!(info[non_uniform_global_expr].ref_count, 1);

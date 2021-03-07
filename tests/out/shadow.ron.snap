@@ -112,6 +112,7 @@ expression: output
                         name: Some("num_lights"),
                         span: None,
                         ty: 13,
+                        binding: None,
                     ),
                 ],
             ),
@@ -154,16 +155,19 @@ expression: output
                         name: Some("proj"),
                         span: None,
                         ty: 18,
+                        binding: None,
                     ),
                     (
                         name: Some("pos"),
                         span: None,
                         ty: 4,
+                        binding: None,
                     ),
                     (
                         name: Some("color"),
                         span: None,
                         ty: 4,
+                        binding: None,
                     ),
                 ],
             ),
@@ -185,6 +189,7 @@ expression: output
                         name: Some("data"),
                         span: None,
                         ty: 20,
+                        binding: None,
                     ),
                 ],
             ),
@@ -221,14 +226,14 @@ expression: output
             name: None,
             inner: Pointer(
                 base: 4,
-                class: Input,
+                class: Private,
             ),
         ),
         (
             name: None,
             inner: Pointer(
                 base: 2,
-                class: Input,
+                class: Private,
             ),
         ),
         (
@@ -319,21 +324,21 @@ expression: output
             name: None,
             inner: Pointer(
                 base: 1,
-                class: Input,
+                class: Private,
             ),
         ),
         (
             name: None,
             inner: Pointer(
                 base: 1,
-                class: Input,
+                class: Private,
             ),
         ),
         (
             name: None,
             inner: Pointer(
                 base: 1,
-                class: Input,
+                class: Private,
             ),
         ),
         (
@@ -424,7 +429,7 @@ expression: output
             name: None,
             inner: Pointer(
                 base: 4,
-                class: Output,
+                class: Private,
             ),
         ),
         (
@@ -764,13 +769,12 @@ expression: output
         (
             name: Some("t_shadow"),
             class: Handle,
-            binding: Some(Resource(
+            binding: Some((
                 group: 0,
                 binding: 2,
             )),
             ty: 56,
             init: None,
-            interpolation: None,
             storage_access: (
                 bits: 0,
             ),
@@ -778,13 +782,12 @@ expression: output
         (
             name: Some("sampler_shadow"),
             class: Handle,
-            binding: Some(Resource(
+            binding: Some((
                 group: 0,
                 binding: 3,
             )),
             ty: 57,
             init: None,
-            interpolation: None,
             storage_access: (
                 bits: 0,
             ),
@@ -792,13 +795,12 @@ expression: output
         (
             name: Some("u_globals"),
             class: Uniform,
-            binding: Some(Resource(
+            binding: Some((
                 group: 0,
                 binding: 0,
             )),
             ty: 14,
             init: None,
-            interpolation: None,
             storage_access: (
                 bits: 0,
             ),
@@ -806,46 +808,42 @@ expression: output
         (
             name: Some("s_lights"),
             class: Storage,
-            binding: Some(Resource(
+            binding: Some((
                 group: 0,
                 binding: 1,
             )),
             ty: 21,
             init: None,
-            interpolation: None,
             storage_access: (
                 bits: 1,
             ),
         ),
         (
             name: Some("in_position_fs"),
-            class: Input,
-            binding: Some(Location(1)),
+            class: Private,
+            binding: None,
             ty: 4,
             init: None,
-            interpolation: None,
             storage_access: (
                 bits: 0,
             ),
         ),
         (
             name: Some("in_normal_fs"),
-            class: Input,
-            binding: Some(Location(0)),
+            class: Private,
+            binding: None,
             ty: 2,
             init: None,
-            interpolation: None,
             storage_access: (
                 bits: 0,
             ),
         ),
         (
             name: Some("out_color_fs"),
-            class: Output,
-            binding: Some(Location(0)),
+            class: Private,
+            binding: None,
             ty: 4,
             init: None,
-            interpolation: None,
             storage_access: (
                 bits: 0,
             ),
@@ -858,13 +856,18 @@ expression: output
                 (
                     name: None,
                     ty: 3,
+                    binding: None,
                 ),
                 (
                     name: None,
                     ty: 4,
+                    binding: None,
                 ),
             ],
-            return_type: Some(1),
+            result: Some((
+                ty: 1,
+                binding: None,
+            )),
             local_variables: [],
             expressions: [
                 GlobalVariable(3),
@@ -1074,6 +1077,427 @@ expression: output
                 ),
             ],
         ),
+        (
+            name: Some("fs_main"),
+            arguments: [],
+            result: None,
+            local_variables: [
+                (
+                    name: Some("color"),
+                    ty: 2,
+                    init: Some(10),
+                ),
+                (
+                    name: Some("i"),
+                    ty: 3,
+                    init: Some(12),
+                ),
+            ],
+            expressions: [
+                GlobalVariable(3),
+                GlobalVariable(6),
+                GlobalVariable(5),
+                GlobalVariable(1),
+                GlobalVariable(2),
+                GlobalVariable(4),
+                GlobalVariable(7),
+                Constant(20),
+                Constant(7),
+                Constant(33),
+                Constant(31),
+                Constant(29),
+                Constant(27),
+                Constant(25),
+                Constant(15),
+                Constant(12),
+                Constant(23),
+                Constant(8),
+                Constant(36),
+                Constant(34),
+                Constant(14),
+                Constant(32),
+                Constant(30),
+                Constant(17),
+                Constant(26),
+                Constant(39),
+                Constant(13),
+                Constant(11),
+                Constant(9),
+                Constant(6),
+                Constant(21),
+                Constant(35),
+                Constant(19),
+                Constant(37),
+                Constant(18),
+                Constant(28),
+                Constant(16),
+                Constant(24),
+                Constant(38),
+                Constant(22),
+                Constant(10),
+                Constant(5),
+                LocalVariable(1),
+                LocalVariable(2),
+                Load(
+                    pointer: 44,
+                ),
+                AccessIndex(
+                    base: 1,
+                    index: 0,
+                ),
+                Access(
+                    base: 46,
+                    index: 37,
+                ),
+                Load(
+                    pointer: 47,
+                ),
+                Math(
+                    fun: Min,
+                    arg: 48,
+                    arg1: Some(28),
+                    arg2: None,
+                ),
+                Binary(
+                    op: GreaterEqual,
+                    left: 45,
+                    right: 49,
+                ),
+                Load(
+                    pointer: 43,
+                ),
+                Load(
+                    pointer: 44,
+                ),
+                AccessIndex(
+                    base: 6,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 44,
+                ),
+                Access(
+                    base: 53,
+                    index: 54,
+                ),
+                AccessIndex(
+                    base: 55,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 56,
+                ),
+                Load(
+                    pointer: 3,
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 57,
+                    right: 58,
+                ),
+                Call(1),
+                Load(
+                    pointer: 2,
+                ),
+                Math(
+                    fun: Normalize,
+                    arg: 61,
+                    arg1: None,
+                    arg2: None,
+                ),
+                AccessIndex(
+                    base: 6,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 44,
+                ),
+                Access(
+                    base: 63,
+                    index: 64,
+                ),
+                AccessIndex(
+                    base: 65,
+                    index: 1,
+                ),
+                Access(
+                    base: 66,
+                    index: 31,
+                ),
+                Load(
+                    pointer: 67,
+                ),
+                AccessIndex(
+                    base: 6,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 44,
+                ),
+                Access(
+                    base: 69,
+                    index: 70,
+                ),
+                AccessIndex(
+                    base: 71,
+                    index: 1,
+                ),
+                Access(
+                    base: 72,
+                    index: 38,
+                ),
+                Load(
+                    pointer: 73,
+                ),
+                AccessIndex(
+                    base: 6,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 44,
+                ),
+                Access(
+                    base: 75,
+                    index: 76,
+                ),
+                AccessIndex(
+                    base: 77,
+                    index: 1,
+                ),
+                Access(
+                    base: 78,
+                    index: 13,
+                ),
+                Load(
+                    pointer: 79,
+                ),
+                Compose(
+                    ty: 2,
+                    components: [
+                        68,
+                        74,
+                        80,
+                    ],
+                ),
+                Access(
+                    base: 3,
+                    index: 36,
+                ),
+                Load(
+                    pointer: 82,
+                ),
+                Access(
+                    base: 3,
+                    index: 12,
+                ),
+                Load(
+                    pointer: 84,
+                ),
+                Access(
+                    base: 3,
+                    index: 23,
+                ),
+                Load(
+                    pointer: 86,
+                ),
+                Compose(
+                    ty: 2,
+                    components: [
+                        83,
+                        85,
+                        87,
+                    ],
+                ),
+                Binary(
+                    op: Subtract,
+                    left: 81,
+                    right: 88,
+                ),
+                Math(
+                    fun: Normalize,
+                    arg: 89,
+                    arg1: None,
+                    arg2: None,
+                ),
+                Math(
+                    fun: Dot,
+                    arg: 62,
+                    arg1: Some(90),
+                    arg2: None,
+                ),
+                Math(
+                    fun: Max,
+                    arg: 42,
+                    arg1: Some(91),
+                    arg2: None,
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 60,
+                    right: 92,
+                ),
+                AccessIndex(
+                    base: 6,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 44,
+                ),
+                Access(
+                    base: 94,
+                    index: 95,
+                ),
+                AccessIndex(
+                    base: 96,
+                    index: 2,
+                ),
+                Access(
+                    base: 97,
+                    index: 10,
+                ),
+                Load(
+                    pointer: 98,
+                ),
+                AccessIndex(
+                    base: 6,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 44,
+                ),
+                Access(
+                    base: 100,
+                    index: 101,
+                ),
+                AccessIndex(
+                    base: 102,
+                    index: 2,
+                ),
+                Access(
+                    base: 103,
+                    index: 19,
+                ),
+                Load(
+                    pointer: 104,
+                ),
+                AccessIndex(
+                    base: 6,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 44,
+                ),
+                Access(
+                    base: 106,
+                    index: 107,
+                ),
+                AccessIndex(
+                    base: 108,
+                    index: 2,
+                ),
+                Access(
+                    base: 109,
+                    index: 26,
+                ),
+                Load(
+                    pointer: 110,
+                ),
+                Compose(
+                    ty: 2,
+                    components: [
+                        99,
+                        105,
+                        111,
+                    ],
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 112,
+                    right: 93,
+                ),
+                Binary(
+                    op: Add,
+                    left: 51,
+                    right: 113,
+                ),
+                Load(
+                    pointer: 44,
+                ),
+                Binary(
+                    op: Add,
+                    left: 115,
+                    right: 27,
+                ),
+                Load(
+                    pointer: 43,
+                ),
+                Compose(
+                    ty: 4,
+                    components: [
+                        117,
+                        30,
+                    ],
+                ),
+            ],
+            body: [
+                Loop(
+                    body: [
+                        Emit((
+                            start: 44,
+                            end: 50,
+                        )),
+                        If(
+                            condition: 50,
+                            accept: [
+                                Break,
+                            ],
+                            reject: [],
+                        ),
+                        Emit((
+                            start: 50,
+                            end: 59,
+                        )),
+                        Call(
+                            function: 1,
+                            arguments: [
+                                52,
+                                59,
+                            ],
+                            result: Some(60),
+                        ),
+                        Emit((
+                            start: 60,
+                            end: 114,
+                        )),
+                        Store(
+                            pointer: 43,
+                            value: 114,
+                        ),
+                    ],
+                    continuing: [
+                        Emit((
+                            start: 114,
+                            end: 116,
+                        )),
+                        Store(
+                            pointer: 44,
+                            value: 116,
+                        ),
+                    ],
+                ),
+                Emit((
+                    start: 116,
+                    end: 118,
+                )),
+                Store(
+                    pointer: 7,
+                    value: 118,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+        ),
     ],
     entry_points: [
         (
@@ -1082,423 +1506,54 @@ expression: output
             early_depth_test: None,
             workgroup_size: (0, 0, 0),
             function: (
-                name: Some("fs_main"),
-                arguments: [],
-                return_type: None,
-                local_variables: [
+                name: None,
+                arguments: [
                     (
-                        name: Some("color"),
+                        name: Some("in_normal_fs"),
                         ty: 2,
-                        init: Some(10),
+                        binding: Some(Location(0, Some(Perspective))),
                     ),
                     (
-                        name: Some("i"),
-                        ty: 3,
-                        init: Some(12),
+                        name: Some("in_position_fs"),
+                        ty: 4,
+                        binding: Some(Location(1, Some(Perspective))),
                     ),
                 ],
+                result: Some((
+                    ty: 4,
+                    binding: Some(Location(0, None)),
+                )),
+                local_variables: [],
                 expressions: [
-                    GlobalVariable(3),
                     GlobalVariable(6),
+                    FunctionArgument(0),
                     GlobalVariable(5),
-                    GlobalVariable(1),
-                    GlobalVariable(2),
-                    GlobalVariable(4),
+                    FunctionArgument(1),
                     GlobalVariable(7),
-                    Constant(20),
-                    Constant(7),
-                    Constant(33),
-                    Constant(31),
-                    Constant(29),
-                    Constant(27),
-                    Constant(25),
-                    Constant(15),
-                    Constant(12),
-                    Constant(23),
-                    Constant(8),
-                    Constant(36),
-                    Constant(34),
-                    Constant(14),
-                    Constant(32),
-                    Constant(30),
-                    Constant(17),
-                    Constant(26),
-                    Constant(39),
-                    Constant(13),
-                    Constant(11),
-                    Constant(9),
-                    Constant(6),
-                    Constant(21),
-                    Constant(35),
-                    Constant(19),
-                    Constant(37),
-                    Constant(18),
-                    Constant(28),
-                    Constant(16),
-                    Constant(24),
-                    Constant(38),
-                    Constant(22),
-                    Constant(10),
-                    Constant(5),
-                    LocalVariable(1),
-                    LocalVariable(2),
                     Load(
-                        pointer: 44,
-                    ),
-                    AccessIndex(
-                        base: 1,
-                        index: 0,
-                    ),
-                    Access(
-                        base: 46,
-                        index: 37,
-                    ),
-                    Load(
-                        pointer: 47,
-                    ),
-                    Math(
-                        fun: Min,
-                        arg: 48,
-                        arg1: Some(28),
-                        arg2: None,
-                    ),
-                    Binary(
-                        op: GreaterEqual,
-                        left: 45,
-                        right: 49,
-                    ),
-                    Load(
-                        pointer: 43,
-                    ),
-                    Load(
-                        pointer: 44,
-                    ),
-                    AccessIndex(
-                        base: 6,
-                        index: 0,
-                    ),
-                    Load(
-                        pointer: 44,
-                    ),
-                    Access(
-                        base: 53,
-                        index: 54,
-                    ),
-                    AccessIndex(
-                        base: 55,
-                        index: 0,
-                    ),
-                    Load(
-                        pointer: 56,
-                    ),
-                    Load(
-                        pointer: 3,
-                    ),
-                    Binary(
-                        op: Multiply,
-                        left: 57,
-                        right: 58,
-                    ),
-                    Call(1),
-                    Load(
-                        pointer: 2,
-                    ),
-                    Math(
-                        fun: Normalize,
-                        arg: 61,
-                        arg1: None,
-                        arg2: None,
-                    ),
-                    AccessIndex(
-                        base: 6,
-                        index: 0,
-                    ),
-                    Load(
-                        pointer: 44,
-                    ),
-                    Access(
-                        base: 63,
-                        index: 64,
-                    ),
-                    AccessIndex(
-                        base: 65,
-                        index: 1,
-                    ),
-                    Access(
-                        base: 66,
-                        index: 31,
-                    ),
-                    Load(
-                        pointer: 67,
-                    ),
-                    AccessIndex(
-                        base: 6,
-                        index: 0,
-                    ),
-                    Load(
-                        pointer: 44,
-                    ),
-                    Access(
-                        base: 69,
-                        index: 70,
-                    ),
-                    AccessIndex(
-                        base: 71,
-                        index: 1,
-                    ),
-                    Access(
-                        base: 72,
-                        index: 38,
-                    ),
-                    Load(
-                        pointer: 73,
-                    ),
-                    AccessIndex(
-                        base: 6,
-                        index: 0,
-                    ),
-                    Load(
-                        pointer: 44,
-                    ),
-                    Access(
-                        base: 75,
-                        index: 76,
-                    ),
-                    AccessIndex(
-                        base: 77,
-                        index: 1,
-                    ),
-                    Access(
-                        base: 78,
-                        index: 13,
-                    ),
-                    Load(
-                        pointer: 79,
-                    ),
-                    Compose(
-                        ty: 2,
-                        components: [
-                            68,
-                            74,
-                            80,
-                        ],
-                    ),
-                    Access(
-                        base: 3,
-                        index: 36,
-                    ),
-                    Load(
-                        pointer: 82,
-                    ),
-                    Access(
-                        base: 3,
-                        index: 12,
-                    ),
-                    Load(
-                        pointer: 84,
-                    ),
-                    Access(
-                        base: 3,
-                        index: 23,
-                    ),
-                    Load(
-                        pointer: 86,
-                    ),
-                    Compose(
-                        ty: 2,
-                        components: [
-                            83,
-                            85,
-                            87,
-                        ],
-                    ),
-                    Binary(
-                        op: Subtract,
-                        left: 81,
-                        right: 88,
-                    ),
-                    Math(
-                        fun: Normalize,
-                        arg: 89,
-                        arg1: None,
-                        arg2: None,
-                    ),
-                    Math(
-                        fun: Dot,
-                        arg: 62,
-                        arg1: Some(90),
-                        arg2: None,
-                    ),
-                    Math(
-                        fun: Max,
-                        arg: 42,
-                        arg1: Some(91),
-                        arg2: None,
-                    ),
-                    Binary(
-                        op: Multiply,
-                        left: 60,
-                        right: 92,
-                    ),
-                    AccessIndex(
-                        base: 6,
-                        index: 0,
-                    ),
-                    Load(
-                        pointer: 44,
-                    ),
-                    Access(
-                        base: 94,
-                        index: 95,
-                    ),
-                    AccessIndex(
-                        base: 96,
-                        index: 2,
-                    ),
-                    Access(
-                        base: 97,
-                        index: 10,
-                    ),
-                    Load(
-                        pointer: 98,
-                    ),
-                    AccessIndex(
-                        base: 6,
-                        index: 0,
-                    ),
-                    Load(
-                        pointer: 44,
-                    ),
-                    Access(
-                        base: 100,
-                        index: 101,
-                    ),
-                    AccessIndex(
-                        base: 102,
-                        index: 2,
-                    ),
-                    Access(
-                        base: 103,
-                        index: 19,
-                    ),
-                    Load(
-                        pointer: 104,
-                    ),
-                    AccessIndex(
-                        base: 6,
-                        index: 0,
-                    ),
-                    Load(
-                        pointer: 44,
-                    ),
-                    Access(
-                        base: 106,
-                        index: 107,
-                    ),
-                    AccessIndex(
-                        base: 108,
-                        index: 2,
-                    ),
-                    Access(
-                        base: 109,
-                        index: 26,
-                    ),
-                    Load(
-                        pointer: 110,
-                    ),
-                    Compose(
-                        ty: 2,
-                        components: [
-                            99,
-                            105,
-                            111,
-                        ],
-                    ),
-                    Binary(
-                        op: Multiply,
-                        left: 112,
-                        right: 93,
-                    ),
-                    Binary(
-                        op: Add,
-                        left: 51,
-                        right: 113,
-                    ),
-                    Load(
-                        pointer: 44,
-                    ),
-                    Binary(
-                        op: Add,
-                        left: 115,
-                        right: 27,
-                    ),
-                    Load(
-                        pointer: 43,
-                    ),
-                    Compose(
-                        ty: 4,
-                        components: [
-                            117,
-                            30,
-                        ],
+                        pointer: 5,
                     ),
                 ],
                 body: [
-                    Loop(
-                        body: [
-                            Emit((
-                                start: 44,
-                                end: 50,
-                            )),
-                            If(
-                                condition: 50,
-                                accept: [
-                                    Break,
-                                ],
-                                reject: [],
-                            ),
-                            Emit((
-                                start: 50,
-                                end: 59,
-                            )),
-                            Call(
-                                function: 1,
-                                arguments: [
-                                    52,
-                                    59,
-                                ],
-                                result: Some(60),
-                            ),
-                            Emit((
-                                start: 60,
-                                end: 114,
-                            )),
-                            Store(
-                                pointer: 43,
-                                value: 114,
-                            ),
-                        ],
-                        continuing: [
-                            Emit((
-                                start: 114,
-                                end: 116,
-                            )),
-                            Store(
-                                pointer: 44,
-                                value: 116,
-                            ),
-                        ],
+                    Store(
+                        pointer: 1,
+                        value: 2,
+                    ),
+                    Store(
+                        pointer: 3,
+                        value: 4,
+                    ),
+                    Call(
+                        function: 2,
+                        arguments: [],
+                        result: None,
                     ),
                     Emit((
-                        start: 116,
-                        end: 118,
+                        start: 5,
+                        end: 6,
                     )),
-                    Store(
-                        pointer: 7,
-                        value: 118,
-                    ),
                     Return(
-                        value: None,
+                        value: Some(6),
                     ),
                 ],
             ),

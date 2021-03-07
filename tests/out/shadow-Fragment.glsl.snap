@@ -22,11 +22,9 @@ readonly buffer Lights_block_1 {
 
 uniform highp sampler2DArrayShadow _group_0_binding_2;
 
-in vec3 _location_0_vs;
-
-in vec4 _location_1_vs;
-
-out vec4 _location_0;
+in vec3 _in_location_0;
+in vec4 _in_location_1;
+out vec4 _out_location_0;
 
 float fetch_shadow(uint light_id, vec4 homogeneous_coords) {
     if((homogeneous_coords[3] <= 0.0)) {
@@ -38,19 +36,20 @@ float fetch_shadow(uint light_id, vec4 homogeneous_coords) {
 }
 
 void main() {
+    vec3 raw_normal = _in_location_0;
+    vec4 position = _in_location_1;
     vec3 color1 = vec3(0.05, 0.05, 0.05);
     uint i = 0u;
     while(true) {
         if((i >= min(_group_0_binding_0.num_lights[0], 10u))) {
             break;
         }
-        Light _expr23 = _group_0_binding_1.data[i];
-        float _expr28 = fetch_shadow(i, (_expr23.proj * _location_1_vs));
-        vec4 _expr34 = _location_1_vs;
-        color1 = (color1 + ((_expr28 * max(0.0, dot(normalize(_location_0_vs), normalize((vec3(_expr23.pos[0], _expr23.pos[1], _expr23.pos[2]) - vec3(_expr34[0], _expr34[1], _expr34[2])))))) * vec3(_expr23.color[0], _expr23.color[1], _expr23.color[2])));
+        Light _expr21 = _group_0_binding_1.data[i];
+        float _expr25 = fetch_shadow(i, (_expr21.proj * position));
+        color1 = (color1 + ((_expr25 * max(0.0, dot(normalize(raw_normal), normalize((vec3(_expr21.pos[0], _expr21.pos[1], _expr21.pos[2]) - vec3(position[0], position[1], position[2])))))) * vec3(_expr21.color[0], _expr21.color[1], _expr21.color[2])));
         i = (i + 1u);
     }
-    _location_0 = vec4(color1, 1.0);
+    _out_location_0 = vec4(color1, 1.0);
     return;
 }
 

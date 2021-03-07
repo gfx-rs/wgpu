@@ -7,11 +7,20 @@ from SPIR-V's descriptor sets, we require a separate mapping provided in the opt
 This mapping may have one or more resource end points for each descriptor set + index
 pair.
 
-## Outputs
+## Entry points
 
-In Metal, built-in shader outputs can not be nested into structures within
-the output struct. If there is a structure in the outputs, and it contains any built-ins,
-we move them up to the root output structure that we define ourselves.
+Even though MSL and our IR appear to be similar in that the entry points in both can
+accept arguments and return values, the restrictions are different.
+MSL allows the varyings to be either in separate arguments, or inside a single
+`[[stage_in]]` struct. We gather input varyings and form this artificial structure.
+We also add all the (non-Private) globals into the arguments.
+
+At the beginning of the entry point, we assign the local constants and re-compose
+the arguments as they are declared on IR side, so that the rest of the logic can
+pretend that MSL doesn't have all the restrictions it has.
+
+For the result type, if it's a structure, we re-compose it with a temporary value
+holding the result.
 !*/
 
 use crate::{
@@ -112,15 +121,14 @@ impl Default for Options {
 }
 
 impl Options {
-    fn resolve_binding(
+    fn resolve_local_binding(
         &self,
-        stage: crate::ShaderStage,
-        var: &crate::GlobalVariable,
+        binding: &crate::Binding,
         mode: LocationMode,
     ) -> Result<ResolvedBinding, Error> {
-        match var.binding {
-            Some(crate::Binding::BuiltIn(built_in)) => Ok(ResolvedBinding::BuiltIn(built_in)),
-            Some(crate::Binding::Location(index)) => match mode {
+        match *binding {
+            crate::Binding::BuiltIn(built_in) => Ok(ResolvedBinding::BuiltIn(built_in)),
+            crate::Binding::Location(index, _) => match mode {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(index)),
                 LocationMode::FragmentOutput => Ok(ResolvedBinding::Color(index)),
                 LocationMode::Intermediate => Ok(ResolvedBinding::User {
@@ -139,25 +147,26 @@ impl Options {
                     Err(Error::Validation)
                 }
             },
-            Some(crate::Binding::Resource { group, binding }) => {
-                let source = BindSource {
-                    stage,
-                    group,
-                    binding,
-                };
-                match self.binding_map.get(&source) {
-                    Some(target) => Ok(ResolvedBinding::Resource(target.clone())),
-                    None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
-                        prefix: "fake",
-                        index: 0,
-                    }),
-                    None => Err(Error::MissingBindTarget(source)),
-                }
-            }
-            None => {
-                log::error!("Missing binding for {:?}", var.name);
-                Err(Error::Validation)
-            }
+        }
+    }
+
+    fn resolve_global_binding(
+        &self,
+        stage: crate::ShaderStage,
+        res_binding: &crate::ResourceBinding,
+    ) -> Result<ResolvedBinding, Error> {
+        let source = BindSource {
+            stage,
+            group: res_binding.group,
+            binding: res_binding.binding,
+        };
+        match self.binding_map.get(&source) {
+            Some(target) => Ok(ResolvedBinding::Resource(target.clone())),
+            None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
+                prefix: "fake",
+                index: 0,
+            }),
+            None => Err(Error::MissingBindTarget(source)),
         }
     }
 }

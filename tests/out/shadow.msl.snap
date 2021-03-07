@@ -63,22 +63,21 @@ type7 fetch_shadow(
 }
 
 struct fs_mainInput {
-    type9 in_normal_fs [[user(loc0)]];
-    type2 in_position_fs [[user(loc1)]];
+    type9 raw_normal [[user(loc0)]];
+    type2 position [[user(loc1)]];
 };
-
 struct fs_mainOutput {
-    type2 out_color_fs [[color(0)]];
+    type2 member [[color(0)]];
 };
-
 fragment fs_mainOutput fs_main(
-    fs_mainInput input [[stage_in]],
-    constant Globals& u_globals [[buffer(0)]],
-    constant Lights& s_lights [[buffer(1)]],
-    type4 t_shadow [[texture(0)]],
-    type5 sampler_shadow [[sampler(0)]]
+  fs_mainInput varyings [[stage_in]]
+, constant Globals& u_globals [[buffer(0)]]
+, constant Lights& s_lights [[buffer(1)]]
+, type4 t_shadow [[texture(0)]]
+, type5 sampler_shadow [[sampler(0)]]
 ) {
-    fs_mainOutput output;
+    const auto raw_normal = varyings.raw_normal;
+    const auto position = varyings.position;
     type9 color1 = c_ambient;
     type6 i = const_0u;
     bool loop_init = true;
@@ -90,12 +89,10 @@ fragment fs_mainOutput fs_main(
         if ((i >= metal::min(u_globals.num_lights.x, c_max_lights))) {
             break;
         }
-        Light _expr23 = s_lights.data[i];
-        type7 _expr28 = fetch_shadow(i, (_expr23.proj * input.in_position_fs), t_shadow, sampler_shadow);
-        type2 _expr34 = input.in_position_fs;
-        color1 = (color1 + ((_expr28 * metal::max(const_0f, metal::dot(metal::normalize(input.in_normal_fs), metal::normalize((metal::float3(_expr23.pos.x, _expr23.pos.y, _expr23.pos.z) - metal::float3(_expr34.x, _expr34.y, _expr34.z)))))) * metal::float3(_expr23.color.x, _expr23.color.y, _expr23.color.z)));
+        Light _expr21 = s_lights.data[i];
+        type7 _expr25 = fetch_shadow(i, (_expr21.proj * position), t_shadow, sampler_shadow);
+        color1 = (color1 + ((_expr25 * metal::max(const_0f, metal::dot(metal::normalize(raw_normal), metal::normalize((metal::float3(_expr21.pos.x, _expr21.pos.y, _expr21.pos.z) - metal::float3(position.x, position.y, position.z)))))) * metal::float3(_expr21.color.x, _expr21.color.y, _expr21.color.z)));
     }
-    output.out_color_fs = metal::float4(color1, const_1f);
-    return output;
+    return fs_mainOutput { metal::float4(color1, const_1f) };
 }
 

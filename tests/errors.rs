@@ -30,13 +30,13 @@ fn function_without_identifier() {
 #[test]
 fn invalid_integer() {
     err!(
-        "[[location(1.)]] var<in> pos : vec2<f32>;",
+        "fn foo([location(1.)] x: i32) {}",
         @r###"
-    error: expected integer literal, found `1.`
-      ┌─ wgsl:1:12
+    error: expected identifier, found '['
+      ┌─ wgsl:1:8
       │
-    1 │ [[location(1.)]] var<in> pos : vec2<f32>;
-      │            ^^ expected integer
+    1 │ fn foo([location(1.)] x: i32) {}
+      │        ^ expected identifier
 
     "###
     );

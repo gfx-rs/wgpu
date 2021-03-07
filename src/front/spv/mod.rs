@@ -8,6 +8,14 @@ There map `spv::Word` into a specific IR handle, plus potentially a bit of
 extra info, such as the related SPIR-V type ID.
 TODO: would be nice to find ways that avoid looking up as much
 
+## Inputs/Outputs
+
+We create a private variable for each input/output. The relevant inputs are
+populated at the start of an entry point. The outputs are saved at the end.
+
+The function associated with an entry point is wrapped in another function,
+such that we can handle any `Return` statements without problems.
+
 !*/
 #![allow(dead_code)]
 
@@ -203,37 +211,31 @@ impl Decoration {
         }
     }
 
-    fn get_binding(&self, is_output: bool) -> Option<crate::Binding> {
-        //TODO: validate this better
+    fn resource_binding(&self) -> Option<crate::ResourceBinding> {
+        match *self {
+            Decoration {
+                desc_set: Some(group),
+                desc_index: Some(binding),
+                ..
+            } => Some(crate::ResourceBinding { group, binding }),
+            _ => None,
+        }
+    }
+
+    fn io_binding(&self, is_output: bool) -> Result<crate::Binding, Error> {
         match *self {
             Decoration {
                 built_in: Some(built_in),
                 location: None,
-                desc_set: None,
-                desc_index: None,
                 ..
-            } => match map_builtin(built_in, is_output) {
-                Ok(built_in) => Some(crate::Binding::BuiltIn(built_in)),
-                Err(e) => {
-                    log::warn!("{:?}", e);
-                    None
-                }
-            },
+            } => map_builtin(built_in, is_output).map(crate::Binding::BuiltIn),
             Decoration {
                 built_in: None,
                 location: Some(loc),
-                desc_set: None,
-                desc_index: None,
+                interpolation,
                 ..
-            } => Some(crate::Binding::Location(loc)),
-            Decoration {
-                built_in: None,
-                location: None,
-                desc_set: Some(group),
-                desc_index: Some(binding),
-                ..
-            } => Some(crate::Binding::Resource { group, binding }),
-            _ => None,
+            } => Ok(crate::Binding::Location(loc, interpolation)),
+            _ => Err(Error::MissingDecoration(spirv::Decoration::Location)),
         }
     }
 }
@@ -267,7 +269,15 @@ struct LookupConstant {
 }
 
 #[derive(Debug)]
+enum Variable {
+    Global,
+    Input(crate::FunctionArgument),
+    Output(crate::FunctionResult),
+}
+
+#[derive(Debug)]
 struct LookupVariable {
+    inner: Variable,
     handle: Handle<crate::GlobalVariable>,
     type_id: spirv::Word,
 }
@@ -279,9 +289,15 @@ struct LookupExpression {
 }
 
 #[derive(Clone, Debug)]
-pub struct Assignment {
+struct Assignment {
     to: Handle<crate::Expression>,
     value: Handle<crate::Expression>,
+}
+
+enum ExtendedClass {
+    Global(crate::StorageClass),
+    Input,
+    Output,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -429,7 +445,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 dec.interpolation = Some(crate::Interpolation::Flat);
             }
             spirv::Decoration::Patch => {
-                dec.interpolation = Some(crate::Interpolation::Patch);
+                // skip
             }
             spirv::Decoration::Centroid => {
                 dec.interpolation = Some(crate::Interpolation::Centroid);
@@ -1706,6 +1722,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             self.index_constants.push(handle);
         }
 
+        self.dummy_functions = Arena::new();
+        self.lookup_function.clear();
+
         loop {
             use spirv::Op;
 
@@ -1764,10 +1783,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         for (_, fun) in module.functions.iter_mut() {
             self.patch_function_calls(fun)?;
         }
-        for ep in module.entry_points.iter_mut() {
-            self.patch_function_calls(&mut ep.function)?;
-        }
-        self.lookup_function.clear();
+        // Note: we aren't patching the entry point functions, because they are simply
+        // wrappers behind real functions, and are already resolved.
 
         // Check all the images and samplers to have consistent comparison property.
         for (handle, flags) in self.handle_sampling.drain() {
@@ -2215,7 +2232,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             {
                 crate::StorageClass::Storage
             }
-            _ => map_storage_class(storage_class)?,
+            _ => match map_storage_class(storage_class)? {
+                ExtendedClass::Global(class) => class,
+                ExtendedClass::Input | ExtendedClass::Output => crate::StorageClass::Private,
+            },
         };
 
         // Don't bother with pointer stuff for `Handle` types.
@@ -2325,6 +2345,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 name: decor.name,
                 span: None, //TODO
                 ty,
+                binding: None,
             });
         }
 
@@ -2695,78 +2716,119 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             } => true,
             _ => false,
         };
-        let class = if self.lookup_storage_buffer_types.contains(&effective_ty) {
-            crate::StorageClass::Storage
+        let ext_class = if self.lookup_storage_buffer_types.contains(&effective_ty) {
+            ExtendedClass::Global(crate::StorageClass::Storage)
         } else {
             map_storage_class(storage_class)?
         };
 
-        let storage_access = if is_storage {
-            let mut access = crate::StorageAccess::all();
-            if dec.flags.contains(DecorationFlags::NON_READABLE) {
-                access ^= crate::StorageAccess::LOAD;
+        let (inner, var) = match ext_class {
+            ExtendedClass::Global(class) => {
+                let storage_access = if is_storage {
+                    let mut access = crate::StorageAccess::all();
+                    if dec.flags.contains(DecorationFlags::NON_READABLE) {
+                        access ^= crate::StorageAccess::LOAD;
+                    }
+                    if dec.flags.contains(DecorationFlags::NON_WRITABLE) {
+                        access ^= crate::StorageAccess::STORE;
+                    }
+                    access
+                } else {
+                    crate::StorageAccess::empty()
+                };
+
+                let var = crate::GlobalVariable {
+                    binding: dec.resource_binding(),
+                    name: dec.name,
+                    class,
+                    ty: effective_ty,
+                    init,
+                    storage_access,
+                };
+                (Variable::Global, var)
             }
-            if dec.flags.contains(DecorationFlags::NON_WRITABLE) {
-                access ^= crate::StorageAccess::STORE;
+            ExtendedClass::Input => {
+                let binding = dec.io_binding(false)?;
+                if let crate::Binding::BuiltIn(built_in) = binding {
+                    let needs_inner_uint = match built_in {
+                        crate::BuiltIn::BaseInstance
+                        | crate::BuiltIn::BaseVertex
+                        | crate::BuiltIn::InstanceIndex
+                        | crate::BuiltIn::SampleIndex
+                        | crate::BuiltIn::VertexIndex
+                        | crate::BuiltIn::LocalInvocationIndex => Some(crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Uint,
+                            width: 4,
+                        }),
+                        crate::BuiltIn::GlobalInvocationId
+                        | crate::BuiltIn::LocalInvocationId
+                        | crate::BuiltIn::WorkGroupId
+                        | crate::BuiltIn::WorkGroupSize => Some(crate::TypeInner::Vector {
+                            size: crate::VectorSize::Tri,
+                            kind: crate::ScalarKind::Uint,
+                            width: 4,
+                        }),
+                        _ => None,
+                    };
+                    if let (Some(inner), Some(crate::ScalarKind::Sint)) = (
+                        needs_inner_uint,
+                        module.types[effective_ty].inner.scalar_kind(),
+                    ) {
+                        log::warn!("Treating {:?} as unsigned", built_in);
+                        effective_ty = module
+                            .types
+                            .fetch_or_append(crate::Type { name: None, inner });
+                    }
+                }
+
+                let var = crate::GlobalVariable {
+                    name: dec.name.clone(),
+                    class: crate::StorageClass::Private,
+                    binding: None,
+                    ty: effective_ty,
+                    init: None,
+                    storage_access: crate::StorageAccess::empty(),
+                };
+                let inner = Variable::Input(crate::FunctionArgument {
+                    name: dec.name,
+                    ty: effective_ty,
+                    binding: Some(binding),
+                });
+                (inner, var)
             }
-            access
-        } else {
-            crate::StorageAccess::empty()
+            ExtendedClass::Output => {
+                let binding = dec.io_binding(true)?;
+                let var = crate::GlobalVariable {
+                    name: dec.name,
+                    class: crate::StorageClass::Private,
+                    binding: None,
+                    ty: effective_ty,
+                    init: None,
+                    storage_access: crate::StorageAccess::empty(),
+                };
+                let inner = Variable::Output(crate::FunctionResult {
+                    ty: effective_ty,
+                    binding: Some(binding),
+                });
+                (inner, var)
+            }
         };
 
-        let binding = dec.get_binding(class == crate::StorageClass::Output);
-        if let Some(crate::Binding::BuiltIn(built_in)) = binding {
-            // SPIR-V only cares about some of the built-in types being integer.
-            // Naga requires them to be strictly unsigned, so we have to patch it.
-            let needs_inner_uint = match built_in {
-                crate::BuiltIn::BaseInstance
-                | crate::BuiltIn::BaseVertex
-                | crate::BuiltIn::InstanceIndex
-                | crate::BuiltIn::SampleIndex
-                | crate::BuiltIn::VertexIndex
-                | crate::BuiltIn::LocalInvocationIndex => Some(crate::TypeInner::Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    width: 4,
-                }),
-                crate::BuiltIn::GlobalInvocationId
-                | crate::BuiltIn::LocalInvocationId
-                | crate::BuiltIn::WorkGroupId
-                | crate::BuiltIn::WorkGroupSize => Some(crate::TypeInner::Vector {
-                    size: crate::VectorSize::Tri,
-                    kind: crate::ScalarKind::Uint,
-                    width: 4,
-                }),
-                _ => None,
-            };
-            if let (Some(inner), Some(crate::ScalarKind::Sint)) = (
-                needs_inner_uint,
-                module.types[effective_ty].inner.scalar_kind(),
-            ) {
-                log::warn!("Treating {:?} as unsigned", built_in);
-                effective_ty = module
-                    .types
-                    .fetch_or_append(crate::Type { name: None, inner });
-            }
-        }
-
-        let var = crate::GlobalVariable {
-            name: dec.name,
-            class,
-            binding,
-            ty: effective_ty,
-            init,
-            interpolation: dec.interpolation,
-            storage_access,
-        };
         let handle = module.global_variables.append(var);
-        self.lookup_variable
-            .insert(id, LookupVariable { handle, type_id });
-
         if module.types[effective_ty].inner.can_comparison_sample() {
             log::debug!("\t\ttracking {:?} for sampling properties", handle);
             self.handle_sampling
                 .insert(handle, image::SamplingFlags::empty());
         }
+
+        self.lookup_variable.insert(
+            id,
+            LookupVariable {
+                inner,
+                handle,
+                type_id,
+            },
+        );
         Ok(())
     }
 }

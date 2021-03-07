@@ -35,19 +35,15 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
     return textureSampleCompare(t_shadow, sampler_shadow, light_local, i32(light_id), homogeneous_coords.z * proj_correction);
 }
 
-[[location(0)]]
-var<in> in_normal_fs: vec3<f32>;
-[[location(1)]]
-var<in> in_position_fs: vec4<f32>;
-[[location(0)]]
-var<out> out_color_fs: vec4<f32>;
-
 const c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
 const c_max_lights: u32 = 10u;
 
 [[stage(fragment)]]
-fn fs_main() {
-    const normal: vec3<f32> = normalize(in_normal_fs);
+fn fs_main(
+    [[location(0)]] raw_normal: vec3<f32>,
+    [[location(1)]] position: vec4<f32>
+) -> [[location(0)]] vec4<f32> {
+    const normal: vec3<f32> = normalize(raw_normal);
     // accumulate color
     var color: vec3<f32> = c_ambient;
     var i: u32 = 0u;
@@ -56,8 +52,8 @@ fn fs_main() {
             break;
         }
         const light: Light = s_lights.data[i];
-        const shadow: f32 = fetch_shadow(i, light.proj * in_position_fs);
-        const light_dir: vec3<f32> = normalize(light.pos.xyz - in_position_fs.xyz);
+        const shadow: f32 = fetch_shadow(i, light.proj * position);
+        const light_dir: vec3<f32> = normalize(light.pos.xyz - position.xyz);
         const diffuse: f32 = max(0.0, dot(normal, light_dir));
         color = color + shadow * diffuse * light.color.xyz;
         continuing {
@@ -65,5 +61,5 @@ fn fs_main() {
         }
     }
     // multiply the light by material color
-    out_color_fs = vec4<f32>(color, 1.0);
+    return vec4<f32>(color, 1.0);
 }

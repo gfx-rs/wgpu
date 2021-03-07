@@ -14,6 +14,7 @@ pub enum NameKey {
     FunctionLocal(Handle<crate::Function>, Handle<crate::LocalVariable>),
     EntryPoint(EntryPointIndex),
     EntryPointLocal(EntryPointIndex, Handle<crate::LocalVariable>),
+    EntryPointArgument(EntryPointIndex, u32),
 }
 
 /// This processor assigns names to all the things in a module
@@ -160,6 +161,13 @@ impl Namer {
         for (ep_index, ep) in module.entry_points.iter().enumerate() {
             let ep_name = self.call(&ep.name);
             output.insert(NameKey::EntryPoint(ep_index as _), ep_name);
+            for (index, arg) in ep.function.arguments.iter().enumerate() {
+                let name = self.call_or(&arg.name, "param");
+                output.insert(
+                    NameKey::EntryPointArgument(ep_index as _, index as u32),
+                    name,
+                );
+            }
             for (handle, var) in ep.function.local_variables.iter() {
                 let name = self.call_or(&var.name, "local");
                 output.insert(NameKey::EntryPointLocal(ep_index as _, handle), name);

@@ -7,6 +7,6 @@ expression: msl
 
 kernel void main1(
 ) {
-    return ;
+    return;
 }
 

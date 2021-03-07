@@ -6,15 +6,20 @@ expression: string
 
 precision highp float;
 
+struct VertexOutput {
+    vec4 position;
+    vec3 uv;
+};
+
 uniform highp samplerCube _group_0_binding_1;
 
-in vec3 _location_0_vs;
-
-out vec4 _location_0;
+in vec3 _in_location_0;
+out vec4 _out_location_0;
 
 void main() {
-    vec4 _expr9 = texture(_group_0_binding_1, vec3(_location_0_vs));
-    _location_0 = _expr9;
+    vec3 uv1 = _in_location_0;
+    vec4 _expr4 = texture(_group_0_binding_1, vec3(uv1));
+    _out_location_0 = _expr4;
     return;
 }
 

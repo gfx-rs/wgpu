@@ -45,11 +45,13 @@ constexpr constant unsigned const_1u = 1u;
 constexpr constant float const_1f = 1.0;
 constexpr constant float const_0_10f = 0.1;
 constexpr constant float const_n1f = -1.0;
+struct main1Input {
+};
 kernel void main1(
-    constant SimParams& params [[buffer(0)]],
-    constant Particles& particlesSrc [[buffer(1)]],
-    device Particles& particlesDst [[buffer(2)]],
-    type4 gl_GlobalInvocationID [[thread_position_in_grid]]
+  type4 global_invocation_id [[thread_position_in_grid]]
+, constant SimParams& params [[buffer(0)]]
+, constant Particles& particlesSrc [[buffer(1)]]
+, device Particles& particlesDst [[buffer(2)]]
 ) {
     type1 vPos;
     type1 vVel;
@@ -61,11 +63,11 @@ kernel void main1(
     type1 pos1;
     type1 vel1;
     type i = const_0u;
-    if ((gl_GlobalInvocationID.x >= NUM_PARTICLES)) {
-        return ;
+    if ((global_invocation_id.x >= NUM_PARTICLES)) {
+        return;
     }
-    vPos = particlesSrc.particles[gl_GlobalInvocationID.x].pos;
-    vVel = particlesSrc.particles[gl_GlobalInvocationID.x].vel;
+    vPos = particlesSrc.particles[global_invocation_id.x].pos;
+    vVel = particlesSrc.particles[global_invocation_id.x].vel;
     cMass = metal::float2(const_0f, const_0f);
     cVel = metal::float2(const_0f, const_0f);
     colVel = metal::float2(const_0f, const_0f);
@@ -78,7 +80,7 @@ kernel void main1(
         if ((i >= NUM_PARTICLES)) {
             break;
         }
-        if ((i == gl_GlobalInvocationID.x)) {
+        if ((i == global_invocation_id.x)) {
             continue;
         }
         pos1 = particlesSrc.particles[i].pos;
@@ -116,8 +118,8 @@ kernel void main1(
     if ((vPos.y > const_1f)) {
         vPos.y = const_n1f;
     }
-    particlesDst.particles[gl_GlobalInvocationID.x].pos = vPos;
-    particlesDst.particles[gl_GlobalInvocationID.x].vel = vVel;
-    return ;
+    particlesDst.particles[global_invocation_id.x].pos = vPos;
+    particlesDst.particles[global_invocation_id.x].vel = vVel;
+    return;
 }
 

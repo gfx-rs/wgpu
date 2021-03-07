@@ -646,10 +646,11 @@ impl Typifier {
                 }
             },
             crate::Expression::Call(function) => {
-                let ty = ctx.functions[function]
-                    .return_type
+                let result = ctx.functions[function]
+                    .result
+                    .as_ref()
                     .ok_or(ResolveError::FunctionReturnsVoid)?;
-                Resolution::Handle(ty)
+                Resolution::Handle(result.ty)
             }
             crate::Expression::ArrayLength(_) => Resolution::Value(Ti::Scalar {
                 kind: crate::ScalarKind::Uint,

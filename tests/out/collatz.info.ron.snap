@@ -6,15 +6,12 @@ expression: output
     functions: [
         (
             uniformity: (
-                non_uniform_result: Some(6),
+                non_uniform_result: Some(5),
                 requirement: None,
             ),
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (
-                    bits: 0,
-                ),
                 (
                     bits: 0,
                 ),
@@ -33,20 +30,12 @@ expression: output
                         non_uniform_result: Some(2),
                         requirement: None,
                     ),
-                    ref_count: 0,
-                    assignable_global: Some(2),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(3),
-                        requirement: None,
-                    ),
                     ref_count: 1,
                     assignable_global: None,
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(4),
+                        non_uniform_result: Some(3),
                         requirement: None,
                     ),
                     ref_count: 7,
@@ -62,7 +51,7 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(5),
                         requirement: None,
                     ),
                     ref_count: 3,
@@ -70,7 +59,7 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(4),
+                        non_uniform_result: Some(3),
                         requirement: None,
                     ),
                     ref_count: 1,
@@ -86,7 +75,7 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(4),
+                        non_uniform_result: Some(3),
                         requirement: None,
                     ),
                     ref_count: 1,
@@ -94,23 +83,7 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(4),
-                        requirement: None,
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: None,
-                        requirement: None,
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(4),
+                        non_uniform_result: Some(3),
                         requirement: None,
                     ),
                     ref_count: 1,
@@ -126,15 +99,7 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(4),
-                        requirement: None,
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(4),
+                        non_uniform_result: Some(3),
                         requirement: None,
                     ),
                     ref_count: 1,
@@ -150,7 +115,15 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(4),
+                        non_uniform_result: Some(3),
+                        requirement: None,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(3),
                         requirement: None,
                     ),
                     ref_count: 1,
@@ -166,15 +139,7 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(4),
-                        requirement: None,
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(4),
+                        non_uniform_result: Some(3),
                         requirement: None,
                     ),
                     ref_count: 1,
@@ -190,7 +155,7 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(4),
+                        non_uniform_result: Some(3),
                         requirement: None,
                     ),
                     ref_count: 1,
@@ -198,7 +163,7 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(3),
                         requirement: None,
                     ),
                     ref_count: 1,
@@ -214,7 +179,7 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(3),
                         requirement: None,
                     ),
                     ref_count: 1,
@@ -222,7 +187,31 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(5),
+                        requirement: None,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirement: None,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(5),
+                        requirement: None,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(5),
                         requirement: None,
                     ),
                     ref_count: 1,
@@ -234,15 +223,12 @@ expression: output
     entry_points: [
         (
             uniformity: (
-                non_uniform_result: Some(6),
+                non_uniform_result: Some(5),
                 requirement: None,
             ),
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (
-                    bits: 1,
-                ),
                 (
                     bits: 3,
                 ),
@@ -262,22 +248,6 @@ expression: output
                         requirement: None,
                     ),
                     ref_count: 2,
-                    assignable_global: Some(2),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(2),
-                        requirement: None,
-                    ),
-                    ref_count: 1,
-                    assignable_global: Some(2),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(1),
-                        requirement: None,
-                    ),
-                    ref_count: 1,
                     assignable_global: None,
                 ),
                 (
@@ -286,27 +256,11 @@ expression: output
                         requirement: None,
                     ),
                     ref_count: 1,
-                    assignable_global: None,
+                    assignable_global: Some(1),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirement: None,
-                    ),
-                    ref_count: 1,
-                    assignable_global: Some(2),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(2),
-                        requirement: None,
-                    ),
-                    ref_count: 1,
-                    assignable_global: Some(2),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(1),
                         requirement: None,
                     ),
                     ref_count: 1,
@@ -318,7 +272,15 @@ expression: output
                         requirement: None,
                     ),
                     ref_count: 1,
-                    assignable_global: None,
+                    assignable_global: Some(1),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirement: None,
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
                 ),
                 (
                     uniformity: (
@@ -326,11 +288,19 @@ expression: output
                         requirement: None,
                     ),
                     ref_count: 1,
-                    assignable_global: Some(2),
+                    assignable_global: None,
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(2),
+                        non_uniform_result: Some(1),
+                        requirement: None,
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
                         requirement: None,
                     ),
                     ref_count: 1,
@@ -338,7 +308,7 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(5),
                         requirement: None,
                     ),
                     ref_count: 1,

@@ -123,10 +123,6 @@ pub enum ShaderStage {
 pub enum StorageClass {
     /// Function locals.
     Function,
-    /// Pipeline input, per invocation.
-    Input,
-    /// Pipeline output, per invocation, mutable.
-    Output,
     /// Private data, per invocation, mutable.
     Private,
     /// Workgroup shared data, mutable.
@@ -228,8 +224,6 @@ pub enum Interpolation {
     Linear,
     /// Indicates that no interpolation will be performed.
     Flat,
-    /// Indicates a tessellation patch.
-    Patch,
     /// When used with multi-sampling rasterization, allow
     /// a single interpolation location for an entire pixel.
     Centroid,
@@ -247,6 +241,8 @@ pub struct StructMember {
     pub name: Option<String>,
     pub span: Option<NonZeroU32>,
     pub ty: Handle<Type>,
+    /// For I/O structs, defines the binding.
+    pub binding: Option<Binding>,
 }
 
 /// The number of dimensions an image has.
@@ -452,9 +448,18 @@ pub enum Binding {
     /// Built-in shader variable.
     BuiltIn(BuiltIn),
     /// Indexed location.
-    Location(u32),
-    /// Binding within a resource group.
-    Resource { group: u32, binding: u32 },
+    Location(u32, Option<Interpolation>),
+}
+
+/// Pipeline binding information for global resources.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub struct ResourceBinding {
+    /// The bind group index.
+    pub group: u32,
+    /// Binding number within the group.
+    pub binding: u32,
 }
 
 /// Variable defined at module level.
@@ -466,19 +471,12 @@ pub struct GlobalVariable {
     pub name: Option<String>,
     /// How this variable is to be stored.
     pub class: StorageClass,
-    /// How this variable is to be bound.
-    pub binding: Option<Binding>,
+    /// For resources, defines the binding point.
+    pub binding: Option<ResourceBinding>,
     /// The type of this variable.
     pub ty: Handle<Type>,
     /// Initial value for this variable.
     pub init: Option<Handle<Constant>>,
-    //TODO: require fragment input interpolation once the entry point I/O
-    // is refactored.
-    /// The interpolation qualifier, if any.
-    /// If the this `GlobalVariable` is a vertex output
-    /// or fragment input, `None` corresponds to the
-    /// `smooth`/`perspective` interpolation qualifier.
-    pub interpolation: Option<Interpolation>,
     /// Access bit for storage types of images and buffers.
     pub storage_access: StorageAccess,
 }
@@ -841,7 +839,7 @@ pub enum Statement {
 }
 
 /// A function argument.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct FunctionArgument {
@@ -849,6 +847,20 @@ pub struct FunctionArgument {
     pub name: Option<String>,
     /// Type of the argument.
     pub ty: Handle<Type>,
+    /// For entry points, an argument has to have a binding
+    /// unless it's a structure.
+    pub binding: Option<Binding>,
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub struct FunctionResult {
+    /// Type of the result.
+    pub ty: Handle<Type>,
+    /// For entry points, the result has to have a binding
+    /// unless it's a structure.
+    pub binding: Option<Binding>,
 }
 
 /// A function defined in the module.
@@ -860,8 +872,8 @@ pub struct Function {
     pub name: Option<String>,
     /// Information about function argument.
     pub arguments: Vec<FunctionArgument>,
-    /// The return type of this function, if any.
-    pub return_type: Option<Handle<Type>>,
+    /// The result of this function, if any.
+    pub result: Option<FunctionResult>,
     /// Local variables defined and used in the function.
     pub local_variables: Arena<LocalVariable>,
     /// Expressions used inside this function.

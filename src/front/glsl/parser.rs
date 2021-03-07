@@ -8,10 +8,11 @@ pomelo! {
             BOOL_WIDTH,
             Arena, BinaryOperator, Binding, Block, Constant,
             ConstantInner, Expression,
-            Function, GlobalVariable, Handle, Interpolation,
-            LocalVariable, ScalarValue, ScalarKind,
+            Function, FunctionArgument, FunctionResult,
+            GlobalVariable, Handle, Interpolation,
+            LocalVariable, ResourceBinding, ScalarValue, ScalarKind,
             Statement, StorageAccess, StorageClass, StructMember,
-            SwitchCase, Type, TypeInner, UnaryOperator, FunctionArgument,
+            SwitchCase, Type, TypeInner, UnaryOperator,
         };
         use pp_rs::token::PreprocessorError;
     }
@@ -602,14 +603,15 @@ pomelo! {
 
     layout_qualifier ::= Layout LeftParen layout_qualifier_id_list(l) RightParen {
         if let Some(&(_, loc)) = l.iter().find(|&q| q.0.as_str() == "location") {
-            StructLayout::Binding(Binding::Location(loc))
+            let interpolation = None; //TODO
+            StructLayout::Binding(Binding::Location(loc, interpolation))
         } else if let Some(&(_, binding)) = l.iter().find(|&q| q.0.as_str() == "binding") {
             let group = if let Some(&(_, set)) = l.iter().find(|&q| q.0.as_str() == "set") {
                 set
             } else {
                 0
             };
-            StructLayout::Binding(Binding::Resource{ group, binding })
+            StructLayout::Resource(ResourceBinding{ group, binding })
         } else if l.iter().any(|q| q.0.as_str() == "push_constant") {
             StructLayout::PushConstant
         } else {
@@ -648,6 +650,7 @@ pomelo! {
     single_type_qualifier ::= layout_qualifier(l) {
         match l {
             StructLayout::Binding(b) => TypeQualifier::Binding(b),
+            StructLayout::Resource(b) => TypeQualifier::ResourceBinding(b),
             StructLayout::PushConstant => TypeQualifier::StorageQualifier(StorageQualifier::StorageClass(StorageClass::PushConstant)),
         }
     }
@@ -663,10 +666,10 @@ pomelo! {
     }
     // storage_qualifier ::= InOut;
     storage_qualifier ::= In {
-        StorageQualifier::StorageClass(StorageClass::Input)
+        StorageQualifier::Input
     }
     storage_qualifier ::= Out {
-        StorageQualifier::StorageClass(StorageClass::Output)
+        StorageQualifier::Output
     }
     // storage_qualifier ::= Centroid;
     // storage_qualifier ::= Patch;
@@ -724,6 +727,7 @@ pomelo! {
                 name: Some(name.clone()),
                 span: None,
                 ty,
+                binding: None, //TODO
             }).collect()
         } else {
             return Err(ErrorKind::SemanticError("Struct member can't be void".into()))
@@ -1005,7 +1009,7 @@ pomelo! {
         Function {
             name: Some(n.1),
             arguments: vec![],
-            return_type: t.1,
+            result: t.1.map(|ty| FunctionResult { ty, binding: None }),
             local_variables: Arena::<LocalVariable>::new(),
             expressions: Arena::<Expression>::new(),
             body: vec![],
@@ -1019,12 +1023,12 @@ pomelo! {
         (h, args)
     }
     parameter_declarator ::= parameter_type_specifier(ty) Identifier(n) {
-        FunctionArgument { name: Some(n.1), ty }
+        FunctionArgument { name: Some(n.1), ty, binding: None }
     }
     // parameter_declarator ::= type_specifier(ty) Identifier(ident) array_specifier;
     parameter_declaration ::= parameter_declarator;
     parameter_declaration ::= parameter_type_specifier(ty) {
-        FunctionArgument { name: None, ty }
+        FunctionArgument { name: None, ty, binding: None }
     }
 
     parameter_type_specifier ::= type_specifier(t) {
@@ -1077,13 +1081,8 @@ pomelo! {
                 StorageQualifier::StorageClass(storage_class) => {
                     // TODO: Check that the storage qualifiers allow for the bindings
                     let binding = d.type_qualifiers.iter().find_map(|tq| {
-                        if let TypeQualifier::Binding(ref b) = *tq { Some(b.clone()) } else { None }
+                        if let TypeQualifier::ResourceBinding(ref b) = *tq { Some(b.clone()) } else { None }
                     });
-
-                    let interpolation = d.type_qualifiers.iter().find_map(|tq| {
-                        if let TypeQualifier::Interpolation(interp) = *tq { Some(interp) } else { None }
-                    });
-
                     for (id, initializer) in d.ids_initializers {
                         let init = initializer.map(|init| extra.solve_constant(init.expression)).transpose()?;
 
@@ -1104,12 +1103,42 @@ pomelo! {
                                 binding: binding.clone(),
                                 ty: d.ty,
                                 init,
-                                interpolation,
                                 storage_access: StorageAccess::empty(), //TODO
                             },
                         );
                         if let Some(id) = id {
                             extra.lookup_global_variables.insert(id, h);
+                        }
+                    }
+                }
+                StorageQualifier::Input => {
+                    let mut binding = d.type_qualifiers.iter().find_map(|tq| {
+                        if let TypeQualifier::Binding(ref b) = *tq { Some(b.clone()) } else { None }
+                    });
+                    let interpolation = d.type_qualifiers.iter().find_map(|tq| {
+                        if let TypeQualifier::Interpolation(interp) = *tq { Some(interp) } else { None }
+                    });
+                    if let Some(Binding::Location(_, ref mut interp)) = binding {
+                        *interp = interpolation;
+                    }
+
+                    for (id, _initializer) in d.ids_initializers {
+                        if let Some(id) = id {
+                            //TODO!
+                            let expr = extra.context.expressions.append(Expression::FunctionArgument(0));
+                            extra.context.lookup_global_var_exps.insert(id, expr);
+                        }
+                    }
+                }
+                StorageQualifier::Output => {
+                    let _binding = d.type_qualifiers.iter().find_map(|tq| {
+                        if let TypeQualifier::Binding(ref b) = *tq { Some(b.clone()) } else { None }
+                    });
+                    for (id, _initializer) in d.ids_initializers {
+                        if let Some(id) = id {
+                            //TODO!
+                            let expr = extra.context.expressions.append(Expression::FunctionArgument(0));
+                            extra.context.lookup_global_var_exps.insert(id, expr);
                         }
                     }
                 }

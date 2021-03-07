@@ -5,25 +5,25 @@ expression: msl
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-typedef metal::uint3 type;
+typedef uint type;
 
-typedef uint type1;
-
-typedef type1 type2[1];
+typedef type type1[1];
 
 struct PrimeIndices {
-    type2 data;
+    type1 data;
 };
+
+typedef metal::uint3 type2;
 
 constexpr constant unsigned const_0u = 0u;
 constexpr constant unsigned const_1u = 1u;
 constexpr constant unsigned const_2u = 2u;
 constexpr constant unsigned const_3u = 3u;
-type1 collatz_iterations(
-    type1 n_base
+type collatz_iterations(
+    type n_base
 ) {
-    type1 n;
-    type1 i = const_0u;
+    type n;
+    type i = const_0u;
     n = n_base;
     while(true) {
         if ((n <= const_1u)) {
@@ -39,12 +39,14 @@ type1 collatz_iterations(
     return i;
 }
 
+struct main1Input {
+};
 kernel void main1(
-    type global_id [[thread_position_in_grid]],
-    device PrimeIndices& v_indices [[buffer(0)]]
+  type2 global_id [[thread_position_in_grid]]
+, device PrimeIndices& v_indices [[buffer(0)]]
 ) {
-    type1 _expr11 = collatz_iterations(v_indices.data[global_id.x]);
-    v_indices.data[global_id.x] = _expr11;
-    return ;
+    type _expr9 = collatz_iterations(v_indices.data[global_id.x]);
+    v_indices.data[global_id.x] = _expr9;
+    return;
 }
 

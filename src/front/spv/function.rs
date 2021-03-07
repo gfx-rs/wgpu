@@ -63,10 +63,14 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             crate::Function {
                 name: self.future_decor.remove(&fun_id).and_then(|dec| dec.name),
                 arguments: Vec::with_capacity(ft.parameter_type_ids.len()),
-                return_type: if self.lookup_void_type == Some(result_type_id) {
+                result: if self.lookup_void_type == Some(result_type_id) {
                     None
                 } else {
-                    Some(self.lookup_type.lookup(result_type_id)?.handle)
+                    let lookup_result_ty = self.lookup_type.lookup(result_type_id)?;
+                    Some(crate::FunctionResult {
+                        ty: lookup_result_ty.handle,
+                        binding: None,
+                    })
                 },
                 local_variables: Arena::new(),
                 expressions: self.make_expression_storage(),
@@ -99,8 +103,12 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         return Err(Error::WrongFunctionArgumentType(type_id));
                     }
                     let ty = self.lookup_type.lookup(type_id)?.handle;
-                    fun.arguments
-                        .push(crate::FunctionArgument { name: None, ty });
+                    let decor = self.future_decor.remove(&id).unwrap_or_default();
+                    fun.arguments.push(crate::FunctionArgument {
+                        name: decor.name,
+                        ty,
+                        binding: None,
+                    });
                 }
                 Instruction { op, .. } => return Err(Error::InvalidParameter(op)),
             }
@@ -157,19 +165,128 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         fun.body = flow_graph.to_naga()?;
 
+        // done
+        let fun_handle = module.functions.append(fun);
         match self.lookup_entry_point.remove(&fun_id) {
             Some(ep) => {
+                // create a wrapping function
+                let mut function = crate::Function {
+                    name: None,
+                    arguments: Vec::new(),
+                    result: None,
+                    local_variables: Arena::new(),
+                    expressions: Arena::new(),
+                    body: Vec::new(),
+                };
+
+                // 1. copy the inputs from arguments to privates
+                for &v_id in ep.variable_ids.iter() {
+                    let lvar = self.lookup_variable.lookup(v_id)?;
+                    if let super::Variable::Input(ref arg) = lvar.inner {
+                        function.body.push(crate::Statement::Store {
+                            pointer: function
+                                .expressions
+                                .append(crate::Expression::GlobalVariable(lvar.handle)),
+                            value:
+                                function
+                                    .expressions
+                                    .append(crate::Expression::FunctionArgument(
+                                        function.arguments.len() as u32,
+                                    )),
+                        });
+                        let mut arg = arg.clone();
+                        if ep.stage == crate::ShaderStage::Fragment {
+                            if let Some(crate::Binding::Location(_, ref mut interpolation @ None)) =
+                                arg.binding
+                            {
+                                *interpolation = Some(crate::Interpolation::Perspective);
+                                // default
+                            }
+                        }
+                        function.arguments.push(arg);
+                    }
+                }
+                // 2. call the wrapped function
+                function.body.push(crate::Statement::Call {
+                    function: fun_handle,
+                    arguments: Vec::new(),
+                    result: None,
+                });
+
+                // 3. copy the outputs from privates to the result
+                let mut members = Vec::new();
+                let mut components = Vec::new();
+                for &v_id in ep.variable_ids.iter() {
+                    let lvar = self.lookup_variable.lookup(v_id)?;
+                    if let super::Variable::Output(ref result) = lvar.inner {
+                        members.push(crate::StructMember {
+                            name: None,
+                            span: None,
+                            ty: result.ty,
+                            binding: result.binding.clone(),
+                        });
+                        // populate just the globals first, then do `Load` in a
+                        // separate step, so that we can get a range.
+                        components.push(
+                            function
+                                .expressions
+                                .append(crate::Expression::GlobalVariable(lvar.handle)),
+                        );
+                    }
+                }
+
+                let old_len = function.expressions.len();
+                for component in components.iter_mut() {
+                    *component = function.expressions.append(crate::Expression::Load {
+                        pointer: *component,
+                    });
+                }
+                match members.len() {
+                    0 => {}
+                    1 => {
+                        let member = members.remove(0);
+                        function.body.push(crate::Statement::Emit(
+                            function.expressions.range_from(old_len),
+                        ));
+                        function.body.push(crate::Statement::Return {
+                            value: components.first().cloned(),
+                        });
+                        function.result = Some(crate::FunctionResult {
+                            ty: member.ty,
+                            binding: member.binding,
+                        });
+                    }
+                    _ => {
+                        let ty = module.types.append(crate::Type {
+                            name: None,
+                            inner: crate::TypeInner::Struct {
+                                block: false,
+                                members,
+                            },
+                        });
+                        let result_expr = function
+                            .expressions
+                            .append(crate::Expression::Compose { ty, components });
+                        function.body.push(crate::Statement::Emit(
+                            function.expressions.range_from(old_len),
+                        ));
+                        function.body.push(crate::Statement::Return {
+                            value: Some(result_expr),
+                        });
+                        function.result = Some(crate::FunctionResult { ty, binding: None });
+                    }
+                }
+
                 module.entry_points.push(crate::EntryPoint {
                     name: ep.name,
                     stage: ep.stage,
                     early_depth_test: ep.early_depth_test,
                     workgroup_size: ep.workgroup_size,
-                    function: fun,
+                    function,
                 });
             }
             None => {
-                let handle = module.functions.append(fun);
-                self.lookup_function.insert(fun_id, handle);
+                self.lookup_function.insert(fun_id, fun_handle);
             }
         };
 

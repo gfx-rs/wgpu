@@ -109,6 +109,12 @@ pub enum Error<'a> {
     ZeroStride,
     #[error("not a composite type: {0:?}")]
     NotCompositeType(Handle<crate::Type>),
+    #[error("Input/output binding is not consistent: location {0:?}, built-in {1:?} and interpolation {2:?}")]
+    InconsistentBinding(
+        Option<u32>,
+        Option<crate::BuiltIn>,
+        Option<crate::Interpolation>,
+    ),
     #[error("call to local `{0}(..)` can't be resolved")]
     UnknownLocalFunction(&'a str),
     #[error("builtin {0:?} is not implemented")]
@@ -415,6 +421,54 @@ pub enum Scope {
 }
 
 type LocalFunctionCall = (Handle<crate::Function>, Vec<Handle<crate::Expression>>);
+
+#[derive(Default)]
+struct BindingParser {
+    location: Option<u32>,
+    built_in: Option<crate::BuiltIn>,
+    interpolation: Option<crate::Interpolation>,
+}
+
+impl BindingParser {
+    fn parse<'a>(&mut self, lexer: &mut Lexer<'a>, name: &'a str) -> Result<(), Error<'a>> {
+        match name {
+            "location" => {
+                lexer.expect(Token::Paren('('))?;
+                self.location = Some(lexer.next_uint_literal()?);
+                lexer.expect(Token::Paren(')'))?;
+            }
+            "builtin" => {
+                lexer.expect(Token::Paren('('))?;
+                let raw = lexer.next_ident()?;
+                self.built_in = Some(conv::map_built_in(raw)?);
+                lexer.expect(Token::Paren(')'))?;
+            }
+            "interpolate" => {
+                lexer.expect(Token::Paren('('))?;
+                let raw = lexer.next_ident()?;
+                self.interpolation = Some(conv::map_interpolation(raw)?);
+                lexer.expect(Token::Paren(')'))?;
+            }
+            _ => return Err(Error::UnknownDecoration(name)),
+        }
+        Ok(())
+    }
+
+    fn finish<'a>(self) -> Result<Option<crate::Binding>, Error<'a>> {
+        match (self.location, self.built_in, self.interpolation) {
+            (None, None, None) => Ok(None),
+            (Some(loc), None, interpolation) => {
+                Ok(Some(crate::Binding::Location(loc, interpolation)))
+            }
+            (None, Some(bi), None) => Ok(Some(crate::Binding::BuiltIn(bi))),
+            (location, built_in, interpolation) => Err(Error::InconsistentBinding(
+                location,
+                built_in,
+                interpolation,
+            )),
+        }
+    }
+}
 
 struct ParsedVariable<'a> {
     name: &'a str,
@@ -1447,6 +1501,7 @@ impl Parser {
         lexer.expect(Token::Paren('{'))?;
         loop {
             let mut span = 0;
+            let mut bind_parser = BindingParser::default();
             if lexer.skip(Token::DoubleParen('[')) {
                 self.scopes.push(Scope::Decoration);
                 let mut ready = true;
@@ -1458,17 +1513,22 @@ impl Parser {
                         (Token::Separator(','), _) if !ready => {
                             ready = true;
                         }
-                        (Token::Word("span"), _) if ready => {
-                            lexer.expect(Token::Paren('('))?;
-                            //Note: 0 is not handled
-                            span = lexer.next_uint_literal()?;
-                            lexer.expect(Token::Paren(')'))?;
-                            ready = false;
-                        }
-                        (Token::Word("offset"), _) if ready => {
-                            lexer.expect(Token::Paren('('))?;
-                            let _offset = lexer.next_uint_literal()?;
-                            lexer.expect(Token::Paren(')'))?;
+                        (Token::Word(word), _) if ready => {
+                            match word {
+                                "span" => {
+                                    lexer.expect(Token::Paren('('))?;
+                                    //Note: 0 is not handled
+                                    span = lexer.next_uint_literal()?;
+                                    lexer.expect(Token::Paren(')'))?;
+                                }
+                                "offset" => {
+                                    // skip - only here for parsing compatibility
+                                    lexer.expect(Token::Paren('('))?;
+                                    let _offset = lexer.next_uint_literal()?;
+                                    lexer.expect(Token::Paren(')'))?;
+                                }
+                                _ => bind_parser.parse(lexer, word)?,
+                            }
                             ready = false;
                         }
                         other => return Err(Error::Unexpected(other, "decoration separator")),
@@ -1476,6 +1536,7 @@ impl Parser {
                 }
                 self.scopes.pop();
             }
+
             let name = match lexer.next() {
                 (Token::Word(word), _) => word,
                 (Token::Paren('}'), _) => return Ok(members),
@@ -1484,10 +1545,12 @@ impl Parser {
             lexer.expect(Token::Separator(':'))?;
             let (ty, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
             lexer.expect(Token::Separator(';'))?;
+
             members.push(crate::StructMember {
                 name: Some(name.to_owned()),
                 span: NonZeroU32::new(span),
                 ty,
+                binding: bind_parser.finish()?,
             });
         }
     }
@@ -2259,6 +2322,31 @@ impl Parser {
         Ok(block)
     }
 
+    fn parse_varying_binding<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+    ) -> Result<Option<crate::Binding>, Error<'a>> {
+        if !lexer.skip(Token::DoubleParen('[')) {
+            return Ok(None);
+        }
+
+        let mut bind_parser = BindingParser::default();
+        self.scopes.push(Scope::Decoration);
+        loop {
+            let word = lexer.next_ident()?;
+            bind_parser.parse(lexer, word)?;
+            match lexer.next() {
+                (Token::DoubleParen(']'), _) => {
+                    break;
+                }
+                (Token::Separator(','), _) => {}
+                other => return Err(Error::Unexpected(other, "decoration separator")),
+            }
+        }
+        self.scopes.pop();
+        bind_parser.finish()
+    }
+
     fn parse_function_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -2278,10 +2366,12 @@ impl Parser {
         // read parameter list
         let mut arguments = Vec::new();
         lexer.expect(Token::Paren('('))?;
+        let mut ready = true;
         while !lexer.skip(Token::Paren(')')) {
-            if !arguments.is_empty() {
-                lexer.expect(Token::Separator(','))?;
+            if !ready {
+                return Err(Error::Unexpected(lexer.next(), "comma"));
             }
+            let binding = self.parse_varying_binding(lexer)?;
             let (param_name, param_type, _access) =
                 self.parse_variable_ident_decl(lexer, &mut module.types, &mut module.constants)?;
             let param_index = arguments.len() as u32;
@@ -2291,13 +2381,16 @@ impl Parser {
             arguments.push(crate::FunctionArgument {
                 name: Some(param_name.to_string()),
                 ty: param_type,
+                binding,
             });
+            ready = lexer.skip(Token::Separator(','));
         }
         // read return type
-        let return_type = if lexer.skip(Token::Arrow) && !lexer.skip(Token::Word("void")) {
-            let (handle, _access) =
+        let result = if lexer.skip(Token::Arrow) && !lexer.skip(Token::Word("void")) {
+            let binding = self.parse_varying_binding(lexer)?;
+            let (ty, _access) =
                 self.parse_type_decl(lexer, None, &mut module.types, &mut module.constants)?;
-            Some(handle)
+            Some(crate::FunctionResult { ty, binding })
         } else {
             None
         };
@@ -2305,7 +2398,7 @@ impl Parser {
         let mut fun = crate::Function {
             name: Some(fun_name.to_string()),
             arguments,
-            return_type,
+            result,
             local_variables: Arena::new(),
             expressions,
             body: Vec::new(),
@@ -2345,7 +2438,6 @@ impl Parser {
         // read decorations
         let mut binding = None;
         // Perspective is the default qualifier.
-        let mut interpolation = None;
         let mut stage = None;
         let mut is_block = false;
         let mut workgroup_size = [0u32; 3];
@@ -2356,18 +2448,6 @@ impl Parser {
             self.scopes.push(Scope::Decoration);
             loop {
                 match lexer.next_ident()? {
-                    "location" => {
-                        lexer.expect(Token::Paren('('))?;
-                        let loc = lexer.next_uint_literal()?;
-                        lexer.expect(Token::Paren(')'))?;
-                        binding = Some(crate::Binding::Location(loc));
-                    }
-                    "builtin" => {
-                        lexer.expect(Token::Paren('('))?;
-                        let builtin = conv::map_built_in(lexer.next_ident()?)?;
-                        lexer.expect(Token::Paren(')'))?;
-                        binding = Some(crate::Binding::BuiltIn(builtin));
-                    }
                     "binding" => {
                         lexer.expect(Token::Paren('('))?;
                         bind_index = Some(lexer.next_uint_literal()?);
@@ -2379,11 +2459,6 @@ impl Parser {
                     "group" => {
                         lexer.expect(Token::Paren('('))?;
                         bind_group = Some(lexer.next_uint_literal()?);
-                        lexer.expect(Token::Paren(')'))?;
-                    }
-                    "interpolate" => {
-                        lexer.expect(Token::Paren('('))?;
-                        interpolation = Some(conv::map_interpolation(lexer.next_ident()?)?);
                         lexer.expect(Token::Paren(')'))?;
                     }
                     "stage" => {
@@ -2433,7 +2508,7 @@ impl Parser {
                 }
             }
             if let (Some(group), Some(index)) = (bind_group, bind_index) {
-                binding = Some(crate::Binding::Resource {
+                binding = Some(crate::ResourceBinding {
                     group,
                     binding: index,
                 });
@@ -2494,33 +2569,21 @@ impl Parser {
                     self.parse_variable_decl(lexer, &mut module.types, &mut module.constants)?;
                 let class = match pvar.class {
                     Some(c) => c,
-                    None => match binding {
-                        Some(crate::Binding::BuiltIn(builtin)) => match builtin {
-                            crate::BuiltIn::GlobalInvocationId => crate::StorageClass::Input,
-                            crate::BuiltIn::Position => crate::StorageClass::Output,
-                            _ => return Err(Error::UnimplementedBuiltin(builtin)),
-                        },
-                        Some(crate::Binding::Resource { .. }) => {
-                            match module.types[pvar.ty].inner {
-                                crate::TypeInner::Struct { .. } if pvar.access.is_empty() => {
-                                    crate::StorageClass::Uniform
-                                }
-                                crate::TypeInner::Struct { .. }
-                                | crate::TypeInner::Array { .. } => crate::StorageClass::Storage,
-                                crate::TypeInner::Image { .. }
-                                | crate::TypeInner::Sampler { .. } => crate::StorageClass::Handle,
-                                ref other => {
-                                    log::error!("Resource type {:?}", other);
-                                    return Err(Error::InvalidResourceType(pvar.ty));
-                                }
+                    None => match module.types[pvar.ty].inner {
+                        crate::TypeInner::Struct { .. } if binding.is_some() => {
+                            if pvar.access.is_empty() {
+                                crate::StorageClass::Uniform
+                            } else {
+                                crate::StorageClass::Storage
                             }
                         }
-                        _ => match module.types[pvar.ty].inner {
-                            crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
-                                crate::StorageClass::Handle
-                            }
-                            _ => crate::StorageClass::Private,
-                        },
+                        crate::TypeInner::Array { .. } if binding.is_some() => {
+                            crate::StorageClass::Storage
+                        }
+                        crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
+                            crate::StorageClass::Handle
+                        }
+                        _ => crate::StorageClass::Private,
                     },
                 };
                 let var_handle = module.global_variables.append(crate::GlobalVariable {
@@ -2529,7 +2592,6 @@ impl Parser {
                     binding: binding.take(),
                     ty: pvar.ty,
                     init: pvar.init,
-                    interpolation,
                     storage_access: pvar.access,
                 });
                 lookup_global_expression

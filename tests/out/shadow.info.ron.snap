@@ -610,8 +610,6 @@ expression: output
                 ),
             ],
         ),
-    ],
-    entry_points: [
         (
             uniformity: (
                 non_uniform_result: Some(44),
@@ -1587,6 +1585,94 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(43),
+                        requirement: None,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+            ],
+        ),
+    ],
+    entry_points: [
+        (
+            uniformity: (
+                non_uniform_result: Some(44),
+                requirement: None,
+            ),
+            may_kill: false,
+            sampling_set: [
+                (
+                    image: 1,
+                    sampler: 2,
+                ),
+            ],
+            global_uses: [
+                (
+                    bits: 1,
+                ),
+                (
+                    bits: 1,
+                ),
+                (
+                    bits: 1,
+                ),
+                (
+                    bits: 1,
+                ),
+                (
+                    bits: 3,
+                ),
+                (
+                    bits: 3,
+                ),
+                (
+                    bits: 3,
+                ),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirement: None,
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(6),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirement: None,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(3),
+                        requirement: None,
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(5),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(4),
+                        requirement: None,
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(5),
+                        requirement: None,
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(7),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(5),
                         requirement: None,
                     ),
                     ref_count: 1,

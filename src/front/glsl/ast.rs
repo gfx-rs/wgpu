@@ -2,8 +2,8 @@ use super::{constants::ConstantSolver, error::ErrorKind};
 use crate::{
     proc::{ResolveContext, Typifier},
     Arena, BinaryOperator, Binding, Constant, Expression, FastHashMap, Function, FunctionArgument,
-    GlobalVariable, Handle, Interpolation, LocalVariable, Module, RelationalFunction, ShaderStage,
-    Statement, StorageClass, Type, UnaryOperator,
+    GlobalVariable, Handle, Interpolation, LocalVariable, Module, RelationalFunction,
+    ResourceBinding, ShaderStage, Statement, StorageClass, Type, UnaryOperator,
 };
 
 #[derive(Debug)]
@@ -224,6 +224,7 @@ impl ExpressionRule {
 #[derive(Debug)]
 pub enum TypeQualifier {
     StorageQualifier(StorageQualifier),
+    ResourceBinding(ResourceBinding),
     Binding(Binding),
     Interpolation(Interpolation),
 }
@@ -250,11 +251,14 @@ pub struct FunctionCall {
 #[derive(Debug, Clone, Copy)]
 pub enum StorageQualifier {
     StorageClass(StorageClass),
+    Input,
+    Output,
     Const,
 }
 
 #[derive(Debug, Clone)]
 pub enum StructLayout {
     Binding(Binding),
+    Resource(ResourceBinding),
     PushConstant,
 }

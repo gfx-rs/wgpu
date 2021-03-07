@@ -70,8 +70,7 @@ pub struct Validator {
     // already have to use the typifier, so the work here is redundant in a way.
     typifier: Typifier,
     type_flags: Vec<TypeFlags>,
-    location_in_mask: BitSet,
-    location_out_mask: BitSet,
+    location_mask: BitSet,
     bind_group_masks: Vec<BitSet>,
     select_cases: FastHashSet<i32>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
@@ -112,8 +111,6 @@ pub enum GlobalVariableError {
     InvalidUsage,
     #[error("Type isn't compatible with the storage class")]
     InvalidType,
-    #[error("Interpolation is not valid")]
-    InvalidInterpolation,
     #[error("Storage access {seen:?} exceeds the allowed {allowed:?}")]
     InvalidStorageAccess {
         allowed: crate::StorageAccess,
@@ -126,14 +123,28 @@ pub enum GlobalVariableError {
     },
     #[error("Binding decoration is missing or not applicable")]
     InvalidBinding,
-    #[error("BuiltIn type for {0:?} is invalid")]
-    InvalidBuiltInType(crate::BuiltIn),
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum LocalVariableError {
     #[error("Initializer doesn't match the variable type")]
     InitializerType,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum VaryingError {
+    #[error("The type does not match the varying")]
+    InvalidType(Handle<crate::Type>),
+    #[error("Interpolation is not valid")]
+    InvalidInterpolation,
+    #[error("BuiltIn {0:?} is not available at this stage")]
+    InvalidBuiltInStage(crate::BuiltIn),
+    #[error("BuiltIn type for {0:?} is invalid")]
+    InvalidBuiltInType(crate::BuiltIn),
+    #[error("Struct member {0} is missing a binding")]
+    MemberMissingBinding(u32),
+    #[error("Multiple bindings at location {location} are present")]
+    BindingCollision { location: u32 },
 }
 
 #[derive(Clone, Debug, Error)]
@@ -241,16 +252,14 @@ pub enum EntryPointError {
     UnexpectedWorkgroupSize,
     #[error("Workgroup size is out of range")]
     OutOfRangeWorkgroupSize,
-    #[error("Can't have arguments")]
-    UnexpectedArguments,
-    #[error("Can't have a return value")]
-    UnexpectedReturnValue,
     #[error("Global variable {0:?} is used incorrectly as {1:?}")]
     InvalidGlobalUsage(Handle<crate::GlobalVariable>, GlobalUse),
-    #[error("Bindings for {0:?} conflict with other global variables")]
+    #[error("Bindings for {0:?} conflict with other resource")]
     BindingCollision(Handle<crate::GlobalVariable>),
-    #[error("Built-in {0:?} is not applicable to this entry point")]
-    InvalidBuiltIn(crate::BuiltIn),
+    #[error("Argument {0} varying error")]
+    Argument(u32, #[source] VaryingError),
+    #[error("Result varying error")]
+    Result(#[source] VaryingError),
     #[error("Location {location} onterpolation of an integer has to be flat")]
     InvalidIntegerInterpolation { location: u32 },
     #[error(transparent)]
@@ -300,111 +309,6 @@ pub enum ValidationError {
     Corrupted,
 }
 
-impl crate::GlobalVariable {
-    fn forbid_interpolation(&self) -> Result<(), GlobalVariableError> {
-        match self.interpolation {
-            Some(_) => Err(GlobalVariableError::InvalidInterpolation),
-            None => Ok(()),
-        }
-    }
-
-    fn check_resource(&self) -> Result<(), GlobalVariableError> {
-        match self.binding {
-            Some(crate::Binding::Resource { .. }) => {}
-            Some(crate::Binding::BuiltIn(_)) | Some(crate::Binding::Location(_)) | None => {
-                return Err(GlobalVariableError::InvalidBinding)
-            }
-        }
-        self.forbid_interpolation()
-    }
-
-    fn check_varying(&self, types: &Arena<crate::Type>) -> Result<(), GlobalVariableError> {
-        match self.binding {
-            Some(crate::Binding::BuiltIn(built_in)) => {
-                use crate::{BuiltIn as Bi, ScalarKind as Sk, TypeInner as Ti, VectorSize as Vs};
-                // Only validate the type here. Whether or not it's legal to access
-                // this builtin is up to the entry point.
-                let width = 4;
-                let expected_ty_inner = match built_in {
-                    Bi::BaseInstance
-                    | Bi::BaseVertex
-                    | Bi::InstanceIndex
-                    | Bi::VertexIndex
-                    | Bi::SampleIndex
-                    | Bi::SampleMaskIn
-                    | Bi::SampleMaskOut
-                    | Bi::LocalInvocationIndex => Some(Ti::Scalar {
-                        kind: Sk::Uint,
-                        width,
-                    }),
-                    Bi::PointSize | Bi::FragDepth => Some(Ti::Scalar {
-                        kind: Sk::Float,
-                        width,
-                    }),
-                    Bi::Position | Bi::FragCoord => Some(Ti::Vector {
-                        size: Vs::Quad,
-                        kind: Sk::Float,
-                        width,
-                    }),
-                    Bi::FrontFacing => Some(Ti::Scalar {
-                        kind: Sk::Bool,
-                        width: crate::BOOL_WIDTH,
-                    }),
-                    Bi::GlobalInvocationId
-                    | Bi::LocalInvocationId
-                    | Bi::WorkGroupId
-                    | Bi::WorkGroupSize => Some(Ti::Vector {
-                        size: Vs::Tri,
-                        kind: Sk::Uint,
-                        width,
-                    }),
-                    Bi::ClipDistance => None,
-                };
-
-                let ty_inner = &types[self.ty].inner;
-                if Some(ty_inner) != expected_ty_inner.as_ref() {
-                    match (built_in, &types[self.ty].inner) {
-                        (Bi::ClipDistance, &Ti::Array { base, .. }) => match types[base].inner {
-                            Ti::Scalar {
-                                kind: Sk::Float, ..
-                            } => {}
-                            ref other => {
-                                log::warn!("Wrong array base type: {:?}", other);
-                                return Err(GlobalVariableError::InvalidBuiltInType(built_in));
-                            }
-                        },
-                        (_, other) => {
-                            log::warn!("Wrong builtin type: {:?}", other);
-                            return Err(GlobalVariableError::InvalidBuiltInType(built_in));
-                        }
-                    }
-                }
-                self.forbid_interpolation()?
-            }
-            Some(crate::Binding::Location(_)) => match types[self.ty].inner {
-                crate::TypeInner::Scalar { .. }
-                | crate::TypeInner::Vector { .. }
-                | crate::TypeInner::Matrix { .. } => {}
-                _ => return Err(GlobalVariableError::InvalidType),
-            },
-            Some(crate::Binding::Resource { .. }) => {
-                return Err(GlobalVariableError::InvalidBinding)
-            }
-            None => {
-                match types[self.ty].inner {
-                    //TODO: check the member types
-                    crate::TypeInner::Struct {
-                        block: _,
-                        members: _,
-                    } => self.forbid_interpolation()?,
-                    _ => return Err(GlobalVariableError::InvalidType),
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
     let mut storage_usage = GlobalUse::QUERY;
     if access.contains(crate::StorageAccess::LOAD) {
@@ -416,27 +320,184 @@ fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
     storage_usage
 }
 
-fn built_in_usage(built_in: crate::BuiltIn) -> (crate::ShaderStage, GlobalUse) {
-    use crate::{BuiltIn as Bi, ShaderStage as Ss};
-    match built_in {
-        Bi::BaseInstance => (Ss::Vertex, GlobalUse::READ),
-        Bi::BaseVertex => (Ss::Vertex, GlobalUse::READ),
-        Bi::ClipDistance => (Ss::Vertex, GlobalUse::WRITE),
-        Bi::InstanceIndex => (Ss::Vertex, GlobalUse::READ),
-        Bi::PointSize => (Ss::Vertex, GlobalUse::WRITE),
-        Bi::Position => (Ss::Vertex, GlobalUse::WRITE),
-        Bi::VertexIndex => (Ss::Vertex, GlobalUse::READ),
-        Bi::FragCoord => (Ss::Fragment, GlobalUse::READ),
-        Bi::FragDepth => (Ss::Fragment, GlobalUse::WRITE),
-        Bi::FrontFacing => (Ss::Fragment, GlobalUse::READ),
-        Bi::SampleIndex => (Ss::Fragment, GlobalUse::READ),
-        Bi::SampleMaskIn => (Ss::Fragment, GlobalUse::READ),
-        Bi::SampleMaskOut => (Ss::Fragment, GlobalUse::WRITE),
-        Bi::GlobalInvocationId => (Ss::Compute, GlobalUse::READ),
-        Bi::LocalInvocationId => (Ss::Compute, GlobalUse::READ),
-        Bi::LocalInvocationIndex => (Ss::Compute, GlobalUse::READ),
-        Bi::WorkGroupId => (Ss::Compute, GlobalUse::READ),
-        Bi::WorkGroupSize => (Ss::Compute, GlobalUse::READ),
+struct VaryingContext<'a> {
+    ty: Handle<crate::Type>,
+    stage: crate::ShaderStage,
+    output: bool,
+    types: &'a Arena<crate::Type>,
+    location_mask: &'a mut BitSet,
+}
+
+impl VaryingContext<'_> {
+    fn validate_impl(&mut self, binding: &crate::Binding) -> Result<(), VaryingError> {
+        use crate::{
+            BuiltIn as Bi, ScalarKind as Sk, ShaderStage as St, TypeInner as Ti, VectorSize as Vs,
+        };
+
+        let ty_inner = &self.types[self.ty].inner;
+        match *binding {
+            crate::Binding::BuiltIn(built_in) => {
+                let width = 4;
+                let (visible, type_good) = match built_in {
+                    Bi::BaseInstance | Bi::BaseVertex | Bi::InstanceIndex | Bi::VertexIndex => (
+                        self.stage == St::Vertex && !self.output,
+                        *ty_inner
+                            == Ti::Scalar {
+                                kind: Sk::Uint,
+                                width,
+                            },
+                    ),
+                    Bi::ClipDistance => (
+                        self.stage == St::Vertex && self.output,
+                        match *ty_inner {
+                            Ti::Array { base, .. } => {
+                                self.types[base].inner
+                                    == Ti::Scalar {
+                                        kind: Sk::Float,
+                                        width,
+                                    }
+                            }
+                            _ => false,
+                        },
+                    ),
+                    Bi::PointSize => (
+                        self.stage == St::Vertex && self.output,
+                        *ty_inner
+                            == Ti::Scalar {
+                                kind: Sk::Float,
+                                width,
+                            },
+                    ),
+                    Bi::Position => (
+                        self.stage == St::Vertex && self.output,
+                        *ty_inner
+                            == Ti::Vector {
+                                size: Vs::Quad,
+                                kind: Sk::Float,
+                                width,
+                            },
+                    ),
+                    Bi::FragCoord => (
+                        self.stage == St::Fragment && !self.output,
+                        *ty_inner
+                            == Ti::Vector {
+                                size: Vs::Quad,
+                                kind: Sk::Float,
+                                width,
+                            },
+                    ),
+                    Bi::FragDepth => (
+                        self.stage == St::Fragment && self.output,
+                        *ty_inner
+                            == Ti::Scalar {
+                                kind: Sk::Float,
+                                width,
+                            },
+                    ),
+                    Bi::FrontFacing => (
+                        self.stage == St::Fragment && !self.output,
+                        *ty_inner
+                            == Ti::Scalar {
+                                kind: Sk::Bool,
+                                width: crate::BOOL_WIDTH,
+                            },
+                    ),
+                    Bi::SampleIndex | Bi::SampleMaskIn => (
+                        self.stage == St::Fragment && !self.output,
+                        *ty_inner
+                            == Ti::Scalar {
+                                kind: Sk::Uint,
+                                width,
+                            },
+                    ),
+                    Bi::SampleMaskOut => (
+                        self.stage == St::Fragment && self.output,
+                        *ty_inner
+                            == Ti::Scalar {
+                                kind: Sk::Uint,
+                                width,
+                            },
+                    ),
+                    Bi::LocalInvocationIndex => (
+                        self.stage == St::Compute && !self.output,
+                        *ty_inner
+                            == Ti::Scalar {
+                                kind: Sk::Uint,
+                                width,
+                            },
+                    ),
+                    Bi::GlobalInvocationId
+                    | Bi::LocalInvocationId
+                    | Bi::WorkGroupId
+                    | Bi::WorkGroupSize => (
+                        self.stage == St::Compute && !self.output,
+                        *ty_inner
+                            == Ti::Vector {
+                                size: Vs::Tri,
+                                kind: Sk::Uint,
+                                width,
+                            },
+                    ),
+                };
+
+                if !visible {
+                    return Err(VaryingError::InvalidBuiltInStage(built_in));
+                }
+                if !type_good {
+                    log::warn!("Wrong builtin type: {:?}", ty_inner);
+                    return Err(VaryingError::InvalidBuiltInType(built_in));
+                }
+            }
+            crate::Binding::Location(location, interpolation) => {
+                if !self.location_mask.insert(location as usize) {
+                    return Err(VaryingError::BindingCollision { location });
+                }
+                let needs_interpolation =
+                    self.stage == crate::ShaderStage::Fragment && !self.output;
+                if !needs_interpolation && interpolation.is_some() {
+                    return Err(VaryingError::InvalidInterpolation);
+                }
+                match ty_inner.scalar_kind() {
+                    Some(crate::ScalarKind::Float) => {}
+                    Some(_)
+                        if needs_interpolation
+                            && interpolation != Some(crate::Interpolation::Flat) =>
+                    {
+                        return Err(VaryingError::InvalidInterpolation);
+                    }
+                    _ => return Err(VaryingError::InvalidType(self.ty)),
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate(mut self, binding: Option<&crate::Binding>) -> Result<(), VaryingError> {
+        match binding {
+            Some(binding) => self.validate_impl(binding),
+            None => {
+                match self.types[self.ty].inner {
+                    //TODO: check the member types
+                    crate::TypeInner::Struct {
+                        block: false,
+                        ref members,
+                    } => {
+                        for (index, member) in members.iter().enumerate() {
+                            self.ty = member.ty;
+                            match member.binding {
+                                None => {
+                                    return Err(VaryingError::MemberMissingBinding(index as u32))
+                                }
+                                Some(ref binding) => self.validate_impl(binding)?,
+                            }
+                        }
+                    }
+                    _ => return Err(VaryingError::InvalidType(self.ty)),
+                }
+                Ok(())
+            }
+        }
     }
 }
 
@@ -446,8 +507,7 @@ impl Validator {
         Validator {
             typifier: Typifier::new(),
             type_flags: Vec::new(),
-            location_in_mask: BitSet::new(),
-            location_out_mask: BitSet::new(),
+            location_mask: BitSet::new(),
             bind_group_masks: Vec::new(),
             select_cases: FastHashSet::default(),
             valid_expression_list: Vec::new(),
@@ -619,17 +679,9 @@ impl Validator {
         types: &Arena<crate::Type>,
     ) -> Result<(), GlobalVariableError> {
         log::debug!("var {:?}", var);
-        let (allowed_storage_access, required_type_flags) = match var.class {
+        let (allowed_storage_access, required_type_flags, is_resource) = match var.class {
             crate::StorageClass::Function => return Err(GlobalVariableError::InvalidUsage),
-            crate::StorageClass::Input | crate::StorageClass::Output => {
-                var.check_varying(types)?;
-                (
-                    crate::StorageAccess::empty(),
-                    TypeFlags::DATA | TypeFlags::INTERFACE,
-                )
-            }
             crate::StorageClass::Storage => {
-                var.check_resource()?;
                 match types[var.ty].inner {
                     crate::TypeInner::Struct { .. } => (),
                     _ => return Err(GlobalVariableError::InvalidType),
@@ -637,10 +689,10 @@ impl Validator {
                 (
                     crate::StorageAccess::all(),
                     TypeFlags::DATA | TypeFlags::HOST_SHARED,
+                    true,
                 )
             }
             crate::StorageClass::Uniform => {
-                var.check_resource()?;
                 match types[var.ty].inner {
                     crate::TypeInner::Struct { .. } => (),
                     _ => return Err(GlobalVariableError::InvalidType),
@@ -648,10 +700,10 @@ impl Validator {
                 (
                     crate::StorageAccess::empty(),
                     TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::HOST_SHARED,
+                    true,
                 )
             }
             crate::StorageClass::Handle => {
-                var.check_resource()?;
                 let access = match types[var.ty].inner {
                     crate::TypeInner::Image {
                         class: crate::ImageClass::Storage(_),
@@ -662,18 +714,15 @@ impl Validator {
                     }
                     _ => return Err(GlobalVariableError::InvalidType),
                 };
-                (access, TypeFlags::empty())
+                (access, TypeFlags::empty(), true)
             }
             crate::StorageClass::Private | crate::StorageClass::WorkGroup => {
-                if var.binding.is_some() {
-                    return Err(GlobalVariableError::InvalidBinding);
-                }
-                var.forbid_interpolation()?;
-                (crate::StorageAccess::empty(), TypeFlags::DATA)
+                (crate::StorageAccess::empty(), TypeFlags::DATA, false)
             }
             crate::StorageClass::PushConstant => (
                 crate::StorageAccess::LOAD,
                 TypeFlags::DATA | TypeFlags::HOST_SHARED,
+                false,
             ),
         };
 
@@ -690,6 +739,10 @@ impl Validator {
                 seen: type_flags,
                 required: required_type_flags,
             });
+        }
+
+        if is_resource != var.binding.is_some() {
+            return Err(GlobalVariableError::InvalidBinding);
         }
 
         Ok(())
@@ -765,7 +818,7 @@ impl Validator {
             .map(|expr| self.resolve_type_impl(expr, context.types))
             .transpose()
             .map_err(CallError::ResultValue)?;
-        let expected_ty = fun.return_type.map(|ty| &context.types[ty].inner);
+        let expected_ty = fun.result.as_ref().map(|fr| &context.types[fr.ty].inner);
         if result_ty != expected_ty {
             log::error!(
                 "Called function returns {:?} where {:?} is expected",
@@ -773,7 +826,7 @@ impl Validator {
                 expected_ty
             );
             return Err(CallError::ResultType {
-                required: fun.return_type,
+                required: fun.result.as_ref().map(|fr| fr.ty),
                 seen_expression: result,
             });
         }
@@ -1054,7 +1107,7 @@ impl Validator {
                 expressions: &fun.expressions,
                 types: &module.types,
                 functions: &module.functions,
-                return_type: fun.return_type,
+                return_type: fun.result.as_ref().map(|fr| fr.ty),
             },
         )
     }
@@ -1080,73 +1133,43 @@ impl Validator {
             return Err(EntryPointError::UnexpectedWorkgroupSize);
         }
 
-        self.location_in_mask.clear();
-        self.location_out_mask.clear();
+        self.location_mask.clear();
+        for (index, fa) in ep.function.arguments.iter().enumerate() {
+            let ctx = VaryingContext {
+                ty: fa.ty,
+                stage: ep.stage,
+                output: false,
+                types: &module.types,
+                location_mask: &mut self.location_mask,
+            };
+            ctx.validate(fa.binding.as_ref())
+                .map_err(|e| EntryPointError::Argument(index as u32, e))?;
+        }
+
+        self.location_mask.clear();
+        if let Some(ref fr) = ep.function.result {
+            let ctx = VaryingContext {
+                ty: fr.ty,
+                stage: ep.stage,
+                output: true,
+                types: &module.types,
+                location_mask: &mut self.location_mask,
+            };
+            ctx.validate(fr.binding.as_ref())
+                .map_err(EntryPointError::Result)?;
+        }
+
         for bg in self.bind_group_masks.iter_mut() {
             bg.clear();
         }
-
         for (var_handle, var) in module.global_variables.iter() {
             let usage = info[var_handle];
             if usage.is_empty() {
                 continue;
             }
 
-            if let Some(crate::Binding::Location(location)) = var.binding {
-                if ep.stage == crate::ShaderStage::Fragment
-                    && var.class == crate::StorageClass::Input
-                {
-                    match module.types[var.ty].inner.scalar_kind() {
-                        Some(crate::ScalarKind::Float) => {}
-                        Some(_) if var.interpolation != Some(crate::Interpolation::Flat) => {
-                            return Err(EntryPointError::InvalidIntegerInterpolation { location });
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
             let allowed_usage = match var.class {
                 crate::StorageClass::Function => unreachable!(),
-                crate::StorageClass::Input => {
-                    match var.binding {
-                        Some(crate::Binding::BuiltIn(built_in)) => {
-                            let (allowed_stage, allowed_usage) = built_in_usage(built_in);
-                            if allowed_stage != ep.stage || !allowed_usage.contains(GlobalUse::READ)
-                            {
-                                return Err(EntryPointError::InvalidBuiltIn(built_in));
-                            }
-                        }
-                        Some(crate::Binding::Location(loc)) => {
-                            if !self.location_in_mask.insert(loc as usize) {
-                                return Err(EntryPointError::BindingCollision(var_handle));
-                            }
-                        }
-                        Some(crate::Binding::Resource { .. }) => unreachable!(),
-                        None => (),
-                    }
-                    GlobalUse::READ
-                }
-                crate::StorageClass::Output => {
-                    match var.binding {
-                        Some(crate::Binding::BuiltIn(built_in)) => {
-                            let (allowed_stage, allowed_usage) = built_in_usage(built_in);
-                            if allowed_stage != ep.stage
-                                || !allowed_usage.contains(GlobalUse::WRITE)
-                            {
-                                return Err(EntryPointError::InvalidBuiltIn(built_in));
-                            }
-                        }
-                        Some(crate::Binding::Location(loc)) => {
-                            if !self.location_out_mask.insert(loc as usize) {
-                                return Err(EntryPointError::BindingCollision(var_handle));
-                            }
-                        }
-                        Some(crate::Binding::Resource { .. }) => unreachable!(),
-                        None => (),
-                    }
-                    GlobalUse::READ | GlobalUse::WRITE
-                }
                 crate::StorageClass::Uniform => GlobalUse::READ | GlobalUse::QUERY,
                 crate::StorageClass::Storage => storage_usage(var.storage_access),
                 crate::StorageClass::Handle => match module.types[var.ty].inner {
@@ -1169,21 +1192,14 @@ impl Validator {
                 return Err(EntryPointError::InvalidGlobalUsage(var_handle, usage));
             }
 
-            if let Some(crate::Binding::Resource { group, binding }) = var.binding {
-                while self.bind_group_masks.len() <= group as usize {
+            if let Some(ref bind) = var.binding {
+                while self.bind_group_masks.len() <= bind.group as usize {
                     self.bind_group_masks.push(BitSet::new());
                 }
-                if !self.bind_group_masks[group as usize].insert(binding as usize) {
+                if !self.bind_group_masks[bind.group as usize].insert(bind.binding as usize) {
                     return Err(EntryPointError::BindingCollision(var_handle));
                 }
             }
-        }
-
-        if !ep.function.arguments.is_empty() {
-            return Err(EntryPointError::UnexpectedArguments);
-        }
-        if ep.function.return_type.is_some() {
-            return Err(EntryPointError::UnexpectedReturnValue);
         }
 
         self.validate_function(&ep.function, info, module)?;

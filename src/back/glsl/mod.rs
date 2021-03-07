@@ -202,16 +202,14 @@ impl<'a, 'b> FunctionCtx<'a, 'b> {
         }
     }
 
-    /// Helper method that retrieves the name of the argument in the current function
+    /// Helper method that generates a [`NameKey`](crate::proc::NameKey) for a function argument.
     ///
     /// # Panics
-    /// - If the function is an entry point
     /// - If the function arguments are less or equal to `arg`
-    /// - If `names` hasn't been filled properly
-    fn get_arg<'c>(&self, arg: u32, names: &'c FastHashMap<NameKey, String>) -> &'c str {
+    fn argument_key(&self, arg: u32) -> NameKey {
         match self.func {
-            FunctionType::Function(handle) => &names[&NameKey::FunctionArgument(handle, arg)],
-            FunctionType::EntryPoint(_) => unreachable!(),
+            FunctionType::Function(handle) => NameKey::FunctionArgument(handle, arg),
+            FunctionType::EntryPoint(ep_index) => NameKey::EntryPointArgument(ep_index, arg),
         }
     }
 }
@@ -227,6 +225,33 @@ impl IdGenerator {
         let ret = self.0;
         self.0 += 1;
         ret
+    }
+}
+
+/// Helper wrapper used to get a name for a varying
+///
+/// Varying have different naming schemes depending on their binding:
+/// - Varyings with builtin bindings get the from [`glsl_built_in`](glsl_built_in)
+/// - Varyings with location bindings are named `_location_X` where `X` is the location
+struct VaryingName<'a> {
+    binding: &'a Binding,
+    output: bool,
+}
+impl fmt::Display for VaryingName<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self.binding {
+            Binding::Location(location, _) => {
+                write!(
+                    f,
+                    "_{}_location_{}",
+                    if self.output { "out" } else { "in" },
+                    location,
+                )
+            }
+            Binding::BuiltIn(built_in) => {
+                write!(f, "{}", glsl_built_in(built_in))
+            }
+        }
     }
 }
 
@@ -450,12 +475,6 @@ impl<'a, W: Write> Writer<'a, W> {
                 continue;
             }
 
-            // Skip builtins
-            // TODO: Write them if they have modifiers
-            if let Some(crate::Binding::BuiltIn(_)) = global.binding {
-                continue;
-            }
-
             match self.module.types[global.ty].inner {
                 // We treat images separately because they might require
                 // writing the storage format
@@ -506,6 +525,15 @@ impl<'a, W: Write> Writer<'a, W> {
                 _ => self.write_global(handle, global)?,
             }
         }
+
+        for arg in self.entry_point.function.arguments.iter() {
+            self.write_varying(arg.binding.as_ref(), arg.ty, false)?;
+        }
+        if let Some(ref result) = self.entry_point.function.result {
+            self.write_varying(result.binding.as_ref(), result.ty, true)?;
+        }
+        writeln!(self.out)?;
+
         // Write all regular functions
         for (handle, function) in self.module.functions.iter() {
             // Check that the function doesn't use globals that aren't supported
@@ -516,7 +544,6 @@ impl<'a, W: Write> Writer<'a, W> {
 
             // We also `clone` to satisfy the borrow checker
             let name = self.names[&NameKey::Function(handle)].clone();
-
             let fun_info = &self.analysis[handle];
 
             // Write the function
@@ -719,22 +746,6 @@ impl<'a, W: Write> Writer<'a, W> {
             write!(self.out, "writeonly ")?;
         }
 
-        // Write the interpolation modifier if needed
-        //
-        // We ignore all interpolation modifiers that aren't used in input globals in fragment
-        // shaders or output globals in vertex shaders
-        //
-        // TODO: Should this throw an error?
-        if let Some(interpolation) = global.interpolation {
-            match (self.options.shader_stage, global.class) {
-                (ShaderStage::Fragment, StorageClass::Input)
-                | (ShaderStage::Vertex, StorageClass::Output) => {
-                    write!(self.out, "{} ", glsl_interpolation(interpolation)?)?;
-                }
-                _ => (),
-            };
-        }
-
         // Write the storage class
         // Trailing space is important
         write!(self.out, "{} ", glsl_storage_class(global.class))?;
@@ -755,29 +766,63 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// Globals have different naming schemes depending on their binding:
     /// - Globals without bindings use the name from the [`Namer`](crate::proc::Namer)
-    /// - Globals with builtin bindings get the from [`glsl_built_in`](glsl_built_in)
-    /// - Globals with location bindings are named `_location_X` where `X` is the location
     /// - Globals with resource binding are named `_group_X_binding_Y` where `X`
     ///   is the group and `Y` is the binding
     fn get_global_name(&self, handle: Handle<GlobalVariable>, global: &GlobalVariable) -> String {
         match global.binding {
-            Some(Binding::Location(location)) => {
-                format!(
-                    "_location_{}{}",
-                    location,
-                    match (self.options.shader_stage, global.class) {
-                        (ShaderStage::Fragment, StorageClass::Input) => "_vs",
-                        (ShaderStage::Vertex, StorageClass::Output) => "_vs",
-                        _ => "",
-                    }
-                )
+            Some(ref br) => {
+                format!("_group_{}_binding_{}", br.group, br.binding)
             }
-            Some(Binding::Resource { group, binding }) => {
-                format!("_group_{}_binding_{}", group, binding)
-            }
-            Some(Binding::BuiltIn(built_in)) => glsl_built_in(built_in).to_string(),
             None => self.names[&NameKey::GlobalVariable(handle)].clone(),
         }
+    }
+
+    /// Writes the varying declaration.
+    fn write_varying(
+        &mut self,
+        binding: Option<&Binding>,
+        ty: Handle<Type>,
+        output: bool,
+    ) -> Result<(), Error> {
+        match self.module.types[ty].inner {
+            crate::TypeInner::Struct {
+                block: _,
+                ref members,
+            } => {
+                for member in members {
+                    self.write_varying(member.binding.as_ref(), member.ty, output)?;
+                }
+            }
+            _ => {
+                let binding = match binding {
+                    Some(binding @ &Binding::Location(..)) => binding,
+                    _ => return Ok(()),
+                };
+                // Write the interpolation modifier if needed
+                //
+                // We ignore all interpolation modifiers that aren't used in input globals in fragment
+                // shaders or output globals in vertex shaders
+                //
+                // TODO: Should this throw an error?
+                if let Binding::Location(_, Some(interp)) = *binding {
+                    if self.options.shader_stage == ShaderStage::Fragment {
+                        write!(self.out, "{} ", glsl_interpolation(interp))?;
+                    }
+                }
+
+                // Write the storage class
+                write!(self.out, "{} ", if output { "out" } else { "in" })?;
+
+                // Write the type
+                // `write_type` adds no leading or trailing spaces
+                self.write_type(ty)?;
+
+                // Finally write the global name and end the global with a `;` and a newline
+                // Leading space is important
+                writeln!(self.out, " {};", VaryingName { binding, output })?;
+            }
+        }
+        Ok(())
     }
 
     /// Helper method used to write functions (both entry points and regular functions)
@@ -828,8 +873,10 @@ impl<'a, W: Write> Writer<'a, W> {
         // Start by writing the return type if any otherwise write void
         // This is the only place where `void` is a valid type
         // (though it's more a keyword than a type)
-        if let Some(ty) = func.return_type {
-            self.write_type(ty)?;
+        if let FunctionType::EntryPoint(_) = ctx.func {
+            write!(self.out, "void")?;
+        } else if let Some(ref result) = func.result {
+            self.write_type(result.ty)?;
         } else {
             write!(self.out, "void")?;
         }
@@ -841,20 +888,62 @@ impl<'a, W: Write> Writer<'a, W> {
         //
         // We need access to `Self` here so we use the reference passed to the closure as an
         // argument instead of capturing as that would cause a borrow checker error
-        self.write_slice(&func.arguments, |this, i, arg| {
+        let arguments = match ctx.func {
+            FunctionType::EntryPoint(_) => &[][..],
+            FunctionType::Function(_) => &func.arguments,
+        };
+        self.write_slice(arguments, |this, i, arg| {
             // Write the argument type
             // `write_type` adds no trailing spaces
             this.write_type(arg.ty)?;
 
             // Write the argument name
             // The leading space is important
-            write!(this.out, " {}", ctx.get_arg(i, &this.names))?;
+            write!(this.out, " {}", &this.names[&ctx.argument_key(i)])?;
 
             Ok(())
         })?;
 
         // Close the parentheses and open braces to start the function body
         writeln!(self.out, ") {{")?;
+
+        // Compose the function arguments from globals, in case of an entry point.
+        if let FunctionType::EntryPoint(ep_index) = ctx.func {
+            for (index, arg) in func.arguments.iter().enumerate() {
+                write!(self.out, "{}", INDENT)?;
+                self.write_type(arg.ty)?;
+                let name = &self.names[&NameKey::EntryPointArgument(ep_index, index as u32)];
+                write!(self.out, " {}", name)?;
+                write!(self.out, " = ")?;
+                match self.module.types[arg.ty].inner {
+                    crate::TypeInner::Struct {
+                        block: _,
+                        ref members,
+                    } => {
+                        self.write_type(arg.ty)?;
+                        write!(self.out, "(")?;
+                        for (index, member) in members.iter().enumerate() {
+                            let varying_name = VaryingName {
+                                binding: member.binding.as_ref().unwrap(),
+                                output: false,
+                            };
+                            if index != 0 {
+                                write!(self.out, ", ")?;
+                            }
+                            write!(self.out, "{}", varying_name)?;
+                        }
+                        writeln!(self.out, ");")?;
+                    }
+                    _ => {
+                        let varying_name = VaryingName {
+                            binding: arg.binding.as_ref().unwrap(),
+                            output: false,
+                        };
+                        writeln!(self.out, "{};", varying_name)?;
+                    }
+                }
+            }
+        }
 
         // Write all function locals
         // Locals are `type name (= init)?;` where the init part (including the =) are optional
@@ -1228,13 +1317,54 @@ impl<'a, W: Write> Writer<'a, W> {
             // `return expr;`, `expr` is optional
             Statement::Return { value } => {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
-                write!(self.out, "return")?;
-                // Write the expression to be returned if needed
-                if let Some(expr) = value {
-                    write!(self.out, " ")?;
-                    self.write_expr(expr, ctx)?;
+                match ctx.func {
+                    FunctionType::Function(_) => {
+                        write!(self.out, "return")?;
+                        // Write the expression to be returned if needed
+                        if let Some(expr) = value {
+                            write!(self.out, " ")?;
+                            self.write_expr(expr, ctx)?;
+                        }
+                        writeln!(self.out, ";")?;
+                    }
+                    FunctionType::EntryPoint(ep_index) => {
+                        if let Some(ref result) =
+                            self.module.entry_points[ep_index as usize].function.result
+                        {
+                            let value = value.unwrap();
+                            match self.module.types[result.ty].inner {
+                                crate::TypeInner::Struct {
+                                    block: _,
+                                    ref members,
+                                } => {
+                                    for (index, member) in members.iter().enumerate() {
+                                        let varying_name = VaryingName {
+                                            binding: member.binding.as_ref().unwrap(),
+                                            output: true,
+                                        };
+                                        write!(self.out, "{} = ", varying_name)?;
+                                        self.write_expr(value, ctx)?;
+                                        let field_name = &self.names
+                                            [&NameKey::StructMember(result.ty, index as u32)];
+                                        writeln!(self.out, ".{};", field_name)?;
+                                        write!(self.out, "{}", INDENT.repeat(indent))?;
+                                    }
+                                }
+                                _ => {
+                                    let name = VaryingName {
+                                        binding: result.binding.as_ref().unwrap(),
+                                        output: true,
+                                    };
+                                    write!(self.out, "{} = ", name)?;
+                                    self.write_expr(value, ctx)?;
+                                    writeln!(self.out, ";")?;
+                                    write!(self.out, "{}", INDENT.repeat(indent))?;
+                                }
+                            }
+                        }
+                        writeln!(self.out, "return;")?;
+                    }
                 }
-                writeln!(self.out, ";")?;
             }
             // This is one of the places were glsl adds to the syntax of C in this case the discard
             // keyword which ceases all further processing in a fragment shader, it's called OpKill
@@ -1282,8 +1412,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
                 if let Some(expr) = result {
                     let name = format!("_expr{}", expr.index());
-                    let ty = self.module.functions[function].return_type.unwrap();
-                    self.write_type(ty)?;
+                    let result = self.module.functions[function].result.as_ref().unwrap();
+                    self.write_type(result.ty)?;
                     write!(self.out, " {} = ", name)?;
                     self.cached_expressions.insert(expr, name);
                 }
@@ -1362,7 +1492,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             // Function arguments are written as the argument name
             Expression::FunctionArgument(pos) => {
-                write!(self.out, "{}", ctx.get_arg(pos, &self.names))?
+                write!(self.out, "{}", &self.names[&ctx.argument_key(pos)])?
             }
             // Global variables need some special work for their name but
             // `get_global_name` does the work for us
@@ -2018,12 +2148,12 @@ fn glsl_built_in(built_in: BuiltIn) -> &'static str {
     match built_in {
         // vertex
         BuiltIn::Position => "gl_Position",
-        BuiltIn::BaseInstance => "gl_BaseInstance",
-        BuiltIn::BaseVertex => "gl_BaseVertex",
+        BuiltIn::BaseInstance => "uint(gl_BaseInstance)",
+        BuiltIn::BaseVertex => "uint(gl_BaseVertex)",
         BuiltIn::ClipDistance => "gl_ClipDistance",
-        BuiltIn::InstanceIndex => "gl_InstanceID",
+        BuiltIn::InstanceIndex => "uint(gl_InstanceID)",
         BuiltIn::PointSize => "gl_PointSize",
-        BuiltIn::VertexIndex => "gl_VertexID",
+        BuiltIn::VertexIndex => "uint(gl_VertexID)",
         // fragment
         BuiltIn::FragCoord => "gl_FragCoord",
         BuiltIn::FragDepth => "gl_FragDepth",
@@ -2044,8 +2174,6 @@ fn glsl_built_in(built_in: BuiltIn) -> &'static str {
 fn glsl_storage_class(class: StorageClass) -> &'static str {
     match class {
         StorageClass::Function => "",
-        StorageClass::Input => "in",
-        StorageClass::Output => "out",
         StorageClass::Private => "",
         StorageClass::Storage => "buffer",
         StorageClass::Uniform => "uniform",
@@ -2056,18 +2184,14 @@ fn glsl_storage_class(class: StorageClass) -> &'static str {
 }
 
 /// Helper function that returns the string corresponding to the glsl interpolation qualifier
-///
-/// # Errors
-/// If [`Patch`](crate::Interpolation::Patch) is passed, as it isn't supported in glsl
-fn glsl_interpolation(interpolation: Interpolation) -> Result<&'static str, Error> {
-    Ok(match interpolation {
+fn glsl_interpolation(interpolation: Interpolation) -> &'static str {
+    match interpolation {
         Interpolation::Perspective => "smooth",
         Interpolation::Linear => "noperspective",
         Interpolation::Flat => "flat",
         Interpolation::Centroid => "centroid",
         Interpolation::Sample => "sample",
-        Interpolation::Patch => return Err(Error::PatchInterpolationNotSupported),
-    })
+    }
 }
 
 /// Helper function that returns the glsl dimension string of [`ImageDimension`](crate::ImageDimension)

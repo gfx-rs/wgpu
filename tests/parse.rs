@@ -1,7 +1,7 @@
 //TODO: consider converting this to snapshots?
 
 #[cfg(feature = "glsl-in")]
-fn check_glsl(name: &str) {
+fn _check_glsl(name: &str) {
     let path = std::path::PathBuf::from("tests/cases").join(name);
     let input = std::fs::read_to_string(path).unwrap();
     let stage = if name.ends_with(".vert") {
@@ -37,6 +37,6 @@ fn check_glsl(name: &str) {
 fn parse_glsl() {
     //check_glsl("glsl_constant_expression.vert"); //TODO
     //check_glsl("glsl_if_preprocessor.vert");
-    check_glsl("glsl_preprocessor_abuse.vert");
+    //check_glsl("glsl_preprocessor_abuse.vert");
     //check_glsl("glsl_vertex_test_shader.vert"); //TODO
 }

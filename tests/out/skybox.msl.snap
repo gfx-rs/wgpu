@@ -9,14 +9,19 @@ typedef metal::float4 type;
 
 typedef metal::float3 type1;
 
-typedef uint type2;
+struct VertexOutput {
+    type position;
+    type1 uv;
+};
 
-typedef metal::float4x4 type3;
+typedef metal::float4x4 type2;
 
 struct Data {
-    type3 proj_inv;
-    type3 view;
+    type2 proj_inv;
+    type2 view;
 };
+
+typedef uint type3;
 
 typedef int type4;
 
@@ -33,47 +38,42 @@ constexpr constant float const_1f = 1.0;
 constexpr constant float const_0f = 0.0;
 struct vs_mainInput {
 };
-
 struct vs_mainOutput {
-    type out_position [[position]];
-    type1 out_uv [[user(loc0)]];
+    type position [[position]];
+    type1 uv [[user(loc0)]];
 };
-
 vertex vs_mainOutput vs_main(
-    vs_mainInput input [[stage_in]],
-    type2 in_vertex_index [[vertex_id]],
-    constant Data& r_data [[buffer(0)]]
+  type3 vertex_index [[vertex_id]]
+, constant Data& r_data [[buffer(0)]]
 ) {
-    vs_mainOutput output;
     type4 tmp1_;
     type4 tmp2_;
     type unprojected;
-    tmp1_ = (static_cast<int>(in_vertex_index) / const_2i);
-    tmp2_ = (static_cast<int>(in_vertex_index) & const_1i);
-    type _expr28 = metal::float4(((static_cast<float>(tmp1_) * const_4f) - const_1f), ((static_cast<float>(tmp2_) * const_4f) - const_1f), const_0f, const_1f);
-    unprojected = (r_data.proj_inv * _expr28);
-    type _expr56 = unprojected;
-    output.out_uv = (metal::transpose(metal::float3x3(metal::float3(r_data.view[0].x, r_data.view[0].y, r_data.view[0].z), metal::float3(r_data.view[1].x, r_data.view[1].y, r_data.view[1].z), metal::float3(r_data.view[2].x, r_data.view[2].y, r_data.view[2].z))) * metal::float3(_expr56.x, _expr56.y, _expr56.z));
-    output.out_position = _expr28;
-    return output;
+    VertexOutput out;
+    tmp1_ = (static_cast<int>(vertex_index) / const_2i);
+    tmp2_ = (static_cast<int>(vertex_index) & const_1i);
+    type _expr24 = metal::float4(((static_cast<float>(tmp1_) * const_4f) - const_1f), ((static_cast<float>(tmp2_) * const_4f) - const_1f), const_0f, const_1f);
+    unprojected = (r_data.proj_inv * _expr24);
+    type _expr54 = unprojected;
+    out.uv = (metal::transpose(metal::float3x3(metal::float3(r_data.view[0].x, r_data.view[0].y, r_data.view[0].z), metal::float3(r_data.view[1].x, r_data.view[1].y, r_data.view[1].z), metal::float3(r_data.view[2].x, r_data.view[2].y, r_data.view[2].z))) * metal::float3(_expr54.x, _expr54.y, _expr54.z));
+    out.position = _expr24;
+    const auto _tmp = out;
+    return vs_mainOutput { _tmp.position, _tmp.uv };
 }
 
 struct fs_mainInput {
-    type1 in_uv [[user(loc0)]];
+    type1 uv1 [[user(loc0)]];
 };
-
 struct fs_mainOutput {
-    type out_color [[color(0)]];
+    type member1 [[color(0)]];
 };
-
 fragment fs_mainOutput fs_main(
-    fs_mainInput input [[stage_in]],
-    type6 r_texture [[texture(0)]],
-    type7 r_sampler [[sampler(1)]]
+  fs_mainInput varyings1 [[stage_in]]
+, type6 r_texture [[texture(0)]]
+, type7 r_sampler [[sampler(1)]]
 ) {
-    fs_mainOutput output;
-    metal::float4 _expr9 = r_texture.sample(r_sampler, input.in_uv);
-    output.out_color = _expr9;
-    return output;
+    const auto uv1 = varyings1.uv1;
+    metal::float4 _expr4 = r_texture.sample(r_sampler, uv1);
+    return fs_mainOutput { _expr4 };
 }
 
