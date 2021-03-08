@@ -1340,12 +1340,24 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 //TODO: handle MS
 
+                // textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL.
+                // To emulate this, we will have to use textureGrad with a constant gradient of 0.
+                let workaround_lod_array_shadow_as_grad =
+                    array_index.is_some() && depth_ref.is_some();
+
                 //Write the function to be used depending on the sample level
                 let fun_name = match level {
                     crate::SampleLevel::Auto | crate::SampleLevel::Bias(_) => "texture",
-                    crate::SampleLevel::Zero | crate::SampleLevel::Exact(_) => "textureLod",
+                    crate::SampleLevel::Zero | crate::SampleLevel::Exact(_) => {
+                        if workaround_lod_array_shadow_as_grad {
+                            "textureGrad"
+                        } else {
+                            "textureLod"
+                        }
+                    }
                     crate::SampleLevel::Gradient { .. } => "textureGrad",
                 };
+
                 write!(self.out, "{}(", fun_name)?;
 
                 // Write the image that will be used
@@ -1385,9 +1397,23 @@ impl<'a, W: Write> Writer<'a, W> {
                     // Auto needs no more arguments
                     crate::SampleLevel::Auto => (),
                     // Zero needs level set to 0
-                    crate::SampleLevel::Zero => write!(self.out, ", 0")?,
+                    crate::SampleLevel::Zero => {
+                        if workaround_lod_array_shadow_as_grad {
+                            write!(self.out, ", vec2(0, 0), vec2(0,0)")?;
+                        } else {
+                            write!(self.out, ", 0")?;
+                        }
+                    }
                     // Exact and bias require another argument
-                    crate::SampleLevel::Exact(expr) | crate::SampleLevel::Bias(expr) => {
+                    crate::SampleLevel::Exact(expr) => {
+                        if workaround_lod_array_shadow_as_grad {
+                            write!(self.out, ", vec2(0, 0), vec2(0,0)")?;
+                        } else {
+                            write!(self.out, ", ")?;
+                            self.write_expr(expr, ctx)?;
+                        }
+                    }
+                    crate::SampleLevel::Bias(expr) => {
                         write!(self.out, ", ")?;
                         self.write_expr(expr, ctx)?;
                     }
