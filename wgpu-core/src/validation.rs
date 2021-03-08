@@ -735,8 +735,8 @@ impl Interface {
 
         let mut entry_points = FastHashMap::default();
         entry_points.reserve(module.entry_points.len());
-        for (&(stage, ref ep_name), _entry_point) in module.entry_points.iter() {
-            let info = analysis.get_entry_point(stage, ep_name);
+        for (index, entry_point) in (&module.entry_points).into_iter().enumerate() {
+            let info = analysis.get_entry_point(index);
             let mut ep = EntryPoint::default();
             for (var_handle, var) in module.global_variables.iter() {
                 let usage = info[var_handle];
@@ -786,7 +786,7 @@ impl Interface {
                     }
                 }
             }
-            entry_points.insert((stage, ep_name.clone()), ep);
+            entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
         }
 
         Interface {
