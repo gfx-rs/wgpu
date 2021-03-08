@@ -111,7 +111,11 @@ impl<B: hal::Backend> super::Device<B> {
     fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<B>, DeviceError> {
         let mut buffer = unsafe {
             self.raw
-                .create_buffer(size, hal::buffer::Usage::TRANSFER_SRC)
+                .create_buffer(
+                    size,
+                    hal::buffer::Usage::TRANSFER_SRC,
+                    hal::memory::SparseFlags::empty(),
+                )
                 .map_err(|err| match err {
                     hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
                     _ => panic!("failed to create staging buffer: {}", err),
