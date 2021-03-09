@@ -83,6 +83,20 @@ expression: output
         ),
         (
             name: None,
+            inner: Pointer(
+                base: 2,
+                class: Function,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 3,
+                class: Function,
+            ),
+        ),
+        (
+            name: None,
             inner: Vector(
                 size: Quad,
                 kind: Uint,
@@ -97,9 +111,30 @@ expression: output
                     (
                         name: Some("num_lights"),
                         span: None,
-                        ty: 11,
+                        ty: 13,
                     ),
                 ],
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 14,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 13,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 3,
+                class: Uniform,
             ),
         ),
         (
@@ -118,7 +153,7 @@ expression: output
                     (
                         name: Some("proj"),
                         span: None,
-                        ty: 13,
+                        ty: 18,
                     ),
                     (
                         name: Some("pos"),
@@ -136,7 +171,7 @@ expression: output
         (
             name: None,
             inner: Array(
-                base: 14,
+                base: 19,
                 size: Dynamic,
                 stride: Some(96),
             ),
@@ -149,9 +184,247 @@ expression: output
                     (
                         name: Some("data"),
                         span: None,
-                        ty: 15,
+                        ty: 20,
                     ),
                 ],
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 21,
+                class: Storage,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 20,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 19,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 18,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 4,
+                class: Input,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 2,
+                class: Input,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 20,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 19,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 4,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 20,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 19,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 4,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 20,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 19,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 4,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                class: Input,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                class: Input,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                class: Input,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 20,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 19,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 4,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 20,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 19,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 4,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 20,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 19,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 4,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 4,
+                class: Output,
             ),
         ),
         (
@@ -495,7 +768,7 @@ expression: output
                 group: 0,
                 binding: 2,
             )),
-            ty: 17,
+            ty: 56,
             init: None,
             interpolation: None,
             storage_access: (
@@ -509,7 +782,7 @@ expression: output
                 group: 0,
                 binding: 3,
             )),
-            ty: 18,
+            ty: 57,
             init: None,
             interpolation: None,
             storage_access: (
@@ -523,7 +796,7 @@ expression: output
                 group: 0,
                 binding: 0,
             )),
-            ty: 12,
+            ty: 14,
             init: None,
             interpolation: None,
             storage_access: (
@@ -537,7 +810,7 @@ expression: output
                 group: 0,
                 binding: 1,
             )),
-            ty: 16,
+            ty: 21,
             init: None,
             interpolation: None,
             storage_access: (

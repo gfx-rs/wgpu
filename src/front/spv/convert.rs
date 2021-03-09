@@ -144,3 +144,20 @@ pub fn map_builtin(word: spirv::Word, is_output: bool) -> Result<crate::BuiltIn,
         _ => return Err(Error::UnsupportedBuiltIn(word)),
     })
 }
+
+pub fn map_storage_class(word: spirv::Word) -> Result<crate::StorageClass, Error> {
+    use spirv::StorageClass as Sc;
+    Ok(match Sc::from_u32(word) {
+        Some(Sc::Function) => crate::StorageClass::Function,
+        Some(Sc::Input) => crate::StorageClass::Input,
+        Some(Sc::Output) => crate::StorageClass::Output,
+        Some(Sc::Private) => crate::StorageClass::Private,
+        Some(Sc::UniformConstant) => crate::StorageClass::Handle,
+        Some(Sc::StorageBuffer) => crate::StorageClass::Storage,
+        // we expect the `Storage` case to be filtered out before calling this function.
+        Some(Sc::Uniform) => crate::StorageClass::Uniform,
+        Some(Sc::Workgroup) => crate::StorageClass::WorkGroup,
+        Some(Sc::PushConstant) => crate::StorageClass::PushConstant,
+        _ => return Err(Error::UnsupportedStorageClass(word)),
+    })
+}
