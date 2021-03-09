@@ -157,9 +157,6 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         fun.body = flow_graph.to_naga()?;
 
-        // done
-        self.patch_function_calls(&mut fun)?;
-
         match self.lookup_entry_point.remove(&fun_id) {
             Some(ep) => {
                 module.entry_points.push(crate::EntryPoint {

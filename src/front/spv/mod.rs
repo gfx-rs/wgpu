@@ -1754,6 +1754,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }?;
         }
 
+        log::info!("Patching...");
+        // patch all the function calls
+        for (_, fun) in module.functions.iter_mut() {
+            self.patch_function_calls(fun)?;
+        }
+        for ep in module.entry_points.iter_mut() {
+            self.patch_function_calls(&mut ep.function)?;
+        }
+        self.lookup_function.clear();
+
         // Check all the images and samplers to have consistent comparison property.
         for (handle, flags) in self.handle_sampling.drain() {
             if !image::patch_comparison_type(
