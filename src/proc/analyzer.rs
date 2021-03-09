@@ -9,38 +9,81 @@ Figures out the following properties:
 use crate::arena::{Arena, Handle};
 use std::ops;
 
+/// Uniform control flow characteristics.
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct Uniformity {
+    /// A child expression with non-uniform result.
+    ///
+    /// This means, when the relevant invocations are scheduled on a compute unit,
+    /// they have to use vector registers to store an individual value
+    /// per invocation.
+    ///
+    /// Whenever the control flow is conditioned on such value,
+    /// the hardware needs to keep track of the mask of invocations,
+    /// and process all branches of the control flow.
+    ///
+    /// Any operations that depend on non-uniform results also produce non-uniform.
+    non_uniform_result: Option<Handle<crate::Expression>>,
+    /// A child expression that requires uniform control flow.
+    ///
+    /// Some operations can only be done within uniform control flow:
+    /// derivatives and auto-level image sampling in fragment shaders,
+    /// and group barriers in compute shaders.
+    require_uniform: Option<Handle<crate::Expression>>,
+}
+
+//TODO: instead of doing cur | next, we could reverse this everywhere
+// and do `next | cur`, which would allow us to trace the cause of
+// uniformity requirement/disruption across the expression chain.
+
+impl ops::BitOr for Uniformity {
+    type Output = Self;
+    fn bitor(self, other: Self) -> Self {
+        Uniformity {
+            non_uniform_result: self.non_uniform_result.or(other.non_uniform_result),
+            require_uniform: self.require_uniform.or(other.require_uniform),
+        }
+    }
+}
+
+impl ops::BitOrAssign for Uniformity {
+    fn bitor_assign(&mut self, other: Self) {
+        *self = self.clone() | other;
+    }
+}
+
+impl Uniformity {
+    fn non_uniform_result(expr: Handle<crate::Expression>) -> Self {
+        Uniformity {
+            non_uniform_result: Some(expr),
+            require_uniform: None,
+        }
+    }
+
+    fn require_uniform(expr: Handle<crate::Expression>) -> Self {
+        Uniformity {
+            non_uniform_result: None,
+            require_uniform: Some(expr),
+        }
+    }
+
+    fn disruptor(&self) -> Option<UniformityDisruptor> {
+        self.non_uniform_result.map(UniformityDisruptor::Expression)
+    }
+}
+
 bitflags::bitflags! {
-    #[derive(Default)]
-    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-    pub struct ControlFlags: u8 {
-        /// The result (of an expression) is not dynamically uniform.
-        ///
-        /// This means, when the relevant invocations are scheduled on a compute unit,
-        /// they have to use vector registers to store an individual value
-        /// per invocation.
-        ///
-        /// Whenever the control flow is conditioned on such value,
-        /// the hardware needs to keep track of the mask of invocations,
-        /// and process all branches of the control flow.
-        ///
-        /// Any operations that depend on non-uniform results also produce non-uniform.
-        const NON_UNIFORM_RESULT = 0x1;
-        /// Uniform control flow is required by the code.
-        ///
-        /// Some operations can only be done within uniform control flow:
-        /// derivatives and auto-level image sampling in fragment shaders,
-        /// and group barriers in compute shaders.
-        ///
-        /// This flag bubbles up from child expressions to parents.
-        const REQUIRE_UNIFORM = 0x2;
-        /// The code may exit the control flow.
-        ///
-        /// `Kill` and `Return` operations have an effect on all the other
-        /// expressions/statements that are evaluated after them. They act as
-        /// pervasive control flow branching. Thus, even after the remaining
-        /// merge together, we are blocked from considering the merged flow uniform.
-        const MAY_EXIT = 0x4;
+    struct ExitFlags: u8 {
+        /// Control flow may return from the function, which makes all the
+        /// subsequent statements within the current function (only!)
+        /// to be executed in a non-uniform control flow.
+        const MAY_RETURN = 0x1;
+        /// Control flow may be killed. Anything after `Statement::Kill` is
+        /// considered inside non-uniform context.
+        const MAY_KILL = 0x2;
     }
 }
 
@@ -70,7 +113,7 @@ pub struct SamplingKey {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct ExpressionInfo {
-    pub control_flags: ControlFlags,
+    pub uniformity: Uniformity,
     pub ref_count: usize,
     assignable_global: Option<Handle<crate::GlobalVariable>>,
 }
@@ -78,8 +121,10 @@ pub struct ExpressionInfo {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct FunctionInfo {
-    /// Accumulated control flags of this function.
-    pub control_flags: ControlFlags,
+    /// Uniformity characteristics.
+    pub uniformity: Uniformity,
+    /// Function may kill the invocation.
+    pub may_kill: bool,
     /// Set of image-sampler pais used with sampling.
     pub sampling_set: crate::FastHashSet<SamplingKey>,
     /// Vector of global variable usages.
@@ -125,14 +170,37 @@ impl ops::Index<Handle<crate::Expression>> for FunctionInfo {
     }
 }
 
+/// Disruptor of the uniform control flow.
+#[derive(Clone, Copy, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum UniformityDisruptor {
+    #[error("Expression {0:?} produced non-uniform result, and control flow depends on it")]
+    Expression(Handle<crate::Expression>),
+    #[error("There is a Return earlier in the control flow of the function")]
+    Return,
+    #[error("There is a Discard earlier in the entry point across all called functions")]
+    Discard,
+}
+
+impl UniformityDisruptor {
+    fn from_exit(flags: ExitFlags) -> Option<Self> {
+        if flags.contains(ExitFlags::MAY_RETURN) {
+            Some(Self::Return)
+        } else if flags.contains(ExitFlags::MAY_KILL) {
+            Some(Self::Discard)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum AnalysisError {
     #[error("Expression {0:?} is not a global variable!")]
     ExpectedGlobalVariable(crate::Expression),
-    //TODO: add more information here!
-    #[error("Required uniformity of control flow is not fulfilled")]
-    NonUniformControlFlow,
+    #[error("Required uniformity of control flow for {0:?} is not fulfilled because of {1:?}")]
+    NonUniformControlFlow(Handle<crate::Expression>, UniformityDisruptor),
 }
 
 impl FunctionInfo {
@@ -142,19 +210,19 @@ impl FunctionInfo {
         &mut self,
         handle: Handle<crate::Expression>,
         global_use: GlobalUse,
-    ) -> ControlFlags {
+    ) -> Uniformity {
         let info = &mut self.expressions[handle.index()];
         info.ref_count += 1;
         // mark the used global as read
         if let Some(global) = info.assignable_global {
             self.global_uses[global.index()] |= global_use;
         }
-        info.control_flags
+        info.uniformity.clone()
     }
 
     /// Adds a value-type reference to an expression.
     #[must_use]
-    fn add_ref(&mut self, handle: Handle<crate::Expression>) -> ControlFlags {
+    fn add_ref(&mut self, handle: Handle<crate::Expression>) -> Uniformity {
         self.add_ref_impl(handle, GlobalUse::READ)
     }
 
@@ -166,7 +234,7 @@ impl FunctionInfo {
         &mut self,
         handle: Handle<crate::Expression>,
         assignable_global: &mut Option<Handle<crate::GlobalVariable>>,
-    ) -> ControlFlags {
+    ) -> Uniformity {
         let info = &mut self.expressions[handle.index()];
         info.ref_count += 1;
         // propagate the assignable global up the chain, till it either hits
@@ -176,23 +244,22 @@ impl FunctionInfo {
                 unreachable!()
             }
         }
-        info.control_flags
+        info.uniformity.clone()
     }
 
     /// Inherit information from a called function.
-    fn process_call(&mut self, info: &Self) -> ControlFlags {
+    fn process_call(&mut self, info: &Self) -> Uniformity {
         for key in info.sampling_set.iter() {
             self.sampling_set.insert(key.clone());
         }
         for (mine, other) in self.global_uses.iter_mut().zip(info.global_uses.iter()) {
             *mine |= *other;
         }
-        info.control_flags
+        info.uniformity.clone()
     }
 
-    /// Computes the control flags of a given expression, and store them
-    /// in `self.expressions`. Also, bumps the reference counts on
-    /// dependent expressions.
+    /// Computes the expression info and stores it in `self.expressions`.
+    /// Also, bumps the reference counts on dependent expressions.
     fn process_expression(
         &mut self,
         handle: Handle<crate::Expression>,
@@ -203,23 +270,23 @@ impl FunctionInfo {
         use crate::{Expression as E, SampleLevel as Sl};
 
         let mut assignable_global = None;
-        let control_flags = match expression_arena[handle] {
+        let uniformity = match expression_arena[handle] {
             E::Access { base, index } => {
                 self.add_assignable_ref(base, &mut assignable_global) | self.add_ref(index)
             }
             E::AccessIndex { base, .. } => self.add_assignable_ref(base, &mut assignable_global),
-            E::Constant(_) => ControlFlags::empty(),
+            E::Constant(_) => Uniformity::default(),
             E::Compose { ref components, .. } => {
-                let mut accum = ControlFlags::empty();
+                let mut accum = Uniformity::default();
                 for &comp in components {
                     accum |= self.add_ref(comp);
                 }
                 accum
             }
-            E::FunctionArgument(_) => ControlFlags::NON_UNIFORM_RESULT, //TODO?
-            E::GlobalVariable(handle) => {
-                assignable_global = Some(handle);
-                let var = &global_var_arena[handle];
+            E::FunctionArgument(_) => Uniformity::non_uniform_result(handle), //TODO?
+            E::GlobalVariable(gh) => {
+                assignable_global = Some(gh);
+                let var = &global_var_arena[gh];
                 let uniform = if let Some(crate::Binding::BuiltIn(built_in)) = var.binding {
                     match built_in {
                         // per-polygon built-ins are uniform
@@ -244,13 +311,13 @@ impl FunctionInfo {
                     }
                 };
                 if uniform {
-                    ControlFlags::empty()
+                    Uniformity::default()
                 } else {
-                    ControlFlags::NON_UNIFORM_RESULT
+                    Uniformity::non_uniform_result(handle)
                 }
             }
             E::LocalVariable(_) => {
-                ControlFlags::NON_UNIFORM_RESULT //TODO?
+                Uniformity::non_uniform_result(handle) //TODO?
             }
             E::Load { pointer } => self.add_ref(pointer),
             E::ImageSample {
@@ -278,18 +345,18 @@ impl FunctionInfo {
                 });
                 let array_flags = match array_index {
                     Some(h) => self.add_ref(h),
-                    None => ControlFlags::empty(),
+                    None => Uniformity::default(),
                 };
                 let level_flags = match level {
                     // implicit derivatives for LOD require uniform
-                    Sl::Auto => ControlFlags::REQUIRE_UNIFORM,
-                    Sl::Zero => ControlFlags::empty(),
+                    Sl::Auto => Uniformity::require_uniform(handle),
+                    Sl::Zero => Uniformity::default(),
                     Sl::Exact(h) | Sl::Bias(h) => self.add_ref(h),
                     Sl::Gradient { x, y } => self.add_ref(x) | self.add_ref(y),
                 };
                 let dref_flags = match depth_ref {
                     Some(h) => self.add_ref(h),
-                    None => ControlFlags::empty(),
+                    None => Uniformity::default(),
                 };
                 self.add_ref(image)
                     | self.add_ref(sampler)
@@ -306,18 +373,18 @@ impl FunctionInfo {
             } => {
                 let array_flags = match array_index {
                     Some(h) => self.add_ref(h),
-                    None => ControlFlags::empty(),
+                    None => Uniformity::default(),
                 };
                 let index_flags = match index {
                     Some(h) => self.add_ref(h),
-                    None => ControlFlags::empty(),
+                    None => Uniformity::default(),
                 };
                 self.add_ref(image) | self.add_ref(coordinate) | array_flags | index_flags
             }
             E::ImageQuery { image, query } => {
                 let query_flags = match query {
                     crate::ImageQuery::Size { level: Some(h) } => self.add_ref(h),
-                    _ => ControlFlags::empty(),
+                    _ => Uniformity::default(),
                 };
                 self.add_ref_impl(image, GlobalUse::QUERY) | query_flags
             }
@@ -329,18 +396,18 @@ impl FunctionInfo {
                 reject,
             } => self.add_ref(condition) | self.add_ref(accept) | self.add_ref(reject),
             // explicit derivatives require uniform
-            E::Derivative { expr, .. } => ControlFlags::REQUIRE_UNIFORM | self.add_ref(expr),
+            E::Derivative { expr, .. } => Uniformity::require_uniform(handle) | self.add_ref(expr),
             E::Relational { argument, .. } => self.add_ref(argument),
             E::Math {
                 arg, arg1, arg2, ..
             } => {
                 let arg1_flags = match arg1 {
                     Some(h) => self.add_ref(h),
-                    None => ControlFlags::empty(),
+                    None => Uniformity::default(),
                 };
                 let arg2_flags = match arg2 {
                     Some(h) => self.add_ref(h),
-                    None => ControlFlags::empty(),
+                    None => Uniformity::default(),
                 };
                 self.add_ref(arg) | arg1_flags | arg2_flags
             }
@@ -350,89 +417,103 @@ impl FunctionInfo {
         };
 
         self.expressions[handle.index()] = ExpressionInfo {
-            control_flags,
+            uniformity,
             ref_count: 0,
             assignable_global,
         };
         Ok(())
     }
 
-    /// Computes the control flags on the block (as a sequence of statements),
-    /// and returns them. The parent control flow is uniform if `is_uniform` is true.
+    /// Computes the uniformity and the exit flags on the block
+    /// (as a sequence of statements), and returns them.
+    /// The parent control flow is uniform if `disruptor.is_none()`.
     ///
     /// Returns a `NonUniformControlFlow` error if any of the expressions in the block
-    /// have `ControlFlags::REQUIRE_UNIFORM` flag, but the current flow is non-uniform.
+    /// require uniformity, but the current flow is non-uniform.
+    #[allow(clippy::or_fun_call)]
     fn process_block(
         &mut self,
         statements: &[crate::Statement],
         other_functions: &[FunctionInfo],
-        mut is_uniform: bool,
-    ) -> Result<ControlFlags, AnalysisError> {
+        mut disruptor: Option<UniformityDisruptor>,
+    ) -> Result<(Uniformity, ExitFlags), AnalysisError> {
         use crate::Statement as S;
-        let mut block_flags = ControlFlags::empty();
+        let mut block_uniformity = Uniformity::default();
+        let mut block_exit = ExitFlags::empty();
         for statement in statements {
-            let flags = match *statement {
-                S::Emit(_) | S::Break | S::Continue => ControlFlags::empty(),
-                S::Kill => ControlFlags::MAY_EXIT,
-                S::Block(ref b) => self.process_block(b, other_functions, is_uniform)?,
+            let (cur_uniformity, cur_exit) = match *statement {
+                S::Emit(_) | S::Break | S::Continue => (Uniformity::default(), ExitFlags::empty()),
+                S::Kill => (Uniformity::default(), ExitFlags::MAY_KILL),
+                S::Block(ref b) => self.process_block(b, other_functions, disruptor)?,
                 S::If {
                     condition,
                     ref accept,
                     ref reject,
                 } => {
-                    let flags = self.add_ref(condition);
-                    if flags.contains(ControlFlags::REQUIRE_UNIFORM) && !is_uniform {
-                        log::warn!("If condition {:?} needs uniformity", condition);
-                        return Err(AnalysisError::NonUniformControlFlow);
-                    }
-                    let branch_uniform =
-                        is_uniform && !flags.contains(ControlFlags::NON_UNIFORM_RESULT);
-                    flags
-                        | self.process_block(accept, other_functions, branch_uniform)?
-                        | self.process_block(reject, other_functions, branch_uniform)?
+                    let condition_uniformity = self.add_ref(condition);
+                    let branch_disruptor = disruptor.or(condition_uniformity.disruptor());
+                    let (accept_uniformity, accept_exit) =
+                        self.process_block(accept, other_functions, branch_disruptor)?;
+                    let (reject_uniformity, reject_exit) =
+                        self.process_block(reject, other_functions, branch_disruptor)?;
+                    (
+                        condition_uniformity | accept_uniformity | reject_uniformity,
+                        accept_exit | reject_exit,
+                    )
                 }
                 S::Switch {
                     selector,
                     ref cases,
                     ref default,
                 } => {
-                    let mut flags = self.add_ref(selector);
-                    if flags.contains(ControlFlags::REQUIRE_UNIFORM) && !is_uniform {
-                        log::warn!("Switch selector {:?} needs uniformity", selector);
-                        return Err(AnalysisError::NonUniformControlFlow);
-                    }
-                    let branch_uniform =
-                        is_uniform && !flags.contains(ControlFlags::NON_UNIFORM_RESULT);
-                    let mut still_uniform = branch_uniform;
+                    let selector_uniformity = self.add_ref(selector);
+                    let branch_disruptor = disruptor.or(selector_uniformity.disruptor());
+                    let mut uniformity = selector_uniformity;
+                    let mut exit = ExitFlags::empty();
+                    let mut case_disruptor = disruptor;
                     for case in cases.iter() {
-                        let case_flags =
-                            self.process_block(&case.body, other_functions, still_uniform)?;
-                        flags |= case_flags;
-                        if case.fall_through {
-                            still_uniform &= !case_flags.contains(ControlFlags::MAY_EXIT);
+                        let (case_uniformity, case_exit) =
+                            self.process_block(&case.body, other_functions, case_disruptor)?;
+                        uniformity |= case_uniformity;
+                        exit |= case_exit;
+                        case_disruptor = if case.fall_through {
+                            case_disruptor.or(UniformityDisruptor::from_exit(case_exit))
                         } else {
-                            still_uniform = branch_uniform;
-                        }
+                            branch_disruptor
+                        };
                     }
-                    flags | self.process_block(default, other_functions, still_uniform)?
+                    let (default_uniformity, default_exit) =
+                        self.process_block(default, other_functions, case_disruptor)?;
+                    (uniformity | default_uniformity, exit | default_exit)
                 }
                 S::Loop {
                     ref body,
                     ref continuing,
                 } => {
-                    let flags = self.process_block(body, other_functions, is_uniform)?;
-                    let still_uniform = is_uniform && !flags.contains(ControlFlags::MAY_EXIT);
-                    self.process_block(continuing, other_functions, still_uniform)?
+                    let (body_uniformity, body_exit) =
+                        self.process_block(body, other_functions, disruptor)?;
+                    let continuing_disruptor = disruptor
+                        .or(body_uniformity.disruptor())
+                        .or(UniformityDisruptor::from_exit(body_exit));
+                    let (continuing_uniformity, continuing_exit) =
+                        self.process_block(continuing, other_functions, continuing_disruptor)?;
+                    (
+                        body_uniformity | continuing_uniformity,
+                        body_exit | continuing_exit,
+                    )
                 }
                 S::Return { value } => {
-                    let flags = match value {
+                    let uniformity = match value {
                         Some(expr) => self.add_ref(expr),
-                        None => ControlFlags::empty(),
+                        None => Uniformity::default(),
                     };
-                    ControlFlags::MAY_EXIT | flags
+                    //TODO: if we are in the uniform control flow, should this still be an exit flag?
+                    (uniformity, ExitFlags::MAY_RETURN)
                 }
                 S::Store { pointer, value } => {
-                    self.add_ref_impl(pointer, GlobalUse::WRITE) | self.add_ref(value)
+                    let uniformity =
+                        self.add_ref_impl(pointer, GlobalUse::WRITE) | self.add_ref(value);
+                    (uniformity, ExitFlags::empty())
                 }
                 S::ImageStore {
                     image,
@@ -440,38 +521,43 @@ impl FunctionInfo {
                     array_index,
                     value,
                 } => {
-                    let array_flags = match array_index {
+                    let array_uniformity = match array_index {
                         Some(expr) => self.add_ref(expr),
-                        None => ControlFlags::empty(),
+                        None => Uniformity::default(),
                     };
-                    array_flags
+                    let uniformity = array_uniformity
                         | self.add_ref_impl(image, GlobalUse::WRITE)
                         | self.add_ref(coordinate)
-                        | self.add_ref(value)
+                        | self.add_ref(value);
+                    (uniformity, ExitFlags::empty())
                 }
                 S::Call {
                     function,
                     ref arguments,
-                    result,
+                    result: _,
                 } => {
-                    let mut flags = self.process_call(&other_functions[function.index()]);
+                    let info = &other_functions[function.index()];
+                    let mut uniformity = self.process_call(info);
                     for &argument in arguments {
-                        flags |= self.add_ref(argument);
+                        uniformity |= self.add_ref(argument);
                     }
-                    if let Some(expr) = result {
-                        flags |= self.add_ref(expr);
-                    }
-                    flags
+                    let exit = if info.may_kill {
+                        ExitFlags::MAY_KILL
+                    } else {
+                        ExitFlags::empty()
+                    };
+                    (uniformity, exit)
                 }
             };
 
-            if flags.contains(ControlFlags::REQUIRE_UNIFORM) && !is_uniform {
-                return Err(AnalysisError::NonUniformControlFlow);
+            if let (Some(expr), Some(cause)) = (cur_uniformity.require_uniform, disruptor) {
+                return Err(AnalysisError::NonUniformControlFlow(expr, cause));
             }
-            is_uniform &= !flags.contains(ControlFlags::MAY_EXIT);
-            block_flags |= flags;
+            disruptor = disruptor.or(UniformityDisruptor::from_exit(cur_exit));
+            block_uniformity |= cur_uniformity;
+            block_exit |= cur_exit;
         }
-        Ok(block_flags)
+        Ok((block_uniformity, block_exit))
     }
 }
 
@@ -492,7 +578,8 @@ impl Analysis {
         global_var_arena: &Arena<crate::GlobalVariable>,
     ) -> Result<FunctionInfo, AnalysisError> {
         let mut info = FunctionInfo {
-            control_flags: ControlFlags::empty(),
+            uniformity: Uniformity::default(),
+            may_kill: false,
             sampling_set: crate::FastHashSet::default(),
             global_uses: vec![GlobalUse::empty(); global_var_arena.len()].into_boxed_slice(),
             expressions: vec![ExpressionInfo::default(); fun.expressions.len()].into_boxed_slice(),
@@ -502,7 +589,9 @@ impl Analysis {
             info.process_expression(handle, &fun.expressions, global_var_arena, &self.functions)?;
         }
 
-        info.control_flags = info.process_block(&fun.body, &self.functions, true)?;
+        let (uniformity, exit) = info.process_block(&fun.body, &self.functions, None)?;
+        info.uniformity = uniformity;
+        info.may_kill = exit.contains(ExitFlags::MAY_KILL);
 
         Ok(info)
     }
@@ -598,7 +687,8 @@ fn uniform_control_flow() {
     });
 
     let mut info = FunctionInfo {
-        control_flags: ControlFlags::empty(),
+        uniformity: Uniformity::default(),
+        may_kill: false,
         sampling_set: crate::FastHashSet::default(),
         global_uses: vec![GlobalUse::empty(); global_var_arena.len()].into_boxed_slice(),
         expressions: vec![ExpressionInfo::default(); expressions.len()].into_boxed_slice(),
@@ -623,8 +713,11 @@ fn uniform_control_flow() {
         }],
     };
     assert_eq!(
-        info.process_block(&[stmt_if_uniform], &[], true),
-        Ok(ControlFlags::REQUIRE_UNIFORM),
+        info.process_block(&[stmt_if_uniform], &[], None),
+        Ok((
+            Uniformity::require_uniform(derivative_expr),
+            ExitFlags::empty()
+        )),
     );
     assert_eq!(info[constant_expr].ref_count, 2);
     assert_eq!(info[uniform_global], GlobalUse::READ | GlobalUse::QUERY);
@@ -638,8 +731,11 @@ fn uniform_control_flow() {
         reject: Vec::new(),
     };
     assert_eq!(
-        info.process_block(&[stmt_if_non_uniform], &[], true),
-        Err(AnalysisError::NonUniformControlFlow),
+        info.process_block(&[stmt_if_non_uniform], &[], None),
+        Err(AnalysisError::NonUniformControlFlow(
+            derivative_expr,
+            UniformityDisruptor::Expression(non_uniform_global_expr)
+        )),
     );
     assert_eq!(info[derivative_expr].ref_count, 2);
     assert_eq!(info[non_uniform_global], GlobalUse::READ);
@@ -648,8 +744,15 @@ fn uniform_control_flow() {
         value: Some(non_uniform_global_expr),
     };
     assert_eq!(
-        info.process_block(&[stmt_return_non_uniform], &[], false),
-        Ok(ControlFlags::NON_UNIFORM_RESULT | ControlFlags::MAY_EXIT),
+        info.process_block(
+            &[stmt_return_non_uniform],
+            &[],
+            Some(UniformityDisruptor::Return)
+        ),
+        Ok((
+            Uniformity::non_uniform_result(non_uniform_global_expr),
+            ExitFlags::MAY_RETURN
+        )),
     );
     assert_eq!(info[non_uniform_global_expr].ref_count, 3);
 
@@ -658,8 +761,11 @@ fn uniform_control_flow() {
         value: query_expr,
     };
     assert_eq!(
-        info.process_block(&[stmt_assign], &[], false),
-        Ok(ControlFlags::NON_UNIFORM_RESULT),
+        info.process_block(&[stmt_assign], &[], Some(UniformityDisruptor::Discard)),
+        Ok((
+            Uniformity::non_uniform_result(non_uniform_global_expr),
+            ExitFlags::empty()
+        )),
     );
     assert_eq!(info[non_uniform_global], GlobalUse::READ | GlobalUse::WRITE);
 }

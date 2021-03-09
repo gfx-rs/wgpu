@@ -49,6 +49,7 @@ fn main() {
 
     let mut args = env::args();
     let _ = args.next().unwrap();
+    #[allow(clippy::while_let_on_iterator)]
     while let Some(arg) = args.next() {
         //TODO: use `strip_prefix` when MSRV reaches 1.45.0
         if arg.starts_with("--") {
