@@ -86,13 +86,13 @@ pub enum TypeError {
     UnresolvedBase(Handle<crate::Type>),
     #[error("Expected data type, found {0:?}")]
     InvalidData(Handle<crate::Type>),
-    #[error("Type {0:?} can not be a part of a host-shared structure")]
-    InvalidHostSharedType(Handle<crate::Type>),
+    #[error("Structure type {0:?} can not be a block structure")]
+    InvalidBlockType(Handle<crate::Type>),
     #[error("Base type {0:?} for the array is invalid")]
     InvalidArrayBaseType(Handle<crate::Type>),
     #[error("The constant {0:?} can not be used for an array size")]
     InvalidArraySizeConstant(Handle<crate::Constant>),
-    #[error("Field {0} can't be dynamically-sized, has type {1:?}")]
+    #[error("Field '{0}' can't be dynamically-sized, has type {1:?}")]
     InvalidDynamicArray(String, Handle<crate::Type>),
 }
 
@@ -540,12 +540,12 @@ impl Validator {
                     }
                     crate::ArraySize::Dynamic => TypeFlags::empty(),
                 };
-                let shared_flag = if stride.is_none() {
-                    TypeFlags::empty()
+                let base_mask = if stride.is_none() {
+                    TypeFlags::INTERFACE
                 } else {
-                    base_flags & TypeFlags::HOST_SHARED
+                    TypeFlags::HOST_SHARED | TypeFlags::INTERFACE
                 };
-                TypeFlags::DATA | sized_flag | shared_flag
+                TypeFlags::DATA | (base_flags & base_mask) | sized_flag
             }
             Ti::Struct { block, ref members } => {
                 let mut flags = TypeFlags::all();
@@ -558,8 +558,8 @@ impl Validator {
                     if !base_flags.contains(TypeFlags::DATA) {
                         return Err(TypeError::InvalidData(member.ty));
                     }
-                    if block && !base_flags.contains(TypeFlags::HOST_SHARED) {
-                        return Err(TypeError::InvalidHostSharedType(member.ty));
+                    if block && !base_flags.contains(TypeFlags::INTERFACE) {
+                        return Err(TypeError::InvalidBlockType(member.ty));
                     }
                     // only the last field can be unsized
                     if i + 1 != members.len() && !base_flags.contains(TypeFlags::SIZED) {
@@ -1093,7 +1093,8 @@ impl Validator {
             }
 
             if let Some(crate::Binding::Location(location)) = var.binding {
-                if ep.stage == crate::ShaderStage::Fragment && var.class == crate::StorageClass::Input
+                if ep.stage == crate::ShaderStage::Fragment
+                    && var.class == crate::StorageClass::Input
                 {
                     match module.types[var.ty].inner.scalar_kind() {
                         Some(crate::ScalarKind::Float) => {}
