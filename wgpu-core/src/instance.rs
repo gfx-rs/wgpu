@@ -641,7 +641,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let surface =
             Surface {
-                #[cfg(feature = "vulkan-portability")]
+                #[cfg(feature = "gfx-backend-vulkan")]
                 vulkan: None, //TODO: create_surface_from_layer ?
                 metal: self.instance.metal.as_ref().map(|inst| {
                     inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
