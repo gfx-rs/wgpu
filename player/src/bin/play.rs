@@ -144,6 +144,7 @@ fn main() {
                                     desc.height,
                                 ));
                                 resize_desc = Some(desc);
+                                break;
                             } else {
                                 gfx_select!(device => global.device_create_swap_chain(device, surface, &desc)).unwrap();
                             }
