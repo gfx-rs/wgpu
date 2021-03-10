@@ -558,12 +558,14 @@ impl<B: GfxBackend> Device<B> {
             flags
         };
 
-        let mut buffer = unsafe { self.raw.create_buffer(desc.size.max(1), usage) }.map_err(
-            |err| match err {
-                hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                _ => panic!("failed to create buffer: {}", err),
-            },
-        )?;
+        let mut buffer = unsafe {
+            self.raw
+                .create_buffer(desc.size.max(1), usage, hal::memory::SparseFlags::empty())
+        }
+        .map_err(|err| match err {
+            hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+            _ => panic!("failed to create buffer: {}", err),
+        })?;
         if let Some(ref label) = desc.label {
             unsafe { self.raw.set_buffer_name(&mut buffer, label) };
         }
@@ -678,6 +680,7 @@ impl<B: GfxBackend> Device<B> {
                     format,
                     hal::image::Tiling::Optimal,
                     usage,
+                    hal::memory::SparseFlags::empty(),
                     view_caps,
                 )
                 .map_err(|err| match err {
