@@ -54,21 +54,7 @@ impl Context {
         self: &Arc<Self>,
         layer: *mut std::ffi::c_void,
     ) -> crate::Surface {
-        let surface = wgc::instance::Surface {
-            #[cfg(feature = "vulkan-portability")]
-            vulkan: None, //TODO: create_surface_from_layer ?
-            metal: self
-                .0
-                .instance
-                .metal
-                .as_ref()
-                .map(|inst| inst.create_surface_from_layer(std::mem::transmute(layer))),
-        };
-
-        let id = self.0.surfaces.process_id(PhantomData);
-        self.0
-            .surfaces
-            .register(id, surface, &mut wgc::hub::Token::root());
+        let id = self.0.instance_create_surface_metal(layer, PhantomData);
         crate::Surface {
             context: Arc::clone(self),
             id,
