@@ -216,6 +216,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "codespan-reporting"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3538270d33cc669650c4b093848450d380def10c331d38c768e34cac80576e6e"
+dependencies = [
+ "termcolor",
+ "unicode-width",
+]
+
+[[package]]
 name = "copyless"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -477,7 +487,7 @@ dependencies = [
 [[package]]
 name = "gfx-auxil"
 version = "0.8.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=0a201d1c406b5119ec11068293a40e50ec0be4c8#0a201d1c406b5119ec11068293a40e50ec0be4c8"
+source = "git+https://github.com/gfx-rs/gfx?rev=cd96e77952dd2e330fe2c31f768203eef47a0d6a#cd96e77952dd2e330fe2c31f768203eef47a0d6a"
 dependencies = [
  "fxhash",
  "gfx-hal",
@@ -487,7 +497,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-dx11"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=0a201d1c406b5119ec11068293a40e50ec0be4c8#0a201d1c406b5119ec11068293a40e50ec0be4c8"
+source = "git+https://github.com/gfx-rs/gfx?rev=cd96e77952dd2e330fe2c31f768203eef47a0d6a#cd96e77952dd2e330fe2c31f768203eef47a0d6a"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -508,7 +518,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-dx12"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=0a201d1c406b5119ec11068293a40e50ec0be4c8#0a201d1c406b5119ec11068293a40e50ec0be4c8"
+source = "git+https://github.com/gfx-rs/gfx?rev=cd96e77952dd2e330fe2c31f768203eef47a0d6a#cd96e77952dd2e330fe2c31f768203eef47a0d6a"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -528,7 +538,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-empty"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=0a201d1c406b5119ec11068293a40e50ec0be4c8#0a201d1c406b5119ec11068293a40e50ec0be4c8"
+source = "git+https://github.com/gfx-rs/gfx?rev=cd96e77952dd2e330fe2c31f768203eef47a0d6a#cd96e77952dd2e330fe2c31f768203eef47a0d6a"
 dependencies = [
  "gfx-hal",
  "log",
@@ -538,7 +548,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-gl"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=0a201d1c406b5119ec11068293a40e50ec0be4c8#0a201d1c406b5119ec11068293a40e50ec0be4c8"
+source = "git+https://github.com/gfx-rs/gfx?rev=cd96e77952dd2e330fe2c31f768203eef47a0d6a#cd96e77952dd2e330fe2c31f768203eef47a0d6a"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -561,7 +571,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-metal"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=0a201d1c406b5119ec11068293a40e50ec0be4c8#0a201d1c406b5119ec11068293a40e50ec0be4c8"
+source = "git+https://github.com/gfx-rs/gfx?rev=cd96e77952dd2e330fe2c31f768203eef47a0d6a#cd96e77952dd2e330fe2c31f768203eef47a0d6a"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -586,7 +596,7 @@ dependencies = [
 [[package]]
 name = "gfx-backend-vulkan"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=0a201d1c406b5119ec11068293a40e50ec0be4c8#0a201d1c406b5119ec11068293a40e50ec0be4c8"
+source = "git+https://github.com/gfx-rs/gfx?rev=cd96e77952dd2e330fe2c31f768203eef47a0d6a#cd96e77952dd2e330fe2c31f768203eef47a0d6a"
 dependencies = [
  "arrayvec",
  "ash",
@@ -606,7 +616,7 @@ dependencies = [
 [[package]]
 name = "gfx-hal"
 version = "0.7.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=0a201d1c406b5119ec11068293a40e50ec0be4c8#0a201d1c406b5119ec11068293a40e50ec0be4c8"
+source = "git+https://github.com/gfx-rs/gfx?rev=cd96e77952dd2e330fe2c31f768203eef47a0d6a#cd96e77952dd2e330fe2c31f768203eef47a0d6a"
 dependencies = [
  "bitflags",
  "naga",
@@ -948,10 +958,11 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.3.1"
-source = "git+https://github.com/gfx-rs/naga?tag=gfx-12#fa7d4d8b51d4eeffe9f648d285466637f733a4a1"
+source = "git+https://github.com/gfx-rs/naga?tag=gfx-13#f5ee79191223e4ebe323a728f4de40830b8d10f6"
 dependencies = [
  "bit-set",
  "bitflags",
+ "codespan-reporting",
  "fxhash",
  "log",
  "num-traits",
@@ -1213,7 +1224,7 @@ dependencies = [
 [[package]]
 name = "range-alloc"
 version = "0.1.2"
-source = "git+https://github.com/gfx-rs/gfx?rev=0a201d1c406b5119ec11068293a40e50ec0be4c8#0a201d1c406b5119ec11068293a40e50ec0be4c8"
+source = "git+https://github.com/gfx-rs/gfx?rev=cd96e77952dd2e330fe2c31f768203eef47a0d6a#cd96e77952dd2e330fe2c31f768203eef47a0d6a"
 
 [[package]]
 name = "raw-window-handle"
@@ -1631,6 +1642,12 @@ name = "ttf-parser"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e5d7cd7ab3e47dda6e56542f4bbf3824c15234958c6e1bd6aaa347e93499fdc"
+
+[[package]]
+name = "unicode-width"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9337591893a19b88d8d87f2cec1e73fad5cdfd10e5a6f349f498ad6ea2ffb1e3"
 
 [[package]]
 name = "unicode-xid"
