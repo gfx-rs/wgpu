@@ -1932,15 +1932,16 @@ impl<B: GfxBackend> Device<B> {
             parent,
         };
 
-        let raw = match unsafe { self.raw.create_compute_pipeline(&pipeline_desc, None) } {
-            Ok(pipeline) => pipeline,
-            Err(hal::pso::CreationError::OutOfMemory(_)) => {
-                return Err(pipeline::CreateComputePipelineError::Device(
-                    DeviceError::OutOfMemory,
-                ))
-            }
-            other => panic!("Compute pipeline creation error: {:?}", other),
-        };
+        let raw =
+            unsafe { self.raw.create_compute_pipeline(&pipeline_desc, None) }.map_err(|err| {
+                match err {
+                    hal::pso::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    _ => {
+                        tracing::error!("failed to create compute pipeline: {}", err);
+                        DeviceError::OutOfMemory
+                    }
+                }
+            })?;
 
         let pipeline = pipeline::ComputePipeline {
             raw,
@@ -2366,14 +2367,16 @@ impl<B: GfxBackend> Device<B> {
             parent,
         };
         // TODO: cache
-        let raw = unsafe {
-            self.raw
-                .create_graphics_pipeline(&pipeline_desc, None)
-                .map_err(|err| match err {
+        let raw =
+            unsafe { self.raw.create_graphics_pipeline(&pipeline_desc, None) }.map_err(|err| {
+                match err {
                     hal::pso::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    _ => panic!("failed to create graphics pipeline: {}", err),
-                })?
-        };
+                    _ => {
+                        tracing::error!("failed to create graphics pipeline: {}", err);
+                        DeviceError::OutOfMemory
+                    }
+                }
+            })?;
 
         let pass_context = RenderPassContext {
             attachments: AttachmentData {
