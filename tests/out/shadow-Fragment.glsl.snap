@@ -1,0 +1,53 @@
+---
+source: tests/snapshots.rs
+expression: string
+---
+#version 310 es
+
+precision highp float;
+
+struct Light {
+    mat4x4 proj;
+    vec4 pos;
+    vec4 color;
+};
+
+uniform Globals_block_0 {
+    uvec4 num_lights;
+} _group_0_binding_0;
+
+readonly buffer Lights_block_1 {
+    Light data[];
+} _group_0_binding_1;
+
+uniform highp sampler2DArrayShadow _group_0_binding_2;
+
+in vec3 _location_0_vs;
+
+in vec4 _location_1_vs;
+
+out vec4 _location_0;
+
+float fetch_shadow(uint light_id, vec4 homogeneous_coords) {
+    if((homogeneous_coords[3] <= 0.0)) {
+        return 1.0;
+    }
+    return textureGrad(_group_0_binding_2, vec4((((vec2(homogeneous_coords[0], homogeneous_coords[1]) * vec2(0.5, -0.5)) * (1.0 / homogeneous_coords[3])) + vec2(0.5, 0.5)), int(light_id), (homogeneous_coords[2] * (1.0 / homogeneous_coords[3]))), vec2(0, 0), vec2(0,0));
+}
+
+void main() {
+    vec3 color1 = vec3(0.05, 0.05, 0.05);
+    uint i = 0u;
+    while(true) {
+        if((i >= min(_group_0_binding_0.num_lights[0], 10u))) {
+            break;
+        }
+        Light _expr23 = _group_0_binding_1.data[i];
+        float _expr28 = fetch_shadow(i, (_expr23.proj * _location_1_vs));
+        vec4 _expr34 = _location_1_vs;
+        color1 = (color1 + ((_expr28 * max(0.0, dot(normalize(_location_0_vs), normalize((vec3(_expr23.pos[0], _expr23.pos[1], _expr23.pos[2]) - vec3(_expr34[0], _expr34[1], _expr34[2])))))) * vec3(_expr23.color[0], _expr23.color[1], _expr23.color[2])));
+        i = (i + 1u);
+    }
+    _location_0 = vec4(color1, 1.0);
+    return;
+}

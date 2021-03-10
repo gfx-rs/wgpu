@@ -416,7 +416,16 @@ impl<'a, W: Write> Writer<'a, W> {
                 ref members,
             } = ty.inner
             {
-                self.write_struct(handle, members)?
+                // No needed to write a struct that also should be written as a global variable
+                let is_global_struct = self
+                    .module
+                    .global_variables
+                    .iter()
+                    .any(|e| e.1.ty == handle);
+
+                if !is_global_struct {
+                    self.write_struct(false, handle, members)?
+                }
             }
         }
 
@@ -571,11 +580,10 @@ impl<'a, W: Write> Writer<'a, W> {
             )?,
             // glsl has no pointer types so just write types as normal and loads are skipped
             TypeInner::Pointer { base, .. } => self.write_type(base)?,
-            // Arrays are written as `base[size]`
-            TypeInner::Array { base, size, .. } => {
-                let ty_name = &self.names[&NameKey::Type(base)];
-
-                write!(self.out, "{}", ty_name)?;
+            // GLSL arrays are written as `type name[size]`
+            // Current code is written arrays only as `[size]`
+            // Base `type` and `name` should be written outside
+            TypeInner::Array { base: _, size, .. } => {
                 write!(self.out, "[")?;
 
                 // Write the array size
@@ -596,41 +604,15 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 write!(self.out, "]")?
             }
+            TypeInner::Struct {
+                block: true,
+                ref members,
+            } => self.write_struct(true, ty, members)?,
             // glsl structs are written as just the struct name if it isn't a block
-            //
-            // If it's a block we need to write `block_name { members }` where `block_name` must be
-            // unique between blocks and structs so we add `_block_ID` where `ID` is a `IdGenerator`
-            // generated number so it's unique and `members` are the same as in a struct
-            TypeInner::Struct { block, ref members } => {
+            TypeInner::Struct { block: false, .. } => {
                 // Get the struct name
                 let name = &self.names[&NameKey::Type(ty)];
-
-                if block {
-                    // Write the block name, it's just the struct name appended with `_block_ID`
-                    writeln!(self.out, "{}_block_{} {{", name, self.block_id.generate())?;
-
-                    // Write the block members
-                    for (idx, member) in members.iter().enumerate() {
-                        // Add a tab for indentation (readability only)
-                        write!(self.out, "{}", INDENT)?;
-                        // Write the member type
-                        self.write_type(member.ty)?;
-
-                        // Finish the member with the name, a semicolon and a newline
-                        // The leading space is important
-                        writeln!(
-                            self.out,
-                            " {};",
-                            &self.names[&NameKey::StructMember(ty, idx as u32)]
-                        )?;
-                    }
-
-                    // Close braces
-                    write!(self.out, "}}")?
-                } else {
-                    // Write the struct name
-                    write!(self.out, "{}", name)?
-                }
+                write!(self.out, "{}", name)?
             }
             // Panic if either Image or Sampler is being written
             //
@@ -960,7 +942,12 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Notes
     /// Ends in a newline
-    fn write_struct(&mut self, handle: Handle<Type>, members: &[StructMember]) -> BackendResult {
+    fn write_struct(
+        &mut self,
+        block: bool,
+        handle: Handle<Type>,
+        members: &[StructMember],
+    ) -> BackendResult {
         // glsl structs are written as in C
         // `struct name() { members };`
         //  | `struct` is a keyword
@@ -968,29 +955,62 @@ impl<'a, W: Write> Writer<'a, W> {
         //  | `members` is a semicolon separated list of `type name`
         //      | `type` is the member type
         //      | `name` is the member name
+        let name = &self.names[&NameKey::Type(handle)];
 
-        writeln!(self.out, "struct {} {{", self.names[&NameKey::Type(handle)])?;
+        // If struct is a block we need to write `block_name { members }` where `block_name` must be
+        // unique between blocks and structs so we add `_block_ID` where `ID` is a `IdGenerator`
+        // generated number so it's unique and `members` are the same as in a struct
+        if block {
+            // Write the block name, it's just the struct name appended with `_block_ID`
+            writeln!(self.out, "{}_block_{} {{", name, self.block_id.generate())?;
+        } else {
+            writeln!(self.out, "struct {} {{", name)?;
+        }
 
         for (idx, member) in members.iter().enumerate() {
             // The indentation is only for readability
             write!(self.out, "{}", INDENT)?;
 
-            // Write the member type
-            // Adds no trailing space
-            self.write_type(member.ty)?;
+            match self.module.types[member.ty].inner {
+                TypeInner::Array { base, .. } => {
+                    // GLSL arrays are written as `type name[size]`
+                    // Write `type` and `name`
+                    let ty_name = &self.names[&NameKey::Type(base)];
+                    write!(self.out, "{}", ty_name)?;
+                    write!(
+                        self.out,
+                        " {}",
+                        &self.names[&NameKey::StructMember(handle, idx as u32)]
+                    )?;
+                    // Write [size]
+                    self.write_type(member.ty)?;
+                    // Newline is important
+                    writeln!(self.out, ";")?;
+                }
+                _ => {
+                    // Write the member type
+                    // Adds no trailing space
+                    self.write_type(member.ty)?;
 
-            // Write the member name and put a semicolon
-            // The leading space is important
-            // All members must have a semicolon even the last one
-            writeln!(
-                self.out,
-                " {};",
-                self.names[&NameKey::StructMember(handle, idx as u32)]
-            )?;
+                    // Write the member name and put a semicolon
+                    // The leading space is important
+                    // All members must have a semicolon even the last one
+                    writeln!(
+                        self.out,
+                        " {};",
+                        &self.names[&NameKey::StructMember(handle, idx as u32)]
+                    )?;
+                }
+            }
         }
 
-        writeln!(self.out, "}};")?;
-        writeln!(self.out)?;
+        write!(self.out, "}}")?;
+
+        if !block {
+            writeln!(self.out, ";")?;
+            // Add a newline for readability
+            writeln!(self.out)?;
+        }
 
         Ok(())
     }

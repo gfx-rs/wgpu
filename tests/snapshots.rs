@@ -259,7 +259,7 @@ fn convert_wgsl_collatz() {
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_shadow() {
-    convert_wgsl("shadow", Targets::SPIRV | Targets::METAL);
+    convert_wgsl("shadow", Targets::SPIRV | Targets::METAL | Targets::GLSL);
 }
 
 #[cfg(feature = "wgsl-in")]
