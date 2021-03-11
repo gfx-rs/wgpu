@@ -6,7 +6,7 @@ expression: output
     functions: [
         (
             uniformity: (
-                non_uniform_result: Some(4),
+                non_uniform_result: Some(6),
                 require_uniform: None,
             ),
             may_kill: false,
@@ -234,7 +234,7 @@ expression: output
     entry_points: [
         (
             uniformity: (
-                non_uniform_result: Some(4),
+                non_uniform_result: Some(6),
                 require_uniform: None,
             ),
             may_kill: false,
@@ -338,7 +338,7 @@ expression: output
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(4),
+                        non_uniform_result: Some(6),
                         require_uniform: None,
                     ),
                     ref_count: 1,

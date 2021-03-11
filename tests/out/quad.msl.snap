@@ -52,6 +52,9 @@ fragment main2Output main2(
 ) {
     main2Output output;
     metal::float4 _expr9 = u_texture.sample(u_sampler, input.v_uv1);
+    if ((_expr9.w == const_0f)) {
+        metal::discard_fragment();
+    }
     output.o_color = _expr9;
     return output;
 }

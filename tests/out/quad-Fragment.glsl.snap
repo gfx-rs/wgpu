@@ -13,6 +13,11 @@ uniform highp sampler2D _group_0_binding_0;
 out vec4 _location_0;
 
 void main() {
+    if((texture(_group_0_binding_0, vec2(_location_0_vs))[3] == 0.0)) {
+        discard;
+    }
     _location_0 = texture(_group_0_binding_0, vec2(_location_0_vs));
     return;
 }
+
+

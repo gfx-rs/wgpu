@@ -784,7 +784,7 @@ impl<W: Write> Writer<W> {
                     )?;
                 }
                 crate::Statement::Kill => {
-                    writeln!(self.out, "{}discard_fragment();", level)?;
+                    writeln!(self.out, "{}{}::discard_fragment();", level, NAMESPACE)?;
                 }
                 crate::Statement::Store { pointer, value } => {
                     write!(self.out, "{}", level)?;

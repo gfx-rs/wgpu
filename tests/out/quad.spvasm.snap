@@ -5,7 +5,7 @@ expression: dis
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 41
+; Bound: 46
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -60,6 +60,7 @@ OpDecorate %23 Location 0
 %23 = OpVariable  %15  Output
 %25 = OpTypeFunction %2
 %38 = OpTypeSampledImage %18
+%42 = OpTypeBool
 %24 = OpFunction  %2  None %25
 %26 = OpLabel
 OpBranch %27
@@ -81,6 +82,13 @@ OpBranch %36
 %37 = OpLoad  %8  %16
 %39 = OpSampledImage  %38  %34 %35
 %40 = OpImageSampleImplicitLod  %14  %39 %37
+%41 = OpCompositeExtract  %4  %40 3
+%43 = OpFOrdEqual  %42  %41 %5
+OpSelectionMerge %44 None
+OpBranchConditional %43 %45 %44
+%45 = OpLabel
+OpKill
+%44 = OpLabel
 OpStore %23 %40
 OpReturn
 OpFunctionEnd

@@ -19,5 +19,9 @@ fn main() {
 
 [[stage(fragment)]]
 fn main() {
-  o_color = textureSample(u_texture, u_sampler, v_uv);
+  const color: vec4<f32> = textureSample(u_texture, u_sampler, v_uv);
+  if (color.a == 0.0) {
+    discard;
+  }
+  o_color = color;
 }
