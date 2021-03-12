@@ -6,11 +6,15 @@
  *  This API is used for targeting both Web and Native.
  */
 
-// The intra doc links to the wgpu crate in this crate actually succesfully link to the types in the wgpu crate, when built from the wgpu crate.
-// However when building from both the wgpu crate or this crate cargo doc will claim all the links cannot be resolved
-// despite the fact that it works fine when it needs to.
-// So we just disable those warnings.
-#![allow(broken_intra_doc_links)]
+#![allow(
+    // The intra doc links to the wgpu crate in this crate actually succesfully link to the types in the wgpu crate, when built from the wgpu crate.
+    // However when building from both the wgpu crate or this crate cargo doc will claim all the links cannot be resolved
+    // despite the fact that it works fine when it needs to.
+    // So we just disable those warnings.
+    broken_intra_doc_links,
+    // We don't use syntax sugar where it's not necessary.
+    clippy::match_like_matches_macro,
+)]
 #![warn(missing_docs)]
 
 #[cfg(feature = "serde")]

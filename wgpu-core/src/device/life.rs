@@ -302,7 +302,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
             };
             tracing::debug!("...Done");
 
-            if status == false {
+            if !status {
                 // We timed out while waiting for the fences
                 return Err(WaitIdleError::StuckGpu);
             }
@@ -389,7 +389,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             while let Some(id) = self.suspected_resources.render_bundles.pop() {
                 if trackers.bundles.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyRenderBundle(id.0)));
+                    if let Some(t) = trace {
+                        t.lock().add(trace::Action::DestroyRenderBundle(id.0));
+                    }
 
                     if let Some(res) = hub.render_bundles.unregister_locked(id.0, &mut *guard) {
                         self.suspected_resources.add_trackers(&res.used);
@@ -405,7 +407,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             while let Some(id) = self.suspected_resources.bind_groups.pop() {
                 if trackers.bind_groups.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyBindGroup(id.0)));
+                    if let Some(t) = trace {
+                        t.lock().add(trace::Action::DestroyBindGroup(id.0));
+                    }
 
                     if let Some(res) = hub.bind_groups.unregister_locked(id.0, &mut *guard) {
                         self.suspected_resources.add_trackers(&res.used);
@@ -429,7 +433,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             for id in self.suspected_resources.texture_views.drain(..) {
                 if trackers.views.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyTextureView(id.0)));
+                    if let Some(t) = trace {
+                        t.lock().add(trace::Action::DestroyTextureView(id.0));
+                    }
 
                     if let Some(res) = hub.texture_views.unregister_locked(id.0, &mut *guard) {
                         let raw = match res.inner {
@@ -459,7 +465,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             for id in self.suspected_resources.textures.drain(..) {
                 if trackers.textures.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyTexture(id.0)));
+                    if let Some(t) = trace {
+                        t.lock().add(trace::Action::DestroyTexture(id.0));
+                    }
 
                     if let Some(res) = hub.textures.unregister_locked(id.0, &mut *guard) {
                         let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
@@ -481,7 +489,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             for id in self.suspected_resources.samplers.drain(..) {
                 if trackers.samplers.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroySampler(id.0)));
+                    if let Some(t) = trace {
+                        t.lock().add(trace::Action::DestroySampler(id.0));
+                    }
 
                     if let Some(res) = hub.samplers.unregister_locked(id.0, &mut *guard) {
                         let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
@@ -503,7 +513,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             for id in self.suspected_resources.buffers.drain(..) {
                 if trackers.buffers.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyBuffer(id.0)));
+                    if let Some(t) = trace {
+                        t.lock().add(trace::Action::DestroyBuffer(id.0));
+                    }
                     tracing::debug!("Buffer {:?} is detached", id);
 
                     if let Some(res) = hub.buffers.unregister_locked(id.0, &mut *guard) {
@@ -536,7 +548,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             for id in self.suspected_resources.compute_pipelines.drain(..) {
                 if trackers.compute_pipes.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyComputePipeline(id.0)));
+                    if let Some(t) = trace {
+                        t.lock().add(trace::Action::DestroyComputePipeline(id.0));
+                    }
 
                     if let Some(res) = hub.compute_pipelines.unregister_locked(id.0, &mut *guard) {
                         let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
@@ -558,7 +572,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             for id in self.suspected_resources.render_pipelines.drain(..) {
                 if trackers.render_pipes.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyRenderPipeline(id.0)));
+                    if let Some(t) = trace {
+                        t.lock().add(trace::Action::DestroyRenderPipeline(id.0));
+                    }
 
                     if let Some(res) = hub.render_pipelines.unregister_locked(id.0, &mut *guard) {
                         let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
@@ -584,7 +600,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                 //Note: this has to happen after all the suspected pipelines are destroyed
                 if ref_count.load() == 1 {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyPipelineLayout(id.0)));
+                    if let Some(t) = trace {
+                        t.lock().add(trace::Action::DestroyPipelineLayout(id.0));
+                    }
 
                     if let Some(lay) = hub.pipeline_layouts.unregister_locked(id.0, &mut *guard) {
                         self.suspected_resources
@@ -606,7 +624,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                 // encounter could drop the refcount to 0.
                 if guard[id].multi_ref_count.dec_and_check_empty() {
                     #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyBindGroupLayout(id.0)));
+                    if let Some(t) = trace {
+                        t.lock().add(trace::Action::DestroyBindGroupLayout(id.0));
+                    }
                     if let Some(lay) = hub.bind_group_layouts.unregister_locked(id.0, &mut *guard) {
                         self.free_resources.descriptor_set_layouts.push(lay.raw);
                     }

@@ -155,8 +155,8 @@ impl RenderPassContext {
         if self.attachments.depth_stencil != other.attachments.depth_stencil {
             return Err(
                 RenderPassCompatibilityError::IncompatibleDepthStencilAttachment(
-                    self.attachments.depth_stencil.clone(),
-                    other.attachments.depth_stencil.clone(),
+                    self.attachments.depth_stencil,
+                    other.attachments.depth_stencil,
                 ),
             );
         }
@@ -298,6 +298,7 @@ pub enum CreateDeviceError {
 }
 
 impl<B: GfxBackend> Device<B> {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         raw: B::Device,
         adapter_id: Stored<id::AdapterId>,
@@ -373,7 +374,7 @@ impl<B: GfxBackend> Device<B> {
             hal_limits,
             private_features,
             limits: desc.limits.clone(),
-            features: desc.features.clone(),
+            features: desc.features,
             spv_options,
             pending_writes: queue::PendingWrites::new(),
         })
@@ -860,7 +861,7 @@ impl<B: GfxBackend> Device<B> {
                     conv::map_texture_view_dimension(view_dim),
                     conv::map_texture_format(format, self.private_features),
                     hal::format::Swizzle::NO,
-                    range.clone(),
+                    range,
                 )
                 .or(Err(resource::CreateTextureViewError::OutOfMemory))?
         };
@@ -1106,8 +1107,8 @@ impl<B: GfxBackend> Device<B> {
         key: &RenderPassKey,
     ) -> Result<B::RenderPass, hal::device::OutOfMemory> {
         let mut color_ids = [(0, hal::image::Layout::ColorAttachmentOptimal); MAX_COLOR_TARGETS];
-        for i in 0..key.colors.len() {
-            color_ids[i].0 = i;
+        for (index, color) in color_ids[..key.colors.len()].iter_mut().enumerate() {
+            color.0 = index;
         }
         let depth_id = key.depth_stencil.as_ref().map(|_| {
             (
@@ -1123,7 +1124,7 @@ impl<B: GfxBackend> Device<B> {
             resolves: &[],
             preserves: &[],
         };
-        let all = key.all().map(|(at, _)| at.clone());
+        let all = key.all().map(|&(ref at, _)| at.clone());
 
         unsafe {
             self.raw
@@ -1138,7 +1139,7 @@ impl<B: GfxBackend> Device<B> {
     ) -> Option<id::BindGroupLayoutId> {
         guard
             .iter(self_id.backend())
-            .find(|(_, bgl)| bgl.device_id.value.0 == self_id && bgl.entries == *entry_map)
+            .find(|&(_, ref bgl)| bgl.device_id.value.0 == self_id && bgl.entries == *entry_map)
             .map(|(id, value)| {
                 value.multi_ref_count.inc();
                 id
@@ -1313,7 +1314,7 @@ impl<B: GfxBackend> Device<B> {
                         _ => {
                             return Err(Error::WrongBindingType {
                                 binding,
-                                actual: decl.ty.clone(),
+                                actual: decl.ty,
                                 expected: "UniformBuffer, StorageBuffer or ReadonlyStorageBuffer",
                             })
                         }
@@ -1425,7 +1426,7 @@ impl<B: GfxBackend> Device<B> {
                         _ => {
                             return Err(Error::WrongBindingType {
                                 binding,
-                                actual: decl.ty.clone(),
+                                actual: decl.ty,
                                 expected: "Sampler",
                             })
                         }
@@ -1528,7 +1529,7 @@ impl<B: GfxBackend> Device<B> {
                         }
                         _ => return Err(Error::WrongBindingType {
                             binding,
-                            actual: decl.ty.clone(),
+                            actual: decl.ty,
                             expected:
                                 "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
                         }),
@@ -1598,7 +1599,7 @@ impl<B: GfxBackend> Device<B> {
                                 _ => {
                                     return Err(Error::WrongBindingType {
                                         binding,
-                                        actual: decl.ty.clone(),
+                                        actual: decl.ty,
                                         expected: "SampledTextureArray",
                                     })
                                 }
@@ -2230,8 +2231,8 @@ impl<B: GfxBackend> Device<B> {
             }
         };
 
-        let fragment = match &desc.fragment {
-            Some(fragment) => {
+        let fragment = match desc.fragment {
+            Some(ref fragment) => {
                 let entry_point_name = &fragment.stage.entry_point;
                 let flag = wgt::ShaderStage::FRAGMENT;
 
@@ -2385,9 +2386,7 @@ impl<B: GfxBackend> Device<B> {
             attachments: AttachmentData {
                 colors: color_states.iter().map(|state| state.format).collect(),
                 resolves: ArrayVec::new(),
-                depth_stencil: depth_stencil_state
-                    .as_ref()
-                    .map(|state| state.format.clone()),
+                depth_stencil: depth_stencil_state.as_ref().map(|state| state.format),
             },
             sample_count: samples,
         };
@@ -2814,8 +2813,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let (_, block) = buffer.raw.as_mut().unwrap();
-        block.write_bytes(&device.raw, offset, data)?;
+        buffer
+            .raw
+            .as_mut()
+            .unwrap()
+            .1
+            .write_bytes(&device.raw, offset, data)?;
 
         Ok(())
     }
@@ -2843,8 +2846,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         check_buffer_usage(buffer.usage, wgt::BufferUsage::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        let (_, block) = buffer.raw.as_mut().unwrap();
-        block.read_bytes(&device.raw, offset, data)?;
+        buffer
+            .raw
+            .as_mut()
+            .unwrap()
+            .1
+            .read_bytes(&device.raw, offset, data)?;
 
         Ok(())
     }
@@ -4291,7 +4298,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let sc_id = surface_id.to_swap_chain_id(B::VARIANT);
         if let Some(sc) = swap_chain_guard.try_remove(sc_id) {
-            if !sc.acquired_view_id.is_none() {
+            if sc.acquired_view_id.is_some() {
                 return Err(swap_chain::CreateSwapChainError::SwapChainOutputExists);
             }
             unsafe {

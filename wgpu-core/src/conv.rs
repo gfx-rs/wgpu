@@ -683,7 +683,7 @@ pub(crate) fn map_texture_state(
 }
 
 pub fn map_query_type(ty: &wgt::QueryType) -> (hal::query::Type, u32) {
-    match ty {
+    match *ty {
         wgt::QueryType::PipelineStatistics(pipeline_statistics) => {
             let mut ps = hal::query::PipelineStatistic::empty();
             ps.set(

@@ -1158,8 +1158,6 @@ pub mod bundle_ffi {
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `offset_length` elements.
-    // TODO: There might be other safety issues, such as using the unsafe
-    // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_bundle_set_bind_group(
         bundle: &mut RenderBundleEncoder,
@@ -1211,6 +1209,10 @@ pub mod bundle_ffi {
         });
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given pointer is
+    /// valid for `data` elements.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_bundle_set_push_constants(
         pass: &mut RenderBundleEncoder,
@@ -1315,6 +1317,10 @@ pub mod bundle_ffi {
         });
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given `label`
+    /// is a valid null-terminated stricng.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_bundle_push_debug_group(
         _bundle: &mut RenderBundleEncoder,
@@ -1325,11 +1331,15 @@ pub mod bundle_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_bundle_pop_debug_group(_bundle: &mut RenderBundleEncoder) {
+    pub extern "C" fn wgpu_render_bundle_pop_debug_group(_bundle: &mut RenderBundleEncoder) {
         span!(_guard, DEBUG, "RenderBundle::pop_debug_group");
         //TODO
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given `label`
+    /// is a valid null-terminated stricng.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_bundle_insert_debug_marker(
         _bundle: &mut RenderBundleEncoder,

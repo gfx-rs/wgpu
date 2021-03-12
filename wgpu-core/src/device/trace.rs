@@ -26,6 +26,7 @@ pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]

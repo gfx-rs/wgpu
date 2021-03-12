@@ -218,7 +218,6 @@ impl<T, I: TypedId> Storage<T, I> {
                 }
                 _ => None,
             })
-            .into_iter()
     }
 }
 
@@ -586,7 +585,7 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
 
         let mut devices = self.devices.data.write();
         for element in devices.map.iter_mut() {
-            if let Element::Occupied(device, _) = element {
+            if let Element::Occupied(ref mut device, _) = *element {
                 device.prepare_to_die();
             }
         }

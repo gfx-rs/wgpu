@@ -735,7 +735,7 @@ impl Interface {
 
         let mut entry_points = FastHashMap::default();
         entry_points.reserve(module.entry_points.len());
-        for (index, entry_point) in (&module.entry_points).into_iter().enumerate() {
+        for (index, entry_point) in (&module.entry_points).iter().enumerate() {
             let info = analysis.get_entry_point(index);
             let mut ep = EntryPoint::default();
             for (var_handle, var) in module.global_variables.iter() {
@@ -837,7 +837,7 @@ impl Interface {
                     .ok_or(BindingError::Missing)
                     .and_then(|set| {
                         let ty = res.derive_binding_type(usage)?;
-                        Ok(match set.entry(res.binding) {
+                        match set.entry(res.binding) {
                             Entry::Occupied(e) if e.get().ty != ty => {
                                 return Err(BindingError::InconsistentlyDerivedType)
                             }
@@ -852,7 +852,8 @@ impl Interface {
                                     count: None,
                                 });
                             }
-                        })
+                        }
+                        Ok(())
                     }),
             };
             if let Err(error) = result {

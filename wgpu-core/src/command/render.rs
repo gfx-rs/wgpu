@@ -804,7 +804,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     inputs: &[],
                     preserves: &[],
                 };
-                let all = entry.key().all().map(|(at, _)| at.clone());
+                let all = entry.key().all().map(|&(ref at, _)| at.clone());
 
                 let pass = unsafe {
                     device
@@ -848,7 +848,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         .raw
                         .create_framebuffer(
                             &render_pass,
-                            e.key().0.all().map(|fat| fat.clone()),
+                            e.key().0.all().cloned(),
                             conv::map_extent(&extent, wgt::TextureDimension::D3),
                         )
                         .or(Err(RenderPassErrorInner::OutOfMemory))?
@@ -874,7 +874,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             .zip(&rp_key.colors)
             .zip(raw_views.colors)
             .map(
-                |((at, (rat, _layout)), image_view)| hal::command::RenderAttachmentInfo {
+                |((at, &(ref rat, _layout)), image_view)| hal::command::RenderAttachmentInfo {
                     image_view,
                     clear_value: match at.channel.load_op {
                         LoadOp::Load => Default::default(),
@@ -1945,7 +1945,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(crate::device::trace::Command::RunRenderPass {
                 base: BasePass::from_ref(base),
-                target_colors: color_attachments.iter().cloned().collect(),
+                target_colors: color_attachments.to_vec(),
                 target_depth_stencil: depth_stencil_attachment.cloned(),
             });
         }
@@ -1990,8 +1990,6 @@ pub mod render_ffi {
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `offset_length` elements.
-    // TODO: There might be other safety issues, such as using the unsafe
-    // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_bind_group(
         pass: &mut RenderPass,
@@ -2089,6 +2087,10 @@ pub mod render_ffi {
             .push(RenderCommand::SetScissor(Rect { x, y, w, h }));
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given pointer is
+    /// valid for `size_bytes` bytes.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_push_constants(
         pass: &mut RenderPass,
@@ -2273,6 +2275,10 @@ pub mod render_ffi {
             });
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given `label`
+    /// is a valid null-terminated stricng.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_push_debug_group(
         pass: &mut RenderPass,
@@ -2295,6 +2301,10 @@ pub mod render_ffi {
         pass.base.commands.push(RenderCommand::PopDebugGroup);
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given `label`
+    /// is a valid null-terminated stricng.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_insert_debug_marker(
         pass: &mut RenderPass,
@@ -2312,7 +2322,7 @@ pub mod render_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_write_timestamp(
+    pub extern "C" fn wgpu_render_pass_write_timestamp(
         pass: &mut RenderPass,
         query_set_id: id::QuerySetId,
         query_index: u32,
@@ -2326,7 +2336,7 @@ pub mod render_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_begin_pipeline_statistics_query(
+    pub extern "C" fn wgpu_render_pass_begin_pipeline_statistics_query(
         pass: &mut RenderPass,
         query_set_id: id::QuerySetId,
         query_index: u32,
@@ -2342,7 +2352,7 @@ pub mod render_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_end_pipeline_statistics_query(pass: &mut RenderPass) {
+    pub extern "C" fn wgpu_render_pass_end_pipeline_statistics_query(pass: &mut RenderPass) {
         span!(_guard, DEBUG, "RenderPass::end_pipeline_statistics_query");
 
         pass.base
@@ -2350,6 +2360,10 @@ pub mod render_ffi {
             .push(RenderCommand::EndPipelineStatisticsQuery);
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given pointer is
+    /// valid for `render_bundle_ids_length` elements.
     #[no_mangle]
     pub unsafe fn wgpu_render_pass_execute_bundles(
         pass: &mut RenderPass,
