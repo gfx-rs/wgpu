@@ -189,13 +189,11 @@ impl<'a> ConstantSolver<'a> {
 
         match inner {
             ConstantInner::Scalar { ref mut value, .. } => {
-                let initial = value.clone();
-
                 *value = match kind {
-                    ScalarKind::Sint => ScalarValue::Sint(inner_cast(initial)),
-                    ScalarKind::Uint => ScalarValue::Uint(inner_cast(initial)),
-                    ScalarKind::Float => ScalarValue::Float(inner_cast(initial)),
-                    ScalarKind::Bool => ScalarValue::Bool(inner_cast::<u64>(initial) != 0),
+                    ScalarKind::Sint => ScalarValue::Sint(inner_cast(*value)),
+                    ScalarKind::Uint => ScalarValue::Uint(inner_cast(*value)),
+                    ScalarKind::Float => ScalarValue::Float(inner_cast(*value)),
+                    ScalarKind::Bool => ScalarValue::Bool(inner_cast::<u64>(*value) != 0),
                 }
             }
             ConstantInner::Composite {
@@ -229,15 +227,15 @@ impl<'a> ConstantSolver<'a> {
 
         match inner {
             ConstantInner::Scalar { ref mut value, .. } => match op {
-                UnaryOperator::Negate => match value {
-                    ScalarValue::Sint(v) => *v = -*v,
-                    ScalarValue::Float(v) => *v = -*v,
+                UnaryOperator::Negate => match *value {
+                    ScalarValue::Sint(ref mut v) => *v = -*v,
+                    ScalarValue::Float(ref mut v) => *v = -*v,
                     _ => return Err(ConstantSolvingError::InvalidUnaryOpArg),
                 },
-                UnaryOperator::Not => match value {
-                    ScalarValue::Sint(v) => *v = !*v,
-                    ScalarValue::Uint(v) => *v = !*v,
-                    ScalarValue::Bool(v) => *v = !*v,
+                UnaryOperator::Not => match *value {
+                    ScalarValue::Sint(ref mut v) => *v = !*v,
+                    ScalarValue::Uint(ref mut v) => *v = !*v,
+                    ScalarValue::Bool(ref mut v) => *v = !*v,
                     _ => return Err(ConstantSolvingError::InvalidUnaryOpArg),
                 },
             },
@@ -274,12 +272,13 @@ impl<'a> ConstantSolver<'a> {
 
         let inner = match (left, right) {
             (
-                ConstantInner::Scalar {
+                &ConstantInner::Scalar {
                     value: left_value,
                     width,
                 },
-                ConstantInner::Scalar {
-                    value: right_value, ..
+                &ConstantInner::Scalar {
+                    value: right_value,
+                    width: _,
                 },
             ) => {
                 let value = match op {
@@ -333,8 +332,8 @@ impl<'a> ConstantSolver<'a> {
                         }
                         (ScalarValue::Bool(a), ScalarValue::Bool(b)) => {
                             ScalarValue::Bool(match op {
-                                BinaryOperator::LogicalAnd => *a && *b,
-                                BinaryOperator::LogicalOr => *a || *b,
+                                BinaryOperator::LogicalAnd => a && b,
+                                BinaryOperator::LogicalOr => a || b,
                                 _ => return Err(ConstantSolvingError::InvalidBinaryOpArgs),
                             })
                         }
@@ -342,10 +341,7 @@ impl<'a> ConstantSolver<'a> {
                     },
                 };
 
-                ConstantInner::Scalar {
-                    value,
-                    width: *width,
-                }
+                ConstantInner::Scalar { value, width }
             }
             _ => return Err(ConstantSolvingError::InvalidBinaryOpArgs),
         };

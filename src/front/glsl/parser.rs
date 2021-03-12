@@ -328,7 +328,7 @@ pomelo! {
         extra.unary_expr(UnaryOperator::Negate, &tgt)
     }
     unary_expression ::= Bang unary_expression(tgt) {
-        if let TypeInner::Scalar { kind: ScalarKind::Bool, .. } = extra.resolve_type(tgt.expression)? {
+        if let TypeInner::Scalar { kind: ScalarKind::Bool, .. } = *extra.resolve_type(tgt.expression)? {
             extra.unary_expr(UnaryOperator::Not, &tgt)
         } else {
             return Err(ErrorKind::SemanticError("Cannot apply '!' to non bool type".into()))
@@ -1070,18 +1070,18 @@ pomelo! {
         if let Some(d) = d {
             // TODO: handle multiple storage qualifiers
             let storage = d.type_qualifiers.iter().find_map(|tq| {
-                if let TypeQualifier::StorageQualifier(sc) = tq { Some(*sc) } else { None }
+                if let TypeQualifier::StorageQualifier(sc) = *tq { Some(sc) } else { None }
             }).unwrap_or(StorageQualifier::StorageClass(StorageClass::Private));
 
             match storage {
                 StorageQualifier::StorageClass(storage_class) => {
                     // TODO: Check that the storage qualifiers allow for the bindings
                     let binding = d.type_qualifiers.iter().find_map(|tq| {
-                        if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
+                        if let TypeQualifier::Binding(ref b) = *tq { Some(b.clone()) } else { None }
                     });
 
                     let interpolation = d.type_qualifiers.iter().find_map(|tq| {
-                        if let TypeQualifier::Interpolation(i) = tq { Some(*i) } else { None }
+                        if let TypeQualifier::Interpolation(interp) = *tq { Some(interp) } else { None }
                     });
 
                     for (id, initializer) in d.ids_initializers {

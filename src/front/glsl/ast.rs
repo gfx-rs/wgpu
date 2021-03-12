@@ -71,12 +71,12 @@ impl<'a> Program<'a> {
         left: &ExpressionRule,
         right: &ExpressionRule,
     ) -> Result<ExpressionRule, ErrorKind> {
-        let left_is_vector = match self.resolve_type(left.expression)? {
+        let left_is_vector = match *self.resolve_type(left.expression)? {
             crate::TypeInner::Vector { .. } => true,
             _ => false,
         };
 
-        let right_is_vector = match self.resolve_type(right.expression)? {
+        let right_is_vector = match *self.resolve_type(right.expression)? {
             crate::TypeInner::Vector { .. } => true,
             _ => false,
         };

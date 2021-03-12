@@ -126,7 +126,7 @@ impl FlowGraph {
                         ControlFlowEdgeType::Forward,
                     );
 
-                    for (_, target_block_id) in targets.iter() {
+                    for &(_, target_block_id) in targets.iter() {
                         let target_node_index = block_to_node[&target_block_id];
 
                         self.flow.add_edge(
@@ -201,7 +201,7 @@ impl FlowGraph {
             let phis = std::mem::replace(&mut self.flow[node_index].phis, Vec::new());
             for phi in phis.iter() {
                 let phi_var = &lookup_expression[&phi.id];
-                for (variable_id, parent_id) in phi.variables.iter() {
+                for &(variable_id, parent_id) in phi.variables.iter() {
                     let variable = &lookup_expression[&variable_id];
                     let parent_node = &mut self.flow[self.block_to_node[&parent_id]];
 

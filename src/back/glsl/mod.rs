@@ -85,7 +85,7 @@ pub enum Version {
 impl Version {
     /// Returns true if self is `Version::Embedded` (i.e. is a es version)
     fn is_es(&self) -> bool {
-        match self {
+        match *self {
             Version::Desktop(_) => false,
             Version::Embedded(_) => true,
         }
@@ -98,9 +98,9 @@ impl Version {
     /// As an invalid version number will never be added to the supported version list
     /// so this also checks for version validity
     fn is_supported(&self) -> bool {
-        match self {
-            Version::Desktop(v) => SUPPORTED_CORE_VERSIONS.contains(v),
-            Version::Embedded(v) => SUPPORTED_ES_VERSIONS.contains(v),
+        match *self {
+            Version::Desktop(v) => SUPPORTED_CORE_VERSIONS.contains(&v),
+            Version::Embedded(v) => SUPPORTED_ES_VERSIONS.contains(&v),
         }
     }
 }
@@ -117,7 +117,7 @@ impl PartialOrd for Version {
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
+        match *self {
             Version::Desktop(v) => write!(f, "{} core", v),
             Version::Embedded(v) => write!(f, "{} es", v),
         }
@@ -1615,7 +1615,7 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::Binary { op, left, right } => {
                 // Holds `Some(function_name)` if the binary operation is
                 // implemented as a function call
-                let function = if let (TypeInner::Vector { .. }, TypeInner::Vector { .. }) = (
+                let function = if let (&TypeInner::Vector { .. }, &TypeInner::Vector { .. }) = (
                     ctx.typifier.get(left, &self.module.types),
                     ctx.typifier.get(right, &self.module.types),
                 ) {

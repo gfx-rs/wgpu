@@ -993,7 +993,7 @@ impl<W: Write> Writer<W> {
                             let (_, global) = module
                                 .global_variables
                                 .iter()
-                                .find(|(_, var)| var.ty == handle)
+                                .find(|&(_, ref var)| var.ty == handle)
                                 .expect("Unable to find a global variable using the image type");
                             let access = if global
                                 .storage_access

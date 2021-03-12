@@ -55,65 +55,6 @@ pub enum Token<'a> {
     End,
 }
 
-impl<'a> Error<'a> {
-    fn as_parse_error(&self, source: &'a str) -> ParseError<'a> {
-        match self {
-            Error::Unexpected((_, unexpected_span), expected) => ParseError {
-                message: format!(
-                    "expected {}, found '{}'",
-                    expected,
-                    &source[unexpected_span.clone()],
-                ),
-                labels: vec![(unexpected_span.clone(), format!("expected {}", expected))],
-                notes: vec![],
-                source,
-            },
-            Error::BadInteger(bad_span) => ParseError {
-                message: format!(
-                    "expected integer literal, found `{}`",
-                    &source[bad_span.clone()],
-                ),
-                labels: vec![(bad_span.clone(), "expected integer".to_string())],
-                notes: vec![],
-                source,
-            },
-            Error::BadFloat(bad_span) => ParseError {
-                message: format!(
-                    "expected floating-point literal, found `{}`",
-                    &source[bad_span.clone()],
-                ),
-                labels: vec![(
-                    bad_span.clone(),
-                    "expected floating-point literal".to_string(),
-                )],
-                notes: vec![],
-                source,
-            },
-            Error::BadScalarWidth(bad_span, width) => ParseError {
-                message: format!("invalid width of `{}` for literal", width,),
-                labels: vec![(bad_span.clone(), "invalid width".to_string())],
-                notes: vec!["valid width is 32".to_string()],
-                source,
-            },
-            Error::BadAccessor(accessor_span) => ParseError {
-                message: format!(
-                    "invalid field accessor `{}`",
-                    &source[accessor_span.clone()],
-                ),
-                labels: vec![(accessor_span.clone(), "invalid accessor".to_string())],
-                notes: vec![],
-                source,
-            },
-            error => ParseError {
-                message: error.to_string(),
-                labels: vec![],
-                notes: vec![],
-                source,
-            },
-        }
-    }
-}
-
 #[derive(Clone, Debug, Error)]
 pub enum Error<'a> {
     #[error("")]
@@ -174,6 +115,65 @@ pub enum Error<'a> {
     UnimplementedBuiltin(crate::BuiltIn),
     #[error("other error")]
     Other,
+}
+
+impl<'a> Error<'a> {
+    fn as_parse_error(&self, source: &'a str) -> ParseError<'a> {
+        match *self {
+            Error::Unexpected((_, ref unexpected_span), expected) => ParseError {
+                message: format!(
+                    "expected {}, found '{}'",
+                    expected,
+                    &source[unexpected_span.clone()],
+                ),
+                labels: vec![(unexpected_span.clone(), format!("expected {}", expected))],
+                notes: vec![],
+                source,
+            },
+            Error::BadInteger(ref bad_span) => ParseError {
+                message: format!(
+                    "expected integer literal, found `{}`",
+                    &source[bad_span.clone()],
+                ),
+                labels: vec![(bad_span.clone(), "expected integer".to_string())],
+                notes: vec![],
+                source,
+            },
+            Error::BadFloat(ref bad_span) => ParseError {
+                message: format!(
+                    "expected floating-point literal, found `{}`",
+                    &source[bad_span.clone()],
+                ),
+                labels: vec![(
+                    bad_span.clone(),
+                    "expected floating-point literal".to_string(),
+                )],
+                notes: vec![],
+                source,
+            },
+            Error::BadScalarWidth(ref bad_span, width) => ParseError {
+                message: format!("invalid width of `{}` for literal", width,),
+                labels: vec![(bad_span.clone(), "invalid width".to_string())],
+                notes: vec!["valid width is 32".to_string()],
+                source,
+            },
+            Error::BadAccessor(ref accessor_span) => ParseError {
+                message: format!(
+                    "invalid field accessor `{}`",
+                    &source[accessor_span.clone()],
+                ),
+                labels: vec![(accessor_span.clone(), "invalid accessor".to_string())],
+                notes: vec![],
+                source,
+            },
+            ref error => ParseError {
+                message: error.to_string(),
+                labels: vec![],
+                notes: vec![],
+                source,
+            },
+        }
+    }
 }
 
 trait StringValueLookup<'a> {
@@ -553,7 +553,7 @@ impl Parser {
         name: &'a str,
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Option<LocalFunctionCall>, Error<'a>> {
-        let fun_handle = match ctx.functions.iter().find(|(_, fun)| match fun.name {
+        let fun_handle = match ctx.functions.iter().find(|&(_, fun)| match fun.name {
             Some(ref string) => string == name,
             None => false,
         }) {
@@ -1033,15 +1033,22 @@ impl Parser {
                     let expr = if components.is_empty() {
                         let last_component_inner = ctx.resolve_type(last_component)?;
                         match (&inner, last_component_inner) {
-                            (crate::TypeInner::Scalar { .. }, crate::TypeInner::Scalar { .. })
-                            | (crate::TypeInner::Matrix { .. }, crate::TypeInner::Matrix { .. })
-                            | (crate::TypeInner::Vector { .. }, crate::TypeInner::Vector { .. }) => {
-                                crate::Expression::As {
-                                    expr: last_component,
-                                    kind: kind.ok_or(Error::BadTypeCast(word))?,
-                                    convert: true,
-                                }
-                            }
+                            (
+                                &crate::TypeInner::Scalar { .. },
+                                &crate::TypeInner::Scalar { .. },
+                            )
+                            | (
+                                &crate::TypeInner::Matrix { .. },
+                                &crate::TypeInner::Matrix { .. },
+                            )
+                            | (
+                                &crate::TypeInner::Vector { .. },
+                                &crate::TypeInner::Vector { .. },
+                            ) => crate::Expression::As {
+                                expr: last_component,
+                                kind: kind.ok_or(Error::BadTypeCast(word))?,
+                                convert: true,
+                            },
                             _ => {
                                 return Err(Error::BadTypeCast(word));
                             }

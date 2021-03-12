@@ -20,12 +20,6 @@ emitted in order to take effect. This happens in one of the following ways:
 
 !*/
 
-#![warn(
-    trivial_casts,
-    trivial_numeric_casts,
-    unused_extern_crates,
-    unused_qualifications
-)]
 #![allow(
     clippy::new_without_default,
     clippy::unneeded_field_pattern,
@@ -33,6 +27,13 @@ emitted in order to take effect. This happens in one of the following ways:
 )]
 // TODO: use `strip_prefix` instead when Rust 1.45 <= MSRV
 #![allow(clippy::manual_strip, clippy::unknown_clippy_lints)]
+#![warn(
+    trivial_casts,
+    trivial_numeric_casts,
+    unused_extern_crates,
+    unused_qualifications,
+    clippy::pattern_type_mismatch
+)]
 #![deny(clippy::panic)]
 
 mod arena;
@@ -418,7 +419,7 @@ pub struct Constant {
 }
 
 /// A literal scalar value, used in constants.
-#[derive(Debug, PartialEq, Clone, PartialOrd)]
+#[derive(Debug, PartialEq, Clone, Copy, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ScalarValue {
@@ -429,7 +430,7 @@ pub enum ScalarValue {
 }
 
 /// Additional information, dependent on the kind of constant.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ConstantInner {

@@ -26,32 +26,34 @@ pub enum ErrorKind {
 
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
+        match *self {
             ErrorKind::EndOfFile => write!(f, "Unexpected end of file"),
             ErrorKind::InvalidInput => write!(f, "InvalidInput"),
-            ErrorKind::InvalidProfile(meta, val) => {
+            ErrorKind::InvalidProfile(ref meta, ref val) => {
                 write!(f, "Invalid profile {} at {:?}", val, meta)
             }
-            ErrorKind::InvalidToken(token) => write!(f, "Invalid Token {:?}", token),
-            ErrorKind::InvalidVersion(meta, val) => {
+            ErrorKind::InvalidToken(ref token) => write!(f, "Invalid Token {:?}", token),
+            ErrorKind::InvalidVersion(ref meta, ref val) => {
                 write!(f, "Invalid version {} at {:?}", val, meta)
             }
-            ErrorKind::IoError(error) => write!(f, "IO Error {}", error),
+            ErrorKind::IoError(ref error) => write!(f, "IO Error {}", error),
             ErrorKind::ParserFail => write!(f, "Parser failed"),
             ErrorKind::ParserStackOverflow => write!(f, "Parser stack overflow"),
-            ErrorKind::NotImplemented(msg) => write!(f, "Not implemented: {}", msg),
-            ErrorKind::UnknownVariable(meta, val) => {
+            ErrorKind::NotImplemented(ref msg) => write!(f, "Not implemented: {}", msg),
+            ErrorKind::UnknownVariable(ref meta, ref val) => {
                 write!(f, "Unknown variable {} at {:?}", val, meta)
             }
-            ErrorKind::UnknownField(meta, val) => write!(f, "Unknown field {} at {:?}", val, meta),
+            ErrorKind::UnknownField(ref meta, ref val) => {
+                write!(f, "Unknown field {} at {:?}", val, meta)
+            }
             #[cfg(feature = "glsl-validate")]
-            ErrorKind::VariableAlreadyDeclared(val) => {
+            ErrorKind::VariableAlreadyDeclared(ref val) => {
                 write!(f, "Variable {} already declared in current scope", val)
             }
             ErrorKind::ExpectedConstant => write!(f, "Expected constant"),
-            ErrorKind::SemanticError(msg) => write!(f, "Semantic error: {}", msg),
-            ErrorKind::PreprocessorError(val) => write!(f, "Preprocessor error: {}", val),
-            ErrorKind::WrongNumberArgs(fun, expected, actual) => {
+            ErrorKind::SemanticError(ref msg) => write!(f, "Semantic error: {}", msg),
+            ErrorKind::PreprocessorError(ref val) => write!(f, "Preprocessor error: {}", val),
+            ErrorKind::WrongNumberArgs(ref fun, expected, actual) => {
                 write!(f, "{} requires {} args, got {}", fun, expected, actual)
             }
         }
