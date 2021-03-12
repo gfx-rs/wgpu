@@ -657,8 +657,6 @@ pub mod compute_ffi {
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `offset_length` elements.
-    // TODO: There might be other safety issues, such as using the unsafe
-    // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_set_bind_group(
         pass: &mut ComputePass,
@@ -691,6 +689,10 @@ pub mod compute_ffi {
             .push(ComputeCommand::SetPipeline(pipeline_id));
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given pointer is
+    /// valid for `size_bytes` bytes.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_set_push_constant(
         pass: &mut ComputePass,
@@ -752,6 +754,10 @@ pub mod compute_ffi {
             .push(ComputeCommand::DispatchIndirect { buffer_id, offset });
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given `label`
+    /// is a valid null-terminated stricng.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_push_debug_group(
         pass: &mut ComputePass,
@@ -774,6 +780,10 @@ pub mod compute_ffi {
         pass.base.commands.push(ComputeCommand::PopDebugGroup);
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given `label`
+    /// is a valid null-terminated stricng.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_insert_debug_marker(
         pass: &mut ComputePass,
@@ -791,7 +801,7 @@ pub mod compute_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_write_timestamp(
+    pub extern "C" fn wgpu_compute_pass_write_timestamp(
         pass: &mut ComputePass,
         query_set_id: id::QuerySetId,
         query_index: u32,
@@ -805,7 +815,7 @@ pub mod compute_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_begin_pipeline_statistics_query(
+    pub extern "C" fn wgpu_compute_pass_begin_pipeline_statistics_query(
         pass: &mut ComputePass,
         query_set_id: id::QuerySetId,
         query_index: u32,
@@ -825,9 +835,7 @@ pub mod compute_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_end_pipeline_statistics_query(
-        pass: &mut ComputePass,
-    ) {
+    pub extern "C" fn wgpu_compute_pass_end_pipeline_statistics_query(pass: &mut ComputePass) {
         span!(_guard, DEBUG, "ComputePass::end_pipeline_statistics_query");
 
         pass.base

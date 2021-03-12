@@ -172,11 +172,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Err(err) => (
                 None,
                 match err {
-                    hal::window::AcquireError::OutOfMemory(_) => Err(DeviceError::OutOfMemory)?,
+                    hal::window::AcquireError::OutOfMemory(_) => {
+                        return Err(DeviceError::OutOfMemory.into())
+                    }
                     hal::window::AcquireError::NotReady { .. } => SwapChainStatus::Timeout,
                     hal::window::AcquireError::OutOfDate(_) => SwapChainStatus::Outdated,
                     hal::window::AcquireError::SurfaceLost(_) => SwapChainStatus::Lost,
-                    hal::window::AcquireError::DeviceLost(_) => Err(DeviceError::Lost)?,
+                    hal::window::AcquireError::DeviceLost(_) => {
+                        return Err(DeviceError::Lost.into())
+                    }
                 },
             ),
         };

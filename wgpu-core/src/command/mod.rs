@@ -175,7 +175,7 @@ impl<C: Clone> BasePass<C> {
 
     pub fn as_ref(&self) -> BasePassRef<C> {
         BasePassRef {
-            label: self.label.as_ref().map(String::as_str),
+            label: self.label.as_deref(),
             commands: &self.commands,
             dynamic_offsets: &self.dynamic_offsets,
             string_data: &self.string_data,

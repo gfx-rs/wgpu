@@ -169,7 +169,7 @@ impl<B: hal::Backend> MemoryBlock<B> {
     ) -> hal::memory::Segment {
         hal::memory::Segment {
             offset: self.0.offset() + inner_offset,
-            size: size.or(Some(self.0.size())),
+            size: size.or_else(|| Some(self.0.size())),
         }
     }
 

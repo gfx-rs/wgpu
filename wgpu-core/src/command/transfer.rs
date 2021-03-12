@@ -313,7 +313,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         span!(_guard, INFO, "CommandEncoder::copy_buffer_to_buffer");
 
         if source == destination {
-            Err(TransferError::SameSourceDestinationBuffer)?
+            return Err(TransferError::SameSourceDestinationBuffer.into());
         }
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -343,7 +343,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(source))?;
         if !src_buffer.usage.contains(BufferUsage::COPY_SRC) {
-            Err(TransferError::MissingCopySrcUsageFlag)?
+            return Err(TransferError::MissingCopySrcUsageFlag.into());
         }
         // expecting only a single barrier
         let src_barrier = src_pending
@@ -360,42 +360,41 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(destination))?;
         if !dst_buffer.usage.contains(BufferUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag(
-                Some(destination),
-                None,
-            ))?
+            return Err(TransferError::MissingCopyDstUsageFlag(Some(destination), None).into());
         }
         let dst_barrier = dst_pending
             .map(|pending| pending.into_hal(dst_buffer))
             .next();
 
         if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            Err(TransferError::UnalignedCopySize(size))?
+            return Err(TransferError::UnalignedCopySize(size).into());
         }
         if source_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            Err(TransferError::UnalignedBufferOffset(source_offset))?
+            return Err(TransferError::UnalignedBufferOffset(source_offset).into());
         }
         if destination_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            Err(TransferError::UnalignedBufferOffset(destination_offset))?
+            return Err(TransferError::UnalignedBufferOffset(destination_offset).into());
         }
 
         let source_end_offset = source_offset + size;
         let destination_end_offset = destination_offset + size;
         if source_end_offset > src_buffer.size {
-            Err(TransferError::BufferOverrun {
+            return Err(TransferError::BufferOverrun {
                 start_offset: source_offset,
                 end_offset: source_end_offset,
                 buffer_size: src_buffer.size,
                 side: CopySide::Source,
-            })?
+            }
+            .into());
         }
         if destination_end_offset > dst_buffer.size {
-            Err(TransferError::BufferOverrun {
+            return Err(TransferError::BufferOverrun {
                 start_offset: destination_offset,
                 end_offset: destination_end_offset,
                 buffer_size: dst_buffer.size,
                 side: CopySide::Destination,
-            })?
+            }
+            .into());
         }
 
         if size == 0 {
@@ -484,7 +483,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(source.buffer))?;
         if !src_buffer.usage.contains(BufferUsage::COPY_SRC) {
-            Err(TransferError::MissingCopySrcUsageFlag)?
+            return Err(TransferError::MissingCopySrcUsageFlag.into());
         }
         let src_barriers = src_pending.map(|pending| pending.into_hal(src_buffer));
 
@@ -503,10 +502,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.usage.contains(TextureUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag(
-                None,
-                Some(destination.texture),
-            ))?
+            return Err(
+                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
+            );
         }
         let dst_barriers = dst_pending.map(|pending| pending.into_hal(dst_texture));
 
@@ -517,10 +515,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             / BITS_PER_BYTE;
         let src_bytes_per_row = source.layout.bytes_per_row;
         if bytes_per_row_alignment % bytes_per_block != 0 {
-            Err(TransferError::UnalignedBytesPerRow)?
+            return Err(TransferError::UnalignedBytesPerRow.into());
         }
         if src_bytes_per_row % bytes_per_row_alignment != 0 {
-            Err(TransferError::UnalignedBytesPerRow)?
+            return Err(TransferError::UnalignedBytesPerRow.into());
         }
         validate_texture_copy_range(
             destination,
@@ -551,9 +549,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (block_width, _) = dst_texture.format.describe().block_dimensions;
         if !conv::is_valid_copy_dst_texture_format(dst_texture.format) {
-            Err(TransferError::CopyToForbiddenTextureFormat(
-                dst_texture.format,
-            ))?
+            return Err(TransferError::CopyToForbiddenTextureFormat(dst_texture.format).into());
         }
 
         // WebGPU uses the physical size of the texture for copies whereas vulkan uses
@@ -640,7 +636,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.usage.contains(TextureUsage::COPY_SRC) {
-            Err(TransferError::MissingCopySrcUsageFlag)?
+            return Err(TransferError::MissingCopySrcUsageFlag.into());
         }
         let src_barriers = src_pending.map(|pending| pending.into_hal(src_texture));
 
@@ -654,10 +650,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(destination.buffer))?;
         if !dst_buffer.usage.contains(BufferUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag(
-                Some(destination.buffer),
-                None,
-            ))?
+            return Err(
+                TransferError::MissingCopyDstUsageFlag(Some(destination.buffer), None).into(),
+            );
         }
         let dst_barrier = dst_barriers.map(|pending| pending.into_hal(dst_buffer));
 
@@ -668,10 +663,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             / BITS_PER_BYTE;
         let dst_bytes_per_row = destination.layout.bytes_per_row;
         if bytes_per_row_alignment % bytes_per_block != 0 {
-            Err(TransferError::UnalignedBytesPerRow)?
+            return Err(TransferError::UnalignedBytesPerRow.into());
         }
         if dst_bytes_per_row % bytes_per_row_alignment != 0 {
-            Err(TransferError::UnalignedBytesPerRow)?
+            return Err(TransferError::UnalignedBytesPerRow.into());
         }
         validate_texture_copy_range(
             source,
@@ -691,9 +686,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (block_width, _) = src_texture.format.describe().block_dimensions;
         if !conv::is_valid_copy_src_texture_format(src_texture.format) {
-            Err(TransferError::CopyFromForbiddenTextureFormat(
-                src_texture.format,
-            ))?
+            return Err(TransferError::CopyFromForbiddenTextureFormat(src_texture.format).into());
         }
 
         cmd_buf.buffer_memory_init_actions.extend(
@@ -769,7 +762,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_layers, dst_selector, dst_offset) =
             texture_copy_view_to_hal(destination, copy_size, &*texture_guard)?;
         if src_layers.aspects != dst_layers.aspects {
-            Err(TransferError::MismatchedAspects)?
+            return Err(TransferError::MismatchedAspects.into());
         }
 
         #[cfg(feature = "trace")]
@@ -801,7 +794,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.usage.contains(TextureUsage::COPY_SRC) {
-            Err(TransferError::MissingCopySrcUsageFlag)?
+            return Err(TransferError::MissingCopySrcUsageFlag.into());
         }
         //TODO: try to avoid this the collection. It's needed because both
         // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
@@ -824,10 +817,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.usage.contains(TextureUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag(
-                None,
-                Some(destination.texture),
-            ))?
+            return Err(
+                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
+            );
         }
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
 

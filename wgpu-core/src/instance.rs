@@ -639,14 +639,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> SurfaceId {
         span!(_guard, INFO, "Instance::instance_create_surface_metal");
 
-        let surface =
-            Surface {
-                #[cfg(feature = "gfx-backend-vulkan")]
-                vulkan: None, //TODO: create_surface_from_layer ?
-                metal: self.instance.metal.as_ref().map(|inst| {
-                    inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
-                }),
-            };
+        let surface = Surface {
+            #[cfg(feature = "gfx-backend-vulkan")]
+            vulkan: None, //TODO: create_surface_from_layer ?
+            metal: self.instance.metal.as_ref().map(|inst| {
+                // we don't want to link to metal-rs for this
+                #[allow(clippy::transmute_ptr_to_ref)]
+                inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
+            }),
+        };
 
         let mut token = Token::root();
         let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
@@ -669,7 +670,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         backends_map! {
             let map = |(instance_field, backend, backend_info, backend_hub)| {
-                if let Some(inst) = instance_field {
+                if let Some(ref inst) = *instance_field {
                     let hub = backend_hub(self);
                     if let Some(id_backend) = inputs.find(backend) {
                         for raw in inst.enumerate_adapters() {
@@ -727,7 +728,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         backends_map! {
             let map = |(instance_backend, id_backend, surface_backend)| {
-                match instance_backend {
+                match *instance_backend {
                     Some(ref inst) if id_backend.is_some() => {
                         let mut adapters = inst.enumerate_adapters();
                         if let Some(surface_backend) = compatible_surface.and_then(surface_backend) {

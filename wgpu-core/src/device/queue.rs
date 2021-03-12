@@ -233,26 +233,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         if !dst.usage.contains(wgt::BufferUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag(
-                Some(buffer_id),
-                None,
-            ))?;
+            return Err(TransferError::MissingCopyDstUsageFlag(Some(buffer_id), None).into());
         }
         dst.life_guard.use_at(device.active_submission_index + 1);
 
         if data_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            Err(TransferError::UnalignedCopySize(data_size))?
+            return Err(TransferError::UnalignedCopySize(data_size).into());
         }
         if buffer_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            Err(TransferError::UnalignedBufferOffset(buffer_offset))?
+            return Err(TransferError::UnalignedBufferOffset(buffer_offset).into());
         }
         if buffer_offset + data_size > dst.size {
-            Err(TransferError::BufferOverrun {
+            return Err(TransferError::BufferOverrun {
                 start_offset: buffer_offset,
                 end_offset: buffer_offset + data_size,
                 buffer_size: dst.size,
                 side: CopySide::Destination,
-            })?
+            }
+            .into());
         }
 
         let region = hal::command::BufferCopy {
@@ -349,7 +347,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let block_height = block_height as u32;
 
         if !conv::is_valid_copy_dst_texture_format(texture_format) {
-            Err(TransferError::CopyToForbiddenTextureFormat(texture_format))?
+            return Err(TransferError::CopyToForbiddenTextureFormat(texture_format).into());
         }
         let width_blocks = size.width / block_width;
         let height_blocks = size.height / block_width;
@@ -384,10 +382,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         if !dst.usage.contains(wgt::TextureUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag(
-                None,
-                Some(destination.texture),
-            ))?
+            return Err(
+                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
+            );
         }
         validate_texture_copy_range(
             destination,
@@ -505,7 +502,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .get(cmb_id)
                     .map_err(|_| QueueSubmitError::InvalidCommandBuffer(cmb_id))?;
 
-                if cmdbuf.buffer_memory_init_actions.len() == 0 {
+                if cmdbuf.buffer_memory_init_actions.is_empty() {
                     continue;
                 }
 
@@ -685,7 +682,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         for id in cmdbuf.trackers.buffers.used() {
                             let buffer = &mut buffer_guard[id];
                             if buffer.raw.is_none() {
-                                return Err(QueueSubmitError::DestroyedBuffer(id.0))?;
+                                return Err(QueueSubmitError::DestroyedBuffer(id.0));
                             }
                             if !buffer.life_guard.use_at(submit_index) {
                                 if let BufferMapState::Active { .. } = buffer.map_state {
@@ -703,7 +700,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         for id in cmdbuf.trackers.textures.used() {
                             let texture = &texture_guard[id];
                             if texture.raw.is_none() {
-                                return Err(QueueSubmitError::DestroyedTexture(id.0))?;
+                                return Err(QueueSubmitError::DestroyedTexture(id.0));
                             }
                             if !texture.life_guard.use_at(submit_index) {
                                 device.temp_suspected.textures.push(id);

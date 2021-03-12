@@ -195,6 +195,10 @@ impl<S: ResourceState + fmt::Debug> fmt::Debug for ResourceTracker<S> {
     }
 }
 
+#[allow(
+    // Explicit lifetimes are easier to reason about here.
+    clippy::needless_lifetimes,
+)]
 impl<S: ResourceState> ResourceTracker<S> {
     /// Create a new empty tracker.
     pub fn new(backend: wgt::Backend) -> Self {
