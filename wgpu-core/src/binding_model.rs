@@ -603,6 +603,7 @@ pub struct BufferBinding {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum BindingResource<'a> {
     Buffer(BufferBinding),
+    BufferArray(Cow<'a, [BufferBinding]>),
     Sampler(SamplerId),
     TextureView(TextureViewId),
     TextureViewArray(Cow<'a, [TextureViewId]>),

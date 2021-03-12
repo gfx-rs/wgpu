@@ -1183,22 +1183,34 @@ impl<B: GfxBackend> Device<B> {
                     ty: wgt::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: _,
-                } => (&mut desc_count.uniform_buffer, None),
+                } => (
+                    &mut desc_count.uniform_buffer,
+                    Some(wgt::Features::BUFFER_BINDING_ARRAY),
+                ),
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Uniform,
                     has_dynamic_offset: true,
                     min_binding_size: _,
-                } => (&mut desc_count.uniform_buffer_dynamic, None),
+                } => (
+                    &mut desc_count.uniform_buffer_dynamic,
+                    Some(wgt::Features::BUFFER_BINDING_ARRAY),
+                ),
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Storage { .. },
                     has_dynamic_offset: false,
                     min_binding_size: _,
-                } => (&mut desc_count.storage_buffer, None),
+                } => (
+                    &mut desc_count.storage_buffer,
+                    Some(wgt::Features::BUFFER_BINDING_ARRAY),
+                ),
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Storage { .. },
                     has_dynamic_offset: true,
                     min_binding_size: _,
-                } => (&mut desc_count.storage_buffer_dynamic, None),
+                } => (
+                    &mut desc_count.storage_buffer_dynamic,
+                    Some(wgt::Features::BUFFER_BINDING_ARRAY),
+                ),
                 Bt::Sampler { .. } => (&mut desc_count.sampler, None),
                 Bt::Texture { .. } => (
                     &mut desc_count.sampled_image,
@@ -1274,6 +1286,120 @@ impl<B: GfxBackend> Device<B> {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn create_buffer_descriptor<'a>(
+        bb: &binding_model::BufferBinding,
+        binding: u32,
+        decl: &wgt::BindGroupLayoutEntry,
+        used_buffer_ranges: &mut Vec<MemoryInitTrackerAction<id::BufferId>>,
+        dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
+        used: &mut TrackerSet,
+        storage: &'a Storage<resource::Buffer<B>, id::BufferId>,
+        limits: &wgt::Limits,
+    ) -> Result<hal::pso::Descriptor<'a, B>, binding_model::CreateBindGroupError> {
+        use crate::binding_model::CreateBindGroupError as Error;
+
+        let (binding_ty, dynamic, min_size) = match decl.ty {
+            wgt::BindingType::Buffer {
+                ty,
+                has_dynamic_offset,
+                min_binding_size,
+            } => (ty, has_dynamic_offset, min_binding_size),
+            _ => {
+                return Err(Error::WrongBindingType {
+                    binding,
+                    actual: decl.ty,
+                    expected: "UniformBuffer, StorageBuffer or ReadonlyStorageBuffer",
+                })
+            }
+        };
+        let (pub_usage, internal_use, range_limit) = match binding_ty {
+            wgt::BufferBindingType::Uniform => (
+                wgt::BufferUsage::UNIFORM,
+                resource::BufferUse::UNIFORM,
+                limits.max_uniform_buffer_binding_size,
+            ),
+            wgt::BufferBindingType::Storage { read_only } => (
+                wgt::BufferUsage::STORAGE,
+                if read_only {
+                    resource::BufferUse::STORAGE_LOAD
+                } else {
+                    resource::BufferUse::STORAGE_STORE
+                },
+                limits.max_storage_buffer_binding_size,
+            ),
+        };
+
+        if bb.offset % wgt::BIND_BUFFER_ALIGNMENT != 0 {
+            return Err(Error::UnalignedBufferOffset(bb.offset));
+        }
+
+        let buffer = used
+            .buffers
+            .use_extend(storage, bb.buffer_id, (), internal_use)
+            .map_err(|_| Error::InvalidBuffer(bb.buffer_id))?;
+        check_buffer_usage(buffer.usage, pub_usage)?;
+        let &(ref buffer_raw, _) = buffer
+            .raw
+            .as_ref()
+            .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
+
+        let (bind_size, bind_end) = match bb.size {
+            Some(size) => {
+                let end = bb.offset + size.get();
+                if end > buffer.size {
+                    return Err(Error::BindingRangeTooLarge {
+                        buffer: bb.buffer_id,
+                        range: bb.offset..end,
+                        size: buffer.size,
+                    });
+                }
+                (size.get(), end)
+            }
+            None => (buffer.size - bb.offset, buffer.size),
+        };
+
+        if bind_size > range_limit as u64 {
+            return Err(Error::BufferRangeTooLarge {
+                binding,
+                given: bind_size as u32,
+                limit: range_limit,
+            });
+        }
+
+        // Record binding info for validating dynamic offsets
+        if dynamic {
+            dynamic_binding_info.push(binding_model::BindGroupDynamicBindingData {
+                maximum_dynamic_offset: buffer.size - bind_end,
+            });
+        }
+
+        if let Some(non_zero) = min_size {
+            let min_size = non_zero.get();
+            if min_size > bind_size {
+                return Err(Error::BindingSizeTooSmall {
+                    buffer: bb.buffer_id,
+                    actual: bind_size,
+                    min: min_size,
+                });
+            }
+        } else if bind_size == 0 {
+            return Err(Error::BindingZeroSize(bb.buffer_id));
+        }
+
+        used_buffer_ranges.push(MemoryInitTrackerAction {
+            id: bb.buffer_id,
+            range: bb.offset..(bb.offset + bind_size),
+            kind: MemoryInitKind::NeedsInitializedMemory,
+        });
+
+        let sub_range = hal::buffer::SubRange {
+            offset: bb.offset,
+            size: Some(bind_size),
+        };
+        Ok(hal::pso::Descriptor::Buffer(buffer_raw, sub_range))
+    }
+
     fn create_bind_group<G: GlobalIdentityHandlerFactory>(
         &self,
         self_id: id::DeviceId,
@@ -1317,105 +1443,52 @@ impl<B: GfxBackend> Device<B> {
                 .ok_or(Error::MissingBindingDeclaration(binding))?;
             let descriptors: SmallVec<[_; 1]> = match entry.resource {
                 Br::Buffer(ref bb) => {
-                    let (binding_ty, dynamic, min_size) = match decl.ty {
-                        wgt::BindingType::Buffer {
-                            ty,
-                            has_dynamic_offset,
-                            min_binding_size,
-                        } => (ty, has_dynamic_offset, min_binding_size),
-                        _ => {
-                            return Err(Error::WrongBindingType {
-                                binding,
-                                actual: decl.ty,
-                                expected: "UniformBuffer, StorageBuffer or ReadonlyStorageBuffer",
-                            })
-                        }
-                    };
-                    let (pub_usage, internal_use, range_limit) = match binding_ty {
-                        wgt::BufferBindingType::Uniform => (
-                            wgt::BufferUsage::UNIFORM,
-                            resource::BufferUse::UNIFORM,
-                            self.limits.max_uniform_buffer_binding_size,
-                        ),
-                        wgt::BufferBindingType::Storage { read_only } => (
-                            wgt::BufferUsage::STORAGE,
-                            if read_only {
-                                resource::BufferUse::STORAGE_LOAD
-                            } else {
-                                resource::BufferUse::STORAGE_STORE
-                            },
-                            self.limits.max_storage_buffer_binding_size,
-                        ),
-                    };
-
-                    if bb.offset % wgt::BIND_BUFFER_ALIGNMENT != 0 {
-                        return Err(Error::UnalignedBufferOffset(bb.offset));
+                    let buffer_desc = Self::create_buffer_descriptor(
+                        &bb,
+                        binding,
+                        &decl,
+                        &mut used_buffer_ranges,
+                        &mut dynamic_binding_info,
+                        &mut used,
+                        &*buffer_guard,
+                        &self.limits,
+                    )?;
+                    SmallVec::from([buffer_desc])
+                }
+                Br::BufferArray(ref bindings_array) => {
+                    let required_feats = wgt::Features::BUFFER_BINDING_ARRAY;
+                    if !self.features.contains(required_feats) {
+                        return Err(Error::MissingFeatures(required_feats));
                     }
 
-                    let buffer = used
-                        .buffers
-                        .use_extend(&*buffer_guard, bb.buffer_id, (), internal_use)
-                        .map_err(|_| Error::InvalidBuffer(bb.buffer_id))?;
-                    check_buffer_usage(buffer.usage, pub_usage)?;
-                    let &(ref buffer_raw, _) = buffer
-                        .raw
-                        .as_ref()
-                        .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
-
-                    let (bind_size, bind_end) = match bb.size {
-                        Some(size) => {
-                            let end = bb.offset + size.get();
-                            if end > buffer.size {
-                                return Err(Error::BindingRangeTooLarge {
-                                    buffer: bb.buffer_id,
-                                    range: bb.offset..end,
-                                    size: buffer.size,
-                                });
-                            }
-                            (size.get(), end)
-                        }
-                        None => (buffer.size - bb.offset, buffer.size),
-                    };
-
-                    if bind_size > range_limit as u64 {
-                        return Err(Error::BufferRangeTooLarge {
-                            binding,
-                            given: bind_size as u32,
-                            limit: range_limit,
-                        });
-                    }
-
-                    // Record binding info for validating dynamic offsets
-                    if dynamic {
-                        dynamic_binding_info.push(binding_model::BindGroupDynamicBindingData {
-                            maximum_dynamic_offset: buffer.size - bind_end,
-                        });
-                    }
-
-                    if let Some(non_zero) = min_size {
-                        let min_size = non_zero.get();
-                        if min_size > bind_size {
-                            return Err(Error::BindingSizeTooSmall {
-                                buffer: bb.buffer_id,
-                                actual: bind_size,
-                                min: min_size,
+                    if let Some(count) = decl.count {
+                        let count = count.get() as usize;
+                        let num_bindings = bindings_array.len();
+                        if count != num_bindings {
+                            return Err(Error::BindingArrayLengthMismatch {
+                                actual: num_bindings,
+                                expected: count,
                             });
                         }
-                    } else if bind_size == 0 {
-                        return Err(Error::BindingZeroSize(bb.buffer_id));
+                    } else {
+                        return Err(Error::SingleBindingExpected);
                     }
 
-                    used_buffer_ranges.push(MemoryInitTrackerAction {
-                        id: bb.buffer_id,
-                        range: bb.offset..(bb.offset + bind_size),
-                        kind: MemoryInitKind::NeedsInitializedMemory,
-                    });
-
-                    let sub_range = hal::buffer::SubRange {
-                        offset: bb.offset,
-                        size: Some(bind_size),
-                    };
-                    SmallVec::from([hal::pso::Descriptor::Buffer(buffer_raw, sub_range)])
+                    bindings_array
+                        .iter()
+                        .map(|bb| {
+                            Self::create_buffer_descriptor(
+                                &bb,
+                                binding,
+                                &decl,
+                                &mut used_buffer_ranges,
+                                &mut dynamic_binding_info,
+                                &mut used,
+                                &*buffer_guard,
+                                &self.limits,
+                            )
+                        })
+                        .collect::<Result<_, _>>()?
                 }
                 Br::Sampler(id) => {
                     match decl.ty {

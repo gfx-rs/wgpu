@@ -435,6 +435,97 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const CONSERVATIVE_RASTERIZATION = 0x0000_0000_8000_0000;
+        /// Allows the user to create arrays of buffers in shaders:
+        ///
+        /// eg. `uniform myBuffer { .... } buffer_array[10]`.
+        ///
+        /// This capability allows them to exist and to be indexed by compile time constant
+        /// values.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const BUFFER_BINDING_ARRAY = 0x0000_0001_0000_0000;
+        /// Allows shaders to index uniform buffer arrays with dynamically uniform values:
+        ///
+        /// eg. `buffer_array[uniform_value]`
+        ///
+        /// This capability means the hardware will also support BUFFER_BINDING_ARRAY.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan's shaderUniformBufferArrayDynamicIndexing feature
+        ///
+        /// This is a native only feature.
+        const UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING = 0x0000_0002_0000_0000;
+        /// Allows shaders to index uniform buffer arrays with dynamically non-uniform values:
+        ///
+        /// eg. `buffer_array[vertex_data]`
+        ///
+        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
+        ///
+        /// `#extension GL_EXT_nonuniform_qualifier : require`
+        ///
+        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
+        ///
+        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        ///
+        /// or as `nonuniformEXT` constructor:
+        ///
+        /// eg. `buffer_array[nonuniformEXT(vertex_data)]`
+        ///
+        /// HLSL does not need any extension.
+        ///
+        /// This capability means the hardware will also support UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING
+        /// and BUFFER_BINDING_ARRAY.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderUniformBufferArrayNonUniformIndexing feature)
+        ///
+        /// This is a native only feature.
+        const UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0004_0000_0000;
+        /// Allows shaders to index storage buffer arrays with dynamically uniform values:
+        ///
+        /// eg. `buffer_array[uniform_value]`
+        ///
+        /// This capability means the hardware will also support BUFFER_BINDING_ARRAY.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan's shaderStorageBufferArrayDynamicIndexing feature
+        ///
+        /// This is a native only feature.
+        const STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING = 0x0000_0008_0000_0000;
+        /// Allows shaders to index storage buffer arrays with dynamically non-uniform values:
+        ///
+        /// eg. `buffer_array[vertex_data]`
+        ///
+        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
+        ///
+        /// `#extension GL_EXT_nonuniform_qualifier : require`
+        ///
+        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
+        ///
+        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        ///
+        /// or as `nonuniformEXT` constructor:
+        ///
+        /// eg. `buffer_array[nonuniformEXT(vertex_data)]`
+        ///
+        /// HLSL does not need any extension.
+        ///
+        /// This capability means the hardware will also support STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING
+        /// and BUFFER_BINDING_ARRAY.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderStorageBufferArrayNonUniformIndexing feature)
+        ///
+        /// This is a native only feature.
+        const STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0010_0000_0000;
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).

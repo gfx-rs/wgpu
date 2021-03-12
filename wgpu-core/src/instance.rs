@@ -197,6 +197,26 @@ impl<B: GfxBackend> Adapter<B> {
             wgt::Features::CONSERVATIVE_RASTERIZATION,
             adapter_features.contains(hal::Features::CONSERVATIVE_RASTERIZATION),
         );
+        features.set(
+            wgt::Features::BUFFER_BINDING_ARRAY,
+            adapter_features.contains(hal::Features::BUFFER_DESCRIPTOR_ARRAY),
+        );
+        features.set(
+            wgt::Features::UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING,
+            adapter_features.contains(hal::Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING),
+        );
+        features.set(
+            wgt::Features::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+            adapter_features.contains(hal::Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING),
+        );
+        features.set(
+            wgt::Features::STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING,
+            adapter_features.contains(hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING),
+        );
+        features.set(
+            wgt::Features::STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+            adapter_features.contains(hal::Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING),
+        );
         #[cfg(not(target_os = "ios"))]
         //TODO: https://github.com/gfx-rs/gfx/issues/3346
         features.set(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER, true);
@@ -513,6 +533,30 @@ impl<B: GfxBackend> Adapter<B> {
             hal::Features::CONSERVATIVE_RASTERIZATION,
             desc.features
                 .contains(wgt::Features::CONSERVATIVE_RASTERIZATION),
+        );
+        enabled_features.set(
+            hal::Features::BUFFER_DESCRIPTOR_ARRAY,
+            desc.features.contains(wgt::Features::BUFFER_BINDING_ARRAY),
+        );
+        enabled_features.set(
+            hal::Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING,
+            desc.features
+                .contains(wgt::Features::UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING),
+        );
+        enabled_features.set(
+            hal::Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING,
+            desc.features
+                .contains(wgt::Features::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
+        );
+        enabled_features.set(
+            hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING,
+            desc.features
+                .contains(wgt::Features::STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING),
+        );
+        enabled_features.set(
+            hal::Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING,
+            desc.features
+                .contains(wgt::Features::STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
         );
 
         let family = self
