@@ -149,3 +149,12 @@ impl crate::Expression {
         }
     }
 }
+
+impl crate::SampleLevel {
+    pub fn implicit_derivatives(&self) -> bool {
+        match *self {
+            Self::Auto | Self::Bias(_) => true,
+            Self::Zero | Self::Exact(_) | Self::Gradient { .. } => false,
+        }
+    }
+}

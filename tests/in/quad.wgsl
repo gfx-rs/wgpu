@@ -23,5 +23,6 @@ fn main() {
   if (color.a == 0.0) {
     discard;
   }
-  o_color = color;
+  const premultiplied: vec4<f32> = color.a * color;
+  o_color = premultiplied;
 }

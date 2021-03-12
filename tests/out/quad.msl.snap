@@ -55,7 +55,7 @@ fragment main2Output main2(
     if ((_expr9.w == const_0f)) {
         metal::discard_fragment();
     }
-    output.o_color = _expr9;
+    output.o_color = (_expr9.w * _expr9);
     return output;
 }
 

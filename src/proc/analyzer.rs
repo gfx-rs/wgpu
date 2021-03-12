@@ -9,6 +9,19 @@ Figures out the following properties:
 use crate::arena::{Arena, Handle};
 use std::ops;
 
+pub type NonUniformResult = Option<Handle<crate::Expression>>;
+
+/// Expressions that require uniform control flow.
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum UniformityRequirement {
+    WorkGroupBarrier,
+    Derivative,
+    ImplicitLevel,
+}
+
 /// Uniform control flow characteristics.
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -26,64 +39,17 @@ pub struct Uniformity {
     /// and process all branches of the control flow.
     ///
     /// Any operations that depend on non-uniform results also produce non-uniform.
-    non_uniform_result: Option<Handle<crate::Expression>>,
-    /// A child expression that requires uniform control flow.
-    ///
-    /// Some operations can only be done within uniform control flow:
-    /// derivatives and auto-level image sampling in fragment shaders,
-    /// and group barriers in compute shaders.
-    require_uniform: Option<Handle<crate::Expression>>,
-}
-
-//TODO: instead of doing cur | next, we could reverse this everywhere
-// and do `next | cur`, which would allow us to trace the cause of
-// uniformity requirement/disruption across the expression chain.
-
-impl ops::BitOr for Uniformity {
-    type Output = Self;
-    fn bitor(self, other: Self) -> Self {
-        Uniformity {
-            non_uniform_result: self.non_uniform_result.or(other.non_uniform_result),
-            require_uniform: self.require_uniform.or(other.require_uniform),
-        }
-    }
-}
-
-impl ops::BitOrAssign for Uniformity {
-    fn bitor_assign(&mut self, other: Self) {
-        *self = self.clone() | other;
-    }
+    pub non_uniform_result: NonUniformResult,
+    /// If this expression requires uniform control flow, store the reason here.
+    pub requirement: Option<UniformityRequirement>,
 }
 
 impl Uniformity {
+    //TODO: is this helper really useful?
     fn non_uniform_result(expr: Handle<crate::Expression>) -> Self {
         Uniformity {
             non_uniform_result: Some(expr),
-            require_uniform: None,
-        }
-    }
-
-    fn require_uniform(expr: Handle<crate::Expression>) -> Self {
-        Uniformity {
-            non_uniform_result: None,
-            require_uniform: Some(expr),
-        }
-    }
-
-    fn disruptor(&self) -> Option<UniformityDisruptor> {
-        self.non_uniform_result.map(UniformityDisruptor::Expression)
-    }
-
-    /// When considering the uniformity at the functional level,
-    /// we don't care about all of the expression results.
-    /// We only care about the `return` expressions.
-    fn to_function(&self) -> FunctionUniformity {
-        FunctionUniformity {
-            result: Uniformity {
-                non_uniform_result: None,
-                require_uniform: self.require_uniform,
-            },
-            exit: ExitFlags::empty(),
+            requirement: None,
         }
     }
 }
@@ -111,7 +77,13 @@ impl ops::BitOr for FunctionUniformity {
     type Output = Self;
     fn bitor(self, other: Self) -> Self {
         FunctionUniformity {
-            result: self.result | other.result,
+            result: Uniformity {
+                non_uniform_result: self
+                    .result
+                    .non_uniform_result
+                    .or(other.result.non_uniform_result),
+                requirement: self.result.requirement.or(other.result.requirement),
+            },
             exit: self.exit | other.exit,
         }
     }
@@ -237,8 +209,14 @@ pub enum UniformityDisruptor {
 pub enum AnalysisError {
     #[error("Expression {0:?} is not a global variable!")]
     ExpectedGlobalVariable(crate::Expression),
-    #[error("Required uniformity of control flow for {0:?} is not fulfilled because of {1:?}")]
-    NonUniformControlFlow(Handle<crate::Expression>, UniformityDisruptor),
+    #[error(
+        "Required uniformity of control flow for {0:?} in {1:?} is not fulfilled because of {2:?}"
+    )]
+    NonUniformControlFlow(
+        UniformityRequirement,
+        Handle<crate::Expression>,
+        UniformityDisruptor,
+    ),
 }
 
 impl FunctionInfo {
@@ -248,19 +226,19 @@ impl FunctionInfo {
         &mut self,
         handle: Handle<crate::Expression>,
         global_use: GlobalUse,
-    ) -> Uniformity {
+    ) -> NonUniformResult {
         let info = &mut self.expressions[handle.index()];
         info.ref_count += 1;
         // mark the used global as read
         if let Some(global) = info.assignable_global {
             self.global_uses[global.index()] |= global_use;
         }
-        info.uniformity.clone()
+        info.uniformity.non_uniform_result
     }
 
     /// Adds a value-type reference to an expression.
     #[must_use]
-    fn add_ref(&mut self, handle: Handle<crate::Expression>) -> Uniformity {
+    fn add_ref(&mut self, handle: Handle<crate::Expression>) -> NonUniformResult {
         self.add_ref_impl(handle, GlobalUse::READ)
     }
 
@@ -272,7 +250,7 @@ impl FunctionInfo {
         &mut self,
         handle: Handle<crate::Expression>,
         assignable_global: &mut Option<Handle<crate::GlobalVariable>>,
-    ) -> Uniformity {
+    ) -> NonUniformResult {
         let info = &mut self.expressions[handle.index()];
         info.ref_count += 1;
         // propagate the assignable global up the chain, till it either hits
@@ -282,7 +260,7 @@ impl FunctionInfo {
                 unreachable!()
             }
         }
-        info.uniformity.clone()
+        info.uniformity.non_uniform_result
     }
 
     /// Inherit information from a called function.
@@ -305,6 +283,7 @@ impl FunctionInfo {
 
     /// Computes the expression info and stores it in `self.expressions`.
     /// Also, bumps the reference counts on dependent expressions.
+    #[allow(clippy::or_fun_call)]
     fn process_expression(
         &mut self,
         handle: Handle<crate::Expression>,
@@ -316,19 +295,30 @@ impl FunctionInfo {
 
         let mut assignable_global = None;
         let uniformity = match expression_arena[handle] {
-            E::Access { base, index } => {
-                self.add_assignable_ref(base, &mut assignable_global) | self.add_ref(index)
-            }
-            E::AccessIndex { base, .. } => self.add_assignable_ref(base, &mut assignable_global),
+            E::Access { base, index } => Uniformity {
+                non_uniform_result: self
+                    .add_assignable_ref(base, &mut assignable_global)
+                    .or(self.add_ref(index)),
+                requirement: None,
+            },
+            E::AccessIndex { base, .. } => Uniformity {
+                non_uniform_result: self.add_assignable_ref(base, &mut assignable_global),
+                requirement: None,
+            },
+            // always uniform
             E::Constant(_) => Uniformity::default(),
             E::Compose { ref components, .. } => {
-                let mut accum = Uniformity::default();
-                for &comp in components {
-                    accum |= self.add_ref(comp);
+                let non_uniform_result = components
+                    .iter()
+                    .fold(None, |nur, &comp| nur.or(self.add_ref(comp)));
+                Uniformity {
+                    non_uniform_result,
+                    requirement: None,
                 }
-                accum
             }
-            E::FunctionArgument(_) => Uniformity::non_uniform_result(handle), //TODO?
+            // same as `LocalVariable` - generally non-uniform
+            E::FunctionArgument(_) => Uniformity::non_uniform_result(handle),
+            // depends on the builtin and storage class
             E::GlobalVariable(gh) => {
                 assignable_global = Some(gh);
                 let var = &global_var_arena[gh];
@@ -355,16 +345,16 @@ impl FunctionInfo {
                         }
                     }
                 };
-                if uniform {
-                    Uniformity::default()
-                } else {
-                    Uniformity::non_uniform_result(handle)
+                Uniformity {
+                    non_uniform_result: if uniform { None } else { Some(handle) },
+                    requirement: None,
                 }
             }
-            E::LocalVariable(_) => {
-                Uniformity::non_uniform_result(handle) //TODO?
-            }
-            E::Load { pointer } => self.add_ref(pointer),
+            E::LocalVariable(_) => Uniformity::non_uniform_result(handle),
+            E::Load { pointer } => Uniformity {
+                non_uniform_result: self.add_ref(pointer),
+                requirement: None,
+            },
             E::ImageSample {
                 image,
                 sampler,
@@ -388,27 +378,28 @@ impl FunctionInfo {
                         }
                     },
                 });
-                let array_flags = match array_index {
-                    Some(h) => self.add_ref(h),
-                    None => Uniformity::default(),
-                };
-                let level_flags = match level {
-                    // implicit derivatives for LOD require uniform
-                    Sl::Auto => Uniformity::require_uniform(handle),
-                    Sl::Zero => Uniformity::default(),
+                // "nur" == "Non-Uniform Result"
+                let array_nur = array_index.and_then(|h| self.add_ref(h));
+                let level_nur = match level {
+                    Sl::Auto | Sl::Zero => None,
                     Sl::Exact(h) | Sl::Bias(h) => self.add_ref(h),
-                    Sl::Gradient { x, y } => self.add_ref(x) | self.add_ref(y),
+                    Sl::Gradient { x, y } => self.add_ref(x).or(self.add_ref(y)),
                 };
-                let dref_flags = match depth_ref {
-                    Some(h) => self.add_ref(h),
-                    None => Uniformity::default(),
-                };
-                self.add_ref(image)
-                    | self.add_ref(sampler)
-                    | self.add_ref(coordinate)
-                    | array_flags
-                    | level_flags
-                    | dref_flags
+                let dref_nur = depth_ref.and_then(|h| self.add_ref(h));
+                Uniformity {
+                    non_uniform_result: self
+                        .add_ref(image)
+                        .or(self.add_ref(sampler))
+                        .or(self.add_ref(coordinate))
+                        .or(array_nur)
+                        .or(level_nur)
+                        .or(dref_nur),
+                    requirement: if level.implicit_derivatives() {
+                        Some(UniformityRequirement::ImplicitLevel)
+                    } else {
+                        None
+                    },
+                }
             }
             E::ImageLoad {
                 image,
@@ -416,49 +407,75 @@ impl FunctionInfo {
                 array_index,
                 index,
             } => {
-                let array_flags = match array_index {
-                    Some(h) => self.add_ref(h),
-                    None => Uniformity::default(),
-                };
-                let index_flags = match index {
-                    Some(h) => self.add_ref(h),
-                    None => Uniformity::default(),
-                };
-                self.add_ref(image) | self.add_ref(coordinate) | array_flags | index_flags
+                let array_nur = array_index.and_then(|h| self.add_ref(h));
+                let index_nur = index.and_then(|h| self.add_ref(h));
+                Uniformity {
+                    non_uniform_result: self
+                        .add_ref(image)
+                        .or(self.add_ref(coordinate))
+                        .or(array_nur)
+                        .or(index_nur),
+                    requirement: None,
+                }
             }
             E::ImageQuery { image, query } => {
-                let query_flags = match query {
+                let query_nur = match query {
                     crate::ImageQuery::Size { level: Some(h) } => self.add_ref(h),
-                    _ => Uniformity::default(),
+                    _ => None,
                 };
-                self.add_ref_impl(image, GlobalUse::QUERY) | query_flags
+                Uniformity {
+                    non_uniform_result: self.add_ref_impl(image, GlobalUse::QUERY).or(query_nur),
+                    requirement: None,
+                }
             }
-            E::Unary { expr, .. } => self.add_ref(expr),
-            E::Binary { left, right, .. } => self.add_ref(left) | self.add_ref(right),
+            E::Unary { expr, .. } => Uniformity {
+                non_uniform_result: self.add_ref(expr),
+                requirement: None,
+            },
+            E::Binary { left, right, .. } => Uniformity {
+                non_uniform_result: self.add_ref(left).or(self.add_ref(right)),
+                requirement: None,
+            },
             E::Select {
                 condition,
                 accept,
                 reject,
-            } => self.add_ref(condition) | self.add_ref(accept) | self.add_ref(reject),
+            } => Uniformity {
+                non_uniform_result: self
+                    .add_ref(condition)
+                    .or(self.add_ref(accept))
+                    .or(self.add_ref(reject)),
+                requirement: None,
+            },
             // explicit derivatives require uniform
-            E::Derivative { expr, .. } => Uniformity::require_uniform(handle) | self.add_ref(expr),
-            E::Relational { argument, .. } => self.add_ref(argument),
+            E::Derivative { expr, .. } => Uniformity {
+                //Note: taking a derivative of a uniform doesn't make it non-uniform
+                non_uniform_result: self.add_ref(expr),
+                requirement: Some(UniformityRequirement::Derivative),
+            },
+            E::Relational { argument, .. } => Uniformity {
+                non_uniform_result: self.add_ref(argument),
+                requirement: None,
+            },
             E::Math {
                 arg, arg1, arg2, ..
             } => {
-                let arg1_flags = match arg1 {
-                    Some(h) => self.add_ref(h),
-                    None => Uniformity::default(),
-                };
-                let arg2_flags = match arg2 {
-                    Some(h) => self.add_ref(h),
-                    None => Uniformity::default(),
-                };
-                self.add_ref(arg) | arg1_flags | arg2_flags
+                let arg1_nur = arg1.and_then(|h| self.add_ref(h));
+                let arg2_nur = arg2.and_then(|h| self.add_ref(h));
+                Uniformity {
+                    non_uniform_result: self.add_ref(arg).or(arg1_nur).or(arg2_nur),
+                    requirement: None,
+                }
             }
-            E::As { expr, .. } => self.add_ref(expr),
+            E::As { expr, .. } => Uniformity {
+                non_uniform_result: self.add_ref(expr),
+                requirement: None,
+            },
             E::Call(function) => self.process_call(&other_functions[function.index()]).result,
-            E::ArrayLength(expr) => self.add_ref_impl(expr, GlobalUse::QUERY),
+            E::ArrayLength(expr) => Uniformity {
+                non_uniform_result: self.add_ref_impl(expr, GlobalUse::QUERY),
+                requirement: None,
+            },
         };
 
         self.expressions[handle.index()] = ExpressionInfo {
@@ -491,15 +508,27 @@ impl FunctionInfo {
         for statement in statements {
             let uniformity = match *statement {
                 S::Emit(ref range) => {
+                    let mut requirement = None;
                     for expr in range.clone() {
-                        if let (Some(expr), Some(cause)) = (
-                            self.expressions[expr.index()].uniformity.require_uniform,
-                            disruptor,
-                        ) {
-                            return Err(AnalysisError::NonUniformControlFlow(expr, cause));
+                        if let Some(req) = self.expressions[expr.index()].uniformity.requirement {
+                            requirement = match disruptor {
+                                Some(cause) => {
+                                    return Err(AnalysisError::NonUniformControlFlow(
+                                        req, expr, cause,
+                                    ))
+                                }
+                                // remember the requirement of any emitted expressions
+                                None => Some(req),
+                            };
                         }
                     }
-                    FunctionUniformity::new()
+                    FunctionUniformity {
+                        result: Uniformity {
+                            non_uniform_result: None,
+                            requirement,
+                        },
+                        exit: ExitFlags::empty(),
+                    }
                 }
                 S::Break | S::Continue => FunctionUniformity::new(),
                 S::Kill => FunctionUniformity {
@@ -512,21 +541,23 @@ impl FunctionInfo {
                     ref accept,
                     ref reject,
                 } => {
-                    let condition_uniformity = self.add_ref(condition);
-                    let branch_disruptor = disruptor.or(condition_uniformity.disruptor());
+                    let condition_nur = self.add_ref(condition);
+                    let branch_disruptor =
+                        disruptor.or(condition_nur.map(UniformityDisruptor::Expression));
                     let accept_uniformity =
                         self.process_block(accept, other_functions, branch_disruptor)?;
                     let reject_uniformity =
                         self.process_block(reject, other_functions, branch_disruptor)?;
-                    condition_uniformity.to_function() | accept_uniformity | reject_uniformity
+                    accept_uniformity | reject_uniformity
                 }
                 S::Switch {
                     selector,
                     ref cases,
                     ref default,
                 } => {
-                    let selector_uniformity = self.add_ref(selector);
-                    let branch_disruptor = disruptor.or(selector_uniformity.disruptor());
+                    let selector_nur = self.add_ref(selector);
+                    let branch_disruptor =
+                        disruptor.or(selector_nur.map(UniformityDisruptor::Expression));
                     let mut uniformity = FunctionUniformity::new();
                     let mut case_disruptor = branch_disruptor;
                     for case in cases.iter() {
@@ -555,18 +586,20 @@ impl FunctionInfo {
                     body_uniformity | continuing_uniformity
                 }
                 S::Return { value } => FunctionUniformity {
-                    result: if let Some(expr) = value {
-                        self.add_ref(expr)
-                    } else {
-                        Uniformity::default()
+                    result: Uniformity {
+                        non_uniform_result: value.and_then(|expr| self.add_ref(expr)),
+                        requirement: None,
                     },
                     //TODO: if we are in the uniform control flow, should this still be an exit flag?
                     exit: ExitFlags::MAY_RETURN,
                 },
+                // Here and below, the used expressions are already emitted,
+                // and their results do not affect the function return value,
+                // so we can ignore their non-uniformity.
                 S::Store { pointer, value } => {
-                    let uniformity =
-                        self.add_ref_impl(pointer, GlobalUse::WRITE) | self.add_ref(value);
-                    uniformity.to_function()
+                    let _ = self.add_ref_impl(pointer, GlobalUse::WRITE);
+                    let _ = self.add_ref(value);
+                    FunctionUniformity::new()
                 }
                 S::ImageStore {
                     image,
@@ -574,28 +607,24 @@ impl FunctionInfo {
                     array_index,
                     value,
                 } => {
-                    let array_uniformity = match array_index {
-                        Some(expr) => self.add_ref(expr),
-                        None => Uniformity::default(),
-                    };
-                    let uniformity = array_uniformity
-                        | self.add_ref_impl(image, GlobalUse::WRITE)
-                        | self.add_ref(coordinate)
-                        | self.add_ref(value);
-                    uniformity.to_function()
+                    let _ = self.add_ref_impl(image, GlobalUse::WRITE);
+                    if let Some(expr) = array_index {
+                        let _ = self.add_ref(expr);
+                    }
+                    let _ = self.add_ref(coordinate);
+                    let _ = self.add_ref(value);
+                    FunctionUniformity::new()
                 }
                 S::Call {
                     function,
                     ref arguments,
                     result: _,
                 } => {
-                    let info = &other_functions[function.index()];
-                    let call_uniformity = self.process_call(info);
-                    let mut uniformity = call_uniformity.result.clone();
                     for &argument in arguments {
-                        uniformity |= self.add_ref(argument);
+                        let _ = self.add_ref(argument);
                     }
-                    call_uniformity | uniformity.to_function()
+                    let info = &other_functions[function.index()];
+                    self.process_call(info)
                 }
             };
 
@@ -768,7 +797,10 @@ fn uniform_control_flow() {
     assert_eq!(
         info.process_block(&[stmt_emit1, stmt_if_uniform], &[], None),
         Ok(FunctionUniformity {
-            result: Uniformity::require_uniform(derivative_expr),
+            result: Uniformity {
+                non_uniform_result: None,
+                requirement: Some(UniformityRequirement::Derivative),
+            },
             exit: ExitFlags::empty(),
         }),
     );
@@ -790,6 +822,7 @@ fn uniform_control_flow() {
     assert_eq!(
         info.process_block(&[stmt_emit2, stmt_if_non_uniform], &[], None),
         Err(AnalysisError::NonUniformControlFlow(
+            UniformityRequirement::Derivative,
             derivative_expr,
             UniformityDisruptor::Expression(non_uniform_global_expr)
         )),
