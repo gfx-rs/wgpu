@@ -1267,11 +1267,11 @@ impl crate::Context for Context {
             .iter()
             .map(|binding| {
                 let mapped_resource = match binding.resource {
-                    crate::BindingResource::Buffer {
+                    crate::BindingResource::Buffer(crate::BufferBinding {
                         ref buffer,
                         offset,
                         size,
-                    } => {
+                    }) => {
                         let mut mapped_buffer_binding =
                             web_sys::GpuBufferBinding::new(&buffer.id.0);
                         mapped_buffer_binding.offset(offset as f64);
@@ -1279,6 +1279,9 @@ impl crate::Context for Context {
                             mapped_buffer_binding.size(s.get() as f64);
                         }
                         JsValue::from(mapped_buffer_binding.clone())
+                    }
+                    crate::BindingResource::BufferArray(..) => {
+                        panic!("Web backend does not support arrays of buffers")
                     }
                     crate::BindingResource::Sampler(ref sampler) => {
                         JsValue::from(sampler.id.0.clone())

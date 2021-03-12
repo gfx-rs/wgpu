@@ -19,8 +19,6 @@ all-features = true
 default = []
 trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
-# Make Vulkan backend available on platforms where it is by default not, e.g. macOS
-vulkan-portability = ["wgc/gfx-backend-vulkan"]
 webgl = ["wgc"]
 # Enable SPIRV-Cross
 cross = ["wgc/cross"]
@@ -28,20 +26,20 @@ cross = ["wgc/cross"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "13015c8621daade1decb7e1083b7e0f73eeab6c7"
+rev = "e5ddb94be0221b0f53a8f43adfb15458daebfd7c"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "13015c8621daade1decb7e1083b7e0f73eeab6c7"
+rev = "e5ddb94be0221b0f53a8f43adfb15458daebfd7c"
 features = ["raw-window-handle"]
 optional = true
 
 [dependencies.wgt]
 package = "wgpu-types"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "13015c8621daade1decb7e1083b7e0f73eeab6c7"
+rev = "e5ddb94be0221b0f53a8f43adfb15458daebfd7c"
 
 [dependencies]
 arrayvec = "0.5"
