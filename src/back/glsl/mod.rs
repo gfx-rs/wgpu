@@ -539,17 +539,17 @@ impl<'a, W: Write> Writer<'a, W> {
         self.collect_reflection_info()
     }
 
-    /// Helper method used to write non image/sampler types
+    /// Helper method used to write value types
     ///
     /// # Notes
     /// Adds no trailing or leading whitespace
     ///
     /// # Panics
-    /// - If type is either a image or sampler
+    /// - If type is either a image, a sampler, a pointer, or a struct
     /// - If it's an Array with a [`ArraySize::Constant`](crate::ArraySize::Constant) with a
     /// constant that isn't [`Uint`](crate::ConstantInner::Uint)
-    fn write_type(&mut self, ty: Handle<Type>) -> BackendResult {
-        match self.module.types[ty].inner {
+    fn write_value_type(&mut self, inner: &TypeInner) -> BackendResult {
+        match *inner {
             // Scalars are simple we just get the full name from `glsl_scalar`
             TypeInner::Scalar { kind, width }
             | TypeInner::ValuePointer {
@@ -587,8 +587,6 @@ impl<'a, W: Write> Writer<'a, W> {
                 columns as u8,
                 rows as u8
             )?,
-            // glsl has no pointer types so just write types as normal and loads are skipped
-            TypeInner::Pointer { base, .. } => self.write_type(base)?,
             // GLSL arrays are written as `type name[size]`
             // Current code is written arrays only as `[size]`
             // Base `type` and `name` should be written outside
@@ -613,24 +611,45 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 write!(self.out, "]")?
             }
+            // Panic if either Image, Sampler, Pointer, or a Struct is being written
+            //
+            // Write all variants instead of `_` so that if new variants are added a
+            // no exhaustiveness error is thrown
+            TypeInner::Pointer { .. }
+            | TypeInner::Struct { .. }
+            | TypeInner::Image { .. }
+            | TypeInner::Sampler { .. } => unreachable!(),
+        }
+
+        Ok(())
+    }
+
+    /// Helper method used to write non image/sampler types
+    ///
+    /// # Notes
+    /// Adds no trailing or leading whitespace
+    ///
+    /// # Panics
+    /// - If type is either a image or sampler
+    /// - If it's an Array with a [`ArraySize::Constant`](crate::ArraySize::Constant) with a
+    /// constant that isn't [`Uint`](crate::ConstantInner::Uint)
+    fn write_type(&mut self, ty: Handle<Type>) -> BackendResult {
+        match self.module.types[ty].inner {
+            // glsl has no pointer types so just write types as normal and loads are skipped
+            TypeInner::Pointer { base, .. } => self.write_type(base),
             TypeInner::Struct {
                 block: true,
                 ref members,
-            } => self.write_struct(true, ty, members)?,
+            } => self.write_struct(true, ty, members),
             // glsl structs are written as just the struct name if it isn't a block
             TypeInner::Struct { block: false, .. } => {
                 // Get the struct name
                 let name = &self.names[&NameKey::Type(ty)];
-                write!(self.out, "{}", name)?
+                write!(self.out, "{}", name)?;
+                Ok(())
             }
-            // Panic if either Image or Sampler is being written
-            //
-            // Write all variants instead of `_` so that if new variants are added a
-            // no exhaustiveness error is thrown
-            TypeInner::Image { .. } | TypeInner::Sampler { .. } => unreachable!(),
+            ref other => self.write_value_type(other),
         }
-
-        Ok(())
     }
 
     /// Helper method to write a image type
@@ -793,6 +812,8 @@ impl<'a, W: Write> Writer<'a, W> {
             expressions: &func.expressions,
             typifier: &typifier,
         };
+
+        self.cached_expressions.clear();
 
         // Write the function header
         //
@@ -1041,11 +1062,11 @@ impl<'a, W: Write> Writer<'a, W> {
             // This is where we can generate intermediate constants for some expression types.
             Statement::Emit(ref range) => {
                 for handle in range.clone() {
-                    if let Ok(ty_handle) = ctx.typifier.get_handle(handle) {
-                        let min_ref_count = ctx.expressions[handle].bake_ref_count();
-                        if min_ref_count <= ctx.info[handle].ref_count {
-                            write!(self.out, "{}", INDENT.repeat(indent))?;
-                            match self.module.types[ty_handle].inner {
+                    let min_ref_count = ctx.expressions[handle].bake_ref_count();
+                    if min_ref_count <= ctx.info[handle].ref_count {
+                        write!(self.out, "{}", INDENT.repeat(indent))?;
+                        match ctx.typifier.get_handle(handle) {
+                            Ok(ty_handle) => match self.module.types[ty_handle].inner {
                                 TypeInner::Struct { .. } => {
                                     let ty_name = &self.names[&NameKey::Type(ty_handle)];
                                     write!(self.out, "{}", ty_name)?;
@@ -1053,13 +1074,16 @@ impl<'a, W: Write> Writer<'a, W> {
                                 _ => {
                                     self.write_type(ty_handle)?;
                                 }
-                            };
-                            let name = format!("_expr{}", handle.index());
-                            write!(self.out, " {} = ", name)?;
-                            self.write_expr(handle, ctx)?;
-                            writeln!(self.out, ";")?;
-                            self.cached_expressions.insert(handle, name);
+                            },
+                            Err(inner) => {
+                                self.write_value_type(inner)?;
+                            }
                         }
+                        let name = format!("_expr{}", handle.index());
+                        write!(self.out, " {} = ", name)?;
+                        self.write_expr(handle, ctx)?;
+                        writeln!(self.out, ";")?;
+                        self.cached_expressions.insert(handle, name);
                     }
                 }
             }
