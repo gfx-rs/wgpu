@@ -690,12 +690,67 @@ pub fn check_texture_format(format: wgt::TextureFormat, output: &NumericType) ->
 pub type StageIo = FastHashMap<wgt::ShaderLocation, NumericType>;
 
 impl Interface {
+    fn populate(
+        list: &mut Vec<Varying>,
+        binding: Option<&naga::Binding>,
+        ty: naga::Handle<naga::Type>,
+        arena: &naga::Arena<naga::Type>,
+    ) {
+        let numeric_ty = match arena[ty].inner {
+            naga::TypeInner::Scalar { kind, width } => NumericType {
+                dim: NumericDimension::Scalar,
+                kind,
+                width,
+            },
+            naga::TypeInner::Vector { size, kind, width } => NumericType {
+                dim: NumericDimension::Vector(size),
+                kind,
+                width,
+            },
+            naga::TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => NumericType {
+                dim: NumericDimension::Matrix(columns, rows),
+                kind: naga::ScalarKind::Float,
+                width,
+            },
+            naga::TypeInner::Struct {
+                block: _,
+                ref members,
+            } => {
+                for member in members {
+                    Self::populate(list, member.binding.as_ref(), member.ty, arena);
+                }
+                return;
+            }
+            ref other => {
+                tracing::error!("Unexpected varying type: {:?}", other);
+                return;
+            }
+        };
+
+        let varying = match binding {
+            Some(&naga::Binding::Location(location, _)) => Varying::Local {
+                location,
+                ty: numeric_ty,
+            },
+            Some(&naga::Binding::BuiltIn(built_in)) => Varying::BuiltIn(built_in),
+            None => {
+                tracing::error!("Missing binding for a varying");
+                return;
+            }
+        };
+        list.push(varying);
+    }
+
     pub fn new(module: &naga::Module, analysis: &naga::proc::analyzer::Analysis) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
             let (group, binding) = match var.binding {
-                Some(naga::Binding::Resource { group, binding }) => (group, binding),
+                Some(ref br) => (br.group, br.binding),
                 _ => continue,
             };
             let ty = match module.types[var.ty].inner {
@@ -722,7 +777,10 @@ impl Interface {
                     class,
                 },
                 naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
-                ref other => panic!("Unexpected resource type: {:?}", other),
+                ref other => {
+                    tracing::error!("Unexpected resource type: {:?}", other);
+                    continue;
+                }
             };
             let handle = resources.append(Resource {
                 group,
@@ -738,54 +796,28 @@ impl Interface {
         for (index, entry_point) in (&module.entry_points).iter().enumerate() {
             let info = analysis.get_entry_point(index);
             let mut ep = EntryPoint::default();
+            for arg in entry_point.function.arguments.iter() {
+                Self::populate(&mut ep.inputs, arg.binding.as_ref(), arg.ty, &module.types);
+            }
+            if let Some(ref result) = entry_point.function.result {
+                Self::populate(
+                    &mut ep.outputs,
+                    result.binding.as_ref(),
+                    result.ty,
+                    &module.types,
+                );
+            }
+
             for (var_handle, var) in module.global_variables.iter() {
                 let usage = info[var_handle];
                 if usage.is_empty() {
                     continue;
                 }
-
-                let varying = match var.binding {
-                    Some(naga::Binding::Resource { .. }) => {
-                        ep.resources.push((resource_mapping[&var_handle], usage));
-                        None
-                    }
-                    Some(naga::Binding::Location(location)) => {
-                        let ty = match module.types[var.ty].inner {
-                            naga::TypeInner::Scalar { kind, width } => NumericType {
-                                dim: NumericDimension::Scalar,
-                                kind,
-                                width,
-                            },
-                            naga::TypeInner::Vector { size, kind, width } => NumericType {
-                                dim: NumericDimension::Vector(size),
-                                kind,
-                                width,
-                            },
-                            naga::TypeInner::Matrix {
-                                columns,
-                                rows,
-                                width,
-                            } => NumericType {
-                                dim: NumericDimension::Matrix(columns, rows),
-                                kind: naga::ScalarKind::Float,
-                                width,
-                            },
-                            ref other => panic!("Unexpected varying type: {:?}", other),
-                        };
-                        Some(Varying::Local { location, ty })
-                    }
-                    Some(naga::Binding::BuiltIn(built_in)) => Some(Varying::BuiltIn(built_in)),
-                    _ => None,
-                };
-
-                if let Some(varying) = varying {
-                    match var.class {
-                        naga::StorageClass::Input => ep.inputs.push(varying),
-                        naga::StorageClass::Output => ep.outputs.push(varying),
-                        _ => (),
-                    }
+                if var.binding.is_some() {
+                    ep.resources.push((resource_mapping[&var_handle], usage));
                 }
             }
+
             entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
         }
 
