@@ -1,24 +1,20 @@
-[[location(0)]]
-var<in> in_position: vec2<f32>;
-[[location(1)]]
-var<in> in_color_vs: vec4<f32>;
-[[location(0)]]
-var<out> out_color_vs: vec4<f32>;
-[[builtin(position)]]
-var<out> out_position: vec4<f32>;
+struct VertexOutput {
+    [[location(0)]] color: vec4<f32>;
+    [[builtin(position)]] position: vec4<f32>;
+};
 
 [[stage(vertex)]]
-fn vs_main() {
-    out_position = vec4<f32>(in_position, 0.0, 1.0);
-    out_color_vs = in_color_vs;
+fn vs_main(
+    [[location(0)]] position: vec2<f32>,
+    [[location(1)]] color: vec4<f32>,
+) -> VertexOutput {
+    var out: VertexOutput;
+    out.position = vec4<f32>(position, 0.0, 1.0);
+    out.color = color;
+    return out;
 }
 
-[[location(0)]]
-var<in> in_color_fs: vec4<f32>;
-[[location(0)]]
-var<out> out_color_fs: vec4<f32>;
-
 [[stage(fragment)]]
-fn fs_main() {
-    out_color_fs = in_color_fs;
+fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+    return in.color;
 }
