@@ -1901,6 +1901,18 @@ impl Writer {
                 block.body.push(instruction);
                 id
             }
+            crate::Expression::Derivative { axis, expr } => {
+                use crate::DerivativeAxis;
+
+                let id = self.generate_id();
+                let expr_id = self.cached[expr];
+                block.body.push(match axis {
+                    DerivativeAxis::X => Instruction::derive_x(result_type_id, id, expr_id),
+                    DerivativeAxis::Y => Instruction::derive_y(result_type_id, id, expr_id),
+                    DerivativeAxis::Width => Instruction::derive_width(result_type_id, id, expr_id),
+                });
+                id
+            }
             ref other => {
                 log::error!("unimplemented {:?}", other);
                 return Err(Error::FeatureNotImplemented("expression"));

@@ -683,6 +683,30 @@ impl super::Instruction {
     // Derivative Instructions
     //
 
+    pub(super) fn derive_x(result_type_id: Word, id: Word, expr_id: Word) -> Self {
+        let mut instruction = Self::new(Op::DPdx);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(expr_id);
+        instruction
+    }
+
+    pub(super) fn derive_y(result_type_id: Word, id: Word, expr_id: Word) -> Self {
+        let mut instruction = Self::new(Op::DPdy);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(expr_id);
+        instruction
+    }
+
+    pub(super) fn derive_width(result_type_id: Word, id: Word, expr_id: Word) -> Self {
+        let mut instruction = Self::new(Op::Fwidth);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(expr_id);
+        instruction
+    }
+
     //
     // Control-Flow Instructions
     //
