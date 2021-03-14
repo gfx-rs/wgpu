@@ -171,7 +171,7 @@ mod pass_impl {
         }
 
         fn write_timestamp(&mut self, query_set: &wgc::id::QuerySetId, query_index: u32) {
-            unsafe { wgpu_compute_pass_write_timestamp(self, *query_set, query_index) }
+            wgpu_compute_pass_write_timestamp(self, *query_set, query_index)
         }
 
         fn begin_pipeline_statistics_query(
@@ -179,13 +179,11 @@ mod pass_impl {
             query_set: &wgc::id::QuerySetId,
             query_index: u32,
         ) {
-            unsafe {
-                wgpu_compute_pass_begin_pipeline_statistics_query(self, *query_set, query_index)
-            }
+            wgpu_compute_pass_begin_pipeline_statistics_query(self, *query_set, query_index)
         }
 
         fn end_pipeline_statistics_query(&mut self) {
-            unsafe { wgpu_compute_pass_end_pipeline_statistics_query(self) }
+            wgpu_compute_pass_end_pipeline_statistics_query(self)
         }
 
         fn dispatch(&mut self, x: u32, y: u32, z: u32) {
@@ -380,7 +378,7 @@ mod pass_impl {
         }
 
         fn write_timestamp(&mut self, query_set: &wgc::id::QuerySetId, query_index: u32) {
-            unsafe { wgpu_render_pass_write_timestamp(self, *query_set, query_index) }
+            wgpu_render_pass_write_timestamp(self, *query_set, query_index)
         }
 
         fn begin_pipeline_statistics_query(
@@ -388,13 +386,11 @@ mod pass_impl {
             query_set: &wgc::id::QuerySetId,
             query_index: u32,
         ) {
-            unsafe {
-                wgpu_render_pass_begin_pipeline_statistics_query(self, *query_set, query_index)
-            }
+            wgpu_render_pass_begin_pipeline_statistics_query(self, *query_set, query_index)
         }
 
         fn end_pipeline_statistics_query(&mut self) {
-            unsafe { wgpu_render_pass_end_pipeline_statistics_query(self) }
+            wgpu_render_pass_end_pipeline_statistics_query(self)
         }
 
         fn execute_bundles<'a, I: Iterator<Item = &'a wgc::id::RenderBundleId>>(
