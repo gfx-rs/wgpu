@@ -133,7 +133,7 @@ pub enum LocalVariableError {
 
 #[derive(Clone, Debug, Error)]
 pub enum VaryingError {
-    #[error("The type does not match the varying")]
+    #[error("The type {0:?} does not match the varying")]
     InvalidType(Handle<crate::Type>),
     #[error("Interpolation is not valid")]
     InvalidInterpolation,
@@ -369,16 +369,11 @@ impl VaryingContext<'_> {
                             },
                     ),
                     Bi::Position => (
-                        self.stage == St::Vertex && self.output,
-                        *ty_inner
-                            == Ti::Vector {
-                                size: Vs::Quad,
-                                kind: Sk::Float,
-                                width,
-                            },
-                    ),
-                    Bi::FragCoord => (
-                        self.stage == St::Fragment && !self.output,
+                        match self.stage {
+                            St::Vertex => self.output,
+                            St::Fragment => !self.output,
+                            St::Compute => false,
+                        },
                         *ty_inner
                             == Ti::Vector {
                                 size: Vs::Quad,
@@ -465,7 +460,8 @@ impl VaryingContext<'_> {
                     {
                         return Err(VaryingError::InvalidInterpolation);
                     }
-                    _ => return Err(VaryingError::InvalidType(self.ty)),
+                    Some(_) => {}
+                    None => return Err(VaryingError::InvalidType(self.ty)),
                 }
             }
         }

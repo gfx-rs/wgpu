@@ -249,7 +249,7 @@ impl fmt::Display for VaryingName<'_> {
                 )
             }
             Binding::BuiltIn(built_in) => {
-                write!(f, "{}", glsl_built_in(built_in))
+                write!(f, "{}", glsl_built_in(built_in, self.output))
             }
         }
     }
@@ -2144,10 +2144,16 @@ fn glsl_scalar(kind: ScalarKind, width: Bytes) -> Result<ScalarString<'static>, 
 }
 
 /// Helper function that returns the glsl variable name for a builtin
-fn glsl_built_in(built_in: BuiltIn) -> &'static str {
+fn glsl_built_in(built_in: BuiltIn, output: bool) -> &'static str {
     match built_in {
+        BuiltIn::Position => {
+            if output {
+                "gl_Position"
+            } else {
+                "gl_FragCoord"
+            }
+        }
         // vertex
-        BuiltIn::Position => "gl_Position",
         BuiltIn::BaseInstance => "uint(gl_BaseInstance)",
         BuiltIn::BaseVertex => "uint(gl_BaseVertex)",
         BuiltIn::ClipDistance => "gl_ClipDistance",
@@ -2155,7 +2161,6 @@ fn glsl_built_in(built_in: BuiltIn) -> &'static str {
         BuiltIn::PointSize => "gl_PointSize",
         BuiltIn::VertexIndex => "uint(gl_VertexID)",
         // fragment
-        BuiltIn::FragCoord => "gl_FragCoord",
         BuiltIn::FragDepth => "gl_FragDepth",
         BuiltIn::FrontFacing => "gl_FrontFacing",
         BuiltIn::SampleIndex => "gl_SampleID",

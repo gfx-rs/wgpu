@@ -12,13 +12,12 @@ pub fn map_storage_class(word: &str) -> Result<crate::StorageClass, Error<'_>> {
 
 pub fn map_built_in(word: &str) -> Result<crate::BuiltIn, Error<'_>> {
     Ok(match word {
-        // vertex
         "position" => crate::BuiltIn::Position,
+        // vertex
         "vertex_index" => crate::BuiltIn::VertexIndex,
         "instance_index" => crate::BuiltIn::InstanceIndex,
         // fragment
         "front_facing" => crate::BuiltIn::FrontFacing,
-        "frag_coord" => crate::BuiltIn::FragCoord,
         "frag_depth" => crate::BuiltIn::FragDepth,
         "sample_index" => crate::BuiltIn::SampleIndex,
         "sample_mask_in" => crate::BuiltIn::SampleMaskIn,

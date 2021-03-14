@@ -177,16 +177,15 @@ impl ResolvedBinding {
             ResolvedBinding::BuiltIn(built_in) => {
                 use crate::BuiltIn as Bi;
                 let name = match built_in {
+                    Bi::Position => "position",
                     // vertex
                     Bi::BaseInstance => "base_instance",
                     Bi::BaseVertex => "base_vertex",
                     Bi::ClipDistance => "clip_distance",
                     Bi::InstanceIndex => "instance_id",
                     Bi::PointSize => "point_size",
-                    Bi::Position => "position",
                     Bi::VertexIndex => "vertex_id",
                     // fragment
-                    Bi::FragCoord => "position",
                     Bi::FragDepth => "depth(any)",
                     Bi::FrontFacing => "front_facing",
                     Bi::SampleIndex => "sample_id",

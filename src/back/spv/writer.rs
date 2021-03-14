@@ -1087,15 +1087,21 @@ impl Writer {
             crate::Binding::BuiltIn(built_in) => {
                 use crate::BuiltIn as Bi;
                 let built_in = match built_in {
+                    Bi::Position => {
+                        if class == spirv::StorageClass::Output {
+                            spirv::BuiltIn::Position
+                        } else {
+                            spirv::BuiltIn::FragCoord
+                        }
+                    }
+                    // vertex
                     Bi::BaseInstance => spirv::BuiltIn::BaseInstance,
                     Bi::BaseVertex => spirv::BuiltIn::BaseVertex,
                     Bi::ClipDistance => spirv::BuiltIn::ClipDistance,
                     Bi::InstanceIndex => spirv::BuiltIn::InstanceIndex,
                     Bi::PointSize => spirv::BuiltIn::PointSize,
-                    Bi::Position => spirv::BuiltIn::Position,
                     Bi::VertexIndex => spirv::BuiltIn::VertexIndex,
                     // fragment
-                    Bi::FragCoord => spirv::BuiltIn::FragCoord,
                     Bi::FragDepth => spirv::BuiltIn::FragDepth,
                     Bi::FrontFacing => spirv::BuiltIn::FrontFacing,
                     Bi::SampleIndex => spirv::BuiltIn::SampleId,

@@ -142,16 +142,15 @@ pub enum StorageClass {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum BuiltIn {
+    Position,
     // vertex
     BaseInstance,
     BaseVertex,
     ClipDistance,
     InstanceIndex,
     PointSize,
-    Position,
     VertexIndex,
     // fragment
-    FragCoord,
     FragDepth,
     FrontFacing,
     SampleIndex,
