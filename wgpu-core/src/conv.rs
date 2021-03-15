@@ -822,7 +822,7 @@ pub fn map_primitive_state_to_rasterizer(
             wgt::FrontFace::Cw => pso::FrontFace::Clockwise,
         },
         depth_bias,
-        conservative: false,
+        conservative: desc.conservative,
         line_width: pso::State::Static(1.0),
     }
 }

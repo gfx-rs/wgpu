@@ -2132,6 +2132,22 @@ impl<B: GfxBackend> Device<B> {
             ));
         }
 
+        if desc.primitive.conservative
+            && !self
+                .features
+                .contains(wgt::Features::CONSERVATIVE_RASTERIZATION)
+        {
+            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
+                wgt::Features::CONSERVATIVE_RASTERIZATION,
+            ));
+        }
+
+        if desc.primitive.conservative && desc.primitive.polygon_mode != wgt::PolygonMode::Fill {
+            return Err(
+                pipeline::CreateRenderPipelineError::ConservativeRasterizationNonFillPolygonMode,
+            );
+        }
+
         if desc.layout.is_none() {
             for _ in 0..self.limits.max_bind_groups {
                 derived_group_layouts.push(binding_model::BindEntryMap::default());

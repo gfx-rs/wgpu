@@ -422,6 +422,17 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const VERTEX_ATTRIBUTE_64BIT = 0x0000_0000_4000_0000;
+        /// Allows the user to set a overestimation-conservative-rasterization in [`PrimitiveState::conservative`]
+        ///
+        /// Processing of degenerate triangles/lines is hardware specific.
+        /// Only triangles are supported.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const CONSERVATIVE_RASTERIZATION = 0x0000_0000_8000_0000;
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).
@@ -922,6 +933,11 @@ pub struct PrimitiveState {
     /// Setting this to something other than `Fill` requires `Features::NON_FILL_POLYGON_MODE` to be enabled.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub polygon_mode: PolygonMode,
+    /// If set to true, the primitives are rendered with conservative overestimation. I.e. any rastered pixel touched by it is filled.
+    /// Only valid for PolygonMode::Fill!
+    ///
+    /// Enabling this requires `Features::CONSERVATIVE_RASTERIZATION` to be enabled.
+    pub conservative: bool,
 }
 
 /// Describes the multi-sampling state of a render pipeline.

@@ -192,6 +192,10 @@ impl<B: GfxBackend> Adapter<B> {
             wgt::Features::SHADER_FLOAT64,
             adapter_features.contains(hal::Features::SHADER_FLOAT64),
         );
+        features.set(
+            wgt::Features::CONSERVATIVE_RASTERIZATION,
+            adapter_features.contains(hal::Features::CONSERVATIVE_RASTERIZATION),
+        );
         #[cfg(not(target_os = "ios"))]
         //TODO: https://github.com/gfx-rs/gfx/issues/3346
         features.set(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER, true);
@@ -463,6 +467,11 @@ impl<B: GfxBackend> Adapter<B> {
         enabled_features.set(
             hal::Features::SHADER_FLOAT64,
             desc.features.contains(wgt::Features::SHADER_FLOAT64),
+        );
+        enabled_features.set(
+            hal::Features::CONSERVATIVE_RASTERIZATION,
+            desc.features
+                .contains(wgt::Features::CONSERVATIVE_RASTERIZATION),
         );
 
         let family = self

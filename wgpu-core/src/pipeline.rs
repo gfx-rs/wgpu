@@ -224,6 +224,8 @@ pub enum CreateRenderPipelineError {
         strip_index_format: Option<wgt::IndexFormat>,
         topology: wgt::PrimitiveTopology,
     },
+    #[error("Conservative Rasterization is only supported for wgt::PolygonMode::Fill")]
+    ConservativeRasterizationNonFillPolygonMode,
     #[error("missing required device features {0:?}")]
     MissingFeature(wgt::Features),
     #[error("error in stage {flag:?}")]
