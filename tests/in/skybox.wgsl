@@ -16,15 +16,15 @@ fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
     // hacky way to draw a large triangle
     var tmp1: i32 = i32(vertex_index) / 2;
     var tmp2: i32 = i32(vertex_index) & 1;
-    const pos: vec4<f32> = vec4<f32>(
+    const pos = vec4<f32>(
         f32(tmp1) * 4.0 - 1.0,
         f32(tmp2) * 4.0 - 1.0,
         0.0,
         1.0
     );
 
-    const inv_model_view: mat3x3<f32> = transpose(mat3x3<f32>(r_data.view.x.xyz, r_data.view.y.xyz, r_data.view.z.xyz));
-    var unprojected: vec4<f32> = r_data.proj_inv * pos; //TODO: const
+    const inv_model_view = transpose(mat3x3<f32>(r_data.view.x.xyz, r_data.view.y.xyz, r_data.view.z.xyz));
+    const unprojected = r_data.proj_inv * pos;
     var out: VertexOutput;
     out.uv = inv_model_view * unprojected.xyz;
     out.position = pos;

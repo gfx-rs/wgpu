@@ -26,6 +26,23 @@ fn parse_types() {
 }
 
 #[test]
+fn parse_type_inference() {
+    parse_str(
+        "
+        fn foo() {
+            const a = 2u;
+            const b: u32 = a;
+        }",
+    )
+    .unwrap();
+    assert!(parse_str(
+        "
+        fn foo() { const c : i32 = 2.0; }",
+    )
+    .is_err());
+}
+
+#[test]
 fn parse_type_cast() {
     parse_str(
         "

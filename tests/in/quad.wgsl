@@ -20,10 +20,12 @@ fn main([[location(0)]] pos : vec2<f32>, [[location(1)]] uv : vec2<f32>) -> Vert
 
 [[stage(fragment)]]
 fn main([[location(0)]] uv : vec2<f32>) -> [[location(0)]] vec4<f32> {
-  const color: vec4<f32> = textureSample(u_texture, u_sampler, uv);
+  const color = textureSample(u_texture, u_sampler, uv);
   if (color.a == 0.0) {
     discard;
   }
-  const premultiplied: vec4<f32> = color.a * color;
+  // forcing the expression here to be emitted in order to check the
+  // uniformity of the control flow a bit more strongly.
+  const premultiplied = color.a * color;
   return premultiplied;
 }

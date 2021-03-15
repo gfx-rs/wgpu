@@ -119,6 +119,8 @@ pub enum Error<'a> {
     UnknownLocalFunction(&'a str),
     #[error("builtin {0:?} is not implemented")]
     UnimplementedBuiltin(crate::BuiltIn),
+    #[error("expression {0} doesn't match its given type {1:?}")]
+    ConstTypeMismatch(&'a str, Handle<crate::Type>),
     #[error("other error")]
     Other,
 }
@@ -1984,12 +1986,34 @@ impl Parser {
         match word {
             "const" => {
                 emitter.start(context.expressions);
-                let (name, _ty, _access) =
-                    self.parse_variable_ident_decl(lexer, context.types, context.constants)?;
+                let name = lexer.next_ident()?;
+                let given_ty = if lexer.skip(Token::Separator(':')) {
+                    let (ty, _access) =
+                        self.parse_type_decl(lexer, None, context.types, context.constants)?;
+                    Some(ty)
+                } else {
+                    None
+                };
                 lexer.expect(Token::Operation('='))?;
                 let expr_id = self
                     .parse_general_expression(lexer, context.as_expression(block, &mut emitter))?;
                 lexer.expect(Token::Separator(';'))?;
+                if let Some(ty) = given_ty {
+                    // prepare the typifier, but work around mutable borrowing...
+                    let _ = context
+                        .as_expression(block, &mut emitter)
+                        .resolve_type(expr_id)?;
+                    let expr_inner = context.typifier.get(expr_id, context.types);
+                    let given_inner = &context.types[ty].inner;
+                    if given_inner != expr_inner {
+                        log::error!(
+                            "Given type {:?} doesn't match expected {:?}",
+                            given_inner,
+                            expr_inner
+                        );
+                        return Err(Error::ConstTypeMismatch(name, ty));
+                    }
+                }
                 block.extend(emitter.finish(context.expressions));
                 context.lookup_ident.insert(name, expr_id);
             }
