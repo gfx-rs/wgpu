@@ -49,7 +49,20 @@ pub enum Terminator {
 }
 
 impl<I: Iterator<Item = u32>> super::Parser<I> {
-    pub fn parse_function(&mut self, module: &mut crate::Module) -> Result<(), Error> {
+    // Registers a function call. It will generate a dummy handle to call, which
+    // gets resolved after all the functions are processed.
+    pub(super) fn add_call(
+        &mut self,
+        from: spirv::Word,
+        to: spirv::Word,
+    ) -> Handle<crate::Function> {
+        let dummy_handle = self.dummy_functions.append(crate::Function::default());
+        self.deferred_function_calls.push(to);
+        self.function_call_graph.add_edge(from, to, ());
+        dummy_handle
+    }
+
+    pub(super) fn parse_function(&mut self, module: &mut crate::Module) -> Result<(), Error> {
         let result_type_id = self.next()?;
         let fun_id = self.next()?;
         let _fun_control = self.next()?;
@@ -115,6 +128,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         }
 
         // Read body
+        self.function_call_graph.add_node(fun_id);
         let mut flow_graph = FlowGraph::new();
 
         // Scan the blocks and add them as nodes
@@ -129,6 +143,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
                     let node = self.next_block(
                         block_id,
+                        fun_id,
                         &mut fun.expressions,
                         &mut fun.local_variables,
                         &module.types,
@@ -167,128 +182,125 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         // done
         let fun_handle = module.functions.append(fun);
-        match self.lookup_entry_point.remove(&fun_id) {
-            Some(ep) => {
-                // create a wrapping function
-                let mut function = crate::Function {
-                    name: None,
-                    arguments: Vec::new(),
-                    result: None,
-                    local_variables: Arena::new(),
-                    expressions: Arena::new(),
-                    body: Vec::new(),
-                };
+        self.lookup_function.insert(fun_id, fun_handle);
+        if let Some(ep) = self.lookup_entry_point.remove(&fun_id) {
+            // create a wrapping function
+            let mut function = crate::Function {
+                name: None,
+                arguments: Vec::new(),
+                result: None,
+                local_variables: Arena::new(),
+                expressions: Arena::new(),
+                body: Vec::new(),
+            };
 
-                // 1. copy the inputs from arguments to privates
-                for &v_id in ep.variable_ids.iter() {
-                    let lvar = self.lookup_variable.lookup(v_id)?;
-                    if let super::Variable::Input(ref arg) = lvar.inner {
-                        function.body.push(crate::Statement::Store {
-                            pointer: function
-                                .expressions
-                                .append(crate::Expression::GlobalVariable(lvar.handle)),
-                            value:
-                                function
-                                    .expressions
-                                    .append(crate::Expression::FunctionArgument(
-                                        function.arguments.len() as u32,
-                                    )),
-                        });
-                        let mut arg = arg.clone();
-                        if ep.stage == crate::ShaderStage::Fragment {
-                            if let Some(crate::Binding::Location(_, ref mut interpolation @ None)) =
-                                arg.binding
-                            {
-                                *interpolation = Some(crate::Interpolation::Perspective);
-                                // default
-                            }
+            // 1. copy the inputs from arguments to privates
+            for &v_id in ep.variable_ids.iter() {
+                let lvar = self.lookup_variable.lookup(v_id)?;
+                if let super::Variable::Input(ref arg) = lvar.inner {
+                    function.body.push(crate::Statement::Store {
+                        pointer: function
+                            .expressions
+                            .append(crate::Expression::GlobalVariable(lvar.handle)),
+                        value: function
+                            .expressions
+                            .append(crate::Expression::FunctionArgument(
+                                function.arguments.len() as u32,
+                            )),
+                    });
+                    let mut arg = arg.clone();
+                    if ep.stage == crate::ShaderStage::Fragment {
+                        if let Some(crate::Binding::Location(_, ref mut interpolation @ None)) =
+                            arg.binding
+                        {
+                            *interpolation = Some(crate::Interpolation::Perspective);
+                            // default
                         }
-                        function.arguments.push(arg);
                     }
+                    function.arguments.push(arg);
                 }
-                // 2. call the wrapped function
-                function.body.push(crate::Statement::Call {
-                    function: fun_handle,
-                    arguments: Vec::new(),
-                    result: None,
+            }
+            // 2. call the wrapped function
+            let fake_id = !(module.entry_points.len() as u32); // doesn't matter, as long as it's not a collision
+            let dummy_handle = self.add_call(fake_id, fun_id);
+            function.body.push(crate::Statement::Call {
+                function: dummy_handle,
+                arguments: Vec::new(),
+                result: None,
+            });
+
+            // 3. copy the outputs from privates to the result
+            let mut members = Vec::new();
+            let mut components = Vec::new();
+            for &v_id in ep.variable_ids.iter() {
+                let lvar = self.lookup_variable.lookup(v_id)?;
+                if let super::Variable::Output(ref result) = lvar.inner {
+                    members.push(crate::StructMember {
+                        name: None,
+                        span: None,
+                        ty: result.ty,
+                        binding: result.binding.clone(),
+                    });
+                    // populate just the globals first, then do `Load` in a
+                    // separate step, so that we can get a range.
+                    components.push(
+                        function
+                            .expressions
+                            .append(crate::Expression::GlobalVariable(lvar.handle)),
+                    );
+                }
+            }
+
+            let old_len = function.expressions.len();
+            for component in components.iter_mut() {
+                *component = function.expressions.append(crate::Expression::Load {
+                    pointer: *component,
                 });
-
-                // 3. copy the outputs from privates to the result
-                let mut members = Vec::new();
-                let mut components = Vec::new();
-                for &v_id in ep.variable_ids.iter() {
-                    let lvar = self.lookup_variable.lookup(v_id)?;
-                    if let super::Variable::Output(ref result) = lvar.inner {
-                        members.push(crate::StructMember {
-                            name: None,
-                            span: None,
-                            ty: result.ty,
-                            binding: result.binding.clone(),
-                        });
-                        // populate just the globals first, then do `Load` in a
-                        // separate step, so that we can get a range.
-                        components.push(
-                            function
-                                .expressions
-                                .append(crate::Expression::GlobalVariable(lvar.handle)),
-                        );
-                    }
-                }
-
-                let old_len = function.expressions.len();
-                for component in components.iter_mut() {
-                    *component = function.expressions.append(crate::Expression::Load {
-                        pointer: *component,
+            }
+            match members.len() {
+                0 => {}
+                1 => {
+                    let member = members.remove(0);
+                    function.body.push(crate::Statement::Emit(
+                        function.expressions.range_from(old_len),
+                    ));
+                    function.body.push(crate::Statement::Return {
+                        value: components.first().cloned(),
+                    });
+                    function.result = Some(crate::FunctionResult {
+                        ty: member.ty,
+                        binding: member.binding,
                     });
                 }
-                match members.len() {
-                    0 => {}
-                    1 => {
-                        let member = members.remove(0);
-                        function.body.push(crate::Statement::Emit(
-                            function.expressions.range_from(old_len),
-                        ));
-                        function.body.push(crate::Statement::Return {
-                            value: components.first().cloned(),
-                        });
-                        function.result = Some(crate::FunctionResult {
-                            ty: member.ty,
-                            binding: member.binding,
-                        });
-                    }
-                    _ => {
-                        let ty = module.types.append(crate::Type {
-                            name: None,
-                            inner: crate::TypeInner::Struct {
-                                block: false,
-                                members,
-                            },
-                        });
-                        let result_expr = function
-                            .expressions
-                            .append(crate::Expression::Compose { ty, components });
-                        function.body.push(crate::Statement::Emit(
-                            function.expressions.range_from(old_len),
-                        ));
-                        function.body.push(crate::Statement::Return {
-                            value: Some(result_expr),
-                        });
-                        function.result = Some(crate::FunctionResult { ty, binding: None });
-                    }
+                _ => {
+                    let ty = module.types.append(crate::Type {
+                        name: None,
+                        inner: crate::TypeInner::Struct {
+                            block: false,
+                            members,
+                        },
+                    });
+                    let result_expr = function
+                        .expressions
+                        .append(crate::Expression::Compose { ty, components });
+                    function.body.push(crate::Statement::Emit(
+                        function.expressions.range_from(old_len),
+                    ));
+                    function.body.push(crate::Statement::Return {
+                        value: Some(result_expr),
+                    });
+                    function.result = Some(crate::FunctionResult { ty, binding: None });
                 }
+            }
 
-                module.entry_points.push(crate::EntryPoint {
-                    name: ep.name,
-                    stage: ep.stage,
-                    early_depth_test: ep.early_depth_test,
-                    workgroup_size: ep.workgroup_size,
-                    function,
-                });
-            }
-            None => {
-                self.lookup_function.insert(fun_id, fun_handle);
-            }
-        };
+            module.entry_points.push(crate::EntryPoint {
+                name: ep.name,
+                stage: ep.stage,
+                early_depth_test: ep.early_depth_test,
+                workgroup_size: ep.workgroup_size,
+                function,
+            });
+        }
 
         self.lookup_expression.clear();
         self.lookup_sampled_image.clear();

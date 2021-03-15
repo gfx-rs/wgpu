@@ -52,6 +52,7 @@ pub enum Error {
     IncompleteData,
     InvalidTerminator,
     InvalidEdgeClassification,
+    FunctionCallCycle(spirv::Word),
     // incomplete implementation error
     UnsupportedRowMajorMatrix,
     UnsupportedMatrixStride(spirv::Word),

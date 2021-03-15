@@ -151,6 +151,11 @@ impl<T> Arena<T> {
         Arena { data: Vec::new() }
     }
 
+    /// Extracts the inner vector.
+    pub fn into_inner(self) -> Vec<T> {
+        self.data
+    }
+
     /// Returns the current number of items stored in this arena.
     pub fn len(&self) -> usize {
         self.data.len()

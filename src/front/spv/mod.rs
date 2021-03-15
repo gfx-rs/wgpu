@@ -36,6 +36,7 @@ use crate::{
 };
 
 use num_traits::cast::FromPrimitive;
+use petgraph::graphmap::GraphMap;
 use std::{convert::TryInto, num::NonZeroU32, path::PathBuf};
 
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
@@ -325,9 +326,14 @@ pub struct Parser<I> {
     lookup_function_type: FastHashMap<spirv::Word, LookupFunctionType>,
     lookup_function: FastHashMap<spirv::Word, Handle<crate::Function>>,
     lookup_entry_point: FastHashMap<spirv::Word, EntryPoint>,
-    //Note: the key here is fully artificial, has nothing to do with the module
-    deferred_function_calls: FastHashMap<Handle<crate::Function>, spirv::Word>,
+    //Note: each `OpFunctionCall` gets a single entry here, indexed by the
+    // dummy `Handle<crate::Function>` of the call site.
+    deferred_function_calls: Vec<spirv::Word>,
     dummy_functions: Arena<crate::Function>,
+    // Graph of all function calls through the module.
+    // It's used to sort the functions (as nodes) topologically,
+    // so that in the IR any called function is already known.
+    function_call_graph: GraphMap<spirv::Word, (), petgraph::Directed>,
     options: Options,
     index_constants: Vec<Handle<crate::Constant>>,
 }
@@ -353,8 +359,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             lookup_function_type: FastHashMap::default(),
             lookup_function: FastHashMap::default(),
             lookup_entry_point: FastHashMap::default(),
-            deferred_function_calls: FastHashMap::default(),
+            deferred_function_calls: Vec::default(),
             dummy_functions: Arena::new(),
+            function_call_graph: GraphMap::new(),
             options: options.clone(),
             index_constants: Vec::new(),
         }
@@ -591,6 +598,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     fn next_block(
         &mut self,
         block_id: spirv::Word,
+        function_id: spirv::Word,
         expressions: &mut Arena<crate::Expression>,
         local_arena: &mut Arena<crate::LocalVariable>,
         type_arena: &Arena<crate::Type>,
@@ -1318,8 +1326,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
 
                     // We just need an unique handle here, nothing more.
-                    let function = self.dummy_functions.append(crate::Function::default());
-                    self.deferred_function_calls.insert(function, func_id);
+                    let function = self.add_call(function_id, func_id);
 
                     let result = if self.lookup_void_type == Some(result_type_id) {
                         None
@@ -1677,7 +1684,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 S::Call {
                     ref mut function, ..
                 } => {
-                    let fun_id = self.deferred_function_calls[function];
+                    let fun_id = self.deferred_function_calls[function.index()];
                     *function = *self.lookup_function.lookup(fun_id)?;
                 }
             }
@@ -1688,7 +1695,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     fn patch_function_calls(&self, fun: &mut crate::Function) -> Result<(), Error> {
         for (_, expr) in fun.expressions.iter_mut() {
             if let crate::Expression::Call(ref mut function) = *expr {
-                let fun_id = self.deferred_function_calls[function];
+                let fun_id = self.deferred_function_calls[function.index()];
                 *function = *self.lookup_function.lookup(fun_id)?;
             }
         }
@@ -1724,6 +1731,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         self.dummy_functions = Arena::new();
         self.lookup_function.clear();
+        self.function_call_graph.clear();
 
         loop {
             use spirv::Op;
@@ -1779,6 +1787,24 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
 
         log::info!("Patching...");
+        {
+            use std::mem::take;
+            let mut nodes = petgraph::algo::toposort(&self.function_call_graph, None)
+                .map_err(|cycle| Error::FunctionCallCycle(cycle.node_id()))?;
+            nodes.reverse(); // we need dominated first
+            let mut functions = take(&mut module.functions).into_inner();
+            for fun_id in nodes {
+                if fun_id > !(functions.len() as u32) {
+                    // skip all the fake IDs registered for the entry points
+                    continue;
+                }
+                let handle = self.lookup_function.get_mut(&fun_id).unwrap();
+                // take out the function from the old array
+                let fun = take(&mut functions[handle.index()]);
+                // add it to the newly formed arena, and adjust the lookup
+                *handle = module.functions.append(fun);
+            }
+        }
         // patch all the function calls
         for (_, fun) in module.functions.iter_mut() {
             self.patch_function_calls(fun)?;

@@ -967,7 +967,8 @@ impl Validator {
                             crate::Expression::Access { base, .. }
                             | crate::Expression::AccessIndex { base, .. } => current = base,
                             crate::Expression::LocalVariable(_)
-                            | crate::Expression::GlobalVariable(_) => break,
+                            | crate::Expression::GlobalVariable(_)
+                            | crate::Expression::FunctionArgument(_) => break,
                             _ => return Err(FunctionError::InvalidStorePointer(current)),
                         }
                     }
