@@ -1179,6 +1179,27 @@ impl<W: Write> Writer<W> {
         for (ep_index, ep) in module.entry_points.iter().enumerate() {
             let fun = &ep.function;
             let fun_info = analysis.get_entry_point(ep_index);
+            // skip this entry point if any global bindings are missing
+            if !options.fake_missing_bindings {
+                if let Some(err) = module
+                    .global_variables
+                    .iter()
+                    .find_map(|(var_handle, var)| {
+                        if !fun_info[var_handle].is_empty() {
+                            if let Some(ref br) = var.binding {
+                                if let Err(e) = options.resolve_global_binding(ep.stage, br) {
+                                    return Some(e);
+                                }
+                            }
+                        }
+                        None
+                    })
+                {
+                    info.entry_point_names.push(Err(err));
+                    continue;
+                }
+            }
+
             self.typifier.resolve_all(
                 &fun.expressions,
                 &module.types,
@@ -1192,7 +1213,7 @@ impl<W: Write> Writer<W> {
             )?;
 
             let fun_name = &self.names[&NameKey::EntryPoint(ep_index as _)];
-            info.entry_point_names.push(fun_name.clone());
+            info.entry_point_names.push(Ok(fun_name.clone()));
 
             let stage_out_name = format!("{}Output", fun_name);
             let stage_in_name = format!("{}Input", fun_name);
@@ -1340,7 +1361,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{} ", separator)?;
                 tyvar.try_fmt(&mut self.out)?;
                 if let Some(ref binding) = var.binding {
-                    let resolved = options.resolve_global_binding(ep.stage, binding)?;
+                    let resolved = options.resolve_global_binding(ep.stage, binding).unwrap();
                     resolved.try_fmt_decorated(&mut self.out, "")?;
                 }
                 if let Some(value) = var.init {

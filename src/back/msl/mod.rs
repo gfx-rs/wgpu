@@ -73,8 +73,6 @@ pub enum Error {
     Utf8(#[from] FromUtf8Error),
     #[error(transparent)]
     Type(#[from] TypifyError),
-    #[error("bind source for {0:?} is missing from the map")]
-    MissingBindTarget(BindSource),
     #[error("bind target {0:?} is empty")]
     UnimplementedBindTarget(BindTarget),
     #[error("composing of {0:?} is not implemented yet")]
@@ -87,6 +85,12 @@ pub enum Error {
     FeatureNotImplemented(String),
     #[error("module is not valid")]
     Validation,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum EntryPointError {
+    #[error("bind source for {0:?} is missing from the map")]
+    MissingBinding(BindSource),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -154,7 +158,7 @@ impl Options {
         &self,
         stage: crate::ShaderStage,
         res_binding: &crate::ResourceBinding,
-    ) -> Result<ResolvedBinding, Error> {
+    ) -> Result<ResolvedBinding, EntryPointError> {
         let source = BindSource {
             stage,
             group: res_binding.group,
@@ -166,7 +170,7 @@ impl Options {
                 prefix: "fake",
                 index: 0,
             }),
-            None => Err(Error::MissingBindTarget(source)),
+            None => Err(EntryPointError::MissingBinding(source)),
         }
     }
 }
@@ -232,8 +236,10 @@ impl ResolvedBinding {
 /// for the use of the result.
 pub struct TranslationInfo {
     /// Mapping of the entry point names. Each item in the array
-    /// corresponds to an entry point in `module.entry_points.iter()`.
-    pub entry_point_names: Vec<String>,
+    /// corresponds to an entry point index.
+    ///
+    ///Note: Some entry points may fail translation because of missing bindings.
+    pub entry_point_names: Vec<Result<String, EntryPointError>>,
 }
 
 pub fn write_string(
