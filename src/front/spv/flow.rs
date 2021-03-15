@@ -81,6 +81,14 @@ impl FlowGraph {
                         continue_block_index,
                         ControlFlowEdgeType::ForwardContinue,
                     );
+
+                    // Back edge
+                    self.flow[continue_block_index].ty = Some(ControlFlowNodeType::Back);
+                    self.flow.add_edge(
+                        continue_block_index,
+                        source_node_index,
+                        ControlFlowEdgeType::Back,
+                    );
                 }
             }
 
@@ -90,11 +98,13 @@ impl FlowGraph {
                 Terminator::Branch { target_id } => {
                     let target_node_index = block_to_node[&target_id];
 
-                    self.flow.add_edge(
-                        source_node_index,
-                        target_node_index,
-                        ControlFlowEdgeType::Forward,
-                    );
+                    if self.flow[source_node_index].ty != Some(ControlFlowNodeType::Back) {
+                        self.flow.add_edge(
+                            source_node_index,
+                            target_node_index,
+                            ControlFlowEdgeType::Forward,
+                        );
+                    }
                 }
                 Terminator::BranchConditional {
                     true_id, false_id, ..
@@ -156,14 +166,6 @@ impl FlowGraph {
                 || self.flow[node_source_index].ty == Some(ControlFlowNodeType::Loop)
             {
                 continue;
-            }
-
-            // Back
-            if self.flow[node_target_index].ty == Some(ControlFlowNodeType::Loop)
-                && self.flow[node_source_index].id > self.flow[node_target_index].id
-            {
-                self.flow[node_source_index].ty = Some(ControlFlowNodeType::Back);
-                self.flow[edge_index] = ControlFlowEdgeType::Back;
             }
 
             let mut target_incoming_edges = self
