@@ -144,6 +144,14 @@ pub enum BufferAccessError {
     NotMapped,
     #[error("buffer map range does not respect `COPY_BUFFER_ALIGNMENT`")]
     UnalignedRange,
+    #[error("buffer access invalid: offset {offset} must be multiple of 8")]
+    UnalignedOffset { offset: u64 },
+    #[error("buffer range size invalid: range_size {range_size} must be multiple of 4")]
+    UnalignedRangeSize { range_size: u64 },
+    #[error("buffer access out of bounds: index {index} would underun the buffer (limit: {min})")]
+    OutOfBoundsUnderrun { index: u64, min: u64 },
+    #[error("buffer access out of bounds: index {index} would overrun the buffer (limit: {max})")]
+    OutOfBoundsOverrun { index: u64, max: u64 },
 }
 
 #[derive(Debug)]

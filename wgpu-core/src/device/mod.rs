@@ -4526,7 +4526,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        _size: Option<BufferSize>,
+        size: Option<BufferSize>,
     ) -> Result<*mut u8, resource::BufferAccessError> {
         span!(_guard, INFO, "Device::buffer_get_mapped_range");
 
@@ -4537,11 +4537,49 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(buffer_id)
             .map_err(|_| resource::BufferAccessError::Invalid)?;
 
-        match buffer.map_state {
-            resource::BufferMapState::Init { ptr, .. }
-            | resource::BufferMapState::Active { ptr, .. } => unsafe {
-                Ok(ptr.as_ptr().offset(offset as isize))
-            },
+        let range_size = if let Some(size) = size {
+            size.into()
+        } else {
+            std::cmp::max(0, buffer.size - offset)
+        };
+
+        if offset % 8 != 0 {
+            return Err(resource::BufferAccessError::UnalignedOffset { offset });
+        }
+        if range_size % 4 != 0 {
+            return Err(resource::BufferAccessError::UnalignedRangeSize { range_size });
+        }
+
+        match &buffer.map_state {
+            resource::BufferMapState::Init { ptr, .. } => {
+                // u64 can not be < 0, so no need to validate this bound
+                if offset + range_size > buffer.size {
+                    return Err(resource::BufferAccessError::OutOfBoundsOverrun {
+                        index: offset + range_size,
+                        max: buffer.size,
+                    });
+                }
+                unsafe { Ok((*ptr).as_ptr().offset(offset as isize)) }
+            }
+            resource::BufferMapState::Active { ptr, sub_range, .. } => {
+                if offset < sub_range.offset {
+                    return Err(resource::BufferAccessError::OutOfBoundsUnderrun {
+                        index: offset,
+                        min: sub_range.offset,
+                    });
+                }
+                let range_end_offset = sub_range
+                    .size
+                    .map(|size| size + sub_range.offset)
+                    .unwrap_or(buffer.size);
+                if offset + range_size > range_end_offset {
+                    return Err(resource::BufferAccessError::OutOfBoundsOverrun {
+                        index: offset + range_size,
+                        max: range_end_offset,
+                    });
+                }
+                unsafe { Ok((*ptr).as_ptr().offset(offset as isize)) }
+            }
             resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
                 Err(resource::BufferAccessError::NotMapped)
             }
