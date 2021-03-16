@@ -191,7 +191,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        wgpu_subscriber::initialize_default_subscriber(None);
+        env_logger::init();
         pollster::block_on(run());
     }
     #[cfg(target_arch = "wasm32")]

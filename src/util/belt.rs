@@ -113,7 +113,7 @@ impl StagingBelt {
         } else {
             let size = self.chunk_size.max(size.get());
             #[cfg(not(target_arch = "wasm32"))]
-            wgc::span!(_guard, INFO, "Creating chunk of size {}", size);
+            profiling::scope!("Creating chunk of size {}");
             Chunk {
                 buffer: device.create_buffer(&BufferDescriptor {
                     label: Some("staging"),
@@ -149,7 +149,7 @@ impl StagingBelt {
     /// the GPU is done copying the data from them.
     pub fn finish(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
-        wgc::span!(_guard, DEBUG, "Finishing chunks");
+        profiling::scope!("Finishing chunks");
 
         for chunk in self.active_chunks.drain(..) {
             chunk.buffer.unmap();
