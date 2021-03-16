@@ -661,7 +661,7 @@ impl Interface {
                 return;
             }
             ref other => {
-                tracing::error!("Unexpected varying type: {:?}", other);
+                log::error!("Unexpected varying type: {:?}", other);
                 return;
             }
         };
@@ -673,7 +673,7 @@ impl Interface {
             },
             Some(&naga::Binding::BuiltIn(built_in)) => Varying::BuiltIn(built_in),
             None => {
-                tracing::error!("Missing binding for a varying");
+                log::error!("Missing binding for a varying");
                 return;
             }
         };
@@ -711,7 +711,7 @@ impl Interface {
                 },
                 naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
                 ref other => {
-                    tracing::error!("Unexpected resource type: {:?}", other);
+                    log::error!("Unexpected resource type: {:?}", other);
                     continue;
                 }
             };

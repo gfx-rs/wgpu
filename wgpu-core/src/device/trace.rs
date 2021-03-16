@@ -175,7 +175,7 @@ pub struct Trace {
 #[cfg(feature = "trace")]
 impl Trace {
     pub fn new(path: &std::path::Path) -> Result<Self, std::io::Error> {
-        tracing::info!("Tracing into '{:?}'", path);
+        log::info!("Tracing into '{:?}'", path);
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
         file.write_all(b"[\n")?;
         Ok(Self {
@@ -199,7 +199,7 @@ impl Trace {
                 let _ = writeln!(self.file, "{},", string);
             }
             Err(e) => {
-                tracing::warn!("RON serialization failure: {:?}", e);
+                log::warn!("RON serialization failure: {:?}", e);
             }
         }
     }
