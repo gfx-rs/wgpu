@@ -858,18 +858,14 @@ impl Writer {
                 let mut current_offset = 0;
                 let mut member_ids = Vec::with_capacity(members.len());
                 for (index, member) in members.iter().enumerate() {
-                    let layout = self.layouter.resolve(member.ty);
-                    current_offset += layout.pad(current_offset);
+                    let (placement, _) = self.layouter.member_placement(current_offset, member);
                     self.annotations.push(Instruction::member_decorate(
                         id,
                         index as u32,
                         spirv::Decoration::Offset,
-                        &[current_offset],
+                        &[placement.start],
                     ));
-                    current_offset += match member.span {
-                        Some(span) => span.get(),
-                        None => layout.size,
-                    };
+                    current_offset = placement.end;
 
                     if self.flags.contains(WriterFlags::DEBUG) {
                         if let Some(ref name) = member.name {

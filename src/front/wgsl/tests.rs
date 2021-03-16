@@ -70,7 +70,11 @@ fn parse_struct() {
     parse_str(
         "
         [[block]] struct Foo { x: i32; };
-        struct Bar { [[span(16)]] x: vec2<i32>; };
+        struct Bar {
+            [[size(16)]] x: vec2<i32>;
+            [[align(16)]] y: f32;
+            [[size(32), align(8)]] z: vec3<f32>;
+        };
         struct Empty {};
         var s: [[access(read_write)]] Foo;
     ",

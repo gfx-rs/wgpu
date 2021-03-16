@@ -2369,9 +2369,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             host_shared |= decor.offset.is_some();
             members.push(crate::StructMember {
                 name: decor.name,
-                span: None, //TODO
                 ty,
                 binding: None,
+                size: None, //TODO
+                align: None,
             });
         }
 

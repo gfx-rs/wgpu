@@ -110,9 +110,10 @@ expression: output
                 members: [
                     (
                         name: Some("num_lights"),
-                        span: None,
                         ty: 13,
                         binding: None,
+                        size: None,
+                        align: None,
                     ),
                 ],
             ),
@@ -153,21 +154,24 @@ expression: output
                 members: [
                     (
                         name: Some("proj"),
-                        span: None,
                         ty: 18,
                         binding: None,
+                        size: None,
+                        align: None,
                     ),
                     (
                         name: Some("pos"),
-                        span: None,
                         ty: 4,
                         binding: None,
+                        size: None,
+                        align: None,
                     ),
                     (
                         name: Some("color"),
-                        span: None,
                         ty: 4,
                         binding: None,
+                        size: None,
+                        align: None,
                     ),
                 ],
             ),
@@ -187,9 +191,10 @@ expression: output
                 members: [
                     (
                         name: Some("data"),
-                        span: None,
                         ty: 20,
                         binding: None,
+                        size: None,
+                        align: None,
                     ),
                 ],
             ),

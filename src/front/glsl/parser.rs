@@ -725,9 +725,12 @@ pomelo! {
         if let Some(ty) = t {
             sdl.iter().map(|name| StructMember {
                 name: Some(name.clone()),
-                span: None,
                 ty,
                 binding: None, //TODO
+                //TODO: if the struct is a uniform struct, these values have to reflect
+                // std140 layout. Otherwise, std430.
+                size: None,
+                align: None,
             }).collect()
         } else {
             return Err(ErrorKind::SemanticError("Struct member can't be void".into()))

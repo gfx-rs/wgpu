@@ -237,9 +237,10 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 if let super::Variable::Output(ref result) = lvar.inner {
                     members.push(crate::StructMember {
                         name: None,
-                        span: None,
                         ty: result.ty,
                         binding: result.binding.clone(),
+                        size: None,
+                        align: None,
                     });
                     // populate just the globals first, then do `Load` in a
                     // separate step, so that we can get a range.

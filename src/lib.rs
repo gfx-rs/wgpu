@@ -238,10 +238,14 @@ pub enum Interpolation {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct StructMember {
     pub name: Option<String>,
-    pub span: Option<NonZeroU32>,
+    /// Type of the field.
     pub ty: Handle<Type>,
     /// For I/O structs, defines the binding.
     pub binding: Option<Binding>,
+    /// Overrides the size computed off the type.
+    pub size: Option<NonZeroU32>,
+    /// Overrides the alignment computed off the type.
+    pub align: Option<NonZeroU32>,
 }
 
 /// The number of dimensions an image has.

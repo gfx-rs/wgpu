@@ -26,9 +26,10 @@ expression: output
                 members: [
                     (
                         name: Some("data"),
-                        span: None,
                         ty: 2,
                         binding: None,
+                        size: None,
+                        align: None,
                     ),
                 ],
             ),

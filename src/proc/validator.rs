@@ -555,7 +555,11 @@ impl Validator {
                 }
                 TypeFlags::SIZED //TODO: `DATA`?
             }
-            Ti::Array { base, size, stride } => {
+            Ti::Array {
+                base,
+                size,
+                stride: _,
+            } => {
                 if base >= handle {
                     return Err(TypeError::UnresolvedBase(base));
                 }
@@ -596,11 +600,7 @@ impl Validator {
                     }
                     crate::ArraySize::Dynamic => TypeFlags::empty(),
                 };
-                let base_mask = if stride.is_none() {
-                    TypeFlags::INTERFACE
-                } else {
-                    TypeFlags::HOST_SHARED | TypeFlags::INTERFACE
-                };
+                let base_mask = TypeFlags::HOST_SHARED | TypeFlags::INTERFACE;
                 TypeFlags::DATA | (base_flags & base_mask) | sized_flag
             }
             Ti::Struct { block, ref members } => {

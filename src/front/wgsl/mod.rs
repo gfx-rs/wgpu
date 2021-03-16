@@ -107,6 +107,8 @@ pub enum Error<'a> {
     UnknownConservativeDepth(&'a str),
     #[error("array stride must not be 0")]
     ZeroStride,
+    #[error("struct member size or array must not be 0")]
+    ZeroSizeOrAlign,
     #[error("not a composite type: {0:?}")]
     NotCompositeType(Handle<crate::Type>),
     #[error("Input/output binding is not consistent: location {0:?}, built-in {1:?} and interpolation {2:?}")]
@@ -1502,7 +1504,7 @@ impl Parser {
         let mut members = Vec::new();
         lexer.expect(Token::Paren('{'))?;
         loop {
-            let mut span = 0;
+            let (mut size, mut align) = (None, None);
             let mut bind_parser = BindingParser::default();
             if lexer.skip(Token::DoubleParen('[')) {
                 self.scopes.push(Scope::Decoration);
@@ -1517,17 +1519,19 @@ impl Parser {
                         }
                         (Token::Word(word), _) if ready => {
                             match word {
-                                "span" => {
+                                "size" => {
                                     lexer.expect(Token::Paren('('))?;
-                                    //Note: 0 is not handled
-                                    span = lexer.next_uint_literal()?;
+                                    let value = lexer.next_uint_literal()?;
                                     lexer.expect(Token::Paren(')'))?;
+                                    size =
+                                        Some(NonZeroU32::new(value).ok_or(Error::ZeroSizeOrAlign)?);
                                 }
-                                "offset" => {
-                                    // skip - only here for parsing compatibility
+                                "align" => {
                                     lexer.expect(Token::Paren('('))?;
-                                    let _offset = lexer.next_uint_literal()?;
+                                    let value = lexer.next_uint_literal()?;
                                     lexer.expect(Token::Paren(')'))?;
+                                    align =
+                                        Some(NonZeroU32::new(value).ok_or(Error::ZeroSizeOrAlign)?);
                                 }
                                 _ => bind_parser.parse(lexer, word)?,
                             }
@@ -1550,9 +1554,10 @@ impl Parser {
 
             members.push(crate::StructMember {
                 name: Some(name.to_owned()),
-                span: NonZeroU32::new(span),
                 ty,
                 binding: bind_parser.finish()?,
+                size,
+                align,
             });
         }
     }
