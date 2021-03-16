@@ -4563,7 +4563,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 unsafe { Ok((ptr.as_ptr().offset(offset as isize), range_size)) }
             }
-            resource::BufferMapState::Active { ptr, ref sub_range, .. } => {
+            resource::BufferMapState::Active {
+                ptr, ref sub_range, ..
+            } => {
                 if offset < sub_range.offset {
                     return Err(resource::BufferAccessError::OutOfBoundsUnderrun {
                         index: offset,
