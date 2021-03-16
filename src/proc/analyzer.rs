@@ -209,6 +209,8 @@ pub enum UniformityDisruptor {
 pub enum AnalysisError {
     #[error("Expression {0:?} is not a global variable!")]
     ExpectedGlobalVariable(crate::Expression),
+    #[error("Called function {0:?} that hasn't been declared in the IR yet")]
+    ForwardCall(Handle<crate::Function>),
     #[error(
         "Required uniformity of control flow for {0:?} in {1:?} is not fulfilled because of {2:?}"
     )]
@@ -478,7 +480,12 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(expr),
                 requirement: None,
             },
-            E::Call(function) => self.process_call(&other_functions[function.index()]).result,
+            E::Call(function) => {
+                let fun = other_functions
+                    .get(function.index())
+                    .ok_or(AnalysisError::ForwardCall(function))?;
+                self.process_call(fun).result
+            }
             E::ArrayLength(expr) => Uniformity {
                 non_uniform_result: self.add_ref_impl(expr, GlobalUse::QUERY),
                 requirement: None,
@@ -630,7 +637,9 @@ impl FunctionInfo {
                     for &argument in arguments {
                         let _ = self.add_ref(argument);
                     }
-                    let info = &other_functions[function.index()];
+                    let info = other_functions
+                        .get(function.index())
+                        .ok_or(AnalysisError::ForwardCall(function))?;
                     self.process_call(info)
                 }
             };

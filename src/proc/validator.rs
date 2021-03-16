@@ -158,7 +158,9 @@ pub enum ExpressionError {
 #[derive(Clone, Debug, Error)]
 pub enum CallError {
     #[error("Bad function")]
-    Function,
+    InvalidFunction,
+    #[error("The callee is declared after the caller")]
+    ForwardDeclaredFunction,
     #[error("Argument {index} expression is invalid")]
     Argument {
         index: usize,
@@ -782,7 +784,7 @@ impl Validator {
         let fun = context
             .functions
             .try_get(function)
-            .ok_or(CallError::Function)?;
+            .ok_or(CallError::InvalidFunction)?;
         if fun.arguments.len() != arguments.len() {
             return Err(CallError::ArgumentCount {
                 required: fun.arguments.len(),
