@@ -144,7 +144,7 @@ pub enum BufferAccessError {
     NotMapped,
     #[error("buffer map range does not respect `COPY_BUFFER_ALIGNMENT`")]
     UnalignedRange,
-    #[error("buffer access invalid: offset {offset} must be multiple of 8")]
+    #[error("buffer offset invalid: offset {offset} must be multiple of 8")]
     UnalignedOffset { offset: u64 },
     #[error("buffer range size invalid: range_size {range_size} must be multiple of 4")]
     UnalignedRangeSize { range_size: u64 },
