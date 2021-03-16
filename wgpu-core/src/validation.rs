@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{binding_model::BindEntryMap, FastHashMap};
-use naga::proc::analyzer::GlobalUse;
+use naga::proc::{analyzer::GlobalUse, Layouter};
 use std::collections::hash_map::Entry;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
@@ -170,71 +170,6 @@ pub enum StageError {
         location: wgt::ShaderLocation,
         error: InputError,
     },
-}
-
-fn get_aligned_type_size(
-    module: &naga::Module,
-    handle: naga::Handle<naga::Type>,
-    allow_unbound: bool,
-) -> wgt::BufferAddress {
-    use naga::TypeInner as Ti;
-    //TODO: take alignment into account!
-    match module.types[handle].inner {
-        Ti::Scalar { kind: _, width } => width as wgt::BufferAddress,
-        Ti::Vector {
-            size,
-            kind: _,
-            width,
-        } => size as wgt::BufferAddress * width as wgt::BufferAddress,
-        Ti::Matrix {
-            rows,
-            columns,
-            width,
-        } => {
-            rows as wgt::BufferAddress * columns as wgt::BufferAddress * width as wgt::BufferAddress
-        }
-        Ti::Pointer { .. } => 4,
-        Ti::Array {
-            base,
-            size: naga::ArraySize::Constant(const_handle),
-            stride,
-        } => {
-            let base_size = match stride {
-                Some(stride) => stride.get() as wgt::BufferAddress,
-                None => get_aligned_type_size(module, base, false),
-            };
-            let count = match module.constants[const_handle].inner {
-                naga::ConstantInner::Scalar {
-                    value: naga::ScalarValue::Uint(value),
-                    width: _,
-                } => value,
-                ref other => panic!("Invalid array size constant: {:?}", other),
-            };
-            base_size * count
-        }
-        Ti::Array {
-            base,
-            size: naga::ArraySize::Dynamic,
-            stride,
-        } if allow_unbound => match stride {
-            Some(stride) => stride.get() as wgt::BufferAddress,
-            None => get_aligned_type_size(module, base, false),
-        },
-        Ti::Struct {
-            block: _,
-            ref members,
-        } => {
-            let mut offset = 0;
-            for member in members {
-                offset += match member.span {
-                    Some(span) => span.get() as wgt::BufferAddress,
-                    None => get_aligned_type_size(module, member.ty, false),
-                }
-            }
-            offset
-        }
-        _ => panic!("Unexpected struct field"),
-    }
 }
 
 fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
@@ -746,6 +681,7 @@ impl Interface {
     }
 
     pub fn new(module: &naga::Module, analysis: &naga::proc::analyzer::Analysis) -> Self {
+        let layouter = Layouter::new(&module.types, &module.constants);
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
@@ -756,15 +692,12 @@ impl Interface {
             let ty = match module.types[var.ty].inner {
                 naga::TypeInner::Struct {
                     block: true,
-                    ref members,
+                    members: _,
                 } => {
-                    let mut actual_size = 0;
-                    for (i, member) in members.iter().enumerate() {
-                        actual_size +=
-                            get_aligned_type_size(module, member.ty, i + 1 == members.len());
-                    }
+                    //TODO: fix the Naga's resolve to include one element of a dynamic array
+                    let actual_size = layouter.resolve(var.ty).size.max(1);
                     ResourceType::Buffer {
-                        size: wgt::BufferSize::new(actual_size).unwrap(),
+                        size: wgt::BufferSize::new(actual_size as u64).unwrap(),
                     }
                 }
                 naga::TypeInner::Image {
