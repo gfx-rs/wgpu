@@ -150,7 +150,7 @@ pub enum BufferAccessError {
     UnalignedRangeSize { range_size: u64 },
     #[error("buffer access out of bounds: index {index} would underun the buffer (limit: {min})")]
     OutOfBoundsUnderrun { index: u64, min: u64 },
-    #[error("buffer access out of bounds: index {index} would overrun the buffer (limit: {max})")]
+    #[error("buffer access out of bounds: last index {index} would overrun the buffer (limit: {max})")]
     OutOfBoundsOverrun { index: u64, max: u64 },
 }
 

@@ -4557,7 +4557,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // offset (u64) can not be < 0, so no need to validate the lower bound
                 if offset + range_size > buffer.size {
                     return Err(resource::BufferAccessError::OutOfBoundsOverrun {
-                        index: offset + range_size,
+                        index: offset + range_size - 1,
                         max: buffer.size,
                     });
                 }
@@ -4578,7 +4578,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .unwrap_or(buffer.size);
                 if offset + range_size > range_end_offset {
                     return Err(resource::BufferAccessError::OutOfBoundsOverrun {
-                        index: offset + range_size,
+                        index: offset + range_size - 1,
                         max: range_end_offset,
                     });
                 }
