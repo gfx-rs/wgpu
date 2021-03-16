@@ -4527,7 +4527,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         size: Option<BufferSize>,
-    ) -> Result<(*mut u8, u64), resource::BufferAccessError> {
+    ) -> Result<(*mut u8, wgt::BufferAddress), resource::BufferAccessError> {
         span!(_guard, INFO, "Device::buffer_get_mapped_range");
 
         let hub = B::hub(self);
