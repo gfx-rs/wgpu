@@ -127,10 +127,10 @@ impl Test<'_> {
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);
             let buffer = wgc::id::TypedId::zip(expect.buffer.index, expect.buffer.epoch, backend);
-            let ptr =
+            let (ptr, size) =
                 wgc::gfx_select!(device => global.buffer_get_mapped_range(buffer, expect.offset, None))
                     .unwrap();
-            let contents = unsafe { slice::from_raw_parts(ptr, expect.data.len()) };
+            let contents = unsafe { slice::from_raw_parts(ptr, size as usize) };
             let expected_data = match expect.data {
                 ExpectedData::Raw(vec) => vec,
                 ExpectedData::File(name, size) => {
