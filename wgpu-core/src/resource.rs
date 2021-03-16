@@ -144,6 +144,22 @@ pub enum BufferAccessError {
     NotMapped,
     #[error("buffer map range does not respect `COPY_BUFFER_ALIGNMENT`")]
     UnalignedRange,
+    #[error("buffer offset invalid: offset {offset} must be multiple of 8")]
+    UnalignedOffset { offset: wgt::BufferAddress },
+    #[error("buffer range size invalid: range_size {range_size} must be multiple of 4")]
+    UnalignedRangeSize { range_size: wgt::BufferAddress },
+    #[error("buffer access out of bounds: index {index} would underun the buffer (limit: {min})")]
+    OutOfBoundsUnderrun {
+        index: wgt::BufferAddress,
+        min: wgt::BufferAddress,
+    },
+    #[error(
+        "buffer access out of bounds: last index {index} would overrun the buffer (limit: {max})"
+    )]
+    OutOfBoundsOverrun {
+        index: wgt::BufferAddress,
+        max: wgt::BufferAddress,
+    },
 }
 
 #[derive(Debug)]
