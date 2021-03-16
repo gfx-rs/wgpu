@@ -20,6 +20,7 @@ use std::{
     path::{Path, PathBuf},
     ptr, slice,
 };
+use wgt::BufferSize;
 
 #[derive(serde::Deserialize)]
 struct RawId {
@@ -128,7 +129,7 @@ impl Test<'_> {
             println!("\t\t\tChecking {}", expect.name);
             let buffer = wgc::id::TypedId::zip(expect.buffer.index, expect.buffer.epoch, backend);
             let (ptr, size) =
-                wgc::gfx_select!(device => global.buffer_get_mapped_range(buffer, expect.offset, None))
+                wgc::gfx_select!(device => global.buffer_get_mapped_range(buffer, expect.offset, Some(BufferSize::new(expect.data.len() as u64).unwrap())))
                     .unwrap();
             let contents = unsafe { slice::from_raw_parts(ptr, size as usize) };
             let expected_data = match expect.data {
