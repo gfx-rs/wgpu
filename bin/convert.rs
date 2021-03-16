@@ -20,18 +20,22 @@ trait PrettyResult {
     fn unwrap_pretty(self) -> Self::Target;
 }
 
+fn print_err(error: impl Error) {
+    println!("{}:", error);
+    let mut e = error.source();
+    while let Some(source) = e {
+        println!("\t{}", source);
+        e = source.source();
+    }
+}
+
 impl<T, E: Error> PrettyResult for Result<T, E> {
     type Target = T;
     fn unwrap_pretty(self) -> T {
         match self {
             Result::Ok(value) => value,
             Result::Err(error) => {
-                println!("{}:", error);
-                let mut e = error.source();
-                while let Some(source) = e {
-                    println!("\t{}", source);
-                    e = source.source();
-                }
+                print_err(error);
                 std::process::exit(1);
             }
         }
@@ -166,6 +170,16 @@ fn main() {
         }
     };
 
+    // validate the IR
+    #[allow(unused_variables)]
+    let analysis = match naga::proc::Validator::new().validate(&module) {
+        Ok(analysis) => Some(analysis),
+        Err(error) => {
+            print_err(error);
+            None
+        }
+    };
+
     let output_path = match output_path {
         Some(ref string) => string,
         None => {
@@ -173,12 +187,6 @@ fn main() {
             return;
         }
     };
-
-    // validate the IR
-    #[allow(unused_variables)]
-    let analysis = naga::proc::Validator::new()
-        .validate(&module)
-        .unwrap_pretty();
 
     match Path::new(output_path)
         .extension()
@@ -189,14 +197,16 @@ fn main() {
         #[cfg(feature = "msl-out")]
         "metal" => {
             use naga::back::msl;
-            let (msl, _) = msl::write_string(&module, &analysis, &params.msl).unwrap_pretty();
+            let (msl, _) =
+                msl::write_string(&module, analysis.as_ref().unwrap(), &params.msl).unwrap_pretty();
             fs::write(output_path, msl).unwrap();
         }
         #[cfg(feature = "spv-out")]
         "spv" => {
             use naga::back::spv;
 
-            let spv = spv::write_vec(&module, &analysis, &params.spv).unwrap_pretty();
+            let spv =
+                spv::write_vec(&module, analysis.as_ref().unwrap(), &params.spv).unwrap_pretty();
             let bytes = spv
                 .iter()
                 .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
@@ -225,7 +235,8 @@ fn main() {
                 .unwrap();
 
             let mut writer =
-                glsl::Writer::new(file, &module, &analysis, &params.glsl).unwrap_pretty();
+                glsl::Writer::new(file, &module, analysis.as_ref().unwrap(), &params.glsl)
+                    .unwrap_pretty();
 
             writer
                 .write()
