@@ -103,7 +103,8 @@ impl Layouter {
                             } => value as u32,
                             ref other => unreachable!("Unexpected array size {:?}", other),
                         },
-                        crate::ArraySize::Dynamic => 0,
+                        // A dynamically-sized array has to have at least one element
+                        crate::ArraySize::Dynamic => 1,
                     };
                     let stride = match stride {
                         Some(value) => value,
