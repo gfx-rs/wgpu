@@ -55,7 +55,7 @@ impl<T> GpuFutureCompletion<T> {
         };
     }
 
-    pub(crate) fn to_raw(self) -> *mut OpaqueData {
+    pub(crate) fn into_raw(self) -> *mut OpaqueData {
         Arc::into_raw(self.data) as _
     }
 

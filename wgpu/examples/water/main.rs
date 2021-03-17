@@ -662,6 +662,7 @@ impl framework::Example for Example {
         self.reflect_view = reflect_view;
     }
 
+    #[allow(clippy::eq_op)]
     fn render(
         &mut self,
         frame: &wgpu::SwapChainTexture,

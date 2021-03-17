@@ -163,12 +163,9 @@ impl PrettyError for wgc::binding_model::CreatePipelineLayoutError {
     fn fmt_pretty(&self, context: &super::Context) -> String {
         let global = context.global();
         let mut ret = format_error_line(self);
-        match *self {
-            Self::InvalidBindGroupLayout(id) => {
-                let name = wgc::gfx_select!(id => global.bind_group_layout_label(id));
-                ret.push_str(&format_label_line("bind group layout", &name));
-            }
-            _ => {}
+        if let Self::InvalidBindGroupLayout(id) = *self {
+            let name = wgc::gfx_select!(id => global.bind_group_layout_label(id));
+            ret.push_str(&format_label_line("bind group layout", &name));
         };
         ret
     }
@@ -192,12 +189,9 @@ impl PrettyError for wgc::command::RenderPassErrorInner {
     fn fmt_pretty(&self, context: &super::Context) -> String {
         let global = context.global();
         let mut ret = format_error_line(self);
-        match *self {
-            Self::InvalidAttachment(id) => {
-                let name = wgc::gfx_select!(id => global.texture_view_label(id));
-                ret.push_str(&format_label_line("attachment", &name));
-            }
-            _ => {}
+        if let Self::InvalidAttachment(id) = *self {
+            let name = wgc::gfx_select!(id => global.texture_view_label(id));
+            ret.push_str(&format_label_line("attachment", &name));
         };
         ret
     }

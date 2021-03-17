@@ -155,7 +155,7 @@ async fn create_png(
         // from the padded_buffer we write just the unpadded bytes into the image
         for chunk in padded_buffer.chunks(buffer_dimensions.padded_bytes_per_row) {
             png_writer
-                .write(&chunk[..buffer_dimensions.unpadded_bytes_per_row])
+                .write_all(&chunk[..buffer_dimensions.unpadded_bytes_per_row])
                 .unwrap();
         }
         png_writer.finish().unwrap();
