@@ -17,6 +17,7 @@ struct StatementGraph {
     flow: Vec<(usize, usize, &'static str)>,
     dependencies: Vec<(usize, Handle<crate::Expression>, &'static str)>,
     emits: Vec<(usize, Handle<crate::Expression>)>,
+    calls: Vec<(usize, Handle<crate::Function>)>,
 }
 
 impl StatementGraph {
@@ -105,7 +106,7 @@ impl StatementGraph {
                     "ImageStore"
                 }
                 S::Call {
-                    function: _,
+                    function,
                     ref arguments,
                     result,
                 } => {
@@ -115,7 +116,7 @@ impl StatementGraph {
                     if let Some(expr) = result {
                         self.emits.push((id, expr));
                     }
-                    //TODO: link to function
+                    self.calls.push((id, function));
                     "Call"
                 }
             };
@@ -400,6 +401,15 @@ fn write_fun(output: &mut String, prefix: String, fun: &crate::Function) -> Resu
             to.index(),
         )?;
     }
+    for (from, function) in sg.calls {
+        writeln!(
+            output,
+            "\t\t{}_s{} -> f{}_s0",
+            prefix,
+            from,
+            function.index(),
+        )?;
+    }
 
     Ok(())
 }
@@ -427,7 +437,12 @@ pub fn write(module: &crate::Module) -> Result<String, FmtError> {
     for (handle, fun) in module.functions.iter() {
         let prefix = format!("f{}", handle.index());
         writeln!(output, "\tsubgraph cluster_{} {{", prefix)?;
-        writeln!(output, "\t\tlabel=\"Function/'{}'\"", name(&fun.name))?;
+        writeln!(
+            output,
+            "\t\tlabel=\"Function{:?}/'{}'\"",
+            handle,
+            name(&fun.name)
+        )?;
         write_fun(&mut output, prefix, fun)?;
         writeln!(output, "\t}}")?;
     }
