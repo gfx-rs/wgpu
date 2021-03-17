@@ -12,7 +12,7 @@ This is the core logic of an experimental [WebGPU](https://www.w3.org/community/
 The implementation consists of the following parts:
 
   - [![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core) [![docs.rs](https://docs.rs/wgpu-core/badge.svg)](https://docs.rs/wgpu-core/) - internal Rust API for WebGPU implementations to use
-  - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between `wgpu-core`, `wgpu-native`, and `wgpu-rs`
+  - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between `wgpu-core` and `wgpu-rs`
   - `player` - standalone application for replaying the API traces, uses `winit`
 
 This repository contains the core of `wgpu`, and is not usable directly by applications.
@@ -23,10 +23,10 @@ If you are looking for the native implementation or bindings to the API in other
 
    API   |    Windows 7/10    |  Linux & Android   |    macOS & iOS     |
   -----  | ------------------ | ------------------ | ------------------ |
-  DX11   | :white_check_mark: |                    |                    |
-  DX12   | :heavy_check_mark: |                    |                    |
-  Vulkan | :heavy_check_mark: | :heavy_check_mark: |                    |
-  Metal  |                    |                    | :heavy_check_mark: |
-  OpenGL |                    | :construction:     | :construction:     |
+  DX11   | :ok:               |                    |                    |
+  DX12   | :white_check_mark: |                    |                    |
+  Vulkan | :white_check_mark: | :white_check_mark: |                    |
+  Metal  |                    |                    | :white_check_mark: |
+  GL ES3 |                    | :construction:     |                    |
 
-:heavy_check_mark: = Primary support — :white_check_mark: = Secondary support — :construction: = Unsupported, but support in progress
+:white_check_mark: = Primary support — :ok: = Secondary support — :construction: = Unsupported, but support in progress

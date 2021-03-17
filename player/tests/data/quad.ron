@@ -11,18 +11,18 @@
     actions: [
         CreateShaderModule(
             id: Id(0, 1, Empty),
-            data: "quad.vert.spv",
-        ),
-        CreateShaderModule(
-            id: Id(1, 1, Empty),
-            data: "quad.frag.spv",
+            desc: (
+                label: None,
+                flags: (bits: 3),
+            ),
+            data: "quad.wgsl",
         ),
         CreateTexture(Id(0, 1, Empty), (
             label: Some("Output Texture"),
             size: (
                 width: 64,
                 height: 64,
-                depth: 1,
+                depth_or_array_layers: 1,
             ),
             mip_level_count: 1,
             sample_count: 1,
@@ -53,46 +53,31 @@
             bind_group_layouts: [],
             push_constant_ranges: [],
         )),
-        CreateRenderPipeline(Id(0, 1, Empty), (
-            label: None,
-            layout: Some(Id(0, 1, Empty)),
-            vertex_stage: (
-                module: Id(0, 1, Empty),
-                entry_point: "main",
-            ),
-            fragment_stage: Some((
-                module: Id(1, 1, Empty),
-                entry_point: "main",
-            )),
-            rasterization_state: None,
-            primitive_topology: TriangleList,
-            color_states: [
-                (
-                    format: Rgba8Unorm,
-                    alpha_blend: (
-                        src_factor: One,
-                        dst_factor: Zero,
-                        operation: Add,
+        CreateRenderPipeline(
+            id: Id(0, 1, Empty),
+            desc: (
+                label: None,
+                layout: Some(Id(0, 1, Empty)),
+                vertex: (
+                    stage: (
+                        module: Id(0, 1, Empty),
+                        entry_point: "vs_main",
                     ),
-                    color_blend: (
-                        src_factor: One,
-                        dst_factor: Zero,
-                        operation: Add,
-                    ),
-                    write_mask: (
-                        bits: 15,
-                    ),
+                    buffers: [],
                 ),
-            ],
-            depth_stencil_state: None,
-            vertex_state: (
-                index_format: Uint16,
-                vertex_buffers: [],
+                fragment: Some((
+                    stage: (
+                        module: Id(0, 1, Empty),
+                        entry_point: "fs_main",
+                    ),
+                    targets: [
+                        (
+                            format: Rgba8Unorm,
+                        ),
+                    ],
+                )),
             ),
-            sample_count: 1,
-            sample_mask: 4294967295,
-            alpha_to_coverage_enabled: false,
-        )),
+        ),
         Submit(1, [
             RunRenderPass(
                 base: (
@@ -145,7 +130,7 @@
                 size: (
                     width: 64,
                     height: 64,
-                    depth: 1,
+                    depth_or_array_layers: 1,
                 ),
             ),
         ]),

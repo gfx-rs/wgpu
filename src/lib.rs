@@ -59,6 +59,12 @@ impl ByteBuf {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
+enum ShaderModuleSource<'a> {
+    SpirV(Cow<'a, [u32]>),
+    Wgsl(Cow<'a, str>),
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
 struct ImplicitLayout<'a> {
     pipeline: id::PipelineLayoutId,
     bind_groups: Cow<'a, [id::BindGroupLayoutId]>,
@@ -78,7 +84,11 @@ enum DeviceAction<'a> {
         wgc::binding_model::PipelineLayoutDescriptor<'a>,
     ),
     CreateBindGroup(id::BindGroupId, wgc::binding_model::BindGroupDescriptor<'a>),
-    CreateShaderModule(id::ShaderModuleId, Cow<'a, [u32]>, Cow<'a, str>),
+    CreateShaderModule(
+        id::ShaderModuleId,
+        wgc::pipeline::ShaderModuleDescriptor<'a>,
+        ShaderModuleSource<'a>,
+    ),
     CreateComputePipeline(
         id::ComputePipelineId,
         wgc::pipeline::ComputePipelineDescriptor<'a>,
@@ -105,10 +115,30 @@ enum TextureAction<'a> {
     CreateView(id::TextureViewId, wgc::resource::TextureViewDescriptor<'a>),
 }
 
+#[repr(C)]
 #[derive(serde::Serialize, serde::Deserialize)]
 enum DropAction {
+    Adapter(id::AdapterId),
+    Device(id::DeviceId),
+    ShaderModule(id::ShaderModuleId),
+    PipelineLayout(id::PipelineLayoutId),
+    BindGroupLayout(id::BindGroupLayoutId),
+    BindGroup(id::BindGroupId),
+    CommandBuffer(id::CommandBufferId),
+    RenderBundle(id::RenderBundleId),
+    RenderPipeline(id::RenderPipelineId),
+    ComputePipeline(id::ComputePipelineId),
     Buffer(id::BufferId),
     Texture(id::TextureId),
+    TextureView(id::TextureViewId),
     Sampler(id::SamplerId),
-    BindGroupLayout(id::BindGroupLayoutId),
+}
+
+impl DropAction {
+    // helper function to construct byte bufs
+    fn to_byte_buf(&self) -> ByteBuf {
+        let mut data = Vec::new();
+        bincode::serialize_into(&mut data, self).unwrap();
+        ByteBuf::from_vec(data)
+    }
 }

@@ -9,17 +9,23 @@
         )),
         CreateShaderModule(
             id: Id(0, 1, Empty),
-            label: None,
-            data: "empty.comp.spv",
-        ),
-        CreateComputePipeline(Id(0, 1, Empty), (
-            label: None,
-            layout: Some(Id(0, 1, Empty)),
-            compute_stage: (
-                module: Id(0, 1, Empty),
-                entry_point: "main",
+            desc: (
+                label: None,
+                flags: (bits: 3),
             ),
-        )),
+            data: "empty.wgsl",
+        ),
+        CreateComputePipeline(
+            id: Id(0, 1, Empty),
+            desc: (
+                label: None,
+                layout: Some(Id(0, 1, Empty)),
+                stage: (
+                    module: Id(0, 1, Empty),
+                    entry_point: "main",
+                ),
+            ),
+        ),
         CreateBuffer(Id(0, 1, Empty), (
             label: None,
             size: 16,

@@ -13,26 +13,30 @@ license = "MPL-2.0"
 publish = false
 
 [features]
+cross = ["wgc/cross"]
 
 [dependencies]
-env_logger = "0.7"
+env_logger = "0.8"
 log = "0.4"
 raw-window-handle = "0.3"
-renderdoc = { version = "0.8", optional = true, default_features = false }
+renderdoc = { version = "0.10", optional = true, default_features = false }
 ron = "0.6"
-winit = { version = "0.22", optional = true }
+winit = { version = "0.24", optional = true }
 
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.6"
 features = ["replay"]
 
 [dependencies.wgc]
 path = "../wgpu-core"
 package = "wgpu-core"
-version = "0.6"
 features = ["replay", "raw-window-handle"]
+
+#[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies.gfx-backend-metal]
+#git = "https://github.com/gfx-rs/gfx"
+#rev = "" # insert revision here
+#features = ["auto-capture"]
 
 [dependencies.wgpu-subscriber]
 git = "https://github.com/gfx-rs/subscriber.git"

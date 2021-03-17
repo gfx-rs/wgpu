@@ -93,7 +93,6 @@ impl Test<'_> {
                 label: None,
                 features: self.features | wgt::Features::MAPPABLE_PRIMARY_BUFFERS,
                 limits: wgt::Limits::default(),
-                shader_validation: true,
             },
             None,
             device
@@ -144,7 +143,12 @@ impl Test<'_> {
                 }
             };
 
-            assert_eq!(&expected_data[..], contents);
+            if &expected_data[..] != contents {
+                panic!(
+                    "Test expectation is not met!\nBuffer content was:\n{:?}\nbut expected:\n{:?}",
+                    contents, expected_data
+                );
+            }
         }
 
         wgc::gfx_select!(device => global.clear_backend(()));
@@ -213,5 +217,12 @@ impl Corpus {
 
 #[test]
 fn test_api() {
+    wgpu_subscriber::initialize_default_subscriber(
+        std::env::var("WGPU_CHROME_TRACE")
+            .as_ref()
+            .map(Path::new)
+            .ok(),
+    );
+
     Corpus::run_from(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data/all.ron"))
 }

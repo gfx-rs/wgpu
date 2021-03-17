@@ -43,6 +43,7 @@ pub struct IdentityRecyclerFactory {
     free_render_bundle: extern "C" fn(id::RenderBundleId, FactoryParam),
     free_render_pipeline: extern "C" fn(id::RenderPipelineId, FactoryParam),
     free_compute_pipeline: extern "C" fn(id::ComputePipelineId, FactoryParam),
+    free_query_set: extern "C" fn(id::QuerySetId, FactoryParam),
     free_buffer: extern "C" fn(id::BufferId, FactoryParam),
     free_texture: extern "C" fn(id::TextureId, FactoryParam),
     free_texture_view: extern "C" fn(id::TextureViewId, FactoryParam),
@@ -157,6 +158,16 @@ impl wgc::hub::IdentityHandlerFactory<id::ComputePipelineId> for IdentityRecycle
             fun: self.free_compute_pipeline,
             param: self.param,
             kind: "compute_pipeline",
+        }
+    }
+}
+impl wgc::hub::IdentityHandlerFactory<id::QuerySetId> for IdentityRecyclerFactory {
+    type Filter = IdentityRecycler<id::QuerySetId>;
+    fn spawn(&self, _min_index: u32) -> Self::Filter {
+        IdentityRecycler {
+            fun: self.free_query_set,
+            param: self.param,
+            kind: "query_set",
         }
     }
 }

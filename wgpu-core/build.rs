@@ -6,15 +6,15 @@ fn main() {
     // Setup cfg aliases
     cfg_aliases::cfg_aliases! {
         // Vendors/systems
-        ios: { target_os = "ios" },
-        macos: { target_os = "macos" },
-        apple: { any(ios, macos) },
+        wasm: { target_arch = "wasm32" },
+        apple: { any(target_os = "ios", target_os = "macos") },
+        unix_wo_apple: {all(unix, not(apple))},
 
         // Backends
-        vulkan: { any(windows, all(unix, not(apple)), feature = "gfx-backend-vulkan") },
-        metal: { apple },
-        dx12: { windows },
-        dx11: { windows },
-        gl: { all(not(unix), not(apple), not(windows)) },
+        vulkan: { all(not(wasm), any(windows, unix_wo_apple, feature = "gfx-backend-vulkan")) },
+        metal: { all(not(wasm), apple) },
+        dx12: { all(not(wasm), windows) },
+        dx11: { all(not(wasm), windows) },
+        gl: { false },
     }
 }

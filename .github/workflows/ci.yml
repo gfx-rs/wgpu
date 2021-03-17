@@ -26,16 +26,20 @@ jobs:
       PKG_CONFIG_ALLOW_CROSS: 1
     steps:
       - uses: actions/checkout@v2
-      - name: Prepare
-        run: |
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq libegl1-mesa-dev
-          echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+      - run: echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
       - run: rustup component add clippy
       - run: rustup target add ${{ env.TARGET }}
       - run: cargo clippy --target ${{ env.TARGET }}
       - name: Additional core features
         run: cargo check --manifest-path wgpu-core/Cargo.toml --features trace --target ${{ env.TARGET }}
+
+  webgl_build:
+    name: Web Assembly
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - run: rustup target add wasm32-unknown-unknown
+      - run: cargo build --manifest-path wgpu-core/Cargo.toml --target wasm32-unknown-unknown
 
   build:
     name: ${{ matrix.name }}
@@ -61,9 +65,7 @@ jobs:
           - name: Ubuntu Stable
             os: ubuntu-18.04
             channel: stable
-            prepare_command: |
-              sudo apt-get update -y -qq
-              sudo apt-get install -y -qq libegl1-mesa-dev
+            prepare_command:
             additional_core_features: trace,replay
             additional_player_features:
           - name: Ubuntu Nightly
@@ -71,8 +73,6 @@ jobs:
             channel: nightly
             prepare_command: |
               sudo apt-get update -y -qq
-              echo "Installing EGL"
-              sudo apt-get install -y -qq libegl1-mesa-dev
               echo "Installing Vulkan"
               sudo apt-get install -y -qq mesa-vulkan-drivers
             additional_core_features: serial-pass

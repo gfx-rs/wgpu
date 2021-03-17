@@ -7,6 +7,7 @@ mod bind;
 mod bundle;
 mod compute;
 mod draw;
+mod query;
 mod render;
 mod transfer;
 
@@ -15,6 +16,7 @@ pub use self::allocator::CommandAllocatorError;
 pub use self::bundle::*;
 pub use self::compute::*;
 pub use self::draw::*;
+pub use self::query::*;
 pub use self::render::*;
 pub use self::transfer::*;
 
@@ -22,6 +24,7 @@ use crate::{
     device::{all_buffer_stages, all_image_stages},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
+    memory_init_tracker::MemoryInitTrackerAction,
     resource::{Buffer, Texture},
     span,
     track::TrackerSet,
@@ -29,6 +32,7 @@ use crate::{
 };
 
 use hal::command::CommandBuffer as _;
+use smallvec::SmallVec;
 use thiserror::Error;
 
 use std::thread::ThreadId;
@@ -42,9 +46,11 @@ pub struct CommandBuffer<B: hal::Backend> {
     recorded_thread_id: ThreadId,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
-    pub(crate) used_swap_chain: Option<(Stored<id::SwapChainId>, B::Framebuffer)>,
+    pub(crate) used_swap_chains: SmallVec<[Stored<id::SwapChainId>; 1]>,
+    pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     limits: wgt::Limits,
     private_features: PrivateFeatures,
+    has_labels: bool,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
     #[cfg(debug_assertions)]
@@ -52,7 +58,7 @@ pub struct CommandBuffer<B: hal::Backend> {
 }
 
 impl<B: GfxBackend> CommandBuffer<B> {
-    fn get_encoder(
+    fn get_encoder_mut(
         storage: &mut Storage<Self, id::CommandEncoderId>,
         id: id::CommandEncoderId,
     ) -> Result<&mut Self, CommandEncoderError> {
@@ -120,6 +126,7 @@ impl<B: hal::Backend> crate::hub::Resource for CommandBuffer<B> {
 
 #[derive(Copy, Clone, Debug)]
 pub struct BasePassRef<'a, C> {
+    pub label: Option<&'a str>,
     pub commands: &'a [C],
     pub dynamic_offsets: &'a [wgt::DynamicOffset],
     pub string_data: &'a [u8],
@@ -137,6 +144,7 @@ pub struct BasePassRef<'a, C> {
     derive(serde::Deserialize)
 )]
 pub struct BasePass<C> {
+    pub label: Option<String>,
     pub commands: Vec<C>,
     pub dynamic_offsets: Vec<wgt::DynamicOffset>,
     pub string_data: Vec<u8>,
@@ -144,8 +152,9 @@ pub struct BasePass<C> {
 }
 
 impl<C: Clone> BasePass<C> {
-    fn new() -> Self {
+    fn new(label: &Label) -> Self {
         Self {
+            label: label.as_ref().map(|cow| cow.to_string()),
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
@@ -156,6 +165,7 @@ impl<C: Clone> BasePass<C> {
     #[cfg(feature = "trace")]
     fn from_ref(base: BasePassRef<C>) -> Self {
         Self {
+            label: base.label.map(str::to_string),
             commands: base.commands.to_vec(),
             dynamic_offsets: base.dynamic_offsets.to_vec(),
             string_data: base.string_data.to_vec(),
@@ -165,6 +175,7 @@ impl<C: Clone> BasePass<C> {
 
     pub fn as_ref(&self) -> BasePassRef<C> {
         BasePassRef {
+            label: self.label.as_ref().map(String::as_str),
             commands: &self.commands,
             dynamic_offsets: &self.dynamic_offsets,
             string_data: &self.string_data,
@@ -195,11 +206,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: actually close the last recorded command buffer
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
 
-        let error = match CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id) {
+        let error = match CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id) {
             Ok(cmd_buf) => {
                 cmd_buf.is_recording = false;
                 // stop tracking the swapchain image, if used
-                if let Some((ref sc_id, _)) = cmd_buf.used_swap_chain {
+                for sc_id in cmd_buf.used_swap_chains.iter() {
                     let view_id = swap_chain_guard[sc_id.value]
                         .acquired_view_id
                         .as_ref()
@@ -226,11 +237,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
-            cmb_raw.begin_debug_marker(label, 0);
+            cmd_buf_raw.begin_debug_marker(label, 0);
         }
         Ok(())
     }
@@ -246,11 +257,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
-            cmb_raw.insert_debug_marker(label, 0);
+            cmd_buf_raw.insert_debug_marker(label, 0);
         }
         Ok(())
     }
@@ -265,11 +276,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
-            cmb_raw.end_debug_marker();
+            cmd_buf_raw.end_debug_marker();
         }
         Ok(())
     }
@@ -343,20 +354,27 @@ pub enum PassErrorScope {
     SetViewport,
     #[error("In a set_scissor_rect command")]
     SetScissorRect,
-    #[error("In a draw command")]
-    Draw,
-    #[error("In a draw_indexed command")]
-    DrawIndexed,
-    #[error("In a draw_indirect command")]
-    DrawIndirect,
-    #[error("In a draw_indexed_indirect command")]
-    DrawIndexedIndirect,
+    #[error("In a draw command, indexed:{indexed} indirect:{indirect}")]
+    Draw {
+        indexed: bool,
+        indirect: bool,
+        pipeline: Option<id::RenderPipelineId>,
+    },
+    #[error("While resetting queries after the renderpass was ran")]
+    QueryReset,
+    #[error("In a write_timestamp command")]
+    WriteTimestamp,
+    #[error("In a begin_pipeline_statistics_query command")]
+    BeginPipelineStatisticsQuery,
+    #[error("In a end_pipeline_statistics_query command")]
+    EndPipelineStatisticsQuery,
     #[error("In a execute_bundle command")]
     ExecuteBundle,
-    #[error("In a dispatch command")]
-    Dispatch,
-    #[error("In a dispatch_indirect command")]
-    DispatchIndirect,
+    #[error("In a dispatch command, indirect:{indirect}")]
+    Dispatch {
+        indirect: bool,
+        pipeline: Option<id::ComputePipelineId>,
+    },
     #[error("In a pop_debug_group command")]
     PopDebugGroup,
 }

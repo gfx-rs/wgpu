@@ -62,6 +62,13 @@ impl<B: hal::Backend> CommandPool<B> {
         }
         self.available.pop().unwrap()
     }
+
+    fn destroy(mut self, device: &B::Device) {
+        unsafe {
+            self.raw.free(self.available.into_iter());
+            device.destroy_command_pool(self.raw);
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -87,13 +94,11 @@ impl<B: GfxBackend> CommandAllocator<B> {
         #[cfg(feature = "trace")] enable_tracing: bool,
     ) -> Result<CommandBuffer<B>, CommandAllocatorError> {
         //debug_assert_eq!(device_id.backend(), B::VARIANT);
-        let _ = label; // silence warning on release
         let thread_id = thread::current().id();
         let mut inner = self.inner.lock();
 
         use std::collections::hash_map::Entry;
         let pool = match inner.pools.entry(thread_id) {
-            Entry::Occupied(e) => e.into_mut(),
             Entry::Vacant(e) => {
                 tracing::info!("Starting on thread {:?}", thread_id);
                 let raw = unsafe {
@@ -104,27 +109,30 @@ impl<B: GfxBackend> CommandAllocator<B> {
                         )
                         .or(Err(DeviceError::OutOfMemory))?
                 };
-                let pool = CommandPool {
+                e.insert(CommandPool {
                     raw,
                     total: 0,
                     available: Vec::new(),
                     pending: Vec::new(),
-                };
-                e.insert(pool)
+                })
             }
+            Entry::Occupied(e) => e.into_mut(),
         };
 
-        let init = pool.allocate();
+        //Note: we have to allocate the first buffer right here, or otherwise
+        // the pool may be cleaned up by maintenance called from another thread.
 
         Ok(CommandBuffer {
-            raw: vec![init],
+            raw: vec![pool.allocate()],
             is_recording: true,
             recorded_thread_id: thread_id,
             device_id,
             trackers: TrackerSet::new(B::VARIANT),
-            used_swap_chain: None,
+            used_swap_chains: Default::default(),
+            buffer_memory_init_actions: Default::default(),
             limits,
             private_features,
+            has_labels: label.is_some(),
             #[cfg(feature = "trace")]
             commands: if enable_tracing {
                 Some(Vec::new())
@@ -209,15 +217,26 @@ impl<B: hal::Backend> CommandAllocator<B> {
             .push((raw, submit_index));
     }
 
-    pub fn after_submit(&self, cmd_buf: CommandBuffer<B>, submit_index: SubmissionIndex) {
+    pub fn after_submit(
+        &self,
+        cmd_buf: CommandBuffer<B>,
+        device: &B::Device,
+        submit_index: SubmissionIndex,
+    ) {
         // Record this command buffer as pending
         let mut inner = self.inner.lock();
+        let clear_label = cmd_buf.has_labels;
         inner
             .pools
             .get_mut(&cmd_buf.recorded_thread_id)
             .unwrap()
             .pending
-            .extend(cmd_buf.raw.into_iter().map(|raw| (raw, submit_index)));
+            .extend(cmd_buf.raw.into_iter().map(|mut raw| {
+                if clear_label {
+                    unsafe { device.set_command_buffer_name(&mut raw, "") };
+                }
+                (raw, submit_index)
+            }));
     }
 
     pub fn maintain(&self, device: &B::Device, last_done_index: SubmissionIndex) {
@@ -232,11 +251,8 @@ impl<B: hal::Backend> CommandAllocator<B> {
         }
         for thread_id in remove_threads {
             tracing::info!("Removing from thread {:?}", thread_id);
-            let mut pool = inner.pools.remove(&thread_id).unwrap();
-            unsafe {
-                pool.raw.free(pool.available);
-                device.destroy_command_pool(pool.raw);
-            }
+            let pool = inner.pools.remove(&thread_id).unwrap();
+            pool.destroy(device);
         }
     }
 
@@ -253,10 +269,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
                     pool.total
                 );
             }
-            unsafe {
-                pool.raw.free(pool.available);
-                device.destroy_command_pool(pool.raw);
-            }
+            pool.destroy(device);
         }
     }
 }

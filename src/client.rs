@@ -4,7 +4,7 @@
 
 use crate::{
     cow_label, ByteBuf, CommandEncoderAction, DeviceAction, DropAction, ImplicitLayout, RawString,
-    TextureAction,
+    ShaderModuleSource, TextureAction,
 };
 
 use wgc::{hub::IdentityManager, id};
@@ -17,8 +17,18 @@ use parking_lot::Mutex;
 use std::{
     borrow::Cow,
     num::{NonZeroU32, NonZeroU8},
-    ptr, slice,
+    ptr,
 };
+
+// we can't call `from_raw_parts` unconditionally because the caller
+// may not even have a valid pointer (e.g. NULL) if the `length` is zero.
+fn make_slice<'a, T>(pointer: *const T, length: usize) -> &'a [T] {
+    if length == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(pointer, length) }
+    }
+}
 
 fn make_byte_buf<T: serde::Serialize>(data: &T) -> ByteBuf {
     let vec = bincode::serialize(data).unwrap();
@@ -27,6 +37,7 @@ fn make_byte_buf<T: serde::Serialize>(data: &T) -> ByteBuf {
 
 #[repr(C)]
 pub struct ShaderModuleDescriptor {
+    label: RawString,
     spirv_words: *const u32,
     spirv_words_length: usize,
     wgsl_chars: RawString,
@@ -51,39 +62,102 @@ impl ProgrammableStageDescriptor {
 pub struct ComputePipelineDescriptor {
     label: RawString,
     layout: Option<id::PipelineLayoutId>,
-    compute_stage: ProgrammableStageDescriptor,
+    stage: ProgrammableStageDescriptor,
 }
 
 #[repr(C)]
-pub struct VertexBufferDescriptor {
-    stride: wgt::BufferAddress,
+pub struct VertexBufferLayout {
+    array_stride: wgt::BufferAddress,
     step_mode: wgt::InputStepMode,
-    attributes: *const wgt::VertexAttributeDescriptor,
+    attributes: *const wgt::VertexAttribute,
     attributes_length: usize,
 }
 
 #[repr(C)]
-pub struct VertexStateDescriptor {
-    index_format: wgt::IndexFormat,
-    vertex_buffers: *const VertexBufferDescriptor,
-    vertex_buffers_length: usize,
+pub struct VertexState {
+    stage: ProgrammableStageDescriptor,
+    buffers: *const VertexBufferLayout,
+    buffers_length: usize,
+}
+
+impl VertexState {
+    fn to_wgpu(&self) -> wgc::pipeline::VertexState {
+        let buffer_layouts = make_slice(self.buffers, self.buffers_length)
+            .iter()
+            .map(|vb| wgc::pipeline::VertexBufferLayout {
+                array_stride: vb.array_stride,
+                step_mode: vb.step_mode,
+                attributes: Cow::Borrowed(make_slice(vb.attributes, vb.attributes_length)),
+            })
+            .collect();
+        wgc::pipeline::VertexState {
+            stage: self.stage.to_wgpu(),
+            buffers: Cow::Owned(buffer_layouts),
+        }
+    }
+}
+
+#[repr(C)]
+pub struct ColorTargetState<'a> {
+    format: wgt::TextureFormat,
+    blend: Option<&'a wgt::BlendState>,
+    write_mask: wgt::ColorWrite,
+}
+
+#[repr(C)]
+pub struct FragmentState<'a> {
+    stage: ProgrammableStageDescriptor,
+    targets: *const ColorTargetState<'a>,
+    targets_length: usize,
+}
+
+impl FragmentState<'_> {
+    fn to_wgpu(&self) -> wgc::pipeline::FragmentState {
+        let color_targets = make_slice(self.targets, self.targets_length)
+            .iter()
+            .map(|ct| wgt::ColorTargetState {
+                format: ct.format,
+                blend: ct.blend.cloned(),
+                write_mask: ct.write_mask,
+            })
+            .collect();
+        wgc::pipeline::FragmentState {
+            stage: self.stage.to_wgpu(),
+            targets: Cow::Owned(color_targets),
+        }
+    }
+}
+
+#[repr(C)]
+pub struct PrimitiveState<'a> {
+    topology: wgt::PrimitiveTopology,
+    strip_index_format: Option<&'a wgt::IndexFormat>,
+    front_face: wgt::FrontFace,
+    cull_mode: Option<&'a wgt::Face>,
+    polygon_mode: wgt::PolygonMode,
+}
+
+impl PrimitiveState<'_> {
+    fn to_wgpu(&self) -> wgt::PrimitiveState {
+        wgt::PrimitiveState {
+            topology: self.topology,
+            strip_index_format: self.strip_index_format.cloned(),
+            front_face: self.front_face.clone(),
+            cull_mode: self.cull_mode.cloned(),
+            polygon_mode: self.polygon_mode,
+        }
+    }
 }
 
 #[repr(C)]
 pub struct RenderPipelineDescriptor<'a> {
     label: RawString,
     layout: Option<id::PipelineLayoutId>,
-    vertex_stage: &'a ProgrammableStageDescriptor,
-    fragment_stage: Option<&'a ProgrammableStageDescriptor>,
-    primitive_topology: wgt::PrimitiveTopology,
-    rasterization_state: Option<&'a wgt::RasterizationStateDescriptor>,
-    color_states: *const wgt::ColorStateDescriptor,
-    color_states_length: usize,
-    depth_stencil_state: Option<&'a wgt::DepthStencilStateDescriptor>,
-    vertex_state: VertexStateDescriptor,
-    sample_count: u32,
-    sample_mask: u32,
-    alpha_to_coverage_enabled: bool,
+    vertex: &'a VertexState,
+    primitive: PrimitiveState<'a>,
+    fragment: Option<&'a FragmentState<'a>>,
+    depth_stencil: Option<&'a wgt::DepthStencilState>,
+    multisample: wgt::MultisampleState,
 }
 
 #[repr(C)]
@@ -101,7 +175,6 @@ pub enum RawBindingType {
     StorageBuffer,
     ReadonlyStorageBuffer,
     Sampler,
-    ComparisonSampler,
     SampledTexture,
     ReadonlyStorageTexture,
     WriteonlyStorageTexture,
@@ -118,6 +191,8 @@ pub struct BindGroupLayoutEntry<'a> {
     texture_sample_type: Option<&'a RawTextureSampleType>,
     multisampled: bool,
     storage_texture_format: Option<&'a wgt::TextureFormat>,
+    sampler_filter: bool,
+    sampler_compare: bool,
 }
 
 #[repr(C)]
@@ -243,14 +318,42 @@ pub unsafe extern "C" fn wgpu_client_drop_action(client: &mut Client, byte_buf: 
     let mut identities = client.identities.lock();
     while let Ok(action) = bincode::deserialize_from(&mut cursor) {
         match action {
-            DropAction::Buffer(id) => identities.select(id.backend()).buffers.free(id),
-            DropAction::Texture(id) => identities.select(id.backend()).textures.free(id),
-            DropAction::Sampler(id) => identities.select(id.backend()).samplers.free(id),
+            DropAction::Adapter(id) => identities.select(id.backend()).adapters.free(id),
+            DropAction::Device(id) => identities.select(id.backend()).devices.free(id),
+            DropAction::ShaderModule(id) => identities.select(id.backend()).shader_modules.free(id),
+            DropAction::PipelineLayout(id) => {
+                identities.select(id.backend()).pipeline_layouts.free(id)
+            }
             DropAction::BindGroupLayout(id) => {
                 identities.select(id.backend()).bind_group_layouts.free(id)
             }
+            DropAction::BindGroup(id) => identities.select(id.backend()).bind_groups.free(id),
+            DropAction::CommandBuffer(id) => {
+                identities.select(id.backend()).command_buffers.free(id)
+            }
+            DropAction::RenderBundle(id) => identities.select(id.backend()).render_bundles.free(id),
+            DropAction::RenderPipeline(id) => {
+                identities.select(id.backend()).render_pipelines.free(id)
+            }
+            DropAction::ComputePipeline(id) => {
+                identities.select(id.backend()).compute_pipelines.free(id)
+            }
+            DropAction::Buffer(id) => identities.select(id.backend()).buffers.free(id),
+            DropAction::Texture(id) => identities.select(id.backend()).textures.free(id),
+            DropAction::TextureView(id) => identities.select(id.backend()).texture_views.free(id),
+            DropAction::Sampler(id) => identities.select(id.backend()).samplers.free(id),
         }
     }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_device_id(client: &Client, id: id::DeviceId) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .devices
+        .free(id)
 }
 
 #[repr(C)]
@@ -295,7 +398,7 @@ pub unsafe extern "C" fn wgpu_client_make_adapter_ids(
 ) -> usize {
     let mut identities = client.identities.lock();
     assert_ne!(id_length, 0);
-    let mut ids = slice::from_raw_parts_mut(ids, id_length).iter_mut();
+    let mut ids = std::slice::from_raw_parts_mut(ids, id_length).iter_mut();
 
     *ids.next().unwrap() = identities.vulkan.adapters.alloc(Backend::Vulkan);
 
@@ -312,13 +415,16 @@ pub unsafe extern "C" fn wgpu_client_make_adapter_ids(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_adapter_id(client: &Client, id: id::AdapterId) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .adapters
-        .free(id)
+pub extern "C" fn wgpu_client_fill_default_limits(limits: &mut wgt::Limits) {
+    *limits = wgt::Limits::default();
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_serialize_device_descriptor(
+    desc: &wgt::DeviceDescriptor<RawString>,
+    bb: &mut ByteBuf,
+) {
+    *bb = make_byte_buf(&desc.map_label(cow_label));
 }
 
 #[no_mangle]
@@ -333,16 +439,6 @@ pub extern "C" fn wgpu_client_make_device_id(
         .select(backend)
         .devices
         .alloc(backend)
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_client_kill_device_id(client: &Client, id: id::DeviceId) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .devices
-        .free(id)
 }
 
 #[no_mangle]
@@ -380,16 +476,6 @@ pub extern "C" fn wgpu_client_create_buffer(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_buffer_id(client: &Client, id: id::BufferId) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .buffers
-        .free(id)
-}
-
-#[no_mangle]
 pub extern "C" fn wgpu_client_create_texture(
     client: &Client,
     device_id: id::DeviceId,
@@ -407,16 +493,6 @@ pub extern "C" fn wgpu_client_create_texture(
     let action = DeviceAction::CreateTexture(id, desc.map_label(cow_label));
     *bb = make_byte_buf(&action);
     id
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_client_kill_texture_id(client: &Client, id: id::TextureId) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .textures
-        .free(id)
 }
 
 #[no_mangle]
@@ -451,16 +527,6 @@ pub extern "C" fn wgpu_client_create_texture_view(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_texture_view_id(client: &Client, id: id::TextureViewId) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .texture_views
-        .free(id)
-}
-
-#[no_mangle]
 pub extern "C" fn wgpu_client_create_sampler(
     client: &Client,
     device_id: id::DeviceId,
@@ -490,16 +556,6 @@ pub extern "C" fn wgpu_client_create_sampler(
     let action = DeviceAction::CreateSampler(id, wgpu_desc);
     *bb = make_byte_buf(&action);
     id
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_client_kill_sampler_id(client: &Client, id: id::SamplerId) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .samplers
-        .free(id)
 }
 
 #[no_mangle]
@@ -536,22 +592,22 @@ pub extern "C" fn wgpu_client_create_command_encoder(
     id
 }
 
-#[no_mangle]
-pub extern "C" fn wgpu_client_kill_encoder_id(client: &Client, id: id::CommandEncoderId) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .command_buffers
-        .free(id)
+#[repr(C)]
+pub struct ComputePassDescriptor {
+    pub label: RawString,
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_command_encoder_begin_compute_pass(
     encoder_id: id::CommandEncoderId,
-    _desc: Option<&wgc::command::ComputePassDescriptor>,
+    desc: &ComputePassDescriptor,
 ) -> *mut wgc::command::ComputePass {
-    let pass = wgc::command::ComputePass::new(encoder_id);
+    let pass = wgc::command::ComputePass::new(
+        encoder_id,
+        &wgc::command::ComputePassDescriptor {
+            label: cow_label(&desc.label),
+        },
+    );
     Box::into_raw(Box::new(pass))
 }
 
@@ -571,6 +627,7 @@ pub unsafe extern "C" fn wgpu_compute_pass_destroy(pass: *mut wgc::command::Comp
 
 #[repr(C)]
 pub struct RenderPassDescriptor {
+    pub label: RawString,
     pub color_attachments: *const wgc::command::ColorAttachmentDescriptor,
     pub color_attachments_length: usize,
     pub depth_stencil_attachment: *const wgc::command::DepthStencilAttachmentDescriptor,
@@ -583,8 +640,9 @@ pub unsafe extern "C" fn wgpu_command_encoder_begin_render_pass(
 ) -> *mut wgc::command::RenderPass {
     let pass = wgc::command::RenderPass::new(
         encoder_id,
-        wgc::command::RenderPassDescriptor {
-            color_attachments: Cow::Borrowed(slice::from_raw_parts(
+        &wgc::command::RenderPassDescriptor {
+            label: cow_label(&desc.label),
+            color_attachments: Cow::Borrowed(make_slice(
                 desc.color_attachments,
                 desc.color_attachments_length,
             )),
@@ -624,7 +682,7 @@ pub unsafe extern "C" fn wgpu_client_create_bind_group_layout(
         .alloc(backend);
 
     let mut entries = Vec::with_capacity(desc.entries_length);
-    for entry in slice::from_raw_parts(desc.entries, desc.entries_length) {
+    for entry in make_slice(desc.entries, desc.entries_length) {
         entries.push(wgt::BindGroupLayoutEntry {
             binding: entry.binding,
             visibility: entry.visibility,
@@ -646,12 +704,8 @@ pub unsafe extern "C" fn wgpu_client_create_bind_group_layout(
                     min_binding_size: entry.min_binding_size,
                 },
                 RawBindingType::Sampler => wgt::BindingType::Sampler {
-                    comparison: false,
-                    filtering: false,
-                },
-                RawBindingType::ComparisonSampler => wgt::BindingType::Sampler {
-                    comparison: true,
-                    filtering: false,
+                    comparison: entry.sampler_compare,
+                    filtering: entry.sampler_filter,
                 },
                 RawBindingType::SampledTexture => wgt::BindingType::Texture {
                     //TODO: the spec has a bug here
@@ -695,19 +749,6 @@ pub unsafe extern "C" fn wgpu_client_create_bind_group_layout(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_bind_group_layout_id(
-    client: &Client,
-    id: id::BindGroupLayoutId,
-) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .bind_group_layouts
-        .free(id)
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn wgpu_client_create_pipeline_layout(
     client: &Client,
     device_id: id::DeviceId,
@@ -724,7 +765,7 @@ pub unsafe extern "C" fn wgpu_client_create_pipeline_layout(
 
     let wgpu_desc = wgc::binding_model::PipelineLayoutDescriptor {
         label: cow_label(&desc.label),
-        bind_group_layouts: Cow::Borrowed(slice::from_raw_parts(
+        bind_group_layouts: Cow::Borrowed(make_slice(
             desc.bind_group_layouts,
             desc.bind_group_layouts_length,
         )),
@@ -734,16 +775,6 @@ pub unsafe extern "C" fn wgpu_client_create_pipeline_layout(
     let action = DeviceAction::CreatePipelineLayout(id, wgpu_desc);
     *bb = make_byte_buf(&action);
     id
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_client_kill_pipeline_layout_id(client: &Client, id: id::PipelineLayoutId) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .pipeline_layouts
-        .free(id)
 }
 
 #[no_mangle]
@@ -762,7 +793,7 @@ pub unsafe extern "C" fn wgpu_client_create_bind_group(
         .alloc(backend);
 
     let mut entries = Vec::with_capacity(desc.entries_length);
-    for entry in slice::from_raw_parts(desc.entries, desc.entries_length) {
+    for entry in make_slice(desc.entries, desc.entries_length) {
         entries.push(wgc::binding_model::BindGroupEntry {
             binding: entry.binding,
             resource: if let Some(id) = entry.buffer {
@@ -792,16 +823,6 @@ pub unsafe extern "C" fn wgpu_client_create_bind_group(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_bind_group_id(client: &Client, id: id::BindGroupId) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .bind_groups
-        .free(id)
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn wgpu_client_create_shader_module(
     client: &Client,
     device_id: id::DeviceId,
@@ -816,28 +837,21 @@ pub unsafe extern "C" fn wgpu_client_create_shader_module(
         .shader_modules
         .alloc(backend);
 
-    assert!(!desc.spirv_words.is_null());
-    let spv = Cow::Borrowed(if desc.spirv_words.is_null() {
-        &[][..]
-    } else {
-        slice::from_raw_parts(desc.spirv_words, desc.spirv_words_length)
-    });
+    let source = match cow_label(&desc.wgsl_chars) {
+        Some(code) => ShaderModuleSource::Wgsl(code),
+        None => ShaderModuleSource::SpirV(Cow::Borrowed(make_slice(
+            desc.spirv_words,
+            desc.spirv_words_length,
+        ))),
+    };
+    let desc = wgc::pipeline::ShaderModuleDescriptor {
+        label: cow_label(&desc.label),
+        flags: wgt::ShaderFlags::VALIDATION, // careful here!
+    };
 
-    let wgsl = cow_label(&desc.wgsl_chars).unwrap_or_default();
-
-    let action = DeviceAction::CreateShaderModule(id, spv, wgsl);
+    let action = DeviceAction::CreateShaderModule(id, desc, source);
     *bb = make_byte_buf(&action);
     id
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_client_kill_shader_module_id(client: &Client, id: id::ShaderModuleId) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .shader_modules
-        .free(id)
 }
 
 #[no_mangle]
@@ -855,7 +869,7 @@ pub unsafe extern "C" fn wgpu_client_create_compute_pipeline(
     let wgpu_desc = wgc::pipeline::ComputePipelineDescriptor {
         label: cow_label(&desc.label),
         layout: desc.layout,
-        compute_stage: desc.compute_stage.to_wgpu(),
+        stage: desc.stage.to_wgpu(),
     };
 
     let implicit = match desc.layout {
@@ -875,16 +889,6 @@ pub unsafe extern "C" fn wgpu_client_create_compute_pipeline(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_compute_pipeline_id(client: &Client, id: id::ComputePipelineId) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .compute_pipelines
-        .free(id)
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn wgpu_client_create_render_pipeline(
     client: &Client,
     device_id: id::DeviceId,
@@ -899,42 +903,11 @@ pub unsafe extern "C" fn wgpu_client_create_render_pipeline(
     let wgpu_desc = wgc::pipeline::RenderPipelineDescriptor {
         label: cow_label(&desc.label),
         layout: desc.layout,
-        vertex_stage: desc.vertex_stage.to_wgpu(),
-        fragment_stage: desc
-            .fragment_stage
-            .map(ProgrammableStageDescriptor::to_wgpu),
-        rasterization_state: desc.rasterization_state.cloned(),
-        primitive_topology: desc.primitive_topology,
-        color_states: Cow::Borrowed(slice::from_raw_parts(
-            desc.color_states,
-            desc.color_states_length,
-        )),
-        depth_stencil_state: desc.depth_stencil_state.cloned(),
-        vertex_state: wgc::pipeline::VertexStateDescriptor {
-            index_format: desc.vertex_state.index_format,
-            vertex_buffers: {
-                let vbufs = slice::from_raw_parts(
-                    desc.vertex_state.vertex_buffers,
-                    desc.vertex_state.vertex_buffers_length,
-                );
-                let owned = vbufs
-                    .iter()
-                    .map(|vb| wgc::pipeline::VertexBufferDescriptor {
-                        stride: vb.stride,
-                        step_mode: vb.step_mode,
-                        attributes: Cow::Borrowed(if vb.attributes.is_null() {
-                            &[]
-                        } else {
-                            slice::from_raw_parts(vb.attributes, vb.attributes_length)
-                        }),
-                    })
-                    .collect();
-                Cow::Owned(owned)
-            },
-        },
-        sample_count: desc.sample_count,
-        sample_mask: desc.sample_mask,
-        alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
+        vertex: desc.vertex.to_wgpu(),
+        fragment: desc.fragment.map(FragmentState::to_wgpu),
+        primitive: desc.primitive.to_wgpu(),
+        depth_stencil: desc.depth_stencil.cloned(),
+        multisample: desc.multisample.clone(),
     };
 
     let implicit = match desc.layout {
@@ -951,16 +924,6 @@ pub unsafe extern "C" fn wgpu_client_create_render_pipeline(
     let action = DeviceAction::CreateRenderPipeline(id, wgpu_desc, implicit);
     *bb = make_byte_buf(&action);
     id
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_client_kill_render_pipeline_id(client: &Client, id: id::RenderPipelineId) {
-    client
-        .identities
-        .lock()
-        .select(id.backend())
-        .render_pipelines
-        .free(id)
 }
 
 #[no_mangle]
@@ -1013,4 +976,15 @@ pub unsafe extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
 ) {
     let action = CommandEncoderAction::CopyTextureToTexture { src, dst, size };
     *bb = make_byte_buf(&action);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_render_pass_set_index_buffer(
+    pass: &mut wgc::command::RenderPass,
+    buffer: wgc::id::BufferId,
+    index_format: wgt::IndexFormat,
+    offset: wgt::BufferAddress,
+    size: Option<wgt::BufferSize>,
+) {
+    pass.set_index_buffer(buffer, index_format, offset, size);
 }
