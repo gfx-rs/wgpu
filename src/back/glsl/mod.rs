@@ -103,6 +103,11 @@ impl Version {
             Version::Embedded(v) => SUPPORTED_ES_VERSIONS.contains(&v),
         }
     }
+
+    /// Checks if the version supports explicit `layout(location=)` qualifiers.
+    fn supports_explicit_locations(&self) -> bool {
+        *self >= Version::Embedded(310) || *self >= Version::Desktop(410)
+    }
 }
 
 impl PartialOrd for Version {
@@ -235,18 +240,23 @@ impl IdGenerator {
 /// - Varyings with location bindings are named `_location_X` where `X` is the location
 struct VaryingName<'a> {
     binding: &'a Binding,
+    stage: ShaderStage,
     output: bool,
 }
 impl fmt::Display for VaryingName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self.binding {
             Binding::Location(location, _) => {
-                write!(
-                    f,
-                    "_{}_location_{}",
-                    if self.output { "out" } else { "in" },
-                    location,
-                )
+                let prefix = match (self.stage, self.output) {
+                    (ShaderStage::Compute, _) => unreachable!(),
+                    // pipeline to vertex
+                    (ShaderStage::Vertex, false) => "p2vs",
+                    // vertex to fragment
+                    (ShaderStage::Vertex, true) | (ShaderStage::Fragment, false) => "vs2fs",
+                    // fragment to pipeline
+                    (ShaderStage::Fragment, true) => "fs2p",
+                };
+                write!(f, "_{}_location{}", prefix, location,)
             }
             Binding::BuiltIn(built_in) => {
                 write!(f, "{}", glsl_built_in(built_in, self.output))
@@ -547,7 +557,7 @@ impl<'a, W: Write> Writer<'a, W> {
             let fun_info = &self.analysis[handle];
 
             // Write the function
-            self.write_function(FunctionType::Function(handle), function, fun_info, name)?;
+            self.write_function(FunctionType::Function(handle), function, fun_info, &name)?;
 
             writeln!(self.out)?;
         }
@@ -794,36 +804,28 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
             }
             _ => {
-                let binding = match binding {
-                    Some(binding @ &Binding::Location(..)) => binding,
+                let (location, interpolation) = match binding {
+                    Some(&Binding::Location(location, interpolation)) => (location, interpolation),
                     _ => return Ok(()),
                 };
                 // Write the interpolation modifier if needed
                 //
                 // We ignore all interpolation modifiers that aren't used in input globals in fragment
                 // shaders or output globals in vertex shaders
-                //
-                // TODO: Should this throw an error?
-                if let Binding::Location(_, Some(interp)) = *binding {
+                if let Some(interp) = interpolation {
                     if self.options.shader_stage == ShaderStage::Fragment {
                         write!(self.out, "{} ", glsl_interpolation(interp))?;
                     }
                 }
 
                 // Write the storage class
-                if self.options.version >= Version::Embedded(310)
-                    || self.options.version >= Version::Desktop(410)
-                {
-                    if let Binding::Location(index, ..) = *binding {
-                        write!(
-                            self.out,
-                            "layout(location = {}) {} ",
-                            index,
-                            if output { "out" } else { "in" }
-                        )?;
-                    } else {
-                        write!(self.out, "{} ", if output { "out" } else { "in" })?;
-                    }
+                if self.options.version.supports_explicit_locations() {
+                    write!(
+                        self.out,
+                        "layout(location = {}) {} ",
+                        location,
+                        if output { "out" } else { "in" }
+                    )?;
                 } else {
                     write!(self.out, "{} ", if output { "out" } else { "in" })?;
                 }
@@ -833,7 +835,12 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // Finally write the global name and end the global with a `;` and a newline
                 // Leading space is important
-                writeln!(self.out, " {};", VaryingName { binding, output })?;
+                let vname = VaryingName {
+                    binding: &Binding::Location(location, None),
+                    stage: self.entry_point.stage,
+                    output,
+                };
+                writeln!(self.out, " {};", vname)?;
             }
         }
         Ok(())
@@ -843,12 +850,12 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Notes
     /// Adds a newline
-    fn write_function<N: AsRef<str>>(
+    fn write_function(
         &mut self,
         ty: FunctionType,
         func: &Function,
         info: &FunctionInfo,
-        name: N,
+        name: &str,
     ) -> BackendResult {
         // Create a new typifier and resolve all types for the current function
         let mut typifier = Typifier::new();
@@ -896,7 +903,7 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         // Write the function name and open parentheses for the argument list
-        write!(self.out, " {}(", name.as_ref())?;
+        write!(self.out, " {}(", name)?;
 
         // Write the comma separated argument list
         //
@@ -923,6 +930,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Compose the function arguments from globals, in case of an entry point.
         if let FunctionType::EntryPoint(ep_index) = ctx.func {
+            let stage = self.module.entry_points[ep_index as usize].stage;
             for (index, arg) in func.arguments.iter().enumerate() {
                 write!(self.out, "{}", INDENT)?;
                 self.write_type(arg.ty)?;
@@ -939,6 +947,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         for (index, member) in members.iter().enumerate() {
                             let varying_name = VaryingName {
                                 binding: member.binding.as_ref().unwrap(),
+                                stage,
                                 output: false,
                             };
                             if index != 0 {
@@ -951,6 +960,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     _ => {
                         let varying_name = VaryingName {
                             binding: arg.binding.as_ref().unwrap(),
+                            stage,
                             output: false,
                         };
                         writeln!(self.out, "{};", varying_name)?;
@@ -1342,9 +1352,8 @@ impl<'a, W: Write> Writer<'a, W> {
                         writeln!(self.out, ";")?;
                     }
                     FunctionType::EntryPoint(ep_index) => {
-                        if let Some(ref result) =
-                            self.module.entry_points[ep_index as usize].function.result
-                        {
+                        let ep = &self.module.entry_points[ep_index as usize];
+                        if let Some(ref result) = ep.function.result {
                             let value = value.unwrap();
                             match self.module.types[result.ty].inner {
                                 crate::TypeInner::Struct {
@@ -1354,6 +1363,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                     for (index, member) in members.iter().enumerate() {
                                         let varying_name = VaryingName {
                                             binding: member.binding.as_ref().unwrap(),
+                                            stage: ep.stage,
                                             output: true,
                                         };
                                         write!(self.out, "{} = ", varying_name)?;
@@ -1367,6 +1377,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 _ => {
                                     let name = VaryingName {
                                         binding: result.binding.as_ref().unwrap(),
+                                        stage: ep.stage,
                                         output: true,
                                     };
                                     write!(self.out, "{} = ", name)?;

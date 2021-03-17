@@ -16,7 +16,7 @@ uniform Data_block_0 {
     mat4x4 view;
 } _group_0_binding_0;
 
-layout(location = 0) out vec3 _out_location_0;
+layout(location = 0) out vec3 _vs2fs_location0;
 
 void main() {
     uint vertex_index = uint(gl_VertexID);
@@ -30,7 +30,7 @@ void main() {
     out1.uv = (transpose(mat3x3(vec3(_group_0_binding_0.view[0][0], _group_0_binding_0.view[0][1], _group_0_binding_0.view[0][2]), vec3(_group_0_binding_0.view[1][0], _group_0_binding_0.view[1][1], _group_0_binding_0.view[1][2]), vec3(_group_0_binding_0.view[2][0], _group_0_binding_0.view[2][1], _group_0_binding_0.view[2][2]))) * vec3(_expr50[0], _expr50[1], _expr50[2]));
     out1.position = _expr24;
     gl_Position = out1.position;
-    _out_location_0 = out1.uv;
+    _vs2fs_location0 = out1.uv;
     return;
 }
 
