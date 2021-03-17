@@ -3,19 +3,20 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::DeviceError,
+    device::{alloc::MemoryBlock, DeviceError, HostMap},
+    hub::Resource,
     id::{DeviceId, SwapChainId, TextureId},
     track::{TextureSelector, DUMMY_SELECTOR},
     validation::MissingBufferUsageError,
     Label, LifeGuard, RefCount, Stored,
 };
 
-use gfx_memory::MemoryBlock;
 use thiserror::Error;
 
 use std::{
     borrow::Borrow,
     num::{NonZeroU32, NonZeroU8},
+    ops::Range,
     ptr::NonNull,
 };
 
@@ -93,7 +94,7 @@ pub(crate) enum BufferMapState<B: hal::Backend> {
     Active {
         ptr: NonNull<u8>,
         sub_range: hal::buffer::SubRange,
-        host: crate::device::HostMap,
+        host: HostMap,
     },
     /// Not mapped
     Idle,
@@ -107,7 +108,7 @@ pub type BufferMapCallback = unsafe extern "C" fn(status: BufferMapAsyncStatus, 
 #[repr(C)]
 #[derive(Debug)]
 pub struct BufferMapOperation {
-    pub host: crate::device::HostMap,
+    pub host: HostMap,
     pub callback: BufferMapCallback,
     pub user_data: *mut u8,
 }
@@ -143,20 +144,9 @@ pub enum BufferAccessError {
     UnalignedRange,
 }
 
-impl From<hal::device::MapError> for BufferAccessError {
-    fn from(error: hal::device::MapError) -> Self {
-        match error {
-            hal::device::MapError::OutOfMemory(_) => {
-                BufferAccessError::Device(DeviceError::OutOfMemory)
-            }
-            _ => panic!("failed to map buffer: {}", error),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct BufferPendingMapping {
-    pub sub_range: hal::buffer::SubRange,
+    pub range: Range<wgt::BufferAddress>,
     pub op: BufferMapOperation,
     // hold the parent alive while the mapping is active
     pub parent_ref_count: RefCount,
@@ -188,9 +178,11 @@ pub enum CreateBufferError {
     UsageMismatch(wgt::BufferUsage),
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for Buffer<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
+impl<B: hal::Backend> Resource for Buffer<B> {
+    const TYPE: &'static str = "Buffer";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 
@@ -246,9 +238,11 @@ pub enum CreateTextureError {
     MissingFeature(wgt::Features, wgt::TextureFormat),
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for Texture<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
+impl<B: hal::Backend> Resource for Texture<B> {
+    const TYPE: &'static str = "Texture";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 
@@ -329,9 +323,14 @@ pub enum CreateTextureViewError {
     #[error(
         "TextureView mip level count + base mip level {requested} must be <= Texture mip level count {total}"
     )]
-    InvalidMipLevelCount { requested: u32, total: u8 },
+    TooManyMipLevels { requested: u32, total: u8 },
     #[error("TextureView array layer count + base array layer {requested} must be <= Texture depth/array layer count {total}")]
-    InvalidArrayLayerCount { requested: u32, total: u16 },
+    TooManyArrayLayers { requested: u32, total: u16 },
+    #[error("Requested array layer count {requested} is not valid for the target view dimension {dim:?}")]
+    InvalidArrayLayerCount {
+        requested: u32,
+        dim: wgt::TextureViewDimension,
+    },
     #[error("Aspect {requested:?} is not in the source texture ({total:?})")]
     InvalidAspect {
         requested: hal::format::Aspects,
@@ -345,9 +344,11 @@ pub enum TextureViewDestroyError {
     SwapChainImage,
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for TextureView<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
+impl<B: hal::Backend> Resource for TextureView<B> {
+    const TYPE: &'static str = "TextureView";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 
@@ -423,9 +424,11 @@ pub enum CreateSamplerError {
     MissingFeature(wgt::Features),
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for Sampler<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
+impl<B: hal::Backend> Resource for Sampler<B> {
+    const TYPE: &'static str = "Sampler";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 

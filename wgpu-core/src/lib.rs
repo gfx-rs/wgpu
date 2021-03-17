@@ -8,6 +8,8 @@
     unused_extern_crates,
     unused_qualifications
 )]
+// We use loops for getting early-out of scope without closures.
+#![allow(clippy::never_loop)]
 
 #[macro_use]
 mod macros;
@@ -19,6 +21,8 @@ pub mod backend {
     pub use gfx_backend_dx11::Backend as Dx11;
     #[cfg(dx12)]
     pub use gfx_backend_dx12::Backend as Dx12;
+    #[cfg(gl)]
+    pub use gfx_backend_gl::Backend as Gl;
     #[cfg(metal)]
     pub use gfx_backend_metal::Backend as Metal;
     #[cfg(vulkan)]
@@ -55,6 +59,22 @@ type Epoch = u32;
 
 pub type RawString = *const c_char;
 pub type Label<'a> = Option<Cow<'a, str>>;
+
+trait LabelHelpers<'a> {
+    fn to_string_or_default(&'a self) -> String;
+    fn borrow_or_default(&'a self) -> &'a str;
+}
+impl<'a> LabelHelpers<'a> for Label<'a> {
+    fn borrow_or_default(&'a self) -> &'a str {
+        self.as_ref().map(|cow| cow.as_ref()).unwrap_or("")
+    }
+    fn to_string_or_default(&'a self) -> String {
+        self.as_ref()
+            .map(|cow| cow.as_ref())
+            .unwrap_or("")
+            .to_string()
+    }
+}
 
 /// Reference count object that is 1:1 with each reference.
 #[derive(Debug)]
@@ -161,17 +181,22 @@ impl Drop for MultiRefCount {
 }
 
 #[derive(Debug)]
-struct LifeGuard {
+pub struct LifeGuard {
     ref_count: Option<RefCount>,
     submission_index: AtomicUsize,
+    #[cfg(debug_assertions)]
+    pub(crate) label: String,
 }
 
 impl LifeGuard {
-    fn new() -> Self {
+    #[allow(unused_variables)]
+    fn new(label: &str) -> Self {
         let bx = Box::new(AtomicUsize::new(1));
         Self {
             ref_count: ptr::NonNull::new(Box::into_raw(bx)).map(RefCount),
             submission_index: AtomicUsize::new(0),
+            #[cfg(debug_assertions)]
+            label: label.to_string(),
         }
     }
 
@@ -203,6 +228,8 @@ struct PrivateFeatures {
 #[macro_export]
 macro_rules! gfx_select {
     ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {
+        // Note: For some reason the cfg aliases defined in build.rs don't succesfully apply in this
+        // macro so we must specify their equivalents manually
         match $id.backend() {
             #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
             wgt::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),* ),
@@ -212,7 +239,9 @@ macro_rules! gfx_select {
             wgt::Backend::Dx12 => $global.$method::<$crate::backend::Dx12>( $($param),* ),
             #[cfg(windows)]
             wgt::Backend::Dx11 => $global.$method::<$crate::backend::Dx11>( $($param),* ),
-            _ => unreachable!()
+            //#[cfg(all(unix, not(any(target_os = "ios", target_os = "macos"))))]
+            //wgt::Backend::Gl => $global.$method::<$crate::backend::Gl>( $($param),+ ),
+            other => panic!("Unexpected backend {:?}", other),
         }
     };
 }

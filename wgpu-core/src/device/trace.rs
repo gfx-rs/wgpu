@@ -31,7 +31,7 @@ pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum Action<'a> {
     Init {
-        desc: wgt::DeviceDescriptor,
+        desc: crate::device::DeviceDescriptor<'a>,
         backend: wgt::Backend,
     },
     CreateBuffer(id::BufferId, crate::resource::BufferDescriptor<'a>),
@@ -71,6 +71,7 @@ pub enum Action<'a> {
     DestroyBindGroup(id::BindGroupId),
     CreateShaderModule {
         id: id::ShaderModuleId,
+        label: crate::Label<'a>,
         data: FileName,
     },
     DestroyShaderModule(id::ShaderModuleId),

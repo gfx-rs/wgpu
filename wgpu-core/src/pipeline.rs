@@ -5,21 +5,32 @@
 use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
     device::{DeviceError, RenderPassContext},
+    hub::Resource,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation::StageError,
-    Label, LifeGuard, RefCount, Stored,
+    Label, LifeGuard, Stored,
 };
-use std::borrow::{Borrow, Cow};
+use std::borrow::Cow;
 use thiserror::Error;
 use wgt::{BufferAddress, IndexFormat, InputStepMode};
 
-// Unable to serialize with `naga::Module` in here:
-// requires naga serialization feature.
 #[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum ShaderModuleSource<'a> {
     SpirV(Cow<'a, [u32]>),
     Wgsl(Cow<'a, str>),
-    Naga(naga::Module),
+    // Unable to serialize with `naga::Module` in here:
+    // requires naga serialization feature.
+    //Naga(naga::Module),
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct ShaderModuleDescriptor<'a> {
+    pub label: Label<'a>,
+    pub source: ShaderModuleSource<'a>,
 }
 
 #[derive(Debug)]
@@ -27,6 +38,23 @@ pub struct ShaderModule<B: hal::Backend> {
     pub(crate) raw: B::ShaderModule,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) module: Option<naga::Module>,
+    #[cfg(debug_assertions)]
+    pub(crate) label: String,
+}
+
+impl<B: hal::Backend> Resource for ShaderModule<B> {
+    const TYPE: &'static str = "ShaderModule";
+
+    fn life_guard(&self) -> &LifeGuard {
+        unreachable!()
+    }
+
+    fn label(&self) -> &str {
+        #[cfg(debug_assertions)]
+        return &self.label;
+        #[cfg(not(debug_assertions))]
+        return "";
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -96,9 +124,11 @@ pub struct ComputePipeline<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for ComputePipeline<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
+impl<B: hal::Backend> Resource for ComputePipeline<B> {
+    const TYPE: &'static str = "ComputePipeline";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 
@@ -171,6 +201,8 @@ pub enum CreateRenderPipelineError {
     InvalidLayout,
     #[error("unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
+    #[error("missing output at index {index}")]
+    MissingOutput { index: u8 },
     #[error("incompatible output format at index {index}")]
     IncompatibleOutputFormat { index: u8 },
     #[error("invalid sample count {0}")]
@@ -213,8 +245,10 @@ pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for RenderPipeline<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
+impl<B: hal::Backend> Resource for RenderPipeline<B> {
+    const TYPE: &'static str = "RenderPipeline";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }

@@ -14,23 +14,6 @@ use wgc::device::trace;
 
 use std::{borrow::Cow, fmt::Debug, fs, marker::PhantomData, path::Path};
 
-#[macro_export]
-macro_rules! gfx_select {
-    ($id:expr => $global:ident.$method:ident( $($param:expr),+ )) => {
-        match $id.backend() {
-            #[cfg(not(any(target_os = "ios", target_os = "macos")))]
-            wgt::Backend::Vulkan => $global.$method::<wgc::backend::Vulkan>( $($param),+ ),
-            #[cfg(any(target_os = "ios", target_os = "macos"))]
-            wgt::Backend::Metal => $global.$method::<wgc::backend::Metal>( $($param),+ ),
-            #[cfg(windows)]
-            wgt::Backend::Dx12 => $global.$method::<wgc::backend::Dx12>( $($param),+ ),
-            #[cfg(windows)]
-            wgt::Backend::Dx11 => $global.$method::<wgc::backend::Dx11>( $($param),+ ),
-            _ => unreachable!()
-        }
-    };
-}
-
 #[derive(Debug)]
 pub struct IdentityPassThrough<I>(PhantomData<I>);
 
@@ -117,8 +100,12 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 }
             }
         }
-        self.command_encoder_finish::<B>(encoder, &wgt::CommandBufferDescriptor { label: None })
-            .unwrap()
+        let (cmd_buf, error) = self
+            .command_encoder_finish::<B>(encoder, &wgt::CommandBufferDescriptor { label: None });
+        if let Some(e) = error {
+            panic!("{:?}", e);
+        }
+        cmd_buf
     }
 
     fn process<B: wgc::hub::GfxBackend>(
@@ -137,7 +124,10 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             A::CreateBuffer(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_buffer::<B>(device, &desc, id).unwrap();
+                let (_, error) = self.device_create_buffer::<B>(device, &desc, id);
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
             }
             A::FreeBuffer(id) => {
                 self.buffer_destroy::<B>(id).unwrap();
@@ -147,7 +137,10 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             A::CreateTexture(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_texture::<B>(device, &desc, id).unwrap();
+                let (_, error) = self.device_create_texture::<B>(device, &desc, id);
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
             }
             A::FreeTexture(id) => {
                 self.texture_destroy::<B>(id).unwrap();
@@ -161,14 +154,20 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 desc,
             } => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.texture_create_view::<B>(parent_id, &desc, id).unwrap();
+                let (_, error) = self.texture_create_view::<B>(parent_id, &desc, id);
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
             }
             A::DestroyTextureView(id) => {
                 self.texture_view_drop::<B>(id).unwrap();
             }
             A::CreateSampler(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_sampler::<B>(device, &desc, id).unwrap();
+                let (_, error) = self.device_create_sampler::<B>(device, &desc, id);
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
             }
             A::DestroySampler(id) => {
                 self.sampler_drop::<B>(id);
@@ -182,58 +181,75 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 }
             }
             A::CreateBindGroupLayout(id, desc) => {
-                self.device_create_bind_group_layout::<B>(device, &desc, id)
-                    .unwrap();
+                let (_, error) = self.device_create_bind_group_layout::<B>(device, &desc, id);
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
             }
             A::DestroyBindGroupLayout(id) => {
                 self.bind_group_layout_drop::<B>(id);
             }
             A::CreatePipelineLayout(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_pipeline_layout::<B>(device, &desc, id)
-                    .unwrap();
+                let (_, error) = self.device_create_pipeline_layout::<B>(device, &desc, id);
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
             }
             A::DestroyPipelineLayout(id) => {
                 self.pipeline_layout_drop::<B>(id);
             }
             A::CreateBindGroup(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_bind_group::<B>(device, &desc, id)
-                    .unwrap();
+                let (_, error) = self.device_create_bind_group::<B>(device, &desc, id);
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
             }
             A::DestroyBindGroup(id) => {
                 self.bind_group_drop::<B>(id);
             }
-            A::CreateShaderModule { id, data } => {
-                let source = if data.ends_with(".wgsl") {
-                    let code = fs::read_to_string(dir.join(data)).unwrap();
-                    wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code))
-                } else {
-                    let byte_vec = fs::read(dir.join(data)).unwrap();
-                    let spv = byte_vec
-                        .chunks(4)
-                        .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-                        .collect::<Vec<_>>();
-                    wgc::pipeline::ShaderModuleSource::SpirV(Cow::Owned(spv))
+            A::CreateShaderModule { id, data, label } => {
+                let desc = wgc::pipeline::ShaderModuleDescriptor {
+                    source: if data.ends_with(".wgsl") {
+                        let code = fs::read_to_string(dir.join(data)).unwrap();
+                        wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code))
+                    } else {
+                        let byte_vec = fs::read(dir.join(data)).unwrap();
+                        let spv = byte_vec
+                            .chunks(4)
+                            .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                            .collect::<Vec<_>>();
+                        wgc::pipeline::ShaderModuleSource::SpirV(Cow::Owned(spv))
+                    },
+                    label,
                 };
-                self.device_create_shader_module::<B>(device, source, id)
-                    .unwrap();
+                let (_, error) = self.device_create_shader_module::<B>(device, &desc, id);
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
             }
             A::DestroyShaderModule(id) => {
                 self.shader_module_drop::<B>(id);
             }
             A::CreateComputePipeline(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_compute_pipeline::<B>(device, &desc, id, None)
-                    .unwrap();
+                let (_, _, error) =
+                    self.device_create_compute_pipeline::<B>(device, &desc, id, None);
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
             }
             A::DestroyComputePipeline(id) => {
                 self.compute_pipeline_drop::<B>(id);
             }
             A::CreateRenderPipeline(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_render_pipeline::<B>(device, &desc, id, None)
-                    .unwrap();
+                let (_, _, error) =
+                    self.device_create_render_pipeline::<B>(device, &desc, id, None);
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
             }
             A::DestroyRenderPipeline(id) => {
                 self.render_pipeline_drop::<B>(id);
@@ -241,12 +257,14 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::CreateRenderBundle { id, desc, base } => {
                 let bundle =
                     wgc::command::RenderBundleEncoder::new(&desc, device, Some(base)).unwrap();
-                self.render_bundle_encoder_finish::<B>(
+                let (_, error) = self.render_bundle_encoder_finish::<B>(
                     bundle,
                     &wgt::RenderBundleDescriptor { label: desc.label },
                     id,
-                )
-                .unwrap();
+                );
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
             }
             A::DestroyRenderBundle(id) => {
                 self.render_bundle_drop::<B>(id);
@@ -279,13 +297,14 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     .unwrap();
             }
             A::Submit(_index, commands) => {
-                let encoder = self
-                    .device_create_command_encoder::<B>(
-                        device,
-                        &wgt::CommandEncoderDescriptor { label: None },
-                        comb_manager.alloc(device.backend()),
-                    )
-                    .unwrap();
+                let (encoder, error) = self.device_create_command_encoder::<B>(
+                    device,
+                    &wgt::CommandEncoderDescriptor { label: None },
+                    comb_manager.alloc(device.backend()),
+                );
+                if let Some(e) = error {
+                    panic!("{:?}", e);
+                }
                 let cmdbuf = self.encode_commands::<B>(encoder, commands);
                 self.queue_submit::<B>(device, &[cmdbuf]).unwrap();
             }

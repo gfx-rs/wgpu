@@ -140,8 +140,8 @@ fn get_aligned_type_size(
                 None => get_aligned_type_size(module, base, false),
             };
             let count = match module.constants[const_handle].inner {
-                naga::ConstantInner::Uint(count) => count,
-                ref other => panic!("Unexpected array size {:?}", other),
+                naga::ConstantInner::Uint(value) => value,
+                ref other => panic!("Invalid array size constant: {:?}", other),
             };
             base_size * count
         }
@@ -240,19 +240,17 @@ fn check_binding_use(
     match module.types[var.ty].inner {
         naga::TypeInner::Struct { ref members } => {
             let (allowed_usage, min_size) = match entry.ty {
-                BindingType::UniformBuffer {
-                    dynamic: _,
+                BindingType::Buffer {
+                    ty,
+                    has_dynamic_offset: _,
                     min_binding_size,
-                } => (naga::GlobalUse::LOAD, min_binding_size),
-                BindingType::StorageBuffer {
-                    dynamic: _,
-                    min_binding_size,
-                    readonly,
                 } => {
-                    let global_use = if readonly {
-                        naga::GlobalUse::LOAD
-                    } else {
-                        naga::GlobalUse::all()
+                    let global_use = match ty {
+                        wgt::BufferBindingType::Uniform
+                        | wgt::BufferBindingType::Storage { read_only: true } => {
+                            naga::GlobalUse::LOAD
+                        }
+                        wgt::BufferBindingType::Storage { read_only: _ } => naga::GlobalUse::all(),
                     };
                     (global_use, min_binding_size)
                 }
@@ -271,7 +269,10 @@ fn check_binding_use(
             Ok(allowed_usage)
         }
         naga::TypeInner::Sampler { comparison } => match entry.ty {
-            BindingType::Sampler { comparison: cmp } => {
+            BindingType::Sampler {
+                filtering: _,
+                comparison: cmp,
+            } => {
                 if cmp == comparison {
                     Ok(naga::GlobalUse::LOAD)
                 } else {
@@ -286,8 +287,8 @@ fn check_binding_use(
             class,
         } => {
             let view_dimension = match entry.ty {
-                BindingType::SampledTexture { dimension, .. }
-                | BindingType::StorageTexture { dimension, .. } => dimension,
+                BindingType::Texture { view_dimension, .. }
+                | BindingType::StorageTexture { view_dimension, .. } => view_dimension,
                 _ => {
                     return Err(BindingError::WrongTextureViewDimension {
                         dim,
@@ -321,40 +322,38 @@ fn check_binding_use(
                 }
             }
             let (expected_class, usage) = match entry.ty {
-                BindingType::SampledTexture {
-                    dimension: _,
-                    component_type,
-                    multisampled,
+                BindingType::Texture {
+                    sample_type,
+                    view_dimension: _,
+                    multisampled: multi,
                 } => {
-                    let (kind, comparison) = match component_type {
-                        wgt::TextureComponentType::Float => (naga::ScalarKind::Float, false),
-                        wgt::TextureComponentType::Sint => (naga::ScalarKind::Sint, false),
-                        wgt::TextureComponentType::Uint => (naga::ScalarKind::Uint, false),
-                        wgt::TextureComponentType::DepthComparison => {
-                            (naga::ScalarKind::Float, true)
-                        }
-                    };
-                    let class = if comparison {
-                        naga::ImageClass::Depth
-                    } else {
-                        naga::ImageClass::Sampled {
-                            kind,
-                            multi: multisampled,
-                        }
+                    let class = match sample_type {
+                        wgt::TextureSampleType::Float { .. } => naga::ImageClass::Sampled {
+                            kind: naga::ScalarKind::Float,
+                            multi,
+                        },
+                        wgt::TextureSampleType::Sint => naga::ImageClass::Sampled {
+                            kind: naga::ScalarKind::Sint,
+                            multi,
+                        },
+                        wgt::TextureSampleType::Uint => naga::ImageClass::Sampled {
+                            kind: naga::ScalarKind::Uint,
+                            multi,
+                        },
+                        wgt::TextureSampleType::Depth => naga::ImageClass::Depth,
                     };
                     (class, naga::GlobalUse::LOAD)
                 }
                 BindingType::StorageTexture {
-                    readonly,
+                    access,
                     format,
-                    dimension: _,
+                    view_dimension: _,
                 } => {
                     let naga_format = map_storage_format_to_naga(format)
                         .ok_or(BindingError::BadStorageFormat(format))?;
-                    let usage = if readonly {
-                        naga::GlobalUse::LOAD
-                    } else {
-                        naga::GlobalUse::STORE
+                    let usage = match access {
+                        wgt::StorageTextureAccess::ReadOnly => naga::GlobalUse::LOAD,
+                        wgt::StorageTextureAccess::WriteOnly => naga::GlobalUse::STORE,
                     };
                     (naga::ImageClass::Storage(naga_format), usage)
                 }
@@ -780,31 +779,37 @@ fn derive_binding_type(
     let ty = &module.types[var.ty];
     Ok(match ty.inner {
         naga::TypeInner::Struct { ref members } => {
-            let dynamic = false;
+            let has_dynamic_offset = false;
             let mut actual_size = 0;
             for (i, member) in members.iter().enumerate() {
                 actual_size += get_aligned_type_size(module, member.ty, i + 1 == members.len());
             }
             match var.class {
-                naga::StorageClass::Uniform => BindingType::UniformBuffer {
-                    dynamic,
+                naga::StorageClass::Uniform => BindingType::Buffer {
+                    ty: wgt::BufferBindingType::Uniform,
+                    has_dynamic_offset,
                     min_binding_size: wgt::BufferSize::new(actual_size),
                 },
-                naga::StorageClass::Storage => BindingType::StorageBuffer {
-                    dynamic,
+                naga::StorageClass::Storage => BindingType::Buffer {
+                    ty: wgt::BufferBindingType::Storage {
+                        read_only: !usage.contains(naga::GlobalUse::STORE),
+                    },
+                    has_dynamic_offset,
                     min_binding_size: wgt::BufferSize::new(actual_size),
-                    readonly: !usage.contains(naga::GlobalUse::STORE),
                 },
                 _ => return Err(BindingError::WrongType),
             }
         }
-        naga::TypeInner::Sampler { comparison } => BindingType::Sampler { comparison },
+        naga::TypeInner::Sampler { comparison } => BindingType::Sampler {
+            filtering: true,
+            comparison,
+        },
         naga::TypeInner::Image {
             dim,
             arrayed,
             class,
         } => {
-            let dimension = match dim {
+            let view_dimension = match dim {
                 naga::ImageDimension::D1 => wgt::TextureViewDimension::D1,
                 naga::ImageDimension::D2 if arrayed => wgt::TextureViewDimension::D2Array,
                 naga::ImageDimension::D2 => wgt::TextureViewDimension::D2,
@@ -813,23 +818,30 @@ fn derive_binding_type(
                 naga::ImageDimension::Cube => wgt::TextureViewDimension::Cube,
             };
             match class {
-                naga::ImageClass::Sampled { multi, kind } => BindingType::SampledTexture {
-                    dimension,
-                    component_type: match kind {
-                        naga::ScalarKind::Float => wgt::TextureComponentType::Float,
-                        naga::ScalarKind::Sint => wgt::TextureComponentType::Sint,
-                        naga::ScalarKind::Uint => wgt::TextureComponentType::Uint,
+                naga::ImageClass::Sampled { multi, kind } => BindingType::Texture {
+                    sample_type: match kind {
+                        naga::ScalarKind::Float => {
+                            wgt::TextureSampleType::Float { filterable: true }
+                        }
+                        naga::ScalarKind::Sint => wgt::TextureSampleType::Sint,
+                        naga::ScalarKind::Uint => wgt::TextureSampleType::Uint,
                         naga::ScalarKind::Bool => unreachable!(),
                     },
+                    view_dimension,
                     multisampled: multi,
                 },
-                naga::ImageClass::Depth => BindingType::SampledTexture {
-                    dimension,
-                    component_type: wgt::TextureComponentType::DepthComparison,
+                naga::ImageClass::Depth => BindingType::Texture {
+                    sample_type: wgt::TextureSampleType::Depth,
+                    view_dimension,
                     multisampled: false,
                 },
                 naga::ImageClass::Storage(format) => BindingType::StorageTexture {
-                    dimension,
+                    access: if usage.contains(naga::GlobalUse::STORE) {
+                        wgt::StorageTextureAccess::WriteOnly
+                    } else {
+                        wgt::StorageTextureAccess::ReadOnly
+                    },
+                    view_dimension,
                     format: {
                         let f = map_storage_format_from_naga(format);
                         let original = map_storage_format_to_naga(f)
@@ -837,7 +849,6 @@ fn derive_binding_type(
                         debug_assert_eq!(format, original);
                         f
                     },
-                    readonly: !usage.contains(naga::GlobalUse::STORE),
                 },
             }
         }

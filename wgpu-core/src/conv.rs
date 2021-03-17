@@ -68,7 +68,7 @@ pub fn map_texture_usage(
     if usage.contains(W::STORAGE) {
         value |= U::STORAGE;
     }
-    if usage.contains(W::OUTPUT_ATTACHMENT) {
+    if usage.contains(W::RENDER_ATTACHMENT) {
         if aspects.intersects(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL) {
             value |= U::DEPTH_STENCIL_ATTACHMENT;
         } else {
@@ -84,36 +84,33 @@ pub fn map_binding_type(binding: &wgt::BindGroupLayoutEntry) -> hal::pso::Descri
     use hal::pso;
     use wgt::BindingType as Bt;
     match binding.ty {
-        Bt::UniformBuffer {
-            dynamic,
+        Bt::Buffer {
+            ty,
+            has_dynamic_offset,
             min_binding_size: _,
         } => pso::DescriptorType::Buffer {
-            ty: pso::BufferDescriptorType::Uniform,
-            format: pso::BufferDescriptorFormat::Structured {
-                dynamic_offset: dynamic,
-            },
-        },
-        Bt::StorageBuffer {
-            readonly,
-            dynamic,
-            min_binding_size: _,
-        } => pso::DescriptorType::Buffer {
-            ty: pso::BufferDescriptorType::Storage {
-                read_only: readonly,
+            ty: match ty {
+                wgt::BufferBindingType::Uniform => pso::BufferDescriptorType::Uniform,
+                wgt::BufferBindingType::Storage { read_only } => {
+                    pso::BufferDescriptorType::Storage { read_only }
+                }
             },
             format: pso::BufferDescriptorFormat::Structured {
-                dynamic_offset: dynamic,
+                dynamic_offset: has_dynamic_offset,
             },
         },
-        Bt::Sampler { comparison: _ } => pso::DescriptorType::Sampler,
-        Bt::SampledTexture { .. } => pso::DescriptorType::Image {
+        Bt::Sampler { .. } => pso::DescriptorType::Sampler,
+        Bt::Texture { .. } => pso::DescriptorType::Image {
             ty: pso::ImageDescriptorType::Sampled {
                 with_sampler: false,
             },
         },
-        Bt::StorageTexture { readonly, .. } => pso::DescriptorType::Image {
+        Bt::StorageTexture { access, .. } => pso::DescriptorType::Image {
             ty: pso::ImageDescriptorType::Storage {
-                read_only: readonly,
+                read_only: match access {
+                    wgt::StorageTextureAccess::ReadOnly => true,
+                    _ => false,
+                },
             },
         },
     }

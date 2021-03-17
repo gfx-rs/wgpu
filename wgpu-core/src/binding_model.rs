@@ -3,15 +3,18 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::{DeviceError, SHADER_STAGE_COUNT},
+    device::{
+        descriptor::{DescriptorSet, DescriptorTotalCount},
+        DeviceError, SHADER_STAGE_COUNT,
+    },
+    hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
     track::{TrackerSet, DUMMY_SELECTOR},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
-    FastHashMap, Label, LifeGuard, MultiRefCount, RefCount, Stored, MAX_BIND_GROUPS,
+    FastHashMap, Label, LifeGuard, MultiRefCount, Stored, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
-use gfx_descriptor::{DescriptorCounts, DescriptorSet};
 
 #[cfg(feature = "replay")]
 use serde::Deserialize;
@@ -192,22 +195,30 @@ impl BindingTypeMaxCountValidator {
     pub(crate) fn add_binding(&mut self, binding: &wgt::BindGroupLayoutEntry) {
         let count = binding.count.map_or(1, |count| count.get());
         match binding.ty {
-            wgt::BindingType::UniformBuffer { dynamic, .. } => {
+            wgt::BindingType::Buffer {
+                ty: wgt::BufferBindingType::Uniform,
+                has_dynamic_offset,
+                ..
+            } => {
                 self.uniform_buffers.add(binding.visibility, count);
-                if dynamic {
+                if has_dynamic_offset {
                     self.dynamic_uniform_buffers += count;
                 }
             }
-            wgt::BindingType::StorageBuffer { dynamic, .. } => {
+            wgt::BindingType::Buffer {
+                ty: wgt::BufferBindingType::Storage { .. },
+                has_dynamic_offset,
+                ..
+            } => {
                 self.storage_buffers.add(binding.visibility, count);
-                if dynamic {
+                if has_dynamic_offset {
                     self.dynamic_storage_buffers += count;
                 }
             }
             wgt::BindingType::Sampler { .. } => {
                 self.samplers.add(binding.visibility, count);
             }
-            wgt::BindingType::SampledTexture { .. } => {
+            wgt::BindingType::Texture { .. } => {
                 self.sampled_textures.add(binding.visibility, count);
             }
             wgt::BindingType::StorageTexture { .. } => {
@@ -313,9 +324,26 @@ pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) multi_ref_count: MultiRefCount,
     pub(crate) entries: BindEntryMap,
-    pub(crate) desc_counts: DescriptorCounts,
+    pub(crate) desc_count: DescriptorTotalCount,
     pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
+    #[cfg(debug_assertions)]
+    pub(crate) label: String,
+}
+
+impl<B: hal::Backend> Resource for BindGroupLayout<B> {
+    const TYPE: &'static str = "BindGroupLayout";
+
+    fn life_guard(&self) -> &LifeGuard {
+        unreachable!()
+    }
+
+    fn label(&self) -> &str {
+        #[cfg(debug_assertions)]
+        return &self.label;
+        #[cfg(not(debug_assertions))]
+        return "";
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -488,6 +516,14 @@ impl<B: hal::Backend> PipelineLayout<B> {
     }
 }
 
+impl<B: hal::Backend> Resource for PipelineLayout<B> {
+    const TYPE: &'static str = "PipelineLayout";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -573,15 +609,17 @@ impl<B: hal::Backend> BindGroup<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<RefCount> for BindGroup<B> {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
-    }
-}
-
 impl<B: hal::Backend> Borrow<()> for BindGroup<B> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
+    }
+}
+
+impl<B: hal::Backend> Resource for BindGroup<B> {
+    const TYPE: &'static str = "BindGroup";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 

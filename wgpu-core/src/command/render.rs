@@ -7,7 +7,7 @@ use crate::{
     command::{
         bind::{Binder, LayoutChange},
         BasePass, BasePassRef, CommandBuffer, CommandEncoderError, DrawError, ExecutionError,
-        RenderCommand, RenderCommandError, StateChange,
+        MapPassErr, PassErrorScope, RenderCommand, RenderCommandError, StateChange,
     },
     conv,
     device::{
@@ -116,18 +116,18 @@ pub struct DepthStencilAttachmentDescriptor {
 }
 
 impl DepthStencilAttachmentDescriptor {
-    fn is_read_only(&self, aspects: hal::format::Aspects) -> Result<bool, RenderPassError> {
+    fn is_read_only(&self, aspects: hal::format::Aspects) -> Result<bool, RenderPassErrorInner> {
         if aspects.contains(hal::format::Aspects::DEPTH) && !self.depth.read_only {
             return Ok(false);
         }
         if (self.depth.load_op, self.depth.store_op) != (LoadOp::Load, StoreOp::Store) {
-            return Err(RenderPassError::InvalidDepthOps);
+            return Err(RenderPassErrorInner::InvalidDepthOps);
         }
         if aspects.contains(hal::format::Aspects::STENCIL) && !self.stencil.read_only {
             return Ok(false);
         }
         if (self.stencil.load_op, self.stencil.store_op) != (LoadOp::Load, StoreOp::Store) {
-            return Err(RenderPassError::InvalidStencilOps);
+            return Err(RenderPassErrorInner::InvalidStencilOps);
         }
         Ok(true)
     }
@@ -318,7 +318,7 @@ impl State {
 
 /// Error encountered when performing a render pass.
 #[derive(Clone, Debug, Error)]
-pub enum RenderPassError {
+pub enum RenderPassErrorInner {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
     #[error("attachment texture view {0:?} is invalid")]
@@ -380,24 +380,45 @@ pub enum RenderPassError {
     Bind(#[from] BindError),
 }
 
-impl From<MissingBufferUsageError> for RenderPassError {
+impl From<MissingBufferUsageError> for RenderPassErrorInner {
     fn from(error: MissingBufferUsageError) -> Self {
         Self::RenderCommand(error.into())
     }
 }
 
-impl From<MissingTextureUsageError> for RenderPassError {
+impl From<MissingTextureUsageError> for RenderPassErrorInner {
     fn from(error: MissingTextureUsageError) -> Self {
         Self::RenderCommand(error.into())
+    }
+}
+
+/// Error encountered when performing a render pass.
+#[derive(Clone, Debug, Error)]
+#[error("Render pass error {scope}: {inner}")]
+pub struct RenderPassError {
+    pub scope: PassErrorScope,
+    #[source]
+    inner: RenderPassErrorInner,
+}
+
+impl<T, E> MapPassErr<T, RenderPassError> for Result<T, E>
+where
+    E: Into<RenderPassErrorInner>,
+{
+    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, RenderPassError> {
+        self.map_err(|inner| RenderPassError {
+            scope,
+            inner: inner.into(),
+        })
     }
 }
 
 fn check_device_features(
     actual: wgt::Features,
     expected: wgt::Features,
-) -> Result<(), RenderPassError> {
+) -> Result<(), RenderPassErrorInner> {
     if !actual.contains(expected) {
-        Err(RenderPassError::MissingDeviceFeatures(expected))
+        Err(RenderPassErrorInner::MissingDeviceFeatures(expected))
     } else {
         Ok(())
     }
@@ -428,6 +449,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         depth_stencil_attachment: Option<&DepthStencilAttachmentDescriptor>,
     ) -> Result<(), RenderPassError> {
         span!(_guard, INFO, "CommandEncoder::run_render_pass");
+        let scope = PassErrorScope::Pass(encoder_id);
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -436,7 +458,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
         let mut trackers = TrackerSet::new(B::VARIANT);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmb_guard, encoder_id)?;
+        let cmd_buf =
+            CommandBuffer::get_encoder(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
         let device = &device_guard[cmd_buf.device_id.value];
         let mut raw = device.cmd_allocator.extend(cmd_buf);
 
@@ -466,13 +489,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // instead of the special read-only one, which would be `None`.
         let mut is_ds_read_only = false;
 
-        struct OutputAttachment<'a> {
+        struct RenderAttachment<'a> {
             texture_id: &'a Stored<id::TextureId>,
             selector: &'a TextureSelector,
             previous_use: Option<TextureUse>,
             new_use: TextureUse,
         }
-        let mut output_attachments = AttachmentDataVec::<OutputAttachment>::new();
+        let mut render_attachments = AttachmentDataVec::<RenderAttachment>::new();
 
         let mut attachment_width = None;
         let mut attachment_height = None;
@@ -492,7 +515,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut add_view = |view: &TextureView<B>| {
                 if let Some(ex) = extent {
                     if ex != view.extent {
-                        return Err(RenderPassError::ExtentStateMismatch {
+                        return Err(RenderPassErrorInner::ExtentStateMismatch {
                             state_extent: ex,
                             view_extent: view.extent,
                         });
@@ -503,7 +526,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if sample_count == 0 {
                     sample_count = view.samples;
                 } else if sample_count != view.samples {
-                    return Err(RenderPassError::SampleCountMismatch {
+                    return Err(RenderPassErrorInner::SampleCountMismatch {
                         actual: view.samples,
                         expected: sample_count,
                     });
@@ -521,14 +544,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let view = trackers
                             .views
                             .use_extend(&*view_guard, at.attachment, (), ())
-                            .map_err(|_| RenderPassError::InvalidAttachment(at.attachment))?;
-                        add_view(view)?;
+                            .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.attachment))
+                            .map_pass_err(scope)?;
+                        add_view(view).map_pass_err(scope)?;
                         depth_stencil_aspects = view.aspects;
 
                         let source_id = match view.inner {
                             TextureViewInner::Native { ref source_id, .. } => source_id,
                             TextureViewInner::SwapChain { .. } => {
-                                return Err(RenderPassError::SwapChainImageAsDepthStencil)
+                                return Err(RenderPassErrorInner::SwapChainImageAsDepthStencil)
+                                    .map_pass_err(scope)
                             }
                         };
 
@@ -536,13 +561,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let previous_use = base_trackers
                             .textures
                             .query(source_id.value, view.selector.clone());
-                        let new_use = if at.is_read_only(view.aspects)? {
+                        let new_use = if at.is_read_only(view.aspects).map_pass_err(scope)? {
                             is_ds_read_only = true;
                             TextureUse::ATTACHMENT_READ
                         } else {
                             TextureUse::ATTACHMENT_WRITE
                         };
-                        output_attachments.push(OutputAttachment {
+                        render_attachments.push(RenderAttachment {
                             texture_id: source_id,
                             selector: &view.selector,
                             previous_use,
@@ -577,8 +602,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let view = trackers
                         .views
                         .use_extend(&*view_guard, at.attachment, (), ())
-                        .map_err(|_| RenderPassError::InvalidAttachment(at.attachment))?;
-                    add_view(view)?;
+                        .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.attachment))
+                        .map_pass_err(scope)?;
+                    add_view(view).map_pass_err(scope)?;
 
                     valid_attachment &= *attachment_width.get_or_insert(view.extent.width)
                         == view.extent.width
@@ -591,7 +617,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .textures
                                 .query(source_id.value, view.selector.clone());
                             let new_use = TextureUse::ATTACHMENT_WRITE;
-                            output_attachments.push(OutputAttachment {
+                            render_attachments.push(RenderAttachment {
                                 texture_id: source_id,
                                 selector: &view.selector,
                                 previous_use,
@@ -611,7 +637,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         TextureViewInner::SwapChain { ref source_id, .. } => {
                             if let Some((ref sc_id, _)) = cmd_buf.used_swap_chain {
                                 if source_id.value != sc_id.value {
-                                    return Err(RenderPassError::SwapChainMismatch);
+                                    return Err(RenderPassErrorInner::SwapChainMismatch)
+                                        .map_pass_err(scope);
                                 }
                             } else {
                                 assert!(used_swap_chain.is_none());
@@ -641,25 +668,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
 
                 if !valid_attachment {
-                    Err(RenderPassError::MismatchAttachments)?
+                    return Err(RenderPassErrorInner::MismatchAttachments).map_pass_err(scope);
                 }
 
                 for resolve_target in color_attachments.iter().flat_map(|at| at.resolve_target) {
                     let view = trackers
                         .views
                         .use_extend(&*view_guard, resolve_target, (), ())
-                        .map_err(|_| RenderPassError::InvalidAttachment(resolve_target))?;
+                        .map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))
+                        .map_pass_err(scope)?;
                     if extent != Some(view.extent) {
-                        return Err(RenderPassError::ExtentStateMismatch {
+                        return Err(RenderPassErrorInner::ExtentStateMismatch {
                             state_extent: extent.unwrap_or_default(),
                             view_extent: view.extent,
-                        });
+                        })
+                        .map_pass_err(scope);
                     }
                     if view.samples != 1 {
-                        return Err(RenderPassError::InvalidResolveTargetSampleCount);
+                        return Err(RenderPassErrorInner::InvalidResolveTargetSampleCount)
+                            .map_pass_err(scope);
                     }
                     if sample_count == 1 {
-                        return Err(RenderPassError::InvalidResolveSourceSampleCount);
+                        return Err(RenderPassErrorInner::InvalidResolveSourceSampleCount)
+                            .map_pass_err(scope);
                     }
 
                     let layouts = match view.inner {
@@ -668,7 +699,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .textures
                                 .query(source_id.value, view.selector.clone());
                             let new_use = TextureUse::ATTACHMENT_WRITE;
-                            output_attachments.push(OutputAttachment {
+                            render_attachments.push(RenderAttachment {
                                 texture_id: source_id,
                                 selector: &view.selector,
                                 previous_use,
@@ -688,7 +719,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         TextureViewInner::SwapChain { ref source_id, .. } => {
                             if let Some((ref sc_id, _)) = cmd_buf.used_swap_chain {
                                 if source_id.value != sc_id.value {
-                                    return Err(RenderPassError::SwapChainMismatch);
+                                    return Err(RenderPassErrorInner::SwapChainMismatch)
+                                        .map_pass_err(scope);
                                 }
                             } else {
                                 assert!(used_swap_chain.is_none());
@@ -722,7 +754,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             if sample_count & sample_count_limit == 0 {
-                return Err(RenderPassError::InvalidSampleCount(sample_count));
+                return Err(RenderPassErrorInner::InvalidSampleCount(sample_count))
+                    .map_pass_err(scope);
             }
 
             let mut render_pass_cache = device.render_passes.lock();
@@ -833,7 +866,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         device
                             .raw
                             .create_framebuffer(&render_pass, attachments, extent.unwrap())
-                            .or(Err(RenderPassError::OutOfMemory))?
+                            .or(Err(RenderPassErrorInner::OutOfMemory))
+                            .map_pass_err(scope)?
                     };
                     cmd_buf.used_swap_chain = Some((sc_id, framebuffer));
                     &mut cmd_buf.used_swap_chain.as_mut().unwrap().1
@@ -863,7 +897,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                             attachments,
                                             extent.unwrap(),
                                         )
-                                        .or(Err(RenderPassError::OutOfMemory))?
+                                        .or(Err(RenderPassErrorInner::OutOfMemory))
+                                        .map_pass_err(scope)?
                                 }
                             };
                             e.insert(fb)
@@ -968,13 +1003,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
+                    let scope = PassErrorScope::SetBindGroup(bind_group_id);
                     let max_bind_groups = device.limits.max_bind_groups;
                     if (index as u32) >= max_bind_groups {
                         return Err(RenderCommandError::BindGroupIndexOutOfRange {
                             index,
                             max: max_bind_groups,
-                        }
-                        .into());
+                        })
+                        .map_pass_err(scope);
                     }
 
                     temp_offsets.clear();
@@ -988,9 +1024,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .unwrap();
                     bind_group
                         .validate_dynamic_bindings(&temp_offsets)
-                        .map_err(RenderPassError::from)?;
+                        .map_pass_err(scope)?;
 
-                    trackers.merge_extend(&bind_group.used)?;
+                    trackers
+                        .merge_extend(&bind_group.used)
+                        .map_pass_err(scope)?;
 
                     if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
                         index as usize,
@@ -1017,6 +1055,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
+                    let scope = PassErrorScope::SetPipelineRender(pipeline_id);
                     if state.pipeline.set_and_check_redundant(pipeline_id) {
                         continue;
                     }
@@ -1024,18 +1063,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let pipeline = trackers
                         .render_pipes
                         .use_extend(&*pipeline_guard, pipeline_id, (), ())
-                        .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))?;
+                        .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))
+                        .map_pass_err(scope)?;
 
                     context
                         .check_compatible(&pipeline.pass_context)
-                        .map_err(RenderCommandError::IncompatiblePipeline)?;
+                        .map_err(RenderCommandError::IncompatiblePipeline)
+                        .map_pass_err(scope)?;
 
                     state.pipeline_flags = pipeline.flags;
 
                     if pipeline.flags.contains(PipelineFlags::WRITES_DEPTH_STENCIL)
                         && is_ds_read_only
                     {
-                        return Err(RenderCommandError::IncompatibleReadOnlyDepthStencil.into());
+                        return Err(RenderCommandError::IncompatibleReadOnlyDepthStencil)
+                            .map_pass_err(scope);
                     }
 
                     state
@@ -1122,17 +1164,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         if let Some((buffer_id, ref range)) = state.index.bound_buffer_view {
                             let &(ref buffer, _) = buffer_guard[buffer_id].raw.as_ref().unwrap();
 
-                            let view = hal::buffer::IndexBufferView {
-                                buffer,
-                                range: hal::buffer::SubRange {
-                                    offset: range.start,
-                                    size: Some(range.end - range.start),
-                                },
-                                index_type: conv::map_index_format(state.index.format),
+                            let range = hal::buffer::SubRange {
+                                offset: range.start,
+                                size: Some(range.end - range.start),
                             };
-
+                            let index_type = conv::map_index_format(state.index.format);
                             unsafe {
-                                raw.bind_index_buffer(view);
+                                raw.bind_index_buffer(buffer, range, index_type);
                             }
                         }
                     }
@@ -1155,15 +1193,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     offset,
                     size,
                 } => {
+                    let scope = PassErrorScope::SetIndexBuffer(buffer_id);
                     let buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
-                        .map_err(|e| RenderCommandError::Buffer(buffer_id, e))?;
-                    check_buffer_usage(buffer.usage, BufferUsage::INDEX)?;
+                        .map_err(|e| RenderCommandError::Buffer(buffer_id, e))
+                        .map_pass_err(scope)?;
+                    check_buffer_usage(buffer.usage, BufferUsage::INDEX).map_pass_err(scope)?;
                     let &(ref buf_raw, _) = buffer
                         .raw
                         .as_ref()
-                        .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))?;
+                        .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
+                        .map_pass_err(scope)?;
 
                     let end = match size {
                         Some(s) => offset + s.get(),
@@ -1172,17 +1213,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     state.index.bound_buffer_view = Some((id::Valid(buffer_id), offset..end));
                     state.index.update_limit();
 
-                    let view = hal::buffer::IndexBufferView {
-                        buffer: buf_raw,
-                        range: hal::buffer::SubRange {
-                            offset,
-                            size: Some(end - offset),
-                        },
-                        index_type: conv::map_index_format(state.index.format),
+                    let range = hal::buffer::SubRange {
+                        offset,
+                        size: Some(end - offset),
                     };
-
+                    let index_type = conv::map_index_format(state.index.format);
                     unsafe {
-                        raw.bind_index_buffer(view);
+                        raw.bind_index_buffer(buf_raw, range, index_type);
                     }
                 }
                 RenderCommand::SetVertexBuffer {
@@ -1191,15 +1228,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     offset,
                     size,
                 } => {
+                    let scope = PassErrorScope::SetVertexBuffer(buffer_id);
                     let buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::VERTEX)
-                        .map_err(|e| RenderCommandError::Buffer(buffer_id, e))?;
-                    check_buffer_usage(buffer.usage, BufferUsage::VERTEX)?;
+                        .map_err(|e| RenderCommandError::Buffer(buffer_id, e))
+                        .map_pass_err(scope)?;
+                    check_buffer_usage(buffer.usage, BufferUsage::VERTEX).map_pass_err(scope)?;
                     let &(ref buf_raw, _) = buffer
                         .raw
                         .as_ref()
-                        .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))?;
+                        .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
+                        .map_pass_err(scope)?;
 
                     let empty_slots = (1 + slot as usize).saturating_sub(state.vertex.inputs.len());
                     state
@@ -1242,6 +1282,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     depth_min,
                     depth_max,
                 } => {
+                    let scope = PassErrorScope::SetViewport;
                     use std::{convert::TryFrom, i16};
                     if rect.w <= 0.0
                         || rect.h <= 0.0
@@ -1250,7 +1291,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         || depth_max < 0.0
                         || depth_max > 1.0
                     {
-                        Err(RenderCommandError::InvalidViewport)?
+                        return Err(RenderCommandError::InvalidViewport).map_pass_err(scope);
                     }
                     let r = hal::pso::Rect {
                         x: i16::try_from(rect.x.round() as i64).unwrap_or(0),
@@ -1274,8 +1315,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     size_bytes,
                     values_offset,
                 } => {
-                    let values_offset =
-                        values_offset.ok_or(RenderPassError::InvalidValuesOffset)?;
+                    let scope = PassErrorScope::SetPushConstant;
+                    let values_offset = values_offset
+                        .ok_or(RenderPassErrorInner::InvalidValuesOffset)
+                        .map_pass_err(scope)?;
 
                     let end_offset_bytes = offset + size_bytes;
                     let values_end_offset =
@@ -1286,12 +1329,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let pipeline_layout_id = state
                         .binder
                         .pipeline_layout_id
-                        .ok_or(DrawError::MissingPipeline)?;
+                        .ok_or(DrawError::MissingPipeline)
+                        .map_pass_err(scope)?;
                     let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
 
                     pipeline_layout
                         .validate_push_constant_ranges(stages, offset, end_offset_bytes)
-                        .map_err(RenderCommandError::from)?;
+                        .map_err(RenderCommandError::from)
+                        .map_pass_err(scope)?;
 
                     unsafe {
                         raw.push_graphics_constants(
@@ -1303,13 +1348,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 RenderCommand::SetScissor(ref rect) => {
+                    let scope = PassErrorScope::SetScissorRect;
                     use std::{convert::TryFrom, i16};
                     if rect.w == 0
                         || rect.h == 0
                         || rect.x + rect.w > attachment_width.unwrap()
                         || rect.y + rect.h > attachment_height.unwrap()
                     {
-                        Err(RenderCommandError::InvalidScissorRect)?
+                        return Err(RenderCommandError::InvalidScissorRect).map_pass_err(scope);
                     }
                     let r = hal::pso::Rect {
                         x: i16::try_from(rect.x).unwrap_or(0),
@@ -1327,22 +1373,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     first_vertex,
                     first_instance,
                 } => {
-                    state.is_ready()?;
+                    let scope = PassErrorScope::Draw;
+                    state.is_ready().map_pass_err(scope)?;
                     let last_vertex = first_vertex + vertex_count;
                     let vertex_limit = state.vertex.vertex_limit;
                     if last_vertex > vertex_limit {
-                        Err(DrawError::VertexBeyondLimit {
+                        return Err(DrawError::VertexBeyondLimit {
                             last_vertex,
                             vertex_limit,
-                        })?
+                        })
+                        .map_pass_err(scope);
                     }
                     let last_instance = first_instance + instance_count;
                     let instance_limit = state.vertex.instance_limit;
                     if last_instance > instance_limit {
-                        Err(DrawError::InstanceBeyondLimit {
+                        return Err(DrawError::InstanceBeyondLimit {
                             last_instance,
                             instance_limit,
-                        })?
+                        })
+                        .map_pass_err(scope);
                     }
 
                     unsafe {
@@ -1359,24 +1408,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     base_vertex,
                     first_instance,
                 } => {
-                    state.is_ready()?;
+                    let scope = PassErrorScope::DrawIndexed;
+                    state.is_ready().map_pass_err(scope)?;
 
                     //TODO: validate that base_vertex + max_index() is within the provided range
                     let last_index = first_index + index_count;
                     let index_limit = state.index.limit;
                     if last_index > index_limit {
-                        Err(DrawError::IndexBeyondLimit {
+                        return Err(DrawError::IndexBeyondLimit {
                             last_index,
                             index_limit,
-                        })?
+                        })
+                        .map_pass_err(scope);
                     }
                     let last_instance = first_instance + instance_count;
                     let instance_limit = state.vertex.instance_limit;
                     if last_instance > instance_limit {
-                        Err(DrawError::InstanceBeyondLimit {
+                        return Err(DrawError::InstanceBeyondLimit {
                             last_instance,
                             instance_limit,
-                        })?
+                        })
+                        .map_pass_err(scope);
                     }
 
                     unsafe {
@@ -1393,7 +1445,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     count,
                     indexed,
                 } => {
-                    state.is_ready()?;
+                    let scope = if indexed {
+                        PassErrorScope::DrawIndexedIndirect
+                    } else {
+                        PassErrorScope::DrawIndirect
+                    };
+                    state.is_ready().map_pass_err(scope)?;
 
                     let stride = match indexed {
                         false => 16,
@@ -1401,31 +1458,36 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
 
                     if count.is_some() {
-                        check_device_features(device.features, wgt::Features::MULTI_DRAW_INDIRECT)?;
+                        check_device_features(device.features, wgt::Features::MULTI_DRAW_INDIRECT)
+                            .map_pass_err(scope)?;
                     }
 
                     let indirect_buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
-                        .map_err(|e| RenderCommandError::Buffer(buffer_id, e))?;
-                    check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)?;
+                        .map_err(|e| RenderCommandError::Buffer(buffer_id, e))
+                        .map_pass_err(scope)?;
+                    check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)
+                        .map_pass_err(scope)?;
                     let &(ref indirect_raw, _) = indirect_buffer
                         .raw
                         .as_ref()
-                        .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))?;
+                        .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
+                        .map_pass_err(scope)?;
 
                     let actual_count = count.map_or(1, |c| c.get());
 
                     let begin_offset = offset;
                     let end_offset = offset + stride * actual_count as u64;
                     if end_offset > indirect_buffer.size {
-                        return Err(RenderPassError::IndirectBufferOverrun {
+                        return Err(RenderPassErrorInner::IndirectBufferOverrun {
                             offset,
                             count,
                             begin_offset,
                             end_offset,
                             buffer_size: indirect_buffer.size,
-                        });
+                        })
+                        .map_pass_err(scope);
                     }
 
                     match indexed {
@@ -1450,7 +1512,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     max_count,
                     indexed,
                 } => {
-                    state.is_ready()?;
+                    let scope = if indexed {
+                        PassErrorScope::DrawIndexedIndirect
+                    } else {
+                        PassErrorScope::DrawIndirect
+                    };
+                    state.is_ready().map_pass_err(scope)?;
 
                     let stride = match indexed {
                         false => 16,
@@ -1460,48 +1527,57 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     check_device_features(
                         device.features,
                         wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
-                    )?;
+                    )
+                    .map_pass_err(scope)?;
 
                     let indirect_buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
-                        .map_err(|e| RenderCommandError::Buffer(buffer_id, e))?;
-                    check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)?;
+                        .map_err(|e| RenderCommandError::Buffer(buffer_id, e))
+                        .map_pass_err(scope)?;
+                    check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)
+                        .map_pass_err(scope)?;
                     let &(ref indirect_raw, _) = indirect_buffer
                         .raw
                         .as_ref()
-                        .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))?;
+                        .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
+                        .map_pass_err(scope)?;
 
                     let count_buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, count_buffer_id, (), BufferUse::INDIRECT)
-                        .map_err(|e| RenderCommandError::Buffer(count_buffer_id, e))?;
-                    check_buffer_usage(count_buffer.usage, BufferUsage::INDIRECT)?;
+                        .map_err(|e| RenderCommandError::Buffer(count_buffer_id, e))
+                        .map_pass_err(scope)?;
+                    check_buffer_usage(count_buffer.usage, BufferUsage::INDIRECT)
+                        .map_pass_err(scope)?;
                     let &(ref count_raw, _) = count_buffer
                         .raw
                         .as_ref()
-                        .ok_or(RenderCommandError::DestroyedBuffer(count_buffer_id))?;
+                        .ok_or(RenderCommandError::DestroyedBuffer(count_buffer_id))
+                        .map_pass_err(scope)?;
 
                     let begin_offset = offset;
                     let end_offset = offset + stride * max_count as u64;
                     if end_offset > indirect_buffer.size {
-                        return Err(RenderPassError::IndirectBufferOverrun {
+                        return Err(RenderPassErrorInner::IndirectBufferOverrun {
                             offset,
                             count: None,
                             begin_offset,
                             end_offset,
                             buffer_size: indirect_buffer.size,
-                        });
+                        })
+                        .map_pass_err(scope);
                     }
 
                     let begin_count_offset = count_buffer_offset;
                     let end_count_offset = count_buffer_offset + 4;
                     if end_count_offset > count_buffer.size {
-                        return Err(RenderPassError::IndirectCountBufferOverrun {
+                        return Err(RenderPassErrorInner::IndirectCountBufferOverrun {
                             begin_count_offset,
                             end_count_offset,
                             count_buffer_size: count_buffer.size,
-                        });
+                        })
+                        .map_pass_err(scope);
                     }
 
                     match indexed {
@@ -1536,8 +1612,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     base.string_data = &base.string_data[len..];
                 }
                 RenderCommand::PopDebugGroup => {
+                    let scope = PassErrorScope::PopDebugGroup;
                     if state.debug_scope_depth == 0 {
-                        return Err(RenderPassError::InvalidPopDebugGroup);
+                        return Err(RenderPassErrorInner::InvalidPopDebugGroup).map_pass_err(scope);
                     }
                     state.debug_scope_depth -= 1;
                     unsafe {
@@ -1552,6 +1629,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     base.string_data = &base.string_data[len..];
                 }
                 RenderCommand::ExecuteBundle(bundle_id) => {
+                    let scope = PassErrorScope::ExecuteBundle;
                     let bundle = trackers
                         .bundles
                         .use_extend(&*bundle_guard, bundle_id, (), ())
@@ -1559,7 +1637,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     context
                         .check_compatible(&bundle.context)
-                        .map_err(RenderPassError::IncompatibleRenderBundle)?;
+                        .map_err(RenderPassErrorInner::IncompatibleRenderBundle)
+                        .map_pass_err(scope)?;
 
                     unsafe {
                         bundle.execute(
@@ -1574,9 +1653,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         ExecutionError::DestroyedBuffer(id) => {
                             RenderCommandError::DestroyedBuffer(id)
                         }
-                    })?;
+                    })
+                    .map_pass_err(scope)?;
 
-                    trackers.merge_extend(&bundle.used)?;
+                    trackers.merge_extend(&bundle.used).map_pass_err(scope)?;
                     state.reset_bundle();
                 }
             }
@@ -1587,31 +1667,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw.end_render_pass();
         }
 
-        for ot in output_attachments {
-            let texture = &texture_guard[ot.texture_id.value];
-            check_texture_usage(texture.usage, TextureUsage::OUTPUT_ATTACHMENT)?;
+        for ra in render_attachments {
+            let texture = &texture_guard[ra.texture_id.value];
+            check_texture_usage(texture.usage, TextureUsage::RENDER_ATTACHMENT)
+                .map_pass_err(scope)?;
 
             // the tracker set of the pass is always in "extend" mode
             trackers
                 .textures
                 .change_extend(
-                    ot.texture_id.value,
-                    &ot.texture_id.ref_count,
-                    ot.selector.clone(),
-                    ot.new_use,
+                    ra.texture_id.value,
+                    &ra.texture_id.ref_count,
+                    ra.selector.clone(),
+                    ra.new_use,
                 )
                 .unwrap();
 
-            if let Some(usage) = ot.previous_use {
+            if let Some(usage) = ra.previous_use {
                 // Make the attachment tracks to be aware of the internal
                 // transition done by the render pass, by registering the
                 // previous usage as the initial state.
                 trackers
                     .textures
                     .prepend(
-                        ot.texture_id.value,
-                        &ot.texture_id.ref_count,
-                        ot.selector.clone(),
+                        ra.texture_id.value,
+                        &ra.texture_id.ref_count,
+                        ra.selector.clone(),
                         usage,
                     )
                     .unwrap();

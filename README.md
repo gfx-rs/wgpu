@@ -7,7 +7,7 @@ This is an active GitHub mirror of the WebGPU implementation in Rust, which now 
 [![Matrix](https://img.shields.io/badge/Dev_Matrix-%23wgpu%3Amatrix.org-blueviolet.svg)](https://matrix.to/#/#wgpu:matrix.org) [![Matrix](https://img.shields.io/badge/User_Matrix-%23wgpu--users%3Amatrix.org-blueviolet.svg)](https://matrix.to/#/#wgpu-users:matrix.org)
 [![Build Status](https://github.com/gfx-rs/wgpu/workflows/CI/badge.svg)](https://github.com/gfx-rs/wgpu/actions)
 
-This is the core logic of an experimental [WebGPU](https://www.w3.org/community/gpu/) implementation. It's written in Rust and is based on [gfx-hal](https://github.com/gfx-rs/gfx) with help of [gfx-extras](https://github.com/gfx-rs/gfx-extras). See the upstream [WebGPU specification](https://gpuweb.github.io/gpuweb/) (work in progress).
+This is the core logic of an experimental [WebGPU](https://www.w3.org/community/gpu/) implementation. It's written in Rust and is based on [gfx-hal](https://github.com/gfx-rs/gfx) with help of [gpu-alloc](https://github.com/zakarumych/gpu-alloc) and [gpu-descriptor](https://github.com/zakarumych/gpu-descriptor). See the upstream [WebGPU specification](https://gpuweb.github.io/gpuweb/) (work in progress).
 
 The implementation consists of the following parts:
 

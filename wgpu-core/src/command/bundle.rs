@@ -38,26 +38,25 @@
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
-    command::{BasePass, DrawError, RenderCommand, RenderCommandError, StateChange},
+    command::{
+        BasePass, DrawError, MapPassErr, PassErrorScope, RenderCommand, RenderCommandError,
+        StateChange,
+    },
     conv,
     device::{
-        AttachmentData, DeviceError, RenderPassContext, MAX_VERTEX_BUFFERS, SHADER_STAGE_COUNT,
+        AttachmentData, Device, DeviceError, RenderPassContext, MAX_VERTEX_BUFFERS,
+        SHADER_STAGE_COUNT,
     },
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Storage, Token},
+    hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Resource, Storage, Token},
     id,
     resource::BufferUse,
     span,
     track::{TrackerSet, UsageConflict},
     validation::check_buffer_usage,
-    Label, LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
+    Label, LabelHelpers, LifeGuard, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
-use std::{
-    borrow::{Borrow, Cow},
-    iter,
-    marker::PhantomData,
-    ops::Range,
-};
+use std::{borrow::Cow, iter, ops::Range};
 use thiserror::Error;
 
 /// Describes a [`RenderBundleEncoder`].
@@ -113,8 +112,327 @@ impl RenderBundleEncoder {
         })
     }
 
+    pub fn dummy(parent_id: id::DeviceId) -> Self {
+        Self {
+            base: BasePass::new(),
+            parent_id,
+            context: RenderPassContext {
+                attachments: AttachmentData {
+                    colors: ArrayVec::new(),
+                    resolves: ArrayVec::new(),
+                    depth_stencil: None,
+                },
+                sample_count: 0,
+            },
+        }
+    }
+
     pub fn parent(&self) -> id::DeviceId {
         self.parent_id
+    }
+
+    pub(crate) fn finish<B: hal::Backend, G: GlobalIdentityHandlerFactory>(
+        self,
+        desc: &RenderBundleDescriptor,
+        device: &Device<B>,
+        hub: &Hub<B, G>,
+        token: &mut Token<Device<B>>,
+    ) -> Result<RenderBundle, RenderBundleError> {
+        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(token);
+        let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+        let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
+        let (buffer_guard, _) = hub.buffers.read(&mut token);
+
+        let mut state = State {
+            trackers: TrackerSet::new(self.parent_id.backend()),
+            index: IndexState::new(),
+            vertex: (0..MAX_VERTEX_BUFFERS)
+                .map(|_| VertexState::new())
+                .collect(),
+            bind: (0..MAX_BIND_GROUPS).map(|_| BindState::new()).collect(),
+            push_constant_ranges: PushConstantState::new(),
+            raw_dynamic_offsets: Vec::new(),
+            flat_dynamic_offsets: Vec::new(),
+            used_bind_groups: 0,
+            pipeline: StateChange::new(),
+        };
+        let mut commands = Vec::new();
+        let mut base = self.base.as_ref();
+        let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
+
+        for &command in base.commands {
+            match command {
+                RenderCommand::SetBindGroup {
+                    index,
+                    num_dynamic_offsets,
+                    bind_group_id,
+                } => {
+                    let scope = PassErrorScope::SetBindGroup(bind_group_id);
+
+                    let max_bind_groups = device.limits.max_bind_groups;
+                    if (index as u32) >= max_bind_groups {
+                        return Err(RenderCommandError::BindGroupIndexOutOfRange {
+                            index,
+                            max: max_bind_groups,
+                        })
+                        .map_pass_err(scope);
+                    }
+
+                    let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
+                    base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
+                    // Check for misaligned offsets.
+                    if let Some(offset) = offsets
+                        .iter()
+                        .map(|offset| *offset as wgt::BufferAddress)
+                        .find(|offset| offset % wgt::BIND_BUFFER_ALIGNMENT != 0)
+                    {
+                        return Err(RenderCommandError::UnalignedBufferOffset(offset))
+                            .map_pass_err(scope);
+                    }
+
+                    let bind_group = state
+                        .trackers
+                        .bind_groups
+                        .use_extend(&*bind_group_guard, bind_group_id, (), ())
+                        .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))
+                        .map_pass_err(scope)?;
+                    if bind_group.dynamic_binding_info.len() != offsets.len() {
+                        return Err(RenderCommandError::InvalidDynamicOffsetCount {
+                            actual: offsets.len(),
+                            expected: bind_group.dynamic_binding_info.len(),
+                        })
+                        .map_pass_err(scope);
+                    }
+
+                    state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
+                    state
+                        .trackers
+                        .merge_extend(&bind_group.used)
+                        .map_pass_err(scope)?;
+                }
+                RenderCommand::SetPipeline(pipeline_id) => {
+                    let scope = PassErrorScope::SetPipelineRender(pipeline_id);
+                    if state.pipeline.set_and_check_redundant(pipeline_id) {
+                        continue;
+                    }
+
+                    let pipeline = state
+                        .trackers
+                        .render_pipes
+                        .use_extend(&*pipeline_guard, pipeline_id, (), ())
+                        .unwrap();
+
+                    self.context
+                        .check_compatible(&pipeline.pass_context)
+                        .map_err(RenderCommandError::IncompatiblePipeline)
+                        .map_pass_err(scope)?;
+
+                    //TODO: check read-only depth
+
+                    let layout = &pipeline_layout_guard[pipeline.layout_id.value];
+                    pipeline_layout_id = Some(pipeline.layout_id.value);
+
+                    state.set_pipeline(
+                        pipeline.index_format,
+                        &pipeline.vertex_strides,
+                        &layout.bind_group_layout_ids,
+                        &layout.push_constant_ranges,
+                    );
+                    commands.push(command);
+                    if let Some(iter) = state.flush_push_constants() {
+                        commands.extend(iter)
+                    }
+                }
+                RenderCommand::SetIndexBuffer {
+                    buffer_id,
+                    offset,
+                    size,
+                } => {
+                    let scope = PassErrorScope::SetIndexBuffer(buffer_id);
+                    let buffer = state
+                        .trackers
+                        .buffers
+                        .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
+                        .unwrap();
+                    check_buffer_usage(buffer.usage, wgt::BufferUsage::INDEX)
+                        .map_pass_err(scope)?;
+
+                    let end = match size {
+                        Some(s) => offset + s.get(),
+                        None => buffer.size,
+                    };
+                    state.index.set_buffer(buffer_id, offset..end);
+                }
+                RenderCommand::SetVertexBuffer {
+                    slot,
+                    buffer_id,
+                    offset,
+                    size,
+                } => {
+                    let scope = PassErrorScope::SetVertexBuffer(buffer_id);
+                    let buffer = state
+                        .trackers
+                        .buffers
+                        .use_extend(&*buffer_guard, buffer_id, (), BufferUse::VERTEX)
+                        .unwrap();
+                    check_buffer_usage(buffer.usage, wgt::BufferUsage::VERTEX)
+                        .map_pass_err(scope)?;
+
+                    let end = match size {
+                        Some(s) => offset + s.get(),
+                        None => buffer.size,
+                    };
+                    state.vertex[slot as usize].set_buffer(buffer_id, offset..end);
+                }
+                RenderCommand::SetPushConstant {
+                    stages,
+                    offset,
+                    size_bytes,
+                    values_offset: _,
+                } => {
+                    let scope = PassErrorScope::SetPushConstant;
+                    let end_offset = offset + size_bytes;
+
+                    let pipeline_layout_id = pipeline_layout_id
+                        .ok_or(DrawError::MissingPipeline)
+                        .map_pass_err(scope)?;
+                    let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
+
+                    pipeline_layout
+                        .validate_push_constant_ranges(stages, offset, end_offset)
+                        .map_pass_err(scope)?;
+
+                    commands.push(command);
+                }
+                RenderCommand::Draw {
+                    vertex_count,
+                    instance_count,
+                    first_vertex,
+                    first_instance,
+                } => {
+                    let scope = PassErrorScope::Draw;
+                    let (vertex_limit, instance_limit) = state.vertex_limits();
+                    let last_vertex = first_vertex + vertex_count;
+                    if last_vertex > vertex_limit {
+                        return Err(DrawError::VertexBeyondLimit {
+                            last_vertex,
+                            vertex_limit,
+                        })
+                        .map_pass_err(scope);
+                    }
+                    let last_instance = first_instance + instance_count;
+                    if last_instance > instance_limit {
+                        return Err(DrawError::InstanceBeyondLimit {
+                            last_instance,
+                            instance_limit,
+                        })
+                        .map_pass_err(scope);
+                    }
+                    commands.extend(state.flush_vertices());
+                    commands.extend(state.flush_binds());
+                    commands.push(command);
+                }
+                RenderCommand::DrawIndexed {
+                    index_count,
+                    instance_count,
+                    first_index,
+                    base_vertex: _,
+                    first_instance,
+                } => {
+                    let scope = PassErrorScope::DrawIndexed;
+                    //TODO: validate that base_vertex + max_index() is within the provided range
+                    let (_, instance_limit) = state.vertex_limits();
+                    let index_limit = state.index.limit();
+                    let last_index = first_index + index_count;
+                    if last_index > index_limit {
+                        return Err(DrawError::IndexBeyondLimit {
+                            last_index,
+                            index_limit,
+                        })
+                        .map_pass_err(scope);
+                    }
+                    let last_instance = first_instance + instance_count;
+                    if last_instance > instance_limit {
+                        return Err(DrawError::InstanceBeyondLimit {
+                            last_instance,
+                            instance_limit,
+                        })
+                        .map_pass_err(scope);
+                    }
+                    commands.extend(state.index.flush());
+                    commands.extend(state.flush_vertices());
+                    commands.extend(state.flush_binds());
+                    commands.push(command);
+                }
+                RenderCommand::MultiDrawIndirect {
+                    buffer_id,
+                    offset: _,
+                    count: None,
+                    indexed: false,
+                } => {
+                    let scope = PassErrorScope::DrawIndirect;
+                    let buffer = state
+                        .trackers
+                        .buffers
+                        .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
+                        .unwrap();
+                    check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
+                        .map_pass_err(scope)?;
+
+                    commands.extend(state.flush_vertices());
+                    commands.extend(state.flush_binds());
+                    commands.push(command);
+                }
+                RenderCommand::MultiDrawIndirect {
+                    buffer_id,
+                    offset: _,
+                    count: None,
+                    indexed: true,
+                } => {
+                    let scope = PassErrorScope::DrawIndexedIndirect;
+                    let buffer = state
+                        .trackers
+                        .buffers
+                        .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
+                        .map_err(|err| RenderCommandError::Buffer(buffer_id, err))
+                        .map_pass_err(scope)?;
+                    check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
+                        .map_pass_err(scope)?;
+
+                    commands.extend(state.index.flush());
+                    commands.extend(state.flush_vertices());
+                    commands.extend(state.flush_binds());
+                    commands.push(command);
+                }
+                RenderCommand::MultiDrawIndirect { .. }
+                | RenderCommand::MultiDrawIndirectCount { .. } => unimplemented!(),
+                RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
+                RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
+                RenderCommand::PopDebugGroup => unimplemented!(),
+                RenderCommand::ExecuteBundle(_)
+                | RenderCommand::SetBlendColor(_)
+                | RenderCommand::SetStencilReference(_)
+                | RenderCommand::SetViewport { .. }
+                | RenderCommand::SetScissor(_) => unreachable!("not supported by a render bundle"),
+            }
+        }
+
+        let _ = desc.label; //TODO: actually use
+        Ok(RenderBundle {
+            base: BasePass {
+                commands,
+                dynamic_offsets: state.flat_dynamic_offsets,
+                string_data: Vec::new(),
+                push_constant_data: Vec::new(),
+            },
+            device_id: Stored {
+                value: id::Valid(self.parent_id),
+                ref_count: device.life_guard.add_ref(),
+            },
+            used: state.trackers,
+            context: self.context,
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+        })
     }
 }
 
@@ -152,6 +470,11 @@ unsafe impl Send for RenderBundle {}
 unsafe impl Sync for RenderBundle {}
 
 impl RenderBundle {
+    #[cfg(feature = "trace")]
+    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand> {
+        BasePass::from_ref(self.base.as_ref())
+    }
+
     /// Actually encode the contents into a native command buffer.
     ///
     /// This is partially duplicating the logic of `command_encoder_run_render_pass`.
@@ -211,16 +534,11 @@ impl RenderBundle {
                         .raw
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
-                    let view = hal::buffer::IndexBufferView {
-                        buffer,
-                        range: hal::buffer::SubRange {
-                            offset,
-                            size: size.map(|s| s.get()),
-                        },
-                        index_type,
+                    let range = hal::buffer::SubRange {
+                        offset,
+                        size: size.map(|s| s.get()),
                     };
-
-                    cmd_buf.bind_index_buffer(view);
+                    cmd_buf.bind_index_buffer(buffer, range, index_type);
                 }
                 RenderCommand::SetVertexBuffer {
                     slot,
@@ -345,9 +663,11 @@ impl RenderBundle {
     }
 }
 
-impl Borrow<RefCount> for RenderBundle {
-    fn borrow(&self) -> &RefCount {
-        self.life_guard.ref_count.as_ref().unwrap()
+impl Resource for RenderBundle {
+    const TYPE: &'static str = "RenderBundle";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 
@@ -656,337 +976,51 @@ impl State {
 
 /// Error encountered when finishing recording a render bundle.
 #[derive(Clone, Debug, Error)]
-pub enum RenderBundleError {
+pub(super) enum RenderBundleErrorInner {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    RenderCommand(#[from] RenderCommandError),
+    RenderCommand(RenderCommandError),
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
     #[error(transparent)]
     Draw(#[from] DrawError),
 }
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn render_bundle_encoder_finish<B: GfxBackend>(
-        &self,
-        bundle_encoder: RenderBundleEncoder,
-        desc: &RenderBundleDescriptor,
-        id_in: Input<G, id::RenderBundleId>,
-    ) -> Result<id::RenderBundleId, RenderBundleError> {
-        span!(_guard, INFO, "RenderBundleEncoder::finish");
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+impl<T> From<T> for RenderBundleErrorInner
+where
+    T: Into<RenderCommandError>,
+{
+    fn from(t: T) -> Self {
+        Self::RenderCommand(t.into())
+    }
+}
 
-        let device = device_guard
-            .get(bundle_encoder.parent_id)
-            .map_err(|_| DeviceError::Invalid)?;
-        let render_bundle = {
-            let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
-            let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-            let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
-            let (buffer_guard, _) = hub.buffers.read(&mut token);
+/// Error encountered when finishing recording a render bundle.
+#[derive(Clone, Debug, Error)]
+#[error("{scope}")]
+pub struct RenderBundleError {
+    pub scope: PassErrorScope,
+    #[source]
+    inner: RenderBundleErrorInner,
+}
 
-            let mut state = State {
-                trackers: TrackerSet::new(bundle_encoder.parent_id.backend()),
-                index: IndexState::new(),
-                vertex: (0..MAX_VERTEX_BUFFERS)
-                    .map(|_| VertexState::new())
-                    .collect(),
-                bind: (0..MAX_BIND_GROUPS).map(|_| BindState::new()).collect(),
-                push_constant_ranges: PushConstantState::new(),
-                raw_dynamic_offsets: Vec::new(),
-                flat_dynamic_offsets: Vec::new(),
-                used_bind_groups: 0,
-                pipeline: StateChange::new(),
-            };
-            let mut commands = Vec::new();
-            let mut base = bundle_encoder.base.as_ref();
-            let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
+impl RenderBundleError {
+    pub(crate) const INVALID_DEVICE: Self = RenderBundleError {
+        scope: PassErrorScope::Bundle,
+        inner: RenderBundleErrorInner::Device(DeviceError::Invalid),
+    };
+}
 
-            for &command in base.commands {
-                match command {
-                    RenderCommand::SetBindGroup {
-                        index,
-                        num_dynamic_offsets,
-                        bind_group_id,
-                    } => {
-                        let max_bind_groups = device.limits.max_bind_groups;
-                        if (index as u32) >= max_bind_groups {
-                            Err(RenderCommandError::BindGroupIndexOutOfRange {
-                                index,
-                                max: max_bind_groups,
-                            })?
-                        }
-
-                        let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
-                        base.dynamic_offsets =
-                            &base.dynamic_offsets[num_dynamic_offsets as usize..];
-                        // Check for misaligned offsets.
-                        if let Some(offset) = offsets
-                            .iter()
-                            .map(|offset| *offset as wgt::BufferAddress)
-                            .find(|offset| offset % wgt::BIND_BUFFER_ALIGNMENT != 0)
-                        {
-                            Err(RenderCommandError::UnalignedBufferOffset(offset))?
-                        }
-
-                        let bind_group = state
-                            .trackers
-                            .bind_groups
-                            .use_extend(&*bind_group_guard, bind_group_id, (), ())
-                            .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))?;
-                        if bind_group.dynamic_binding_info.len() != offsets.len() {
-                            Err(RenderCommandError::InvalidDynamicOffsetCount {
-                                actual: offsets.len(),
-                                expected: bind_group.dynamic_binding_info.len(),
-                            })?
-                        }
-
-                        state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
-                        state.trackers.merge_extend(&bind_group.used)?;
-                    }
-                    RenderCommand::SetPipeline(pipeline_id) => {
-                        if state.pipeline.set_and_check_redundant(pipeline_id) {
-                            continue;
-                        }
-
-                        let pipeline = state
-                            .trackers
-                            .render_pipes
-                            .use_extend(&*pipeline_guard, pipeline_id, (), ())
-                            .unwrap();
-
-                        bundle_encoder
-                            .context
-                            .check_compatible(&pipeline.pass_context)
-                            .map_err(RenderCommandError::IncompatiblePipeline)?;
-
-                        //TODO: check read-only depth
-
-                        let layout = &pipeline_layout_guard[pipeline.layout_id.value];
-                        pipeline_layout_id = Some(pipeline.layout_id.value);
-
-                        state.set_pipeline(
-                            pipeline.index_format,
-                            &pipeline.vertex_strides,
-                            &layout.bind_group_layout_ids,
-                            &layout.push_constant_ranges,
-                        );
-                        commands.push(command);
-                        if let Some(iter) = state.flush_push_constants() {
-                            commands.extend(iter)
-                        }
-                    }
-                    RenderCommand::SetIndexBuffer {
-                        buffer_id,
-                        offset,
-                        size,
-                    } => {
-                        let buffer = state
-                            .trackers
-                            .buffers
-                            .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
-                            .unwrap();
-                        check_buffer_usage(buffer.usage, wgt::BufferUsage::INDEX)
-                            .map_err(RenderCommandError::from)?;
-
-                        let end = match size {
-                            Some(s) => offset + s.get(),
-                            None => buffer.size,
-                        };
-                        state.index.set_buffer(buffer_id, offset..end);
-                    }
-                    RenderCommand::SetVertexBuffer {
-                        slot,
-                        buffer_id,
-                        offset,
-                        size,
-                    } => {
-                        let buffer = state
-                            .trackers
-                            .buffers
-                            .use_extend(&*buffer_guard, buffer_id, (), BufferUse::VERTEX)
-                            .unwrap();
-                        check_buffer_usage(buffer.usage, wgt::BufferUsage::VERTEX)
-                            .map_err(RenderCommandError::from)?;
-
-                        let end = match size {
-                            Some(s) => offset + s.get(),
-                            None => buffer.size,
-                        };
-                        state.vertex[slot as usize].set_buffer(buffer_id, offset..end);
-                    }
-                    RenderCommand::SetPushConstant {
-                        stages,
-                        offset,
-                        size_bytes,
-                        values_offset: _,
-                    } => {
-                        let end_offset = offset + size_bytes;
-
-                        let pipeline_layout_id =
-                            pipeline_layout_id.ok_or(DrawError::MissingPipeline)?;
-                        let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
-
-                        pipeline_layout
-                            .validate_push_constant_ranges(stages, offset, end_offset)
-                            .map_err(RenderCommandError::from)?;
-
-                        commands.push(command);
-                    }
-                    RenderCommand::Draw {
-                        vertex_count,
-                        instance_count,
-                        first_vertex,
-                        first_instance,
-                    } => {
-                        let (vertex_limit, instance_limit) = state.vertex_limits();
-                        let last_vertex = first_vertex + vertex_count;
-                        if last_vertex > vertex_limit {
-                            Err(DrawError::VertexBeyondLimit {
-                                last_vertex,
-                                vertex_limit,
-                            })?
-                        }
-                        let last_instance = first_instance + instance_count;
-                        if last_instance > instance_limit {
-                            Err(DrawError::InstanceBeyondLimit {
-                                last_instance,
-                                instance_limit,
-                            })?
-                        }
-                        commands.extend(state.flush_vertices());
-                        commands.extend(state.flush_binds());
-                        commands.push(command);
-                    }
-                    RenderCommand::DrawIndexed {
-                        index_count,
-                        instance_count,
-                        first_index,
-                        base_vertex: _,
-                        first_instance,
-                    } => {
-                        //TODO: validate that base_vertex + max_index() is within the provided range
-                        let (_, instance_limit) = state.vertex_limits();
-                        let index_limit = state.index.limit();
-                        let last_index = first_index + index_count;
-                        if last_index > index_limit {
-                            Err(DrawError::IndexBeyondLimit {
-                                last_index,
-                                index_limit,
-                            })?
-                        }
-                        let last_instance = first_instance + instance_count;
-                        if last_instance > instance_limit {
-                            Err(DrawError::InstanceBeyondLimit {
-                                last_instance,
-                                instance_limit,
-                            })?
-                        }
-                        commands.extend(state.index.flush());
-                        commands.extend(state.flush_vertices());
-                        commands.extend(state.flush_binds());
-                        commands.push(command);
-                    }
-                    RenderCommand::MultiDrawIndirect {
-                        buffer_id,
-                        offset: _,
-                        count: None,
-                        indexed: false,
-                    } => {
-                        let buffer = state
-                            .trackers
-                            .buffers
-                            .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
-                            .unwrap();
-                        check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
-                            .map_err(RenderCommandError::from)?;
-
-                        commands.extend(state.flush_vertices());
-                        commands.extend(state.flush_binds());
-                        commands.push(command);
-                    }
-                    RenderCommand::MultiDrawIndirect {
-                        buffer_id,
-                        offset: _,
-                        count: None,
-                        indexed: true,
-                    } => {
-                        let buffer = state
-                            .trackers
-                            .buffers
-                            .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
-                            .map_err(|err| RenderCommandError::Buffer(buffer_id, err))?;
-                        check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
-                            .map_err(RenderCommandError::from)?;
-
-                        commands.extend(state.index.flush());
-                        commands.extend(state.flush_vertices());
-                        commands.extend(state.flush_binds());
-                        commands.push(command);
-                    }
-                    RenderCommand::MultiDrawIndirect { .. }
-                    | RenderCommand::MultiDrawIndirectCount { .. } => unimplemented!(),
-                    RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
-                    RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
-                    RenderCommand::PopDebugGroup => unimplemented!(),
-                    RenderCommand::ExecuteBundle(_)
-                    | RenderCommand::SetBlendColor(_)
-                    | RenderCommand::SetStencilReference(_)
-                    | RenderCommand::SetViewport { .. }
-                    | RenderCommand::SetScissor(_) => {
-                        unreachable!("not supported by a render bundle")
-                    }
-                }
-            }
-
-            tracing::debug!("Render bundle {:?} = {:#?}", id_in, state.trackers);
-            let _ = desc.label; //TODO: actually use
-                                //TODO: check if the device is still alive
-            RenderBundle {
-                base: BasePass {
-                    commands,
-                    dynamic_offsets: state.flat_dynamic_offsets,
-                    string_data: Vec::new(),
-                    push_constant_data: Vec::new(),
-                },
-                device_id: Stored {
-                    value: id::Valid(bundle_encoder.parent_id),
-                    ref_count: device.life_guard.add_ref(),
-                },
-                used: state.trackers,
-                context: bundle_encoder.context,
-                life_guard: LifeGuard::new(),
-            }
-        };
-
-        let ref_count = render_bundle.life_guard.add_ref();
-        let id = hub
-            .render_bundles
-            .register_identity(id_in, render_bundle, &mut token);
-
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            use crate::device::trace;
-            let (bundle_guard, _) = hub.render_bundles.read(&mut token);
-            let bundle = &bundle_guard[id];
-            let label = desc.label.as_ref().map(|l| l.as_ref());
-            trace.lock().add(trace::Action::CreateRenderBundle {
-                id: id.0,
-                desc: trace::new_render_bundle_encoder_descriptor(label, &bundle.context),
-                base: BasePass::from_ref(bundle.base.as_ref()),
-            });
-        }
-
-        device
-            .trackers
-            .lock()
-            .bundles
-            .init(id, ref_count, PhantomData)
-            .unwrap();
-        Ok(id.0)
+impl<T, E> MapPassErr<T, RenderBundleError> for Result<T, E>
+where
+    E: Into<RenderBundleErrorInner>,
+{
+    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, RenderBundleError> {
+        self.map_err(|inner| RenderBundleError {
+            scope,
+            inner: inner.into(),
+        })
     }
 }
 

@@ -44,7 +44,7 @@ pub enum TransferError {
     #[error("source buffer/texture is missing the `COPY_SRC` usage flag")]
     MissingCopySrcUsageFlag,
     #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
-    MissingCopyDstUsageFlag,
+    MissingCopyDstUsageFlag(Option<BufferId>, Option<TextureId>),
     #[error("copy of {start_offset}..{end_offset} would end up overruning the bounds of the {side:?} buffer of size {buffer_size}")]
     BufferOverrun {
         start_offset: BufferAddress,
@@ -95,7 +95,7 @@ pub enum TransferError {
 pub enum CopyError {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
-    #[error(transparent)]
+    #[error("Copy error")]
     Transfer(#[from] TransferError),
 }
 
@@ -349,7 +349,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(destination))?;
         if !dst_buffer.usage.contains(BufferUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag)?
+            Err(TransferError::MissingCopyDstUsageFlag(
+                Some(destination),
+                None,
+            ))?
         }
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_buffer)));
 
@@ -465,7 +468,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.usage.contains(TextureUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag)?
+            Err(TransferError::MissingCopyDstUsageFlag(
+                None,
+                Some(destination.texture),
+            ))?
         }
         let dst_barriers = dst_pending.map(|pending| pending.into_hal(dst_texture));
 
@@ -591,7 +597,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(destination.buffer))?;
         if !dst_buffer.usage.contains(BufferUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag)?
+            Err(TransferError::MissingCopyDstUsageFlag(
+                Some(destination.buffer),
+                None,
+            ))?
         }
         let dst_barrier = dst_barriers.map(|pending| pending.into_hal(dst_buffer));
 
@@ -731,7 +740,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.usage.contains(TextureUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag)?
+            Err(TransferError::MissingCopyDstUsageFlag(
+                None,
+                Some(destination.texture),
+            ))?
         }
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
 

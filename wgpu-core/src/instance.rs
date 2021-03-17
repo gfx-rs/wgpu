@@ -4,13 +4,13 @@
 
 use crate::{
     backend,
-    device::Device,
+    device::{Device, DeviceDescriptor},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId, Valid},
-    span, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
+    span, LabelHelpers, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
 };
 
-use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, BIND_BUFFER_ALIGNMENT};
+use wgt::{Backend, BackendBit, PowerPreference, BIND_BUFFER_ALIGNMENT};
 
 use hal::{
     adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
@@ -38,6 +38,8 @@ pub struct Instance {
     pub dx12: Option<gfx_backend_dx12::Instance>,
     #[cfg(dx11)]
     pub dx11: Option<gfx_backend_dx11::Instance>,
+    #[cfg(gl)]
+    pub gl: Option<gfx_backend_gl::Instance>,
 }
 
 impl Instance {
@@ -59,28 +61,32 @@ impl Instance {
                 dx12: map((Backend::Dx12, gfx_backend_dx12::Instance::create)),
                 #[cfg(dx11)]
                 dx11: map((Backend::Dx11, gfx_backend_dx11::Instance::create)),
+                #[cfg(gl)]
+                gl: map((Backend::Gl, gfx_backend_gl::Instance::create)),
             }
         }
     }
 
-    pub(crate) fn destroy_surface(&mut self, surface: Surface) {
+    pub(crate) fn destroy_surface(&self, surface: Surface) {
         backends_map! {
             let map = |(surface_backend, self_backend)| {
                 unsafe {
                     if let Some(suf) = surface_backend {
-                        self_backend.as_mut().unwrap().destroy_surface(suf);
+                        self_backend.as_ref().unwrap().destroy_surface(suf);
                     }
                 }
             };
 
             #[cfg(vulkan)]
-            map((surface.vulkan, &mut self.vulkan)),
+            map((surface.vulkan, &self.vulkan)),
             #[cfg(metal)]
-            map((surface.metal, &mut self.metal)),
+            map((surface.metal, &self.metal)),
             #[cfg(dx12)]
-            map((surface.dx12, &mut self.dx12)),
+            map((surface.dx12, &self.dx12)),
             #[cfg(dx11)]
-            map((surface.dx11, &mut self.dx11)),
+            map((surface.dx11, &self.dx11)),
+            #[cfg(gl)]
+            map((surface.gl, &self.gl)),
         }
     }
 }
@@ -97,6 +103,20 @@ pub struct Surface {
     pub dx12: Option<GfxSurface<backend::Dx12>>,
     #[cfg(dx11)]
     pub dx11: Option<GfxSurface<backend::Dx11>>,
+    #[cfg(gl)]
+    pub gl: Option<GfxSurface<backend::Gl>>,
+}
+
+impl crate::hub::Resource for Surface {
+    const TYPE: &'static str = "Surface";
+
+    fn life_guard(&self) -> &LifeGuard {
+        unreachable!()
+    }
+
+    fn label(&self) -> &str {
+        "<Surface>"
+    }
 }
 
 #[derive(Debug)]
@@ -107,7 +127,7 @@ pub struct Adapter<B: hal::Backend> {
     life_guard: LifeGuard,
 }
 
-impl<B: hal::Backend> Adapter<B> {
+impl<B: GfxBackend> Adapter<B> {
     fn new(raw: hal::adapter::Adapter<B>) -> Self {
         span!(_guard, INFO, "Adapter::new");
 
@@ -204,8 +224,160 @@ impl<B: hal::Backend> Adapter<B> {
             raw,
             features,
             limits,
-            life_guard: LifeGuard::new(),
+            life_guard: LifeGuard::new("<Adapter>"),
         }
+    }
+
+    fn create_device(
+        &self,
+        self_id: AdapterId,
+        desc: &DeviceDescriptor,
+        trace_path: Option<&std::path::Path>,
+    ) -> Result<Device<B>, RequestDeviceError> {
+        // Verify all features were exposed by the adapter
+        if !self.features.contains(desc.features) {
+            return Err(RequestDeviceError::UnsupportedFeature(
+                desc.features - self.features,
+            ));
+        }
+
+        // Verify feature preconditions
+        if desc
+            .features
+            .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
+            && self.raw.info.device_type == hal::adapter::DeviceType::DiscreteGpu
+        {
+            tracing::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
+        }
+
+        let phd = &self.raw.physical_device;
+        let available_features = phd.features();
+
+        // Check features that are always needed
+        let wishful_features = hal::Features::ROBUST_BUFFER_ACCESS
+            | hal::Features::VERTEX_STORES_AND_ATOMICS
+            | hal::Features::FRAGMENT_STORES_AND_ATOMICS
+            | hal::Features::NDC_Y_UP
+            | hal::Features::INDEPENDENT_BLENDING
+            | hal::Features::SAMPLER_ANISOTROPY
+            | hal::Features::IMAGE_CUBE_ARRAY;
+        let mut enabled_features = available_features & wishful_features;
+        if enabled_features != wishful_features {
+            tracing::warn!(
+                "Missing internal features: {:?}",
+                wishful_features - enabled_features
+            );
+        }
+
+        // Features
+        enabled_features.set(
+            hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
+            desc.features
+                .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
+        );
+        enabled_features.set(
+            hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
+            desc.features
+                .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
+        );
+        enabled_features.set(
+            hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
+            desc.features
+                .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+        );
+        enabled_features.set(
+            hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
+            desc.features.contains(wgt::Features::UNSIZED_BINDING_ARRAY),
+        );
+        enabled_features.set(
+            hal::Features::MULTI_DRAW_INDIRECT,
+            desc.features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
+        );
+        enabled_features.set(
+            hal::Features::DRAW_INDIRECT_COUNT,
+            desc.features
+                .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT),
+        );
+        enabled_features.set(
+            hal::Features::NON_FILL_POLYGON_MODE,
+            desc.features.contains(wgt::Features::NON_FILL_POLYGON_MODE),
+        );
+
+        let family = self
+            .raw
+            .queue_families
+            .iter()
+            .find(|family| family.queue_type().supports_graphics())
+            .ok_or(RequestDeviceError::NoGraphicsQueue)?;
+        let mut gpu =
+            unsafe { phd.open(&[(family, &[1.0])], enabled_features) }.map_err(|err| {
+                use hal::device::CreationError::*;
+                match err {
+                    DeviceLost => RequestDeviceError::DeviceLost,
+                    InitializationFailed => RequestDeviceError::Internal,
+                    OutOfMemory(_) => RequestDeviceError::OutOfMemory,
+                    _ => panic!("failed to create `gfx-hal` device: {}", err),
+                }
+            })?;
+
+        if let Some(_) = desc.label {
+            //TODO
+        }
+
+        let limits = phd.limits();
+        assert_eq!(
+            0,
+            BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
+            "Adapter storage buffer offset alignment not compatible with WGPU"
+        );
+        assert_eq!(
+            0,
+            BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
+            "Adapter uniform buffer offset alignment not compatible with WGPU"
+        );
+        if self.limits < desc.limits {
+            return Err(RequestDeviceError::LimitsExceeded);
+        }
+
+        let mem_props = phd.memory_properties();
+        if !desc.shader_validation {
+            tracing::warn!("Shader validation is disabled");
+        }
+        let private_features = PrivateFeatures {
+            shader_validation: desc.shader_validation,
+            anisotropic_filtering: enabled_features.contains(hal::Features::SAMPLER_ANISOTROPY),
+            texture_d24: phd
+                .format_properties(Some(hal::format::Format::X8D24Unorm))
+                .optimal_tiling
+                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+            texture_d24_s8: phd
+                .format_properties(Some(hal::format::Format::D24UnormS8Uint))
+                .optimal_tiling
+                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+        };
+
+        Device::new(
+            gpu.device,
+            Stored {
+                value: Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            gpu.queue_groups.swap_remove(0),
+            mem_props,
+            limits,
+            private_features,
+            desc,
+            trace_path,
+        )
+        .or(Err(RequestDeviceError::OutOfMemory))
+    }
+}
+
+impl<B: hal::Backend> crate::hub::Resource for Adapter<B> {
+    const TYPE: &'static str = "Adapter";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
     }
 }
 
@@ -245,7 +417,7 @@ impl AdapterInfo {
     }
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error)]
 /// Error when requesting a device from the adaptor
 pub enum RequestDeviceError {
     #[error("parent adapter is invalid")]
@@ -340,7 +512,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let map = |inst| {
                     inst
                     .as_ref()
-                    .and_then(|inst| inst.create_surface(handle).ok())
+                    .and_then(|inst| inst.create_surface(handle).map_err(|e| {
+                        tracing::warn!("Error: {:?}", e);
+                    }).ok())
                 };
 
                 Surface {
@@ -352,6 +526,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     dx12: map(&self.instance.dx12),
                     #[cfg(dx11)]
                     dx11: map(&self.instance.dx11),
+                    #[cfg(gl)]
+                    gl: map(&self.instance.gl),
                 }
             }
         };
@@ -359,6 +535,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let id = self.surfaces.register_identity(id_in, surface, &mut token);
         id.0
+    }
+
+    pub fn surface_drop(&self, id: SurfaceId) {
+        span!(_guard, INFO, "Surface::drop");
+        let mut token = Token::root();
+        let (surface, _) = self.surfaces.unregister(id, &mut token);
+        self.instance.destroy_surface(surface.unwrap());
     }
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
@@ -395,6 +578,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             map((&instance.dx12, Backend::Dx12, "Dx12", backend::Dx12::hub)),
             #[cfg(dx11)]
             map((&instance.dx11, Backend::Dx11, "Dx11", backend::Dx11::hub)),
+            #[cfg(gl)]
+            map((&instance.gl, Backend::Gl, "GL", backend::Gl::hub)),
         }
 
         adapters
@@ -424,6 +609,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut id_metal = inputs.find(Backend::Metal);
         let mut id_dx12 = inputs.find(Backend::Dx12);
         let mut id_dx11 = inputs.find(Backend::Dx11);
+        let mut id_gl = inputs.find(Backend::Gl);
 
         backends_map! {
             let map = |(instance_backend, id_backend, surface_backend)| {
@@ -474,6 +660,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     surf.dx11.as_ref()
                 }
                 surface_dx11
+            }));
+            #[cfg(gl)]
+            let adapters_gl = map((&instance.gl, &id_gl, {
+                fn surface_gl(surf: &Surface) -> Option<&GfxSurface<backend::Gl>> {
+                    surf.gl.as_ref()
+                }
+                surface_gl
             }));
         }
 
@@ -530,6 +723,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             map(("Dx12", &mut id_dx12, adapters_dx12, backend::Dx12::hub)),
             #[cfg(dx11)]
             map(("Dx11", &mut id_dx11, adapters_dx11, backend::Dx11::hub)),
+            #[cfg(gl)]
+            map(("GL", &mut id_dx11, adapters_gl, backend::Gl::hub)),
         }
 
         let _ = (
@@ -538,6 +733,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             id_metal.take(),
             id_dx12.take(),
             id_dx11.take(),
+            id_gl.take(),
         );
         tracing::warn!("Some adapters are present, but enumerating them failed!");
         Err(RequestAdapterError::NotFound)
@@ -588,7 +784,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| InvalidAdapter)
     }
 
-    pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {
+    pub fn adapter_drop<B: GfxBackend>(&self, adapter_id: AdapterId) {
         span!(_guard, INFO, "Adapter::drop");
 
         let hub = B::hub(self);
@@ -616,148 +812,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
-    ) -> Result<DeviceId, RequestDeviceError> {
+    ) -> (DeviceId, Option<RequestDeviceError>) {
         span!(_guard, INFO, "Adapter::request_device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
-        let device = {
-            let (adapter_guard, _) = hub.adapters.read(&mut token);
-            let adapter = adapter_guard
-                .get(adapter_id)
-                .map_err(|_| RequestDeviceError::InvalidAdapter)?;
-            let phd = &adapter.raw.physical_device;
 
-            // Verify all features were exposed by the adapter
-            if !adapter.features.contains(desc.features) {
-                return Err(RequestDeviceError::UnsupportedFeature(
-                    desc.features - adapter.features,
-                ));
-            }
-
-            // Verify feature preconditions
-            if desc
-                .features
-                .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
-                && adapter.raw.info.device_type == hal::adapter::DeviceType::DiscreteGpu
-            {
-                tracing::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
-            }
-
-            let available_features = adapter.raw.physical_device.features();
-
-            // Check features that are always needed
-            let wishful_features = hal::Features::ROBUST_BUFFER_ACCESS
-                | hal::Features::VERTEX_STORES_AND_ATOMICS
-                | hal::Features::FRAGMENT_STORES_AND_ATOMICS
-                | hal::Features::NDC_Y_UP
-                | hal::Features::INDEPENDENT_BLENDING
-                | hal::Features::SAMPLER_ANISOTROPY
-                | hal::Features::IMAGE_CUBE_ARRAY;
-            let mut enabled_features = available_features & wishful_features;
-            if enabled_features != wishful_features {
-                tracing::warn!(
-                    "Missing internal features: {:?}",
-                    wishful_features - enabled_features
-                );
-            }
-
-            // Features
-            enabled_features.set(
-                hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
-                desc.features
-                    .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
-            );
-            enabled_features.set(
-                hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
-                desc.features
-                    .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
-            );
-            enabled_features.set(
-                hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
-                desc.features
-                    .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
-            );
-            enabled_features.set(
-                hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
-                desc.features.contains(wgt::Features::UNSIZED_BINDING_ARRAY),
-            );
-            enabled_features.set(
-                hal::Features::MULTI_DRAW_INDIRECT,
-                desc.features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
-            );
-            enabled_features.set(
-                hal::Features::DRAW_INDIRECT_COUNT,
-                desc.features
-                    .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT),
-            );
-
-            let family = adapter
-                .raw
-                .queue_families
-                .iter()
-                .find(|family| family.queue_type().supports_graphics())
-                .ok_or(RequestDeviceError::NoGraphicsQueue)?;
-            let mut gpu =
-                unsafe { phd.open(&[(family, &[1.0])], enabled_features) }.map_err(|err| {
-                    use hal::device::CreationError::*;
-                    match err {
-                        DeviceLost => RequestDeviceError::DeviceLost,
-                        InitializationFailed => RequestDeviceError::Internal,
-                        OutOfMemory(_) => RequestDeviceError::OutOfMemory,
-                        _ => panic!("failed to create `gfx-hal` device: {}", err),
-                    }
-                })?;
-
-            let limits = phd.limits();
-            assert_eq!(
-                0,
-                BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
-                "Adapter storage buffer offset alignment not compatible with WGPU"
-            );
-            assert_eq!(
-                0,
-                BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
-                "Adapter uniform buffer offset alignment not compatible with WGPU"
-            );
-            if adapter.limits < desc.limits {
-                return Err(RequestDeviceError::LimitsExceeded);
-            }
-
-            let mem_props = phd.memory_properties();
-            if !desc.shader_validation {
-                tracing::warn!("Shader validation is disabled");
-            }
-            let private_features = PrivateFeatures {
-                shader_validation: desc.shader_validation,
-                anisotropic_filtering: enabled_features.contains(hal::Features::SAMPLER_ANISOTROPY),
-                texture_d24: phd
-                    .format_properties(Some(hal::format::Format::X8D24Unorm))
-                    .optimal_tiling
-                    .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
-                texture_d24_s8: phd
-                    .format_properties(Some(hal::format::Format::D24UnormS8Uint))
-                    .optimal_tiling
-                    .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+        let error = loop {
+            let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+            let adapter = match adapter_guard.get(adapter_id) {
+                Ok(adapter) => adapter,
+                Err(_) => break RequestDeviceError::InvalidAdapter,
             };
-
-            Device::new(
-                gpu.device,
-                Stored {
-                    value: Valid(adapter_id),
-                    ref_count: adapter.life_guard.add_ref(),
-                },
-                gpu.queue_groups.swap_remove(0),
-                mem_props,
-                limits,
-                private_features,
-                desc,
-                trace_path,
-            )
-            .or(Err(RequestDeviceError::OutOfMemory))?
+            let device = match adapter.create_device(adapter_id, desc, trace_path) {
+                Ok(device) => device,
+                Err(e) => break e,
+            };
+            let id = hub.devices.register_identity(id_in, device, &mut token);
+            return (id.0, None);
         };
 
-        let id = hub.devices.register_identity(id_in, device, &mut token);
-        Ok(id.0)
+        let id = hub
+            .devices
+            .register_error(id_in, desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
     }
 }

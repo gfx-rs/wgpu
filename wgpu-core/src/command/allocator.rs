@@ -8,6 +8,9 @@ use crate::{
     PrivateFeatures, Stored, SubmissionIndex,
 };
 
+#[cfg(debug_assertions)]
+use crate::LabelHelpers;
+
 use hal::{command::CommandBuffer as _, device::Device as _, pool::CommandPool as _};
 use parking_lot::Mutex;
 use thiserror::Error;
@@ -80,9 +83,11 @@ impl<B: GfxBackend> CommandAllocator<B> {
         device: &B::Device,
         limits: wgt::Limits,
         private_features: PrivateFeatures,
+        label: &crate::Label,
         #[cfg(feature = "trace")] enable_tracing: bool,
     ) -> Result<CommandBuffer<B>, CommandAllocatorError> {
         //debug_assert_eq!(device_id.backend(), B::VARIANT);
+        let _ = label; // silence warning on release
         let thread_id = thread::current().id();
         let mut inner = self.inner.lock();
 
@@ -126,6 +131,8 @@ impl<B: GfxBackend> CommandAllocator<B> {
             } else {
                 None
             },
+            #[cfg(debug_assertions)]
+            label: label.to_string_or_default(),
         })
     }
 }

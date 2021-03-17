@@ -10,22 +10,21 @@ use crate::{
         CommandAllocator, CommandBuffer, CopySide, TextureCopyView, TransferError, BITS_PER_BYTE,
     },
     conv,
-    device::{DeviceError, WaitIdleError},
+    device::{alloc, DeviceError, WaitIdleError},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
     resource::{BufferAccessError, BufferMapState, BufferUse, TextureUse},
     span, FastHashSet,
 };
 
-use gfx_memory::{Block, Heaps, MemoryBlock};
 use hal::{command::CommandBuffer as _, device::Device as _, queue::CommandQueue as _};
 use smallvec::SmallVec;
-use std::iter;
+use std::{iter, ptr};
 use thiserror::Error;
 
 struct StagingData<B: hal::Backend> {
     buffer: B::Buffer,
-    memory: MemoryBlock<B>,
+    memory: alloc::MemoryBlock<B>,
     cmdbuf: B::CommandBuffer,
 }
 
@@ -38,7 +37,7 @@ pub enum TempResource<B: hal::Backend> {
 #[derive(Debug)]
 pub(crate) struct PendingWrites<B: hal::Backend> {
     pub command_buffer: Option<B::CommandBuffer>,
-    pub temp_resources: Vec<(TempResource<B>, MemoryBlock<B>)>,
+    pub temp_resources: Vec<(TempResource<B>, alloc::MemoryBlock<B>)>,
     pub dst_buffers: FastHashSet<id::BufferId>,
     pub dst_textures: FastHashSet<id::TextureId>,
 }
@@ -57,7 +56,7 @@ impl<B: hal::Backend> PendingWrites<B> {
         self,
         device: &B::Device,
         cmd_allocator: &CommandAllocator<B>,
-        mem_allocator: &mut Heaps<B>,
+        mem_allocator: &mut alloc::MemoryAllocator<B>,
     ) {
         if let Some(raw) = self.command_buffer {
             cmd_allocator.discard_internal(raw);
@@ -75,7 +74,7 @@ impl<B: hal::Backend> PendingWrites<B> {
         }
     }
 
-    pub fn consume_temp(&mut self, resource: TempResource<B>, memory: MemoryBlock<B>) {
+    pub fn consume_temp(&mut self, resource: TempResource<B>, memory: alloc::MemoryBlock<B>) {
         self.temp_resources.push((resource, memory));
     }
 
@@ -118,24 +117,17 @@ impl<B: hal::Backend> super::Device<B> {
                 })?
         };
         //TODO: do we need to transition into HOST_WRITE access first?
-        let requirements = unsafe { self.raw.get_buffer_requirements(&buffer) };
-
-        let memory = self
-            .mem_allocator
-            .lock()
-            .allocate(
-                &self.raw,
-                &requirements,
-                gfx_memory::MemoryUsage::Staging { read_back: false },
-                gfx_memory::Kind::Linear,
-            )
-            .map_err(DeviceError::from_heaps)?;
-        unsafe {
+        let requirements = unsafe {
             self.raw.set_buffer_name(&mut buffer, "<write_buffer_temp>");
-            self.raw
-                .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut buffer)
-                .map_err(DeviceError::from_bind)?;
-        }
+            self.raw.get_buffer_requirements(&buffer)
+        };
+
+        let block = self.mem_allocator.lock().allocate(
+            &self.raw,
+            requirements,
+            gpu_alloc::UsageFlags::UPLOAD | gpu_alloc::UsageFlags::TRANSIENT,
+        )?;
+        block.bind_buffer(&self.raw, &mut buffer)?;
 
         let cmdbuf = match self.pending_writes.command_buffer.take() {
             Some(cmdbuf) => cmdbuf,
@@ -149,7 +141,7 @@ impl<B: hal::Backend> super::Device<B> {
         };
         Ok(StagingData {
             buffer,
-            memory,
+            memory: block,
             cmdbuf,
         })
     }
@@ -220,19 +212,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let mut stage = device.prepare_stage(data_size)?;
-        {
-            let mut mapped = stage
-                .memory
-                .map(&device.raw, hal::memory::Segment::ALL)
-                .map_err(|err| match err {
-                    hal::device::MapError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    _ => panic!("failed to map buffer: {}", err),
-                })?;
-            unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
-                .expect("failed to get writer to mapped staging buffer")
-                .slice[..data.len()]
-                .copy_from_slice(data);
-        }
+        stage.memory.write_bytes(&device.raw, 0, data)?;
 
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers
@@ -244,7 +224,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         if !dst.usage.contains(wgt::BufferUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag)?;
+            Err(TransferError::MissingCopyDstUsageFlag(
+                Some(buffer_id),
+                None,
+            ))?;
         }
         dst.life_guard.use_at(device.active_submission_index + 1);
 
@@ -377,7 +360,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         if !dst.usage.contains(wgt::TextureUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag)?
+            Err(TransferError::MissingCopyDstUsageFlag(
+                None,
+                Some(destination.texture),
+            ))?
         }
         validate_texture_copy_range(
             destination,
@@ -388,19 +374,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         )?;
         dst.life_guard.use_at(device.active_submission_index + 1);
 
-        {
-            let mut mapped = stage
-                .memory
-                .map(&device.raw, hal::memory::Segment::ALL)
-                .map_err(|err| match err {
-                    hal::device::MapError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    _ => panic!("failed to map staging buffer: {}", err),
-                })?;
-            let mapping = unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
-                .expect("failed to get writer to mapped staging buffer");
+        let ptr = stage.memory.map(&device.raw, 0, stage_size)?;
+        unsafe {
+            //TODO: https://github.com/zakarumych/gpu-alloc/issues/13
             if stage_bytes_per_row == data_layout.bytes_per_row {
                 // Fast path if the data isalready being aligned optimally.
-                mapping.slice[..stage_size as usize].copy_from_slice(data);
+                ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), stage_size as usize);
             } else {
                 // Copy row by row into the optimal alignment.
                 let copy_bytes_per_row =
@@ -408,15 +387,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 for layer in 0..size.depth {
                     let rows_offset = layer * block_rows_per_image;
                     for row in 0..height_blocks {
-                        let data_offset =
-                            (rows_offset + row) as usize * data_layout.bytes_per_row as usize;
-                        let stage_offset =
-                            (rows_offset + row) as usize * stage_bytes_per_row as usize;
-                        mapping.slice[stage_offset..stage_offset + copy_bytes_per_row]
-                            .copy_from_slice(&data[data_offset..data_offset + copy_bytes_per_row]);
+                        ptr::copy_nonoverlapping(
+                            data.as_ptr().offset(
+                                (rows_offset + row) as isize * data_layout.bytes_per_row as isize,
+                            ),
+                            ptr.as_ptr().offset(
+                                (rows_offset + row) as isize * stage_bytes_per_row as isize,
+                            ),
+                            copy_bytes_per_row,
+                        );
                     }
                 }
             }
+        }
+        stage.memory.unmap(&device.raw);
+        if !stage.memory.is_coherent() {
+            stage.memory.flush_range(&device.raw, 0, None)?;
         }
 
         let region = hal::command::BufferImageCopy {

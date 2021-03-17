@@ -5,7 +5,12 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    device::{queue::TempResource, DeviceError},
+    device::{
+        alloc,
+        descriptor::{DescriptorAllocator, DescriptorSet},
+        queue::TempResource,
+        DeviceError,
+    },
     hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Token},
     id, resource,
     track::TrackerSet,
@@ -13,8 +18,6 @@ use crate::{
 };
 
 use copyless::VecHelper as _;
-use gfx_descriptor::{DescriptorAllocator, DescriptorSet};
-use gfx_memory::{Heaps, MemoryBlock};
 use hal::device::Device as _;
 use parking_lot::Mutex;
 use thiserror::Error;
@@ -84,8 +87,8 @@ impl SuspectedResources {
 /// A struct that keeps lists of resources that are no longer needed.
 #[derive(Debug)]
 struct NonReferencedResources<B: hal::Backend> {
-    buffers: Vec<(B::Buffer, MemoryBlock<B>)>,
-    images: Vec<(B::Image, MemoryBlock<B>)>,
+    buffers: Vec<(B::Buffer, alloc::MemoryBlock<B>)>,
+    images: Vec<(B::Image, alloc::MemoryBlock<B>)>,
     // Note: we keep the associated ID here in order to be able to check
     // at any point what resources are used in a submission.
     image_views: Vec<(id::Valid<id::TextureViewId>, B::ImageView)>,
@@ -130,20 +133,20 @@ impl<B: hal::Backend> NonReferencedResources<B> {
     unsafe fn clean(
         &mut self,
         device: &B::Device,
-        heaps_mutex: &Mutex<Heaps<B>>,
+        memory_allocator_mutex: &Mutex<alloc::MemoryAllocator<B>>,
         descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
     ) {
         if !self.buffers.is_empty() || !self.images.is_empty() {
-            let mut heaps = heaps_mutex.lock();
+            let mut allocator = memory_allocator_mutex.lock();
             for (raw, memory) in self.buffers.drain(..) {
                 tracing::trace!("Buffer {:?} is destroyed with memory {:?}", raw, memory);
                 device.destroy_buffer(raw);
-                heaps.free(device, memory);
+                allocator.free(device, memory);
             }
             for (raw, memory) in self.images.drain(..) {
                 tracing::trace!("Image {:?} is destroyed with memory {:?}", raw, memory);
                 device.destroy_image(raw);
-                heaps.free(device, memory);
+                allocator.free(device, memory);
             }
         }
 
@@ -160,7 +163,7 @@ impl<B: hal::Backend> NonReferencedResources<B> {
         if !self.desc_sets.is_empty() {
             descriptor_allocator_mutex
                 .lock()
-                .free(self.desc_sets.drain(..));
+                .free(device, self.desc_sets.drain(..));
         }
 
         for raw in self.compute_pipes.drain(..) {
@@ -241,7 +244,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         index: SubmissionIndex,
         fence: B::Fence,
         new_suspects: &SuspectedResources,
-        temp_resources: impl Iterator<Item = (TempResource<B>, MemoryBlock<B>)>,
+        temp_resources: impl Iterator<Item = (TempResource<B>, alloc::MemoryBlock<B>)>,
     ) {
         let mut last_resources = NonReferencedResources::new();
         for (res, memory) in temp_resources {
@@ -334,12 +337,12 @@ impl<B: hal::Backend> LifetimeTracker<B> {
     pub fn cleanup(
         &mut self,
         device: &B::Device,
-        heaps_mutex: &Mutex<Heaps<B>>,
+        memory_allocator_mutex: &Mutex<alloc::MemoryAllocator<B>>,
         descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
     ) {
         unsafe {
             self.free_resources
-                .clean(device, heaps_mutex, descriptor_allocator_mutex);
+                .clean(device, memory_allocator_mutex, descriptor_allocator_mutex);
             descriptor_allocator_mutex.lock().cleanup(device);
         }
     }
@@ -347,7 +350,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
     pub fn schedule_resource_destruction(
         &mut self,
         temp_resource: TempResource<B>,
-        memory: MemoryBlock<B>,
+        memory: alloc::MemoryBlock<B>,
         last_submit_index: SubmissionIndex,
     ) {
         let resources = self
@@ -725,14 +728,18 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
                     _ => panic!("No pending mapping."),
                 };
-                let status = if mapping.sub_range.size.map_or(true, |x| x != 0) {
+                let status = if mapping.range.start != mapping.range.end {
                     tracing::debug!("Buffer {:?} map state -> Active", buffer_id);
                     let host = mapping.op.host;
-                    match super::map_buffer(raw, buffer, mapping.sub_range.clone(), host) {
+                    let size = mapping.range.end - mapping.range.start;
+                    match super::map_buffer(raw, buffer, mapping.range.start, size, host) {
                         Ok(ptr) => {
                             buffer.map_state = resource::BufferMapState::Active {
                                 ptr,
-                                sub_range: mapping.sub_range,
+                                sub_range: hal::buffer::SubRange {
+                                    offset: mapping.range.start,
+                                    size: Some(size),
+                                },
                                 host,
                             };
                             resource::BufferMapAsyncStatus::Success

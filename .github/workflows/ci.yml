@@ -23,15 +23,14 @@ jobs:
     runs-on: ubuntu-18.04
     env:
       TARGET: aarch64-linux-android
+      PKG_CONFIG_ALLOW_CROSS: 1
     steps:
       - uses: actions/checkout@v2
-      - name: Install NDK
+      - name: Prepare
         run: |
-          curl -LO https://dl.google.com/android/repository/android-ndk-r21b-linux-x86_64.zip
-          unzip -qq android-ndk-r21b-linux-x86_64.zip -d $GITHUB_WORKSPACE
-          export NDK_HOME_BIN=$GITHUB_WORKSPACE/android-ndk-r21b/toolchains/llvm/prebuilt/linux-x86_64/bin
-          ln -s $NDK_HOME_BIN/aarch64-linux-android21-clang $NDK_HOME_BIN/aarch64-linux-android-clang
-          echo "::add-path::$NDK_HOME_BIN"
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq libegl1-mesa-dev
+          echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
       - run: rustup component add clippy
       - run: rustup target add ${{ env.TARGET }}
       - run: cargo clippy --target ${{ env.TARGET }}
@@ -50,40 +49,44 @@ jobs:
           - name: MacOS Stable
             channel: stable
             os: macos-10.15
-            build_command: cargo clippy
+            prepare_command:
             additional_core_features: trace
             additional_player_features: winit
           - name: MacOS Nightly
             os: macos-10.15
             channel: nightly
-            build_command: cargo test -- --nocapture
+            prepare_command:
             additional_core_features:
             additional_player_features:
           - name: Ubuntu Stable
             os: ubuntu-18.04
             channel: stable
-            build_command: cargo clippy
+            prepare_command: |
+              sudo apt-get update -y -qq
+              sudo apt-get install -y -qq libegl1-mesa-dev
             additional_core_features: trace,replay
             additional_player_features:
           - name: Ubuntu Nightly
             os: ubuntu-18.04
             channel: nightly
-            build_command: | 
-              sudo add-apt-repository ppa:oibaf/graphics-drivers;
-              sudo apt-get install mesa-vulkan-drivers;
-              cargo test -- --nocapture; 
+            prepare_command: |
+              sudo apt-get update -y -qq
+              echo "Installing EGL"
+              sudo apt-get install -y -qq libegl1-mesa-dev
+              echo "Installing Vulkan"
+              sudo apt-get install -y -qq mesa-vulkan-drivers
             additional_core_features: serial-pass
             additional_player_features: winit
           - name: Windows Stable
             os: windows-2019
             channel: stable
-            build_command: rustup default stable-msvc; cargo clippy
+            prepare_command: rustup default stable-msvc
             additional_core_features: trace,serial-pass
             additional_player_features: renderdoc
           - name: Windows Nightly
             os: windows-2019
             channel: nightly
-            build_command: rustup default nightly-msvc; cargo test -- --nocapture
+            prepare_command: rustup default nightly-msvc
             additional_core_features:
             additional_player_features:
     steps:
@@ -96,6 +99,9 @@ jobs:
           override: true
       - if: matrix.channel == 'stable'
         run: rustup component add clippy
+        # prepare
+      - if: matrix.prepare_command != ''
+        run: ${{ matrix.prepare_command }}
         # build with no features first
       - if: matrix.additional_core_features == ''
         run: cargo check --manifest-path wgpu-core/Cargo.toml --no-default-features
@@ -103,4 +109,7 @@ jobs:
         run: cargo check --manifest-path wgpu-core/Cargo.toml --features ${{ matrix.additional_core_features }}
       - if: matrix.additional_player_features != ''
         run: cargo check --manifest-path player/Cargo.toml --features ${{ matrix.additional_player_features }}
-      - run: ${{ matrix.build_command }}
+      - if: matrix.channel == 'stable'
+        run: cargo clippy
+      - if: matrix.channel == 'nightly'
+        run: cargo test -- --nocapture

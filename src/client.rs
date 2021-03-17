@@ -87,6 +87,15 @@ pub struct RenderPipelineDescriptor<'a> {
 }
 
 #[repr(C)]
+pub enum RawTextureSampleType {
+    Float,
+    UnfilterableFloat,
+    Uint,
+    Sint,
+    Depth,
+}
+
+#[repr(C)]
 pub enum RawBindingType {
     UniformBuffer,
     StorageBuffer,
@@ -106,7 +115,7 @@ pub struct BindGroupLayoutEntry<'a> {
     has_dynamic_offset: bool,
     min_binding_size: Option<wgt::BufferSize>,
     view_dimension: Option<&'a wgt::TextureViewDimension>,
-    texture_component_type: Option<&'a wgt::TextureComponentType>,
+    texture_sample_type: Option<&'a RawTextureSampleType>,
     multisampled: bool,
     storage_texture_format: Option<&'a wgt::TextureFormat>,
 }
@@ -621,41 +630,56 @@ pub unsafe extern "C" fn wgpu_client_create_bind_group_layout(
             visibility: entry.visibility,
             count: None,
             ty: match entry.ty {
-                RawBindingType::UniformBuffer => wgt::BindingType::UniformBuffer {
-                    dynamic: entry.has_dynamic_offset,
+                RawBindingType::UniformBuffer => wgt::BindingType::Buffer {
+                    ty: wgt::BufferBindingType::Uniform,
+                    has_dynamic_offset: entry.has_dynamic_offset,
                     min_binding_size: entry.min_binding_size,
                 },
-                RawBindingType::StorageBuffer => wgt::BindingType::StorageBuffer {
-                    dynamic: entry.has_dynamic_offset,
+                RawBindingType::StorageBuffer => wgt::BindingType::Buffer {
+                    ty: wgt::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: entry.has_dynamic_offset,
                     min_binding_size: entry.min_binding_size,
-                    readonly: false,
                 },
-                RawBindingType::ReadonlyStorageBuffer => wgt::BindingType::StorageBuffer {
-                    dynamic: entry.has_dynamic_offset,
+                RawBindingType::ReadonlyStorageBuffer => wgt::BindingType::Buffer {
+                    ty: wgt::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: entry.has_dynamic_offset,
                     min_binding_size: entry.min_binding_size,
-                    readonly: true,
                 },
-                RawBindingType::Sampler => wgt::BindingType::Sampler { comparison: false },
-                RawBindingType::ComparisonSampler => wgt::BindingType::Sampler { comparison: true },
-                RawBindingType::SampledTexture => wgt::BindingType::SampledTexture {
+                RawBindingType::Sampler => wgt::BindingType::Sampler {
+                    comparison: false,
+                    filtering: false,
+                },
+                RawBindingType::ComparisonSampler => wgt::BindingType::Sampler {
+                    comparison: true,
+                    filtering: false,
+                },
+                RawBindingType::SampledTexture => wgt::BindingType::Texture {
                     //TODO: the spec has a bug here
-                    dimension: *entry
+                    view_dimension: *entry
                         .view_dimension
                         .unwrap_or(&wgt::TextureViewDimension::D2),
-                    component_type: *entry
-                        .texture_component_type
-                        .unwrap_or(&wgt::TextureComponentType::Float),
+                    sample_type: match entry.texture_sample_type {
+                        None | Some(RawTextureSampleType::Float) => {
+                            wgt::TextureSampleType::Float { filterable: true }
+                        }
+                        Some(RawTextureSampleType::UnfilterableFloat) => {
+                            wgt::TextureSampleType::Float { filterable: false }
+                        }
+                        Some(RawTextureSampleType::Uint) => wgt::TextureSampleType::Uint,
+                        Some(RawTextureSampleType::Sint) => wgt::TextureSampleType::Sint,
+                        Some(RawTextureSampleType::Depth) => wgt::TextureSampleType::Depth,
+                    },
                     multisampled: entry.multisampled,
                 },
                 RawBindingType::ReadonlyStorageTexture => wgt::BindingType::StorageTexture {
-                    dimension: *entry.view_dimension.unwrap(),
+                    access: wgt::StorageTextureAccess::ReadOnly,
+                    view_dimension: *entry.view_dimension.unwrap(),
                     format: *entry.storage_texture_format.unwrap(),
-                    readonly: true,
                 },
                 RawBindingType::WriteonlyStorageTexture => wgt::BindingType::StorageTexture {
-                    dimension: *entry.view_dimension.unwrap(),
+                    access: wgt::StorageTextureAccess::WriteOnly,
+                    view_dimension: *entry.view_dimension.unwrap(),
                     format: *entry.storage_texture_format.unwrap(),
-                    readonly: false,
                 },
             },
         });

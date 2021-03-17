@@ -47,6 +47,8 @@ pub struct CommandBuffer<B: hal::Backend> {
     private_features: PrivateFeatures,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
+    #[cfg(debug_assertions)]
+    pub(crate) label: String,
 }
 
 impl<B: GfxBackend> CommandBuffer<B> {
@@ -98,6 +100,21 @@ impl<B: GfxBackend> CommandBuffer<B> {
                 buffer_barriers.chain(texture_barriers),
             );
         }
+    }
+}
+
+impl<B: hal::Backend> crate::hub::Resource for CommandBuffer<B> {
+    const TYPE: &'static str = "CommandBuffer";
+
+    fn life_guard(&self) -> &crate::LifeGuard {
+        unreachable!()
+    }
+
+    fn label(&self) -> &str {
+        #[cfg(debug_assertions)]
+        return &self.label;
+        #[cfg(not(debug_assertions))]
+        return "";
     }
 }
 
@@ -169,7 +186,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor<Label>,
-    ) -> Result<id::CommandBufferId, CommandEncoderError> {
+    ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
         span!(_guard, INFO, "CommandEncoder::finish");
 
         let hub = B::hub(self);
@@ -177,18 +194,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
         //TODO: actually close the last recorded command buffer
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
-        cmd_buf.is_recording = false;
-        // stop tracking the swapchain image, if used
-        if let Some((ref sc_id, _)) = cmd_buf.used_swap_chain {
-            let view_id = swap_chain_guard[sc_id.value]
-                .acquired_view_id
-                .as_ref()
-                .expect("Used swap chain frame has already presented");
-            cmd_buf.trackers.views.remove(view_id.value);
-        }
-        tracing::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
-        Ok(encoder_id)
+
+        let error = match CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id) {
+            Ok(cmd_buf) => {
+                cmd_buf.is_recording = false;
+                // stop tracking the swapchain image, if used
+                if let Some((ref sc_id, _)) = cmd_buf.used_swap_chain {
+                    let view_id = swap_chain_guard[sc_id.value]
+                        .acquired_view_id
+                        .as_ref()
+                        .expect("Used swap chain frame has already presented");
+                    cmd_buf.trackers.views.remove(view_id.value);
+                }
+                tracing::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
+                None
+            }
+            Err(e) => Some(e),
+        };
+
+        (encoder_id, error)
     }
 
     pub fn command_encoder_push_debug_group<B: GfxBackend>(
@@ -291,4 +315,48 @@ impl<T: Copy + PartialEq> StateChange<T> {
     fn reset(&mut self) {
         self.last_state = None;
     }
+}
+
+trait MapPassErr<T, O> {
+    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, O>;
+}
+
+#[derive(Clone, Copy, Debug, Error)]
+pub enum PassErrorScope {
+    #[error("In a bundle parameter")]
+    Bundle,
+    #[error("In a pass parameter")]
+    Pass(id::CommandEncoderId),
+    #[error("In a set_bind_group command")]
+    SetBindGroup(id::BindGroupId),
+    #[error("In a set_pipeline command")]
+    SetPipelineRender(id::RenderPipelineId),
+    #[error("In a set_pipeline command")]
+    SetPipelineCompute(id::ComputePipelineId),
+    #[error("In a set_push_constant command")]
+    SetPushConstant,
+    #[error("In a set_vertex_buffer command")]
+    SetVertexBuffer(id::BufferId),
+    #[error("In a set_index_buffer command")]
+    SetIndexBuffer(id::BufferId),
+    #[error("In a set_viewport command")]
+    SetViewport,
+    #[error("In a set_scissor_rect command")]
+    SetScissorRect,
+    #[error("In a draw command")]
+    Draw,
+    #[error("In a draw_indexed command")]
+    DrawIndexed,
+    #[error("In a draw_indirect command")]
+    DrawIndirect,
+    #[error("In a draw_indexed_indirect command")]
+    DrawIndexedIndirect,
+    #[error("In a execute_bundle command")]
+    ExecuteBundle,
+    #[error("In a dispatch command")]
+    Dispatch,
+    #[error("In a dispatch_indirect command")]
+    DispatchIndirect,
+    #[error("In a pop_debug_group command")]
+    PopDebugGroup,
 }

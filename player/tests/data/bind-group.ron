@@ -9,6 +9,7 @@
         )),
         CreateShaderModule(
             id: Id(0, 1, Empty),
+            label: None,
             data: "empty.comp.spv",
         ),
         CreateComputePipeline(Id(0, 1, Empty), (
@@ -33,11 +34,9 @@
                 (
                     binding: 0,
                     visibility: (bits: 0x3),
-                    ty: UniformBuffer(
-                        dynamic: false,
-                        min_binding_size: None,
+                    ty: Buffer(
+                        ty: Uniform,
                     ),
-                    count: None,
                 ),
             ],
         )),
