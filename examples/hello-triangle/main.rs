@@ -131,7 +131,7 @@ fn main() {
     let window = winit::window::Window::new(&event_loop).unwrap();
     #[cfg(not(target_arch = "wasm32"))]
     {
-        wgpu_subscriber::initialize_default_subscriber(None);
+        env_logger::init();
         // Temporarily avoid srgb formats for the swapchain on the web
         pollster::block_on(run(event_loop, window));
     }
