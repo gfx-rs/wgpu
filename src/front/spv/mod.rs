@@ -453,9 +453,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             spirv::Decoration::Flat => {
                 dec.interpolation = Some(crate::Interpolation::Flat);
             }
-            spirv::Decoration::Patch => {
-                // skip
-            }
             spirv::Decoration::Centroid => {
                 dec.interpolation = Some(crate::Interpolation::Centroid);
             }

@@ -206,7 +206,7 @@ pub enum UniformityDisruptor {
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
-pub enum AnalysisError {
+pub enum FunctionAnalysisError {
     #[error("Expression {0:?} is not a global variable!")]
     ExpectedGlobalVariable(crate::Expression),
     #[error("Called function {0:?} that hasn't been declared in the IR yet")]
@@ -219,6 +219,15 @@ pub enum AnalysisError {
         Handle<crate::Expression>,
         UniformityDisruptor,
     ),
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum AnalysisError {
+    #[error("Function {0:?} analysis failed")]
+    Function(Handle<crate::Function>, #[source] FunctionAnalysisError),
+    #[error("Entry point {0:?}/'{1}' function analysis failed")]
+    EntryPoint(crate::ShaderStage, String, #[source] FunctionAnalysisError),
 }
 
 impl FunctionInfo {
@@ -293,7 +302,7 @@ impl FunctionInfo {
         arguments: &[crate::FunctionArgument],
         global_var_arena: &Arena<crate::GlobalVariable>,
         other_functions: &[FunctionInfo],
-    ) -> Result<(), AnalysisError> {
+    ) -> Result<(), FunctionAnalysisError> {
         use crate::{Expression as E, SampleLevel as Sl};
 
         let mut assignable_global = None;
@@ -346,7 +355,10 @@ impl FunctionInfo {
                 assignable_global = Some(gh);
                 let var = &global_var_arena[gh];
                 let uniform = match var.class {
-                    Sc::Function | Sc::Private | Sc::WorkGroup => false,
+                    // local data is non-uniform
+                    Sc::Function | Sc::Private => false,
+                    // workgroup memory is exclusively accessed by the group
+                    Sc::WorkGroup => true,
                     // uniform data
                     Sc::Uniform | Sc::PushConstant => true,
                     // storage data is only uniform when read-only
@@ -377,13 +389,17 @@ impl FunctionInfo {
                     image: match expression_arena[image] {
                         crate::Expression::GlobalVariable(var) => var,
                         ref other => {
-                            return Err(AnalysisError::ExpectedGlobalVariable(other.clone()))
+                            return Err(FunctionAnalysisError::ExpectedGlobalVariable(
+                                other.clone(),
+                            ))
                         }
                     },
                     sampler: match expression_arena[sampler] {
                         crate::Expression::GlobalVariable(var) => var,
                         ref other => {
-                            return Err(AnalysisError::ExpectedGlobalVariable(other.clone()))
+                            return Err(FunctionAnalysisError::ExpectedGlobalVariable(
+                                other.clone(),
+                            ))
                         }
                     },
                 });
@@ -483,7 +499,7 @@ impl FunctionInfo {
             E::Call(function) => {
                 let fun = other_functions
                     .get(function.index())
-                    .ok_or(AnalysisError::ForwardCall(function))?;
+                    .ok_or(FunctionAnalysisError::ForwardCall(function))?;
                 self.process_call(fun).result
             }
             E::ArrayLength(expr) => Uniformity {
@@ -515,7 +531,7 @@ impl FunctionInfo {
         statements: &[crate::Statement],
         other_functions: &[FunctionInfo],
         mut disruptor: Option<UniformityDisruptor>,
-    ) -> Result<FunctionUniformity, AnalysisError> {
+    ) -> Result<FunctionUniformity, FunctionAnalysisError> {
         use crate::Statement as S;
 
         let mut combined_uniformity = FunctionUniformity::new();
@@ -527,7 +543,7 @@ impl FunctionInfo {
                         if let Some(req) = self.expressions[expr.index()].uniformity.requirement {
                             requirement = match disruptor {
                                 Some(cause) => {
-                                    return Err(AnalysisError::NonUniformControlFlow(
+                                    return Err(FunctionAnalysisError::NonUniformControlFlow(
                                         req, expr, cause,
                                     ))
                                 }
@@ -639,7 +655,7 @@ impl FunctionInfo {
                     }
                     let info = other_functions
                         .get(function.index())
-                        .ok_or(AnalysisError::ForwardCall(function))?;
+                        .ok_or(FunctionAnalysisError::ForwardCall(function))?;
                     self.process_call(info)
                 }
             };
@@ -666,7 +682,7 @@ impl Analysis {
         &self,
         fun: &crate::Function,
         global_var_arena: &Arena<crate::GlobalVariable>,
-    ) -> Result<FunctionInfo, AnalysisError> {
+    ) -> Result<FunctionInfo, FunctionAnalysisError> {
         let mut info = FunctionInfo {
             uniformity: Uniformity::default(),
             may_kill: false,
@@ -698,13 +714,17 @@ impl Analysis {
             functions: Vec::with_capacity(module.functions.len()),
             entry_points: Vec::with_capacity(module.entry_points.len()),
         };
-        for (_, fun) in module.functions.iter() {
-            let info = this.process_function(fun, &module.global_variables)?;
+        for (fun_handle, fun) in module.functions.iter() {
+            let info = this
+                .process_function(fun, &module.global_variables)
+                .map_err(|source| AnalysisError::Function(fun_handle, source))?;
             this.functions.push(info);
         }
 
         for ep in module.entry_points.iter() {
-            let info = this.process_function(&ep.function, &module.global_variables)?;
+            let info = this
+                .process_function(&ep.function, &module.global_variables)
+                .map_err(|source| AnalysisError::EntryPoint(ep.stage, ep.name.clone(), source))?;
             this.entry_points.push(info);
         }
 
@@ -841,7 +861,7 @@ fn uniform_control_flow() {
     };
     assert_eq!(
         info.process_block(&[stmt_emit2, stmt_if_non_uniform], &[], None),
-        Err(AnalysisError::NonUniformControlFlow(
+        Err(FunctionAnalysisError::NonUniformControlFlow(
             UniformityRequirement::Derivative,
             derivative_expr,
             UniformityDisruptor::Expression(non_uniform_global_expr)
