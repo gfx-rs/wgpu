@@ -43,3 +43,23 @@ jobs:
     - name: cargo doc
       run: cargo --version; cargo doc --lib --no-deps
       continue-on-error: true
+
+  lint:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - run: rustup component add clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check

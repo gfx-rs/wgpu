@@ -294,7 +294,7 @@ impl framework::Example for Example {
             use cgmath::{Decomposed, Deg, InnerSpace, Quaternion, Rotation3};
 
             let transform = Decomposed {
-                disp: cube.offset.clone(),
+                disp: cube.offset,
                 rot: Quaternion::from_axis_angle(cube.offset.normalize(), Deg(cube.angle)),
                 scale: cube.scale,
             };

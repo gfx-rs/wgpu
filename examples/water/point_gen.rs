@@ -30,7 +30,7 @@ const S45: f32 = std::f32::consts::FRAC_1_SQRT_2;
 ///
 const C45: f32 = S45;
 
-const SQRT_3: f32 = 1.73205080757;
+const SQRT_3: f32 = 1.7320508;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Pod, Zeroable)]
