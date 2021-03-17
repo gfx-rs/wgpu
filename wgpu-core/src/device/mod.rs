@@ -114,12 +114,13 @@ impl<T> AttachmentData<T> {
 }
 
 pub(crate) type AttachmentDataVec<T> = ArrayVec<[T; MAX_COLOR_TARGETS + MAX_COLOR_TARGETS + 1]>;
-
 pub(crate) type RenderPassKey = AttachmentData<(hal::pass::Attachment, hal::image::Layout)>;
-pub(crate) type FramebufferKey = (
-    AttachmentData<hal::image::FramebufferAttachment>,
-    wgt::Extent3d,
-);
+#[derive(Debug, Eq, Hash, PartialEq)]
+pub(crate) struct FramebufferKey {
+    pub(crate) attachments: AttachmentData<hal::image::FramebufferAttachment>,
+    pub(crate) extent: wgt::Extent3d,
+    pub(crate) samples: hal::image::NumSamples,
+}
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]

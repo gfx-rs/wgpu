@@ -11,8 +11,8 @@ use crate::{
     },
     conv,
     device::{
-        AttachmentData, AttachmentDataVec, Device, RenderPassCompatibilityError, RenderPassContext,
-        RenderPassKey, RenderPassLock, MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS,
+        AttachmentData, AttachmentDataVec, Device, FramebufferKey, RenderPassCompatibilityError,
+        RenderPassContext, RenderPassKey, RenderPassLock, MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS,
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
@@ -829,10 +829,11 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 .map(|at| view_guard.get(at.attachment).unwrap()),
         };
         let extent = extent.ok_or(RenderPassErrorInner::MissingAttachments)?;
-        let fb_key = (
-            view_data.map(|view| view.framebuffer_attachment.clone()),
+        let fb_key = FramebufferKey {
+            attachments: view_data.map(|view| view.framebuffer_attachment.clone()),
             extent,
-        );
+            samples: sample_count,
+        };
         let context = RenderPassContext {
             attachments: view_data.map(|view| view.format),
             sample_count,
@@ -847,7 +848,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         .raw
                         .create_framebuffer(
                             &render_pass,
-                            e.key().0.all().cloned(),
+                            e.key().attachments.all().cloned(),
                             conv::map_extent(&extent, wgt::TextureDimension::D3),
                         )
                         .or(Err(RenderPassErrorInner::OutOfMemory))?
