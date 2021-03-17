@@ -11,9 +11,9 @@ struct VertexOutput {
     vec4 position;
 };
 
-in vec2 _in_location_0;
-in vec2 _in_location_1;
-out vec2 _out_location_0;
+layout(location = 0) in vec2 _in_location_0;
+layout(location = 1) in vec2 _in_location_1;
+layout(location = 0) out vec2 _out_location_0;
 
 void main() {
     vec2 pos = _in_location_0;

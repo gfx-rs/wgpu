@@ -13,8 +13,8 @@ struct VertexOutput {
 
 uniform highp samplerCube _group_0_binding_1;
 
-in vec3 _in_location_0;
-out vec4 _out_location_0;
+layout(location = 0) in vec3 _in_location_0;
+layout(location = 0) out vec4 _out_location_0;
 
 void main() {
     vec3 uv1 = _in_location_0;

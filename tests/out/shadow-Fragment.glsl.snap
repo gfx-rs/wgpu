@@ -22,9 +22,9 @@ readonly buffer Lights_block_1 {
 
 uniform highp sampler2DArrayShadow _group_0_binding_2;
 
-in vec3 _in_location_0;
-in vec4 _in_location_1;
-out vec4 _out_location_0;
+layout(location = 0) in vec3 _in_location_0;
+layout(location = 1) in vec4 _in_location_1;
+layout(location = 0) out vec4 _out_location_0;
 
 float fetch_shadow(uint light_id, vec4 homogeneous_coords) {
     if((homogeneous_coords[3] <= 0.0)) {

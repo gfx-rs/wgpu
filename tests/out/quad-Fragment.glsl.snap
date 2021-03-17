@@ -13,8 +13,8 @@ struct VertexOutput {
 
 uniform highp sampler2D _group_0_binding_0;
 
-in vec2 _in_location_0;
-out vec4 _out_location_0;
+layout(location = 0) in vec2 _in_location_0;
+layout(location = 0) out vec4 _out_location_0;
 
 void main() {
     vec2 uv2 = _in_location_0;

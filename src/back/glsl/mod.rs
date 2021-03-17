@@ -811,8 +811,22 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
 
                 // Write the storage class
-                write!(self.out, "{} ", if output { "out" } else { "in" })?;
-
+                if self.options.version >= Version::Embedded(310)
+                    || self.options.version >= Version::Desktop(410)
+                {
+                    if let Binding::Location(index, ..) = *binding {
+                        write!(
+                            self.out,
+                            "layout(location = {}) {} ",
+                            index,
+                            if output { "out" } else { "in" }
+                        )?;
+                    } else {
+                        write!(self.out, "{} ", if output { "out" } else { "in" })?;
+                    }
+                } else {
+                    write!(self.out, "{} ", if output { "out" } else { "in" })?;
+                }
                 // Write the type
                 // `write_type` adds no leading or trailing spaces
                 self.write_type(ty)?;
