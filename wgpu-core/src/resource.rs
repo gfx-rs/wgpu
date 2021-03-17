@@ -121,7 +121,7 @@ unsafe impl Sync for BufferMapOperation {}
 
 impl BufferMapOperation {
     pub(crate) fn call_error(self) {
-        tracing::error!("wgpu_buffer_map_async failed: buffer mapping is pending");
+        log::error!("wgpu_buffer_map_async failed: buffer mapping is pending");
         unsafe {
             (self.callback)(BufferMapAsyncStatus::Error, self.user_data);
         }

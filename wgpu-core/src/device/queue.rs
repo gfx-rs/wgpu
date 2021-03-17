@@ -15,7 +15,7 @@ use crate::{
     id,
     memory_init_tracker::MemoryInitKind,
     resource::{BufferAccessError, BufferMapState, BufferUse, TextureUse},
-    span, FastHashMap, FastHashSet,
+    FastHashMap, FastHashSet,
 };
 
 use hal::{command::CommandBuffer as _, device::Device as _, queue::Queue as _};
@@ -192,7 +192,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_offset: wgt::BufferAddress,
         data: &[u8],
     ) -> Result<(), QueueWriteError> {
-        span!(_guard, INFO, "Queue::write_buffer");
+        profiling::scope!("Queue::write_buffer");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -216,7 +216,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let data_size = data.len() as wgt::BufferAddress;
         if data_size == 0 {
-            tracing::trace!("Ignoring write_buffer of size 0");
+            log::trace!("Ignoring write_buffer of size 0");
             return Ok(());
         }
 
@@ -299,7 +299,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         data_layout: &wgt::TextureDataLayout,
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
-        span!(_guard, INFO, "Queue::write_texture");
+        profiling::scope!("Queue::write_texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -324,7 +324,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
-            tracing::trace!("Ignoring write_texture of size 0");
+            log::trace!("Ignoring write_texture of size 0");
             return Ok(());
         }
 
@@ -609,7 +609,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id: id::QueueId,
         command_buffer_ids: &[id::CommandBufferId],
     ) -> Result<(), QueueSubmitError> {
-        span!(_guard, INFO, "Queue::submit");
+        profiling::scope!("Queue::submit");
 
         self.initialize_used_uninitialized_memory::<B>(queue_id, command_buffer_ids)?;
 
@@ -686,7 +686,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                             if !buffer.life_guard.use_at(submit_index) {
                                 if let BufferMapState::Active { .. } = buffer.map_state {
-                                    tracing::warn!("Dropped buffer has a pending mapping.");
+                                    log::warn!("Dropped buffer has a pending mapping.");
                                     super::unmap_buffer(&device.raw, buffer)?;
                                 }
                                 device.temp_suspected.buffers.push(id);
@@ -745,7 +745,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             transit
                                 .begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
                         }
-                        tracing::trace!("Stitching command buffer {:?} before submission", cmb_id);
+                        log::trace!("Stitching command buffer {:?} before submission", cmb_id);
                         CommandBuffer::insert_barriers(
                             &mut transit,
                             &mut *trackers,
@@ -759,7 +759,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         cmdbuf.raw.insert(0, transit);
                     }
 
-                    tracing::trace!("Device after submission {}: {:#?}", submit_index, trackers);
+                    log::trace!("Device after submission {}: {:#?}", submit_index, trackers);
                 }
 
                 // now prepare the GPU submission
@@ -828,7 +828,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         queue_id: id::QueueId,
     ) -> Result<f32, InvalidQueue> {
-        span!(_guard, INFO, "Queue::get_timestamp_period");
+        profiling::scope!("Queue::get_timestamp_period");
 
         let hub = B::hub(self);
         let mut token = Token::root();

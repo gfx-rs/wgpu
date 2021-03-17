@@ -194,7 +194,7 @@ impl Binder {
         bind_group: &BindGroup<B>,
         offsets: &[wgt::DynamicOffset],
     ) -> &'a [EntryPayload] {
-        tracing::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
+        log::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
         debug_assert_eq!(B::VARIANT, bind_group_id.0.backend());
 
         let payload = &mut self.payloads[index];

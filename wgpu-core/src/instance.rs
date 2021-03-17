@@ -7,7 +7,7 @@ use crate::{
     device::{Device, DeviceDescriptor},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId, Valid},
-    span, LabelHelpers, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
+    LabelHelpers, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
 };
 
 use wgt::{Backend, BackendBit, PowerPreference, BIND_BUFFER_ALIGNMENT};
@@ -127,7 +127,7 @@ pub struct Adapter<B: hal::Backend> {
 
 impl<B: GfxBackend> Adapter<B> {
     fn new(raw: hal::adapter::Adapter<B>) -> Self {
-        span!(_guard, INFO, "Adapter::new");
+        profiling::scope!("Adapter::new");
 
         let adapter_features = raw.physical_device.features();
         let properties = raw.physical_device.properties();
@@ -287,7 +287,7 @@ impl<B: GfxBackend> Adapter<B> {
         &self,
         surface: &mut Surface,
     ) -> Result<wgt::TextureFormat, GetSwapChainPreferredFormatError> {
-        span!(_guard, INFO, "Adapter::get_swap_chain_preferred_format");
+        profiling::scope!("Adapter::get_swap_chain_preferred_format");
 
         let formats = {
             let surface = B::get_surface_mut(surface);
@@ -385,7 +385,7 @@ impl<B: GfxBackend> Adapter<B> {
             .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
             && self.raw.info.device_type == hal::adapter::DeviceType::DiscreteGpu
         {
-            tracing::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
+            log::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
         }
 
         let phd = &self.raw.physical_device;
@@ -401,7 +401,7 @@ impl<B: GfxBackend> Adapter<B> {
             | hal::Features::IMAGE_CUBE_ARRAY;
         let mut enabled_features = available_features & wishful_features;
         if enabled_features != wishful_features {
-            tracing::warn!(
+            log::warn!(
                 "Missing internal features: {:?}",
                 wishful_features - enabled_features
             );
@@ -608,7 +608,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         handle: &impl raw_window_handle::HasRawWindowHandle,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        span!(_guard, INFO, "Instance::create_surface");
+        profiling::scope!("Instance::create_surface");
 
         let surface = unsafe {
             backends_map! {
@@ -616,7 +616,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     inst
                     .as_ref()
                     .and_then(|inst| inst.create_surface(handle).map_err(|e| {
-                        tracing::warn!("Error: {:?}", e);
+                        log::warn!("Error: {:?}", e);
                     }).ok())
                 };
 
@@ -646,7 +646,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         layer: *mut std::ffi::c_void,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        span!(_guard, INFO, "Instance::instance_create_surface_metal");
+        profiling::scope!("Instance::instance_create_surface_metal");
 
         let surface = Surface {
             #[cfg(feature = "gfx-backend-vulkan")]
@@ -664,14 +664,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn surface_drop(&self, id: SurfaceId) {
-        span!(_guard, INFO, "Surface::drop");
+        profiling::scope!("Surface::drop");
         let mut token = Token::root();
         let (surface, _) = self.surfaces.unregister(id, &mut token);
         self.instance.destroy_surface(surface.unwrap());
     }
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
-        span!(_guard, INFO, "Instance::enumerate_adapters");
+        profiling::scope!("Instance::enumerate_adapters");
 
         let instance = &self.instance;
         let mut token = Token::root();
@@ -684,7 +684,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if let Some(id_backend) = inputs.find(backend) {
                         for raw in inst.enumerate_adapters() {
                             let adapter = Adapter::new(raw);
-                            tracing::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
+                            log::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
                             let id = hub.adapters
                                 .prepare(id_backend.clone())
                                 .assign(adapter, &mut token);
@@ -714,7 +714,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &RequestAdapterOptions,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Result<AdapterId, RequestAdapterError> {
-        span!(_guard, INFO, "Instance::pick_adapter");
+        profiling::scope!("Instance::pick_adapter");
 
         let instance = &self.instance;
         let mut token = Token::root();
@@ -832,7 +832,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let map = |(info_adapter, id_backend, mut adapters_backend, backend_hub)| {
                 if selected < adapters_backend.len() {
                     let adapter = Adapter::new(adapters_backend.swap_remove(selected));
-                    tracing::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
+                    log::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
                     let id = backend_hub(self).adapters
                         .prepare(id_backend.take().unwrap())
                         .assign(adapter, &mut token);
@@ -861,7 +861,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             id_dx11.take(),
             id_gl.take(),
         );
-        tracing::warn!("Some adapters are present, but enumerating them failed!");
+        log::warn!("Some adapters are present, but enumerating them failed!");
         Err(RequestAdapterError::NotFound)
     }
 
@@ -869,7 +869,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::AdapterInfo, InvalidAdapter> {
-        span!(_guard, INFO, "Adapter::get_info");
+        profiling::scope!("Adapter::get_info");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -885,7 +885,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: AdapterId,
         format: wgt::TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
-        span!(_guard, INFO, "Adapter::get_texture_format_features");
+        profiling::scope!("Adapter::get_texture_format_features");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -900,7 +900,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::Features, InvalidAdapter> {
-        span!(_guard, INFO, "Adapter::features");
+        profiling::scope!("Adapter::features");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -915,7 +915,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::Limits, InvalidAdapter> {
-        span!(_guard, INFO, "Adapter::limits");
+        profiling::scope!("Adapter::limits");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -927,7 +927,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn adapter_drop<B: GfxBackend>(&self, adapter_id: AdapterId) {
-        span!(_guard, INFO, "Adapter::drop");
+        profiling::scope!("Adapter::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -952,7 +952,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
     ) -> (DeviceId, Option<RequestDeviceError>) {
-        span!(_guard, INFO, "Adapter::request_device");
+        profiling::scope!("Adapter::request_device");
 
         let hub = B::hub(self);
         let mut token = Token::root();

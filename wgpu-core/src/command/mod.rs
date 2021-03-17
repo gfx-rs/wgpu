@@ -26,7 +26,6 @@ use crate::{
     id,
     memory_init_tracker::MemoryInitTrackerAction,
     resource::{Buffer, Texture},
-    span,
     track::TrackerSet,
     Label, PrivateFeatures, Stored,
 };
@@ -198,7 +197,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor<Label>,
     ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
-        span!(_guard, INFO, "CommandEncoder::finish");
+        profiling::scope!("CommandEncoder::finish");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -217,7 +216,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .expect("Used swap chain frame has already presented");
                     cmd_buf.trackers.views.remove(view_id.value);
                 }
-                tracing::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
+                log::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
                 None
             }
             Err(e) => Some(e),
@@ -231,7 +230,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) -> Result<(), CommandEncoderError> {
-        span!(_guard, DEBUG, "CommandEncoder::push_debug_group");
+        profiling::scope!("CommandEncoder::push_debug_group");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -251,7 +250,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) -> Result<(), CommandEncoderError> {
-        span!(_guard, DEBUG, "CommandEncoder::insert_debug_marker");
+        profiling::scope!("CommandEncoder::insert_debug_marker");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -270,7 +269,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
     ) -> Result<(), CommandEncoderError> {
-        span!(_guard, DEBUG, "CommandEncoder::pop_debug_marker");
+        profiling::scope!("CommandEncoder::pop_debug_marker");
 
         let hub = B::hub(self);
         let mut token = Token::root();

@@ -12,7 +12,6 @@ use crate::{
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, BufferUse, Texture},
-    span,
     track::{TrackerSet, UsageConflict},
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label,
@@ -221,7 +220,7 @@ impl State {
             self.trackers.merge_extend(&bind_group_guard[id].used)?;
         }
 
-        tracing::trace!("Encoding dispatch barriers");
+        log::trace!("Encoding dispatch barriers");
 
         CommandBuffer::insert_barriers(
             raw_cmd_buf,
@@ -253,7 +252,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<ComputeCommand>,
     ) -> Result<(), ComputePassError> {
-        span!(_guard, INFO, "CommandEncoder::run_compute_pass");
+        profiling::scope!("CommandEncoder::run_compute_pass");
         let scope = PassErrorScope::Pass(encoder_id);
 
         let hub = B::hub(self);
@@ -649,7 +648,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 pub mod compute_ffi {
     use super::{ComputeCommand, ComputePass};
-    use crate::{id, span, RawString};
+    use crate::{id, RawString};
     use std::{convert::TryInto, ffi, slice};
     use wgt::{BufferAddress, DynamicOffset};
 
@@ -665,7 +664,6 @@ pub mod compute_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        span!(_guard, DEBUG, "ComputePass::set_bind_group");
         pass.base.commands.push(ComputeCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
@@ -683,7 +681,6 @@ pub mod compute_ffi {
         pass: &mut ComputePass,
         pipeline_id: id::ComputePipelineId,
     ) {
-        span!(_guard, DEBUG, "ComputePass::set_pipeline");
         pass.base
             .commands
             .push(ComputeCommand::SetPipeline(pipeline_id));
@@ -700,7 +697,6 @@ pub mod compute_ffi {
         size_bytes: u32,
         data: *const u8,
     ) {
-        span!(_guard, DEBUG, "ComputePass::set_push_constant");
         assert_eq!(
             offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
@@ -736,7 +732,6 @@ pub mod compute_ffi {
         groups_y: u32,
         groups_z: u32,
     ) {
-        span!(_guard, DEBUG, "ComputePass::dispatch");
         pass.base
             .commands
             .push(ComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
@@ -748,7 +743,6 @@ pub mod compute_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        span!(_guard, DEBUG, "ComputePass::dispatch_indirect");
         pass.base
             .commands
             .push(ComputeCommand::DispatchIndirect { buffer_id, offset });
@@ -764,7 +758,6 @@ pub mod compute_ffi {
         label: RawString,
         color: u32,
     ) {
-        span!(_guard, DEBUG, "ComputePass::push_debug_group");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -776,7 +769,6 @@ pub mod compute_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_compute_pass_pop_debug_group(pass: &mut ComputePass) {
-        span!(_guard, DEBUG, "ComputePass::pop_debug_group");
         pass.base.commands.push(ComputeCommand::PopDebugGroup);
     }
 
@@ -790,7 +782,6 @@ pub mod compute_ffi {
         label: RawString,
         color: u32,
     ) {
-        span!(_guard, DEBUG, "ComputePass::insert_debug_marker");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -806,8 +797,6 @@ pub mod compute_ffi {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) {
-        span!(_guard, DEBUG, "ComputePass::write_timestamp");
-
         pass.base.commands.push(ComputeCommand::WriteTimestamp {
             query_set_id,
             query_index,
@@ -820,12 +809,6 @@ pub mod compute_ffi {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) {
-        span!(
-            _guard,
-            DEBUG,
-            "ComputePass::begin_pipeline_statistics query"
-        );
-
         pass.base
             .commands
             .push(ComputeCommand::BeginPipelineStatisticsQuery {
@@ -836,8 +819,6 @@ pub mod compute_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_compute_pass_end_pipeline_statistics_query(pass: &mut ComputePass) {
-        span!(_guard, DEBUG, "ComputePass::end_pipeline_statistics_query");
-
         pass.base
             .commands
             .push(ComputeCommand::EndPipelineStatisticsQuery);
