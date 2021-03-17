@@ -4,7 +4,10 @@
  * of IR inspection and debugging.
 !*/
 
-use crate::arena::Handle;
+use crate::{
+    arena::Handle,
+    proc::analyzer::{Analysis, FunctionInfo},
+};
 
 use std::{
     borrow::Cow,
@@ -140,7 +143,12 @@ const COLORS: &[&str] = &[
     "#d9d9d9",
 ];
 
-fn write_fun(output: &mut String, prefix: String, fun: &crate::Function) -> Result<(), FmtError> {
+fn write_fun(
+    output: &mut String,
+    prefix: String,
+    fun: &crate::Function,
+    info: Option<&FunctionInfo>,
+) -> Result<(), FmtError> {
     enum Payload<'a> {
         Arguments(&'a [Handle<crate::Expression>]),
         Local(Handle<crate::LocalVariable>),
@@ -312,11 +320,18 @@ fn write_fun(output: &mut String, prefix: String, fun: &crate::Function) -> Resu
                 (Cow::Borrowed("ArrayLength"), 7)
             }
         };
+
+        // give uniform expressions an outline
+        let color_attr = match info {
+            Some(info) if info[handle].uniformity.non_uniform_result.is_none() => "fillcolor",
+            _ => "color",
+        };
         writeln!(
             output,
-            "\t\t{}_e{} [ color=\"{}\" label=\"{:?} {}\" ]",
+            "\t\t{}_e{} [ {}=\"{}\" label=\"{:?} {}\" ]",
             prefix,
             handle.index(),
+            color_attr,
             COLORS[color_id],
             handle,
             label,
@@ -354,7 +369,7 @@ fn write_fun(output: &mut String, prefix: String, fun: &crate::Function) -> Resu
             Some(Payload::Global(h)) => {
                 writeln!(
                     output,
-                    "\t\tg{} -> {}_e{} [color=gray]",
+                    "\t\tg{} -> {}_e{} [fillcolor=gray]",
                     h.index(),
                     prefix,
                     handle.index(),
@@ -414,7 +429,7 @@ fn write_fun(output: &mut String, prefix: String, fun: &crate::Function) -> Resu
     Ok(())
 }
 
-pub fn write(module: &crate::Module) -> Result<String, FmtError> {
+pub fn write(module: &crate::Module, analysis: Option<&Analysis>) -> Result<String, FmtError> {
     use std::fmt::Write as _;
 
     let mut output = String::new();
@@ -443,14 +458,16 @@ pub fn write(module: &crate::Module) -> Result<String, FmtError> {
             handle,
             name(&fun.name)
         )?;
-        write_fun(&mut output, prefix, fun)?;
+        let info = analysis.map(|a| &a[handle]);
+        write_fun(&mut output, prefix, fun, info)?;
         writeln!(output, "\t}}")?;
     }
     for (ep_index, ep) in module.entry_points.iter().enumerate() {
         let prefix = format!("ep{}", ep_index);
         writeln!(output, "\tsubgraph cluster_{} {{", prefix)?;
         writeln!(output, "\t\tlabel=\"{:?}/'{}'\"", ep.stage, ep.name)?;
-        write_fun(&mut output, prefix, &ep.function)?;
+        let info = analysis.map(|a| a.get_entry_point(ep_index));
+        write_fun(&mut output, prefix, &ep.function, info)?;
         writeln!(output, "\t}}")?;
     }
 

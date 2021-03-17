@@ -249,7 +249,7 @@ fn main() {
         #[cfg(feature = "dot-out")]
         "dot" => {
             use naga::back::dot;
-            let output = dot::write(&module).unwrap();
+            let output = dot::write(&module, analysis.as_ref()).unwrap();
             fs::write(output_path, output).unwrap();
         }
         other => {
