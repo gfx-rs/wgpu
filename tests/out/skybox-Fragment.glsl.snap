@@ -17,9 +17,9 @@ layout(location = 0) in vec3 _vs2fs_location0;
 layout(location = 0) out vec4 _fs2p_location0;
 
 void main() {
-    vec3 uv1 = _vs2fs_location0;
-    vec4 _expr4 = texture(_group_0_binding_1, vec3(uv1));
-    _fs2p_location0 = _expr4;
+    VertexOutput in1 = VertexOutput(gl_FragCoord, _vs2fs_location0);
+    vec4 _expr5 = texture(_group_0_binding_1, vec3(in1.uv));
+    _fs2p_location0 = _expr5;
     return;
 }
 

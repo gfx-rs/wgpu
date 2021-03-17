@@ -6,39 +6,26 @@ expression: msl
 #include <simd/simd.h>
 
 typedef metal::uint4 type;
-
 struct Globals {
     type num_lights;
 };
-
 typedef metal::float4x4 type1;
-
 typedef metal::float4 type2;
-
 struct Light {
     type1 proj;
     type2 pos;
     type2 color;
 };
-
 typedef Light type3[1];
-
 struct Lights {
     type3 data;
 };
-
 typedef metal::depth2d_array<float, metal::access::sample> type4;
-
 typedef metal::sampler type5;
-
 typedef uint type6;
-
 typedef float type7;
-
 typedef metal::float2 type8;
-
 typedef metal::float3 type9;
-
 constexpr constant float const_0f = 0.0;
 constexpr constant float const_1f = 1.0;
 constexpr constant float const_0_50f = 0.5;

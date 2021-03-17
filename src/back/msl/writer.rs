@@ -894,12 +894,12 @@ impl<W: Write> Writer<W> {
             let global_use = GlobalUse::all(); //TODO
             match ty.inner {
                 crate::TypeInner::Scalar { kind, .. } => {
-                    write!(self.out, "typedef {} {}", scalar_kind_string(kind), name)?;
+                    writeln!(self.out, "typedef {} {};", scalar_kind_string(kind), name)?;
                 }
                 crate::TypeInner::Vector { size, kind, .. } => {
-                    write!(
+                    writeln!(
                         self.out,
-                        "typedef {}::{}{} {}",
+                        "typedef {}::{}{} {};",
                         NAMESPACE,
                         scalar_kind_string(kind),
                         vector_size_string(size),
@@ -907,9 +907,9 @@ impl<W: Write> Writer<W> {
                     )?;
                 }
                 crate::TypeInner::Matrix { columns, rows, .. } => {
-                    write!(
+                    writeln!(
                         self.out,
-                        "typedef {}::{}{}x{} {}",
+                        "typedef {}::{}{}x{} {};",
                         NAMESPACE,
                         scalar_kind_string(crate::ScalarKind::Float),
                         vector_size_string(columns),
@@ -923,7 +923,7 @@ impl<W: Write> Writer<W> {
                         Some(name) => name,
                         None => continue,
                     };
-                    write!(self.out, "typedef {} {} *{}", class_name, base_name, name)?;
+                    writeln!(self.out, "typedef {} {} *{};", class_name, base_name, name)?;
                 }
                 crate::TypeInner::ValuePointer {
                     size: None,
@@ -935,9 +935,9 @@ impl<W: Write> Writer<W> {
                         Some(name) => name,
                         None => continue,
                     };
-                    write!(
+                    writeln!(
                         self.out,
-                        "typedef {} {} *{}",
+                        "typedef {} {} *{};",
                         class_name,
                         scalar_kind_string(kind),
                         name
@@ -953,9 +953,9 @@ impl<W: Write> Writer<W> {
                         Some(name) => name,
                         None => continue,
                     };
-                    write!(
+                    writeln!(
                         self.out,
-                        "typedef {} {}::{}{} {}",
+                        "typedef {} {}::{}{} {};",
                         class_name,
                         NAMESPACE,
                         scalar_kind_string(kind),
@@ -975,7 +975,7 @@ impl<W: Write> Writer<W> {
                         }
                         crate::ArraySize::Dynamic => "1",
                     };
-                    write!(self.out, "typedef {} {}[{}]", base_name, name, size_str)?;
+                    writeln!(self.out, "typedef {} {}[{}];", base_name, name, size_str)?;
                 }
                 crate::TypeInner::Struct {
                     block: _,
@@ -987,7 +987,7 @@ impl<W: Write> Writer<W> {
                         let base_name = &self.names[&NameKey::Type(member.ty)];
                         writeln!(self.out, "{}{} {};", INDENT, base_name, member_name)?;
                     }
-                    write!(self.out, "}}")?;
+                    writeln!(self.out, "}};")?;
                 }
                 crate::TypeInner::Image {
                     dim,
@@ -1030,9 +1030,9 @@ impl<W: Write> Writer<W> {
                     };
                     let base_name = scalar_kind_string(kind);
                     let array_str = if arrayed { "_array" } else { "" };
-                    write!(
+                    writeln!(
                         self.out,
-                        "typedef {}::{}{}{}{}<{}, {}::access::{}> {}",
+                        "typedef {}::{}{}{}{}<{}, {}::access::{}> {};",
                         NAMESPACE,
                         texture_str,
                         dim_str,
@@ -1045,11 +1045,9 @@ impl<W: Write> Writer<W> {
                     )?;
                 }
                 crate::TypeInner::Sampler { comparison: _ } => {
-                    write!(self.out, "typedef {}::sampler {}", NAMESPACE, name)?;
+                    writeln!(self.out, "typedef {}::sampler {};", NAMESPACE, name)?;
                 }
             }
-            writeln!(self.out, ";")?;
-            writeln!(self.out)?;
         }
         Ok(())
     }
@@ -1418,19 +1416,21 @@ impl<W: Write> Writer<W> {
                         let struct_name = &self.names[&NameKey::Type(arg.ty)];
                         write!(
                             self.out,
-                            "{}const {} {} = {{",
+                            "{}const {} {} = {{ ",
                             INDENT, struct_name, arg_name
                         )?;
-                        for member_index in 0..members.len() {
+                        for (member_index, member) in members.iter().enumerate() {
                             let name =
                                 &self.names[&NameKey::StructMember(arg.ty, member_index as u32)];
-                            let separator = if member_index != 0 { ", " } else { "" };
-                            write!(self.out, "{}{}", INDENT, separator)?;
-                            if let Some(crate::Binding::Location(..)) = arg.binding {
+                            if member_index != 0 {
+                                write!(self.out, ", ")?;
+                            }
+                            if let Some(crate::Binding::Location(..)) = member.binding {
                                 write!(self.out, "{}.", varyings_member_name)?;
                             }
                             write!(self.out, "{}", name)?;
                         }
+                        writeln!(self.out, " }};")?;
                     }
                     _ => {
                         if let Some(crate::Binding::Location(..)) = arg.binding {

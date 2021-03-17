@@ -6,20 +6,14 @@ expression: msl
 #include <simd/simd.h>
 
 typedef float type;
-
 typedef metal::float2 type1;
-
 typedef metal::float4 type2;
-
 struct VertexOutput {
     type1 uv;
     type2 position;
 };
-
 typedef metal::texture2d<float, metal::access::sample> type3;
-
 typedef metal::sampler type4;
-
 constexpr constant float c_scale = 1.2;
 constexpr constant float const_0f = 0.0;
 constexpr constant float const_1f = 1.0;

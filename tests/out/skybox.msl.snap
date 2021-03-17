@@ -6,31 +6,21 @@ expression: msl
 #include <simd/simd.h>
 
 typedef metal::float4 type;
-
 typedef metal::float3 type1;
-
 struct VertexOutput {
     type position;
     type1 uv;
 };
-
 typedef metal::float4x4 type2;
-
 struct Data {
     type2 proj_inv;
     type2 view;
 };
-
 typedef uint type3;
-
 typedef int type4;
-
 typedef metal::float3x3 type5;
-
 typedef metal::texturecube<float, metal::access::sample> type6;
-
 typedef metal::sampler type7;
-
 constexpr constant int const_2i = 2;
 constexpr constant int const_1i = 1;
 constexpr constant float const_4f = 4.0;
@@ -60,18 +50,19 @@ vertex vs_mainOutput vs_main(
 }
 
 struct fs_mainInput {
-    type1 uv1 [[user(loc0)]];
+    type1 uv [[user(loc0)]];
 };
 struct fs_mainOutput {
     type member1 [[color(0)]];
 };
 fragment fs_mainOutput fs_main(
   fs_mainInput varyings1 [[stage_in]]
+, type position [[position]]
 , type6 r_texture [[texture(0)]]
 , type7 r_sampler [[sampler(1)]]
 ) {
-    const auto uv1 = varyings1.uv1;
-    metal::float4 _expr4 = r_texture.sample(r_sampler, uv1);
-    return fs_mainOutput { _expr4 };
+    const VertexOutput in = { position, varyings1.uv };
+    metal::float4 _expr5 = r_texture.sample(r_sampler, in.uv);
+    return fs_mainOutput { _expr5 };
 }
 
