@@ -280,6 +280,16 @@ impl<W: Write> Writer<W> {
                         )?;
                         self.put_call_parameters(components.iter().cloned(), context)?;
                     }
+                    crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => {
+                        write!(self.out, "{} {{", &self.names[&NameKey::Type(ty)])?;
+                        for (i, &component) in components.iter().enumerate() {
+                            if i != 0 {
+                                write!(self.out, ", ")?;
+                            }
+                            self.put_expression(component, context)?;
+                        }
+                        write!(self.out, "}}")?;
+                    }
                     _ => return Err(Error::UnsupportedCompose(ty)),
                 }
             }
