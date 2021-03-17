@@ -202,13 +202,12 @@ impl FlowGraph {
         for node_index in self.flow.node_indices() {
             let phis = std::mem::replace(&mut self.flow[node_index].phis, Vec::new());
             for phi in phis.iter() {
-                let phi_var = &lookup_expression[&phi.id];
                 for &(variable_id, parent_id) in phi.variables.iter() {
                     let variable = &lookup_expression[&variable_id];
                     let parent_node = &mut self.flow[self.block_to_node[&parent_id]];
 
                     parent_node.block.push(crate::Statement::Store {
-                        pointer: phi_var.handle,
+                        pointer: phi.pointer,
                         value: variable.handle,
                     });
                 }

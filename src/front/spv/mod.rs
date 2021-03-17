@@ -94,10 +94,12 @@ impl crate::TypeInner {
 }
 
 /// OpPhi instruction.
-#[derive(Clone, Default, Debug)]
+#[derive(Debug)]
 struct PhiInstruction {
     /// SPIR-V's ID.
     id: u32,
+
+    pointer: Handle<crate::Expression>,
 
     /// Tuples of (variable, parent).
     variables: Vec<(u32, u32)>,
@@ -684,25 +686,32 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         ty: self.lookup_type.lookup(result_type_id)?.handle,
                         init: None,
                     });
-                    self.lookup_expression.insert(
-                        result_id,
-                        LookupExpression {
-                            handle: expressions
-                                .append(crate::Expression::LocalVariable(var_handle)),
-                            type_id: result_type_id,
-                        },
-                    );
+                    let pointer = expressions.append(crate::Expression::LocalVariable(var_handle));
 
+                    let in_count = (inst.wc - 3) / 2;
                     let mut phi = PhiInstruction {
                         id: result_id,
-                        ..Default::default()
+                        pointer,
+                        variables: Vec::with_capacity(in_count as usize),
                     };
-                    for _ in 0..(inst.wc - 3) / 2 {
-                        phi.variables.push((self.next()?, self.next()?));
+                    for _ in 0..in_count {
+                        let source_id = self.next()?;
+                        let value = self.next()?;
+                        phi.variables.push((source_id, value));
                     }
 
                     phis.push(phi);
                     emitter.start(expressions);
+
+                    // Associate the lookup with an actual value, which is emitted
+                    // into the current block.
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: expressions.append(crate::Expression::Load { pointer }),
+                            type_id: result_type_id,
+                        },
+                    );
                 }
                 Op::AccessChain => {
                     struct AccessExpression {
