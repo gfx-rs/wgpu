@@ -315,6 +315,18 @@ impl<S: ResourceState> ResourceTracker<S> {
         }
     }
 
+    fn get<'a>(
+        self_backend: wgt::Backend,
+        map: &'a mut FastHashMap<Index, Resource<S>>,
+        id: Valid<S::Id>,
+    ) -> &'a mut Resource<S> {
+        let (index, epoch, backend) = id.0.unzip();
+        debug_assert_eq!(self_backend, backend);
+        let e = map.get_mut(&index).unwrap();
+        assert_eq!(e.epoch, epoch);
+        e
+    }
+
     /// Extend the usage of a specified resource.
     ///
     /// Returns conflicting transition as an error.
@@ -345,6 +357,21 @@ impl<S: ResourceState> ResourceTracker<S> {
         self.temp.drain(..)
     }
 
+    /// Replace the usage of a specified already tracked resource.
+    /// (panics if the resource is not yet tracked)
+    pub(crate) fn change_replace_tracked(
+        &mut self,
+        id: Valid<S::Id>,
+        selector: S::Selector,
+        usage: S::Usage,
+    ) -> Drain<PendingTransition<S>> {
+        let res = Self::get(self.backend, &mut self.map, id);
+        res.state
+            .change(id, selector, usage, Some(&mut self.temp))
+            .ok();
+        self.temp.drain(..)
+    }
+
     /// Turn the tracking from the "expand" mode into the "replace" one,
     /// installing the selected usage as the "first".
     /// This is a special operation only used by the render pass attachments.
@@ -370,7 +397,12 @@ impl<S: ResourceState> ResourceTracker<S> {
                     e.insert(new.clone());
                 }
                 Entry::Occupied(e) => {
-                    assert_eq!(e.get().epoch, new.epoch);
+                    assert_eq!(
+                        e.get().epoch,
+                        new.epoch,
+                        "ID {:?} wasn't properly removed",
+                        S::Id::zip(index, e.get().epoch, self.backend)
+                    );
                     let id = Valid(S::Id::zip(index, new.epoch, self.backend));
                     e.into_mut().state.merge(id, &new.state, None)?;
                 }
@@ -388,7 +420,12 @@ impl<S: ResourceState> ResourceTracker<S> {
                     e.insert(new.clone());
                 }
                 Entry::Occupied(e) => {
-                    assert_eq!(e.get().epoch, new.epoch);
+                    assert_eq!(
+                        e.get().epoch,
+                        new.epoch,
+                        "ID {:?} wasn't properly removed",
+                        S::Id::zip(index, e.get().epoch, self.backend)
+                    );
                     let id = Valid(S::Id::zip(index, new.epoch, self.backend));
                     e.into_mut()
                         .state
@@ -518,6 +555,7 @@ pub(crate) struct TrackerSet {
     pub compute_pipes: ResourceTracker<PhantomData<id::ComputePipelineId>>,
     pub render_pipes: ResourceTracker<PhantomData<id::RenderPipelineId>>,
     pub bundles: ResourceTracker<PhantomData<id::RenderBundleId>>,
+    pub query_sets: ResourceTracker<PhantomData<id::QuerySetId>>,
 }
 
 impl TrackerSet {
@@ -532,6 +570,7 @@ impl TrackerSet {
             compute_pipes: ResourceTracker::new(backend),
             render_pipes: ResourceTracker::new(backend),
             bundles: ResourceTracker::new(backend),
+            query_sets: ResourceTracker::new(backend),
         }
     }
 
@@ -545,6 +584,7 @@ impl TrackerSet {
         self.compute_pipes.clear();
         self.render_pipes.clear();
         self.bundles.clear();
+        self.query_sets.clear();
     }
 
     /// Try to optimize the tracking representation.
@@ -557,6 +597,7 @@ impl TrackerSet {
         self.compute_pipes.optimize();
         self.render_pipes.optimize();
         self.bundles.optimize();
+        self.query_sets.optimize();
     }
 
     /// Merge all the trackers of another instance by extending
@@ -584,6 +625,7 @@ impl TrackerSet {
             .unwrap();
         self.render_pipes.merge_extend(&other.render_pipes).unwrap();
         self.bundles.merge_extend(&other.bundles).unwrap();
+        self.query_sets.merge_extend(&other.query_sets).unwrap();
         Ok(())
     }
 

@@ -26,21 +26,37 @@ pub enum DrawError {
     MissingBlendColor,
     #[error("render pipeline must be set")]
     MissingPipeline,
+    #[error("vertex buffer {index} must be set")]
+    MissingVertexBuffer { index: u32 },
+    #[error("index buffer must be set")]
+    MissingIndexBuffer,
     #[error("current render pipeline has a layout which is incompatible with a currently set bind group, first differing at entry index {index}")]
     IncompatibleBindGroup {
         index: u32,
         //expected: BindGroupLayoutId,
         //provided: Option<(BindGroupLayoutId, BindGroupId)>,
     },
-    #[error("vertex {last_vertex} extends beyond limit {vertex_limit}")]
-    VertexBeyondLimit { last_vertex: u32, vertex_limit: u32 },
-    #[error("instance {last_instance} extends beyond limit {instance_limit}")]
+    #[error("vertex {last_vertex} extends beyond limit {vertex_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
+    VertexBeyondLimit {
+        last_vertex: u32,
+        vertex_limit: u32,
+        slot: u32,
+    },
+    #[error("instance {last_instance} extends beyond limit {instance_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Instance` step-rate vertex buffer?")]
     InstanceBeyondLimit {
         last_instance: u32,
         instance_limit: u32,
+        slot: u32,
     },
-    #[error("index {last_index} extends beyond limit {index_limit}")]
+    #[error("index {last_index} extends beyond limit {index_limit}. Did you bind the correct index buffer?")]
     IndexBeyondLimit { last_index: u32, index_limit: u32 },
+    #[error(
+        "pipeline index format ({pipeline:?}) and buffer index format ({buffer:?}) do not match"
+    )]
+    UnmatchedIndexFormats {
+        pipeline: wgt::IndexFormat,
+        buffer: wgt::IndexFormat,
+    },
 }
 
 /// Error encountered when encoding a render command.
@@ -49,6 +65,8 @@ pub enum DrawError {
 pub enum RenderCommandError {
     #[error("bind group {0:?} is invalid")]
     InvalidBindGroup(id::BindGroupId),
+    #[error("render bundle {0:?} is invalid")]
+    InvalidRenderBundle(id::RenderBundleId),
     #[error("bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u8, max: u32 },
     #[error("dynamic buffer offset {0} does not respect `BIND_BUFFER_ALIGNMENT`")]
@@ -57,6 +75,8 @@ pub enum RenderCommandError {
     InvalidDynamicOffsetCount { actual: usize, expected: usize },
     #[error("render pipeline {0:?} is invalid")]
     InvalidPipeline(id::RenderPipelineId),
+    #[error("QuerySet {0:?} is invalid")]
+    InvalidQuerySet(id::QuerySetId),
     #[error("Render pipeline is incompatible with render pass")]
     IncompatiblePipeline(#[from] crate::device::RenderPassCompatibilityError),
     #[error("pipeline is not compatible with the depth-stencil read-only render pass")]
@@ -112,6 +132,7 @@ pub enum RenderCommand {
     SetPipeline(id::RenderPipelineId),
     SetIndexBuffer {
         buffer_id: id::BufferId,
+        index_format: wgt::IndexFormat,
         offset: BufferAddress,
         size: Option<BufferSize>,
     },
@@ -176,5 +197,14 @@ pub enum RenderCommand {
         color: u32,
         len: usize,
     },
+    WriteTimestamp {
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    },
+    BeginPipelineStatisticsQuery {
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    },
+    EndPipelineStatisticsQuery,
     ExecuteBundle(id::RenderBundleId),
 }

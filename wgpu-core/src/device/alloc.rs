@@ -3,20 +3,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::DeviceError;
-use hal::device::Device;
-use std::{borrow::Cow, fmt, iter, ptr::NonNull, sync::Arc};
+use hal::device::Device as _;
+use std::{borrow::Cow, iter, ptr::NonNull};
 
-pub struct MemoryAllocator<B: hal::Backend>(gpu_alloc::GpuAllocator<Arc<B::Memory>>);
 #[derive(Debug)]
-pub struct MemoryBlock<B: hal::Backend>(gpu_alloc::MemoryBlock<Arc<B::Memory>>);
+pub struct MemoryAllocator<B: hal::Backend>(gpu_alloc::GpuAllocator<B::Memory>);
+#[derive(Debug)]
+pub struct MemoryBlock<B: hal::Backend>(gpu_alloc::MemoryBlock<B::Memory>);
 struct MemoryDevice<'a, B: hal::Backend>(&'a B::Device);
-
-//TODO: https://github.com/zakarumych/gpu-alloc/issues/9
-impl<B: hal::Backend> fmt::Debug for MemoryAllocator<B> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "MemoryAllocator")
-    }
-}
 
 impl<B: hal::Backend> MemoryAllocator<B> {
     pub fn new(mem_props: hal::adapter::MemoryProperties, limits: hal::Limits) -> Self {
@@ -99,17 +93,19 @@ impl<B: hal::Backend> MemoryBlock<B> {
         device: &B::Device,
         buffer: &mut B::Buffer,
     ) -> Result<(), DeviceError> {
+        let mem = self.0.memory();
         unsafe {
             device
-                .bind_buffer_memory(self.0.memory(), self.0.offset(), buffer)
+                .bind_buffer_memory(mem, self.0.offset(), buffer)
                 .map_err(DeviceError::from_bind)
         }
     }
 
     pub fn bind_image(&self, device: &B::Device, image: &mut B::Image) -> Result<(), DeviceError> {
+        let mem = self.0.memory();
         unsafe {
             device
-                .bind_image_memory(self.0.memory(), self.0.offset(), image)
+                .bind_image_memory(mem, self.0.offset(), image)
                 .map_err(DeviceError::from_bind)
         }
     }
@@ -184,9 +180,10 @@ impl<B: hal::Backend> MemoryBlock<B> {
         size: Option<wgt::BufferAddress>,
     ) -> Result<(), DeviceError> {
         let segment = self.segment(inner_offset, size);
+        let mem = self.0.memory();
         unsafe {
             device
-                .flush_mapped_memory_ranges(iter::once((&**self.0.memory(), segment)))
+                .flush_mapped_memory_ranges(iter::once((mem, segment)))
                 .or(Err(DeviceError::OutOfMemory))
         }
     }
@@ -198,40 +195,39 @@ impl<B: hal::Backend> MemoryBlock<B> {
         size: Option<wgt::BufferAddress>,
     ) -> Result<(), DeviceError> {
         let segment = self.segment(inner_offset, size);
+        let mem = self.0.memory();
         unsafe {
             device
-                .invalidate_mapped_memory_ranges(iter::once((&**self.0.memory(), segment)))
+                .invalidate_mapped_memory_ranges(iter::once((mem, segment)))
                 .or(Err(DeviceError::OutOfMemory))
         }
     }
 }
 
-impl<B: hal::Backend> gpu_alloc::MemoryDevice<Arc<B::Memory>> for MemoryDevice<'_, B> {
+impl<B: hal::Backend> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B> {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     unsafe fn allocate_memory(
         &self,
         size: u64,
         memory_type: u32,
         flags: gpu_alloc::AllocationFlags,
-    ) -> Result<Arc<B::Memory>, gpu_alloc::OutOfMemory> {
+    ) -> Result<B::Memory, gpu_alloc::OutOfMemory> {
         assert!(flags.is_empty());
 
         self.0
             .allocate_memory(hal::MemoryTypeId(memory_type as _), size)
-            .map(Arc::new)
             .map_err(|_| gpu_alloc::OutOfMemory::OutOfDeviceMemory)
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
-    unsafe fn deallocate_memory(&self, memory: Arc<B::Memory>) {
-        let memory = Arc::try_unwrap(memory).expect("Memory must not be used anywhere");
+    unsafe fn deallocate_memory(&self, memory: B::Memory) {
         self.0.free_memory(memory);
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     unsafe fn map_memory(
         &self,
-        memory: &Arc<B::Memory>,
+        memory: &mut B::Memory,
         offset: u64,
         size: u64,
     ) -> Result<NonNull<u8>, gpu_alloc::DeviceMapError> {
@@ -252,22 +248,22 @@ impl<B: hal::Backend> gpu_alloc::MemoryDevice<Arc<B::Memory>> for MemoryDevice<'
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
-    unsafe fn unmap_memory(&self, memory: &Arc<B::Memory>) {
+    unsafe fn unmap_memory(&self, memory: &mut B::Memory) {
         self.0.unmap_memory(memory);
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     unsafe fn invalidate_memory_ranges(
         &self,
-        ranges: &[gpu_alloc::MappedMemoryRange<'_, Arc<B::Memory>>],
+        ranges: &[gpu_alloc::MappedMemoryRange<'_, B::Memory>],
     ) -> Result<(), gpu_alloc::OutOfMemory> {
         self.0
-            .invalidate_mapped_memory_ranges(ranges.iter().map(|range| {
+            .invalidate_mapped_memory_ranges(ranges.iter().map(|r| {
                 (
-                    &**range.memory,
+                    r.memory,
                     hal::memory::Segment {
-                        offset: range.offset,
-                        size: Some(range.size),
+                        offset: r.offset,
+                        size: Some(r.size),
                     },
                 )
             }))
@@ -277,15 +273,15 @@ impl<B: hal::Backend> gpu_alloc::MemoryDevice<Arc<B::Memory>> for MemoryDevice<'
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     unsafe fn flush_memory_ranges(
         &self,
-        ranges: &[gpu_alloc::MappedMemoryRange<'_, Arc<B::Memory>>],
+        ranges: &[gpu_alloc::MappedMemoryRange<'_, B::Memory>],
     ) -> Result<(), gpu_alloc::OutOfMemory> {
         self.0
-            .flush_mapped_memory_ranges(ranges.iter().map(|range| {
+            .flush_mapped_memory_ranges(ranges.iter().map(|r| {
                 (
-                    &**range.memory,
+                    r.memory,
                     hal::memory::Segment {
-                        offset: range.offset,
-                        size: Some(range.size),
+                        offset: r.offset,
+                        size: Some(r.size),
                     },
                 )
             }))

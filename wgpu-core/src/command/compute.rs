@@ -5,25 +5,25 @@
 use crate::{
     binding_model::{BindError, BindGroup, PushConstantUploadError},
     command::{
-        bind::{Binder, LayoutChange},
-        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, MapPassErr, PassErrorScope,
-        StateChange,
+        bind::Binder, end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer,
+        CommandEncoderError, MapPassErr, PassErrorScope, QueryUseError, StateChange,
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
+    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, BufferUse, Texture},
     span,
     track::{TrackerSet, UsageConflict},
     validation::{check_buffer_usage, MissingBufferUsageError},
-    MAX_BIND_GROUPS,
+    Label,
 };
 
-use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
 use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, ShaderStage};
 
-use std::{fmt, iter, str};
+use crate::track::UseExtendError;
+use std::{fmt, mem, str};
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
@@ -61,6 +61,15 @@ pub enum ComputeCommand {
         color: u32,
         len: usize,
     },
+    WriteTimestamp {
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    },
+    BeginPipelineStatisticsQuery {
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    },
+    EndPipelineStatisticsQuery,
 }
 
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
@@ -70,9 +79,9 @@ pub struct ComputePass {
 }
 
 impl ComputePass {
-    pub fn new(parent_id: id::CommandEncoderId) -> Self {
+    pub fn new(parent_id: id::CommandEncoderId, desc: &ComputePassDescriptor) -> Self {
         Self {
-            base: BasePass::new(),
+            base: BasePass::new(&desc.label),
             parent_id,
         }
     }
@@ -99,10 +108,9 @@ impl fmt::Debug for ComputePass {
     }
 }
 
-#[repr(C)]
 #[derive(Clone, Debug, Default)]
-pub struct ComputePassDescriptor {
-    pub todo: u32,
+pub struct ComputePassDescriptor<'a> {
+    pub label: Label<'a>,
 }
 
 #[derive(Clone, Debug, Error, PartialEq)]
@@ -128,8 +136,18 @@ pub enum ComputePassErrorInner {
     BindGroupIndexOutOfRange { index: u8, max: u32 },
     #[error("compute pipeline {0:?} is invalid")]
     InvalidPipeline(id::ComputePipelineId),
+    #[error("QuerySet {0:?} is invalid")]
+    InvalidQuerySet(id::QuerySetId),
     #[error("indirect buffer {0:?} is invalid or destroyed")]
     InvalidIndirectBuffer(id::BufferId),
+    #[error("indirect buffer uses bytes {offset}..{end_offset} which overruns indirect buffer of size {buffer_size}")]
+    IndirectBufferOverrun {
+        offset: u64,
+        end_offset: u64,
+        buffer_size: u64,
+    },
+    #[error("buffer {0:?} is invalid or destroyed")]
+    InvalidBuffer(id::BufferId),
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
     #[error(transparent)]
@@ -142,6 +160,8 @@ pub enum ComputePassErrorInner {
     Bind(#[from] BindError),
     #[error(transparent)]
     PushConstants(#[from] PushConstantUploadError),
+    #[error(transparent)]
+    QueryUse(#[from] QueryUseError),
 }
 
 /// Error encountered when performing a compute pass.
@@ -231,7 +251,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_run_compute_pass_impl<B: GfxBackend>(
         &self,
         encoder_id: id::CommandEncoderId,
-        mut base: BasePassRef<ComputeCommand>,
+        base: BasePassRef<ComputeCommand>,
     ) -> Result<(), ComputePassError> {
         span!(_guard, INFO, "CommandEncoder::run_compute_pass");
         let scope = PassErrorScope::Pass(encoder_id);
@@ -241,7 +261,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf =
-            CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id).map_pass_err(scope)?;
+            CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id).map_pass_err(scope)?;
         let raw = cmd_buf.raw.last_mut().unwrap();
 
         #[cfg(feature = "trace")]
@@ -251,20 +271,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
+        if let Some(ref label) = base.label {
+            unsafe {
+                raw.begin_debug_marker(label, 0);
+            }
+        }
+
         let (_, mut token) = hub.render_bundles.read(&mut token);
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
         let (pipeline_guard, mut token) = hub.compute_pipelines.read(&mut token);
+        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
 
         let mut state = State {
-            binder: Binder::new(cmd_buf.limits.max_bind_groups),
+            binder: Binder::new(),
             pipeline: StateChange::new(),
             trackers: TrackerSet::new(B::VARIANT),
             debug_scope_depth: 0,
         };
         let mut temp_offsets = Vec::new();
+        let mut dynamic_offset_count = 0;
+        let mut string_offset = 0;
+        let mut active_query = None;
 
         for command in base.commands {
             match *command {
@@ -285,9 +315,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     temp_offsets.clear();
-                    temp_offsets
-                        .extend_from_slice(&base.dynamic_offsets[..num_dynamic_offsets as usize]);
-                    base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
+                    temp_offsets.extend_from_slice(
+                        &base.dynamic_offsets[dynamic_offset_count
+                            ..dynamic_offset_count + (num_dynamic_offsets as usize)],
+                    );
+                    dynamic_offset_count += num_dynamic_offsets as usize;
 
                     let bind_group = cmd_buf
                         .trackers
@@ -299,26 +331,44 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .validate_dynamic_bindings(&temp_offsets)
                         .map_pass_err(scope)?;
 
-                    if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
+                    cmd_buf.buffer_memory_init_actions.extend(
+                        bind_group.used_buffer_ranges.iter().filter_map(
+                            |action| match buffer_guard.get(action.id) {
+                                Ok(buffer) => buffer
+                                    .initialization_status
+                                    .check(action.range.clone())
+                                    .map(|range| MemoryInitTrackerAction {
+                                        id: action.id,
+                                        range,
+                                        kind: action.kind,
+                                    }),
+                                Err(_) => None,
+                            },
+                        ),
+                    );
+
+                    let pipeline_layout_id = state.binder.pipeline_layout_id;
+                    let entries = state.binder.assign_group(
                         index as usize,
                         id::Valid(bind_group_id),
                         bind_group,
                         &temp_offsets,
-                    ) {
-                        let bind_groups = iter::once(bind_group.raw.raw())
-                            .chain(
-                                follow_ups
-                                    .clone()
-                                    .map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()),
-                            )
-                            .collect::<ArrayVec<[_; MAX_BIND_GROUPS]>>();
-                        temp_offsets.extend(follow_ups.flat_map(|(_, offsets)| offsets));
+                    );
+                    if !entries.is_empty() {
+                        let pipeline_layout =
+                            &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
+                        let desc_sets = entries.iter().map(|e| {
+                            bind_group_guard[e.group_id.as_ref().unwrap().value]
+                                .raw
+                                .raw()
+                        });
+                        let offsets = entries.iter().flat_map(|e| &e.dynamic_offsets).cloned();
                         unsafe {
                             raw.bind_compute_descriptor_sets(
-                                &pipeline_layout_guard[pipeline_layout_id].raw,
+                                pipeline_layout,
                                 index as usize,
-                                bind_groups,
-                                &temp_offsets,
+                                desc_sets,
+                                offsets,
                             );
                         }
                     }
@@ -345,36 +395,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if state.binder.pipeline_layout_id != Some(pipeline.layout_id.value) {
                         let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id.value];
 
-                        state.binder.change_pipeline_layout(
+                        let (start_index, entries) = state.binder.change_pipeline_layout(
                             &*pipeline_layout_guard,
                             pipeline.layout_id.value,
                         );
-
-                        let mut is_compatible = true;
-
-                        for (index, (entry, &bgl_id)) in state
-                            .binder
-                            .entries
-                            .iter_mut()
-                            .zip(&pipeline_layout.bind_group_layout_ids)
-                            .enumerate()
-                        {
-                            match entry.expect_layout(bgl_id) {
-                                LayoutChange::Match(bg_id, offsets) if is_compatible => {
-                                    let desc_set = bind_group_guard[bg_id].raw.raw();
-                                    unsafe {
-                                        raw.bind_compute_descriptor_sets(
-                                            &pipeline_layout.raw,
-                                            index,
-                                            iter::once(desc_set),
-                                            offsets.iter().cloned(),
-                                        );
-                                    }
-                                }
-                                LayoutChange::Match(..) | LayoutChange::Unchanged => {}
-                                LayoutChange::Mismatch => {
-                                    is_compatible = false;
-                                }
+                        if !entries.is_empty() {
+                            let desc_sets = entries.iter().map(|e| {
+                                bind_group_guard[e.group_id.as_ref().unwrap().value]
+                                    .raw
+                                    .raw()
+                            });
+                            let offsets = entries.iter().flat_map(|e| &e.dynamic_offsets).cloned();
+                            unsafe {
+                                raw.bind_compute_descriptor_sets(
+                                    &pipeline_layout.raw,
+                                    start_index,
+                                    desc_sets,
+                                    offsets,
+                                );
                             }
                         }
 
@@ -433,7 +471,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     unsafe { raw.push_compute_constants(&pipeline_layout.raw, offset, data_slice) }
                 }
                 ComputeCommand::Dispatch(groups) => {
-                    let scope = PassErrorScope::Dispatch;
+                    let scope = PassErrorScope::Dispatch {
+                        indirect: false,
+                        pipeline: state.pipeline.last_state,
+                    };
 
                     state.is_ready().map_pass_err(scope)?;
                     state
@@ -450,7 +491,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::DispatchIndirect { buffer_id, offset } => {
-                    let scope = PassErrorScope::DispatchIndirect;
+                    let scope = PassErrorScope::Dispatch {
+                        indirect: true,
+                        pipeline: state.pipeline.last_state,
+                    };
 
                     state.is_ready().map_pass_err(scope)?;
 
@@ -462,11 +506,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope)?;
                     check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)
                         .map_pass_err(scope)?;
+
+                    let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;
+                    if end_offset > indirect_buffer.size {
+                        return Err(ComputePassErrorInner::IndirectBufferOverrun {
+                            offset,
+                            end_offset,
+                            buffer_size: indirect_buffer.size,
+                        })
+                        .map_pass_err(scope);
+                    }
+
                     let &(ref buf_raw, _) = indirect_buffer
                         .raw
                         .as_ref()
                         .ok_or(ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
                         .map_pass_err(scope)?;
+
+                    let stride = 3 * 4; // 3 integers, x/y/z group size
+
+                    cmd_buf.buffer_memory_init_actions.extend(
+                        indirect_buffer
+                            .initialization_status
+                            .check(offset..(offset + stride))
+                            .map(|range| MemoryInitTrackerAction {
+                                id: buffer_id,
+                                range,
+                                kind: MemoryInitKind::NeedsInitializedMemory,
+                            }),
+                    );
 
                     state
                         .flush_states(
@@ -483,12 +551,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 ComputeCommand::PushDebugGroup { color, len } => {
                     state.debug_scope_depth += 1;
-
-                    let label = str::from_utf8(&base.string_data[..len]).unwrap();
+                    let label =
+                        str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                            .unwrap();
+                    string_offset += len;
                     unsafe {
                         raw.begin_debug_marker(label, color);
                     }
-                    base.string_data = &base.string_data[len..];
                 }
                 ComputeCommand::PopDebugGroup => {
                     let scope = PassErrorScope::PopDebugGroup;
@@ -503,10 +572,74 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::InsertDebugMarker { color, len } => {
-                    let label = str::from_utf8(&base.string_data[..len]).unwrap();
+                    let label =
+                        str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                            .unwrap();
+                    string_offset += len;
                     unsafe { raw.insert_debug_marker(label, color) }
-                    base.string_data = &base.string_data[len..];
                 }
+                ComputeCommand::WriteTimestamp {
+                    query_set_id,
+                    query_index,
+                } => {
+                    let scope = PassErrorScope::WriteTimestamp;
+
+                    let query_set = cmd_buf
+                        .trackers
+                        .query_sets
+                        .use_extend(&*query_set_guard, query_set_id, (), ())
+                        .map_err(|e| match e {
+                            UseExtendError::InvalidResource => {
+                                ComputePassErrorInner::InvalidQuerySet(query_set_id)
+                            }
+                            _ => unreachable!(),
+                        })
+                        .map_pass_err(scope)?;
+
+                    query_set
+                        .validate_and_write_timestamp(raw, query_set_id, query_index, None)
+                        .map_pass_err(scope)?;
+                }
+                ComputeCommand::BeginPipelineStatisticsQuery {
+                    query_set_id,
+                    query_index,
+                } => {
+                    let scope = PassErrorScope::BeginPipelineStatisticsQuery;
+
+                    let query_set = cmd_buf
+                        .trackers
+                        .query_sets
+                        .use_extend(&*query_set_guard, query_set_id, (), ())
+                        .map_err(|e| match e {
+                            UseExtendError::InvalidResource => {
+                                ComputePassErrorInner::InvalidQuerySet(query_set_id)
+                            }
+                            _ => unreachable!(),
+                        })
+                        .map_pass_err(scope)?;
+
+                    query_set
+                        .validate_and_begin_pipeline_statistics_query(
+                            raw,
+                            query_set_id,
+                            query_index,
+                            None,
+                            &mut active_query,
+                        )
+                        .map_pass_err(scope)?;
+                }
+                ComputeCommand::EndPipelineStatisticsQuery => {
+                    let scope = PassErrorScope::EndPipelineStatisticsQuery;
+
+                    end_pipeline_statistics_query(raw, &*query_set_guard, &mut active_query)
+                        .map_pass_err(scope)?;
+                }
+            }
+        }
+
+        if let Some(_) = base.label {
+            unsafe {
+                raw.end_debug_marker();
             }
         }
 
@@ -540,9 +673,11 @@ pub mod compute_ffi {
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
         });
-        pass.base
-            .dynamic_offsets
-            .extend_from_slice(slice::from_raw_parts(offsets, offset_length));
+        if offset_length != 0 {
+            pass.base
+                .dynamic_offsets
+                .extend_from_slice(slice::from_raw_parts(offsets, offset_length));
+        }
     }
 
     #[no_mangle]
@@ -653,5 +788,50 @@ pub mod compute_ffi {
             color,
             len: bytes.len(),
         });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_compute_pass_write_timestamp(
+        pass: &mut ComputePass,
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    ) {
+        span!(_guard, DEBUG, "ComputePass::write_timestamp");
+
+        pass.base.commands.push(ComputeCommand::WriteTimestamp {
+            query_set_id,
+            query_index,
+        });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_compute_pass_begin_pipeline_statistics_query(
+        pass: &mut ComputePass,
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    ) {
+        span!(
+            _guard,
+            DEBUG,
+            "ComputePass::begin_pipeline_statistics query"
+        );
+
+        pass.base
+            .commands
+            .push(ComputeCommand::BeginPipelineStatisticsQuery {
+                query_set_id,
+                query_index,
+            });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_compute_pass_end_pipeline_statistics_query(
+        pass: &mut ComputePass,
+    ) {
+        span!(_guard, DEBUG, "ComputePass::end_pipeline_statistics_query");
+
+        pass.base
+            .commands
+            .push(ComputeCommand::EndPipelineStatisticsQuery);
     }
 }

@@ -1,5 +1,26 @@
 # Change Log
 
+## v0.7 (2021-01-31)
+  - Major API changes:
+    - `RenderPipelineDescriptor`
+    - `BindingType`
+  - Features:
+    - (beta) WGSL support, including the ability to bypass SPIR-V entirely
+    - (beta) implicit bind group layout support
+    - timestamp and pipeline statistics queries
+    - ETC2 and ASTC compressed textures
+    - (beta) targeting WASM with WebGL backend
+    - reduced dependencies
+    - Native-only:
+      - clamp-to-border addressing
+      - polygon fill modes
+      - query a format for extra capabilities
+      - `f64` support in shaders
+  - Validation:
+    - shader interface
+    - render pipeline descriptor
+    - vertex buffers
+
 ## v0.6 (2020-08-17)
   - Crates:
     - C API is moved to [another repository](https://github.com/gfx-rs/wgpu-native)

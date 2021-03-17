@@ -4,12 +4,12 @@
 
 use crate::{
     cow_label, identity::IdentityRecyclerFactory, ByteBuf, CommandEncoderAction, DeviceAction,
-    DropAction, RawString, TextureAction,
+    DropAction, RawString, ShaderModuleSource, TextureAction,
 };
 
 use wgc::{gfx_select, id};
 
-use std::{fmt::Display, os::raw::c_char, ptr, slice};
+use std::{error::Error, os::raw::c_char, ptr, slice};
 
 #[repr(C)]
 pub struct ErrorBuffer {
@@ -18,9 +18,17 @@ pub struct ErrorBuffer {
 }
 
 impl ErrorBuffer {
-    fn init(&mut self, error: impl Display) {
+    fn init(&mut self, error: impl Error) {
+        use std::fmt::Write;
+
+        let mut string = format!("{}", error);
+        let mut e = error.source();
+        while let Some(source) = e {
+            write!(string, ", caused by: {}", source).unwrap();
+            e = source.source();
+        }
+
         assert_ne!(self.capacity, 0);
-        let string = format!("{}", error);
         let length = if string.len() >= self.capacity {
             log::warn!(
                 "Error length {} reached capacity {}",
@@ -106,23 +114,18 @@ pub unsafe extern "C" fn wgpu_server_instance_request_adapter(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_fill_default_limits(limits: &mut wgt::Limits) {
-    *limits = wgt::Limits::default();
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn wgpu_server_adapter_request_device(
     global: &Global,
     self_id: id::AdapterId,
-    desc: &wgt::DeviceDescriptor<RawString>,
+    byte_buf: &ByteBuf,
     new_id: id::DeviceId,
     mut error_buf: ErrorBuffer,
 ) {
+    let desc: wgc::device::DeviceDescriptor = bincode::deserialize(byte_buf.as_slice()).unwrap();
     let trace_string = std::env::var("WGPU_TRACE").ok();
     let trace_path = trace_string
         .as_ref()
         .map(|string| std::path::Path::new(string.as_str()));
-    let desc = desc.map_label(cow_label);
     let (_, error) =
         gfx_select!(self_id => global.adapter_request_device(self_id, &desc, trace_path, new_id));
     if let Some(err) = error {
@@ -266,16 +269,14 @@ impl GlobalExt for Global {
                     error_buf.init(err);
                 }
             }
-            DeviceAction::CreateShaderModule(id, spirv, wgsl) => {
-                let desc = wgc::pipeline::ShaderModuleDescriptor {
-                    label: None, //TODO
-                    source: if spirv.is_empty() {
-                        wgc::pipeline::ShaderModuleSource::Wgsl(wgsl)
-                    } else {
-                        wgc::pipeline::ShaderModuleSource::SpirV(spirv)
-                    },
+            DeviceAction::CreateShaderModule(id, desc, source) => {
+                let source = match source {
+                    ShaderModuleSource::SpirV(data) => {
+                        wgc::pipeline::ShaderModuleSource::SpirV(data)
+                    }
+                    ShaderModuleSource::Wgsl(data) => wgc::pipeline::ShaderModuleSource::Wgsl(data),
                 };
-                let (_, error) = self.device_create_shader_module::<B>(self_id, &desc, id);
+                let (_, error) = self.device_create_shader_module::<B>(self_id, &desc, source, id);
                 if let Some(err) = error {
                     error_buf.init(err);
                 }
@@ -398,6 +399,34 @@ impl GlobalExt for Global {
                 if let Err(err) =
                     self.command_encoder_run_compute_pass_impl::<B>(self_id, base.as_ref())
                 {
+                    error_buf.init(err);
+                }
+            }
+            CommandEncoderAction::WriteTimestamp {
+                query_set_id,
+                query_index,
+            } => {
+                if let Err(err) =
+                    self.command_encoder_write_timestamp::<B>(self_id, query_set_id, query_index)
+                {
+                    error_buf.init(err);
+                }
+            }
+            CommandEncoderAction::ResolveQuerySet {
+                query_set_id,
+                start_query,
+                query_count,
+                destination,
+                destination_offset,
+            } => {
+                if let Err(err) = self.command_encoder_resolve_query_set::<B>(
+                    self_id,
+                    query_set_id,
+                    start_query,
+                    query_count,
+                    destination,
+                    destination_offset,
+                ) {
                     error_buf.init(err);
                 }
             }
@@ -604,7 +633,7 @@ pub extern "C" fn wgpu_server_texture_drop(global: &Global, self_id: id::Texture
 
 #[no_mangle]
 pub extern "C" fn wgpu_server_texture_view_drop(global: &Global, self_id: id::TextureViewId) {
-    gfx_select!(self_id => global.texture_view_drop(self_id)).unwrap();
+    gfx_select!(self_id => global.texture_view_drop(self_id, false)).unwrap();
 }
 
 #[no_mangle]

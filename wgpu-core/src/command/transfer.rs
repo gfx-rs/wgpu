@@ -10,6 +10,7 @@ use crate::{
     device::{all_buffer_stages, all_image_stages},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId},
+    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{BufferUse, Texture, TextureErrorDimension, TextureUse},
     span,
     track::TextureSelector,
@@ -121,7 +122,7 @@ pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
     let (layer, layer_count, z) = match texture.dimension {
         wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => (
             view.origin.z as hal::image::Layer,
-            size.depth as hal::image::Layer,
+            size.depth_or_array_layers as hal::image::Layer,
             0,
         ),
         wgt::TextureDimension::D3 => (0, 1, view.origin.z as i32),
@@ -149,6 +150,7 @@ pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
 }
 
 /// Function copied with minor modifications from webgpu standard https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
+/// If successful, returns number of buffer bytes required for this copy.
 pub(crate) fn validate_linear_texture_data(
     layout: &wgt::TextureDataLayout,
     format: wgt::TextureFormat,
@@ -156,17 +158,17 @@ pub(crate) fn validate_linear_texture_data(
     buffer_side: CopySide,
     bytes_per_block: BufferAddress,
     copy_size: &Extent3d,
-) -> Result<(), TransferError> {
+) -> Result<BufferAddress, TransferError> {
     // Convert all inputs to BufferAddress (u64) to prevent overflow issues
     let copy_width = copy_size.width as BufferAddress;
     let copy_height = copy_size.height as BufferAddress;
-    let copy_depth = copy_size.depth as BufferAddress;
+    let copy_depth = copy_size.depth_or_array_layers as BufferAddress;
 
     let offset = layout.offset;
     let rows_per_image = layout.rows_per_image as BufferAddress;
     let bytes_per_row = layout.bytes_per_row as BufferAddress;
 
-    let (block_width, block_height) = conv::texture_block_size(format);
+    let (block_width, block_height) = format.describe().block_dimensions;
     let block_width = block_width as BufferAddress;
     let block_height = block_height as BufferAddress;
     let block_size = bytes_per_block;
@@ -217,10 +219,10 @@ pub(crate) fn validate_linear_texture_data(
     if copy_depth > 1 && rows_per_image == 0 {
         return Err(TransferError::InvalidRowsPerImage);
     }
-    Ok(())
+    Ok(required_bytes_in_copy)
 }
 
-/// Function copied with minor modifications from webgpu standard https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
+/// Function copied with minor modifications from webgpu standard <https://gpuweb.github.io/gpuweb/#valid-texture-copy-range>
 pub(crate) fn validate_texture_copy_range(
     texture_copy_view: &TextureCopyView,
     texture_format: wgt::TextureFormat,
@@ -228,12 +230,21 @@ pub(crate) fn validate_texture_copy_range(
     texture_side: CopySide,
     copy_size: &Extent3d,
 ) -> Result<(), TransferError> {
-    let (block_width, block_height) = conv::texture_block_size(texture_format);
+    let (block_width, block_height) = texture_format.describe().block_dimensions;
+    let block_width = block_width as u32;
+    let block_height = block_height as u32;
 
     let mut extent = texture_dimension.level_extent(texture_copy_view.mip_level as u8);
+
+    // Adjust extent for the physical size of mips
+    if texture_copy_view.mip_level != 0 {
+        extent.width = conv::align_up(extent.width, block_width);
+        extent.height = conv::align_up(extent.height, block_height);
+    }
+
     match texture_dimension {
         hal::image::Kind::D1(..) => {
-            if (copy_size.height, copy_size.depth) != (1, 1) {
+            if (copy_size.height, copy_size.depth_or_array_layers) != (1, 1) {
                 return Err(TransferError::InvalidCopySize);
             }
         }
@@ -263,7 +274,7 @@ pub(crate) fn validate_texture_copy_range(
             side: texture_side,
         });
     }
-    let z_copy_max = texture_copy_view.origin.z + copy_size.depth;
+    let z_copy_max = texture_copy_view.origin.z + copy_size.depth_or_array_layers;
     if z_copy_max > extent.depth {
         return Err(TransferError::TextureOverrun {
             start_offset: texture_copy_view.origin.z,
@@ -308,11 +319,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, command_encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
         let (buffer_guard, _) = hub.buffers.read(&mut token);
-        // we can't hold both src_pending and dst_pending in scope because they
-        // borrow the buffer tracker mutably...
-        let mut barriers = Vec::new();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -337,7 +345,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !src_buffer.usage.contains(BufferUsage::COPY_SRC) {
             Err(TransferError::MissingCopySrcUsageFlag)?
         }
-        barriers.extend(src_pending.map(|pending| pending.into_hal(src_buffer)));
+        // expecting only a single barrier
+        let src_barrier = src_pending
+            .map(|pending| pending.into_hal(src_buffer))
+            .next();
 
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
@@ -354,7 +365,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 None,
             ))?
         }
-        barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_buffer)));
+        let dst_barrier = dst_pending
+            .map(|pending| pending.into_hal(dst_buffer))
+            .next();
 
         if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             Err(TransferError::UnalignedCopySize(size))?
@@ -390,19 +403,41 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
+        // Make sure source is initialized memory and mark dest as initialized.
+        cmd_buf.buffer_memory_init_actions.extend(
+            dst_buffer
+                .initialization_status
+                .check(destination_offset..(destination_offset + size))
+                .map(|range| MemoryInitTrackerAction {
+                    id: destination,
+                    range,
+                    kind: MemoryInitKind::ImplicitlyInitialized,
+                }),
+        );
+        cmd_buf.buffer_memory_init_actions.extend(
+            src_buffer
+                .initialization_status
+                .check(source_offset..(source_offset + size))
+                .map(|range| MemoryInitTrackerAction {
+                    id: source,
+                    range,
+                    kind: MemoryInitKind::NeedsInitializedMemory,
+                }),
+        );
+
         let region = hal::command::BufferCopy {
             src: source_offset,
             dst: destination_offset,
             size,
         };
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {
-            cmb_raw.pipeline_barrier(
+            cmd_buf_raw.pipeline_barrier(
                 all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
-                barriers,
+                src_barrier.into_iter().chain(dst_barrier),
             );
-            cmb_raw.copy_buffer(src_raw, dst_raw, iter::once(region));
+            cmd_buf_raw.copy_buffer(src_raw, dst_raw, iter::once(region));
         }
         Ok(())
     }
@@ -419,7 +454,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, command_encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
         let (dst_layers, dst_selector, dst_offset) =
@@ -434,7 +469,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
+        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             tracing::trace!("Ignoring copy_buffer_to_texture of size 0");
             return Ok(());
         }
@@ -494,7 +529,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             CopySide::Destination,
             copy_size,
         )?;
-        validate_linear_texture_data(
+        let required_buffer_bytes_in_copy = validate_linear_texture_data(
             &source.layout,
             dst_texture.format,
             src_buffer.size,
@@ -503,30 +538,52 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let (block_width, _) = conv::texture_block_size(dst_texture.format);
+        cmd_buf.buffer_memory_init_actions.extend(
+            src_buffer
+                .initialization_status
+                .check(source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy))
+                .map(|range| MemoryInitTrackerAction {
+                    id: source.buffer,
+                    range,
+                    kind: MemoryInitKind::NeedsInitializedMemory,
+                }),
+        );
+
+        let (block_width, _) = dst_texture.format.describe().block_dimensions;
         if !conv::is_valid_copy_dst_texture_format(dst_texture.format) {
             Err(TransferError::CopyToForbiddenTextureFormat(
                 dst_texture.format,
             ))?
         }
 
-        let buffer_width = (source.layout.bytes_per_row / bytes_per_block) * block_width;
+        // WebGPU uses the physical size of the texture for copies whereas vulkan uses
+        // the virtual size. We have passed validation, so it's safe to use the
+        // image extent data directly. We want the provided copy size to be no larger than
+        // the virtual size.
+        let max_image_extent = dst_texture.kind.level_extent(destination.mip_level as _);
+        let image_extent = Extent3d {
+            width: copy_size.width.min(max_image_extent.width),
+            height: copy_size.height.min(max_image_extent.height),
+            depth_or_array_layers: copy_size.depth_or_array_layers,
+        };
+
+        let buffer_width = (source.layout.bytes_per_row / bytes_per_block) * block_width as u32;
         let region = hal::command::BufferImageCopy {
             buffer_offset: source.layout.offset,
             buffer_width,
             buffer_height: source.layout.rows_per_image,
             image_layers: dst_layers,
             image_offset: dst_offset,
-            image_extent: conv::map_extent(copy_size, dst_texture.dimension),
+            image_extent: conv::map_extent(&image_extent, dst_texture.dimension),
         };
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {
-            cmb_raw.pipeline_barrier(
+            cmd_buf_raw.pipeline_barrier(
                 all_buffer_stages() | all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 src_barriers.chain(dst_barriers),
             );
-            cmb_raw.copy_buffer_to_image(
+            cmd_buf_raw.copy_buffer_to_image(
                 src_raw,
                 dst_raw,
                 hal::image::Layout::TransferDstOptimal,
@@ -548,7 +605,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, command_encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
         let (src_layers, src_selector, src_offset) =
@@ -563,7 +620,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
+        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             tracing::trace!("Ignoring copy_texture_to_buffer of size 0");
             return Ok(());
         }
@@ -623,7 +680,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             CopySide::Source,
             copy_size,
         )?;
-        validate_linear_texture_data(
+        let required_buffer_bytes_in_copy = validate_linear_texture_data(
             &destination.layout,
             src_texture.format,
             dst_buffer.size,
@@ -632,30 +689,56 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let (block_width, _) = conv::texture_block_size(src_texture.format);
+        let (block_width, _) = src_texture.format.describe().block_dimensions;
         if !conv::is_valid_copy_src_texture_format(src_texture.format) {
             Err(TransferError::CopyFromForbiddenTextureFormat(
                 src_texture.format,
             ))?
         }
 
-        let buffer_width = (destination.layout.bytes_per_row / bytes_per_block) * block_width;
+        cmd_buf.buffer_memory_init_actions.extend(
+            dst_buffer
+                .initialization_status
+                .check(
+                    destination.layout.offset
+                        ..(destination.layout.offset + required_buffer_bytes_in_copy),
+                )
+                .map(|range| MemoryInitTrackerAction {
+                    id: destination.buffer,
+                    range,
+                    kind: MemoryInitKind::ImplicitlyInitialized,
+                }),
+        );
+
+        // WebGPU uses the physical size of the texture for copies whereas vulkan uses
+        // the virtual size. We have passed validation, so it's safe to use the
+        // image extent data directly. We want the provided copy size to be no larger than
+        // the virtual size.
+        let max_image_extent = src_texture.kind.level_extent(source.mip_level as _);
+        let image_extent = Extent3d {
+            width: copy_size.width.min(max_image_extent.width),
+            height: copy_size.height.min(max_image_extent.height),
+            depth_or_array_layers: copy_size.depth_or_array_layers,
+        };
+
+        let buffer_width =
+            (destination.layout.bytes_per_row / bytes_per_block) * block_width as u32;
         let region = hal::command::BufferImageCopy {
             buffer_offset: destination.layout.offset,
             buffer_width,
             buffer_height: destination.layout.rows_per_image,
             image_layers: src_layers,
             image_offset: src_offset,
-            image_extent: conv::map_extent(copy_size, src_texture.dimension),
+            image_extent: conv::map_extent(&image_extent, src_texture.dimension),
         };
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {
-            cmb_raw.pipeline_barrier(
+            cmd_buf_raw.pipeline_barrier(
                 all_buffer_stages() | all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 src_barriers.chain(dst_barrier),
             );
-            cmb_raw.copy_image_to_buffer(
+            cmd_buf_raw.copy_image_to_buffer(
                 src_raw,
                 hal::image::Layout::TransferSrcOptimal,
                 dst_raw,
@@ -678,12 +761,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, command_encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
         let (_, mut token) = hub.buffers.read(&mut token); // skip token
         let (texture_guard, _) = hub.textures.read(&mut token);
-        // we can't hold both src_pending and dst_pending in scope because they
-        // borrow the buffer tracker mutably...
-        let mut barriers = Vec::new();
         let (src_layers, src_selector, src_offset) =
             texture_copy_view_to_hal(source, copy_size, &*texture_guard)?;
         let (dst_layers, dst_selector, dst_offset) =
@@ -701,7 +781,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
+        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             tracing::trace!("Ignoring copy_texture_to_texture of size 0");
             return Ok(());
         }
@@ -723,7 +803,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !src_texture.usage.contains(TextureUsage::COPY_SRC) {
             Err(TransferError::MissingCopySrcUsageFlag)?
         }
-        barriers.extend(src_pending.map(|pending| pending.into_hal(src_texture)));
+        //TODO: try to avoid this the collection. It's needed because both
+        // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
+        let mut barriers = src_pending
+            .map(|pending| pending.into_hal(src_texture))
+            .collect::<Vec<_>>();
 
         let (dst_texture, dst_pending) = cmd_buf
             .trackers
@@ -762,21 +846,37 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
+        // WebGPU uses the physical size of the texture for copies whereas vulkan uses
+        // the virtual size. We have passed validation, so it's safe to use the
+        // image extent data directly. We want the provided copy size to be no larger than
+        // the virtual size.
+        let max_src_image_extent = src_texture.kind.level_extent(source.mip_level as _);
+        let max_dst_image_extent = dst_texture.kind.level_extent(destination.mip_level as _);
+        let image_extent = Extent3d {
+            width: copy_size
+                .width
+                .min(max_src_image_extent.width.min(max_dst_image_extent.width)),
+            height: copy_size
+                .height
+                .min(max_src_image_extent.height.min(max_dst_image_extent.height)),
+            depth_or_array_layers: copy_size.depth_or_array_layers,
+        };
+
         let region = hal::command::ImageCopy {
             src_subresource: src_layers,
             src_offset,
             dst_subresource: dst_layers,
             dst_offset,
-            extent: conv::map_extent(copy_size, src_texture.dimension),
+            extent: conv::map_extent(&image_extent, src_texture.dimension),
         };
-        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {
-            cmb_raw.pipeline_barrier(
+            cmd_buf_raw.pipeline_barrier(
                 all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
-                barriers,
+                barriers.into_iter(),
             );
-            cmb_raw.copy_image(
+            cmd_buf_raw.copy_image(
                 src_raw,
                 hal::image::Layout::TransferSrcOptimal,
                 dst_raw,

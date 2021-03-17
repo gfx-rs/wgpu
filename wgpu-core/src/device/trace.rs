@@ -15,11 +15,11 @@ pub const FILE_NAME: &str = "trace.ron";
 
 #[cfg(feature = "trace")]
 pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
-    label: Option<&'a str>,
+    label: crate::Label<'a>,
     context: &'a super::RenderPassContext,
 ) -> crate::command::RenderBundleEncoderDescriptor<'a> {
     crate::command::RenderBundleEncoderDescriptor {
-        label: label.map(Cow::Borrowed),
+        label,
         color_formats: Cow::Borrowed(&context.attachments.colors),
         depth_stencil_format: context.attachments.depth_stencil,
         sample_count: context.sample_count as u32,
@@ -50,7 +50,7 @@ pub enum Action<'a> {
     DestroySampler(id::SamplerId),
     CreateSwapChain(id::SwapChainId, wgt::SwapChainDescriptor),
     GetSwapChainTexture {
-        id: Option<id::TextureViewId>,
+        id: id::TextureViewId,
         parent_id: id::SwapChainId,
     },
     PresentSwapChain(id::SwapChainId),
@@ -71,19 +71,23 @@ pub enum Action<'a> {
     DestroyBindGroup(id::BindGroupId),
     CreateShaderModule {
         id: id::ShaderModuleId,
-        label: crate::Label<'a>,
+        desc: crate::pipeline::ShaderModuleDescriptor<'a>,
         data: FileName,
     },
     DestroyShaderModule(id::ShaderModuleId),
-    CreateComputePipeline(
-        id::ComputePipelineId,
-        crate::pipeline::ComputePipelineDescriptor<'a>,
-    ),
+    CreateComputePipeline {
+        id: id::ComputePipelineId,
+        desc: crate::pipeline::ComputePipelineDescriptor<'a>,
+        #[cfg_attr(feature = "replay", serde(default))]
+        implicit_context: Option<super::ImplicitPipelineContext>,
+    },
     DestroyComputePipeline(id::ComputePipelineId),
-    CreateRenderPipeline(
-        id::RenderPipelineId,
-        crate::pipeline::RenderPipelineDescriptor<'a>,
-    ),
+    CreateRenderPipeline {
+        id: id::RenderPipelineId,
+        desc: crate::pipeline::RenderPipelineDescriptor<'a>,
+        #[cfg_attr(feature = "replay", serde(default))]
+        implicit_context: Option<super::ImplicitPipelineContext>,
+    },
     DestroyRenderPipeline(id::RenderPipelineId),
     CreateRenderBundle {
         id: id::RenderBundleId,
@@ -91,6 +95,11 @@ pub enum Action<'a> {
         base: crate::command::BasePass<crate::command::RenderCommand>,
     },
     DestroyRenderBundle(id::RenderBundleId),
+    CreateQuerySet {
+        id: id::QuerySetId,
+        desc: wgt::QuerySetDescriptor,
+    },
+    DestroyQuerySet(id::QuerySetId),
     WriteBuffer {
         id: id::BufferId,
         data: FileName,
@@ -131,6 +140,17 @@ pub enum Command {
         src: crate::command::TextureCopyView,
         dst: crate::command::TextureCopyView,
         size: wgt::Extent3d,
+    },
+    WriteTimestamp {
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+    },
+    ResolveQuerySet {
+        query_set_id: id::QuerySetId,
+        start_query: u32,
+        query_count: u32,
+        destination: id::BufferId,
+        destination_offset: wgt::BufferAddress,
     },
     RunComputePass {
         base: crate::command::BasePass<crate::command::ComputeCommand>,

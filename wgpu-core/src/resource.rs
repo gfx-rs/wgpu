@@ -6,6 +6,7 @@ use crate::{
     device::{alloc::MemoryBlock, DeviceError, HostMap},
     hub::Resource,
     id::{DeviceId, SwapChainId, TextureId},
+    memory_init_tracker::MemoryInitTracker,
     track::{TextureSelector, DUMMY_SELECTOR},
     validation::MissingBufferUsageError,
     Label, LifeGuard, RefCount, Stored,
@@ -75,6 +76,7 @@ bitflags::bitflags! {
 pub enum BufferMapAsyncStatus {
     Success,
     Error,
+    Aborted,
     Unknown,
     ContextLost,
 }
@@ -160,7 +162,7 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) usage: wgt::BufferUsage,
     pub(crate) size: wgt::BufferAddress,
-    pub(crate) full_range: (),
+    pub(crate) initialization_status: MemoryInitTracker,
     pub(crate) sync_mapped_writes: Option<hal::memory::Segment>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) map_state: BufferMapState<B>,
@@ -174,6 +176,8 @@ pub enum CreateBufferError {
     AccessError(#[from] BufferAccessError),
     #[error("buffers that are mapped at creation have to be aligned to `COPY_BUFFER_ALIGNMENT`")]
     UnalignedSize,
+    #[error("Buffers cannot have empty usage flags")]
+    EmptyUsage,
     #[error("`MAP` usage can only be combined with the opposite `COPY`, requested {0:?}")]
     UsageMismatch(wgt::BufferUsage),
 }
@@ -203,11 +207,13 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) dimension: wgt::TextureDimension,
     pub(crate) kind: hal::image::Kind,
     pub(crate) format: wgt::TextureFormat,
+    pub(crate) format_features: wgt::TextureFormatFeatures,
+    pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum TextureErrorDimension {
     X,
     Y,
@@ -218,8 +224,12 @@ pub enum TextureErrorDimension {
 pub enum TextureDimensionError {
     #[error("Dimension {0:?} is zero")]
     Zero(TextureErrorDimension),
-    #[error("1D textures must have height set to 1")]
-    InvalidHeight,
+    #[error("Dimension {0:?} value {given} exceeds the limit of {limit}")]
+    LimitExceeded {
+        dim: TextureErrorDimension,
+        given: u32,
+        limit: u32,
+    },
     #[error("sample count {0} is invalid")]
     InvalidSampleCount(u32),
 }
@@ -230,10 +240,14 @@ pub enum CreateTextureError {
     Device(#[from] DeviceError),
     #[error("D24Plus textures cannot be copied")]
     CannotCopyD24Plus,
+    #[error("Textures cannot have empty usage flags")]
+    EmptyUsage,
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
     #[error("texture descriptor mip level count ({0}) is invalid")]
     InvalidMipLevelCount(u32),
+    #[error("The texture usages {0:?} are not allowed on a texture of type {1:?}")]
+    InvalidUsages(wgt::TextureUsage, wgt::TextureFormat),
     #[error("Feature {0:?} must be enabled to create a texture of type {1:?}")]
     MissingFeature(wgt::Features, wgt::TextureFormat),
 }
@@ -265,7 +279,7 @@ pub struct TextureViewDescriptor<'a> {
     /// The dimension of the texture view. For 1D textures, this must be `1D`. For 2D textures it must be one of
     /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `3D`
     pub dimension: Option<wgt::TextureViewDimension>,
-    /// Aspect of the texture. Color textures must be [`TextureAspect::All`].
+    /// Aspect of the texture. Color textures must be [`TextureAspect::All`](wgt::TextureAspect::All).
     pub aspect: wgt::TextureAspect,
     /// Base mip level.
     pub base_mip_level: u32,
@@ -299,8 +313,13 @@ pub struct TextureView<B: hal::Backend> {
     //TODO: store device_id for quick access?
     pub(crate) aspects: hal::format::Aspects,
     pub(crate) format: wgt::TextureFormat,
-    pub(crate) extent: hal::image::Extent,
+    pub(crate) format_features: wgt::TextureFormatFeatures,
+    pub(crate) dimension: wgt::TextureViewDimension,
+    pub(crate) extent: wgt::Extent3d,
     pub(crate) samples: hal::image::NumSamples,
+    pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
+    /// Internal use of this texture view when used as `BindingType::Texture`.
+    pub(crate) sampled_internal_use: TextureUse,
     pub(crate) selector: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }
@@ -381,7 +400,7 @@ pub struct SamplerDescriptor<'a> {
     pub compare: Option<wgt::CompareFunction>,
     /// Valid values: 1, 2, 4, 8, and 16.
     pub anisotropy_clamp: Option<NonZeroU8>,
-    /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
+    /// Border color to use when address_mode is [`AddressMode::ClampToBorder`](wgt::AddressMode::ClampToBorder)
     pub border_color: Option<wgt::SamplerBorderColor>,
 }
 
@@ -433,6 +452,42 @@ impl<B: hal::Backend> Resource for Sampler<B> {
 }
 
 impl<B: hal::Backend> Borrow<()> for Sampler<B> {
+    fn borrow(&self) -> &() {
+        &DUMMY_SELECTOR
+    }
+}
+#[derive(Clone, Debug, Error)]
+pub enum CreateQuerySetError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("QuerySets cannot be made with zero queries")]
+    ZeroCount,
+    #[error("{count} is too many queries for a single QuerySet. QuerySets cannot be made more than {maximum} queries.")]
+    TooManyQueries { count: u32, maximum: u32 },
+    #[error("Feature {0:?} must be enabled")]
+    MissingFeature(wgt::Features),
+}
+
+#[derive(Debug)]
+pub struct QuerySet<B: hal::Backend> {
+    pub(crate) raw: B::QueryPool,
+    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) life_guard: LifeGuard,
+    /// Amount of queries in the query set.
+    pub(crate) desc: wgt::QuerySetDescriptor,
+    /// Amount of numbers in each query (i.e. a pipeline statistics query for two attributes will have this number be two)
+    pub(crate) elements: u32,
+}
+
+impl<B: hal::Backend> Resource for QuerySet<B> {
+    const TYPE: &'static str = "QuerySet";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
+    }
+}
+
+impl<B: hal::Backend> Borrow<()> for QuerySet<B> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
