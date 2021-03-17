@@ -2853,7 +2853,7 @@ impl SwapChain {
         let output = view_id.map(|id| SwapChainTexture {
             view: TextureView {
                 context: Arc::clone(&self.context),
-                id: id,
+                id,
                 owned: false,
             },
             detail,

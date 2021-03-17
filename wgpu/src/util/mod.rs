@@ -24,7 +24,7 @@ pub use encoder::RenderEncoder;
 /// - Input length isn't multiple of 4
 /// - Input is longer than [`usize::max_value`]
 /// - SPIR-V magic number is missing from beginning of stream
-pub fn make_spirv<'a>(data: &'a [u8]) -> super::ShaderSource<'a> {
+pub fn make_spirv(data: &[u8]) -> super::ShaderSource {
     const MAGIC_NUMBER: u32 = 0x0723_0203;
 
     assert_eq!(

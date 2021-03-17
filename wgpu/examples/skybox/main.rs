@@ -363,6 +363,7 @@ impl framework::Example for Skybox {
         }
     }
 
+    #[allow(clippy::single_match)]
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
             winit::event::WindowEvent::CursorMoved { position, .. } => {
@@ -443,7 +444,7 @@ impl framework::Example for Skybox {
             }
 
             rpass.set_pipeline(&self.sky_pipeline);
-            rpass.draw(0..3 as u32, 0..1);
+            rpass.draw(0..3, 0..1);
         }
 
         queue.submit(std::iter::once(encoder.finish()));
