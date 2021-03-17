@@ -1809,8 +1809,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         for (_, fun) in module.functions.iter_mut() {
             self.patch_function_calls(fun)?;
         }
-        // Note: we aren't patching the entry point functions, because they are simply
-        // wrappers behind real functions, and are already resolved.
+        for ep in module.entry_points.iter_mut() {
+            self.patch_function_calls(&mut ep.function)?;
+        }
 
         // Check all the images and samplers to have consistent comparison property.
         for (handle, flags) in self.handle_sampling.drain() {
