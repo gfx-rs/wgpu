@@ -49,7 +49,6 @@ use crate::{
     },
     hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Resource, Storage, Token},
     id,
-    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::BufferUse,
     span,
     track::{TrackerSet, UsageConflict},
@@ -57,7 +56,7 @@ use crate::{
     Label, LabelHelpers, LifeGuard, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Cow, iter, mem, ops::Range};
+use std::{borrow::Cow, iter, ops::Range};
 use thiserror::Error;
 
 /// Describes a [`RenderBundleEncoder`].
@@ -94,7 +93,7 @@ impl RenderBundleEncoder {
     ) -> Result<Self, CreateRenderBundleError> {
         span!(_guard, INFO, "RenderBundleEncoder::new");
         Ok(Self {
-            base: base.unwrap_or_else(|| BasePass::new(&desc.label)),
+            base: base.unwrap_or_else(BasePass::new),
             parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
@@ -115,7 +114,7 @@ impl RenderBundleEncoder {
 
     pub fn dummy(parent_id: id::DeviceId) -> Self {
         Self {
-            base: BasePass::new(&None),
+            base: BasePass::new(),
             parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
@@ -126,11 +125,6 @@ impl RenderBundleEncoder {
                 sample_count: 0,
             },
         }
-    }
-
-    #[cfg(feature = "trace")]
-    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand> {
-        BasePass::from_ref(self.base.as_ref())
     }
 
     pub fn parent(&self) -> id::DeviceId {
@@ -165,7 +159,6 @@ impl RenderBundleEncoder {
         let mut commands = Vec::new();
         let mut base = self.base.as_ref();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
-        let mut buffer_memory_init_actions = Vec::new();
 
         for &command in base.commands {
             match command {
@@ -211,8 +204,6 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope);
                     }
 
-                    buffer_memory_init_actions.extend_from_slice(&bind_group.used_buffer_ranges);
-
                     state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
                     state
                         .trackers
@@ -242,7 +233,7 @@ impl RenderBundleEncoder {
                     pipeline_layout_id = Some(pipeline.layout_id.value);
 
                     state.set_pipeline(
-                        pipeline.strip_index_format,
+                        pipeline.index_format,
                         &pipeline.vertex_strides,
                         &layout.bind_group_layout_ids,
                         &layout.push_constant_ranges,
@@ -254,7 +245,6 @@ impl RenderBundleEncoder {
                 }
                 RenderCommand::SetIndexBuffer {
                     buffer_id,
-                    index_format,
                     offset,
                     size,
                 } => {
@@ -271,12 +261,6 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
-                    buffer_memory_init_actions.push(MemoryInitTrackerAction {
-                        id: buffer_id,
-                        range: offset..end,
-                        kind: MemoryInitKind::NeedsInitializedMemory,
-                    });
-                    state.index.set_format(index_format);
                     state.index.set_buffer(buffer_id, offset..end);
                 }
                 RenderCommand::SetVertexBuffer {
@@ -298,11 +282,6 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
-                    buffer_memory_init_actions.push(MemoryInitTrackerAction {
-                        id: buffer_id,
-                        range: offset..end,
-                        kind: MemoryInitKind::NeedsInitializedMemory,
-                    });
                     state.vertex[slot as usize].set_buffer(buffer_id, offset..end);
                 }
                 RenderCommand::SetPushConstant {
@@ -331,27 +310,21 @@ impl RenderBundleEncoder {
                     first_vertex,
                     first_instance,
                 } => {
-                    let scope = PassErrorScope::Draw {
-                        indexed: false,
-                        indirect: false,
-                        pipeline: state.pipeline.last_state,
-                    };
-                    let vertex_limits = state.vertex_limits();
+                    let scope = PassErrorScope::Draw;
+                    let (vertex_limit, instance_limit) = state.vertex_limits();
                     let last_vertex = first_vertex + vertex_count;
-                    if last_vertex > vertex_limits.vertex_limit {
+                    if last_vertex > vertex_limit {
                         return Err(DrawError::VertexBeyondLimit {
                             last_vertex,
-                            vertex_limit: vertex_limits.vertex_limit,
-                            slot: vertex_limits.vertex_limit_slot,
+                            vertex_limit,
                         })
                         .map_pass_err(scope);
                     }
                     let last_instance = first_instance + instance_count;
-                    if last_instance > vertex_limits.instance_limit {
+                    if last_instance > instance_limit {
                         return Err(DrawError::InstanceBeyondLimit {
                             last_instance,
-                            instance_limit: vertex_limits.instance_limit,
-                            slot: vertex_limits.instance_limit_slot,
+                            instance_limit,
                         })
                         .map_pass_err(scope);
                     }
@@ -366,13 +339,9 @@ impl RenderBundleEncoder {
                     base_vertex: _,
                     first_instance,
                 } => {
-                    let scope = PassErrorScope::Draw {
-                        indexed: true,
-                        indirect: false,
-                        pipeline: state.pipeline.last_state,
-                    };
+                    let scope = PassErrorScope::DrawIndexed;
                     //TODO: validate that base_vertex + max_index() is within the provided range
-                    let vertex_limits = state.vertex_limits();
+                    let (_, instance_limit) = state.vertex_limits();
                     let index_limit = state.index.limit();
                     let last_index = first_index + index_count;
                     if last_index > index_limit {
@@ -383,11 +352,10 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope);
                     }
                     let last_instance = first_instance + instance_count;
-                    if last_instance > vertex_limits.instance_limit {
+                    if last_instance > instance_limit {
                         return Err(DrawError::InstanceBeyondLimit {
                             last_instance,
-                            instance_limit: vertex_limits.instance_limit,
-                            slot: vertex_limits.instance_limit_slot,
+                            instance_limit,
                         })
                         .map_pass_err(scope);
                     }
@@ -398,15 +366,11 @@ impl RenderBundleEncoder {
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
-                    offset,
+                    offset: _,
                     count: None,
                     indexed: false,
                 } => {
-                    let scope = PassErrorScope::Draw {
-                        indexed: false,
-                        indirect: true,
-                        pipeline: state.pipeline.last_state,
-                    };
+                    let scope = PassErrorScope::DrawIndirect;
                     let buffer = state
                         .trackers
                         .buffers
@@ -415,34 +379,17 @@ impl RenderBundleEncoder {
                     check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
                         .map_pass_err(scope)?;
 
-                    buffer_memory_init_actions.extend(
-                        buffer
-                            .initialization_status
-                            .check(
-                                offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
-                            )
-                            .map(|range| MemoryInitTrackerAction {
-                                id: buffer_id,
-                                range,
-                                kind: MemoryInitKind::NeedsInitializedMemory,
-                            }),
-                    );
-
                     commands.extend(state.flush_vertices());
                     commands.extend(state.flush_binds());
                     commands.push(command);
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
-                    offset,
+                    offset: _,
                     count: None,
                     indexed: true,
                 } => {
-                    let scope = PassErrorScope::Draw {
-                        indexed: true,
-                        indirect: true,
-                        pipeline: state.pipeline.last_state,
-                    };
+                    let scope = PassErrorScope::DrawIndexedIndirect;
                     let buffer = state
                         .trackers
                         .buffers
@@ -451,19 +398,6 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
                         .map_pass_err(scope)?;
-
-                    buffer_memory_init_actions.extend(
-                        buffer
-                            .initialization_status
-                            .check(
-                                offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
-                            )
-                            .map(|range| MemoryInitTrackerAction {
-                                id: buffer_id,
-                                range,
-                                kind: MemoryInitKind::NeedsInitializedMemory,
-                            }),
-                    );
 
                     commands.extend(state.index.flush());
                     commands.extend(state.flush_vertices());
@@ -475,9 +409,6 @@ impl RenderBundleEncoder {
                 RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
                 RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
                 RenderCommand::PopDebugGroup => unimplemented!(),
-                RenderCommand::WriteTimestamp { .. }
-                | RenderCommand::BeginPipelineStatisticsQuery { .. }
-                | RenderCommand::EndPipelineStatisticsQuery => unimplemented!(),
                 RenderCommand::ExecuteBundle(_)
                 | RenderCommand::SetBlendColor(_)
                 | RenderCommand::SetStencilReference(_)
@@ -486,9 +417,9 @@ impl RenderBundleEncoder {
             }
         }
 
+        let _ = desc.label; //TODO: actually use
         Ok(RenderBundle {
             base: BasePass {
-                label: desc.label.as_ref().map(|cow| cow.to_string()),
                 commands,
                 dynamic_offsets: state.flat_dynamic_offsets,
                 string_data: Vec::new(),
@@ -499,26 +430,9 @@ impl RenderBundleEncoder {
                 ref_count: device.life_guard.add_ref(),
             },
             used: state.trackers,
-            buffer_memory_init_actions,
             context: self.context,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
-    }
-
-    pub fn set_index_buffer(
-        &mut self,
-        buffer_id: id::BufferId,
-        index_format: wgt::IndexFormat,
-        offset: wgt::BufferAddress,
-        size: Option<wgt::BufferSize>,
-    ) {
-        span!(_guard, DEBUG, "RenderBundle::set_index_buffer");
-        self.base.commands.push(RenderCommand::SetIndexBuffer {
-            buffer_id,
-            index_format,
-            offset,
-            size,
-        });
     }
 }
 
@@ -548,7 +462,6 @@ pub struct RenderBundle {
     base: BasePass<RenderCommand>,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) used: TrackerSet,
-    pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     pub(crate) context: RenderPassContext,
     pub(crate) life_guard: LifeGuard,
 }
@@ -557,6 +470,11 @@ unsafe impl Send for RenderBundle {}
 unsafe impl Sync for RenderBundle {}
 
 impl RenderBundle {
+    #[cfg(feature = "trace")]
+    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand> {
+        BasePass::from_ref(self.base.as_ref())
+    }
+
     /// Actually encode the contents into a native command buffer.
     ///
     /// This is partially duplicating the logic of `command_encoder_run_render_pass`.
@@ -580,10 +498,8 @@ impl RenderBundle {
         use hal::command::CommandBuffer as _;
 
         let mut offsets = self.base.dynamic_offsets.as_slice();
+        let mut index_type = hal::IndexType::U16;
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
-        if let Some(ref label) = self.base.label {
-            cmd_buf.begin_debug_marker(label, 0);
-        }
 
         for command in self.base.commands.iter() {
             match *command {
@@ -597,24 +513,21 @@ impl RenderBundle {
                         &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw,
                         index as usize,
                         iter::once(bind_group.raw.raw()),
-                        offsets.iter().take(num_dynamic_offsets as usize).cloned(),
+                        &offsets[..num_dynamic_offsets as usize],
                     );
                     offsets = &offsets[num_dynamic_offsets as usize..];
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let pipeline = pipeline_guard.get(pipeline_id).unwrap();
                     cmd_buf.bind_graphics_pipeline(&pipeline.raw);
-
+                    index_type = conv::map_index_format(pipeline.index_format);
                     pipeline_layout_id = Some(pipeline.layout_id.value);
                 }
                 RenderCommand::SetIndexBuffer {
                     buffer_id,
-                    index_format,
                     offset,
                     size,
                 } => {
-                    let index_type = conv::map_index_format(index_format);
-
                     let &(ref buffer, _) = buffer_guard
                         .get(buffer_id)
                         .unwrap()
@@ -738,19 +651,12 @@ impl RenderBundle {
                 RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
                 RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
                 RenderCommand::PopDebugGroup => unimplemented!(),
-                RenderCommand::WriteTimestamp { .. }
-                | RenderCommand::BeginPipelineStatisticsQuery { .. }
-                | RenderCommand::EndPipelineStatisticsQuery => unimplemented!(),
                 RenderCommand::ExecuteBundle(_)
                 | RenderCommand::SetBlendColor(_)
                 | RenderCommand::SetStencilReference(_)
                 | RenderCommand::SetViewport { .. }
                 | RenderCommand::SetScissor(_) => unreachable!(),
             }
-        }
-
-        if let Some(_) = self.base.label {
-            cmd_buf.end_debug_marker();
         }
 
         Ok(())
@@ -769,7 +675,6 @@ impl Resource for RenderBundle {
 struct IndexState {
     buffer: Option<id::BufferId>,
     format: wgt::IndexFormat,
-    pipeline_format: Option<wgt::IndexFormat>,
     range: Range<wgt::BufferAddress>,
     is_dirty: bool,
 }
@@ -779,7 +684,6 @@ impl IndexState {
         Self {
             buffer: None,
             format: wgt::IndexFormat::default(),
-            pipeline_format: None,
             range: 0..0,
             is_dirty: false,
         }
@@ -799,7 +703,6 @@ impl IndexState {
             self.is_dirty = false;
             Some(RenderCommand::SetIndexBuffer {
                 buffer_id: self.buffer.unwrap(),
-                index_format: self.format,
                 offset: self.range.start,
                 size: wgt::BufferSize::new(self.range.end - self.range.start),
             })
@@ -923,18 +826,6 @@ impl PushConstantState {
 }
 
 #[derive(Debug)]
-struct VertexLimitState {
-    /// Length of the shortest vertex rate vertex buffer
-    vertex_limit: u32,
-    /// Buffer slot which the shortest vertex rate vertex buffer is bound to
-    vertex_limit_slot: u32,
-    /// Length of the shortest instance rate vertex buffer
-    instance_limit: u32,
-    /// Buffer slot which the shortest instance rate vertex buffer is bound to
-    instance_limit_slot: u32,
-}
-
-#[derive(Debug)]
 struct State {
     trackers: TrackerSet,
     index: IndexState,
@@ -948,34 +839,20 @@ struct State {
 }
 
 impl State {
-    fn vertex_limits(&self) -> VertexLimitState {
-        let mut vert_state = VertexLimitState {
-            vertex_limit: u32::MAX,
-            vertex_limit_slot: 0,
-            instance_limit: u32::MAX,
-            instance_limit_slot: 0,
-        };
-        for (idx, vbs) in self.vertex.iter().enumerate() {
+    fn vertex_limits(&self) -> (u32, u32) {
+        let mut vertex_limit = !0;
+        let mut instance_limit = !0;
+        for vbs in &self.vertex {
             if vbs.stride == 0 {
                 continue;
             }
             let limit = ((vbs.range.end - vbs.range.start) / vbs.stride) as u32;
             match vbs.rate {
-                wgt::InputStepMode::Vertex => {
-                    if limit < vert_state.vertex_limit {
-                        vert_state.vertex_limit = limit;
-                        vert_state.vertex_limit_slot = idx as _;
-                    }
-                }
-                wgt::InputStepMode::Instance => {
-                    if limit < vert_state.instance_limit {
-                        vert_state.instance_limit = limit;
-                        vert_state.instance_limit_slot = idx as _;
-                    }
-                }
+                wgt::InputStepMode::Vertex => vertex_limit = vertex_limit.min(limit),
+                wgt::InputStepMode::Instance => instance_limit = instance_limit.min(limit),
             }
         }
-        vert_state
+        (vertex_limit, instance_limit)
     }
 
     fn invalidate_group_from(&mut self, slot: usize) {
@@ -1006,13 +883,12 @@ impl State {
 
     fn set_pipeline(
         &mut self,
-        index_format: Option<wgt::IndexFormat>,
+        index_format: wgt::IndexFormat,
         vertex_strides: &[(wgt::BufferAddress, wgt::InputStepMode)],
         layout_ids: &[id::Valid<id::BindGroupLayoutId>],
         push_constant_layouts: &[wgt::PushConstantRange],
     ) {
-        self.index.pipeline_format = index_format;
-
+        self.index.set_format(index_format);
         for (vs, &(stride, step_mode)) in self.vertex.iter_mut().zip(vertex_strides) {
             if vs.stride != stride || vs.rate != step_mode {
                 vs.stride = stride;
@@ -1174,12 +1050,10 @@ pub mod bundle_ffi {
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
         });
-        if offset_length != 0 {
-            bundle
-                .base
-                .dynamic_offsets
-                .extend_from_slice(slice::from_raw_parts(offsets, offset_length));
-        }
+        bundle
+            .base
+            .dynamic_offsets
+            .extend_from_slice(slice::from_raw_parts(offsets, offset_length));
     }
 
     #[no_mangle]
@@ -1192,6 +1066,21 @@ pub mod bundle_ffi {
             .base
             .commands
             .push(RenderCommand::SetPipeline(pipeline_id));
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_bundle_set_index_buffer(
+        bundle: &mut RenderBundleEncoder,
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+        size: Option<BufferSize>,
+    ) {
+        span!(_guard, DEBUG, "RenderBundle::set_index_buffer");
+        bundle.base.commands.push(RenderCommand::SetIndexBuffer {
+            buffer_id,
+            offset,
+            size,
+        });
     }
 
     #[no_mangle]

@@ -59,12 +59,6 @@ impl ByteBuf {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-enum ShaderModuleSource<'a> {
-    SpirV(Cow<'a, [u32]>),
-    Wgsl(Cow<'a, str>),
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
 struct ImplicitLayout<'a> {
     pipeline: id::PipelineLayoutId,
     bind_groups: Cow<'a, [id::BindGroupLayoutId]>,
@@ -84,11 +78,7 @@ enum DeviceAction<'a> {
         wgc::binding_model::PipelineLayoutDescriptor<'a>,
     ),
     CreateBindGroup(id::BindGroupId, wgc::binding_model::BindGroupDescriptor<'a>),
-    CreateShaderModule(
-        id::ShaderModuleId,
-        wgc::pipeline::ShaderModuleDescriptor<'a>,
-        ShaderModuleSource<'a>,
-    ),
+    CreateShaderModule(id::ShaderModuleId, Cow<'a, [u32]>, Cow<'a, str>),
     CreateComputePipeline(
         id::ComputePipelineId,
         wgc::pipeline::ComputePipelineDescriptor<'a>,

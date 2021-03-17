@@ -14,7 +14,7 @@ use crate::{
     hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Token},
     id, resource,
     track::TrackerSet,
-    RefCount, Stored, SubmissionIndex,
+    FastHashMap, RefCount, Stored, SubmissionIndex,
 };
 
 use copyless::VecHelper as _;
@@ -28,7 +28,7 @@ const CLEANUP_WAIT_MS: u64 = 5000;
 
 /// A struct that keeps lists of resources that are no longer needed by the user.
 #[derive(Debug, Default)]
-pub(super) struct SuspectedResources {
+pub struct SuspectedResources {
     pub(crate) buffers: Vec<id::Valid<id::BufferId>>,
     pub(crate) textures: Vec<id::Valid<id::TextureId>>,
     pub(crate) texture_views: Vec<id::Valid<id::TextureViewId>>,
@@ -39,11 +39,10 @@ pub(super) struct SuspectedResources {
     pub(crate) bind_group_layouts: Vec<id::Valid<id::BindGroupLayoutId>>,
     pub(crate) pipeline_layouts: Vec<Stored<id::PipelineLayoutId>>,
     pub(crate) render_bundles: Vec<id::Valid<id::RenderBundleId>>,
-    pub(crate) query_sets: Vec<id::Valid<id::QuerySetId>>,
 }
 
 impl SuspectedResources {
-    pub(super) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.buffers.clear();
         self.textures.clear();
         self.texture_views.clear();
@@ -54,10 +53,9 @@ impl SuspectedResources {
         self.bind_group_layouts.clear();
         self.pipeline_layouts.clear();
         self.render_bundles.clear();
-        self.query_sets.clear();
     }
 
-    pub(super) fn extend(&mut self, other: &Self) {
+    pub(crate) fn extend(&mut self, other: &Self) {
         self.buffers.extend_from_slice(&other.buffers);
         self.textures.extend_from_slice(&other.textures);
         self.texture_views.extend_from_slice(&other.texture_views);
@@ -72,10 +70,9 @@ impl SuspectedResources {
         self.pipeline_layouts
             .extend_from_slice(&other.pipeline_layouts);
         self.render_bundles.extend_from_slice(&other.render_bundles);
-        self.query_sets.extend_from_slice(&other.query_sets);
     }
 
-    pub(super) fn add_trackers(&mut self, trackers: &TrackerSet) {
+    pub(crate) fn add_trackers(&mut self, trackers: &TrackerSet) {
         self.buffers.extend(trackers.buffers.used());
         self.textures.extend(trackers.textures.used());
         self.texture_views.extend(trackers.views.used());
@@ -84,7 +81,6 @@ impl SuspectedResources {
         self.compute_pipelines.extend(trackers.compute_pipes.used());
         self.render_pipelines.extend(trackers.render_pipes.used());
         self.render_bundles.extend(trackers.bundles.used());
-        self.query_sets.extend(trackers.query_sets.used());
     }
 }
 
@@ -103,7 +99,6 @@ struct NonReferencedResources<B: hal::Backend> {
     graphics_pipes: Vec<B::GraphicsPipeline>,
     descriptor_set_layouts: Vec<B::DescriptorSetLayout>,
     pipeline_layouts: Vec<B::PipelineLayout>,
-    query_sets: Vec<B::QueryPool>,
 }
 
 impl<B: hal::Backend> NonReferencedResources<B> {
@@ -119,7 +114,6 @@ impl<B: hal::Backend> NonReferencedResources<B> {
             graphics_pipes: Vec::new(),
             descriptor_set_layouts: Vec::new(),
             pipeline_layouts: Vec::new(),
-            query_sets: Vec::new(),
         }
     }
 
@@ -132,7 +126,6 @@ impl<B: hal::Backend> NonReferencedResources<B> {
         self.desc_sets.extend(other.desc_sets);
         self.compute_pipes.extend(other.compute_pipes);
         self.graphics_pipes.extend(other.graphics_pipes);
-        self.query_sets.extend(other.query_sets);
         assert!(other.descriptor_set_layouts.is_empty());
         assert!(other.pipeline_layouts.is_empty());
     }
@@ -185,9 +178,6 @@ impl<B: hal::Backend> NonReferencedResources<B> {
         for raw in self.pipeline_layouts.drain(..) {
             device.destroy_pipeline_layout(raw);
         }
-        for raw in self.query_sets.drain(..) {
-            device.destroy_query_pool(raw);
-        }
     }
 }
 
@@ -216,7 +206,7 @@ pub enum WaitIdleError {
 ///   3. When `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
 ///   4. Finally, `handle_mapping` issues all the callbacks.
 #[derive(Debug)]
-pub(super) struct LifetimeTracker<B: hal::Backend> {
+pub(crate) struct LifetimeTracker<B: hal::Backend> {
     /// Resources that the user has requested be mapped, but are still in use.
     mapped: Vec<Stored<id::BufferId>>,
     /// Buffers can be used in a submission that is yet to be made, by the
@@ -326,9 +316,10 @@ impl<B: hal::Backend> LifetimeTracker<B> {
             .iter()
             .position(|a| unsafe { !device.get_fence_status(&a.fence).unwrap_or(false) })
             .unwrap_or_else(|| self.active.len());
-        let last_done = match done_count.checked_sub(1) {
-            Some(i) => self.active[i].index,
-            None => return Ok(0),
+        let last_done = if done_count != 0 {
+            self.active[done_count - 1].index
+        } else {
+            return Ok(0);
         };
 
         for a in self.active.drain(..done_count) {
@@ -375,7 +366,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
 }
 
 impl<B: GfxBackend> LifetimeTracker<B> {
-    pub(super) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<B, G>,
         trackers: &Mutex<TrackerSet>,
@@ -383,8 +374,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         token: &mut Token<super::Device<B>>,
     ) {
         if !self.suspected_resources.render_bundles.is_empty() {
-            let (mut guard, _) = hub.render_bundles.write(token);
             let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.render_bundles.write(token);
 
             while let Some(id) = self.suspected_resources.render_bundles.pop() {
                 if trackers.bundles.remove_abandoned(id) {
@@ -399,8 +390,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.bind_groups.is_empty() {
-            let (mut guard, _) = hub.bind_groups.write(token);
             let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.bind_groups.write(token);
 
             while let Some(id) = self.suspected_resources.bind_groups.pop() {
                 if trackers.bind_groups.remove_abandoned(id) {
@@ -423,8 +414,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.texture_views.is_empty() {
-            let (mut guard, _) = hub.texture_views.write(token);
             let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.texture_views.write(token);
 
             for id in self.suspected_resources.texture_views.drain(..) {
                 if trackers.views.remove_abandoned(id) {
@@ -453,8 +444,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.textures.is_empty() {
-            let (mut guard, _) = hub.textures.write(token);
             let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.textures.write(token);
 
             for id in self.suspected_resources.textures.drain(..) {
                 if trackers.textures.remove_abandoned(id) {
@@ -475,8 +466,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.samplers.is_empty() {
-            let (mut guard, _) = hub.samplers.write(token);
             let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.samplers.write(token);
 
             for id in self.suspected_resources.samplers.drain(..) {
                 if trackers.samplers.remove_abandoned(id) {
@@ -497,8 +488,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.buffers.is_empty() {
-            let (mut guard, _) = hub.buffers.write(token);
             let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.buffers.write(token);
 
             for id in self.suspected_resources.buffers.drain(..) {
                 if trackers.buffers.remove_abandoned(id) {
@@ -508,16 +499,6 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
                     if let Some(res) = hub.buffers.unregister_locked(id.0, &mut *guard) {
                         let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                        if let resource::BufferMapState::Init {
-                            stage_buffer,
-                            stage_memory,
-                            ..
-                        } = res.map_state
-                        {
-                            self.free_resources
-                                .buffers
-                                .push((stage_buffer, stage_memory));
-                        }
                         self.active
                             .iter_mut()
                             .find(|a| a.index == submit_index)
@@ -530,8 +511,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.compute_pipelines.is_empty() {
-            let (mut guard, _) = hub.compute_pipelines.write(token);
             let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.compute_pipelines.write(token);
 
             for id in self.suspected_resources.compute_pipelines.drain(..) {
                 if trackers.compute_pipes.remove_abandoned(id) {
@@ -552,8 +533,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.render_pipelines.is_empty() {
-            let (mut guard, _) = hub.render_pipelines.write(token);
             let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.render_pipelines.write(token);
 
             for id in self.suspected_resources.render_pipelines.drain(..) {
                 if trackers.render_pipes.remove_abandoned(id) {
@@ -613,30 +594,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                 }
             }
         }
-
-        if !self.suspected_resources.query_sets.is_empty() {
-            let (mut guard, _) = hub.query_sets.write(token);
-            let mut trackers = trackers.lock();
-
-            for id in self.suspected_resources.query_sets.drain(..) {
-                if trackers.query_sets.remove_abandoned(id) {
-                    // #[cfg(feature = "trace")]
-                    // trace.map(|t| t.lock().add(trace::Action::DestroyComputePipeline(id.0)));
-                    if let Some(res) = hub.query_sets.unregister_locked(id.0, &mut *guard) {
-                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                        self.active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .query_sets
-                            .push(res.raw);
-                    }
-                }
-            }
-        }
     }
 
-    pub(super) fn triage_mapped<G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn triage_mapped<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<B, G>,
         token: &mut Token<super::Device<B>>,
@@ -666,7 +626,75 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
     }
 
-    pub(super) fn handle_mapping<G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn triage_framebuffers<G: GlobalIdentityHandlerFactory>(
+        &mut self,
+        hub: &Hub<B, G>,
+        framebuffers: &mut FastHashMap<super::FramebufferKey, B::Framebuffer>,
+        token: &mut Token<super::Device<B>>,
+    ) {
+        let (texture_view_guard, _) = hub.texture_views.read(token);
+        let remove_list = framebuffers
+            .keys()
+            .filter_map(|key| {
+                let mut last_submit = None;
+                let mut needs_cleanup = false;
+
+                // A framebuffer needs to be scheduled for cleanup, if there's at least one
+                // attachment is no longer valid.
+
+                for &at in key.all() {
+                    // If this attachment is still registered, it's still valid
+                    if texture_view_guard.contains(at.0) {
+                        continue;
+                    }
+
+                    // This attachment is no longer registered, this framebuffer needs cleanup
+                    needs_cleanup = true;
+
+                    // Check if there's any active submissions that are still referring to this
+                    // attachment, if there are we need to get the greatest submission index, as
+                    // that's the last time this attachment is still valid
+                    let mut attachment_last_submit = None;
+                    for a in &self.active {
+                        if a.last_resources.image_views.iter().any(|&(id, _)| id == at) {
+                            let max = attachment_last_submit.unwrap_or(0).max(a.index);
+                            attachment_last_submit = Some(max);
+                        }
+                    }
+
+                    // Between all attachments, we need the smallest index, because that's the last
+                    // time this framebuffer is still valid
+                    if let Some(attachment_last_submit) = attachment_last_submit {
+                        let min = last_submit
+                            .unwrap_or(std::usize::MAX)
+                            .min(attachment_last_submit);
+                        last_submit = Some(min);
+                    }
+                }
+
+                if needs_cleanup {
+                    Some((key.clone(), last_submit.unwrap_or(0)))
+                } else {
+                    None
+                }
+            })
+            .collect::<FastHashMap<_, _>>();
+
+        if !remove_list.is_empty() {
+            tracing::debug!("Free framebuffers {:?}", remove_list);
+            for (ref key, submit_index) in remove_list {
+                let framebuffer = framebuffers.remove(key).unwrap();
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .framebuffers
+                    .push(framebuffer);
+            }
+        }
+    }
+
+    pub(crate) fn handle_mapping<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<B, G>,
         raw: &B::Device,
@@ -698,14 +726,6 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     resource::BufferMapState::Idle,
                 ) {
                     resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
-                    // Mapping cancelled
-                    resource::BufferMapState::Idle => continue,
-                    // Mapping queued at least twice by map -> unmap -> map
-                    // and was already successfully mapped below
-                    active @ resource::BufferMapState::Active { .. } => {
-                        buffer.map_state = active;
-                        continue;
-                    }
                     _ => panic!("No pending mapping."),
                 };
                 let status = if mapping.range.start != mapping.range.end {

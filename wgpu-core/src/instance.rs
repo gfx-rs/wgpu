@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    backend, conv,
+    backend,
     device::{Device, DeviceDescriptor},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId, Valid},
@@ -13,7 +13,10 @@ use crate::{
 use wgt::{Backend, BackendBit, PowerPreference, BIND_BUFFER_ALIGNMENT};
 
 use hal::{
-    adapter::PhysicalDevice as _, queue::QueueFamily as _, window::Surface as _, Instance as _,
+    adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
+    queue::QueueFamily as _,
+    window::Surface as _,
+    Instance as _,
 };
 use thiserror::Error;
 
@@ -120,7 +123,6 @@ impl crate::hub::Resource for Surface {
 pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
     features: wgt::Features,
-    pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
     life_guard: LifeGuard,
 }
@@ -130,12 +132,10 @@ impl<B: GfxBackend> Adapter<B> {
         span!(_guard, INFO, "Adapter::new");
 
         let adapter_features = raw.physical_device.features();
-        let properties = raw.physical_device.properties();
 
         let mut features = wgt::Features::default()
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
-            | wgt::Features::PUSH_CONSTANTS
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+            | wgt::Features::PUSH_CONSTANTS;
         features.set(
             wgt::Features::DEPTH_CLAMPING,
             adapter_features.contains(hal::Features::DEPTH_CLAMP),
@@ -143,14 +143,6 @@ impl<B: GfxBackend> Adapter<B> {
         features.set(
             wgt::Features::TEXTURE_COMPRESSION_BC,
             adapter_features.contains(hal::Features::FORMAT_BC),
-        );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_ETC2,
-            adapter_features.contains(hal::Features::FORMAT_ETC2),
-        );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
-            adapter_features.contains(hal::Features::FORMAT_ASTC_LDR),
         );
         features.set(
             wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
@@ -180,185 +172,59 @@ impl<B: GfxBackend> Adapter<B> {
             wgt::Features::NON_FILL_POLYGON_MODE,
             adapter_features.contains(hal::Features::NON_FILL_POLYGON_MODE),
         );
-        features.set(
-            wgt::Features::TIMESTAMP_QUERY,
-            properties.limits.timestamp_compute_and_graphics,
-        );
-        features.set(
-            wgt::Features::PIPELINE_STATISTICS_QUERY,
-            adapter_features.contains(hal::Features::PIPELINE_STATISTICS_QUERY),
-        );
-        features.set(
-            wgt::Features::SHADER_FLOAT64,
-            adapter_features.contains(hal::Features::SHADER_FLOAT64),
-        );
         #[cfg(not(target_os = "ios"))]
         //TODO: https://github.com/gfx-rs/gfx/issues/3346
         features.set(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER, true);
 
-        let private_features = PrivateFeatures {
-            anisotropic_filtering: adapter_features.contains(hal::Features::SAMPLER_ANISOTROPY),
-            texture_d24: raw
-                .physical_device
-                .format_properties(Some(hal::format::Format::X8D24Unorm))
-                .optimal_tiling
-                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
-            texture_d24_s8: raw
-                .physical_device
-                .format_properties(Some(hal::format::Format::D24UnormS8Uint))
-                .optimal_tiling
-                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
-        };
+        let adapter_limits = raw.physical_device.limits();
 
         let default_limits = wgt::Limits::default();
 
         // All these casts to u32 are safe as the underlying vulkan types are u32s.
         // If another backend provides larger limits than u32, we need to clamp them to u32::MAX.
         // TODO: fix all gfx-hal backends to produce limits we care about, and remove .max
-        let desc_limits = &properties.limits.descriptor_limits;
         let limits = wgt::Limits {
-            max_texture_dimension_1d: properties
-                .limits
-                .max_image_1d_size
-                .max(default_limits.max_texture_dimension_1d),
-            max_texture_dimension_2d: properties
-                .limits
-                .max_image_2d_size
-                .max(default_limits.max_texture_dimension_1d),
-            max_texture_dimension_3d: properties
-                .limits
-                .max_image_3d_size
-                .max(default_limits.max_texture_dimension_1d),
-            max_texture_array_layers: (properties.limits.max_image_array_layers as u32)
-                .max(default_limits.max_texture_array_layers),
-            max_bind_groups: (properties.limits.max_bound_descriptor_sets as u32)
+            max_bind_groups: (adapter_limits.max_bound_descriptor_sets as u32)
                 .min(MAX_BIND_GROUPS as u32)
                 .max(default_limits.max_bind_groups),
-            max_dynamic_uniform_buffers_per_pipeline_layout: desc_limits
+            max_dynamic_uniform_buffers_per_pipeline_layout: (adapter_limits
                 .max_descriptor_set_uniform_buffers_dynamic
-                .max(default_limits.max_dynamic_uniform_buffers_per_pipeline_layout),
-            max_dynamic_storage_buffers_per_pipeline_layout: desc_limits
-                .max_descriptor_set_storage_buffers_dynamic
-                .max(default_limits.max_dynamic_storage_buffers_per_pipeline_layout),
-            max_sampled_textures_per_shader_stage: desc_limits
-                .max_per_stage_descriptor_sampled_images
-                .max(default_limits.max_sampled_textures_per_shader_stage),
-            max_samplers_per_shader_stage: desc_limits
-                .max_per_stage_descriptor_samplers
-                .max(default_limits.max_samplers_per_shader_stage),
-            max_storage_buffers_per_shader_stage: desc_limits
-                .max_per_stage_descriptor_storage_buffers
-                .max(default_limits.max_storage_buffers_per_shader_stage),
-            max_storage_textures_per_shader_stage: desc_limits
-                .max_per_stage_descriptor_storage_images
-                .max(default_limits.max_storage_textures_per_shader_stage),
-            max_uniform_buffers_per_shader_stage: desc_limits
-                .max_per_stage_descriptor_uniform_buffers
-                .max(default_limits.max_uniform_buffers_per_shader_stage),
-            max_uniform_buffer_binding_size: (properties.limits.max_uniform_buffer_range as u32)
-                .max(default_limits.max_uniform_buffer_binding_size),
-            max_storage_buffer_binding_size: (properties.limits.max_storage_buffer_range as u32)
-                .max(default_limits.max_storage_buffer_binding_size),
-            max_vertex_buffers: (properties.limits.max_vertex_input_bindings as u32)
-                .max(default_limits.max_vertex_buffers),
-            max_vertex_attributes: (properties.limits.max_vertex_input_attributes as u32)
-                .max(default_limits.max_vertex_attributes),
-            max_vertex_buffer_array_stride: (properties.limits.max_vertex_input_binding_stride
                 as u32)
-                .max(default_limits.max_vertex_buffer_array_stride),
-            max_push_constant_size: (properties.limits.max_push_constants_size as u32)
+                .max(default_limits.max_dynamic_uniform_buffers_per_pipeline_layout),
+            max_dynamic_storage_buffers_per_pipeline_layout: (adapter_limits
+                .max_descriptor_set_storage_buffers_dynamic
+                as u32)
+                .max(default_limits.max_dynamic_storage_buffers_per_pipeline_layout),
+            max_sampled_textures_per_shader_stage: (adapter_limits
+                .max_per_stage_descriptor_sampled_images
+                as u32)
+                .max(default_limits.max_sampled_textures_per_shader_stage),
+            max_samplers_per_shader_stage: (adapter_limits.max_per_stage_descriptor_samplers
+                as u32)
+                .max(default_limits.max_samplers_per_shader_stage),
+            max_storage_buffers_per_shader_stage: (adapter_limits
+                .max_per_stage_descriptor_storage_buffers
+                as u32)
+                .max(default_limits.max_storage_buffers_per_shader_stage),
+            max_storage_textures_per_shader_stage: (adapter_limits
+                .max_per_stage_descriptor_storage_images
+                as u32)
+                .max(default_limits.max_storage_textures_per_shader_stage),
+            max_uniform_buffers_per_shader_stage: (adapter_limits
+                .max_per_stage_descriptor_uniform_buffers
+                as u32)
+                .max(default_limits.max_uniform_buffers_per_shader_stage),
+            max_uniform_buffer_binding_size: (adapter_limits.max_uniform_buffer_range as u32)
+                .max(default_limits.max_uniform_buffer_binding_size),
+            max_push_constant_size: (adapter_limits.max_push_constants_size as u32)
                 .max(MIN_PUSH_CONSTANT_SIZE), // As an extension, the default is always 0, so define a separate minimum.
         };
 
         Self {
             raw,
             features,
-            private_features,
             limits,
             life_guard: LifeGuard::new("<Adapter>"),
-        }
-    }
-
-    pub fn get_swap_chain_preferred_format(
-        &self,
-        surface: &mut Surface,
-    ) -> Result<wgt::TextureFormat, GetSwapChainPreferredFormatError> {
-        span!(_guard, INFO, "Adapter::get_swap_chain_preferred_format");
-
-        let formats = {
-            let surface = B::get_surface_mut(surface);
-            let queue_family = &self.raw.queue_families[0];
-            if !surface.supports_queue_family(queue_family) {
-                return Err(GetSwapChainPreferredFormatError::UnsupportedQueueFamily);
-            }
-            surface.supported_formats(&self.raw.physical_device)
-        };
-        if let Some(formats) = formats {
-            // Check the four formats mentioned in the WebGPU spec:
-            // Bgra8UnormSrgb, Rgba8UnormSrgb, Bgra8Unorm, Rgba8Unorm
-            // Also, prefer sRGB over linear as it is better in
-            // representing perceived colors.
-            if formats.contains(&hal::format::Format::Bgra8Srgb) {
-                return Ok(wgt::TextureFormat::Bgra8UnormSrgb);
-            }
-            if formats.contains(&hal::format::Format::Rgba8Srgb) {
-                return Ok(wgt::TextureFormat::Rgba8UnormSrgb);
-            }
-            if formats.contains(&hal::format::Format::Bgra8Unorm) {
-                return Ok(wgt::TextureFormat::Bgra8Unorm);
-            }
-            if formats.contains(&hal::format::Format::Rgba8Unorm) {
-                return Ok(wgt::TextureFormat::Rgba8Unorm);
-            }
-            return Err(GetSwapChainPreferredFormatError::NotFound);
-        }
-
-        // If no formats were returned, use Bgra8UnormSrgb
-        Ok(wgt::TextureFormat::Bgra8UnormSrgb)
-    }
-
-    pub(crate) fn get_texture_format_features(
-        &self,
-        format: wgt::TextureFormat,
-    ) -> wgt::TextureFormatFeatures {
-        let texture_format_properties = self
-            .raw
-            .physical_device
-            .format_properties(Some(conv::map_texture_format(
-                format,
-                self.private_features,
-            )))
-            .optimal_tiling;
-
-        let mut allowed_usages = format.describe().guaranteed_format_features.allowed_usages;
-        if texture_format_properties.contains(hal::format::ImageFeature::SAMPLED) {
-            allowed_usages |= wgt::TextureUsage::SAMPLED;
-        }
-        if texture_format_properties.contains(hal::format::ImageFeature::STORAGE) {
-            allowed_usages |= wgt::TextureUsage::STORAGE;
-        }
-        if texture_format_properties.contains(hal::format::ImageFeature::COLOR_ATTACHMENT) {
-            allowed_usages |= wgt::TextureUsage::RENDER_ATTACHMENT;
-        }
-        if texture_format_properties.contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT) {
-            allowed_usages |= wgt::TextureUsage::RENDER_ATTACHMENT;
-        }
-
-        let mut flags = wgt::TextureFormatFeatureFlags::empty();
-        if texture_format_properties.contains(hal::format::ImageFeature::STORAGE_ATOMIC) {
-            flags |= wgt::TextureFormatFeatureFlags::STORAGE_ATOMICS;
-        }
-        if texture_format_properties.contains(hal::format::ImageFeature::STORAGE_READ_WRITE) {
-            flags |= wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE;
-        }
-
-        let filterable =
-            texture_format_properties.contains(hal::format::ImageFeature::SAMPLED_LINEAR);
-
-        wgt::TextureFormatFeatures {
-            allowed_usages,
-            flags,
-            filterable,
         }
     }
 
@@ -405,25 +271,6 @@ impl<B: GfxBackend> Adapter<B> {
 
         // Features
         enabled_features.set(
-            hal::Features::DEPTH_CLAMP,
-            desc.features.contains(wgt::Features::DEPTH_CLAMPING),
-        );
-        enabled_features.set(
-            hal::Features::FORMAT_BC,
-            desc.features
-                .contains(wgt::Features::TEXTURE_COMPRESSION_BC),
-        );
-        enabled_features.set(
-            hal::Features::FORMAT_ETC2,
-            desc.features
-                .contains(wgt::Features::TEXTURE_COMPRESSION_ETC2),
-        );
-        enabled_features.set(
-            hal::Features::FORMAT_ASTC_LDR,
-            desc.features
-                .contains(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR),
-        );
-        enabled_features.set(
             hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
             desc.features
                 .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
@@ -455,15 +302,6 @@ impl<B: GfxBackend> Adapter<B> {
             hal::Features::NON_FILL_POLYGON_MODE,
             desc.features.contains(wgt::Features::NON_FILL_POLYGON_MODE),
         );
-        enabled_features.set(
-            hal::Features::PIPELINE_STATISTICS_QUERY,
-            desc.features
-                .contains(wgt::Features::PIPELINE_STATISTICS_QUERY),
-        );
-        enabled_features.set(
-            hal::Features::SHADER_FLOAT64,
-            desc.features.contains(wgt::Features::SHADER_FLOAT64),
-        );
 
         let family = self
             .raw
@@ -471,7 +309,6 @@ impl<B: GfxBackend> Adapter<B> {
             .iter()
             .find(|family| family.queue_type().supports_graphics())
             .ok_or(RequestDeviceError::NoGraphicsQueue)?;
-
         let mut gpu =
             unsafe { phd.open(&[(family, &[1.0])], enabled_features) }.map_err(|err| {
                 use hal::device::CreationError::*;
@@ -487,7 +324,7 @@ impl<B: GfxBackend> Adapter<B> {
             //TODO
         }
 
-        let limits = phd.properties().limits;
+        let limits = phd.limits();
         assert_eq!(
             0,
             BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
@@ -503,6 +340,21 @@ impl<B: GfxBackend> Adapter<B> {
         }
 
         let mem_props = phd.memory_properties();
+        if !desc.shader_validation {
+            tracing::warn!("Shader validation is disabled");
+        }
+        let private_features = PrivateFeatures {
+            shader_validation: desc.shader_validation,
+            anisotropic_filtering: enabled_features.contains(hal::Features::SAMPLER_ANISOTROPY),
+            texture_d24: phd
+                .format_properties(Some(hal::format::Format::X8D24Unorm))
+                .optimal_tiling
+                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+            texture_d24_s8: phd
+                .format_properties(Some(hal::format::Format::D24UnormS8Uint))
+                .optimal_tiling
+                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+        };
 
         Device::new(
             gpu.device,
@@ -513,7 +365,7 @@ impl<B: GfxBackend> Adapter<B> {
             gpu.queue_groups.swap_remove(0),
             mem_props,
             limits,
-            self.private_features,
+            private_features,
             desc,
             trace_path,
         )
@@ -529,16 +381,40 @@ impl<B: hal::Backend> crate::hub::Resource for Adapter<B> {
     }
 }
 
-#[derive(Clone, Debug, Error)]
-pub enum GetSwapChainPreferredFormatError {
-    #[error("no suitable format found")]
-    NotFound,
-    #[error("invalid adapter")]
-    InvalidAdapter,
-    #[error("invalid surface")]
-    InvalidSurface,
-    #[error("surface does not support the adapter's queue family")]
-    UnsupportedQueueFamily,
+/// Metadata about a backend adapter.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct AdapterInfo {
+    /// Adapter name
+    pub name: String,
+    /// Vendor PCI id of the adapter
+    pub vendor: usize,
+    /// PCI id of the adapter
+    pub device: usize,
+    /// Type of device
+    pub device_type: DeviceType,
+    /// Backend used for device
+    pub backend: Backend,
+}
+
+impl AdapterInfo {
+    fn from_gfx(adapter_info: HalAdapterInfo, backend: Backend) -> Self {
+        let HalAdapterInfo {
+            name,
+            vendor,
+            device,
+            device_type,
+        } = adapter_info;
+
+        Self {
+            name,
+            vendor,
+            device,
+            device_type: device_type.into(),
+            backend,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -558,6 +434,36 @@ pub enum RequestDeviceError {
     OutOfMemory,
     #[error("unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),
+}
+
+/// Supported physical device types.
+#[repr(u8)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum DeviceType {
+    /// Other.
+    Other,
+    /// Integrated GPU with shared CPU/GPU memory.
+    IntegratedGpu,
+    /// Discrete GPU with separate CPU/GPU memory.
+    DiscreteGpu,
+    /// Virtual / Hosted.
+    VirtualGpu,
+    /// Cpu / Software Rendering.
+    Cpu,
+}
+
+impl From<HalDeviceType> for DeviceType {
+    fn from(device_type: HalDeviceType) -> Self {
+        match device_type {
+            HalDeviceType::Other => Self::Other,
+            HalDeviceType::IntegratedGpu => Self::IntegratedGpu,
+            HalDeviceType::DiscreteGpu => Self::DiscreteGpu,
+            HalDeviceType::VirtualGpu => Self::VirtualGpu,
+            HalDeviceType::Cpu => Self::Cpu,
+        }
+    }
 }
 
 pub enum AdapterInputs<'a, I> {
@@ -580,8 +486,8 @@ impl<I: Clone> AdapterInputs<'_, I> {
     }
 }
 
-#[derive(Clone, Debug, Error)]
 #[error("adapter is invalid")]
+#[derive(Clone, Debug, Error)]
 pub struct InvalidAdapter;
 
 #[derive(Clone, Debug, Error)]
@@ -627,29 +533,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut token = Token::root();
-        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
-        id.0
-    }
-
-    #[cfg(metal)]
-    pub fn instance_create_surface_metal(
-        &self,
-        layer: *mut std::ffi::c_void,
-        id_in: Input<G, SurfaceId>,
-    ) -> SurfaceId {
-        span!(_guard, INFO, "Instance::instance_create_surface_metal");
-
-        let surface =
-            Surface {
-                #[cfg(feature = "vulkan-portability")]
-                vulkan: None, //TODO: create_surface_from_layer ?
-                metal: self.instance.metal.as_ref().map(|inst| {
-                    inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
-                }),
-            };
-
-        let mut token = Token::root();
-        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
+        let id = self.surfaces.register_identity(id_in, surface, &mut token);
         id.0
     }
 
@@ -675,9 +559,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         for raw in inst.enumerate_adapters() {
                             let adapter = Adapter::new(raw);
                             tracing::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
-                            let id = hub.adapters
-                                .prepare(id_backend.clone())
-                                .assign(adapter, &mut token);
+                            let id = hub.adapters.register_identity(
+                                id_backend.clone(),
+                                adapter,
+                                &mut token,
+                            );
                             adapters.push(id.0);
                         }
                     }
@@ -788,8 +674,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(RequestAdapterError::NotFound);
         }
 
-        let (mut integrated, mut discrete, mut virt, mut cpu, mut other) =
-            (None, None, None, None, None);
+        let (mut integrated, mut discrete, mut virt, mut other) = (None, None, None, None);
 
         for (i, ty) in device_types.into_iter().enumerate() {
             match ty {
@@ -802,18 +687,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::adapter::DeviceType::VirtualGpu => {
                     virt = virt.or(Some(i));
                 }
-                hal::adapter::DeviceType::Cpu => {
-                    cpu = cpu.or(Some(i));
-                }
-                hal::adapter::DeviceType::Other => {
+                _ => {
                     other = other.or(Some(i));
                 }
             }
         }
 
         let preferred_gpu = match desc.power_preference {
-            PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt).or(cpu),
-            PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt).or(cpu),
+            PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt),
+            PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt),
         };
 
         let mut selected = preferred_gpu.unwrap_or(0);
@@ -823,9 +705,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if selected < adapters_backend.len() {
                     let adapter = Adapter::new(adapters_backend.swap_remove(selected));
                     tracing::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
-                    let id = backend_hub(self).adapters
-                        .prepare(id_backend.take().unwrap())
-                        .assign(adapter, &mut token);
+                    let id = backend_hub(self).adapters.register_identity(
+                        id_backend.take().unwrap(),
+                        adapter,
+                        &mut token,
+                    );
                     return Ok(id.0);
                 }
                 selected -= adapters_backend.len();
@@ -840,7 +724,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             #[cfg(dx11)]
             map(("Dx11", &mut id_dx11, adapters_dx11, backend::Dx11::hub)),
             #[cfg(gl)]
-            map(("GL", &mut id_gl, adapters_gl, backend::Gl::hub)),
+            map(("GL", &mut id_dx11, adapters_gl, backend::Gl::hub)),
         }
 
         let _ = (
@@ -858,7 +742,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn adapter_get_info<B: GfxBackend>(
         &self,
         adapter_id: AdapterId,
-    ) -> Result<wgt::AdapterInfo, InvalidAdapter> {
+    ) -> Result<AdapterInfo, InvalidAdapter> {
         span!(_guard, INFO, "Adapter::get_info");
 
         let hub = B::hub(self);
@@ -866,23 +750,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| conv::map_adapter_info(adapter.raw.info.clone(), adapter_id.backend()))
-            .map_err(|_| InvalidAdapter)
-    }
-
-    pub fn adapter_get_texture_format_features<B: GfxBackend>(
-        &self,
-        adapter_id: AdapterId,
-        format: wgt::TextureFormat,
-    ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
-        span!(_guard, INFO, "Adapter::get_texture_format_features");
-
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let (adapter_guard, _) = hub.adapters.read(&mut token);
-        adapter_guard
-            .get(adapter_id)
-            .map(|adapter| adapter.get_texture_format_features(format))
+            .map(|adapter| AdapterInfo::from_gfx(adapter.raw.info.clone(), adapter_id.backend()))
             .map_err(|_| InvalidAdapter)
     }
 
@@ -923,13 +791,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (mut adapter_guard, _) = hub.adapters.write(&mut token);
 
-        let free = match adapter_guard.get_mut(adapter_id) {
-            Ok(adapter) => adapter.life_guard.ref_count.take().unwrap().load() == 1,
-            Err(_) => true,
-        };
-        if free {
-            hub.adapters
-                .unregister_locked(adapter_id, &mut *adapter_guard);
+        match adapter_guard.get_mut(adapter_id) {
+            Ok(adapter) => {
+                if adapter.life_guard.ref_count.take().unwrap().load() == 1 {
+                    hub.adapters
+                        .unregister_locked(adapter_id, &mut *adapter_guard);
+                }
+            }
+            Err(_) => {
+                hub.adapters.free_id(adapter_id);
+            }
         }
     }
 }
@@ -946,7 +817,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
-        let fid = hub.devices.prepare(id_in);
 
         let error = loop {
             let (adapter_guard, mut token) = hub.adapters.read(&mut token);
@@ -958,11 +828,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(e) => break e,
             };
-            let id = fid.assign(device, &mut token);
+            let id = hub.devices.register_identity(id_in, device, &mut token);
             return (id.0, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        let id = hub
+            .devices
+            .register_error(id_in, desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 }

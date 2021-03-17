@@ -23,8 +23,6 @@ use crate::{
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use wgt::Backend;
 
-use crate::id::QuerySetId;
-use crate::resource::QuerySet;
 #[cfg(debug_assertions)]
 use std::cell::Cell;
 use std::{fmt::Debug, marker::PhantomData, ops, thread};
@@ -266,11 +264,6 @@ impl<B: hal::Backend> Access<ComputePipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for ComputePipeline<B> {}
-impl<B: hal::Backend> Access<QuerySet<B>> for Root {}
-impl<B: hal::Backend> Access<QuerySet<B>> for Device<B> {}
-impl<B: hal::Backend> Access<QuerySet<B>> for CommandBuffer<B> {}
-impl<B: hal::Backend> Access<QuerySet<B>> for RenderPipeline<B> {}
-impl<B: hal::Backend> Access<QuerySet<B>> for ComputePipeline<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for Device<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for BindGroupLayout<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for Root {}
@@ -280,7 +273,6 @@ impl<B: hal::Backend> Access<Buffer<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for ComputePipeline<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for RenderPipeline<B> {}
-impl<B: hal::Backend> Access<Buffer<B>> for QuerySet<B> {}
 impl<B: hal::Backend> Access<Texture<B>> for Root {}
 impl<B: hal::Backend> Access<Texture<B>> for Device<B> {}
 impl<B: hal::Backend> Access<Texture<B>> for Buffer<B> {}
@@ -302,7 +294,7 @@ thread_local! {
 ///
 /// Note: there can only be one non-borrowed `Token` alive on a thread
 /// at a time, which is enforced by `ACTIVE_TOKEN`.
-pub(crate) struct Token<'a, T: 'a> {
+pub struct Token<'a, T: 'a> {
     level: PhantomData<&'a T>,
 }
 
@@ -382,7 +374,6 @@ pub trait GlobalIdentityHandlerFactory:
     + IdentityHandlerFactory<RenderBundleId>
     + IdentityHandlerFactory<RenderPipelineId>
     + IdentityHandlerFactory<ComputePipelineId>
-    + IdentityHandlerFactory<QuerySetId>
     + IdentityHandlerFactory<BufferId>
     + IdentityHandlerFactory<TextureId>
     + IdentityHandlerFactory<TextureViewId>
@@ -439,56 +430,58 @@ impl<T: Resource, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     }
 }
 
-#[must_use]
-pub(crate) struct FutureId<'a, I: TypedId, T> {
-    id: I,
-    data: &'a RwLock<Storage<T, I>>,
-}
-
-impl<I: TypedId + Copy, T> FutureId<'_, I, T> {
-    #[cfg(feature = "trace")]
-    pub fn id(&self) -> I {
-        self.id
-    }
-
-    pub fn into_id(self) -> I {
-        self.id
-    }
-
-    pub fn assign<'a, A: Access<T>>(self, value: T, _: &'a mut Token<A>) -> Valid<I> {
-        self.data.write().insert(self.id, value);
-        Valid(self.id)
-    }
-
-    pub fn assign_error<'a, A: Access<T>>(self, label: &str, _: &'a mut Token<A>) -> I {
-        self.data.write().insert_error(self.id, label);
-        self.id
-    }
-}
-
 impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
-    pub(crate) fn prepare(
-        &self,
-        id_in: <F::Filter as IdentityHandler<I>>::Input,
-    ) -> FutureId<I, T> {
-        FutureId {
-            id: self.identity.process(id_in, self.backend),
-            data: &self.data,
-        }
+    pub fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
+        debug_assert_eq!(id.unzip().2, self.backend);
+        self.data.write().insert(id, value);
     }
 
-    pub(crate) fn read<'a, A: Access<T>>(
+    pub fn read<'a, A: Access<T>>(
         &'a self,
         _token: &'a mut Token<A>,
     ) -> (RwLockReadGuard<'a, Storage<T, I>>, Token<'a, T>) {
         (self.data.read(), Token::new())
     }
 
-    pub(crate) fn write<'a, A: Access<T>>(
+    pub fn write<'a, A: Access<T>>(
         &'a self,
         _token: &'a mut Token<A>,
     ) -> (RwLockWriteGuard<'a, Storage<T, I>>, Token<'a, T>) {
         (self.data.write(), Token::new())
+    }
+
+    pub(crate) fn register_identity<A: Access<T>>(
+        &self,
+        id_in: <F::Filter as IdentityHandler<I>>::Input,
+        value: T,
+        token: &mut Token<A>,
+    ) -> Valid<I> {
+        let id = self.identity.process(id_in, self.backend);
+        self.register(id, value, token);
+        Valid(id)
+    }
+
+    pub(crate) fn register_identity_locked(
+        &self,
+        id_in: <F::Filter as IdentityHandler<I>>::Input,
+        value: T,
+        guard: &mut Storage<T, I>,
+    ) -> Valid<I> {
+        let id = self.identity.process(id_in, self.backend);
+        guard.insert(id, value);
+        Valid(id)
+    }
+
+    pub fn register_error<A: Access<T>>(
+        &self,
+        id_in: <F::Filter as IdentityHandler<I>>::Input,
+        label: &str,
+        _token: &mut Token<A>,
+    ) -> I {
+        let id = self.identity.process(id_in, self.backend);
+        debug_assert_eq!(id.unzip().2, self.backend);
+        self.data.write().insert_error(id, label);
+        id
     }
 
     pub fn unregister_locked(&self, id: I, guard: &mut Storage<T, I>) -> Option<T> {
@@ -499,7 +492,7 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
         value
     }
 
-    pub(crate) fn unregister<'a, A: Access<T>>(
+    pub fn unregister<'a, A: Access<T>>(
         &self,
         id: I,
         _token: &'a mut Token<A>,
@@ -509,6 +502,14 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
         self.identity.free(id);
         //Returning None is legal if it's an error ID
         (value, Token::new())
+    }
+
+    pub fn process_id(&self, id_in: <F::Filter as IdentityHandler<I>>::Input) -> I {
+        self.identity.process(id_in, self.backend)
+    }
+
+    pub fn free_id(&self, id: I) {
+        self.identity.free(id)
     }
 
     pub fn label_for_resource(&self, id: I) -> String {
@@ -546,7 +547,6 @@ pub struct Hub<B: hal::Backend, F: GlobalIdentityHandlerFactory> {
     pub render_bundles: Registry<RenderBundle, RenderBundleId, F>,
     pub render_pipelines: Registry<RenderPipeline<B>, RenderPipelineId, F>,
     pub compute_pipelines: Registry<ComputePipeline<B>, ComputePipelineId, F>,
-    pub query_sets: Registry<QuerySet<B>, QuerySetId, F>,
     pub buffers: Registry<Buffer<B>, BufferId, F>,
     pub textures: Registry<Texture<B>, TextureId, F>,
     pub texture_views: Registry<TextureView<B>, TextureViewId, F>,
@@ -567,7 +567,6 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
             render_bundles: Registry::new(B::VARIANT, factory),
             render_pipelines: Registry::new(B::VARIANT, factory),
             compute_pipelines: Registry::new(B::VARIANT, factory),
-            query_sets: Registry::new(B::VARIANT, factory),
             buffers: Registry::new(B::VARIANT, factory),
             textures: Registry::new(B::VARIANT, factory),
             texture_views: Registry::new(B::VARIANT, factory),
@@ -577,10 +576,7 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
 }
 
 impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
-    //TODO: instead of having a hacky `with_adapters` parameter,
-    // we should have `clear_device(device_id)` that specifically destroys
-    // everything related to a logical device.
-    fn clear(&self, surface_guard: &mut Storage<Surface, SurfaceId>, with_adapters: bool) {
+    fn clear(&self, surface_guard: &mut Storage<Surface, SurfaceId>) {
         use crate::resource::TextureViewInner;
         use hal::{device::Device as _, window::PresentationSurface as _};
 
@@ -630,10 +626,9 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
         }
         for element in self.command_buffers.data.write().map.drain(..) {
             if let Element::Occupied(command_buffer, _) = element {
-                let device = &devices[command_buffer.device_id.value];
-                device
+                devices[command_buffer.device_id.value]
                     .cmd_allocator
-                    .after_submit(command_buffer, &device.raw, 0);
+                    .after_submit(command_buffer, 0);
             }
         }
         for element in self.bind_groups.data.write().map.drain(..) {
@@ -702,22 +697,10 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
             }
         }
 
-        for element in self.query_sets.data.write().map.drain(..) {
-            if let Element::Occupied(query_set, _) = element {
-                let device = &devices[query_set.device_id.value];
-                unsafe {
-                    device.raw.destroy_query_pool(query_set.raw);
-                }
-            }
-        }
-
         for element in devices.map.drain(..) {
             if let Element::Occupied(device, _) = element {
                 device.dispose();
             }
-        }
-        if with_adapters {
-            self.adapters.data.write().map.clear();
         }
     }
 }
@@ -773,8 +756,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn clear_backend<B: GfxBackend>(&self, _dummy: ()) {
         let mut surface_guard = self.surfaces.data.write();
         let hub = B::hub(self);
-        // this is used for tests, which keep the adapter
-        hub.clear(&mut *surface_guard, false);
+        hub.clear(&mut *surface_guard);
     }
 }
 
@@ -787,23 +769,23 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
             // destroy hubs
             #[cfg(vulkan)]
             {
-                self.hubs.vulkan.clear(&mut *surface_guard, true);
+                self.hubs.vulkan.clear(&mut *surface_guard);
             }
             #[cfg(metal)]
             {
-                self.hubs.metal.clear(&mut *surface_guard, true);
+                self.hubs.metal.clear(&mut *surface_guard);
             }
             #[cfg(dx12)]
             {
-                self.hubs.dx12.clear(&mut *surface_guard, true);
+                self.hubs.dx12.clear(&mut *surface_guard);
             }
             #[cfg(dx11)]
             {
-                self.hubs.dx11.clear(&mut *surface_guard, true);
+                self.hubs.dx11.clear(&mut *surface_guard);
             }
             #[cfg(gl)]
             {
-                self.hubs.gl.clear(&mut *surface_guard, true);
+                self.hubs.gl.clear(&mut *surface_guard);
             }
 
             // destroy surfaces
