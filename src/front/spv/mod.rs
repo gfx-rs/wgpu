@@ -43,13 +43,22 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Shader,
     spirv::Capability::ClipDistance,
     spirv::Capability::CullDistance,
+    spirv::Capability::SampleRateShading,
+    spirv::Capability::DerivativeControl,
+    spirv::Capability::InterpolationFunction,
+    spirv::Capability::Matrix,
     spirv::Capability::ImageQuery,
+    spirv::Capability::Sampled1D,
     spirv::Capability::Image1D,
+    spirv::Capability::SampledCubeArray,
     spirv::Capability::ImageCubeArray,
     spirv::Capability::ImageMSArray,
     spirv::Capability::StorageImageExtendedFormats,
     spirv::Capability::Sampled1D,
     spirv::Capability::SampledCubeArray,
+    // tricky ones
+    spirv::Capability::UniformBufferArrayDynamicIndexing,
+    spirv::Capability::StorageBufferArrayDynamicIndexing,
 ];
 pub const SUPPORTED_EXTENSIONS: &[&str] = &[];
 pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
