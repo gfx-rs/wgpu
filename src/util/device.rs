@@ -42,7 +42,8 @@ impl DeviceExt for crate::Device {
         // 2. buffer size must be greater than 0.
         // Therefore we round the value up to the nearest multiple, and ensure it's at least COPY_BUFFER_ALIGNMENT.
         let align_mask = crate::COPY_BUFFER_ALIGNMENT - 1;
-        let padded_size = ((unpadded_size + align_mask) & !align_mask).max(crate::COPY_BUFFER_ALIGNMENT);
+        let padded_size =
+            ((unpadded_size + align_mask) & !align_mask).max(crate::COPY_BUFFER_ALIGNMENT);
 
         let wgt_descriptor = crate::BufferDescriptor {
             label: descriptor.label,

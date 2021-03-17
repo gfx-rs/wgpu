@@ -101,7 +101,7 @@ impl Example {
         let multisampled_frame_descriptor = &wgpu::TextureDescriptor {
             size: multisampled_texture_extent,
             mip_level_count: 1,
-            sample_count: sample_count,
+            sample_count,
             dimension: wgpu::TextureDimension::D2,
             format: sc_desc.format,
             usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
@@ -192,6 +192,7 @@ impl framework::Example for Example {
         }
     }
 
+    #[allow(clippy::single_match)]
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
             winit::event::WindowEvent::KeyboardInput { input, .. } => {

@@ -78,15 +78,12 @@ impl Context {
         let sink = sink_mutex.lock();
         let mut source_opt: Option<&(dyn Error + 'static)> = Some(&error);
         while let Some(source) = source_opt {
-            if let Some(device_error) = source.downcast_ref::<wgc::device::DeviceError>() {
-                match device_error {
-                    wgc::device::DeviceError::OutOfMemory => {
-                        return sink.handle_error(crate::Error::OutOfMemoryError {
-                            source: Box::new(error),
-                        });
-                    }
-                    _ => {}
-                }
+            if let Some(wgc::device::DeviceError::OutOfMemory) =
+                source.downcast_ref::<wgc::device::DeviceError>()
+            {
+                return sink.handle_error(crate::Error::OutOfMemoryError {
+                    source: Box::new(error),
+                });
             }
             source_opt = source.source();
         }
@@ -156,14 +153,14 @@ mod pass_impl {
         fn insert_debug_marker(&mut self, label: &str) {
             unsafe {
                 let label = std::ffi::CString::new(label).unwrap();
-                wgpu_compute_pass_insert_debug_marker(self, label.as_ptr().into(), 0);
+                wgpu_compute_pass_insert_debug_marker(self, label.as_ptr(), 0);
             }
         }
 
         fn push_debug_group(&mut self, group_label: &str) {
             unsafe {
                 let label = std::ffi::CString::new(group_label).unwrap();
-                wgpu_compute_pass_push_debug_group(self, label.as_ptr().into(), 0);
+                wgpu_compute_pass_push_debug_group(self, label.as_ptr(), 0);
             }
         }
         fn pop_debug_group(&mut self) {
@@ -362,14 +359,14 @@ mod pass_impl {
         fn insert_debug_marker(&mut self, label: &str) {
             unsafe {
                 let label = std::ffi::CString::new(label).unwrap();
-                wgpu_render_pass_insert_debug_marker(self, label.as_ptr().into(), 0);
+                wgpu_render_pass_insert_debug_marker(self, label.as_ptr(), 0);
             }
         }
 
         fn push_debug_group(&mut self, group_label: &str) {
             unsafe {
                 let label = std::ffi::CString::new(group_label).unwrap();
-                wgpu_render_pass_push_debug_group(self, label.as_ptr().into(), 0);
+                wgpu_render_pass_push_debug_group(self, label.as_ptr(), 0);
             }
         }
 
@@ -637,6 +634,7 @@ impl crate::Context for Context {
     type SwapChainOutputDetail = SwapChainOutputDetail;
 
     type RequestAdapterFuture = Ready<Option<Self::AdapterId>>;
+    #[allow(clippy::type_complexity)]
     type RequestDeviceFuture =
         Ready<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>;
     type MapAsyncFuture = native_gpu_future::GpuFuture<Result<(), crate::BufferAsyncError>>;
@@ -853,11 +851,8 @@ impl crate::Context for Context {
         {
             // gather all the array view IDs first
             for entry in desc.entries.iter() {
-                match entry.resource {
-                    BindingResource::TextureViewArray(array) => {
-                        arrayed_texture_views.extend(array.iter().map(|view| view.id));
-                    }
-                    _ => {}
+                if let BindingResource::TextureViewArray(array) = entry.resource {
+                    arrayed_texture_views.extend(array.iter().map(|view| view.id));
                 }
             }
         }
@@ -1290,7 +1285,7 @@ impl crate::Context for Context {
                 MapMode::Write => wgc::device::HostMap::Write,
             },
             callback: buffer_map_future_wrapper,
-            user_data: completion.to_raw() as _,
+            user_data: completion.into_raw() as _,
         };
 
         let global = &self.0;
