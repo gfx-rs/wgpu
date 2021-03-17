@@ -58,6 +58,15 @@ impl ByteBuf {
     }
 }
 
+#[repr(C)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct AdapterInformation {
+    id: id::AdapterId,
+    //inner: wgt::AdapterInfo, //TODO: not C-friendly
+    limits: wgt::Limits,
+    features: wgt::Features,
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 enum ShaderModuleSource<'a> {
     SpirV(Cow<'a, [u32]>),
@@ -108,6 +117,19 @@ enum DeviceAction<'a> {
         id::CommandEncoderId,
         wgt::CommandEncoderDescriptor<wgc::Label<'a>>,
     ),
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+enum QueueWriteAction {
+    Buffer {
+        dst: id::BufferId,
+        offset: wgt::BufferAddress,
+    },
+    Texture {
+        dst: wgt::TextureCopyView<id::TextureId>,
+        layout: wgt::TextureDataLayout,
+        size: wgt::Extent3d,
+    },
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

@@ -17,7 +17,7 @@ default = []
 [dependencies.wgc]
 path = "../wgpu/wgpu-core"
 package = "wgpu-core"
-features = ["replay", "trace", "serial-pass"]
+features = ["cross", "replay", "trace", "serial-pass"]
 
 [dependencies.wgt]
 path = "../wgpu/wgpu-types"
