@@ -80,7 +80,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         // the resources are properly cleaned up.
         let _ = (&instance, &adapter, &shader, &pipeline_layout);
 
-        *control_flow = ControlFlow::Poll;
+        *control_flow = ControlFlow::Wait;
         match event {
             Event::WindowEvent {
                 event: WindowEvent::Resized(size),
