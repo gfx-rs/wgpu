@@ -9,8 +9,7 @@ use crate::{
 };
 use bit_set::BitSet;
 use std::{
-    fmt::{Display, Error as FmtError, Formatter},
-    io::Write,
+    fmt::{Display, Error as FmtError, Formatter, Write},
     iter,
 };
 
@@ -73,6 +72,8 @@ pub struct Writer<W> {
     named_expressions: BitSet,
     typifier: Typifier,
     namer: Namer,
+    #[cfg(test)]
+    put_expression_stack_pointers: crate::FastHashSet<*const ()>,
 }
 
 fn scalar_kind_string(kind: crate::ScalarKind) -> &'static str {
@@ -158,6 +159,8 @@ impl<W: Write> Writer<W> {
             named_expressions: BitSet::new(),
             typifier: Typifier::new(),
             namer: Namer::default(),
+            #[cfg(test)]
+            put_expression_stack_pointers: Default::default(),
         }
     }
 
@@ -203,6 +206,11 @@ impl<W: Write> Writer<W> {
         expr_handle: Handle<crate::Expression>,
         context: &ExpressionContext,
     ) -> Result<(), Error> {
+        // Add to the set in order to track the stack size.
+        #[cfg(test)]
+        #[allow(trivial_casts)]
+        self.put_expression_stack_pointers.insert(&expr_handle as *const _ as *const ());
+
         if self.named_expressions.contains(expr_handle.index()) {
             write!(self.out, "{}{}", BAKE_PREFIX, expr_handle.index())?;
             return Ok(());
@@ -1477,4 +1485,40 @@ impl<W: Write> Writer<W> {
 
         Ok(info)
     }
+}
+
+#[test]
+fn test_stack_size() {
+    // create a module with at least one expression nested
+    let mut module = crate::Module::default();
+    let constant = module.constants.append(crate::Constant {
+        name: None,
+        specialization: None,
+        inner: crate::ConstantInner::Scalar {
+            value: crate::ScalarValue::Float(1.0),
+            width: 4,
+        },
+    });
+    let mut fun = crate::Function::default();
+    let const_expr = fun.expressions.append(crate::Expression::Constant(constant));
+    let nested_expr = fun.expressions.append(crate::Expression::Unary {
+        op: crate::UnaryOperator::Negate,
+        expr: const_expr,
+    });
+    fun.body.push(crate::Statement::Emit(fun.expressions.range_from(1)));
+    fun.body.push(crate::Statement::If { condition: nested_expr, accept: Vec::new(), reject: Vec::new() });
+    let _ = module.functions.append(fun);
+    // analyse the module
+    let analysis = Analysis::new(&module).unwrap();
+    // process the module
+    let mut writer = Writer::new(String::new());
+    writer.write(&module, &analysis, &Default::default()).unwrap();
+    let (mut min_addr, mut max_addr) = (!0usize, 0usize);
+    for pointer in writer.put_expression_stack_pointers {
+        min_addr = min_addr.min(pointer as usize);
+        max_addr = max_addr.max(pointer as usize);
+    }
+    let stack_size = max_addr - min_addr;
+    // check the size (in debug only)
+    debug_assert_eq!(stack_size, 39856);
 }

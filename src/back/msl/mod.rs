@@ -29,7 +29,7 @@ use crate::{
     FastHashMap,
 };
 use std::{
-    io::{Error as IoError, Write},
+    fmt::{Error as FmtError, Write},
     string::FromUtf8Error,
 };
 
@@ -68,7 +68,7 @@ enum ResolvedBinding {
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
-    IO(#[from] IoError),
+    Format(#[from] FmtError),
     #[error(transparent)]
     Utf8(#[from] FromUtf8Error),
     #[error(transparent)]
@@ -247,8 +247,13 @@ pub fn write_string(
     analysis: &Analysis,
     options: &Options,
 ) -> Result<(String, TranslationInfo), Error> {
-    let mut w = writer::Writer::new(Vec::new());
+    let mut w = writer::Writer::new(String::new());
     let info = w.write(module, analysis, options)?;
-    let string = String::from_utf8(w.finish())?;
-    Ok((string, info))
+    Ok((w.finish(), info))
+}
+
+#[test]
+fn test_error_size() {
+    use std::mem::size_of;
+    assert_eq!(size_of::<Error>(), 96);
 }
