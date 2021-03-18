@@ -77,16 +77,11 @@ pub enum ResolveError {
     FunctionReturnsVoid,
     #[error("Type is not found in the given immutable arena")]
     TypeNotFound,
-    #[error("Incompatible operand: {op} {operand}")]
-    IncompatibleOperand { op: String, operand: String },
-    #[error("Incompatible operands: {left} {op} {right}")]
-    IncompatibleOperands {
-        op: String,
-        left: String,
-        right: String,
-    },
+    #[error("Incompatible operands: {0}")]
+    IncompatibleOperands(String),
 }
 
+#[repr(C)] // pack this tighter: 48 -> 40 bytes
 #[derive(Clone, Debug, Error, PartialEq)]
 #[error("Type resolution of {0:?} failed")]
 pub struct TypifyError(Handle<crate::Expression>, #[source] ResolveError);
@@ -441,11 +436,10 @@ impl Typifier {
                             width,
                         })
                     } else {
-                        return Err(ResolveError::IncompatibleOperands {
-                            op: "x".to_string(),
-                            left: format!("{:?}", ty_left),
-                            right: format!("{:?}", ty_right),
-                        });
+                        return Err(ResolveError::IncompatibleOperands(format!(
+                            "{:?} * {:?}",
+                            ty_left, ty_right
+                        )));
                     }
                 }
                 crate::BinaryOperator::Equal
@@ -462,10 +456,10 @@ impl Typifier {
                         Ti::Scalar { .. } => Ti::Scalar { kind, width },
                         Ti::Vector { size, .. } => Ti::Vector { size, kind, width },
                         ref other => {
-                            return Err(ResolveError::IncompatibleOperand {
-                                op: "logical".to_string(),
-                                operand: format!("{:?}", other),
-                            })
+                            return Err(ResolveError::IncompatibleOperands(format!(
+                                "{:?}({:?}, _)",
+                                op, other
+                            )))
                         }
                     };
                     Resolution::Value(inner)
@@ -530,27 +524,21 @@ impl Typifier {
                             size: _,
                             width,
                         } => Resolution::Value(Ti::Scalar { kind, width }),
-                        ref other => {
-                            return Err(ResolveError::IncompatibleOperand {
-                                op: "dot product".to_string(),
-                                operand: format!("{:?}", other),
-                            })
-                        }
+                        ref other =>
+                            return Err(ResolveError::IncompatibleOperands(
+                                format!("{:?}({:?}, _)", fun, other)
+                            )),
                     },
                     Mf::Outer => {
-                        let arg1 = arg1.ok_or_else(|| ResolveError::IncompatibleOperand {
-                            op: "outer product".to_string(),
-                            operand: "".to_string(),
-                        })?;
+                        let arg1 = arg1.ok_or_else(|| ResolveError::IncompatibleOperands(
+                            format!("{:?}(_, None)", fun)
+                        ))?;
                         match (self.get(arg, types), self.get(arg1,types)) {
                             (&Ti::Vector {kind: _, size: columns,width}, &Ti::Vector{ size: rows, .. }) => Resolution::Value(Ti::Matrix { columns, rows, width }),
-                            (left, right) => {
-                                return Err(ResolveError::IncompatibleOperands {
-                                    op: "outer product".to_string(),
-                                    left: format!("{:?}", left),
-                                    right: format!("{:?}", right),
-                                })
-                            }
+                            (left, right) =>
+                                return Err(ResolveError::IncompatibleOperands(
+                                    format!("{:?}({:?}, {:?})", fun, left, right)
+                                )),
                         }
                     },
                     Mf::Cross => self.resolutions[arg.index()].clone(),
@@ -558,12 +546,9 @@ impl Typifier {
                     Mf::Length => match *self.get(arg, types) {
                         Ti::Scalar {width,kind} |
                         Ti::Vector {width,kind,size:_} => Resolution::Value(Ti::Scalar { kind, width }),
-                        ref other => {
-                            return Err(ResolveError::IncompatibleOperand {
-                                op: format!("{:?}", fun),
-                                operand: format!("{:?}", other),
-                            })
-                        }
+                        ref other => return Err(ResolveError::IncompatibleOperands(
+                                format!("{:?}({:?})", fun, other)
+                            )),
                     },
                     Mf::Normalize |
                     Mf::FaceForward |
@@ -586,12 +571,9 @@ impl Typifier {
                             rows: columns,
                             width,
                         }),
-                        ref other => {
-                            return Err(ResolveError::IncompatibleOperand {
-                                op: "transpose".to_string(),
-                                operand: format!("{:?}", other),
-                            })
-                        }
+                        ref other => return Err(ResolveError::IncompatibleOperands(
+                            format!("{:?}({:?})", fun, other)
+                        )),
                     },
                     Mf::Inverse => match *self.get(arg, types) {
                         Ti::Matrix {
@@ -603,24 +585,18 @@ impl Typifier {
                             rows,
                             width,
                         }),
-                        ref other => {
-                            return Err(ResolveError::IncompatibleOperand {
-                                op: "inverse".to_string(),
-                                operand: format!("{:?}", other),
-                            })
-                        }
+                        ref other => return Err(ResolveError::IncompatibleOperands(
+                            format!("{:?}({:?})", fun, other)
+                        )),
                     },
                     Mf::Determinant => match *self.get(arg, types) {
                         Ti::Matrix {
                             width,
                             ..
                         } => Resolution::Value(Ti::Scalar { kind: crate::ScalarKind::Float, width }),
-                        ref other => {
-                            return Err(ResolveError::IncompatibleOperand {
-                                op: "determinant".to_string(),
-                                operand: format!("{:?}", other),
-                            })
-                        }
+                        ref other => return Err(ResolveError::IncompatibleOperands(
+                            format!("{:?}({:?})", fun, other)
+                        )),
                     },
                     // bits
                     Mf::CountOneBits |
@@ -639,10 +615,10 @@ impl Typifier {
                     width,
                 } => Resolution::Value(Ti::Vector { kind, size, width }),
                 ref other => {
-                    return Err(ResolveError::IncompatibleOperand {
-                        op: "as".to_string(),
-                        operand: format!("{:?}", other),
-                    })
+                    return Err(ResolveError::IncompatibleOperands(format!(
+                        "{:?} as {:?}",
+                        other, kind
+                    )))
                 }
             },
             crate::Expression::Call(function) => {
@@ -696,6 +672,6 @@ impl Typifier {
 #[test]
 fn test_error_size() {
     use std::mem::size_of;
-    assert_eq!(size_of::<ResolveError>(), 80);
-    assert_eq!(size_of::<TypifyError>(), 88);
+    assert_eq!(size_of::<ResolveError>(), 32);
+    assert_eq!(size_of::<TypifyError>(), 40);
 }

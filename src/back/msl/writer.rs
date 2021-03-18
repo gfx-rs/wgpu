@@ -209,7 +209,8 @@ impl<W: Write> Writer<W> {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
         #[allow(trivial_casts)]
-        self.put_expression_stack_pointers.insert(&expr_handle as *const _ as *const ());
+        self.put_expression_stack_pointers
+            .insert(&expr_handle as *const _ as *const ());
 
         if self.named_expressions.contains(expr_handle.index()) {
             write!(self.out, "{}{}", BAKE_PREFIX, expr_handle.index())?;
@@ -1500,19 +1501,28 @@ fn test_stack_size() {
         },
     });
     let mut fun = crate::Function::default();
-    let const_expr = fun.expressions.append(crate::Expression::Constant(constant));
+    let const_expr = fun
+        .expressions
+        .append(crate::Expression::Constant(constant));
     let nested_expr = fun.expressions.append(crate::Expression::Unary {
         op: crate::UnaryOperator::Negate,
         expr: const_expr,
     });
-    fun.body.push(crate::Statement::Emit(fun.expressions.range_from(1)));
-    fun.body.push(crate::Statement::If { condition: nested_expr, accept: Vec::new(), reject: Vec::new() });
+    fun.body
+        .push(crate::Statement::Emit(fun.expressions.range_from(1)));
+    fun.body.push(crate::Statement::If {
+        condition: nested_expr,
+        accept: Vec::new(),
+        reject: Vec::new(),
+    });
     let _ = module.functions.append(fun);
     // analyse the module
     let analysis = Analysis::new(&module).unwrap();
     // process the module
     let mut writer = Writer::new(String::new());
-    writer.write(&module, &analysis, &Default::default()).unwrap();
+    writer
+        .write(&module, &analysis, &Default::default())
+        .unwrap();
     let (mut min_addr, mut max_addr) = (!0usize, 0usize);
     for pointer in writer.put_expression_stack_pointers {
         min_addr = min_addr.min(pointer as usize);
@@ -1520,5 +1530,8 @@ fn test_stack_size() {
     }
     let stack_size = max_addr - min_addr;
     // check the size (in debug only)
-    debug_assert_eq!(stack_size, 39856);
+    // last observed macOS value: 25696
+    if stack_size > 26000 {
+        panic!("`put_expression` stack size {} is too large!", stack_size);
+    }
 }
