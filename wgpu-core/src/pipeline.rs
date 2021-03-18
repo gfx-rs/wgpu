@@ -113,6 +113,8 @@ pub enum CreateComputePipelineError {
     Implicit(#[from] ImplicitLayoutError),
     #[error(transparent)]
     Stage(validation::StageError),
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
 #[derive(Debug)]
@@ -233,6 +235,11 @@ pub enum CreateRenderPipelineError {
         flag: wgt::ShaderStage,
         #[source]
         error: validation::StageError,
+    },
+    #[error("Internal error in stage {stage:?}: {error}")]
+    Internal {
+        stage: wgt::ShaderStage,
+        error: String,
     },
 }
 

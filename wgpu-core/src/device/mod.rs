@@ -1940,10 +1940,15 @@ impl<B: GfxBackend> Device<B> {
         let raw =
             unsafe { self.raw.create_compute_pipeline(&pipeline_desc, None) }.map_err(|err| {
                 match err {
-                    hal::pso::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    hal::pso::CreationError::OutOfMemory(_) => {
+                        pipeline::CreateComputePipelineError::Device(DeviceError::OutOfMemory)
+                    }
+                    hal::pso::CreationError::ShaderCreationError(_, error) => {
+                        pipeline::CreateComputePipelineError::Internal(error)
+                    }
                     _ => {
                         log::error!("failed to create compute pipeline: {}", err);
-                        DeviceError::OutOfMemory
+                        pipeline::CreateComputePipelineError::Device(DeviceError::OutOfMemory)
                     }
                 }
             })?;
@@ -2391,10 +2396,18 @@ impl<B: GfxBackend> Device<B> {
         let raw =
             unsafe { self.raw.create_graphics_pipeline(&pipeline_desc, None) }.map_err(|err| {
                 match err {
-                    hal::pso::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    hal::pso::CreationError::OutOfMemory(_) => {
+                        pipeline::CreateRenderPipelineError::Device(DeviceError::OutOfMemory)
+                    }
+                    hal::pso::CreationError::ShaderCreationError(stage, error) => {
+                        pipeline::CreateRenderPipelineError::Internal {
+                            stage: conv::map_hal_flags_to_shader_stage(stage),
+                            error,
+                        }
+                    }
                     _ => {
                         log::error!("failed to create graphics pipeline: {}", err);
-                        DeviceError::OutOfMemory
+                        pipeline::CreateRenderPipelineError::Device(DeviceError::OutOfMemory)
                     }
                 }
             })?;
