@@ -692,3 +692,10 @@ impl Typifier {
         Ok(())
     }
 }
+
+#[test]
+fn test_error_size() {
+    use std::mem::size_of;
+    assert_eq!(size_of::<ResolveError>(), 80);
+    assert_eq!(size_of::<TypifyError>(), 88);
+}
