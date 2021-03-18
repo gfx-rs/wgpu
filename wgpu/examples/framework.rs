@@ -221,7 +221,7 @@ fn start<E: Example>(
             ControlFlow::Poll
         };
         match event {
-            event::Event::MainEventsCleared => {
+            event::Event::RedrawEventsCleared => {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     // Clamp to some max framerate to avoid busy-looping too much
