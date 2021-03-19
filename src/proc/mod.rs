@@ -158,3 +158,22 @@ impl crate::SampleLevel {
         }
     }
 }
+
+impl crate::Constant {
+    pub fn to_array_length(&self) -> Option<u32> {
+        use std::convert::TryInto;
+        match self.inner {
+            crate::ConstantInner::Scalar { value, width: _ } => match value {
+                crate::ScalarValue::Uint(value) => value.try_into().ok(),
+                // Accept a signed integer size to avoid
+                // requiring an explicit uint
+                // literal. Type inference should make
+                // this unnecessary.
+                crate::ScalarValue::Sint(value) => value.try_into().ok(),
+                _ => None,
+            },
+            // caught by type validation
+            crate::ConstantInner::Composite { .. } => None,
+        }
+    }
+}

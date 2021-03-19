@@ -88,21 +88,9 @@ impl Layouter {
                 },
                 Ti::Array { base, size, stride } => {
                     let count = match size {
-                        crate::ArraySize::Constant(handle) => match constants[handle].inner {
-                            crate::ConstantInner::Scalar {
-                                width: _,
-                                value: crate::ScalarValue::Uint(value),
-                            } => value as u32,
-                            // Accept a signed integer size to avoid
-                            // requiring an explicit uint
-                            // literal. Type inference should make
-                            // this unnecessary.
-                            crate::ConstantInner::Scalar {
-                                width: _,
-                                value: crate::ScalarValue::Sint(value),
-                            } => value as u32,
-                            ref other => unreachable!("Unexpected array size {:?}", other),
-                        },
+                        crate::ArraySize::Constant(handle) => {
+                            constants[handle].to_array_length().unwrap()
+                        }
                         // A dynamically-sized array has to have at least one element
                         crate::ArraySize::Dynamic => 1,
                     };
