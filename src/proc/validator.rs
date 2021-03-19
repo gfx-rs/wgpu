@@ -181,6 +181,14 @@ pub enum ExpressionError {
     InvalidComposeCount { given: u32, expected: u32 },
     #[error("Composing {0}'s component {1:?} is not expected")]
     InvalidComponentType(u32, Handle<crate::Expression>),
+    #[error("Operation {0:?} can't work with {1:?}")]
+    InvalidUnaryOperandType(crate::UnaryOperator, Handle<crate::Expression>),
+    #[error("Operation {0:?} can't work with {1:?} and {2:?}")]
+    InvalidBinaryOperandTypes(
+        crate::BinaryOperator,
+        Handle<crate::Expression>,
+        Handle<crate::Expression>,
+    ),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -887,7 +895,7 @@ impl Validator {
         stage: Option<crate::ShaderStage>,
         module: &crate::Module,
     ) -> Result<(), ExpressionError> {
-        use crate::{Expression as E, TypeInner as Ti};
+        use crate::{Expression as E, ScalarKind as Sk, TypeInner as Ti};
 
         let resolver = ExpressionTypeResolver {
             root,
@@ -910,11 +918,11 @@ impl Validator {
                 match *resolver.resolve(index)? {
                     //TODO: only allow one of these
                     Ti::Scalar {
-                        kind: crate::ScalarKind::Sint,
+                        kind: Sk::Sint,
                         width: _,
                     }
                     | Ti::Scalar {
-                        kind: crate::ScalarKind::Uint,
+                        kind: Sk::Uint,
                         width: _,
                     } => {}
                     ref other => {
@@ -998,7 +1006,7 @@ impl Validator {
                     } => {
                         let inner = Ti::Vector {
                             size: rows,
-                            kind: crate::ScalarKind::Float,
+                            kind: Sk::Float,
                             width,
                         };
                         if columns as usize != components.len() {
@@ -1109,8 +1117,178 @@ impl Validator {
                 index,
             } => {}
             E::ImageQuery { image, query } => {}
-            E::Unary { op, expr } => {}
-            E::Binary { op, left, right } => {}
+            E::Unary { op, expr } => {
+                use crate::UnaryOperator as Uo;
+                let inner = resolver.resolve(expr)?;
+                match (op, inner.scalar_kind()) {
+                    (_, Some(Sk::Sint))
+                    | (_, Some(Sk::Bool))
+                    | (Uo::Negate, Some(Sk::Float))
+                    | (Uo::Not, Some(Sk::Uint)) => {}
+                    other => {
+                        log::error!("Op {:?} kind {:?}", op, other);
+                        return Err(ExpressionError::InvalidUnaryOperandType(op, expr));
+                    }
+                }
+            }
+            E::Binary { op, left, right } => {
+                use crate::BinaryOperator as Bo;
+                let left_inner = resolver.resolve(left)?;
+                let right_inner = resolver.resolve(right)?;
+                let good = match op {
+                    Bo::Add | Bo::Subtract | Bo::Divide | Bo::Modulo => match *left_inner {
+                        Ti::Scalar { kind, .. } | Ti::Vector { kind, .. } => match kind {
+                            Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
+                            Sk::Bool => false,
+                        },
+                        _ => false,
+                    },
+                    Bo::Multiply => {
+                        let kind_match = match left_inner.scalar_kind() {
+                            Some(Sk::Uint) | Some(Sk::Sint) | Some(Sk::Float) => true,
+                            Some(Sk::Bool) | None => false,
+                        };
+                        //TODO: should we be more restrictive here? I.e. expect scalar only to the left.
+                        let types_match = match (left_inner, right_inner) {
+                            (&Ti::Scalar { kind: kind1, .. }, &Ti::Scalar { kind: kind2, .. })
+                            | (&Ti::Vector { kind: kind1, .. }, &Ti::Scalar { kind: kind2, .. })
+                            | (&Ti::Scalar { kind: kind1, .. }, &Ti::Vector { kind: kind2, .. }) => {
+                                kind1 == kind2
+                            }
+                            (
+                                &Ti::Scalar {
+                                    kind: Sk::Float, ..
+                                },
+                                &Ti::Matrix { .. },
+                            )
+                            | (
+                                &Ti::Matrix { .. },
+                                &Ti::Scalar {
+                                    kind: Sk::Float, ..
+                                },
+                            ) => true,
+                            (
+                                &Ti::Vector {
+                                    kind: kind1,
+                                    size: size1,
+                                    ..
+                                },
+                                &Ti::Vector {
+                                    kind: kind2,
+                                    size: size2,
+                                    ..
+                                },
+                            ) => kind1 == kind2 && size1 == size2,
+                            (
+                                &Ti::Matrix { columns, .. },
+                                &Ti::Vector {
+                                    kind: Sk::Float,
+                                    size,
+                                    ..
+                                },
+                            ) => columns == size,
+                            (
+                                &Ti::Vector {
+                                    kind: Sk::Float,
+                                    size,
+                                    ..
+                                },
+                                &Ti::Matrix { rows, .. },
+                            ) => size == rows,
+                            (&Ti::Matrix { columns, .. }, &Ti::Matrix { rows, .. }) => {
+                                columns == rows
+                            }
+                            _ => false,
+                        };
+                        let left_width = match *left_inner {
+                            Ti::Scalar { width, .. }
+                            | Ti::Vector { width, .. }
+                            | Ti::Matrix { width, .. } => width,
+                            _ => 0,
+                        };
+                        let right_width = match *right_inner {
+                            Ti::Scalar { width, .. }
+                            | Ti::Vector { width, .. }
+                            | Ti::Matrix { width, .. } => width,
+                            _ => 0,
+                        };
+                        kind_match && types_match && left_width == right_width
+                    }
+                    Bo::Equal | Bo::NotEqual => match *left_inner {
+                        Ti::Scalar { .. }
+                        | Ti::Vector { .. }
+                        | Ti::Matrix { .. }
+                        | Ti::Array {
+                            size: crate::ArraySize::Constant(_),
+                            ..
+                        }
+                        | Ti::Pointer { .. }
+                        | Ti::ValuePointer { .. }
+                        | Ti::Struct { .. } => left_inner == right_inner,
+                        Ti::Array { .. } | Ti::Image { .. } | Ti::Sampler { .. } => false,
+                    },
+                    Bo::Less | Bo::LessEqual | Bo::Greater | Bo::GreaterEqual => {
+                        match *left_inner {
+                            Ti::Scalar { kind, .. } | Ti::Vector { kind, .. } => match kind {
+                                Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
+                                Sk::Bool => false,
+                            },
+                            ref other => {
+                                log::error!("Op {:?} left type {:?}", op, other);
+                                false
+                            }
+                        }
+                    }
+                    Bo::LogicalAnd | Bo::LogicalOr => match *left_inner {
+                        Ti::Scalar { kind: Sk::Bool, .. } | Ti::Vector { kind: Sk::Bool, .. } => {
+                            left_inner == right_inner
+                        }
+                        ref other => {
+                            log::error!("Op {:?} left type {:?}", op, other);
+                            false
+                        }
+                    },
+                    Bo::And | Bo::ExclusiveOr | Bo::InclusiveOr => match *left_inner {
+                        Ti::Scalar { kind, .. } | Ti::Vector { kind, .. } => match kind {
+                            Sk::Sint | Sk::Uint => left_inner == right_inner,
+                            Sk::Bool | Sk::Float => false,
+                        },
+                        ref other => {
+                            log::error!("Op {:?} left type {:?}", op, other);
+                            false
+                        }
+                    },
+                    Bo::ShiftLeft | Bo::ShiftRight => {
+                        let (base_size, base_kind) = match *left_inner {
+                            Ti::Scalar { kind, .. } => (Ok(None), kind),
+                            Ti::Vector { size, kind, .. } => (Ok(Some(size)), kind),
+                            ref other => {
+                                log::error!("Op {:?} base type {:?}", op, other);
+                                (Err(()), Sk::Bool)
+                            }
+                        };
+                        let shift_size = match *right_inner {
+                            Ti::Scalar { kind: Sk::Uint, .. } => Ok(None),
+                            Ti::Vector {
+                                size,
+                                kind: Sk::Uint,
+                                ..
+                            } => Ok(Some(size)),
+                            ref other => {
+                                log::error!("Op {:?} shift type {:?}", op, other);
+                                Err(())
+                            }
+                        };
+                        match base_kind {
+                            Sk::Sint | Sk::Uint => base_size.is_ok() && base_size == shift_size,
+                            Sk::Float | Sk::Bool => false,
+                        }
+                    }
+                };
+                if !good {
+                    return Err(ExpressionError::InvalidBinaryOperandTypes(op, left, right));
+                }
+            }
             E::Select {
                 condition,
                 accept,

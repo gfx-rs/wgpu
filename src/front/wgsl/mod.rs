@@ -2575,7 +2575,7 @@ impl Parser {
                 lexer.expect(Token::Separator(';'))?;
             }
             (Token::Word("const"), _) => {
-                let (name, _ty, _access) = self.parse_variable_ident_decl(
+                let (name, explicit_ty, _access) = self.parse_variable_ident_decl(
                     lexer,
                     &mut module.types,
                     &mut module.constants,
@@ -2589,6 +2589,20 @@ impl Parser {
                     &mut module.types,
                     &mut module.constants,
                 )?;
+                let con = &module.constants[const_handle];
+                let type_match = match con.inner {
+                    crate::ConstantInner::Scalar { width, value } => {
+                        module.types[explicit_ty].inner
+                            == crate::TypeInner::Scalar {
+                                kind: value.scalar_kind(),
+                                width,
+                            }
+                    }
+                    crate::ConstantInner::Composite { ty, components: _ } => ty == explicit_ty,
+                };
+                if !type_match {
+                    return Err(Error::ConstTypeMismatch(name, explicit_ty));
+                }
                 //TODO: check `ty` against `const_handle`.
                 lexer.expect(Token::Separator(';'))?;
                 lookup_global_expression.insert(name, crate::Expression::Constant(const_handle));

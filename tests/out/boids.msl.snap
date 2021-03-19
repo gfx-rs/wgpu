@@ -27,7 +27,7 @@ struct Particles {
 };
 typedef metal::uint3 type4;
 typedef int type5;
-constexpr constant int NUM_PARTICLES = 1500;
+constexpr constant unsigned NUM_PARTICLES = 1500u;
 constexpr constant float const_0f = 0.0;
 constexpr constant int const_0i = 0;
 constexpr constant unsigned const_0u = 0u;

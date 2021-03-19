@@ -10,7 +10,7 @@ var<push_constant> pc: PushConstants;
 
 [[stage(fragment)]]
 fn main([[location(0)]] tex_coord: vec2<f32>) -> [[location(1)]] vec4<f32> {
-    if (pc.index == 0) {
+    if (pc.index == 0u) {
         return textureSample(texture0, sampler, tex_coord);
     } else {
         return textureSample(texture1, sampler, tex_coord);

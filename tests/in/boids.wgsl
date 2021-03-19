@@ -1,4 +1,4 @@
-const NUM_PARTICLES: u32 = 1500;
+const NUM_PARTICLES: u32 = 1500u;
 
 [[block]]
 struct Particle {
