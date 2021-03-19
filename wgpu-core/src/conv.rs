@@ -154,6 +154,25 @@ pub fn map_shader_stage_flags(shader_stage_flags: wgt::ShaderStage) -> hal::pso:
     value
 }
 
+pub fn map_hal_flags_to_shader_stage(
+    shader_stage_flags: hal::pso::ShaderStageFlags,
+) -> wgt::ShaderStage {
+    use hal::pso::ShaderStageFlags as H;
+    use wgt::ShaderStage as Ss;
+
+    let mut value = Ss::empty();
+    if shader_stage_flags.contains(H::VERTEX) {
+        value |= Ss::VERTEX;
+    }
+    if shader_stage_flags.contains(H::FRAGMENT) {
+        value |= Ss::FRAGMENT;
+    }
+    if shader_stage_flags.contains(H::COMPUTE) {
+        value |= Ss::COMPUTE;
+    }
+    value
+}
+
 pub fn map_extent(extent: &wgt::Extent3d, dim: wgt::TextureDimension) -> hal::image::Extent {
     hal::image::Extent {
         width: extent.width,
