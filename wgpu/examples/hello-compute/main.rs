@@ -89,25 +89,18 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     // It is to WebGPU what a descriptor set is to Vulkan.
     // `binding` here refers to the `binding` of a buffer in the shader (`layout(set = 0, binding = 0) buffer`).
 
-    // Here we specifiy the layout of the bind group.
-    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+    // A pipeline specifices the operation of a shader
+
+    // Instantiates the pipeline.
+    let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,                             // The location
-            visibility: wgpu::ShaderStage::COMPUTE, // Which shader type in the pipeline this buffer is available to.
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage {
-                    // Specifies if the buffer can only be read within the shader
-                    read_only: false,
-                },
-                has_dynamic_offset: false,
-                min_binding_size: wgpu::BufferSize::new(4),
-            },
-            count: None,
-        }],
+        layout: None,
+        module: &cs_module,
+        entry_point: "main",
     });
 
     // Instantiates the bind group, once again specifying the binding of buffers.
+    let bind_group_layout = compute_pipeline.get_bind_group_layout(0);
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &bind_group_layout,
@@ -115,23 +108,6 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
             binding: 0,
             resource: storage_buffer.as_entire_binding(),
         }],
-    });
-
-    // A pipeline specifices the operation of a shader
-
-    // Here we specifiy the layout of the pipeline.
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[&bind_group_layout],
-        push_constant_ranges: &[],
-    });
-
-    // Instantiates the pipeline.
-    let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: None,
-        layout: Some(&pipeline_layout),
-        module: &cs_module,
-        entry_point: "main",
     });
 
     // A command encoder executes one or many pipelines.
