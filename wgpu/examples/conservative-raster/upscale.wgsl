@@ -5,8 +5,8 @@ struct VertexOutput {
 
 [[stage(vertex)]]
 fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
-    const x: f32 = f32(i32(vertex_index & 1) << 2) - 1.0;
-    const y: f32 = f32(i32(vertex_index & 2) << 1) - 1.0;
+    const x: f32 = f32(i32(vertex_index & 1u) << 2u) - 1.0;
+    const y: f32 = f32(i32(vertex_index & 2u) << 1u) - 1.0;
     var output: VertexOutput;
     output.position = vec4<f32>(x, -y, 0.0, 1.0);
     output.tex_coords = vec2<f32>(x + 1.0, y + 1.0) * 0.5;
