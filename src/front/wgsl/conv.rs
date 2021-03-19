@@ -20,8 +20,7 @@ pub fn map_built_in(word: &str) -> Result<crate::BuiltIn, Error<'_>> {
         "front_facing" => crate::BuiltIn::FrontFacing,
         "frag_depth" => crate::BuiltIn::FragDepth,
         "sample_index" => crate::BuiltIn::SampleIndex,
-        "sample_mask_in" => crate::BuiltIn::SampleMaskIn,
-        "sample_mask_out" => crate::BuiltIn::SampleMaskOut,
+        "sample_mask" => crate::BuiltIn::SampleMask,
         // compute
         "global_invocation_id" => crate::BuiltIn::GlobalInvocationId,
         "local_invocation_id" => crate::BuiltIn::LocalInvocationId,

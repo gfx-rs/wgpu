@@ -2189,8 +2189,13 @@ fn glsl_built_in(built_in: BuiltIn, output: bool) -> &'static str {
         BuiltIn::FragDepth => "gl_FragDepth",
         BuiltIn::FrontFacing => "gl_FrontFacing",
         BuiltIn::SampleIndex => "gl_SampleID",
-        BuiltIn::SampleMaskIn => "gl_SampleMaskIn",
-        BuiltIn::SampleMaskOut => "gl_SampleMask",
+        BuiltIn::SampleMask => {
+            if output {
+                "gl_SampleMask"
+            } else {
+                "gl_SampleMaskIn"
+            }
+        }
         // compute
         BuiltIn::GlobalInvocationId => "gl_GlobalInvocationID",
         BuiltIn::LocalInvocationId => "gl_LocalInvocationID",

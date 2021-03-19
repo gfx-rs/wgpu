@@ -234,13 +234,13 @@ impl Decoration {
         }
     }
 
-    fn io_binding(&self, is_output: bool) -> Result<crate::Binding, Error> {
+    fn io_binding(&self) -> Result<crate::Binding, Error> {
         match *self {
             Decoration {
                 built_in: Some(built_in),
                 location: None,
                 ..
-            } => map_builtin(built_in, is_output).map(crate::Binding::BuiltIn),
+            } => map_builtin(built_in).map(crate::Binding::BuiltIn),
             Decoration {
                 built_in: None,
                 location: Some(loc),
@@ -2791,7 +2791,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 (Variable::Global, var)
             }
             ExtendedClass::Input => {
-                let binding = dec.io_binding(false)?;
+                let binding = dec.io_binding()?;
                 if let crate::Binding::BuiltIn(built_in) = binding {
                     let needs_inner_uint = match built_in {
                         crate::BuiltIn::BaseInstance
@@ -2840,7 +2840,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 (inner, var)
             }
             ExtendedClass::Output => {
-                let binding = dec.io_binding(true)?;
+                let binding = dec.io_binding()?;
                 let var = crate::GlobalVariable {
                     name: dec.name,
                     class: crate::StorageClass::Private,

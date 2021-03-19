@@ -1101,8 +1101,7 @@ impl Writer {
                     Bi::FragDepth => spirv::BuiltIn::FragDepth,
                     Bi::FrontFacing => spirv::BuiltIn::FrontFacing,
                     Bi::SampleIndex => spirv::BuiltIn::SampleId,
-                    Bi::SampleMaskIn => spirv::BuiltIn::SampleMask,
-                    Bi::SampleMaskOut => spirv::BuiltIn::SampleMask,
+                    Bi::SampleMask => spirv::BuiltIn::SampleMask,
                     // compute
                     Bi::GlobalInvocationId => spirv::BuiltIn::GlobalInvocationId,
                     Bi::LocalInvocationId => spirv::BuiltIn::LocalInvocationId,

@@ -154,8 +154,7 @@ pub enum BuiltIn {
     FragDepth,
     FrontFacing,
     SampleIndex,
-    SampleMaskIn,
-    SampleMaskOut,
+    SampleMask,
     // compute
     GlobalInvocationId,
     LocalInvocationId,

@@ -419,7 +419,7 @@ impl VaryingContext<'_> {
                                 width: crate::BOOL_WIDTH,
                             },
                     ),
-                    Bi::SampleIndex | Bi::SampleMaskIn => (
+                    Bi::SampleIndex => (
                         self.stage == St::Fragment && !self.output,
                         *ty_inner
                             == Ti::Scalar {
@@ -427,8 +427,8 @@ impl VaryingContext<'_> {
                                 width,
                             },
                     ),
-                    Bi::SampleMaskOut => (
-                        self.stage == St::Fragment && self.output,
+                    Bi::SampleMask => (
+                        self.stage == St::Fragment,
                         *ty_inner
                             == Ti::Scalar {
                                 kind: Sk::Uint,
