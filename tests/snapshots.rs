@@ -63,7 +63,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
         Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
         Err(_) => Parameters::default(),
     };
-    let analysis = naga::proc::Validator::new(naga::proc::analyzer::AnalysisFlags::all())
+    let info = naga::valid::Validator::new(naga::valid::AnalysisFlags::all())
         .validate(module)
         .unwrap();
 
@@ -78,7 +78,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
         }
         if targets.contains(Targets::ANALYSIS) {
             let config = ron::ser::PrettyConfig::default().with_new_line("\n".to_string());
-            let output = ron::ser::to_string_pretty(&analysis, config).unwrap();
+            let output = ron::ser::to_string_pretty(&info, config).unwrap();
             with_snapshot_settings(|| {
                 insta::assert_snapshot!(format!("{}.info.ron", name), output);
             });
@@ -88,27 +88,27 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     #[cfg(feature = "spv-out")]
     {
         if targets.contains(Targets::SPIRV) {
-            check_output_spv(module, &analysis, name, &params);
+            check_output_spv(module, &info, name, &params);
         }
     }
     #[cfg(feature = "msl-out")]
     {
         if targets.contains(Targets::METAL) {
-            check_output_msl(module, &analysis, name, &params);
+            check_output_msl(module, &info, name, &params);
         }
     }
     #[cfg(feature = "glsl-out")]
     {
         if targets.contains(Targets::GLSL) {
             for ep in module.entry_points.iter() {
-                check_output_glsl(module, &analysis, name, ep.stage, &ep.name);
+                check_output_glsl(module, &info, name, ep.stage, &ep.name);
             }
         }
     }
     #[cfg(feature = "dot-out")]
     {
         if targets.contains(Targets::DOT) {
-            let string = naga::back::dot::write(module, Some(&analysis)).unwrap();
+            let string = naga::back::dot::write(module, Some(&info)).unwrap();
             with_snapshot_settings(|| {
                 insta::assert_snapshot!(format!("{}.dot", name), string);
             });
@@ -119,7 +119,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
 #[cfg(feature = "spv-out")]
 fn check_output_spv(
     module: &naga::Module,
-    analysis: &naga::proc::analyzer::Analysis,
+    info: &naga::valid::ModuleInfo,
     name: &str,
     params: &Parameters,
 ) {
@@ -132,7 +132,7 @@ fn check_output_spv(
         capabilities: params.spv_capabilities.clone(),
     };
 
-    let spv = spv::write_vec(module, analysis, &options).unwrap();
+    let spv = spv::write_vec(module, info, &options).unwrap();
 
     let dis = rspirv::dr::load_words(spv)
         .expect("Produced invalid SPIR-V")
@@ -145,7 +145,7 @@ fn check_output_spv(
 #[cfg(feature = "msl-out")]
 fn check_output_msl(
     module: &naga::Module,
-    analysis: &naga::proc::analyzer::Analysis,
+    info: &naga::valid::ModuleInfo,
     name: &str,
     params: &Parameters,
 ) {
@@ -178,7 +178,7 @@ fn check_output_msl(
         fake_missing_bindings: false,
     };
 
-    let (msl, _) = msl::write_string(module, analysis, &options).unwrap();
+    let (msl, _) = msl::write_string(module, info, &options).unwrap();
 
     with_snapshot_settings(|| {
         insta::assert_snapshot!(format!("{}.msl", name), msl);
@@ -188,7 +188,7 @@ fn check_output_msl(
 #[cfg(feature = "glsl-out")]
 fn check_output_glsl(
     module: &naga::Module,
-    analysis: &naga::proc::analyzer::Analysis,
+    info: &naga::valid::ModuleInfo,
     name: &str,
     stage: naga::ShaderStage,
     ep_name: &str,
@@ -202,7 +202,7 @@ fn check_output_glsl(
     };
 
     let mut buffer = Vec::new();
-    let mut writer = glsl::Writer::new(&mut buffer, module, analysis, &options).unwrap();
+    let mut writer = glsl::Writer::new(&mut buffer, module, info, &options).unwrap();
     writer.write().unwrap();
 
     let string = String::from_utf8(buffer).unwrap();
@@ -278,7 +278,7 @@ fn convert_spv(name: &str, targets: Targets) {
     )
     .unwrap();
     check_targets(&module, name, targets);
-    naga::proc::Validator::new(naga::proc::analyzer::AnalysisFlags::all())
+    naga::valid::Validator::new(naga::valid::AnalysisFlags::all())
         .validate(&module)
         .unwrap();
 }

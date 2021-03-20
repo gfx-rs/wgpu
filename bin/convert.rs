@@ -172,15 +172,14 @@ fn main() {
 
     // validate the IR
     #[allow(unused_variables)]
-    let analysis = match naga::proc::Validator::new(naga::proc::analyzer::AnalysisFlags::all())
-        .validate(&module)
-    {
-        Ok(analysis) => Some(analysis),
-        Err(error) => {
-            print_err(error);
-            None
-        }
-    };
+    let info =
+        match naga::valid::Validator::new(naga::valid::AnalysisFlags::all()).validate(&module) {
+            Ok(info) => Some(info),
+            Err(error) => {
+                print_err(error);
+                None
+            }
+        };
 
     let output_path = match output_path {
         Some(ref string) => string,
@@ -200,15 +199,14 @@ fn main() {
         "metal" => {
             use naga::back::msl;
             let (msl, _) =
-                msl::write_string(&module, analysis.as_ref().unwrap(), &params.msl).unwrap_pretty();
+                msl::write_string(&module, info.as_ref().unwrap(), &params.msl).unwrap_pretty();
             fs::write(output_path, msl).unwrap();
         }
         #[cfg(feature = "spv-out")]
         "spv" => {
             use naga::back::spv;
 
-            let spv =
-                spv::write_vec(&module, analysis.as_ref().unwrap(), &params.spv).unwrap_pretty();
+            let spv = spv::write_vec(&module, info.as_ref().unwrap(), &params.spv).unwrap_pretty();
             let bytes = spv
                 .iter()
                 .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
@@ -236,9 +234,8 @@ fn main() {
                 .open(output_path)
                 .unwrap();
 
-            let mut writer =
-                glsl::Writer::new(file, &module, analysis.as_ref().unwrap(), &params.glsl)
-                    .unwrap_pretty();
+            let mut writer = glsl::Writer::new(file, &module, info.as_ref().unwrap(), &params.glsl)
+                .unwrap_pretty();
 
             writer
                 .write()
@@ -251,7 +248,7 @@ fn main() {
         #[cfg(feature = "dot-out")]
         "dot" => {
             use naga::back::dot;
-            let output = dot::write(&module, analysis.as_ref()).unwrap();
+            let output = dot::write(&module, info.as_ref()).unwrap();
             fs::write(output_path, output).unwrap();
         }
         other => {

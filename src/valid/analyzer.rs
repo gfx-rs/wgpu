@@ -692,13 +692,13 @@ bitflags::bitflags! {
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct Analysis {
+pub struct ModuleInfo {
     flags: AnalysisFlags,
     functions: Vec<FunctionInfo>,
     entry_points: Vec<FunctionInfo>,
 }
 
-impl Analysis {
+impl ModuleInfo {
     /// Builds the `FunctionInfo` based on the function, and validates the
     /// uniform control flow if required by the expressions of this function.
     fn process_function(
@@ -732,9 +732,9 @@ impl Analysis {
         Ok(info)
     }
 
-    /// Analyze a module and return the `Analysis`, if successful.
+    /// Analyze a module and return the `ModuleInfo`, if successful.
     pub fn new(module: &crate::Module, flags: AnalysisFlags) -> Result<Self, AnalysisError> {
-        let mut this = Analysis {
+        let mut this = ModuleInfo {
             flags,
             functions: Vec::with_capacity(module.functions.len()),
             entry_points: Vec::with_capacity(module.entry_points.len()),
@@ -761,7 +761,7 @@ impl Analysis {
     }
 }
 
-impl ops::Index<Handle<crate::Function>> for Analysis {
+impl ops::Index<Handle<crate::Function>> for ModuleInfo {
     type Output = FunctionInfo;
     fn index(&self, handle: Handle<crate::Function>) -> &FunctionInfo {
         &self.functions[handle.index()]

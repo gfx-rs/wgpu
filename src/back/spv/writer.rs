@@ -2,10 +2,8 @@
 use super::{Instruction, LogicalLayout, Options, PhysicalLayout, WriterFlags};
 use crate::{
     arena::{Arena, Handle},
-    proc::{
-        analyzer::{Analysis, FunctionInfo},
-        Layouter, ResolveContext, Typifier, TypifyError,
-    },
+    proc::{Layouter, ResolveContext, Typifier, TypifyError},
+    valid::{FunctionInfo, ModuleInfo},
 };
 use spirv::Word;
 use std::{collections::hash_map::Entry, ops};
@@ -2350,7 +2348,7 @@ impl Writer {
     fn write_logical_layout(
         &mut self,
         ir_module: &crate::Module,
-        analysis: &Analysis,
+        mod_info: &ModuleInfo,
     ) -> Result<(), Error> {
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
@@ -2387,13 +2385,13 @@ impl Writer {
         }
 
         for (handle, ir_function) in ir_module.functions.iter() {
-            let info = &analysis[handle];
+            let info = &mod_info[handle];
             let id = self.write_function(ir_function, info, ir_module, None)?;
             self.lookup_function.insert(handle, id);
         }
 
         for (ep_index, ir_ep) in ir_module.entry_points.iter().enumerate() {
-            let info = analysis.get_entry_point(ep_index);
+            let info = mod_info.get_entry_point(ep_index);
             let ep_instruction = self.write_entry_point(ir_ep, info, ir_module)?;
             ep_instruction.to_words(&mut self.logical_layout.entry_points);
         }
@@ -2426,7 +2424,7 @@ impl Writer {
     pub fn write(
         &mut self,
         ir_module: &crate::Module,
-        analysis: &Analysis,
+        info: &ModuleInfo,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
         self.lookup_function.clear();
@@ -2436,7 +2434,7 @@ impl Writer {
         self.layouter
             .initialize(&ir_module.types, &ir_module.constants);
 
-        self.write_logical_layout(ir_module, analysis)?;
+        self.write_logical_layout(ir_module, info)?;
         self.write_physical_layout();
 
         self.physical_layout.in_words(words);

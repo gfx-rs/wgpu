@@ -1,10 +1,8 @@
 use super::{keywords::RESERVED, Error, LocationMode, Options, TranslationInfo};
 use crate::{
     arena::Handle,
-    proc::{
-        analyzer::{Analysis, FunctionInfo, GlobalUse},
-        EntryPointIndex, NameKey, Namer, ResolveContext, Typifier,
-    },
+    proc::{EntryPointIndex, NameKey, Namer, ResolveContext, Typifier},
+    valid::{FunctionInfo, GlobalUse, ModuleInfo},
     FastHashMap,
 };
 use bit_set::BitSet;
@@ -141,7 +139,7 @@ struct ExpressionContext<'a> {
     function: &'a crate::Function,
     origin: FunctionOrigin,
     module: &'a crate::Module,
-    analysis: &'a Analysis,
+    mod_info: &'a ModuleInfo,
 }
 
 struct StatementContext<'a> {
@@ -859,7 +857,7 @@ impl<W: Write> Writer<W> {
                     }
                     // follow-up with any global resources used
                     let mut separate = !arguments.is_empty();
-                    let fun_info = &context.expression.analysis[function];
+                    let fun_info = &context.expression.mod_info[function];
                     for (handle, var) in context.expression.module.global_variables.iter() {
                         if !fun_info[handle].is_empty() && var.class.needs_pass_through() {
                             let name = &self.names[&NameKey::GlobalVariable(handle)];
@@ -882,7 +880,7 @@ impl<W: Write> Writer<W> {
     pub fn write(
         &mut self,
         module: &crate::Module,
-        analysis: &Analysis,
+        info: &ModuleInfo,
         options: &Options,
     ) -> Result<TranslationInfo, Error> {
         self.names.clear();
@@ -894,7 +892,7 @@ impl<W: Write> Writer<W> {
 
         self.write_type_defs(module)?;
         self.write_constants(module)?;
-        self.write_functions(module, analysis, options)
+        self.write_functions(module, info, options)
     }
 
     fn write_type_defs(&mut self, module: &crate::Module) -> Result<(), Error> {
@@ -1106,7 +1104,7 @@ impl<W: Write> Writer<W> {
     fn write_functions(
         &mut self,
         module: &crate::Module,
-        analysis: &Analysis,
+        mod_info: &ModuleInfo,
         options: &Options,
     ) -> Result<TranslationInfo, Error> {
         let mut pass_through_globals = Vec::new();
@@ -1123,7 +1121,7 @@ impl<W: Write> Writer<W> {
                 },
             )?;
 
-            let fun_info = &analysis[fun_handle];
+            let fun_info = &mod_info[fun_handle];
             pass_through_globals.clear();
             for (handle, var) in module.global_variables.iter() {
                 if !fun_info[handle].is_empty() && var.class.needs_pass_through() {
@@ -1179,7 +1177,7 @@ impl<W: Write> Writer<W> {
                     function: fun,
                     origin: FunctionOrigin::Handle(fun_handle),
                     module,
-                    analysis,
+                    mod_info,
                 },
                 fun_info,
                 result_struct: None,
@@ -1195,7 +1193,7 @@ impl<W: Write> Writer<W> {
         };
         for (ep_index, ep) in module.entry_points.iter().enumerate() {
             let fun = &ep.function;
-            let fun_info = analysis.get_entry_point(ep_index);
+            let fun_info = mod_info.get_entry_point(ep_index);
             // skip this entry point if any global bindings are missing
             if !options.fake_missing_bindings {
                 if let Some(err) = module
@@ -1471,7 +1469,7 @@ impl<W: Write> Writer<W> {
                     function: fun,
                     origin: FunctionOrigin::EntryPoint(ep_index as _),
                     module,
-                    analysis,
+                    mod_info,
                 },
                 fun_info,
                 result_struct: Some(&stage_out_name),
@@ -1490,7 +1488,7 @@ impl<W: Write> Writer<W> {
 
 #[test]
 fn test_stack_size() {
-    use crate::proc::analyzer::AnalysisFlags;
+    use crate::valid::AnalysisFlags;
     // create a module with at least one expression nested
     let mut module = crate::Module::default();
     let constant = module.constants.append(crate::Constant {
@@ -1518,12 +1516,10 @@ fn test_stack_size() {
     });
     let _ = module.functions.append(fun);
     // analyse the module
-    let analysis = Analysis::new(&module, AnalysisFlags::empty()).unwrap();
+    let info = ModuleInfo::new(&module, AnalysisFlags::empty()).unwrap();
     // process the module
     let mut writer = Writer::new(String::new());
-    writer
-        .write(&module, &analysis, &Default::default())
-        .unwrap();
+    writer.write(&module, &info, &Default::default()).unwrap();
     let (mut min_addr, mut max_addr) = (!0usize, 0usize);
     for pointer in writer.put_expression_stack_pointers {
         min_addr = min_addr.min(pointer as usize);

@@ -44,10 +44,8 @@
 pub use features::Features;
 
 use crate::{
-    proc::{
-        analyzer::{Analysis, FunctionInfo},
-        EntryPointIndex, NameKey, Namer, ResolveContext, Typifier, TypifyError,
-    },
+    proc::{EntryPointIndex, NameKey, Namer, ResolveContext, Typifier, TypifyError},
+    valid::{FunctionInfo, ModuleInfo},
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant,
     ConstantInner, DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle,
     ImageClass, Interpolation, LocalVariable, Module, RelationalFunction, ScalarKind, ScalarValue,
@@ -314,7 +312,7 @@ pub struct Writer<'a, W> {
     /// The module being written
     module: &'a Module,
     /// The module analysis.
-    analysis: &'a Analysis,
+    info: &'a ModuleInfo,
     /// The output writer
     out: W,
     /// User defined configuration to be used
@@ -348,7 +346,7 @@ impl<'a, W: Write> Writer<'a, W> {
     pub fn new(
         out: W,
         module: &'a Module,
-        analysis: &'a Analysis,
+        info: &'a ModuleInfo,
         options: &'a Options,
     ) -> Result<Self, Error> {
         // Check if the requested version is supported
@@ -371,7 +369,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // Build the instance
         let mut this = Self {
             module,
-            analysis,
+            info,
             out,
             options,
 
@@ -473,7 +471,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        let ep_info = self.analysis.get_entry_point(self.entry_point_idx as usize);
+        let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
 
         // Write the globals
         //
@@ -548,13 +546,13 @@ impl<'a, W: Write> Writer<'a, W> {
         for (handle, function) in self.module.functions.iter() {
             // Check that the function doesn't use globals that aren't supported
             // by the current entry point
-            if !ep_info.dominates_global_use(&self.analysis[handle]) {
+            if !ep_info.dominates_global_use(&self.info[handle]) {
                 continue;
             }
 
             // We also `clone` to satisfy the borrow checker
             let name = self.names[&NameKey::Function(handle)].clone();
-            let fun_info = &self.analysis[handle];
+            let fun_info = &self.info[handle];
 
             // Write the function
             self.write_function(FunctionType::Function(handle), function, fun_info, &name)?;
@@ -2071,7 +2069,7 @@ impl<'a, W: Write> Writer<'a, W> {
     /// [`Arena`](crate::arena::Arena) and we need to traverse it
     fn collect_reflection_info(&self) -> Result<ReflectionInfo, Error> {
         use std::collections::hash_map::Entry;
-        let info = self.analysis.get_entry_point(self.entry_point_idx as usize);
+        let info = self.info.get_entry_point(self.entry_point_idx as usize);
         let mut mappings = FastHashMap::default();
         let mut uniforms = FastHashMap::default();
 

@@ -23,13 +23,13 @@ fn _check_glsl(name: &str) {
             defines: Default::default(),
         },
     ) {
-        Ok(m) => match naga::proc::Validator::new(naga::proc::analyzer::AnalysisFlags::all())
-            .validate(&m)
-        {
-            Ok(_analysis) => (),
-            //TODO: panic
-            Err(e) => log::error!("Unable to validate {}: {:?}", name, e),
-        },
+        Ok(m) => {
+            match naga::valid::Validator::new(naga::valid::AnalysisFlags::all()).validate(&m) {
+                Ok(_info) => (),
+                //TODO: panic
+                Err(e) => log::error!("Unable to validate {}: {:?}", name, e),
+            }
+        }
         Err(e) => panic!("Unable to parse {}: {:?}", name, e),
     };
 }

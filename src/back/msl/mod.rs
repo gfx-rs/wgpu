@@ -23,11 +23,7 @@ For the result type, if it's a structure, we re-compose it with a temporary valu
 holding the result.
 !*/
 
-use crate::{
-    arena::Handle,
-    proc::{analyzer::Analysis, TypifyError},
-    FastHashMap,
-};
+use crate::{arena::Handle, proc::TypifyError, valid::ModuleInfo, FastHashMap};
 use std::{
     fmt::{Error as FmtError, Write},
     string::FromUtf8Error,
@@ -243,11 +239,11 @@ pub struct TranslationInfo {
 
 pub fn write_string(
     module: &crate::Module,
-    analysis: &Analysis,
+    info: &ModuleInfo,
     options: &Options,
 ) -> Result<(String, TranslationInfo), Error> {
     let mut w = writer::Writer::new(String::new());
-    let info = w.write(module, analysis, options)?;
+    let info = w.write(module, info, options)?;
     Ok((w.finish(), info))
 }
 

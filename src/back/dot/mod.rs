@@ -6,7 +6,7 @@
 
 use crate::{
     arena::Handle,
-    proc::analyzer::{Analysis, FunctionInfo},
+    valid::{FunctionInfo, ModuleInfo},
 };
 
 use std::{
@@ -429,7 +429,7 @@ fn write_fun(
     Ok(())
 }
 
-pub fn write(module: &crate::Module, analysis: Option<&Analysis>) -> Result<String, FmtError> {
+pub fn write(module: &crate::Module, mod_info: Option<&ModuleInfo>) -> Result<String, FmtError> {
     use std::fmt::Write as _;
 
     let mut output = String::new();
@@ -458,7 +458,7 @@ pub fn write(module: &crate::Module, analysis: Option<&Analysis>) -> Result<Stri
             handle,
             name(&fun.name)
         )?;
-        let info = analysis.map(|a| &a[handle]);
+        let info = mod_info.map(|a| &a[handle]);
         write_fun(&mut output, prefix, fun, info)?;
         writeln!(output, "\t}}")?;
     }
@@ -466,7 +466,7 @@ pub fn write(module: &crate::Module, analysis: Option<&Analysis>) -> Result<Stri
         let prefix = format!("ep{}", ep_index);
         writeln!(output, "\tsubgraph cluster_{} {{", prefix)?;
         writeln!(output, "\t\tlabel=\"{:?}/'{}'\"", ep.stage, ep.name)?;
-        let info = analysis.map(|a| a.get_entry_point(ep_index));
+        let info = mod_info.map(|a| a.get_entry_point(ep_index));
         write_fun(&mut output, prefix, &ep.function, info)?;
         writeln!(output, "\t}}")?;
     }

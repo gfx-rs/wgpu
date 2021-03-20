@@ -40,6 +40,7 @@ mod arena;
 pub mod back;
 pub mod front;
 pub mod proc;
+pub mod valid;
 
 pub use crate::arena::{Arena, Handle, Range};
 

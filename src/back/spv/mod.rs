@@ -73,11 +73,11 @@ impl Default for Options {
 
 pub fn write_vec(
     module: &crate::Module,
-    analysis: &crate::proc::analyzer::Analysis,
+    info: &crate::valid::ModuleInfo,
     options: &Options,
 ) -> Result<Vec<u32>, Error> {
     let mut words = Vec::new();
     let mut w = Writer::new(options)?;
-    w.write(module, analysis, &mut words)?;
+    w.write(module, info, &mut words)?;
     Ok(words)
 }
