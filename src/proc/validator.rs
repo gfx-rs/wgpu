@@ -1,5 +1,5 @@
 use super::{
-    analyzer::{Analysis, AnalysisError, FunctionInfo, GlobalUse},
+    analyzer::{Analysis, AnalysisError, AnalysisFlags, FunctionInfo, GlobalUse},
     typifier::{ResolveContext, Typifier, TypifyError},
 };
 use crate::{
@@ -66,6 +66,7 @@ impl<'a> BlockContext<'a> {
 
 #[derive(Debug)]
 pub struct Validator {
+    analysis_flags: AnalysisFlags,
     //Note: this is a bit tricky: some of the front-ends as well as backends
     // already have to use the typifier, so the work here is redundant in a way.
     typifier: Typifier,
@@ -580,8 +581,9 @@ impl<'a> ExpressionTypeResolver<'a> {
 
 impl Validator {
     /// Construct a new validator instance.
-    pub fn new() -> Self {
+    pub fn new(analysis_flags: AnalysisFlags) -> Self {
         Validator {
+            analysis_flags,
             typifier: Typifier::new(),
             type_flags: Vec::new(),
             location_mask: BitSet::new(),
@@ -1763,7 +1765,7 @@ impl Validator {
         self.type_flags
             .resize(module.types.len(), TypeFlags::empty());
 
-        let analysis = Analysis::new(module)?;
+        let analysis = Analysis::new(module, self.analysis_flags)?;
 
         for (handle, constant) in module.constants.iter() {
             self.validate_constant(handle, &module.constants, &module.types)

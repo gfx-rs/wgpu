@@ -63,7 +63,9 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
         Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
         Err(_) => Parameters::default(),
     };
-    let analysis = naga::proc::Validator::new().validate(module).unwrap();
+    let analysis = naga::proc::Validator::new(naga::proc::analyzer::AnalysisFlags::all())
+        .validate(module)
+        .unwrap();
 
     #[cfg(feature = "serialize")]
     {
@@ -276,7 +278,9 @@ fn convert_spv(name: &str, targets: Targets) {
     )
     .unwrap();
     check_targets(&module, name, targets);
-    naga::proc::Validator::new().validate(&module).unwrap();
+    naga::proc::Validator::new(naga::proc::analyzer::AnalysisFlags::all())
+        .validate(&module)
+        .unwrap();
 }
 
 #[cfg(feature = "spv-in")]

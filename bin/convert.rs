@@ -172,7 +172,9 @@ fn main() {
 
     // validate the IR
     #[allow(unused_variables)]
-    let analysis = match naga::proc::Validator::new().validate(&module) {
+    let analysis = match naga::proc::Validator::new(naga::proc::analyzer::AnalysisFlags::all())
+        .validate(&module)
+    {
         Ok(analysis) => Some(analysis),
         Err(error) => {
             print_err(error);

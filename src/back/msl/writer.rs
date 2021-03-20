@@ -1490,6 +1490,7 @@ impl<W: Write> Writer<W> {
 
 #[test]
 fn test_stack_size() {
+    use crate::proc::analyzer::AnalysisFlags;
     // create a module with at least one expression nested
     let mut module = crate::Module::default();
     let constant = module.constants.append(crate::Constant {
@@ -1517,7 +1518,7 @@ fn test_stack_size() {
     });
     let _ = module.functions.append(fun);
     // analyse the module
-    let analysis = Analysis::new(&module).unwrap();
+    let analysis = Analysis::new(&module, AnalysisFlags::empty()).unwrap();
     // process the module
     let mut writer = Writer::new(String::new());
     writer

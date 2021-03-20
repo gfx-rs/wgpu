@@ -3,11 +3,19 @@ source: tests/snapshots.rs
 expression: output
 ---
 (
+    flags: (
+        bits: 1,
+    ),
     functions: [
         (
+            flags: (
+                bits: 1,
+            ),
             uniformity: (
                 non_uniform_result: Some(5),
-                requirement: None,
+                requirements: (
+                    bits: 0,
+                ),
             ),
             may_kill: false,
             sampling_set: [],
@@ -20,7 +28,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 0,
                     assignable_global: Some(1),
@@ -28,7 +38,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -36,7 +48,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 7,
                     assignable_global: None,
@@ -44,7 +58,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -52,7 +68,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(5),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 3,
                     assignable_global: None,
@@ -60,7 +78,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -68,7 +88,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -76,7 +98,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -84,7 +108,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -92,7 +118,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -100,7 +128,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -108,7 +138,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -116,7 +148,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -124,7 +158,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -132,7 +168,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -140,7 +178,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -148,7 +188,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -156,7 +198,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -164,7 +208,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -172,7 +218,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -180,7 +228,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -188,7 +238,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(5),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -196,7 +248,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -204,7 +258,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(5),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -212,7 +268,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(5),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -222,9 +280,14 @@ expression: output
     ],
     entry_points: [
         (
+            flags: (
+                bits: 1,
+            ),
             uniformity: (
                 non_uniform_result: Some(5),
-                requirement: None,
+                requirements: (
+                    bits: 0,
+                ),
             ),
             may_kill: false,
             sampling_set: [],
@@ -237,7 +300,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 2,
                     assignable_global: Some(1),
@@ -245,7 +310,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 2,
                     assignable_global: None,
@@ -253,7 +320,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
@@ -261,7 +330,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -269,7 +340,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
@@ -277,7 +350,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
@@ -285,7 +360,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -293,7 +370,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
@@ -301,7 +380,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -309,7 +390,9 @@ expression: output
                 (
                     uniformity: (
                         non_uniform_result: Some(5),
-                        requirement: None,
+                        requirements: (
+                            bits: 0,
+                        ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
