@@ -1,4 +1,4 @@
-use crate::arena::Arena;
+use crate::arena::{Arena, Handle};
 use std::{num::NonZeroU32, ops};
 
 pub type Alignment = NonZeroU32;
@@ -130,8 +130,11 @@ impl Layouter {
             });
         }
     }
+}
 
-    pub fn resolve(&self, handle: crate::Handle<crate::Type>) -> TypeLayout {
-        self.layouts[handle.index()]
+impl ops::Index<Handle<crate::Type>> for Layouter {
+    type Output = TypeLayout;
+    fn index(&self, handle: Handle<crate::Type>) -> &TypeLayout {
+        &self.layouts[handle.index()]
     }
 }
