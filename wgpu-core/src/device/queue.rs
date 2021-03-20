@@ -340,6 +340,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             CopySide::Source,
             bytes_per_block as wgt::BufferAddress,
             size,
+            false,
         )?;
 
         let (block_width, block_height) = texture_format.describe().block_dimensions;
@@ -352,8 +353,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let width_blocks = size.width / block_width;
         let height_blocks = size.height / block_width;
 
-        let texel_rows_per_image = data_layout.rows_per_image;
-        let block_rows_per_image = data_layout.rows_per_image / block_height;
+        let texel_rows_per_image = if let Some(rows_per_image) = data_layout.rows_per_image {
+            rows_per_image.get()
+        } else {
+            // doesn't really matter because we need this only if we copy more than one layer, and then we validate for this being not None
+            size.height
+        };
+        let block_rows_per_image = texel_rows_per_image / block_height;
 
         let bytes_per_row_alignment = get_lowest_common_denom(
             device.hal_limits.optimal_buffer_copy_pitch_alignment as u32,
@@ -397,21 +403,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let ptr = stage.memory.map(&device.raw, 0, stage_size)?;
         unsafe {
+            let bytes_per_row = if let Some(bytes_per_row) = data_layout.bytes_per_row {
+                bytes_per_row.get()
+            } else {
+                width_blocks * bytes_per_block
+            };
+
             //TODO: https://github.com/zakarumych/gpu-alloc/issues/13
-            if stage_bytes_per_row == data_layout.bytes_per_row {
+            if stage_bytes_per_row == bytes_per_row {
                 // Fast path if the data isalready being aligned optimally.
                 ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), stage_size as usize);
             } else {
                 // Copy row by row into the optimal alignment.
-                let copy_bytes_per_row =
-                    stage_bytes_per_row.min(data_layout.bytes_per_row) as usize;
+                let copy_bytes_per_row = stage_bytes_per_row.min(bytes_per_row) as usize;
                 for layer in 0..size.depth_or_array_layers {
                     let rows_offset = layer * block_rows_per_image;
                     for row in 0..height_blocks {
                         ptr::copy_nonoverlapping(
-                            data.as_ptr().offset(
-                                (rows_offset + row) as isize * data_layout.bytes_per_row as isize,
-                            ),
+                            data.as_ptr()
+                                .offset((rows_offset + row) as isize * bytes_per_row as isize),
                             ptr.as_ptr().offset(
                                 (rows_offset + row) as isize * stage_bytes_per_row as isize,
                             ),
