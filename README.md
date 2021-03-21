@@ -52,13 +52,6 @@ The following environment variables can be used to configure how the framework e
 
 See [wiki article](https://github.com/gfx-rs/wgpu-rs/wiki/Running-on-the-Web-with-WebGPU-and-WebGL).
 
-### How to compile the shaders in the examples
-
-Currently, shaders in the examples are written in GLSL 4.50 and compiled to SPIR-V manually.
-In the future [WGSL](https://gpuweb.github.io/gpuweb/wgsl.html) will be the shader language for WebGPU, but support is not implemented yet.
-
-For now, the shaders can be compiled to SPIR-V by running `make`, which requires you to have `glslang`s `glslangValidator` binary.
-
 ## Logging
 
 `wgpu-core` uses `tracing` for logging and `wgpu-rs` uses `log` for logging.
