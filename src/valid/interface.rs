@@ -1,6 +1,6 @@
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
-    FunctionError, TypeFlags,
+    Disalignment, FunctionError, TypeFlags,
 };
 use crate::arena::{Arena, Handle};
 
@@ -26,6 +26,8 @@ pub enum GlobalVariableError {
     },
     #[error("Binding decoration is missing or not applicable")]
     InvalidBinding,
+    #[error("Alignment requirements for this storage class are not met by {0:?}")]
+    Alignment(Handle<crate::Type>, #[source] Disalignment),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -263,11 +265,20 @@ impl super::Validator {
         types: &Arena<crate::Type>,
     ) -> Result<(), GlobalVariableError> {
         log::debug!("var {:?}", var);
+        let type_info = &self.types[var.ty.index()];
+
         let (allowed_storage_access, required_type_flags, is_resource) = match var.class {
             crate::StorageClass::Function => return Err(GlobalVariableError::InvalidUsage),
             crate::StorageClass::Storage => {
                 match types[var.ty].inner {
-                    crate::TypeInner::Struct { .. } => (),
+                    crate::TypeInner::Struct { block: true, .. } => {
+                        if let Err((ty_handle, ref disalignment)) = type_info.storage_layout {
+                            return Err(GlobalVariableError::Alignment(
+                                ty_handle,
+                                disalignment.clone(),
+                            ));
+                        }
+                    }
                     _ => return Err(GlobalVariableError::InvalidType),
                 }
                 (
@@ -278,7 +289,14 @@ impl super::Validator {
             }
             crate::StorageClass::Uniform => {
                 match types[var.ty].inner {
-                    crate::TypeInner::Struct { .. } => (),
+                    crate::TypeInner::Struct { block: true, .. } => {
+                        if let Err((ty_handle, ref disalignment)) = type_info.uniform_layout {
+                            return Err(GlobalVariableError::Alignment(
+                                ty_handle,
+                                disalignment.clone(),
+                            ));
+                        }
+                    }
                     _ => return Err(GlobalVariableError::InvalidType),
                 }
                 (
@@ -317,10 +335,9 @@ impl super::Validator {
             });
         }
 
-        let type_flags = self.type_flags[var.ty.index()];
-        if !type_flags.contains(required_type_flags) {
+        if !type_info.flags.contains(required_type_flags) {
             return Err(GlobalVariableError::MissingTypeFlags {
-                seen: type_flags,
+                seen: type_info.flags,
                 required: required_type_flags,
             });
         }

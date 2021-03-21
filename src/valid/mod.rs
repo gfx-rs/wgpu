@@ -5,7 +5,7 @@ mod interface;
 
 use crate::{
     arena::{Arena, Handle},
-    proc::Typifier,
+    proc::{Layouter, Typifier},
     FastHashSet,
 };
 use bit_set::BitSet;
@@ -46,13 +46,60 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum Disalignment {
+    #[error("The array stride {stride} is not a multiple of the required alignment {alignment}")]
+    ArrayStride { stride: u32, alignment: u32 },
+    #[error("The struct size {size}, is not a multiple of the required alignment {alignment}")]
+    StructSize { size: u32, alignment: u32 },
+    #[error("The struct member[{index}] offset {offset} is not a multiple of the required alignment {alignment}")]
+    Member {
+        index: u32,
+        offset: u32,
+        alignment: u32,
+    },
+    #[error("The struct member[{index}] is not statically sized")]
+    UnsizedMember { index: u32 },
+}
+
+// Only makes sense if `flags.contains(HOST_SHARED)`
+type LayoutCompatibility = Result<(), (Handle<crate::Type>, Disalignment)>;
+
+// For the uniform buffer alignment, array strides and struct sizes must be multiples of 16.
+const UNIFORM_LAYOUT_ALIGNMENT_MASK: u32 = 0xF;
+
+#[derive(Clone, Debug)]
+struct TypeInfo {
+    flags: TypeFlags,
+    uniform_layout: LayoutCompatibility,
+    storage_layout: LayoutCompatibility,
+}
+
+impl TypeInfo {
+    fn new() -> Self {
+        TypeInfo {
+            flags: TypeFlags::empty(),
+            uniform_layout: Ok(()),
+            storage_layout: Ok(()),
+        }
+    }
+
+    fn from_flags(flags: TypeFlags) -> Self {
+        TypeInfo {
+            flags,
+            uniform_layout: Ok(()),
+            storage_layout: Ok(()),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Validator {
     flags: ValidationFlags,
     //Note: this is a bit tricky: some of the front-ends as well as backends
     // already have to use the typifier, so the work here is redundant in a way.
     typifier: Typifier,
-    type_flags: Vec<TypeFlags>,
+    types: Vec<TypeInfo>,
     location_mask: BitSet,
     bind_group_masks: Vec<BitSet>,
     select_cases: FastHashSet<i32>,
@@ -74,8 +121,20 @@ pub enum TypeError {
     InvalidArrayBaseType(Handle<crate::Type>),
     #[error("The constant {0:?} can not be used for an array size")]
     InvalidArraySizeConstant(Handle<crate::Constant>),
+    #[error(
+        "Array stride {stride} is not a multiple of the base element alignment {base_alignment}"
+    )]
+    UnalignedArrayStride { stride: u32, base_alignment: u32 },
+    #[error("Array stride {stride} is smaller than the base element size {base_size}")]
+    InsufficientArrayStride { stride: u32, base_size: u32 },
     #[error("Field '{0}' can't be dynamically-sized, has type {1:?}")]
     InvalidDynamicArray(String, Handle<crate::Type>),
+    #[error("Structure member[{index}] size {size} is not a sufficient to hold {base_size}")]
+    InsufficientMemberSize {
+        index: u32,
+        size: u32,
+        base_size: u32,
+    },
 }
 
 #[derive(Clone, Debug, Error)]
@@ -155,7 +214,7 @@ impl Validator {
         Validator {
             flags,
             typifier: Typifier::new(),
-            type_flags: Vec::new(),
+            types: Vec::new(),
             location_mask: BitSet::new(),
             bind_group_masks: Vec::new(),
             select_cases: FastHashSet::default(),
@@ -176,26 +235,37 @@ impl Validator {
         ty: &crate::Type,
         handle: Handle<crate::Type>,
         constants: &Arena<crate::Constant>,
-    ) -> Result<TypeFlags, TypeError> {
+        layouter: &Layouter,
+    ) -> Result<TypeInfo, TypeError> {
         use crate::TypeInner as Ti;
         Ok(match ty.inner {
             Ti::Scalar { kind, width } | Ti::Vector { kind, width, .. } => {
                 if !Self::check_width(kind, width) {
                     return Err(TypeError::InvalidWidth(kind, width));
                 }
-                TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::INTERFACE | TypeFlags::HOST_SHARED
+                TypeInfo::from_flags(
+                    TypeFlags::DATA
+                        | TypeFlags::SIZED
+                        | TypeFlags::INTERFACE
+                        | TypeFlags::HOST_SHARED,
+                )
             }
             Ti::Matrix { width, .. } => {
                 if !Self::check_width(crate::ScalarKind::Float, width) {
                     return Err(TypeError::InvalidWidth(crate::ScalarKind::Float, width));
                 }
-                TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::INTERFACE | TypeFlags::HOST_SHARED
+                TypeInfo::from_flags(
+                    TypeFlags::DATA
+                        | TypeFlags::SIZED
+                        | TypeFlags::INTERFACE
+                        | TypeFlags::HOST_SHARED,
+                )
             }
             Ti::Pointer { base, class: _ } => {
                 if base >= handle {
                     return Err(TypeError::UnresolvedBase(base));
                 }
-                TypeFlags::DATA | TypeFlags::SIZED
+                TypeInfo::from_flags(TypeFlags::DATA | TypeFlags::SIZED)
             }
             Ti::ValuePointer {
                 size: _,
@@ -206,22 +276,34 @@ impl Validator {
                 if !Self::check_width(kind, width) {
                     return Err(TypeError::InvalidWidth(kind, width));
                 }
-                TypeFlags::SIZED //TODO: `DATA`?
+                TypeInfo::from_flags(TypeFlags::SIZED)
             }
-            Ti::Array {
-                base,
-                size,
-                stride: _,
-            } => {
+            Ti::Array { base, size, stride } => {
                 if base >= handle {
                     return Err(TypeError::UnresolvedBase(base));
                 }
-                let base_flags = self.type_flags[base.index()];
-                if !base_flags.contains(TypeFlags::DATA | TypeFlags::SIZED) {
+                let base_info = &self.types[base.index()];
+                if !base_info.flags.contains(TypeFlags::DATA | TypeFlags::SIZED) {
                     return Err(TypeError::InvalidArrayBaseType(base));
                 }
 
-                let sized_flag = match size {
+                let base_layout = &layouter[base];
+                if let Some(stride) = stride {
+                    if stride.get() % base_layout.alignment.get() != 0 {
+                        return Err(TypeError::UnalignedArrayStride {
+                            stride: stride.get(),
+                            base_alignment: base_layout.alignment.get(),
+                        });
+                    }
+                    if stride.get() < base_layout.size {
+                        return Err(TypeError::InsufficientArrayStride {
+                            stride: stride.get(),
+                            base_size: base_layout.size,
+                        });
+                    }
+                }
+
+                let (sized_flag, uniform_layout) = match size {
                     crate::ArraySize::Constant(const_handle) => {
                         match constants.try_get(const_handle) {
                             Some(&crate::Constant {
@@ -249,37 +331,109 @@ impl Validator {
                                 return Err(TypeError::InvalidArraySizeConstant(const_handle));
                             }
                         }
-                        TypeFlags::SIZED
+
+                        let effective_alignment = match stride {
+                            Some(stride) => stride.get(),
+                            None => base_layout.size,
+                        };
+                        let uniform_layout =
+                            if effective_alignment & UNIFORM_LAYOUT_ALIGNMENT_MASK == 0 {
+                                base_info.uniform_layout.clone()
+                            } else {
+                                Err((
+                                    handle,
+                                    Disalignment::ArrayStride {
+                                        stride: effective_alignment,
+                                        alignment: effective_alignment,
+                                    },
+                                ))
+                            };
+                        (TypeFlags::SIZED, uniform_layout)
                     }
-                    crate::ArraySize::Dynamic => TypeFlags::empty(),
+                    //Note: this will be detected at the struct level
+                    crate::ArraySize::Dynamic => (TypeFlags::empty(), Ok(())),
                 };
+
                 let base_mask = TypeFlags::HOST_SHARED | TypeFlags::INTERFACE;
-                TypeFlags::DATA | (base_flags & base_mask) | sized_flag
+                TypeInfo {
+                    flags: TypeFlags::DATA | (base_info.flags & base_mask) | sized_flag,
+                    uniform_layout,
+                    storage_layout: base_info.storage_layout.clone(),
+                }
             }
             Ti::Struct { block, ref members } => {
                 let mut flags = TypeFlags::all();
+                let mut uniform_layout = Ok(());
+                let mut storage_layout = Ok(());
+                let mut offset = 0;
                 for (i, member) in members.iter().enumerate() {
                     if member.ty >= handle {
                         return Err(TypeError::UnresolvedBase(member.ty));
                     }
-                    let base_flags = self.type_flags[member.ty.index()];
-                    flags &= base_flags;
-                    if !base_flags.contains(TypeFlags::DATA) {
+                    let base_info = &self.types[member.ty.index()];
+                    flags &= base_info.flags;
+                    if !base_info.flags.contains(TypeFlags::DATA) {
                         return Err(TypeError::InvalidData(member.ty));
                     }
-                    if block && !base_flags.contains(TypeFlags::INTERFACE) {
+                    if block && !base_info.flags.contains(TypeFlags::INTERFACE) {
                         return Err(TypeError::InvalidBlockType(member.ty));
                     }
-                    // only the last field can be unsized
-                    if i + 1 != members.len() && !base_flags.contains(TypeFlags::SIZED) {
-                        let name = member.name.clone().unwrap_or_default();
-                        return Err(TypeError::InvalidDynamicArray(name, member.ty));
+
+                    let base_layout = &layouter[member.ty];
+                    let (range, _alignment) = layouter.member_placement(offset, member);
+                    if range.end - range.start < base_layout.size {
+                        return Err(TypeError::InsufficientMemberSize {
+                            index: i as u32,
+                            size: range.end - range.start,
+                            base_size: base_layout.size,
+                        });
                     }
+                    if range.start % base_layout.alignment.get() != 0 {
+                        let result = Err((
+                            handle,
+                            Disalignment::Member {
+                                index: i as u32,
+                                offset: range.start,
+                                alignment: base_layout.alignment.get(),
+                            },
+                        ));
+                        uniform_layout = uniform_layout.or_else(|_| result.clone());
+                        storage_layout = storage_layout.or(result);
+                    }
+                    offset = range.end;
+
+                    // only the last field can be unsized
+                    if !base_info.flags.contains(TypeFlags::SIZED) {
+                        if i + 1 != members.len() {
+                            let name = member.name.clone().unwrap_or_default();
+                            return Err(TypeError::InvalidDynamicArray(name, member.ty));
+                        }
+                        if uniform_layout.is_ok() {
+                            uniform_layout =
+                                Err((handle, Disalignment::UnsizedMember { index: i as u32 }));
+                        }
+                    }
+
+                    uniform_layout = uniform_layout.or_else(|_| base_info.uniform_layout.clone());
+                    storage_layout = storage_layout.or_else(|_| base_info.storage_layout.clone());
                 }
-                //TODO: check the spans
-                flags
+
+                if uniform_layout.is_ok() && offset % UNIFORM_LAYOUT_ALIGNMENT_MASK == 0 {
+                    uniform_layout = Err((
+                        handle,
+                        Disalignment::StructSize {
+                            size: offset,
+                            alignment: UNIFORM_LAYOUT_ALIGNMENT_MASK,
+                        },
+                    ));
+                }
+                TypeInfo {
+                    flags,
+                    uniform_layout,
+                    storage_layout,
+                }
             }
-            Ti::Image { .. } | Ti::Sampler { .. } => TypeFlags::empty(),
+            Ti::Image { .. } | Ti::Sampler { .. } => TypeInfo::from_flags(TypeFlags::empty()),
         })
     }
 
@@ -325,11 +479,12 @@ impl Validator {
     /// Check the given module to be valid.
     pub fn validate(&mut self, module: &crate::Module) -> Result<ModuleInfo, ValidationError> {
         self.typifier.clear();
-        self.type_flags.clear();
-        self.type_flags
-            .resize(module.types.len(), TypeFlags::empty());
+        self.types.clear();
+        self.types.resize(module.types.len(), TypeInfo::new());
 
         let mod_info = ModuleInfo::new(module, self.flags)?;
+
+        let layouter = Layouter::new(&module.types, &module.constants);
 
         for (handle, constant) in module.constants.iter() {
             self.validate_constant(handle, &module.constants, &module.types)
@@ -342,14 +497,14 @@ impl Validator {
 
         // doing after the globals, so that `type_flags` is ready
         for (handle, ty) in module.types.iter() {
-            let ty_flags = self
-                .validate_type(ty, handle, &module.constants)
+            let ty_info = self
+                .validate_type(ty, handle, &module.constants, &layouter)
                 .map_err(|error| ValidationError::Type {
                     handle,
                     name: ty.name.clone().unwrap_or_default(),
                     error,
                 })?;
-            self.type_flags[handle.index()] = ty_flags;
+            self.types[handle.index()] = ty_info;
         }
 
         for (var_handle, var) in module.global_variables.iter() {

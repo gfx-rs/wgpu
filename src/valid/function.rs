@@ -487,7 +487,10 @@ impl super::Validator {
         }
 
         for (index, argument) in fun.arguments.iter().enumerate() {
-            if !self.type_flags[argument.ty.index()].contains(TypeFlags::DATA) {
+            if !self.types[argument.ty.index()]
+                .flags
+                .contains(TypeFlags::DATA)
+            {
                 return Err(FunctionError::InvalidArgumentType {
                     index,
                     name: argument.name.clone().unwrap_or_default(),
