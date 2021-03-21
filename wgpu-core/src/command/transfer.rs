@@ -181,7 +181,7 @@ pub(crate) fn validate_linear_texture_data(
     let bytes_per_row = if let Some(bytes_per_row) = layout.bytes_per_row {
         bytes_per_row.get() as BufferAddress
     } else {
-        if copy_depth > 1 || block_height > 1 {
+        if copy_depth > 1 || height_in_blocks > 1 {
             return Err(TransferError::UnspecifiedBytesPerRow);
         }
         bytes_per_block * width_in_blocks

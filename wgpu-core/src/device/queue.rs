@@ -401,14 +401,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         )?;
         dst.life_guard.use_at(device.active_submission_index + 1);
 
+        let bytes_per_row = if let Some(bytes_per_row) = data_layout.bytes_per_row {
+            bytes_per_row.get()
+        } else {
+            width_blocks * bytes_per_block
+        };
+
         let ptr = stage.memory.map(&device.raw, 0, stage_size)?;
         unsafe {
-            let bytes_per_row = if let Some(bytes_per_row) = data_layout.bytes_per_row {
-                bytes_per_row.get()
-            } else {
-                width_blocks * bytes_per_block
-            };
-
             //TODO: https://github.com/zakarumych/gpu-alloc/issues/13
             if stage_bytes_per_row == bytes_per_row {
                 // Fast path if the data isalready being aligned optimally.
