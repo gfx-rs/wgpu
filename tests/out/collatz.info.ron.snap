@@ -3,13 +3,10 @@ source: tests/snapshots.rs
 expression: output
 ---
 (
-    flags: (
-        bits: 1,
-    ),
     functions: [
         (
             flags: (
-                bits: 1,
+                bits: 7,
             ),
             uniformity: (
                 non_uniform_result: Some(5),
@@ -281,7 +278,7 @@ expression: output
     entry_points: [
         (
             flags: (
-                bits: 1,
+                bits: 7,
             ),
             uniformity: (
                 non_uniform_result: Some(5),

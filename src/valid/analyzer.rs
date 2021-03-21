@@ -6,6 +6,7 @@ Figures out the following properties:
   - expression reference counts
 !*/
 
+use super::ValidationFlags;
 use crate::arena::{Arena, Handle};
 use std::ops;
 
@@ -152,8 +153,8 @@ impl ExpressionInfo {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct FunctionInfo {
-    /// Options.
-    flags: AnalysisFlags,
+    /// Validation flags.
+    flags: ValidationFlags,
     /// Uniformity characteristics.
     pub uniformity: Uniformity,
     /// Function may kill the invocation.
@@ -555,7 +556,9 @@ impl FunctionInfo {
                     let mut requirements = UniformityRequirements::empty();
                     for expr in range.clone() {
                         let req = self.expressions[expr.index()].uniformity.requirements;
-                        if self.flags.contains(AnalysisFlags::CONTROL_FLOW_UNIFORMITY)
+                        if self
+                            .flags
+                            .contains(super::ValidationFlags::CONTROL_FLOW_UNIFORMITY)
                             && !req.is_empty()
                         {
                             if let Some(cause) = disruptor {
@@ -681,19 +684,9 @@ impl FunctionInfo {
     }
 }
 
-bitflags::bitflags! {
-    /// Analysis flags.
-    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-    pub struct AnalysisFlags: u8 {
-        const CONTROL_FLOW_UNIFORMITY = 0x1;
-    }
-}
-
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct ModuleInfo {
-    flags: AnalysisFlags,
     functions: Vec<FunctionInfo>,
     entry_points: Vec<FunctionInfo>,
 }
@@ -705,9 +698,10 @@ impl ModuleInfo {
         &self,
         fun: &crate::Function,
         global_var_arena: &Arena<crate::GlobalVariable>,
+        flags: ValidationFlags,
     ) -> Result<FunctionInfo, FunctionAnalysisError> {
         let mut info = FunctionInfo {
-            flags: self.flags,
+            flags,
             uniformity: Uniformity::new(),
             may_kill: false,
             sampling_set: crate::FastHashSet::default(),
@@ -733,22 +727,21 @@ impl ModuleInfo {
     }
 
     /// Analyze a module and return the `ModuleInfo`, if successful.
-    pub fn new(module: &crate::Module, flags: AnalysisFlags) -> Result<Self, AnalysisError> {
+    pub fn new(module: &crate::Module, flags: ValidationFlags) -> Result<Self, AnalysisError> {
         let mut this = ModuleInfo {
-            flags,
             functions: Vec::with_capacity(module.functions.len()),
             entry_points: Vec::with_capacity(module.entry_points.len()),
         };
         for (fun_handle, fun) in module.functions.iter() {
             let info = this
-                .process_function(fun, &module.global_variables)
+                .process_function(fun, &module.global_variables, flags)
                 .map_err(|source| AnalysisError::Function(fun_handle, source))?;
             this.functions.push(info);
         }
 
         for ep in module.entry_points.iter() {
             let info = this
-                .process_function(&ep.function, &module.global_variables)
+                .process_function(&ep.function, &module.global_variables, flags)
                 .map_err(|source| AnalysisError::EntryPoint(ep.stage, ep.name.clone(), source))?;
             this.entry_points.push(info);
         }
@@ -830,7 +823,7 @@ fn uniform_control_flow() {
     let emit_range_query_access_globals = expressions.range_from(2);
 
     let mut info = FunctionInfo {
-        flags: AnalysisFlags::all(),
+        flags: ValidationFlags::all(),
         uniformity: Uniformity::new(),
         may_kill: false,
         sampling_set: crate::FastHashSet::default(),

@@ -14,12 +14,23 @@ use thiserror::Error;
 //TODO: analyze the model at the same time as we validate it,
 // merge the corresponding matches over expressions and statements.
 pub use analyzer::{
-    AnalysisError, AnalysisFlags, ExpressionInfo, FunctionInfo, GlobalUse, ModuleInfo, Uniformity,
+    AnalysisError, ExpressionInfo, FunctionInfo, GlobalUse, ModuleInfo, Uniformity,
     UniformityRequirements,
 };
 pub use expression::ExpressionError;
 pub use function::{CallError, FunctionError, LocalVariableError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
+
+bitflags::bitflags! {
+    /// Validation flags.
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    pub struct ValidationFlags: u8 {
+        const EXPRESSIONS = 0x1;
+        const BLOCKS = 0x2;
+        const CONTROL_FLOW_UNIFORMITY = 0x4;
+    }
+}
 
 bitflags::bitflags! {
     #[repr(transparent)]
@@ -37,7 +48,7 @@ bitflags::bitflags! {
 
 #[derive(Debug)]
 pub struct Validator {
-    analysis_flags: AnalysisFlags,
+    flags: ValidationFlags,
     //Note: this is a bit tricky: some of the front-ends as well as backends
     // already have to use the typifier, so the work here is redundant in a way.
     typifier: Typifier,
@@ -140,9 +151,9 @@ impl crate::TypeInner {
 
 impl Validator {
     /// Construct a new validator instance.
-    pub fn new(analysis_flags: AnalysisFlags) -> Self {
+    pub fn new(flags: ValidationFlags) -> Self {
         Validator {
-            analysis_flags,
+            flags,
             typifier: Typifier::new(),
             type_flags: Vec::new(),
             location_mask: BitSet::new(),
@@ -318,7 +329,7 @@ impl Validator {
         self.type_flags
             .resize(module.types.len(), TypeFlags::empty());
 
-        let analysis = ModuleInfo::new(module, self.analysis_flags)?;
+        let mod_info = ModuleInfo::new(module, self.flags)?;
 
         for (handle, constant) in module.constants.iter() {
             self.validate_constant(handle, &module.constants, &module.types)
@@ -351,7 +362,7 @@ impl Validator {
         }
 
         for (handle, fun) in module.functions.iter() {
-            self.validate_function(fun, &analysis[handle], module)
+            self.validate_function(fun, &mod_info[handle], module)
                 .map_err(|error| ValidationError::Function {
                     handle,
                     name: fun.name.clone().unwrap_or_default(),
@@ -368,7 +379,7 @@ impl Validator {
                     error: EntryPointError::Conflict,
                 });
             }
-            let info = analysis.get_entry_point(index);
+            let info = mod_info.get_entry_point(index);
             self.validate_entry_point(ep, info, module)
                 .map_err(|error| ValidationError::EntryPoint {
                     stage: ep.stage,
@@ -377,6 +388,6 @@ impl Validator {
                 })?;
         }
 
-        Ok(analysis)
+        Ok(mod_info)
     }
 }

@@ -1,4 +1,4 @@
-use super::{analyzer::FunctionInfo, ExpressionError, TypeFlags};
+use super::{analyzer::FunctionInfo, ExpressionError, TypeFlags, ValidationFlags};
 use crate::{
     arena::{Arena, Handle},
     proc::{ResolveContext, TypifyError},
@@ -500,11 +500,17 @@ impl super::Validator {
             if expr.needs_pre_emit() {
                 self.valid_expression_set.insert(handle.index());
             }
-            if let Err(error) = self.validate_expression(handle, expr, fun, module) {
-                return Err(FunctionError::Expression { handle, error });
+            if !self.flags.contains(ValidationFlags::EXPRESSIONS) {
+                if let Err(error) = self.validate_expression(handle, expr, fun, module) {
+                    return Err(FunctionError::Expression { handle, error });
+                }
             }
         }
 
-        self.validate_block(&fun.body, &BlockContext::new(fun, module))
+        if self.flags.contains(ValidationFlags::BLOCKS) {
+            self.validate_block(&fun.body, &BlockContext::new(fun, module))
+        } else {
+            Ok(())
+        }
     }
 }

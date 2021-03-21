@@ -24,7 +24,7 @@ fn _check_glsl(name: &str) {
         },
     ) {
         Ok(m) => {
-            match naga::valid::Validator::new(naga::valid::AnalysisFlags::all()).validate(&m) {
+            match naga::valid::Validator::new(naga::valid::ValidationFlags::all()).validate(&m) {
                 Ok(_info) => (),
                 //TODO: panic
                 Err(e) => log::error!("Unable to validate {}: {:?}", name, e),
