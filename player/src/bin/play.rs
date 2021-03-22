@@ -141,7 +141,10 @@ fn main() {
                                 resize_desc = Some(desc);
                                 break;
                             } else {
-                                gfx_select!(device => global.device_create_swap_chain(device, surface, &desc)).unwrap();
+                                let (_, error) = gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
+                                if let Some(e) = error {
+                                    panic!("{:?}", e);
+                                }
                             }
                         }
                         Some(trace::Action::PresentSwapChain(id)) => {
@@ -159,7 +162,10 @@ fn main() {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(_) => {
                         if let Some(desc) = resize_desc.take() {
-                            gfx_select!(device => global.device_create_swap_chain(device, surface, &desc)).unwrap();
+                            let (_, error) = gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
+                            if let Some(e) = error {
+                                panic!("{:?}", e);
+                            }
                         }
                     }
                     WindowEvent::KeyboardInput {

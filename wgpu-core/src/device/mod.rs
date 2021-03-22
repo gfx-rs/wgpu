@@ -4239,7 +4239,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         surface_id: id::SurfaceId,
         desc: &wgt::SwapChainDescriptor,
-    ) -> Result<id::SwapChainId, swap_chain::CreateSwapChainError> {
+    ) -> (id::SwapChainId, Option<swap_chain::CreateSwapChainError>) {
         profiling::scope!("Device::create_swap_chain");
 
         fn validate_swap_chain_descriptor(
@@ -4275,6 +4275,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         log::info!("creating swap chain {:?}", desc);
+        let sc_id = surface_id.to_swap_chain_id(B::VARIANT);
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -4282,84 +4283,98 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (mut swap_chain_guard, _) = hub.swap_chains.write(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
-        let surface = surface_guard
-            .get_mut(surface_id)
-            .map_err(|_| swap_chain::CreateSwapChainError::InvalidSurface)?;
 
-        let (caps, formats) = {
-            let surface = B::get_surface_mut(surface);
-            let adapter = &adapter_guard[device.adapter_id.value];
-            let queue_family = &adapter.raw.queue_families[0];
-            if !surface.supports_queue_family(queue_family) {
-                return Err(swap_chain::CreateSwapChainError::UnsupportedQueueFamily);
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateSwapChain(sc_id, desc.clone()));
             }
-            let formats = surface.supported_formats(&adapter.raw.physical_device);
-            let caps = surface.capabilities(&adapter.raw.physical_device);
-            (caps, formats)
+
+            let surface = match surface_guard.get_mut(surface_id) {
+                Ok(surface) => surface,
+                Err(_) => break swap_chain::CreateSwapChainError::InvalidSurface,
+            };
+
+            let (caps, formats) = {
+                let surface = B::get_surface_mut(surface);
+                let adapter = &adapter_guard[device.adapter_id.value];
+                let queue_family = &adapter.raw.queue_families[0];
+                if !surface.supports_queue_family(queue_family) {
+                    break swap_chain::CreateSwapChainError::UnsupportedQueueFamily;
+                }
+                let formats = surface.supported_formats(&adapter.raw.physical_device);
+                let caps = surface.capabilities(&adapter.raw.physical_device);
+                (caps, formats)
+            };
+
+            let num_frames = swap_chain::DESIRED_NUM_FRAMES
+                .max(*caps.image_count.start())
+                .min(*caps.image_count.end());
+            let mut config = swap_chain::swap_chain_descriptor_to_hal(
+                &desc,
+                num_frames,
+                device.private_features,
+            );
+            if let Some(formats) = formats {
+                if !formats.contains(&config.format) {
+                    break swap_chain::CreateSwapChainError::UnsupportedFormat {
+                        requested: config.format,
+                        available: formats,
+                    };
+                }
+            }
+            if let Err(error) = validate_swap_chain_descriptor(&mut config, &caps) {
+                break error;
+            }
+            let framebuffer_attachment = config.framebuffer_attachment();
+
+            match unsafe { B::get_surface_mut(surface).configure_swapchain(&device.raw, config) } {
+                Ok(()) => (),
+                Err(hal::window::SwapchainError::OutOfMemory(_)) => {
+                    break DeviceError::OutOfMemory.into()
+                }
+                Err(hal::window::SwapchainError::DeviceLost(_)) => break DeviceError::Lost.into(),
+                Err(err) => panic!("failed to configure swap chain on creation: {}", err),
+            }
+
+            if let Some(sc) = swap_chain_guard.try_remove(sc_id) {
+                if sc.acquired_view_id.is_some() {
+                    break swap_chain::CreateSwapChainError::SwapChainOutputExists;
+                }
+                unsafe {
+                    device.raw.destroy_semaphore(sc.semaphore);
+                }
+            }
+
+            let swap_chain = swap_chain::SwapChain {
+                life_guard: LifeGuard::new("<SwapChain>"),
+                device_id: Stored {
+                    value: id::Valid(device_id),
+                    ref_count: device.life_guard.add_ref(),
+                },
+                desc: desc.clone(),
+                num_frames,
+                semaphore: match device.raw.create_semaphore() {
+                    Ok(sem) => sem,
+                    Err(_) => break DeviceError::OutOfMemory.into(),
+                },
+                acquired_view_id: None,
+                active_submission_index: 0,
+                framebuffer_attachment,
+            };
+            swap_chain_guard.insert(sc_id, swap_chain);
+
+            return (sc_id, None);
         };
-        let num_frames = swap_chain::DESIRED_NUM_FRAMES
-            .max(*caps.image_count.start())
-            .min(*caps.image_count.end());
-        let mut config =
-            swap_chain::swap_chain_descriptor_to_hal(&desc, num_frames, device.private_features);
-        if let Some(formats) = formats {
-            if !formats.contains(&config.format) {
-                return Err(swap_chain::CreateSwapChainError::UnsupportedFormat {
-                    requested: config.format,
-                    available: formats,
-                });
-            }
-        }
-        validate_swap_chain_descriptor(&mut config, &caps)?;
-        let framebuffer_attachment = config.framebuffer_attachment();
 
-        unsafe {
-            B::get_surface_mut(surface)
-                .configure_swapchain(&device.raw, config)
-                .map_err(|err| match err {
-                    hal::window::SwapchainError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    hal::window::SwapchainError::DeviceLost(_) => DeviceError::Lost,
-                    _ => panic!("failed to configure swap chain on creation: {}", err),
-                })?;
-        }
-
-        let sc_id = surface_id.to_swap_chain_id(B::VARIANT);
-        if let Some(sc) = swap_chain_guard.try_remove(sc_id) {
-            if sc.acquired_view_id.is_some() {
-                return Err(swap_chain::CreateSwapChainError::SwapChainOutputExists);
-            }
-            unsafe {
-                device.raw.destroy_semaphore(sc.semaphore);
-            }
-        }
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace
-                .lock()
-                .add(trace::Action::CreateSwapChain(sc_id, desc.clone()));
-        }
-
-        let swap_chain = swap_chain::SwapChain {
-            life_guard: LifeGuard::new("<SwapChain>"),
-            device_id: Stored {
-                value: id::Valid(device_id),
-                ref_count: device.life_guard.add_ref(),
-            },
-            desc: desc.clone(),
-            num_frames,
-            semaphore: device
-                .raw
-                .create_semaphore()
-                .or(Err(DeviceError::OutOfMemory))?,
-            acquired_view_id: None,
-            active_submission_index: 0,
-            framebuffer_attachment,
-        };
-        swap_chain_guard.insert(sc_id, swap_chain);
-        Ok(sc_id)
+        swap_chain_guard.insert_error(sc_id, "");
+        (sc_id, Some(error))
     }
 
     #[cfg(feature = "replay")]
