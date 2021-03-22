@@ -44,7 +44,7 @@
 pub use features::Features;
 
 use crate::{
-    proc::{EntryPointIndex, NameKey, Namer, ResolveContext, Typifier, TypifyError},
+    proc::{EntryPointIndex, NameKey, Namer, TypeResolution, TypifyError},
     valid::{FunctionInfo, ModuleInfo},
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant,
     ConstantInner, DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle,
@@ -185,18 +185,16 @@ enum FunctionType {
 }
 
 /// Helper structure that stores data needed when writing the function
-struct FunctionCtx<'a, 'b> {
+struct FunctionCtx<'a> {
     /// The current function being written
     func: FunctionType,
     /// Analysis about the function
     info: &'a FunctionInfo,
     /// The expression arena of the current function being written
     expressions: &'a Arena<Expression>,
-    /// A typifier that has already resolved all expressions in the function being written
-    typifier: &'b Typifier,
 }
 
-impl<'a, 'b> FunctionCtx<'a, 'b> {
+impl<'a> FunctionCtx<'a> {
     /// Helper method that generates a [`NameKey`](crate::proc::NameKey) for a local in the current function
     fn name_key(&self, local: Handle<LocalVariable>) -> NameKey {
         match self.func {
@@ -855,26 +853,11 @@ impl<'a, W: Write> Writer<'a, W> {
         info: &FunctionInfo,
         name: &str,
     ) -> BackendResult {
-        // Create a new typifier and resolve all types for the current function
-        let mut typifier = Typifier::new();
-        typifier.resolve_all(
-            &func.expressions,
-            &self.module.types,
-            &ResolveContext {
-                constants: &self.module.constants,
-                global_vars: &self.module.global_variables,
-                local_vars: &func.local_variables,
-                functions: &self.module.functions,
-                arguments: &func.arguments,
-            },
-        )?;
-
         // Create a function context for the function being written
         let ctx = FunctionCtx {
             func: ty,
             info,
             expressions: &func.expressions,
-            typifier: &typifier,
         };
 
         self.cached_expressions.clear();
@@ -1166,7 +1149,7 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_stmt(
         &mut self,
         sta: &Statement,
-        ctx: &FunctionCtx<'_, '_>,
+        ctx: &FunctionCtx<'_>,
         indent: usize,
     ) -> BackendResult {
         match *sta {
@@ -1176,17 +1159,19 @@ impl<'a, W: Write> Writer<'a, W> {
                     let min_ref_count = ctx.expressions[handle].bake_ref_count();
                     if min_ref_count <= ctx.info[handle].ref_count {
                         write!(self.out, "{}", INDENT.repeat(indent))?;
-                        match ctx.typifier.get_handle(handle) {
-                            Ok(ty_handle) => match self.module.types[ty_handle].inner {
-                                TypeInner::Struct { .. } => {
-                                    let ty_name = &self.names[&NameKey::Type(ty_handle)];
-                                    write!(self.out, "{}", ty_name)?;
+                        match ctx.info[handle].ty {
+                            TypeResolution::Handle(ty_handle) => {
+                                match self.module.types[ty_handle].inner {
+                                    TypeInner::Struct { .. } => {
+                                        let ty_name = &self.names[&NameKey::Type(ty_handle)];
+                                        write!(self.out, "{}", ty_name)?;
+                                    }
+                                    _ => {
+                                        self.write_type(ty_handle)?;
+                                    }
                                 }
-                                _ => {
-                                    self.write_type(ty_handle)?;
-                                }
-                            },
-                            Err(inner) => {
+                            }
+                            TypeResolution::Value(ref inner) => {
                                 self.write_value_type(inner)?;
                             }
                         }
@@ -1413,7 +1398,7 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
                 // This will only panic if the module is invalid
-                let dim = match *ctx.typifier.get(image, &self.module.types) {
+                let dim = match *ctx.info[image].ty.inner_with(&self.module.types) {
                     TypeInner::Image { dim, .. } => dim,
                     _ => unreachable!(),
                 };
@@ -1453,7 +1438,7 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Notes
     /// Doesn't add any newlines or leading/trailing spaces
-    fn write_expr(&mut self, expr: Handle<Expression>, ctx: &FunctionCtx<'_, '_>) -> BackendResult {
+    fn write_expr(&mut self, expr: Handle<Expression>, ctx: &FunctionCtx<'_>) -> BackendResult {
         if let Some(name) = self.cached_expressions.get(&expr) {
             write!(self.out, "{}", name)?;
             return Ok(());
@@ -1472,13 +1457,14 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::AccessIndex { base, index } => {
                 self.write_expr(base, ctx)?;
 
-                let mut resolved = ctx.typifier.get(base, &self.module.types);
+                let base_ty_res = &ctx.info[base].ty;
+                let mut resolved = base_ty_res.inner_with(&self.module.types);
                 let base_ty_handle = match *resolved {
                     TypeInner::Pointer { base, class: _ } => {
                         resolved = &self.module.types[base].inner;
-                        Ok(base)
+                        Some(base)
                     }
-                    _ => ctx.typifier.get_handle(base),
+                    _ => base_ty_res.handle(),
                 };
 
                 match *resolved {
@@ -1576,7 +1562,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // We need to get the coordinates vector size to later build a vector that's `size + 1`
                 // if `depth_ref` is some, if it isn't a vector we panic as that's not a valid expression
-                let size = match *ctx.typifier.get(coordinate, &self.module.types) {
+                let size = match *ctx.info[coordinate].ty.inner_with(&self.module.types) {
                     TypeInner::Vector { size, .. } => size,
                     _ => unreachable!(),
                 };
@@ -1652,7 +1638,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 index,
             } => {
                 // This will only panic if the module is invalid
-                let (dim, class) = match *ctx.typifier.get(image, &self.module.types) {
+                let (dim, class) = match *ctx.info[image].ty.inner_with(&self.module.types) {
                     TypeInner::Image {
                         dim,
                         arrayed: _,
@@ -1685,7 +1671,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // - textureSamples/imageSamples
             Expression::ImageQuery { image, query } => {
                 // This will only panic if the module is invalid
-                let (dim, class) = match *ctx.typifier.get(image, &self.module.types) {
+                let (dim, class) = match *ctx.info[image].ty.inner_with(&self.module.types) {
                     TypeInner::Image {
                         dim,
                         arrayed: _,
@@ -1759,25 +1745,26 @@ impl<'a, W: Write> Writer<'a, W> {
                     "({} ",
                     match op {
                         UnaryOperator::Negate => "-",
-                        UnaryOperator::Not => match *ctx.typifier.get(expr, &self.module.types) {
-                            TypeInner::Scalar {
-                                kind: ScalarKind::Sint,
-                                ..
-                            } => "~",
-                            TypeInner::Scalar {
-                                kind: ScalarKind::Uint,
-                                ..
-                            } => "~",
-                            TypeInner::Scalar {
-                                kind: ScalarKind::Bool,
-                                ..
-                            } => "!",
-                            ref other =>
-                                return Err(Error::Custom(format!(
-                                    "Cannot apply not to type {:?}",
-                                    other
-                                ))),
-                        },
+                        UnaryOperator::Not =>
+                            match *ctx.info[expr].ty.inner_with(&self.module.types) {
+                                TypeInner::Scalar {
+                                    kind: ScalarKind::Sint,
+                                    ..
+                                } => "~",
+                                TypeInner::Scalar {
+                                    kind: ScalarKind::Uint,
+                                    ..
+                                } => "~",
+                                TypeInner::Scalar {
+                                    kind: ScalarKind::Bool,
+                                    ..
+                                } => "!",
+                                ref other =>
+                                    return Err(Error::Custom(format!(
+                                        "Cannot apply not to type {:?}",
+                                        other
+                                    ))),
+                            },
                     }
                 )?;
 
@@ -1793,8 +1780,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 // Holds `Some(function_name)` if the binary operation is
                 // implemented as a function call
                 let function = if let (&TypeInner::Vector { .. }, &TypeInner::Vector { .. }) = (
-                    ctx.typifier.get(left, &self.module.types),
-                    ctx.typifier.get(right, &self.module.types),
+                    ctx.info[left].ty.inner_with(&self.module.types),
+                    ctx.info[right].ty.inner_with(&self.module.types),
                 ) {
                     match op {
                         BinaryOperator::Less => Some("lessThan"),
@@ -1979,7 +1966,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 kind,
                 convert,
             } => {
-                let inner = ctx.typifier.get(expr, &self.module.types);
+                let inner = ctx.info[expr].ty.inner_with(&self.module.types);
                 if convert {
                     // this is similar to `write_type`, but with the target kind
                     match *inner {

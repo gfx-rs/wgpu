@@ -2,7 +2,7 @@
 use super::{Instruction, LogicalLayout, Options, PhysicalLayout, WriterFlags};
 use crate::{
     arena::{Arena, Handle},
-    proc::{Layouter, ResolveContext, Typifier, TypifyError},
+    proc::{Layouter, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
 };
 use spirv::Word;
@@ -19,8 +19,6 @@ pub enum Error {
     MissingCapabilities(Vec<spirv::Capability>),
     #[error("unimplemented {0}")]
     FeatureNotImplemented(&'static str),
-    #[error(transparent)]
-    Resolve(#[from] TypifyError),
 }
 
 struct Block {
@@ -263,7 +261,6 @@ pub struct Writer {
     struct_type_handles: crate::FastHashMap<Handle<crate::Type>, crate::StorageAccess>,
     gl450_ext_inst_id: Word,
     layouter: Layouter,
-    typifier: Typifier,
     temp_chain: Vec<Word>,
 }
 
@@ -295,7 +292,6 @@ impl Writer {
             struct_type_handles: crate::FastHashMap::default(),
             gl450_ext_inst_id,
             layouter: Layouter::default(),
-            typifier: Typifier::new(),
             temp_chain: Vec::new(),
         })
     }
@@ -377,18 +373,6 @@ impl Writer {
         mut varying_ids: Option<&mut Vec<Word>>,
     ) -> Result<Word, Error> {
         let mut function = Function::default();
-
-        self.typifier.resolve_all(
-            &ir_function.expressions,
-            &ir_module.types,
-            &ResolveContext {
-                constants: &ir_module.constants,
-                global_vars: &ir_module.global_variables,
-                local_vars: &ir_function.local_variables,
-                functions: &ir_module.functions,
-                arguments: &ir_function.arguments,
-            },
-        )?;
 
         for (handle, variable) in ir_function.local_variables.iter() {
             let id = self.generate_id();
@@ -559,6 +543,7 @@ impl Writer {
                 self.cache_expression_value(
                     ir_module,
                     ir_function,
+                    info,
                     handle,
                     &mut prelude,
                     &mut function,
@@ -573,6 +558,7 @@ impl Writer {
             &ir_function.body,
             ir_module,
             ir_function,
+            info,
             &mut function,
             None,
             LoopContext::default(),
@@ -1209,6 +1195,7 @@ impl Writer {
     fn write_texture_coordinates(
         &mut self,
         ir_module: &crate::Module,
+        fun_info: &FunctionInfo,
         coordinates: Handle<crate::Expression>,
         array_index: Option<Handle<crate::Expression>>,
         block: &mut Block,
@@ -1227,7 +1214,7 @@ impl Writer {
             )?;
 
             let mut constituent_ids = [0u32; 4];
-            let size = match *self.typifier.get(coordinates, &ir_module.types) {
+            let size = match *fun_info[coordinates].ty.inner_with(&ir_module.types) {
                 crate::TypeInner::Scalar { .. } => {
                     constituent_ids[0] = coordinate_id;
                     crate::VectorSize::Bi
@@ -1291,13 +1278,16 @@ impl Writer {
         &mut self,
         ir_module: &'a crate::Module,
         ir_function: &crate::Function,
+        fun_info: &FunctionInfo,
         expr_handle: Handle<crate::Expression>,
         block: &mut Block,
         function: &mut Function,
     ) -> Result<(), Error> {
-        let result_lookup_ty = match self.typifier.get_handle(expr_handle) {
-            Ok(ty_handle) => LookupType::Handle(ty_handle),
-            Err(inner) => LookupType::Local(self.physical_layout.make_local(inner).unwrap()),
+        let result_lookup_ty = match fun_info[expr_handle].ty {
+            TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
+            TypeResolution::Value(ref inner) => {
+                LookupType::Local(self.physical_layout.make_local(inner).unwrap())
+            }
         };
         let result_type_id = self.get_type_id(&ir_module.types, result_lookup_ty)?;
 
@@ -1313,7 +1303,7 @@ impl Writer {
                     0
                 } else {
                     let index_id = self.cached[index];
-                    match *self.typifier.get(base, &ir_module.types) {
+                    match *fun_info[base].ty.inner_with(&ir_module.types) {
                         crate::TypeInner::Vector { .. } => {
                             let id = self.generate_id();
                             let base_id = self.cached[base];
@@ -1343,7 +1333,7 @@ impl Writer {
                 if base_is_var {
                     0
                 } else {
-                    match *self.typifier.get(base, &ir_module.types) {
+                    match *fun_info[base].ty.inner_with(&ir_module.types) {
                         crate::TypeInner::Vector { .. }
                         | crate::TypeInner::Matrix { .. }
                         | crate::TypeInner::Array { .. }
@@ -1382,7 +1372,7 @@ impl Writer {
             crate::Expression::Unary { op, expr } => {
                 let id = self.generate_id();
                 let expr_id = self.cached[expr];
-                let expr_ty_inner = self.typifier.get(expr, &ir_module.types);
+                let expr_ty_inner = fun_info[expr].ty.inner_with(&ir_module.types);
 
                 let spirv_op = match op {
                     crate::UnaryOperator::Negate => match expr_ty_inner.scalar_kind() {
@@ -1407,8 +1397,8 @@ impl Writer {
                 let left_id = self.cached[left];
                 let right_id = self.cached[right];
 
-                let left_ty_inner = self.typifier.get(left, &ir_module.types);
-                let right_ty_inner = self.typifier.get(right, &ir_module.types);
+                let left_ty_inner = fun_info[left].ty.inner_with(&ir_module.types);
+                let right_ty_inner = fun_info[right].ty.inner_with(&ir_module.types);
 
                 let left_dimension = get_dimension(left_ty_inner);
                 let right_dimension = get_dimension(right_ty_inner);
@@ -1543,7 +1533,7 @@ impl Writer {
                 }
 
                 let arg0_id = self.cached[arg];
-                let arg_scalar_kind = self.typifier.get(arg, &ir_module.types).scalar_kind();
+                let arg_scalar_kind = fun_info[arg].ty.inner_with(&ir_module.types).scalar_kind();
                 let arg1_id = match arg1 {
                     Some(handle) => self.cached[handle],
                     None => 0,
@@ -1672,6 +1662,7 @@ impl Writer {
                 let (pointer_id, _) = self.write_expression_pointer(
                     ir_module,
                     ir_function,
+                    fun_info,
                     pointer,
                     block,
                     function,
@@ -1694,9 +1685,9 @@ impl Writer {
                 convert,
             } => {
                 let expr_id = self.cached[expr];
-                let expr_kind = self
-                    .typifier
-                    .get(expr, &ir_module.types)
+                let expr_kind = fun_info[expr]
+                    .ty
+                    .inner_with(&ir_module.types)
                     .scalar_kind()
                     .unwrap();
 
@@ -1722,12 +1713,17 @@ impl Writer {
                 index,
             } => {
                 let image_id = self.get_expression_global(ir_function, image);
-                let coordinate_id =
-                    self.write_texture_coordinates(ir_module, coordinate, array_index, block)?;
+                let coordinate_id = self.write_texture_coordinates(
+                    ir_module,
+                    fun_info,
+                    coordinate,
+                    array_index,
+                    block,
+                )?;
 
                 let id = self.generate_id();
 
-                let image_ty = self.typifier.get(image, &ir_module.types);
+                let image_ty = fun_info[image].ty.inner_with(&ir_module.types);
                 let mut instruction = match *image_ty {
                     crate::TypeInner::Image {
                         class: crate::ImageClass::Storage { .. },
@@ -1738,7 +1734,7 @@ impl Writer {
 
                 if let Some(index) = index {
                     let index_id = self.cached[index];
-                    let image_ops = match *self.typifier.get(image, &ir_module.types) {
+                    let image_ops = match *fun_info[image].ty.inner_with(&ir_module.types) {
                         crate::TypeInner::Image {
                             class: crate::ImageClass::Sampled { multi: true, .. },
                             ..
@@ -1764,7 +1760,7 @@ impl Writer {
                 use super::instructions::SampleLod;
                 // image
                 let image_id = self.get_expression_global(ir_function, image);
-                let image_type = self.typifier.get_handle(image).unwrap();
+                let image_type = fun_info[image].ty.handle().unwrap();
 
                 // OpTypeSampledImage
                 let sampled_image_type_id = self.get_type_id(
@@ -1773,8 +1769,13 @@ impl Writer {
                 )?;
 
                 let sampler_id = self.get_expression_global(ir_function, sampler);
-                let coordinate_id =
-                    self.write_texture_coordinates(ir_module, coordinate, array_index, block)?;
+                let coordinate_id = self.write_texture_coordinates(
+                    ir_module,
+                    fun_info,
+                    coordinate,
+                    array_index,
+                    block,
+                )?;
 
                 let sampled_image_id = self.generate_id();
                 block.body.push(Instruction::sampled_image(
@@ -1921,13 +1922,16 @@ impl Writer {
         &mut self,
         ir_module: &'a crate::Module,
         ir_function: &crate::Function,
+        fun_info: &FunctionInfo,
         mut expr_handle: Handle<crate::Expression>,
         block: &mut Block,
         function: &mut Function,
     ) -> Result<(Word, spirv::StorageClass), Error> {
-        let result_lookup_ty = match self.typifier.get_handle(expr_handle) {
-            Ok(ty_handle) => LookupType::Handle(ty_handle),
-            Err(inner) => LookupType::Local(self.physical_layout.make_local(inner).unwrap()),
+        let result_lookup_ty = match fun_info[expr_handle].ty {
+            TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
+            TypeResolution::Value(ref inner) => {
+                LookupType::Local(self.physical_layout.make_local(inner).unwrap())
+            }
         };
         let result_type_id = self.get_type_id(&ir_module.types, result_lookup_ty)?;
 
@@ -1998,6 +2002,7 @@ impl Writer {
         }
     }
 
+    //TODO: put most of these into a `BlockContext` structure!
     #[allow(clippy::too_many_arguments)]
     fn write_block(
         &mut self,
@@ -2005,6 +2010,7 @@ impl Writer {
         statements: &[crate::Statement],
         ir_module: &crate::Module,
         ir_function: &crate::Function,
+        fun_info: &FunctionInfo,
         function: &mut Function,
         exit_id: Option<Word>,
         loop_context: LoopContext,
@@ -2021,6 +2027,7 @@ impl Writer {
                         self.cache_expression_value(
                             ir_module,
                             ir_function,
+                            fun_info,
                             handle,
                             &mut block,
                             function,
@@ -2037,6 +2044,7 @@ impl Writer {
                         block_statements,
                         ir_module,
                         ir_function,
+                        fun_info,
                         function,
                         Some(merge_id),
                         loop_context,
@@ -2083,6 +2091,7 @@ impl Writer {
                             accept,
                             ir_module,
                             ir_function,
+                            fun_info,
                             function,
                             Some(merge_id),
                             loop_context,
@@ -2094,6 +2103,7 @@ impl Writer {
                             reject,
                             ir_module,
                             ir_function,
+                            fun_info,
                             function,
                             Some(merge_id),
                             loop_context,
@@ -2143,6 +2153,7 @@ impl Writer {
                             &case.body,
                             ir_module,
                             ir_function,
+                            fun_info,
                             function,
                             Some(case_finish_id),
                             LoopContext::default(),
@@ -2154,6 +2165,7 @@ impl Writer {
                         default,
                         ir_module,
                         ir_function,
+                        fun_info,
                         function,
                         Some(merge_id),
                         LoopContext::default(),
@@ -2187,6 +2199,7 @@ impl Writer {
                         body,
                         ir_module,
                         ir_function,
+                        fun_info,
                         function,
                         Some(continuing_id),
                         LoopContext {
@@ -2200,6 +2213,7 @@ impl Writer {
                         continuing,
                         ir_module,
                         ir_function,
+                        fun_info,
                         function,
                         Some(preamble_id),
                         LoopContext {
@@ -2263,6 +2277,7 @@ impl Writer {
                     let (pointer_id, _) = self.write_expression_pointer(
                         ir_module,
                         ir_function,
+                        fun_info,
                         pointer,
                         &mut block,
                         function,
@@ -2282,6 +2297,7 @@ impl Writer {
                     let image_id = self.get_expression_global(ir_function, image);
                     let coordinate_id = self.write_texture_coordinates(
                         ir_module,
+                        fun_info,
                         coordinate,
                         array_index,
                         &mut block,

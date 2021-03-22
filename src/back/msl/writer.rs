@@ -1,7 +1,7 @@
 use super::{keywords::RESERVED, Error, LocationMode, Options, TranslationInfo};
 use crate::{
     arena::Handle,
-    proc::{EntryPointIndex, NameKey, Namer, ResolveContext, Typifier},
+    proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, GlobalUse, ModuleInfo},
     FastHashMap,
 };
@@ -68,7 +68,6 @@ pub struct Writer<W> {
     out: W,
     names: FastHashMap<NameKey, String>,
     named_expressions: BitSet,
-    typifier: Typifier,
     namer: Namer,
     #[cfg(test)]
     put_expression_stack_pointers: crate::FastHashSet<*const ()>,
@@ -138,13 +137,19 @@ enum FunctionOrigin {
 struct ExpressionContext<'a> {
     function: &'a crate::Function,
     origin: FunctionOrigin,
+    info: &'a FunctionInfo,
     module: &'a crate::Module,
-    mod_info: &'a ModuleInfo,
+}
+
+impl<'a> ExpressionContext<'a> {
+    fn resolve_type(&self, handle: Handle<crate::Expression>) -> &'a crate::TypeInner {
+        self.info[handle].ty.inner_with(&self.module.types)
+    }
 }
 
 struct StatementContext<'a> {
     expression: ExpressionContext<'a>,
-    fun_info: &'a FunctionInfo,
+    mod_info: &'a ModuleInfo,
     result_struct: Option<&'a str>,
 }
 
@@ -155,7 +160,6 @@ impl<W: Write> Writer<W> {
             out,
             names: FastHashMap::default(),
             named_expressions: BitSet::new(),
-            typifier: Typifier::new(),
             namer: Namer::default(),
             #[cfg(test)]
             put_expression_stack_pointers: Default::default(),
@@ -226,13 +230,14 @@ impl<W: Write> Writer<W> {
             }
             crate::Expression::AccessIndex { base, index } => {
                 self.put_expression(base, context)?;
-                let mut resolved = self.typifier.get(base, &context.module.types);
+                let base_res = &context.info[base].ty;
+                let mut resolved = base_res.inner_with(&context.module.types);
                 let base_ty_handle = match *resolved {
                     crate::TypeInner::Pointer { base, class: _ } => {
                         resolved = &context.module.types[base].inner;
-                        Ok(base)
+                        Some(base)
                     }
-                    _ => self.typifier.get_handle(base),
+                    _ => base_res.handle(),
                 };
                 match *resolved {
                     crate::TypeInner::Struct { .. } => {
@@ -410,7 +415,7 @@ impl<W: Write> Writer<W> {
                 crate::ImageQuery::Size { level } => {
                     //Note: MSL only has separate width/height/depth queries,
                     // so compose the result of them.
-                    let dim = match *self.typifier.get(image, &context.module.types) {
+                    let dim = match *context.resolve_type(image) {
                         crate::TypeInner::Image { dim, .. } => dim,
                         ref other => unreachable!("Unexpected type {:?}", other),
                     };
@@ -488,9 +493,8 @@ impl<W: Write> Writer<W> {
                     crate::BinaryOperator::ShiftLeft => "<<",
                     crate::BinaryOperator::ShiftRight => ">>",
                 };
-                let kind = self
-                    .typifier
-                    .get(left, &context.module.types)
+                let kind = context
+                    .resolve_type(left)
                     .scalar_kind()
                     .ok_or(Error::UnsupportedBinaryOp(op))?;
                 if op == crate::BinaryOperator::Modulo && kind == crate::ScalarKind::Float {
@@ -615,7 +619,7 @@ impl<W: Write> Writer<W> {
                 convert,
             } => {
                 let scalar = scalar_kind_string(kind);
-                let size = match *self.typifier.get(expr, &context.module.types) {
+                let size = match *context.resolve_type(expr) {
                     crate::TypeInner::Scalar { .. } => "",
                     crate::TypeInner::Vector { size, .. } => vector_size_string(size),
                     _ => return Err(Error::Validation),
@@ -627,37 +631,39 @@ impl<W: Write> Writer<W> {
             }
             // has to be a named expression
             crate::Expression::Call(_) => unreachable!(),
-            crate::Expression::ArrayLength(expr) => {
-                match *self.typifier.get(expr, &context.module.types) {
-                    crate::TypeInner::Array {
-                        size: crate::ArraySize::Constant(const_handle),
-                        ..
-                    } => {
-                        let size_str = &self.names[&NameKey::Constant(const_handle)];
-                        write!(self.out, "{}", size_str)?;
-                    }
-                    crate::TypeInner::Array { .. } => {
-                        return Err(Error::FeatureNotImplemented(
-                            "dynamic array size".to_string(),
-                        ))
-                    }
-                    _ => return Err(Error::Validation),
+            crate::Expression::ArrayLength(expr) => match *context.resolve_type(expr) {
+                crate::TypeInner::Array {
+                    size: crate::ArraySize::Constant(const_handle),
+                    ..
+                } => {
+                    let size_str = &self.names[&NameKey::Constant(const_handle)];
+                    write!(self.out, "{}", size_str)?;
                 }
-            }
+                crate::TypeInner::Array { .. } => {
+                    return Err(Error::FeatureNotImplemented(
+                        "dynamic array size".to_string(),
+                    ))
+                }
+                _ => return Err(Error::Validation),
+            },
         }
         Ok(())
     }
 
-    fn start_baking_expression(&mut self, handle: Handle<crate::Expression>) -> Result<(), Error> {
-        match self.typifier.get_handle(handle) {
-            Ok(ty_handle) => {
+    fn start_baking_expression(
+        &mut self,
+        handle: Handle<crate::Expression>,
+        context: &ExpressionContext,
+    ) -> Result<(), Error> {
+        match context.info[handle].ty {
+            TypeResolution::Handle(ty_handle) => {
                 let ty_name = &self.names[&NameKey::Type(ty_handle)];
                 write!(self.out, "{}", ty_name)?;
             }
-            Err(&crate::TypeInner::Scalar { kind, .. }) => {
+            TypeResolution::Value(crate::TypeInner::Scalar { kind, .. }) => {
                 write!(self.out, "{}", scalar_kind_string(kind))?;
             }
-            Err(&crate::TypeInner::Vector { size, kind, .. }) => {
+            TypeResolution::Value(crate::TypeInner::Vector { size, kind, .. }) => {
                 write!(
                     self.out,
                     "{}::{}{}",
@@ -666,7 +672,7 @@ impl<W: Write> Writer<W> {
                     vector_size_string(size)
                 )?;
             }
-            Err(other) => {
+            TypeResolution::Value(ref other) => {
                 log::error!("Type {:?} isn't a known local", other);
                 return Err(Error::FeatureNotImplemented("weird local type".to_string()));
             }
@@ -690,9 +696,9 @@ impl<W: Write> Writer<W> {
                     for handle in range.clone() {
                         let min_ref_count =
                             context.expression.function.expressions[handle].bake_ref_count();
-                        if min_ref_count <= context.fun_info[handle].ref_count {
+                        if min_ref_count <= context.expression.info[handle].ref_count {
                             write!(self.out, "{}", level)?;
-                            self.start_baking_expression(handle)?;
+                            self.start_baking_expression(handle, &context.expression)?;
                             self.put_expression(handle, &context.expression)?;
                             writeln!(self.out, ";")?;
                             self.named_expressions.insert(handle.index());
@@ -843,7 +849,7 @@ impl<W: Write> Writer<W> {
                 } => {
                     write!(self.out, "{}", level)?;
                     if let Some(expr) = result {
-                        self.start_baking_expression(expr)?;
+                        self.start_baking_expression(expr, &context.expression)?;
                         self.named_expressions.insert(expr.index());
                     }
                     let fun_name = &self.names[&NameKey::Function(function)];
@@ -857,7 +863,7 @@ impl<W: Write> Writer<W> {
                     }
                     // follow-up with any global resources used
                     let mut separate = !arguments.is_empty();
-                    let fun_info = &context.expression.mod_info[function];
+                    let fun_info = &context.mod_info[function];
                     for (handle, var) in context.expression.module.global_variables.iter() {
                         if !fun_info[handle].is_empty() && var.class.needs_pass_through() {
                             let name = &self.names[&NameKey::GlobalVariable(handle)];
@@ -1109,18 +1115,6 @@ impl<W: Write> Writer<W> {
     ) -> Result<TranslationInfo, Error> {
         let mut pass_through_globals = Vec::new();
         for (fun_handle, fun) in module.functions.iter() {
-            self.typifier.resolve_all(
-                &fun.expressions,
-                &module.types,
-                &ResolveContext {
-                    constants: &module.constants,
-                    global_vars: &module.global_variables,
-                    local_vars: &fun.local_variables,
-                    functions: &module.functions,
-                    arguments: &fun.arguments,
-                },
-            )?;
-
             let fun_info = &mod_info[fun_handle];
             pass_through_globals.clear();
             for (handle, var) in module.global_variables.iter() {
@@ -1176,10 +1170,10 @@ impl<W: Write> Writer<W> {
                 expression: ExpressionContext {
                     function: fun,
                     origin: FunctionOrigin::Handle(fun_handle),
+                    info: fun_info,
                     module,
-                    mod_info,
                 },
-                fun_info,
+                mod_info,
                 result_struct: None,
             };
             self.named_expressions.clear();
@@ -1214,18 +1208,6 @@ impl<W: Write> Writer<W> {
                     continue;
                 }
             }
-
-            self.typifier.resolve_all(
-                &fun.expressions,
-                &module.types,
-                &ResolveContext {
-                    constants: &module.constants,
-                    global_vars: &module.global_variables,
-                    local_vars: &fun.local_variables,
-                    functions: &module.functions,
-                    arguments: &fun.arguments,
-                },
-            )?;
 
             let fun_name = &self.names[&NameKey::EntryPoint(ep_index as _)];
             info.entry_point_names.push(Ok(fun_name.clone()));
@@ -1468,10 +1450,10 @@ impl<W: Write> Writer<W> {
                 expression: ExpressionContext {
                     function: fun,
                     origin: FunctionOrigin::EntryPoint(ep_index as _),
+                    info: fun_info,
                     module,
-                    mod_info,
                 },
-                fun_info,
+                mod_info,
                 result_struct: Some(&stage_out_name),
             };
             self.named_expressions.clear();
