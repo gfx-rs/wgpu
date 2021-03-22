@@ -2507,18 +2507,18 @@ pub struct TextureDataLayout {
     /// For non-compressed textures, this is 1.
     pub offset: BufferAddress,
     /// Bytes per "row" of the image. This represents one row of pixels in the x direction. Compressed
-    /// textures include multiple rows of pixels in each "row". May be 0 for 1D texture copies.
+    /// textures include multiple rows of pixels in each "row".
+    /// Required if there are multiple rows (i.e. height or depth is more than one pixel or pixel block for compressed textures)
     ///
     /// Must be a multiple of 256 for [`CommandEncoder::copy_buffer_to_texture`] and [`CommandEncoder::copy_texture_to_buffer`].
     /// [`Queue::write_texture`] does not have this requirement.
     ///
     /// Must be a multiple of the texture block size. For non-compressed textures, this is 1.
-    pub bytes_per_row: u32,
+    pub bytes_per_row: Option<NonZeroU32>,
     /// Rows that make up a single "image". Each "image" is one layer in the z direction of a 3D image. May be larger
     /// than `copy_size.y`.
-    ///
-    /// May be 0 for 2D texture copies.
-    pub rows_per_image: u32,
+    /// Required if there are multiple images (i.e. the depth is more than one)
+    pub rows_per_image: Option<NonZeroU32>,
 }
 
 /// Specific type of a buffer binding.
