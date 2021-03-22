@@ -24,10 +24,7 @@ holding the result.
 !*/
 
 use crate::{arena::Handle, valid::ModuleInfo, FastHashMap};
-use std::{
-    fmt::{Error as FmtError, Write},
-    string::FromUtf8Error,
-};
+use std::fmt::{Error as FmtError, Write};
 
 mod keywords;
 mod writer;
@@ -65,8 +62,6 @@ enum ResolvedBinding {
 pub enum Error {
     #[error(transparent)]
     Format(#[from] FmtError),
-    #[error(transparent)]
-    Utf8(#[from] FromUtf8Error),
     #[error("bind target {0:?} is empty")]
     UnimplementedBindTarget(BindTarget),
     #[error("composing of {0:?} is not implemented yet")]
@@ -248,5 +243,5 @@ pub fn write_string(
 #[test]
 fn test_error_size() {
     use std::mem::size_of;
-    assert_eq!(size_of::<Error>(), 48);
+    assert_eq!(size_of::<Error>(), 32);
 }

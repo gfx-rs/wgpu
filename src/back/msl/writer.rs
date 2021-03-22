@@ -1511,8 +1511,8 @@ fn test_stack_size() {
     }
     let stack_size = max_addr - min_addr;
     // check the size (in debug only)
-    // last observed macOS value: 25696
-    if stack_size > 26000 {
+    // last observed macOS value: 20672
+    if stack_size > 21000 {
         panic!("`put_expression` stack size {} is too large!", stack_size);
     }
 }
