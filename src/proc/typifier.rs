@@ -62,12 +62,6 @@ impl Clone for TypeResolution {
     }
 }
 
-/// Helper processor that derives the types of all expressions.
-#[derive(Debug)]
-pub struct Typifier {
-    resolutions: Vec<TypeResolution>,
-}
-
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum ResolveError {
     #[error("Index {index} is out of bounds for expression {expr:?}")]
@@ -99,12 +93,6 @@ pub enum ResolveError {
     IncompatibleOperands(String),
 }
 
-//TODO: remove this
-#[repr(C)] // pack this tighter: 48 -> 40 bytes
-#[derive(Clone, Debug, Error, PartialEq)]
-#[error("Type resolution of {0:?} failed")]
-pub struct TypifyError(Handle<crate::Expression>, #[source] ResolveError);
-
 pub struct ResolveContext<'a> {
     pub constants: &'a Arena<crate::Constant>,
     pub global_vars: &'a Arena<crate::GlobalVariable>,
@@ -113,34 +101,34 @@ pub struct ResolveContext<'a> {
     pub arguments: &'a [crate::FunctionArgument],
 }
 
-impl TypeResolution {
-    pub fn new<'a>(
+impl<'a> ResolveContext<'a> {
+    pub fn resolve(
+        &self,
         expr: &crate::Expression,
         types: &'a Arena<crate::Type>,
-        ctx: &ResolveContext,
-        past: impl Fn(Handle<crate::Expression>) -> &'a Self,
-    ) -> Result<Self, ResolveError> {
+        past: impl Fn(Handle<crate::Expression>) -> &'a TypeResolution,
+    ) -> Result<TypeResolution, ResolveError> {
         use crate::TypeInner as Ti;
         Ok(match *expr {
             crate::Expression::Access { base, .. } => match *past(base).inner_with(types) {
-                Ti::Array { base, .. } => Self::Handle(base),
+                Ti::Array { base, .. } => TypeResolution::Handle(base),
                 Ti::Vector {
                     size: _,
                     kind,
                     width,
-                } => Self::Value(Ti::Scalar { kind, width }),
+                } => TypeResolution::Value(Ti::Scalar { kind, width }),
                 Ti::ValuePointer {
                     size: Some(_),
                     kind,
                     width,
                     class,
-                } => Self::Value(Ti::ValuePointer {
+                } => TypeResolution::Value(Ti::ValuePointer {
                     size: None,
                     kind,
                     width,
                     class,
                 }),
-                Ti::Pointer { base, class } => Self::Value(match types[base].inner {
+                Ti::Pointer { base, class } => TypeResolution::Value(match types[base].inner {
                     Ti::Array { base, .. } => Ti::Pointer { base, class },
                     Ti::Vector {
                         size: _,
@@ -173,7 +161,7 @@ impl TypeResolution {
                     if index >= size as u32 {
                         return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
                     }
-                    Self::Value(Ti::Scalar { kind, width })
+                    TypeResolution::Value(Ti::Scalar { kind, width })
                 }
                 Ti::Matrix {
                     columns,
@@ -183,13 +171,13 @@ impl TypeResolution {
                     if index >= columns as u32 {
                         return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
                     }
-                    Self::Value(crate::TypeInner::Vector {
+                    TypeResolution::Value(crate::TypeInner::Vector {
                         size: rows,
                         kind: crate::ScalarKind::Float,
                         width,
                     })
                 }
-                Ti::Array { base, .. } => Self::Handle(base),
+                Ti::Array { base, .. } => TypeResolution::Handle(base),
                 Ti::Struct {
                     block: _,
                     ref members,
@@ -197,7 +185,7 @@ impl TypeResolution {
                     let member = members
                         .get(index as usize)
                         .ok_or(ResolveError::OutOfBoundsIndex { expr: base, index })?;
-                    Self::Handle(member.ty)
+                    TypeResolution::Handle(member.ty)
                 }
                 Ti::ValuePointer {
                     size: Some(size),
@@ -208,7 +196,7 @@ impl TypeResolution {
                     if index >= size as u32 {
                         return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
                     }
-                    Self::Value(Ti::ValuePointer {
+                    TypeResolution::Value(Ti::ValuePointer {
                         size: None,
                         kind,
                         width,
@@ -218,7 +206,7 @@ impl TypeResolution {
                 Ti::Pointer {
                     base: ty_base,
                     class,
-                } => Self::Value(match types[ty_base].inner {
+                } => TypeResolution::Value(match types[ty_base].inner {
                     Ti::Array { base, .. } => Ti::Pointer { base, class },
                     Ti::Vector { size, kind, width } => {
                         if index >= size as u32 {
@@ -274,43 +262,45 @@ impl TypeResolution {
                     });
                 }
             },
-            crate::Expression::Constant(h) => match ctx.constants[h].inner {
-                crate::ConstantInner::Scalar { width, ref value } => Self::Value(Ti::Scalar {
-                    kind: value.scalar_kind(),
-                    width,
-                }),
-                crate::ConstantInner::Composite { ty, components: _ } => Self::Handle(ty),
+            crate::Expression::Constant(h) => match self.constants[h].inner {
+                crate::ConstantInner::Scalar { width, ref value } => {
+                    TypeResolution::Value(Ti::Scalar {
+                        kind: value.scalar_kind(),
+                        width,
+                    })
+                }
+                crate::ConstantInner::Composite { ty, components: _ } => TypeResolution::Handle(ty),
             },
-            crate::Expression::Compose { ty, .. } => Self::Handle(ty),
+            crate::Expression::Compose { ty, .. } => TypeResolution::Handle(ty),
             crate::Expression::FunctionArgument(index) => {
-                Self::Handle(ctx.arguments[index as usize].ty)
+                TypeResolution::Handle(self.arguments[index as usize].ty)
             }
             crate::Expression::GlobalVariable(h) => {
-                let var = &ctx.global_vars[h];
+                let var = &self.global_vars[h];
                 if var.class == crate::StorageClass::Handle {
-                    Self::Handle(var.ty)
+                    TypeResolution::Handle(var.ty)
                 } else {
-                    Self::Value(Ti::Pointer {
+                    TypeResolution::Value(Ti::Pointer {
                         base: var.ty,
                         class: var.class,
                     })
                 }
             }
             crate::Expression::LocalVariable(h) => {
-                let var = &ctx.local_vars[h];
-                Self::Value(Ti::Pointer {
+                let var = &self.local_vars[h];
+                TypeResolution::Value(Ti::Pointer {
                     base: var.ty,
                     class: crate::StorageClass::Function,
                 })
             }
             crate::Expression::Load { pointer } => match *past(pointer).inner_with(types) {
-                Ti::Pointer { base, class: _ } => Self::Handle(base),
+                Ti::Pointer { base, class: _ } => TypeResolution::Handle(base),
                 Ti::ValuePointer {
                     size,
                     kind,
                     width,
                     class: _,
-                } => Self::Value(match size {
+                } => TypeResolution::Value(match size {
                     Some(size) => Ti::Vector { size, kind, width },
                     None => Ti::Scalar { kind, width },
                 }),
@@ -321,7 +311,7 @@ impl TypeResolution {
             },
             crate::Expression::ImageSample { image, .. }
             | crate::Expression::ImageLoad { image, .. } => match *past(image).inner_with(types) {
-                Ti::Image { class, .. } => Self::Value(match class {
+                Ti::Image { class, .. } => TypeResolution::Value(match class {
                     crate::ImageClass::Depth => Ti::Scalar {
                         kind: crate::ScalarKind::Float,
                         width: 4,
@@ -342,7 +332,7 @@ impl TypeResolution {
                     return Err(ResolveError::InvalidImage(image));
                 }
             },
-            crate::Expression::ImageQuery { image, query } => Self::Value(match query {
+            crate::Expression::ImageQuery { image, query } => TypeResolution::Value(match query {
                 crate::ImageQuery::Size { level: _ } => match *past(image).inner_with(types) {
                     Ti::Image { dim, .. } => match dim {
                         crate::ImageDimension::D1 => Ti::Scalar {
@@ -395,7 +385,7 @@ impl TypeResolution {
                         width,
                     } = *ty_left
                     {
-                        Self::Value(Ti::Vector {
+                        TypeResolution::Value(Ti::Vector {
                             size: rows,
                             kind: crate::ScalarKind::Float,
                             width,
@@ -406,7 +396,7 @@ impl TypeResolution {
                         width,
                     } = *ty_right
                     {
-                        Self::Value(Ti::Vector {
+                        TypeResolution::Value(Ti::Vector {
                             size: columns,
                             kind: crate::ScalarKind::Float,
                             width,
@@ -438,7 +428,7 @@ impl TypeResolution {
                             )))
                         }
                     };
-                    Self::Value(inner)
+                    TypeResolution::Value(inner)
                 }
                 crate::BinaryOperator::And
                 | crate::BinaryOperator::ExclusiveOr
@@ -448,7 +438,7 @@ impl TypeResolution {
             },
             crate::Expression::Select { accept, .. } => past(accept).clone(),
             crate::Expression::Derivative { axis: _, expr } => past(expr).clone(),
-            crate::Expression::Relational { .. } => Self::Value(Ti::Scalar {
+            crate::Expression::Relational { .. } => TypeResolution::Value(Ti::Scalar {
                 kind: crate::ScalarKind::Bool,
                 width: 4,
             }),
@@ -498,7 +488,7 @@ impl TypeResolution {
                             kind,
                             size: _,
                             width,
-                        } => Self::Value(Ti::Scalar { kind, width }),
+                        } => TypeResolution::Value(Ti::Scalar { kind, width }),
                         ref other =>
                             return Err(ResolveError::IncompatibleOperands(
                                 format!("{:?}({:?}, _)", fun, other)
@@ -509,7 +499,7 @@ impl TypeResolution {
                             format!("{:?}(_, None)", fun)
                         ))?;
                         match (res_arg.inner_with(types), past(arg1).inner_with(types)) {
-                            (&Ti::Vector {kind: _, size: columns,width}, &Ti::Vector{ size: rows, .. }) => Self::Value(Ti::Matrix { columns, rows, width }),
+                            (&Ti::Vector {kind: _, size: columns,width}, &Ti::Vector{ size: rows, .. }) => TypeResolution::Value(Ti::Matrix { columns, rows, width }),
                             (left, right) =>
                                 return Err(ResolveError::IncompatibleOperands(
                                     format!("{:?}({:?}, {:?})", fun, left, right)
@@ -520,7 +510,7 @@ impl TypeResolution {
                     Mf::Distance |
                     Mf::Length => match *res_arg.inner_with(types) {
                         Ti::Scalar {width,kind} |
-                        Ti::Vector {width,kind,size:_} => Self::Value(Ti::Scalar { kind, width }),
+                        Ti::Vector {width,kind,size:_} => TypeResolution::Value(Ti::Scalar { kind, width }),
                         ref other => return Err(ResolveError::IncompatibleOperands(
                                 format!("{:?}({:?})", fun, other)
                             )),
@@ -541,7 +531,7 @@ impl TypeResolution {
                             columns,
                             rows,
                             width,
-                        } => Self::Value(Ti::Matrix {
+                        } => TypeResolution::Value(Ti::Matrix {
                             columns: rows,
                             rows: columns,
                             width,
@@ -555,7 +545,7 @@ impl TypeResolution {
                             columns,
                             rows,
                             width,
-                        } if columns == rows => Self::Value(Ti::Matrix {
+                        } if columns == rows => TypeResolution::Value(Ti::Matrix {
                             columns,
                             rows,
                             width,
@@ -568,7 +558,7 @@ impl TypeResolution {
                         Ti::Matrix {
                             width,
                             ..
-                        } => Self::Value(Ti::Scalar { kind: crate::ScalarKind::Float, width }),
+                        } => TypeResolution::Value(Ti::Scalar { kind: crate::ScalarKind::Float, width }),
                         ref other => return Err(ResolveError::IncompatibleOperands(
                             format!("{:?}({:?})", fun, other)
                         )),
@@ -583,12 +573,12 @@ impl TypeResolution {
                 kind,
                 convert: _,
             } => match *past(expr).inner_with(types) {
-                Ti::Scalar { kind: _, width } => Self::Value(Ti::Scalar { kind, width }),
+                Ti::Scalar { kind: _, width } => TypeResolution::Value(Ti::Scalar { kind, width }),
                 Ti::Vector {
                     kind: _,
                     size,
                     width,
-                } => Self::Value(Ti::Vector { kind, size, width }),
+                } => TypeResolution::Value(Ti::Vector { kind, size, width }),
                 ref other => {
                     return Err(ResolveError::IncompatibleOperands(format!(
                         "{:?} as {:?}",
@@ -597,13 +587,13 @@ impl TypeResolution {
                 }
             },
             crate::Expression::Call(function) => {
-                let result = ctx.functions[function]
+                let result = self.functions[function]
                     .result
                     .as_ref()
                     .ok_or(ResolveError::FunctionReturnsVoid)?;
-                Self::Handle(result.ty)
+                TypeResolution::Handle(result.ty)
             }
-            crate::Expression::ArrayLength(_) => Self::Value(Ti::Scalar {
+            crate::Expression::ArrayLength(_) => TypeResolution::Value(Ti::Scalar {
                 kind: crate::ScalarKind::Uint,
                 width: 4,
             }),
@@ -611,89 +601,8 @@ impl TypeResolution {
     }
 }
 
-impl Typifier {
-    pub fn new() -> Self {
-        Typifier {
-            resolutions: Vec::new(),
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.resolutions.clear()
-    }
-
-    //TODO: remove most of these
-    pub fn get<'a>(
-        &'a self,
-        expr_handle: Handle<crate::Expression>,
-        types: &'a Arena<crate::Type>,
-    ) -> &'a crate::TypeInner {
-        match self.resolutions[expr_handle.index()] {
-            TypeResolution::Handle(ty_handle) => &types[ty_handle].inner,
-            TypeResolution::Value(ref inner) => inner,
-        }
-    }
-
-    pub fn try_get<'a>(
-        &'a self,
-        expr_handle: Handle<crate::Expression>,
-        types: &'a Arena<crate::Type>,
-    ) -> Option<&'a crate::TypeInner> {
-        let resolution = self.resolutions.get(expr_handle.index())?;
-        Some(match *resolution {
-            TypeResolution::Handle(ty_handle) => &types[ty_handle].inner,
-            TypeResolution::Value(ref inner) => inner,
-        })
-    }
-
-    pub fn get_handle(
-        &self,
-        expr_handle: Handle<crate::Expression>,
-    ) -> Result<Handle<crate::Type>, &crate::TypeInner> {
-        match self.resolutions[expr_handle.index()] {
-            TypeResolution::Handle(ty_handle) => Ok(ty_handle),
-            TypeResolution::Value(ref inner) => Err(inner),
-        }
-    }
-
-    pub fn grow(
-        &mut self,
-        expr_handle: Handle<crate::Expression>,
-        expressions: &Arena<crate::Expression>,
-        types: &mut Arena<crate::Type>,
-        ctx: &ResolveContext,
-    ) -> Result<(), ResolveError> {
-        if self.resolutions.len() <= expr_handle.index() {
-            for (eh, expr) in expressions.iter().skip(self.resolutions.len()) {
-                let resolution =
-                    TypeResolution::new(expr, types, ctx, |h| &self.resolutions[h.index()])?;
-                log::debug!("Resolving {:?} = {:?} : {:?}", eh, expr, resolution);
-                self.resolutions.push(resolution);
-            }
-        }
-        Ok(())
-    }
-
-    pub fn resolve_all(
-        &mut self,
-        expressions: &Arena<crate::Expression>,
-        types: &Arena<crate::Type>,
-        ctx: &ResolveContext,
-    ) -> Result<(), TypifyError> {
-        self.clear();
-        for (handle, expr) in expressions.iter() {
-            let resolution =
-                TypeResolution::new(expr, types, ctx, |h| &self.resolutions[h.index()])
-                    .map_err(|err| TypifyError(handle, err))?;
-            self.resolutions.push(resolution);
-        }
-        Ok(())
-    }
-}
-
 #[test]
 fn test_error_size() {
     use std::mem::size_of;
     assert_eq!(size_of::<ResolveError>(), 32);
-    assert_eq!(size_of::<TypifyError>(), 40);
 }

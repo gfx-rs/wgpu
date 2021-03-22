@@ -23,7 +23,7 @@ For the result type, if it's a structure, we re-compose it with a temporary valu
 holding the result.
 !*/
 
-use crate::{arena::Handle, proc::TypifyError, valid::ModuleInfo, FastHashMap};
+use crate::{arena::Handle, valid::ModuleInfo, FastHashMap};
 use std::{
     fmt::{Error as FmtError, Write},
     string::FromUtf8Error,
@@ -67,8 +67,6 @@ pub enum Error {
     Format(#[from] FmtError),
     #[error(transparent)]
     Utf8(#[from] FromUtf8Error),
-    #[error(transparent)]
-    Type(#[from] TypifyError),
     #[error("bind target {0:?} is empty")]
     UnimplementedBindTarget(BindTarget),
     #[error("composing of {0:?} is not implemented yet")]

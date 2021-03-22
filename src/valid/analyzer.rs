@@ -499,9 +499,8 @@ impl FunctionInfo {
             },
         };
 
-        let ty = TypeResolution::new(expression, type_arena, resolve_context, |h| {
-            &self.expressions[h.index()].ty
-        })?;
+        let ty =
+            resolve_context.resolve(expression, type_arena, |h| &self.expressions[h.index()].ty)?;
         self.expressions[handle.index()] = ExpressionInfo {
             uniformity,
             ref_count: 0,

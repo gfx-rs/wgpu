@@ -9,7 +9,7 @@ mod tests;
 
 use crate::{
     arena::{Arena, Handle},
-    proc::{ensure_block_returns, ResolveContext, ResolveError, Typifier},
+    proc::{ensure_block_returns, ResolveContext, ResolveError},
     FastHashMap,
 };
 
@@ -199,7 +199,7 @@ impl<'a> StringValueLookup<'a> for FastHashMap<&'a str, Handle<crate::Expression
 
 struct StatementContext<'input, 'temp, 'out> {
     lookup_ident: &'temp mut FastHashMap<&'input str, Handle<crate::Expression>>,
-    typifier: &'temp mut Typifier,
+    typifier: &'temp mut super::Typifier,
     variables: &'out mut Arena<crate::LocalVariable>,
     expressions: &'out mut Arena<crate::Expression>,
     types: &'out mut Arena<crate::Type>,
@@ -255,7 +255,7 @@ struct SamplingContext {
 
 struct ExpressionContext<'input, 'temp, 'out> {
     lookup_ident: &'temp FastHashMap<&'input str, Handle<crate::Expression>>,
-    typifier: &'temp mut Typifier,
+    typifier: &'temp mut super::Typifier,
     expressions: &'out mut Arena<crate::Expression>,
     types: &'out mut Arena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
@@ -2434,7 +2434,7 @@ impl Parser {
         };
 
         // read body
-        let mut typifier = Typifier::new();
+        let mut typifier = super::Typifier::new();
         fun.body = self.parse_block(
             lexer,
             StatementContext {

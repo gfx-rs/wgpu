@@ -44,7 +44,7 @@
 pub use features::Features;
 
 use crate::{
-    proc::{EntryPointIndex, NameKey, Namer, TypeResolution, TypifyError},
+    proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant,
     ConstantInner, DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle,
@@ -270,9 +270,6 @@ pub enum Error {
     /// A error occurred while writing to the output
     #[error("I/O error")]
     IoError(#[from] IoError),
-    /// The [`Module`](crate::Module) failed type resolution
-    #[error("Type error")]
-    Type(#[from] TypifyError),
     /// The specified [`Version`](Version) doesn't have all required [`Features`](super)
     ///
     /// Contains the missing [`Features`](Features)

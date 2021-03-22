@@ -1,7 +1,7 @@
+use super::super::Typifier;
 use crate::{
-    proc::{ensure_block_returns, Typifier},
-    BinaryOperator, Block, EntryPoint, Expression, Function, MathFunction, RelationalFunction,
-    SampleLevel, TypeInner,
+    proc::ensure_block_returns, BinaryOperator, Block, EntryPoint, Expression, Function,
+    MathFunction, RelationalFunction, SampleLevel, TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind};
