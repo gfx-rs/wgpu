@@ -1,10 +1,14 @@
-use super::{analyzer::FunctionInfo, ExpressionError, TypeFlags, ValidationFlags};
+use super::{
+    analyzer::{FunctionInfo, UniformityDisruptor, UniformityRequirements},
+    ExpressionError, ModuleInfo, TypeFlags, ValidationFlags,
+};
 use crate::{
     arena::{Arena, Handle},
     proc::{ResolveContext, TypifyError},
 };
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum CallError {
     #[error("Bad function")]
     InvalidFunction,
@@ -36,12 +40,14 @@ pub enum CallError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum LocalVariableError {
     #[error("Initializer doesn't match the variable type")]
     InitializerType,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum FunctionError {
     #[error(transparent)]
     Resolve(#[from] TypifyError),
@@ -97,6 +103,16 @@ pub enum FunctionError {
         #[source]
         error: CallError,
     },
+    #[error("Expression {0:?} is not a global variable!")]
+    ExpectedGlobalVariable(crate::Expression),
+    #[error(
+        "Required uniformity of control flow for {0:?} in {1:?} is not fulfilled because of {2:?}"
+    )]
+    NonUniformControlFlow(
+        UniformityRequirements,
+        Handle<crate::Expression>,
+        UniformityDisruptor,
+    ),
 }
 
 bitflags::bitflags! {
@@ -464,9 +480,9 @@ impl super::Validator {
     pub(super) fn validate_function(
         &mut self,
         fun: &crate::Function,
-        _info: &FunctionInfo,
         module: &crate::Module,
-    ) -> Result<(), FunctionError> {
+        mod_info: &ModuleInfo,
+    ) -> Result<FunctionInfo, FunctionError> {
         let resolve_ctx = ResolveContext {
             constants: &module.constants,
             global_vars: &module.global_variables,
@@ -476,6 +492,7 @@ impl super::Validator {
         };
         self.typifier
             .resolve_all(&fun.expressions, &module.types, &resolve_ctx)?;
+        let info = mod_info.process_function(fun, &module.global_variables, self.flags)?;
 
         for (var_handle, var) in fun.local_variables.iter() {
             self.validate_local_var(var, &module.types, &module.constants)
@@ -511,9 +528,8 @@ impl super::Validator {
         }
 
         if self.flags.contains(ValidationFlags::BLOCKS) {
-            self.validate_block(&fun.body, &BlockContext::new(fun, module))
-        } else {
-            Ok(())
+            self.validate_block(&fun.body, &BlockContext::new(fun, module))?;
         }
+        Ok(info)
     }
 }

@@ -4,6 +4,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum ExpressionError {
     #[error("Doesn't exist")]
     DoesntExist,

@@ -1516,7 +1516,9 @@ fn test_stack_size() {
     });
     let _ = module.functions.append(fun);
     // analyse the module
-    let info = ModuleInfo::new(&module, ValidationFlags::empty()).unwrap();
+    let info = crate::valid::Validator::new(ValidationFlags::empty())
+        .validate(&module)
+        .unwrap();
     // process the module
     let mut writer = Writer::new(String::new());
     writer.write(&module, &info, &Default::default()).unwrap();

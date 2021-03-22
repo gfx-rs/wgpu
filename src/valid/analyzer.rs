@@ -6,7 +6,7 @@ Figures out the following properties:
   - expression reference counts
 !*/
 
-use super::ValidationFlags;
+use super::{CallError, FunctionError, ModuleInfo, ValidationFlags};
 use crate::arena::{Arena, Handle};
 use std::ops;
 
@@ -216,32 +216,6 @@ pub enum UniformityDisruptor {
     Discard,
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
-#[cfg_attr(test, derive(PartialEq))]
-pub enum FunctionAnalysisError {
-    #[error("Expression {0:?} is not a global variable!")]
-    ExpectedGlobalVariable(crate::Expression),
-    #[error("Called function {0:?} that hasn't been declared in the IR yet")]
-    ForwardCall(Handle<crate::Function>),
-    #[error(
-        "Required uniformity of control flow for {0:?} in {1:?} is not fulfilled because of {2:?}"
-    )]
-    NonUniformControlFlow(
-        UniformityRequirements,
-        Handle<crate::Expression>,
-        UniformityDisruptor,
-    ),
-}
-
-#[derive(Clone, Debug, thiserror::Error)]
-#[cfg_attr(test, derive(PartialEq))]
-pub enum AnalysisError {
-    #[error("Function {0:?} analysis failed")]
-    Function(Handle<crate::Function>, #[source] FunctionAnalysisError),
-    #[error("Entry point {0:?}/'{1}' function analysis failed")]
-    EntryPoint(crate::ShaderStage, String, #[source] FunctionAnalysisError),
-}
-
 impl FunctionInfo {
     /// Adds a value-type reference to an expression.
     #[must_use]
@@ -314,7 +288,7 @@ impl FunctionInfo {
         arguments: &[crate::FunctionArgument],
         global_var_arena: &Arena<crate::GlobalVariable>,
         other_functions: &[FunctionInfo],
-    ) -> Result<(), FunctionAnalysisError> {
+    ) -> Result<(), FunctionError> {
         use crate::{Expression as E, SampleLevel as Sl};
 
         let mut assignable_global = None;
@@ -404,17 +378,13 @@ impl FunctionInfo {
                     image: match expression_arena[image] {
                         crate::Expression::GlobalVariable(var) => var,
                         ref other => {
-                            return Err(FunctionAnalysisError::ExpectedGlobalVariable(
-                                other.clone(),
-                            ))
+                            return Err(FunctionError::ExpectedGlobalVariable(other.clone()))
                         }
                     },
                     sampler: match expression_arena[sampler] {
                         crate::Expression::GlobalVariable(var) => var,
                         ref other => {
-                            return Err(FunctionAnalysisError::ExpectedGlobalVariable(
-                                other.clone(),
-                            ))
+                            return Err(FunctionError::ExpectedGlobalVariable(other.clone()))
                         }
                     },
                 });
@@ -512,9 +482,13 @@ impl FunctionInfo {
                 requirements: UniformityRequirements::empty(),
             },
             E::Call(function) => {
-                let fun = other_functions
-                    .get(function.index())
-                    .ok_or(FunctionAnalysisError::ForwardCall(function))?;
+                let fun =
+                    other_functions
+                        .get(function.index())
+                        .ok_or(FunctionError::InvalidCall {
+                            function,
+                            error: CallError::ForwardDeclaredFunction,
+                        })?;
                 self.process_call(fun).result
             }
             E::ArrayLength(expr) => Uniformity {
@@ -546,7 +520,7 @@ impl FunctionInfo {
         statements: &[crate::Statement],
         other_functions: &[FunctionInfo],
         mut disruptor: Option<UniformityDisruptor>,
-    ) -> Result<FunctionUniformity, FunctionAnalysisError> {
+    ) -> Result<FunctionUniformity, FunctionError> {
         use crate::Statement as S;
 
         let mut combined_uniformity = FunctionUniformity::new();
@@ -562,9 +536,7 @@ impl FunctionInfo {
                             && !req.is_empty()
                         {
                             if let Some(cause) = disruptor {
-                                return Err(FunctionAnalysisError::NonUniformControlFlow(
-                                    req, expr, cause,
-                                ));
+                                return Err(FunctionError::NonUniformControlFlow(req, expr, cause));
                             }
                         }
                         requirements |= req;
@@ -670,9 +642,12 @@ impl FunctionInfo {
                     for &argument in arguments {
                         let _ = self.add_ref(argument);
                     }
-                    let info = other_functions
-                        .get(function.index())
-                        .ok_or(FunctionAnalysisError::ForwardCall(function))?;
+                    let info = other_functions.get(function.index()).ok_or(
+                        FunctionError::InvalidCall {
+                            function,
+                            error: CallError::ForwardDeclaredFunction,
+                        },
+                    )?;
                     self.process_call(info)
                 }
             };
@@ -684,22 +659,15 @@ impl FunctionInfo {
     }
 }
 
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct ModuleInfo {
-    functions: Vec<FunctionInfo>,
-    entry_points: Vec<FunctionInfo>,
-}
-
 impl ModuleInfo {
     /// Builds the `FunctionInfo` based on the function, and validates the
     /// uniform control flow if required by the expressions of this function.
-    fn process_function(
+    pub(super) fn process_function(
         &self,
         fun: &crate::Function,
         global_var_arena: &Arena<crate::GlobalVariable>,
         flags: ValidationFlags,
-    ) -> Result<FunctionInfo, FunctionAnalysisError> {
+    ) -> Result<FunctionInfo, FunctionError> {
         let mut info = FunctionInfo {
             flags,
             uniformity: Uniformity::new(),
@@ -724,29 +692,6 @@ impl ModuleInfo {
         info.may_kill = uniformity.exit.contains(ExitFlags::MAY_KILL);
 
         Ok(info)
-    }
-
-    /// Analyze a module and return the `ModuleInfo`, if successful.
-    pub fn new(module: &crate::Module, flags: ValidationFlags) -> Result<Self, AnalysisError> {
-        let mut this = ModuleInfo {
-            functions: Vec::with_capacity(module.functions.len()),
-            entry_points: Vec::with_capacity(module.entry_points.len()),
-        };
-        for (fun_handle, fun) in module.functions.iter() {
-            let info = this
-                .process_function(fun, &module.global_variables, flags)
-                .map_err(|source| AnalysisError::Function(fun_handle, source))?;
-            this.functions.push(info);
-        }
-
-        for ep in module.entry_points.iter() {
-            let info = this
-                .process_function(&ep.function, &module.global_variables, flags)
-                .map_err(|source| AnalysisError::EntryPoint(ep.stage, ep.name.clone(), source))?;
-            this.entry_points.push(info);
-        }
-
-        Ok(this)
     }
 
     pub fn get_entry_point(&self, index: usize) -> &FunctionInfo {
@@ -880,7 +825,7 @@ fn uniform_control_flow() {
     };
     assert_eq!(
         info.process_block(&[stmt_emit2, stmt_if_non_uniform], &[], None),
-        Err(FunctionAnalysisError::NonUniformControlFlow(
+        Err(FunctionError::NonUniformControlFlow(
             UniformityRequirements::DERIVATIVE,
             derivative_expr,
             UniformityDisruptor::Expression(non_uniform_global_expr)

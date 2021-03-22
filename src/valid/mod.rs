@@ -13,10 +13,7 @@ use bit_set::BitSet;
 
 //TODO: analyze the model at the same time as we validate it,
 // merge the corresponding matches over expressions and statements.
-pub use analyzer::{
-    AnalysisError, ExpressionInfo, FunctionInfo, GlobalUse, ModuleInfo, Uniformity,
-    UniformityRequirements,
-};
+pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, UniformityRequirements};
 pub use expression::ExpressionError;
 pub use function::{CallError, FunctionError, LocalVariableError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
@@ -31,6 +28,13 @@ bitflags::bitflags! {
         const BLOCKS = 0x2;
         const CONTROL_FLOW_UNIFORMITY = 0x4;
     }
+}
+
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct ModuleInfo {
+    functions: Vec<FunctionInfo>,
+    entry_points: Vec<FunctionInfo>,
 }
 
 #[derive(Debug)]
@@ -94,8 +98,6 @@ pub enum ValidationError {
         #[source]
         error: EntryPointError,
     },
-    #[error(transparent)]
-    Analysis(#[from] AnalysisError),
     #[error("Module is corrupted")]
     Corrupted,
 }
@@ -176,8 +178,10 @@ impl Validator {
     pub fn validate(&mut self, module: &crate::Module) -> Result<ModuleInfo, ValidationError> {
         self.reset_types(module.types.len());
 
-        let mod_info = ModuleInfo::new(module, self.flags)?;
-
+        let mut mod_info = ModuleInfo {
+            functions: Vec::with_capacity(module.functions.len()),
+            entry_points: Vec::with_capacity(module.entry_points.len()),
+        };
         let layouter = Layouter::new(&module.types, &module.constants);
 
         for (handle, constant) in module.constants.iter() {
@@ -211,16 +215,20 @@ impl Validator {
         }
 
         for (handle, fun) in module.functions.iter() {
-            self.validate_function(fun, &mod_info[handle], module)
-                .map_err(|error| ValidationError::Function {
-                    handle,
-                    name: fun.name.clone().unwrap_or_default(),
-                    error,
-                })?;
+            match self.validate_function(fun, module, &mod_info) {
+                Ok(info) => mod_info.functions.push(info),
+                Err(error) => {
+                    return Err(ValidationError::Function {
+                        handle,
+                        name: fun.name.clone().unwrap_or_default(),
+                        error,
+                    })
+                }
+            }
         }
 
         let mut ep_map = FastHashSet::default();
-        for (index, ep) in module.entry_points.iter().enumerate() {
+        for ep in module.entry_points.iter() {
             if !ep_map.insert((ep.stage, &ep.name)) {
                 return Err(ValidationError::EntryPoint {
                     stage: ep.stage,
@@ -228,13 +236,17 @@ impl Validator {
                     error: EntryPointError::Conflict,
                 });
             }
-            let info = mod_info.get_entry_point(index);
-            self.validate_entry_point(ep, info, module)
-                .map_err(|error| ValidationError::EntryPoint {
-                    stage: ep.stage,
-                    name: ep.name.clone(),
-                    error,
-                })?;
+
+            match self.validate_entry_point(ep, module, &mod_info) {
+                Ok(info) => mod_info.entry_points.push(info),
+                Err(error) => {
+                    return Err(ValidationError::EntryPoint {
+                        stage: ep.stage,
+                        name: ep.name.clone(),
+                        error,
+                    })
+                }
+            }
         }
 
         Ok(mod_info)

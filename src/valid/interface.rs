@@ -1,6 +1,6 @@
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
-    Disalignment, FunctionError, TypeFlags,
+    Disalignment, FunctionError, ModuleInfo, TypeFlags,
 };
 use crate::arena::{Arena, Handle};
 
@@ -352,9 +352,9 @@ impl super::Validator {
     pub(super) fn validate_entry_point(
         &mut self,
         ep: &crate::EntryPoint,
-        info: &FunctionInfo,
         module: &crate::Module,
-    ) -> Result<(), EntryPointError> {
+        mod_info: &ModuleInfo,
+    ) -> Result<FunctionInfo, EntryPointError> {
         if ep.early_depth_test.is_some() && ep.stage != crate::ShaderStage::Fragment {
             return Err(EntryPointError::UnexpectedEarlyDepthTest);
         }
@@ -369,6 +369,8 @@ impl super::Validator {
         } else if ep.workgroup_size != [0; 3] {
             return Err(EntryPointError::UnexpectedWorkgroupSize);
         }
+
+        let info = self.validate_function(&ep.function, module, &mod_info)?;
 
         self.location_mask.clear();
         for (index, fa) in ep.function.arguments.iter().enumerate() {
@@ -439,7 +441,6 @@ impl super::Validator {
             }
         }
 
-        self.validate_function(&ep.function, info, module)?;
-        Ok(())
+        Ok(info)
     }
 }
