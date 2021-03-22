@@ -103,7 +103,6 @@ impl super::Validator {
     }
 
     pub(super) fn reset_types(&mut self, size: usize) {
-        self.typifier.clear();
         self.types.clear();
         self.types.resize(size, TypeInfo::new());
     }

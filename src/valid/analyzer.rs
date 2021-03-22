@@ -6,8 +6,11 @@ Figures out the following properties:
   - expression reference counts
 !*/
 
-use super::{CallError, FunctionError, ModuleInfo, ValidationFlags};
-use crate::arena::{Arena, Handle};
+use super::{CallError, ExpressionError, FunctionError, ModuleInfo, ValidationFlags};
+use crate::{
+    arena::{Arena, Handle},
+    proc::{ResolveContext, TypeResolution},
+};
 use std::ops;
 
 pub type NonUniformResult = Option<Handle<crate::Expression>>;
@@ -138,6 +141,7 @@ pub struct ExpressionInfo {
     pub uniformity: Uniformity,
     pub ref_count: usize,
     assignable_global: Option<Handle<crate::GlobalVariable>>,
+    pub ty: TypeResolution,
 }
 
 impl ExpressionInfo {
@@ -146,6 +150,11 @@ impl ExpressionInfo {
             uniformity: Uniformity::new(),
             ref_count: 0,
             assignable_global: None,
+            // this doesn't matter at this point, will be overwritten
+            ty: TypeResolution::Value(crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Bool,
+                width: 0,
+            }),
         }
     }
 }
@@ -284,15 +293,16 @@ impl FunctionInfo {
     fn process_expression(
         &mut self,
         handle: Handle<crate::Expression>,
+        expression: &crate::Expression,
         expression_arena: &Arena<crate::Expression>,
-        arguments: &[crate::FunctionArgument],
-        global_var_arena: &Arena<crate::GlobalVariable>,
         other_functions: &[FunctionInfo],
-    ) -> Result<(), FunctionError> {
+        type_arena: &Arena<crate::Type>,
+        resolve_context: &ResolveContext,
+    ) -> Result<(), ExpressionError> {
         use crate::{Expression as E, SampleLevel as Sl};
 
         let mut assignable_global = None;
-        let uniformity = match expression_arena[handle] {
+        let uniformity = match *expression {
             E::Access { base, index } => Uniformity {
                 non_uniform_result: self
                     .add_assignable_ref(base, &mut assignable_global)
@@ -316,7 +326,7 @@ impl FunctionInfo {
             }
             // depends on the builtin or interpolation
             E::FunctionArgument(index) => {
-                let arg = &arguments[index as usize];
+                let arg = &resolve_context.arguments[index as usize];
                 let uniform = match arg.binding {
                     Some(crate::Binding::BuiltIn(built_in)) => match built_in {
                         // per-polygon built-ins are uniform
@@ -339,7 +349,7 @@ impl FunctionInfo {
             E::GlobalVariable(gh) => {
                 use crate::StorageClass as Sc;
                 assignable_global = Some(gh);
-                let var = &global_var_arena[gh];
+                let var = &resolve_context.global_vars[gh];
                 let uniform = match var.class {
                     // local data is non-uniform
                     Sc::Function | Sc::Private => false,
@@ -377,15 +387,11 @@ impl FunctionInfo {
                 self.sampling_set.insert(SamplingKey {
                     image: match expression_arena[image] {
                         crate::Expression::GlobalVariable(var) => var,
-                        ref other => {
-                            return Err(FunctionError::ExpectedGlobalVariable(other.clone()))
-                        }
+                        _ => return Err(ExpressionError::ExpectedGlobalVariable),
                     },
                     sampler: match expression_arena[sampler] {
                         crate::Expression::GlobalVariable(var) => var,
-                        ref other => {
-                            return Err(FunctionError::ExpectedGlobalVariable(other.clone()))
-                        }
+                        _ => return Err(ExpressionError::ExpectedGlobalVariable),
                     },
                 });
                 // "nur" == "Non-Uniform Result"
@@ -482,13 +488,9 @@ impl FunctionInfo {
                 requirements: UniformityRequirements::empty(),
             },
             E::Call(function) => {
-                let fun =
-                    other_functions
-                        .get(function.index())
-                        .ok_or(FunctionError::InvalidCall {
-                            function,
-                            error: CallError::ForwardDeclaredFunction,
-                        })?;
+                let fun = other_functions
+                    .get(function.index())
+                    .ok_or(ExpressionError::CallToUndeclaredFunction(function))?;
                 self.process_call(fun).result
             }
             E::ArrayLength(expr) => Uniformity {
@@ -497,10 +499,14 @@ impl FunctionInfo {
             },
         };
 
+        let ty = TypeResolution::new(expression, type_arena, resolve_context, |h| {
+            &self.expressions[h.index()].ty
+        })?;
         self.expressions[handle.index()] = ExpressionInfo {
             uniformity,
             ref_count: 0,
             assignable_global,
+            ty,
         };
         Ok(())
     }
@@ -648,6 +654,7 @@ impl FunctionInfo {
                             error: CallError::ForwardDeclaredFunction,
                         },
                     )?;
+                    //Note: the result is validated by the Validator, not here
                     self.process_call(info)
                 }
             };
@@ -665,7 +672,7 @@ impl ModuleInfo {
     pub(super) fn process_function(
         &self,
         fun: &crate::Function,
-        global_var_arena: &Arena<crate::GlobalVariable>,
+        module: &crate::Module,
         flags: ValidationFlags,
     ) -> Result<FunctionInfo, FunctionError> {
         let mut info = FunctionInfo {
@@ -673,18 +680,28 @@ impl ModuleInfo {
             uniformity: Uniformity::new(),
             may_kill: false,
             sampling_set: crate::FastHashSet::default(),
-            global_uses: vec![GlobalUse::empty(); global_var_arena.len()].into_boxed_slice(),
+            global_uses: vec![GlobalUse::empty(); module.global_variables.len()].into_boxed_slice(),
             expressions: vec![ExpressionInfo::new(); fun.expressions.len()].into_boxed_slice(),
         };
+        let resolve_context = ResolveContext {
+            constants: &module.constants,
+            global_vars: &module.global_variables,
+            local_vars: &fun.local_variables,
+            functions: &module.functions,
+            arguments: &fun.arguments,
+        };
 
-        for (handle, _) in fun.expressions.iter() {
-            info.process_expression(
+        for (handle, expr) in fun.expressions.iter() {
+            if let Err(error) = info.process_expression(
                 handle,
+                expr,
                 &fun.expressions,
-                &fun.arguments,
-                global_var_arena,
                 &self.functions,
-            )?;
+                &module.types,
+                &resolve_context,
+            ) {
+                return Err(FunctionError::Expression { handle, error });
+            }
         }
 
         let uniformity = info.process_block(&fun.body, &self.functions, None)?;
@@ -722,7 +739,8 @@ fn uniform_control_flow() {
     let mut type_arena = Arena::new();
     let ty = type_arena.append(crate::Type {
         name: None,
-        inner: crate::TypeInner::Scalar {
+        inner: crate::TypeInner::Vector {
+            size: crate::VectorSize::Bi,
             kind: crate::ScalarKind::Float,
             width: 4,
         },
@@ -775,9 +793,23 @@ fn uniform_control_flow() {
         global_uses: vec![GlobalUse::empty(); global_var_arena.len()].into_boxed_slice(),
         expressions: vec![ExpressionInfo::new(); expressions.len()].into_boxed_slice(),
     };
-    for (handle, _) in expressions.iter() {
-        info.process_expression(handle, &expressions, &[], &global_var_arena, &[])
-            .unwrap();
+    let resolve_context = ResolveContext {
+        constants: &constant_arena,
+        global_vars: &global_var_arena,
+        local_vars: &Arena::new(),
+        functions: &Arena::new(),
+        arguments: &[],
+    };
+    for (handle, expression) in expressions.iter() {
+        info.process_expression(
+            handle,
+            expression,
+            &expressions,
+            &[],
+            &type_arena,
+            &resolve_context,
+        )
+        .unwrap();
     }
     assert_eq!(info[non_uniform_global_expr].ref_count, 1);
     assert_eq!(info[uniform_global_expr].ref_count, 1);

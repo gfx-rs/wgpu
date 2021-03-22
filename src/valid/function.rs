@@ -1,11 +1,8 @@
 use super::{
-    analyzer::{FunctionInfo, UniformityDisruptor, UniformityRequirements},
-    ExpressionError, ModuleInfo, TypeFlags, ValidationFlags,
+    analyzer::{UniformityDisruptor, UniformityRequirements},
+    ExpressionError, FunctionInfo, ModuleInfo, TypeFlags, ValidationFlags,
 };
-use crate::{
-    arena::{Arena, Handle},
-    proc::{ResolveContext, TypifyError},
-};
+use crate::arena::{Arena, Handle};
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -32,11 +29,8 @@ pub enum CallError {
         required: Handle<crate::Type>,
         seen_expression: Handle<crate::Expression>,
     },
-    #[error("Result value {seen_expression:?} does not match the type {required:?}")]
-    ResultType {
-        required: Option<Handle<crate::Type>>,
-        seen_expression: Option<Handle<crate::Expression>>,
-    },
+    #[error("The emitted expression doesn't match the call")]
+    ExpressionMismatch(Option<Handle<crate::Expression>>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -49,8 +43,6 @@ pub enum LocalVariableError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum FunctionError {
-    #[error(transparent)]
-    Resolve(#[from] TypifyError),
     #[error("Expression {handle:?} is invalid")]
     Expression {
         handle: Handle<crate::Expression>,
@@ -103,8 +95,6 @@ pub enum FunctionError {
         #[source]
         error: CallError,
     },
-    #[error("Expression {0:?} is not a global variable!")]
-    ExpectedGlobalVariable(crate::Expression),
     #[error(
         "Required uniformity of control flow for {0:?} in {1:?} is not fulfilled because of {2:?}"
     )]
@@ -127,6 +117,7 @@ bitflags::bitflags! {
 
 struct BlockContext<'a> {
     flags: Flags,
+    info: &'a FunctionInfo,
     expressions: &'a Arena<crate::Expression>,
     types: &'a Arena<crate::Type>,
     functions: &'a Arena<crate::Function>,
@@ -134,9 +125,10 @@ struct BlockContext<'a> {
 }
 
 impl<'a> BlockContext<'a> {
-    pub(super) fn new(fun: &'a crate::Function, module: &'a crate::Module) -> Self {
+    fn new(fun: &'a crate::Function, module: &'a crate::Module, info: &'a FunctionInfo) -> Self {
         Self {
             flags: Flags::CAN_JUMP,
+            info,
             expressions: &fun.expressions,
             types: &module.types,
             functions: &module.functions,
@@ -147,6 +139,7 @@ impl<'a> BlockContext<'a> {
     fn with_flags(&self, flags: Flags) -> Self {
         BlockContext {
             flags,
+            info: self.info,
             expressions: self.expressions,
             types: self.types,
             functions: self.functions,
@@ -161,6 +154,25 @@ impl<'a> BlockContext<'a> {
         self.expressions
             .try_get(handle)
             .ok_or(FunctionError::InvalidExpression(handle))
+    }
+
+    fn resolve_type_impl(
+        &self,
+        handle: Handle<crate::Expression>,
+    ) -> Result<&crate::TypeInner, ExpressionError> {
+        if handle.index() < self.expressions.len() {
+            Ok(self.info[handle].ty.inner_with(self.types))
+        } else {
+            Err(ExpressionError::DoesntExist)
+        }
+    }
+
+    fn resolve_type(
+        &self,
+        handle: Handle<crate::Expression>,
+    ) -> Result<&crate::TypeInner, FunctionError> {
+        self.resolve_type_impl(handle)
+            .map_err(|error| FunctionError::Expression { handle, error })
     }
 }
 
@@ -183,8 +195,8 @@ impl super::Validator {
             });
         }
         for (index, (arg, &expr)) in fun.arguments.iter().zip(arguments).enumerate() {
-            let ty = self
-                .resolve_statement_type_impl(expr, context.types)
+            let ty = context
+                .resolve_type_impl(expr)
                 .map_err(|error| CallError::Argument { index, error })?;
             if ty != &context.types[arg.ty].inner {
                 return Err(CallError::ArgumentType {
@@ -201,47 +213,15 @@ impl super::Validator {
             } else {
                 return Err(CallError::ResultAlreadyInScope(expr));
             }
+            match context.expressions[expr] {
+                crate::Expression::Call(callee) if fun.result.is_some() && callee == function => {}
+                _ => return Err(CallError::ExpressionMismatch(result)),
+            }
+        } else if fun.result.is_some() {
+            return Err(CallError::ExpressionMismatch(result));
         }
 
-        let result_ty = result
-            .map(|expr| self.resolve_statement_type_impl(expr, context.types))
-            .transpose()
-            .map_err(CallError::ResultValue)?;
-        let expected_ty = fun.result.as_ref().map(|fr| &context.types[fr.ty].inner);
-        if result_ty != expected_ty {
-            log::error!(
-                "Called function returns {:?} where {:?} is expected",
-                result_ty,
-                expected_ty
-            );
-            return Err(CallError::ResultType {
-                required: fun.result.as_ref().map(|fr| fr.ty),
-                seen_expression: result,
-            });
-        }
         Ok(())
-    }
-
-    fn resolve_statement_type_impl<'a>(
-        &'a self,
-        handle: Handle<crate::Expression>,
-        types: &'a Arena<crate::Type>,
-    ) -> Result<&'a crate::TypeInner, ExpressionError> {
-        if !self.valid_expression_set.contains(handle.index()) {
-            return Err(ExpressionError::NotInScope);
-        }
-        self.typifier
-            .try_get(handle, types)
-            .ok_or(ExpressionError::DoesntExist)
-    }
-
-    fn resolve_statement_type<'a>(
-        &'a self,
-        handle: Handle<crate::Expression>,
-        types: &'a Arena<crate::Type>,
-    ) -> Result<&'a crate::TypeInner, FunctionError> {
-        self.resolve_statement_type_impl(handle, types)
-            .map_err(|error| FunctionError::Expression { handle, error })
     }
 
     fn validate_block_impl(
@@ -271,7 +251,7 @@ impl super::Validator {
                     ref accept,
                     ref reject,
                 } => {
-                    match *self.resolve_statement_type(condition, context.types)? {
+                    match *context.resolve_type(condition)? {
                         Ti::Scalar {
                             kind: crate::ScalarKind::Bool,
                             width: _,
@@ -286,7 +266,7 @@ impl super::Validator {
                     ref cases,
                     ref default,
                 } => {
-                    match *self.resolve_statement_type(selector, context.types)? {
+                    match *context.resolve_type(selector)? {
                         Ti::Scalar {
                             kind: crate::ScalarKind::Sint,
                             width: _,
@@ -330,9 +310,7 @@ impl super::Validator {
                     if !context.flags.contains(Flags::CAN_JUMP) {
                         return Err(FunctionError::InvalidReturnSpot);
                     }
-                    let value_ty = value
-                        .map(|expr| self.resolve_statement_type(expr, context.types))
-                        .transpose()?;
+                    let value_ty = value.map(|expr| context.resolve_type(expr)).transpose()?;
                     let expected_ty = context.return_type.map(|ty| &context.types[ty].inner);
                     if value_ty != expected_ty {
                         log::error!(
@@ -350,12 +328,7 @@ impl super::Validator {
                 S::Store { pointer, value } => {
                     let mut current = pointer;
                     loop {
-                        self.typifier.try_get(current, context.types).ok_or(
-                            FunctionError::Expression {
-                                handle: current,
-                                error: ExpressionError::DoesntExist,
-                            },
-                        )?;
+                        let _ = context.resolve_type(current)?;
                         match context.expressions[current] {
                             crate::Expression::Access { base, .. }
                             | crate::Expression::AccessIndex { base, .. } => current = base,
@@ -366,29 +339,27 @@ impl super::Validator {
                         }
                     }
 
-                    let value_ty = self.resolve_statement_type(value, context.types)?;
+                    let value_ty = context.resolve_type(value)?;
                     match *value_ty {
                         Ti::Image { .. } | Ti::Sampler { .. } => {
                             return Err(FunctionError::InvalidStoreValue(value));
                         }
                         _ => {}
                     }
-                    let good = match self.typifier.try_get(pointer, context.types) {
-                        Some(&Ti::Pointer { base, class: _ }) => {
-                            *value_ty == context.types[base].inner
-                        }
-                        Some(&Ti::ValuePointer {
+                    let good = match *context.resolve_type(pointer)? {
+                        Ti::Pointer { base, class: _ } => *value_ty == context.types[base].inner,
+                        Ti::ValuePointer {
                             size: Some(size),
                             kind,
                             width,
                             class: _,
-                        }) => *value_ty == Ti::Vector { size, kind, width },
-                        Some(&Ti::ValuePointer {
+                        } => *value_ty == Ti::Vector { size, kind, width },
+                        Ti::ValuePointer {
                             size: None,
                             kind,
                             width,
                             class: _,
-                        }) => *value_ty == Ti::Scalar { kind, width },
+                        } => *value_ty == Ti::Scalar { kind, width },
                         _ => false,
                     };
                     if !good {
@@ -405,15 +376,14 @@ impl super::Validator {
                         crate::Expression::GlobalVariable(_var_handle) => (), //TODO
                         _ => return Err(FunctionError::InvalidImage(image)),
                     };
-                    let value_ty = self.typifier.get(value, context.types);
-                    match *value_ty {
+                    match *context.resolve_type(value)? {
                         Ti::Scalar { .. } | Ti::Vector { .. } => {}
                         _ => {
                             return Err(FunctionError::InvalidStoreValue(value));
                         }
                     }
                     if let Some(expr) = array_index {
-                        match *self.typifier.get(expr, context.types) {
+                        match *context.resolve_type(expr)? {
                             Ti::Scalar {
                                 kind: crate::ScalarKind::Sint,
                                 width: _,
@@ -483,16 +453,7 @@ impl super::Validator {
         module: &crate::Module,
         mod_info: &ModuleInfo,
     ) -> Result<FunctionInfo, FunctionError> {
-        let resolve_ctx = ResolveContext {
-            constants: &module.constants,
-            global_vars: &module.global_variables,
-            local_vars: &fun.local_variables,
-            functions: &module.functions,
-            arguments: &fun.arguments,
-        };
-        self.typifier
-            .resolve_all(&fun.expressions, &module.types, &resolve_ctx)?;
-        let info = mod_info.process_function(fun, &module.global_variables, self.flags)?;
+        let info = mod_info.process_function(fun, module, self.flags)?;
 
         for (var_handle, var) in fun.local_variables.iter() {
             self.validate_local_var(var, &module.types, &module.constants)
@@ -521,14 +482,14 @@ impl super::Validator {
                 self.valid_expression_set.insert(handle.index());
             }
             if !self.flags.contains(ValidationFlags::EXPRESSIONS) {
-                if let Err(error) = self.validate_expression(handle, expr, fun, module) {
+                if let Err(error) = self.validate_expression(handle, expr, fun, module, &info) {
                     return Err(FunctionError::Expression { handle, error });
                 }
             }
         }
 
         if self.flags.contains(ValidationFlags::BLOCKS) {
-            self.validate_block(&fun.body, &BlockContext::new(fun, module))?;
+            self.validate_block(&fun.body, &BlockContext::new(fun, module, &info))?;
         }
         Ok(info)
     }

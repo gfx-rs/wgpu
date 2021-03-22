@@ -31,6 +31,10 @@ expression: output
                     ),
                     ref_count: 0,
                     assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 3,
+                        class: Storage,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -41,6 +45,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -51,6 +56,10 @@ expression: output
                     ),
                     ref_count: 7,
                     assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 1,
+                        class: Function,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -61,6 +70,10 @@ expression: output
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -71,6 +84,10 @@ expression: output
                     ),
                     ref_count: 3,
                     assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 1,
+                        class: Function,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -81,6 +98,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -91,6 +109,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -101,6 +123,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Bool,
+                        width: 1,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -111,6 +137,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -121,6 +148,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -131,6 +162,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -141,6 +173,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -151,6 +187,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Bool,
+                        width: 1,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -161,6 +201,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -171,6 +212,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -181,6 +226,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -191,6 +237,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -201,6 +251,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -211,6 +262,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -221,6 +276,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -231,6 +290,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -241,6 +304,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -251,6 +315,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -261,6 +329,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -271,6 +340,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Handle(1),
                 ),
             ],
         ),
@@ -303,6 +373,10 @@ expression: output
                     ),
                     ref_count: 2,
                     assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 3,
+                        class: Storage,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -313,6 +387,7 @@ expression: output
                     ),
                     ref_count: 2,
                     assignable_global: None,
+                    ty: Handle(4),
                 ),
                 (
                     uniformity: (
@@ -323,6 +398,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 2,
+                        class: Storage,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -333,6 +412,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -343,6 +426,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 1,
+                        class: Storage,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -353,6 +440,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 2,
+                        class: Storage,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -363,6 +454,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -373,6 +468,10 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 1,
+                        class: Storage,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -383,6 +482,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -393,6 +493,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    ty: Handle(1),
                 ),
             ],
         ),

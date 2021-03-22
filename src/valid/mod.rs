@@ -6,7 +6,7 @@ mod r#type;
 
 use crate::{
     arena::{Arena, Handle},
-    proc::{Layouter, Typifier},
+    proc::Layouter,
     FastHashSet,
 };
 use bit_set::BitSet;
@@ -40,9 +40,6 @@ pub struct ModuleInfo {
 #[derive(Debug)]
 pub struct Validator {
     flags: ValidationFlags,
-    //Note: this is a bit tricky: some of the front-ends as well as backends
-    // already have to use the typifier, so the work here is redundant in a way.
-    typifier: Typifier,
     types: Vec<r#type::TypeInfo>,
     location_mask: BitSet,
     bind_group_masks: Vec<BitSet>,
@@ -125,7 +122,6 @@ impl Validator {
     pub fn new(flags: ValidationFlags) -> Self {
         Validator {
             flags,
-            typifier: Typifier::new(),
             types: Vec::new(),
             location_mask: BitSet::new(),
             bind_group_masks: Vec::new(),

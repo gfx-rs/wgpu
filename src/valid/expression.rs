@@ -1,6 +1,7 @@
+use super::FunctionInfo;
 use crate::{
     arena::{Arena, Handle},
-    proc::Typifier,
+    proc::ResolveError,
 };
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -52,12 +53,18 @@ pub enum ExpressionError {
     InvalidBooleanVector(Handle<crate::Expression>),
     #[error("Relational argument {0:?} is not a float")]
     InvalidFloatArgument(Handle<crate::Expression>),
+    #[error("Type resolution failed")]
+    Type(#[from] ResolveError),
+    #[error("Not a global variable")]
+    ExpectedGlobalVariable,
+    #[error("Calling an undeclared function {0:?}")]
+    CallToUndeclaredFunction(Handle<crate::Function>),
 }
 
 struct ExpressionTypeResolver<'a> {
     root: Handle<crate::Expression>,
     types: &'a Arena<crate::Type>,
-    typifier: &'a Typifier,
+    info: &'a FunctionInfo,
 }
 
 impl<'a> ExpressionTypeResolver<'a> {
@@ -66,7 +73,7 @@ impl<'a> ExpressionTypeResolver<'a> {
         handle: Handle<crate::Expression>,
     ) -> Result<&'a crate::TypeInner, ExpressionError> {
         if handle < self.root {
-            Ok(self.typifier.get(handle, self.types))
+            Ok(self.info[handle].ty.inner_with(self.types))
         } else {
             Err(ExpressionError::ForwardDependency(handle))
         }
@@ -80,13 +87,14 @@ impl super::Validator {
         expression: &crate::Expression,
         function: &crate::Function,
         module: &crate::Module,
+        info: &FunctionInfo,
     ) -> Result<(), ExpressionError> {
         use crate::{Expression as E, ScalarKind as Sk, TypeInner as Ti};
 
         let resolver = ExpressionTypeResolver {
             root,
             types: &module.types,
-            typifier: &self.typifier,
+            info,
         };
 
         match *expression {
