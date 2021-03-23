@@ -21,6 +21,16 @@ pub enum Error {
     FeatureNotImplemented(&'static str),
 }
 
+#[derive(Default)]
+struct IdGenerator(Word);
+
+impl IdGenerator {
+    fn next(&mut self) -> Word {
+        self.0 += 1;
+        self.0
+    }
+}
+
 struct Block {
     label_id: Word,
     body: Vec<Instruction>,
@@ -242,7 +252,7 @@ struct GlobalVariable {
 pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
-    id_count: u32,
+    id_gen: IdGenerator,
     capabilities: crate::FastHashSet<spirv::Capability>,
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
@@ -270,12 +280,13 @@ impl Writer {
             return Err(Error::UnsupportedVersion(major, minor));
         }
         let raw_version = ((major as u32) << 16) | ((minor as u32) << 8);
-        let gl450_ext_inst_id = 1;
-        let void_type = 2;
+        let mut id_gen = IdGenerator::default();
+        let gl450_ext_inst_id = id_gen.next();
+        let void_type = id_gen.next();
         Ok(Writer {
             physical_layout: PhysicalLayout::new(raw_version),
             logical_layout: LogicalLayout::default(),
-            id_count: 2, // see `gl450_ext_inst_id` and `void_type`
+            id_gen,
             capabilities: options.capabilities.clone(),
             debugs: vec![],
             annotations: vec![],
@@ -292,11 +303,6 @@ impl Writer {
             gl450_ext_inst_id,
             temp_chain: Vec::new(),
         })
-    }
-
-    fn generate_id(&mut self) -> Word {
-        self.id_count += 1;
-        self.id_count
     }
 
     fn check(&mut self, capabilities: &[spirv::Capability]) -> Result<(), Error> {
@@ -343,7 +349,7 @@ impl Writer {
         Ok(if let Some(&id) = self.lookup_type.get(&lookup_type) {
             id
         } else {
-            let id = self.generate_id();
+            let id = self.id_gen.next();
             let instruction = Instruction::type_pointer(id, class, ty_id);
             instruction.to_words(&mut self.logical_layout.declarations);
             self.lookup_type.insert(lookup_type, id);
@@ -352,7 +358,7 @@ impl Writer {
     }
 
     fn create_constant(&mut self, type_id: Word, value: &[Word]) -> Word {
-        let id = self.generate_id();
+        let id = self.id_gen.next();
         let instruction = Instruction::constant(type_id, id, value);
         instruction.to_words(&mut self.logical_layout.declarations);
         id
@@ -368,7 +374,7 @@ impl Writer {
         let mut function = Function::default();
 
         for (handle, variable) in ir_function.local_variables.iter() {
-            let id = self.generate_id();
+            let id = self.id_gen.next();
 
             if self.flags.contains(WriterFlags::DEBUG) {
                 if let Some(ref name) = variable.name {
@@ -392,7 +398,7 @@ impl Writer {
                 .insert(handle, LocalVariable { id, instruction });
         }
 
-        let prelude_id = self.generate_id();
+        let prelude_id = self.id_gen.next();
         let mut prelude = Block::new(prelude_id);
         let mut ep_context = EntryPointContext::default();
 
@@ -407,7 +413,7 @@ impl Writer {
                     let varying_id =
                         self.write_varying(ir_module, class, name, argument.ty, binding)?;
                     list.push(varying_id);
-                    let id = self.generate_id();
+                    let id = self.id_gen.next();
                     prelude
                         .body
                         .push(Instruction::load(argument_type_id, id, varying_id, None));
@@ -417,7 +423,7 @@ impl Writer {
                     ref members,
                 } = ir_module.types[argument.ty].inner
                 {
-                    let struct_id = self.generate_id();
+                    let struct_id = self.id_gen.next();
                     let mut constituent_ids = Vec::with_capacity(members.len());
                     for member in members {
                         let type_id =
@@ -427,7 +433,7 @@ impl Writer {
                         let varying_id =
                             self.write_varying(ir_module, class, name, member.ty, binding)?;
                         list.push(varying_id);
-                        let id = self.generate_id();
+                        let id = self.id_gen.next();
                         prelude
                             .body
                             .push(Instruction::load(type_id, id, varying_id, None));
@@ -444,7 +450,7 @@ impl Writer {
                 };
                 ep_context.argument_ids.push(id);
             } else {
-                let id = self.generate_id();
+                let id = self.id_gen.next();
                 let instruction = Instruction::function_parameter(argument_type_id, id);
                 function.parameters.push(instruction);
                 parameter_type_ids.push(argument_type_id);
@@ -493,7 +499,7 @@ impl Writer {
             parameter_type_ids,
         };
 
-        let function_id = self.generate_id();
+        let function_id = self.id_gen.next();
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(ref name) = ir_function.name {
                 self.debugs.push(Instruction::name(function_id, name));
@@ -521,7 +527,7 @@ impl Writer {
             if info[handle].is_empty() || var.class != crate::StorageClass::Handle {
                 continue;
             }
-            let id = self.generate_id();
+            let id = self.id_gen.next();
             let result_type_id = self.get_type_id(&ir_module.types, LookupType::Handle(var.ty))?;
             let gv = &mut self.global_variables[handle.index()];
             prelude
@@ -544,7 +550,7 @@ impl Writer {
             }
         }
 
-        let main_id = self.generate_id();
+        let main_id = self.id_gen.next();
         function.consume(prelude, Instruction::branch(main_id));
         self.write_block(
             main_id,
@@ -633,7 +639,7 @@ impl Writer {
         arena: &Arena<crate::Type>,
         local_ty: LocalType,
     ) -> Result<Word, Error> {
-        let id = self.generate_id();
+        let id = self.id_gen.next();
         let instruction = match local_ty {
             LocalType::Value {
                 vector_size: None,
@@ -714,7 +720,7 @@ impl Writer {
     ) -> Result<Word, Error> {
         let ty = &arena[handle];
 
-        if let Some(local) = self.physical_layout.make_local(&ty.inner) {
+        let id = if let Some(local) = self.physical_layout.make_local(&ty.inner) {
             match self.lookup_type.entry(LookupType::Local(local)) {
                 // if it's already known as local, re-use it
                 Entry::Occupied(e) => {
@@ -724,12 +730,13 @@ impl Writer {
                 }
                 // also register the type as "local", to avoid duplication
                 Entry::Vacant(e) => {
-                    let id = self.id_count + 1; // has to match the next ID
-                    e.insert(id);
+                    let id = self.id_gen.next();
+                    *e.insert(id)
                 }
             }
-        }
-        let id = self.generate_id();
+        } else {
+            self.id_gen.next()
+        };
         self.lookup_type.insert(LookupType::Handle(handle), id);
 
         if self.flags.contains(WriterFlags::DEBUG) {
@@ -1006,7 +1013,7 @@ impl Writer {
         ty: Handle<crate::Type>,
         binding: &crate::Binding,
     ) -> Result<Word, Error> {
-        let id = self.generate_id();
+        let id = self.id_gen.next();
         let pointer_type_id = self.get_pointer_id(&ir_module.types, ty, class)?;
         Instruction::variable(pointer_type_id, id, class, None)
             .to_words(&mut self.logical_layout.declarations);
@@ -1082,7 +1089,7 @@ impl Writer {
         ir_module: &crate::Module,
         global_variable: &crate::GlobalVariable,
     ) -> Result<(Instruction, Word, spirv::StorageClass), Error> {
-        let id = self.generate_id();
+        let id = self.id_gen.next();
 
         let class = self
             .physical_layout
@@ -1135,7 +1142,7 @@ impl Writer {
         {
             Entry::Occupied(e) => *e.get(),
             _ => {
-                let id = self.generate_id();
+                let id = self.id_gen.next();
                 let instruction = Instruction::type_function(
                     id,
                     lookup_function_type.return_type_id,
@@ -1154,7 +1161,7 @@ impl Writer {
         constituent_ids: &[Word],
         block: &mut Block,
     ) -> Word {
-        let id = self.generate_id();
+        let id = self.id_gen.next();
         block.body.push(Instruction::composite_construct(
             base_type_id,
             id,
@@ -1192,7 +1199,7 @@ impl Writer {
                 }
                 crate::TypeInner::Vector { size, .. } => {
                     for i in 0..size as u32 {
-                        let id = self.generate_id();
+                        let id = self.id_gen.next();
                         constituent_ids[i as usize] = id;
                         block.body.push(Instruction::composite_extract(
                             coordinate_scalar_type_id,
@@ -1212,7 +1219,7 @@ impl Writer {
                 ref other => unimplemented!("wrong coordinate type {:?}", other),
             };
 
-            let array_index_f32_id = self.generate_id();
+            let array_index_f32_id = self.id_gen.next();
             constituent_ids[size as usize - 1] = array_index_f32_id;
 
             let array_index_u32_id = self.cached[array_index];
@@ -1276,7 +1283,7 @@ impl Writer {
                     let index_id = self.cached[index];
                     match *fun_info[base].ty.inner_with(&ir_module.types) {
                         crate::TypeInner::Vector { .. } => {
-                            let id = self.generate_id();
+                            let id = self.id_gen.next();
                             let base_id = self.cached[base];
                             block.body.push(Instruction::vector_extract_dynamic(
                                 result_type_id,
@@ -1309,7 +1316,7 @@ impl Writer {
                         | crate::TypeInner::Matrix { .. }
                         | crate::TypeInner::Array { .. }
                         | crate::TypeInner::Struct { .. } => {
-                            let id = self.generate_id();
+                            let id = self.id_gen.next();
                             let base_id = self.cached[base];
                             block.body.push(Instruction::composite_extract(
                                 result_type_id,
@@ -1341,7 +1348,7 @@ impl Writer {
                 self.write_composite_construct(result_type_id, &constituent_ids, block)
             }
             crate::Expression::Unary { op, expr } => {
-                let id = self.generate_id();
+                let id = self.id_gen.next();
                 let expr_id = self.cached[expr];
                 let expr_ty_inner = fun_info[expr].ty.inner_with(&ir_module.types);
 
@@ -1364,7 +1371,7 @@ impl Writer {
                 id
             }
             crate::Expression::Binary { op, left, right } => {
-                let id = self.generate_id();
+                let id = self.id_gen.next();
                 let left_id = self.cached[left];
                 let right_id = self.cached[right];
 
@@ -1514,7 +1521,7 @@ impl Writer {
                     None => 0,
                 };
 
-                let id = self.generate_id();
+                let id = self.id_gen.next();
                 let math_op = match fun {
                     // comparison
                     Mf::Abs => {
@@ -1639,7 +1646,7 @@ impl Writer {
                     function,
                 )?;
 
-                let id = self.generate_id();
+                let id = self.id_gen.next();
                 block
                     .body
                     .push(Instruction::load(result_type_id, id, pointer_id, None));
@@ -1672,7 +1679,7 @@ impl Writer {
                     _ => spirv::Op::Bitcast,
                 };
 
-                let id = self.generate_id();
+                let id = self.id_gen.next();
                 let instruction = Instruction::unary(op, result_type_id, id, expr_id);
                 block.body.push(instruction);
                 id
@@ -1692,7 +1699,7 @@ impl Writer {
                     block,
                 )?;
 
-                let id = self.generate_id();
+                let id = self.id_gen.next();
 
                 let image_ty = fun_info[image].ty.inner_with(&ir_module.types);
                 let mut instruction = match *image_ty {
@@ -1748,14 +1755,14 @@ impl Writer {
                     block,
                 )?;
 
-                let sampled_image_id = self.generate_id();
+                let sampled_image_id = self.id_gen.next();
                 block.body.push(Instruction::sampled_image(
                     sampled_image_type_id,
                     sampled_image_id,
                     image_id,
                     sampler_id,
                 ));
-                let id = self.generate_id();
+                let id = self.id_gen.next();
 
                 let depth_id = depth_ref.map(|handle| self.cached[handle]);
 
@@ -1771,7 +1778,7 @@ impl Writer {
                         );
 
                         //TODO: cache this!
-                        let zero_id = self.generate_id();
+                        let zero_id = self.id_gen.next();
                         self.write_constant_scalar(
                             zero_id,
                             &crate::ScalarValue::Float(0.0),
@@ -1857,7 +1864,7 @@ impl Writer {
                 accept,
                 reject,
             } => {
-                let id = self.generate_id();
+                let id = self.id_gen.next();
                 let condition_id = self.cached[condition];
                 let accept_id = self.cached[accept];
                 let reject_id = self.cached[reject];
@@ -1870,7 +1877,7 @@ impl Writer {
             crate::Expression::Derivative { axis, expr } => {
                 use crate::DerivativeAxis;
 
-                let id = self.generate_id();
+                let id = self.id_gen.next();
                 let expr_id = self.cached[expr];
                 block.body.push(match axis {
                     DerivativeAxis::X => Instruction::derive_x(result_type_id, id, expr_id),
@@ -1945,7 +1952,7 @@ impl Writer {
             root_id
         } else {
             self.temp_chain.reverse();
-            let id = self.generate_id();
+            let id = self.id_gen.next();
             block.body.push(Instruction::access_chain(
                 result_type_id,
                 id,
@@ -2007,10 +2014,10 @@ impl Writer {
                     }
                 }
                 crate::Statement::Block(ref block_statements) => {
-                    let scope_id = self.generate_id();
+                    let scope_id = self.id_gen.next();
                     function.consume(block, Instruction::branch(scope_id));
 
-                    let merge_id = self.generate_id();
+                    let merge_id = self.id_gen.next();
                     self.write_block(
                         scope_id,
                         block_statements,
@@ -2031,7 +2038,7 @@ impl Writer {
                 } => {
                     let condition_id = self.cached[condition];
 
-                    let merge_id = self.generate_id();
+                    let merge_id = self.id_gen.next();
                     block.body.push(Instruction::selection_merge(
                         merge_id,
                         spirv::SelectionControl::NONE,
@@ -2040,12 +2047,12 @@ impl Writer {
                     let accept_id = if accept.is_empty() {
                         None
                     } else {
-                        Some(self.generate_id())
+                        Some(self.id_gen.next())
                     };
                     let reject_id = if reject.is_empty() {
                         None
                     } else {
-                        Some(self.generate_id())
+                        Some(self.id_gen.next())
                     };
 
                     function.consume(
@@ -2091,18 +2098,18 @@ impl Writer {
                 } => {
                     let selector_id = self.cached[selector];
 
-                    let merge_id = self.generate_id();
+                    let merge_id = self.id_gen.next();
                     block.body.push(Instruction::selection_merge(
                         merge_id,
                         spirv::SelectionControl::NONE,
                     ));
 
-                    let default_id = self.generate_id();
+                    let default_id = self.id_gen.next();
                     let raw_cases = cases
                         .iter()
                         .map(|c| super::instructions::Case {
                             value: c.value as Word,
-                            label_id: self.generate_id(),
+                            label_id: self.id_gen.next(),
                         })
                         .collect::<Vec<_>>();
 
@@ -2149,12 +2156,12 @@ impl Writer {
                     ref body,
                     ref continuing,
                 } => {
-                    let preamble_id = self.generate_id();
+                    let preamble_id = self.id_gen.next();
                     function.consume(block, Instruction::branch(preamble_id));
 
-                    let merge_id = self.generate_id();
-                    let body_id = self.generate_id();
-                    let continuing_id = self.generate_id();
+                    let merge_id = self.id_gen.next();
+                    let body_id = self.id_gen.next();
+                    let continuing_id = self.id_gen.next();
 
                     // SPIR-V requires the continuing to the `OpLoopMerge`,
                     // so we have to start a new block with it.
@@ -2214,7 +2221,7 @@ impl Writer {
                                 for (index, &(varying_id, type_id)) in
                                     context.result_ids_typed.iter().enumerate()
                                 {
-                                    let member_value_id = self.generate_id();
+                                    let member_value_id = self.id_gen.next();
                                     block.body.push(Instruction::composite_extract(
                                         type_id,
                                         member_value_id,
@@ -2285,7 +2292,7 @@ impl Writer {
                     ref arguments,
                     result,
                 } => {
-                    let id = self.generate_id();
+                    let id = self.id_gen.next();
                     //TODO: avoid heap allocation
                     let mut argument_ids = vec![];
 
@@ -2330,7 +2337,7 @@ impl Writer {
     }
 
     fn write_physical_layout(&mut self) {
-        self.physical_layout.bound = self.id_count + 1;
+        self.physical_layout.bound = self.id_gen.0 + 1;
     }
 
     fn write_logical_layout(
@@ -2352,7 +2359,7 @@ impl Writer {
             match constant.inner {
                 crate::ConstantInner::Composite { .. } => continue,
                 crate::ConstantInner::Scalar { width, ref value } => {
-                    let id = self.generate_id();
+                    let id = self.id_gen.next();
                     self.lookup_constant.insert(handle, id);
                     if self.flags.contains(WriterFlags::DEBUG) {
                         if let Some(ref name) = constant.name {
@@ -2382,7 +2389,7 @@ impl Writer {
             match constant.inner {
                 crate::ConstantInner::Scalar { .. } => continue,
                 crate::ConstantInner::Composite { ty, ref components } => {
-                    let id = self.generate_id();
+                    let id = self.id_gen.next();
                     self.lookup_constant.insert(handle, id);
                     if self.flags.contains(WriterFlags::DEBUG) {
                         if let Some(ref name) = constant.name {
@@ -2462,14 +2469,6 @@ impl Writer {
         self.logical_layout.in_words(words);
         Ok(())
     }
-}
-
-#[test]
-fn test_writer_generate_id() {
-    let mut writer = Writer::new(&Options::default()).unwrap();
-    assert_eq!(writer.id_count, 2);
-    writer.generate_id();
-    assert_eq!(writer.id_count, 3);
 }
 
 #[test]
