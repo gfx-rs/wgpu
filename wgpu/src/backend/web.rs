@@ -16,8 +16,6 @@ use wasm_bindgen::prelude::*;
 // type is (for now) harmless.  Eventually wasm32 will support threading, and depending on how this
 // is integrated (or not integrated) with values like those in webgpu, this may become unsound.
 
-//forse run from integration system
-
 #[derive(Clone, Debug)]
 pub(crate) struct Sendable<T>(T);
 unsafe impl<T> Send for Sendable<T> {}
@@ -160,7 +158,7 @@ impl crate::RenderInner<Context> for RenderPass {
     fn set_index_buffer(
         &mut self,
         buffer: &Sendable<web_sys::GpuBuffer>,
-        _index_format: wgt::IndexFormat,
+        index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
@@ -168,8 +166,12 @@ impl crate::RenderInner<Context> for RenderPass {
             Some(s) => s.get() as f64,
             None => 0f64,
         };
-        self.0
-            .set_index_buffer_with_f64_and_f64(&buffer.0, offset as f64, mapped_size);
+        self.0.set_index_buffer_with_f64_and_f64(
+            &buffer.0,
+            map_index_format(index_format),
+            offset as f64,
+            mapped_size,
+        );
     }
     fn set_vertex_buffer(
         &mut self,
@@ -285,7 +287,7 @@ impl crate::RenderInner<Context> for RenderBundleEncoder {
     fn set_index_buffer(
         &mut self,
         buffer: &Sendable<web_sys::GpuBuffer>,
-        _index_format: wgt::IndexFormat,
+        index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
@@ -293,8 +295,12 @@ impl crate::RenderInner<Context> for RenderBundleEncoder {
             Some(s) => s.get() as f64,
             None => 0f64,
         };
-        self.0
-            .set_index_buffer_with_f64_and_f64(&buffer.0, offset as f64, mapped_size);
+        self.0.set_index_buffer_with_f64_and_f64(
+            &buffer.0,
+            map_index_format(index_format),
+            offset as f64,
+            mapped_size,
+        );
     }
     fn set_vertex_buffer(
         &mut self,
@@ -496,14 +502,65 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
     }
 }
 
+fn map_texture_format_from_web_sys(
+    texture_format: web_sys::GpuTextureFormat,
+) -> wgt::TextureFormat {
+    use web_sys::GpuTextureFormat as tf;
+    use wgt::TextureFormat;
+    match texture_format {
+        tf::R8unorm => TextureFormat::R8Unorm,
+        tf::R8snorm => TextureFormat::R8Snorm,
+        tf::R8uint => TextureFormat::R8Uint,
+        tf::R8sint => TextureFormat::R8Sint,
+        tf::R16uint => TextureFormat::R16Uint,
+        tf::R16sint => TextureFormat::R16Sint,
+        tf::R16float => TextureFormat::R16Float,
+        tf::Rg8unorm => TextureFormat::Rg8Unorm,
+        tf::Rg8snorm => TextureFormat::Rg8Snorm,
+        tf::Rg8uint => TextureFormat::Rg8Uint,
+        tf::Rg8sint => TextureFormat::Rg8Sint,
+        tf::R32uint => TextureFormat::R32Uint,
+        tf::R32sint => TextureFormat::R32Sint,
+        tf::R32float => TextureFormat::R32Float,
+        tf::Rg16uint => TextureFormat::Rg16Uint,
+        tf::Rg16sint => TextureFormat::Rg16Sint,
+        tf::Rg16float => TextureFormat::Rg16Float,
+        tf::Rgba8unorm => TextureFormat::Rgba8Unorm,
+        tf::Rgba8unormSrgb => TextureFormat::Rgba8UnormSrgb,
+        tf::Rgba8snorm => TextureFormat::Rgba8Snorm,
+        tf::Rgba8uint => TextureFormat::Rgba8Uint,
+        tf::Rgba8sint => TextureFormat::Rgba8Sint,
+        tf::Bgra8unorm => TextureFormat::Bgra8Unorm,
+        tf::Bgra8unormSrgb => TextureFormat::Bgra8UnormSrgb,
+        tf::Rgb10a2unorm => TextureFormat::Rgb10a2Unorm,
+        tf::Rg11b10ufloat => TextureFormat::Rg11b10Float,
+        tf::Rg32uint => TextureFormat::Rg32Uint,
+        tf::Rg32sint => TextureFormat::Rg32Sint,
+        tf::Rg32float => TextureFormat::Rg32Float,
+        tf::Rgba16uint => TextureFormat::Rgba16Uint,
+        tf::Rgba16sint => TextureFormat::Rgba16Sint,
+        tf::Rgba16float => TextureFormat::Rgba16Float,
+        tf::Rgba32uint => TextureFormat::Rgba32Uint,
+        tf::Rgba32sint => TextureFormat::Rgba32Sint,
+        tf::Rgba32float => TextureFormat::Rgba32Float,
+        tf::Depth32float => TextureFormat::Depth32Float,
+        tf::Depth24plus => TextureFormat::Depth24Plus,
+        tf::Depth24plusStencil8 => TextureFormat::Depth24PlusStencil8,
+        _ => unimplemented!(),
+    }
+}
+
 fn map_texture_component_type(
     sample_type: wgt::TextureSampleType,
-) -> web_sys::GpuTextureComponentType {
+) -> web_sys::GpuTextureSampleType {
+    use web_sys::GpuTextureSampleType as ts;
+    use wgt::TextureSampleType;
     match sample_type {
-        wgt::TextureSampleType::Float { .. } => web_sys::GpuTextureComponentType::Float,
-        wgt::TextureSampleType::Sint => web_sys::GpuTextureComponentType::Sint,
-        wgt::TextureSampleType::Uint => web_sys::GpuTextureComponentType::Uint,
-        wgt::TextureSampleType::Depth => web_sys::GpuTextureComponentType::DepthComparison,
+        TextureSampleType::Float { filterable: true } => ts::Float,
+        TextureSampleType::Float { filterable: false } => ts::UnfilterableFloat,
+        TextureSampleType::Sint => ts::Sint,
+        TextureSampleType::Uint => ts::Uint,
+        TextureSampleType::Depth => ts::Depth,
     }
 }
 
@@ -526,17 +583,26 @@ fn map_front_face(front_face: wgt::FrontFace) -> web_sys::GpuFrontFace {
     }
 }
 
-fn map_rasterization_state_descriptor(
-    primitive: &wgt::PrimitiveState,
-    ds: Option<&wgt::DepthStencilState>,
-) -> web_sys::GpuRasterizationStateDescriptor {
-    let mut mapped = web_sys::GpuRasterizationStateDescriptor::new();
-    mapped.front_face(map_front_face(primitive.front_face));
+fn map_primitive_state(primitive: &wgt::PrimitiveState) -> web_sys::GpuPrimitiveState {
+    use web_sys::GpuPrimitiveTopology as pt;
+    use wgt::PrimitiveTopology;
+
+    let mut mapped = web_sys::GpuPrimitiveState::new();
     mapped.cull_mode(map_cull_mode(primitive.cull_mode));
-    let bias = ds.map_or(wgt::DepthBiasState::default(), |ds| ds.bias.clone());
-    mapped.depth_bias(bias.constant);
-    mapped.depth_bias_clamp(bias.clamp);
-    mapped.depth_bias_slope_scale(bias.slope_scale);
+    mapped.front_face(map_front_face(primitive.front_face));
+
+    if let Some(format) = primitive.strip_index_format {
+        mapped.strip_index_format(map_index_format(format));
+    }
+
+    mapped.topology(match primitive.topology {
+        PrimitiveTopology::PointList => pt::PointList,
+        PrimitiveTopology::LineList => pt::LineList,
+        PrimitiveTopology::LineStrip => pt::LineStrip,
+        PrimitiveTopology::TriangleList => pt::TriangleList,
+        PrimitiveTopology::TriangleStrip => pt::TriangleStrip,
+    });
+
     mapped
 }
 
@@ -570,10 +636,8 @@ fn map_stencil_operation(op: wgt::StencilOperation) -> web_sys::GpuStencilOperat
     }
 }
 
-fn map_stencil_state_face_descriptor(
-    desc: &wgt::StencilFaceState,
-) -> web_sys::GpuStencilStateFaceDescriptor {
-    let mut mapped = web_sys::GpuStencilStateFaceDescriptor::new();
+fn map_stencil_state_face(desc: &wgt::StencilFaceState) -> web_sys::GpuStencilFaceState {
+    let mut mapped = web_sys::GpuStencilFaceState::new();
     mapped.compare(map_compare_function(desc.compare));
     mapped.depth_fail_op(map_stencil_operation(desc.depth_fail_op));
     mapped.fail_op(map_stencil_operation(desc.fail_op));
@@ -581,21 +645,23 @@ fn map_stencil_state_face_descriptor(
     mapped
 }
 
-fn map_depth_stencil_state_descriptor(
-    desc: &wgt::DepthStencilState,
-) -> web_sys::GpuDepthStencilStateDescriptor {
-    let mut mapped = web_sys::GpuDepthStencilStateDescriptor::new(map_texture_format(desc.format));
+fn map_depth_stencil_state(desc: &wgt::DepthStencilState) -> web_sys::GpuDepthStencilState {
+    let mut mapped = web_sys::GpuDepthStencilState::new(map_texture_format(desc.format));
+    mapped.clamp_depth(desc.clamp_depth);
+    mapped.depth_bias(desc.bias.constant);
+    mapped.depth_bias_clamp(desc.bias.clamp);
+    mapped.depth_bias_slope_scale(desc.bias.slope_scale);
     mapped.depth_compare(map_compare_function(desc.depth_compare));
     mapped.depth_write_enabled(desc.depth_write_enabled);
-    mapped.stencil_back(&map_stencil_state_face_descriptor(&desc.stencil.back));
-    mapped.stencil_front(&map_stencil_state_face_descriptor(&desc.stencil.front));
+    mapped.stencil_back(&map_stencil_state_face(&desc.stencil.back));
+    mapped.stencil_front(&map_stencil_state_face(&desc.stencil.front));
     mapped.stencil_read_mask(desc.stencil.read_mask);
     mapped.stencil_write_mask(desc.stencil.write_mask);
     mapped
 }
 
-fn map_blend_descriptor(desc: &wgt::BlendComponent) -> web_sys::GpuBlendDescriptor {
-    let mut mapped = web_sys::GpuBlendDescriptor::new();
+fn map_blend_component(desc: &wgt::BlendComponent) -> web_sys::GpuBlendComponent {
+    let mut mapped = web_sys::GpuBlendComponent::new();
     mapped.dst_factor(map_blend_factor(desc.dst_factor));
     mapped.operation(map_blend_operation(desc.operation));
     mapped.src_factor(map_blend_factor(desc.src_factor));
@@ -647,36 +713,36 @@ fn map_vertex_format(format: wgt::VertexFormat) -> web_sys::GpuVertexFormat {
     use web_sys::GpuVertexFormat as vf;
     use wgt::VertexFormat;
     match format {
-        VertexFormat::Uint8x2 => vf::Uchar2,
-        VertexFormat::Uint8x4 => vf::Uchar4,
-        VertexFormat::Sint8x2 => vf::Char2,
-        VertexFormat::Sint8x4 => vf::Char4,
-        VertexFormat::Unorm8x2 => vf::Uchar2norm,
-        VertexFormat::Unorm8x4 => vf::Uchar4norm,
-        VertexFormat::Snorm8x2 => vf::Char2norm,
-        VertexFormat::Snorm8x4 => vf::Char4norm,
-        VertexFormat::Uint16x2 => vf::Ushort2,
-        VertexFormat::Uint16x4 => vf::Ushort4,
-        VertexFormat::Sint16x2 => vf::Short2,
-        VertexFormat::Sint16x4 => vf::Short4,
-        VertexFormat::Unorm16x2 => vf::Ushort2norm,
-        VertexFormat::Unorm16x4 => vf::Ushort4norm,
-        VertexFormat::Snorm16x2 => vf::Short2norm,
-        VertexFormat::Snorm16x4 => vf::Short4norm,
-        VertexFormat::Float16x2 => vf::Half2,
-        VertexFormat::Float16x4 => vf::Half4,
-        VertexFormat::Float32 => vf::Float,
-        VertexFormat::Float32x2 => vf::Float2,
-        VertexFormat::Float32x3 => vf::Float3,
-        VertexFormat::Float32x4 => vf::Float4,
-        VertexFormat::Uint32 => vf::Uint,
-        VertexFormat::Uint32x2 => vf::Uint2,
-        VertexFormat::Uint32x3 => vf::Uint3,
-        VertexFormat::Uint32x4 => vf::Uint4,
-        VertexFormat::Sint32 => vf::Int,
-        VertexFormat::Sint32x2 => vf::Int2,
-        VertexFormat::Sint32x3 => vf::Int3,
-        VertexFormat::Sint32x4 => vf::Int4,
+        VertexFormat::Uint8x2 => vf::Uint8x2,
+        VertexFormat::Uint8x4 => vf::Uint8x4,
+        VertexFormat::Sint8x2 => vf::Sint8x2,
+        VertexFormat::Sint8x4 => vf::Sint8x4,
+        VertexFormat::Unorm8x2 => vf::Unorm8x2,
+        VertexFormat::Unorm8x4 => vf::Unorm8x4,
+        VertexFormat::Snorm8x2 => vf::Snorm8x2,
+        VertexFormat::Snorm8x4 => vf::Snorm8x4,
+        VertexFormat::Uint16x2 => vf::Uint16x2,
+        VertexFormat::Uint16x4 => vf::Uint16x4,
+        VertexFormat::Sint16x2 => vf::Sint16x2,
+        VertexFormat::Sint16x4 => vf::Sint16x4,
+        VertexFormat::Unorm16x2 => vf::Unorm16x2,
+        VertexFormat::Unorm16x4 => vf::Unorm16x4,
+        VertexFormat::Snorm16x2 => vf::Snorm16x2,
+        VertexFormat::Snorm16x4 => vf::Snorm16x4,
+        VertexFormat::Float16x2 => vf::Float16x2,
+        VertexFormat::Float16x4 => vf::Float16x4,
+        VertexFormat::Float32 => vf::Float32,
+        VertexFormat::Float32x2 => vf::Float32x2,
+        VertexFormat::Float32x3 => vf::Float32x3,
+        VertexFormat::Float32x4 => vf::Float32x4,
+        VertexFormat::Uint32 => vf::Uint32,
+        VertexFormat::Uint32x2 => vf::Uint32x2,
+        VertexFormat::Uint32x3 => vf::Uint32x3,
+        VertexFormat::Uint32x4 => vf::Uint32x4,
+        VertexFormat::Sint32 => vf::Sint32,
+        VertexFormat::Sint32x2 => vf::Sint32x2,
+        VertexFormat::Sint32x3 => vf::Sint32x3,
+        VertexFormat::Sint32x4 => vf::Sint32x4,
         VertexFormat::Float64
         | VertexFormat::Float64x2
         | VertexFormat::Float64x3
@@ -695,50 +761,10 @@ fn map_input_step_mode(mode: wgt::InputStepMode) -> web_sys::GpuInputStepMode {
     }
 }
 
-fn map_vertex_state_descriptor(
-    desc: &crate::RenderPipelineDescriptor,
-) -> web_sys::GpuVertexStateDescriptor {
-    let mapped_vertex_buffers = desc
-        .vertex
-        .buffers
-        .iter()
-        .map(|vbuf| {
-            let mapped_attributes = vbuf
-                .attributes
-                .iter()
-                .map(|attr| {
-                    web_sys::GpuVertexAttributeDescriptor::new(
-                        map_vertex_format(attr.format),
-                        attr.offset as f64,
-                        attr.shader_location,
-                    )
-                })
-                .collect::<js_sys::Array>();
-
-            let mut mapped_vbuf = web_sys::GpuVertexBufferLayoutDescriptor::new(
-                vbuf.array_stride as f64,
-                &mapped_attributes,
-            );
-            mapped_vbuf.step_mode(map_input_step_mode(vbuf.step_mode));
-            mapped_vbuf
-        })
-        .collect::<js_sys::Array>();
-
-    let mut mapped = web_sys::GpuVertexStateDescriptor::new();
-    mapped.index_format(
-        desc.primitive
-            .strip_index_format
-            .map_or(web_sys::GpuIndexFormat::Uint16, map_index_format),
-    );
-    mapped.vertex_buffers(&mapped_vertex_buffers);
-    mapped
-}
-
 fn map_extent_3d(extent: wgt::Extent3d) -> web_sys::GpuExtent3dDict {
-    let mut mapped = web_sys::GpuExtent3dDict::new();
-    mapped.depth(extent.depth_or_array_layers);
+    let mut mapped = web_sys::GpuExtent3dDict::new(extent.width);
     mapped.height(extent.height);
-    mapped.width(extent.width);
+    mapped.depth_or_array_layers(extent.depth_or_array_layers);
     mapped
 }
 
@@ -772,16 +798,16 @@ fn map_texture_view_dimension(
     }
 }
 
-fn map_buffer_copy_view(view: crate::BufferCopyView) -> web_sys::GpuBufferCopyView {
-    let mut mapped = web_sys::GpuBufferCopyView::new(&view.buffer.id.0);
+fn map_buffer_copy_view(view: crate::BufferCopyView) -> web_sys::GpuImageCopyBuffer {
+    let mut mapped = web_sys::GpuImageCopyBuffer::new(&view.buffer.id.0);
     mapped.bytes_per_row(view.layout.bytes_per_row);
     mapped.rows_per_image(view.layout.rows_per_image);
     mapped.offset(view.layout.offset as f64);
     mapped
 }
 
-fn map_texture_copy_view(view: crate::TextureCopyView) -> web_sys::GpuTextureCopyView {
-    let mut mapped = web_sys::GpuTextureCopyView::new(&view.texture.id.0);
+fn map_texture_copy_view(view: crate::TextureCopyView) -> web_sys::GpuImageCopyTexture {
+    let mut mapped = web_sys::GpuImageCopyTexture::new(&view.texture.id.0);
     mapped.mip_level(view.mip_level);
     mapped.origin(&map_origin_3d(view.origin));
     mapped
@@ -807,7 +833,7 @@ fn map_address_mode(mode: wgt::AddressMode) -> web_sys::GpuAddressMode {
         wgt::AddressMode::ClampToEdge => web_sys::GpuAddressMode::ClampToEdge,
         wgt::AddressMode::Repeat => web_sys::GpuAddressMode::Repeat,
         wgt::AddressMode::MirrorRepeat => web_sys::GpuAddressMode::MirrorRepeat,
-        wgt::AddressMode::ClampToBorder => unimplemented!(),
+        wgt::AddressMode::ClampToBorder => panic!("Clamp to border is not supported"),
     }
 }
 
@@ -845,7 +871,7 @@ fn future_request_device(
     result
         .map(|js_value| {
             let device_id = web_sys::GpuDevice::from(js_value);
-            let queue_id = device_id.default_queue();
+            let queue_id = device_id.queue();
             (Sendable(device_id), Sendable(queue_id))
         })
         .map_err(|_| crate::RequestDeviceError)
@@ -929,7 +955,7 @@ impl crate::Context for Context {
     ) -> Self::RequestAdapterFuture {
         //TODO: support this check, return `None` if the flag is not set.
         // It's not trivial, since we need the Future logic to have this check,
-        // and currently the Future her has no room for extra parameter `backends`.
+        // and currently the Future here has no room for extra parameter `backends`.
         //assert!(backends.contains(wgt::BackendBit::BROWSER_WEBGPU));
         let mut mapped_options = web_sys::GpuRequestAdapterOptions::new();
         let mapped_power_preference = match options.power_preference {
@@ -955,6 +981,8 @@ impl crate::Context for Context {
         desc: &crate::DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
+        use web_sys::GpuFeatureName as Gfn;
+
         if trace_dir.is_some() {
             //Error: Tracing isn't supported on the Web target
         }
@@ -963,11 +991,41 @@ impl crate::Context for Context {
             "The web backend doesn't support any native extensions. Enabled native extensions: {:?}",
             desc.features & crate::Features::ALL_NATIVE
         );
+
+        // TODO: non-guaranteed limits
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
-        // TODO: label, extensions
-        let mut mapped_limits = web_sys::GpuLimits::new();
-        mapped_limits.max_bind_groups(desc.limits.max_bind_groups);
-        mapped_desc.limits(&mapped_limits);
+
+        let possible_features = [
+            (wgt::Features::DEPTH_CLAMPING, Gfn::DepthClamping),
+            // TODO (_, Gfn::Depth24unormStencil8),
+            // TODO (_, Gfn::Depth32floatStencil8),
+            (
+                wgt::Features::PIPELINE_STATISTICS_QUERY,
+                Gfn::PipelineStatisticsQuery,
+            ),
+            (
+                wgt::Features::TEXTURE_COMPRESSION_BC,
+                Gfn::TextureCompressionBc,
+            ),
+            (wgt::Features::TIMESTAMP_QUERY, Gfn::TimestampQuery),
+        ];
+        let non_guaranteed_features = possible_features
+            .iter()
+            .copied()
+            .flat_map(|(flag, value)| {
+                if desc.features.contains(flag) {
+                    Some(JsValue::from(value))
+                } else {
+                    None
+                }
+            })
+            .collect::<js_sys::Array>();
+        mapped_desc.non_guaranteed_features(&non_guaranteed_features);
+
+        if let Some(label) = desc.label {
+            mapped_desc.label(label);
+        }
+
         let device_promise = adapter.0.request_device_with_descriptor(&mapped_desc);
 
         MakeSendFuture::new(
@@ -978,21 +1036,44 @@ impl crate::Context for Context {
 
     fn adapter_get_swap_chain_preferred_format(
         &self,
-        _adapter: &Self::AdapterId,
-        _surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+        surface: &Self::SurfaceId,
     ) -> Option<wgt::TextureFormat> {
-        // TODO: web-sys bindings need to be updated to not return a promise
-        Some(wgt::TextureFormat::Bgra8Unorm)
+        let format =
+            map_texture_format_from_web_sys(surface.0.get_swap_chain_preferred_format(&adapter.0));
+        Some(format)
     }
 
-    fn adapter_features(&self, _adapter: &Self::AdapterId) -> wgt::Features {
-        // TODO: web-sys has no way of getting extensions on adapters
+    fn adapter_features(&self, adapter: &Self::AdapterId) -> wgt::Features {
+        // TODO
+        let _features = adapter.0.features();
         wgt::Features::empty()
     }
 
-    fn adapter_limits(&self, _adapter: &Self::AdapterId) -> wgt::Limits {
-        // TODO: web-sys has no way of getting limits on adapters
-        wgt::Limits::default()
+    fn adapter_limits(&self, adapter: &Self::AdapterId) -> wgt::Limits {
+        let limits = adapter.0.limits();
+        wgt::Limits {
+            max_texture_dimension_1d: limits.max_texture_dimension_1d(),
+            max_texture_dimension_2d: limits.max_texture_dimension_2d(),
+            max_texture_dimension_3d: limits.max_texture_dimension_3d(),
+            max_texture_array_layers: limits.max_texture_array_layers(),
+            max_bind_groups: limits.max_bind_groups(),
+            max_dynamic_uniform_buffers_per_pipeline_layout: limits
+                .max_dynamic_uniform_buffers_per_pipeline_layout(),
+            max_dynamic_storage_buffers_per_pipeline_layout: limits
+                .max_dynamic_storage_buffers_per_pipeline_layout(),
+            max_sampled_textures_per_shader_stage: limits.max_sampled_textures_per_shader_stage(),
+            max_samplers_per_shader_stage: limits.max_samplers_per_shader_stage(),
+            max_storage_buffers_per_shader_stage: limits.max_storage_buffers_per_shader_stage(),
+            max_storage_textures_per_shader_stage: limits.max_storage_textures_per_shader_stage(),
+            max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
+            max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size(),
+            max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size(),
+            max_vertex_buffers: limits.max_vertex_buffers(),
+            max_vertex_attributes: limits.max_vertex_attributes(),
+            max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
+            ..wgt::Limits::default()
+        }
     }
 
     fn adapter_get_info(&self, _adapter: &Self::AdapterId) -> wgt::AdapterInfo {
@@ -1015,12 +1096,12 @@ impl crate::Context for Context {
     }
 
     fn device_features(&self, _device: &Self::DeviceId) -> wgt::Features {
-        // TODO: web-sys has no way of getting extensions on devices
+        // TODO
         wgt::Features::empty()
     }
 
     fn device_limits(&self, _device: &Self::DeviceId) -> wgt::Limits {
-        // TODO: web-sys has a method for getting limits on devices, but it returns Object not GpuLimit
+        // TODO
         wgt::Limits::default()
     }
 
@@ -1071,72 +1152,83 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &crate::BindGroupLayoutDescriptor,
     ) -> Self::BindGroupLayoutId {
-        use web_sys::GpuBindingType as bt;
-
         let mapped_bindings = desc
             .entries
             .iter()
             .map(|bind| {
-                let mapped_type = match bind.ty {
-                    wgt::BindingType::Buffer {
-                        ty: wgt::BufferBindingType::Uniform,
-                        ..
-                    } => bt::UniformBuffer,
-                    wgt::BindingType::Buffer {
-                        ty: wgt::BufferBindingType::Storage { read_only: false },
-                        ..
-                    } => bt::StorageBuffer,
-                    wgt::BindingType::Buffer {
-                        ty: wgt::BufferBindingType::Storage { read_only: true },
-                        ..
-                    } => bt::ReadonlyStorageBuffer,
-                    wgt::BindingType::Sampler {
-                        comparison: false, ..
-                    } => bt::Sampler,
-                    wgt::BindingType::Sampler { .. } => bt::ComparisonSampler,
-                    wgt::BindingType::Texture {
-                        multisampled: true, ..
-                    } => bt::MultisampledTexture,
-                    wgt::BindingType::Texture { .. } => bt::SampledTexture,
-                    wgt::BindingType::StorageTexture {
-                        access: wgt::StorageTextureAccess::ReadOnly,
-                        ..
-                    } => bt::ReadonlyStorageTexture,
-                    wgt::BindingType::StorageTexture { .. } => bt::WriteonlyStorageTexture,
-                };
-
-                assert!(
-                    bind.count.is_none(),
-                    "The web backend doesn't support arrays of bindings"
-                );
-
-                let mut mapped_entry = web_sys::GpuBindGroupLayoutEntry::new(
-                    bind.binding,
-                    mapped_type,
-                    bind.visibility.bits(),
-                );
-
-                if let wgt::BindingType::Buffer {
-                    has_dynamic_offset, ..
-                } = bind.ty
-                {
-                    mapped_entry.has_dynamic_offset(has_dynamic_offset);
-                }
-
-                if let wgt::BindingType::Texture { sample_type, .. } = bind.ty {
-                    mapped_entry.texture_component_type(map_texture_component_type(sample_type));
-                }
+                let mut mapped_entry =
+                    web_sys::GpuBindGroupLayoutEntry::new(bind.binding, bind.visibility.bits());
 
                 match bind.ty {
-                    wgt::BindingType::Texture { view_dimension, .. }
-                    | wgt::BindingType::StorageTexture { view_dimension, .. } => {
-                        mapped_entry.view_dimension(map_texture_view_dimension(view_dimension));
+                    wgt::BindingType::Buffer {
+                        ty,
+                        has_dynamic_offset,
+                        min_binding_size,
+                    } => {
+                        let mut buffer = web_sys::GpuBufferBindingLayout::new();
+                        buffer.has_dynamic_offset(has_dynamic_offset);
+                        if let Some(size) = min_binding_size {
+                            buffer.min_binding_size(size.get() as f64);
+                        }
+                        buffer.type_(match ty {
+                            wgt::BufferBindingType::Uniform => {
+                                web_sys::GpuBufferBindingType::Uniform
+                            }
+                            wgt::BufferBindingType::Storage { read_only: false } => {
+                                web_sys::GpuBufferBindingType::Storage
+                            }
+                            wgt::BufferBindingType::Storage { read_only: true } => {
+                                web_sys::GpuBufferBindingType::ReadOnlyStorage
+                            }
+                        });
+                        mapped_entry.buffer(&buffer);
                     }
-                    _ => {}
-                }
-
-                if let wgt::BindingType::StorageTexture { format, .. } = bind.ty {
-                    mapped_entry.storage_texture_format(map_texture_format(format));
+                    wgt::BindingType::Sampler {
+                        comparison,
+                        filtering,
+                    } => {
+                        let mut sampler = web_sys::GpuSamplerBindingLayout::new();
+                        sampler.type_(match (comparison, filtering) {
+                            (false, false) => web_sys::GpuSamplerBindingType::NonFiltering,
+                            (false, true) => web_sys::GpuSamplerBindingType::Filtering,
+                            (true, _) => web_sys::GpuSamplerBindingType::Comparison,
+                        });
+                        mapped_entry.sampler(&sampler);
+                    }
+                    wgt::BindingType::Texture {
+                        multisampled,
+                        sample_type,
+                        view_dimension,
+                    } => {
+                        let mut texture = web_sys::GpuTextureBindingLayout::new();
+                        texture.multisampled(multisampled);
+                        texture.sample_type(map_texture_component_type(sample_type));
+                        texture.view_dimension(map_texture_view_dimension(view_dimension));
+                        mapped_entry.texture(&texture);
+                    }
+                    wgt::BindingType::StorageTexture {
+                        access,
+                        format,
+                        view_dimension,
+                    } => {
+                        let mapped_access = match access {
+                            wgt::StorageTextureAccess::ReadOnly => {
+                                web_sys::GpuStorageTextureAccess::ReadOnly
+                            }
+                            wgt::StorageTextureAccess::WriteOnly => {
+                                web_sys::GpuStorageTextureAccess::WriteOnly
+                            }
+                            wgt::StorageTextureAccess::ReadWrite => {
+                                panic!("ReadWrite is not available")
+                            }
+                        };
+                        let mut storage_texture = web_sys::GpuStorageTextureBindingLayout::new(
+                            mapped_access,
+                            map_texture_format(format),
+                        );
+                        storage_texture.view_dimension(map_texture_view_dimension(view_dimension));
+                        mapped_entry.storage_texture(&storage_texture);
+                    }
                 }
 
                 mapped_entry
@@ -1218,67 +1310,81 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &crate::RenderPipelineDescriptor,
     ) -> Self::RenderPipelineId {
-        use web_sys::GpuPrimitiveTopology as pt;
+        let mut mapped_vertex_state =
+            web_sys::GpuVertexState::new(&desc.vertex.entry_point, &desc.vertex.module.id.0);
 
-        let targets = desc.fragment.as_ref().map_or(&[][..], |frag| &frag.targets);
-        let mapped_color_states = targets
+        let buffers = desc
+            .vertex
+            .buffers
             .iter()
-            .map(|target| {
-                let mapped_format = map_texture_format(target.format);
-                let mut mapped_color_state_desc =
-                    web_sys::GpuColorStateDescriptor::new(mapped_format);
-                if let Some(ref bs) = target.blend {
-                    mapped_color_state_desc.alpha_blend(&map_blend_descriptor(&bs.alpha));
-                    mapped_color_state_desc.color_blend(&map_blend_descriptor(&bs.color));
-                }
-                mapped_color_state_desc.write_mask(target.write_mask.bits());
-                mapped_color_state_desc
+            .map(|vbuf| {
+                let mapped_attributes = vbuf
+                    .attributes
+                    .iter()
+                    .map(|attr| {
+                        web_sys::GpuVertexAttribute::new(
+                            map_vertex_format(attr.format),
+                            attr.offset as f64,
+                            attr.shader_location,
+                        )
+                    })
+                    .collect::<js_sys::Array>();
+
+                let mut mapped_vbuf = web_sys::GpuVertexBufferLayout::new(
+                    vbuf.array_stride as f64,
+                    &mapped_attributes,
+                );
+                mapped_vbuf.step_mode(map_input_step_mode(vbuf.step_mode));
+                mapped_vbuf
             })
             .collect::<js_sys::Array>();
 
-        let mapped_primitive_topology = match desc.primitive.topology {
-            wgt::PrimitiveTopology::PointList => pt::PointList,
-            wgt::PrimitiveTopology::LineList => pt::LineList,
-            wgt::PrimitiveTopology::LineStrip => pt::LineStrip,
-            wgt::PrimitiveTopology::TriangleList => pt::TriangleList,
-            wgt::PrimitiveTopology::TriangleStrip => pt::TriangleStrip,
-        };
+        mapped_vertex_state.buffers(&buffers);
 
-        let mapped_vertex_stage = web_sys::GpuProgrammableStageDescriptor::new(
-            &desc.vertex.entry_point,
-            &desc.vertex.module.id.0,
-        );
+        let mut mapped_desc = web_sys::GpuRenderPipelineDescriptor::new(&mapped_vertex_state);
 
-        let mut mapped_desc = web_sys::GpuRenderPipelineDescriptor::new(
-            &mapped_color_states,
-            mapped_primitive_topology,
-            &mapped_vertex_stage,
-        );
+        if let Some(label) = desc.label {
+            mapped_desc.label(label);
+        }
+
         if let Some(layout) = desc.layout {
             mapped_desc.layout(&layout.id.0);
         }
 
-        // TODO: label
+        if let Some(ref depth_stencil) = desc.depth_stencil {
+            mapped_desc.depth_stencil(&map_depth_stencil_state(depth_stencil));
+        }
 
         if let Some(ref frag) = desc.fragment {
+            let targets = frag
+                .targets
+                .iter()
+                .map(|target| {
+                    let mapped_format = map_texture_format(target.format);
+                    let mut mapped_color_state = web_sys::GpuColorTargetState::new(mapped_format);
+                    if let Some(ref bs) = target.blend {
+                        let alpha = map_blend_component(&bs.alpha);
+                        let color = map_blend_component(&bs.color);
+                        let mapped_blend_state = web_sys::GpuBlendState::new(&alpha, &color);
+                        mapped_color_state.blend(&mapped_blend_state);
+                    }
+                    mapped_color_state.write_mask(target.write_mask.bits());
+                    mapped_color_state
+                })
+                .collect::<js_sys::Array>();
             let mapped_fragment_desc =
-                web_sys::GpuProgrammableStageDescriptor::new(&frag.entry_point, &frag.module.id.0);
-            mapped_desc.fragment_stage(&mapped_fragment_desc);
+                web_sys::GpuFragmentState::new(&frag.entry_point, &frag.module.id.0, &targets);
+            mapped_desc.fragment(&mapped_fragment_desc);
         }
 
-        mapped_desc.rasterization_state(&map_rasterization_state_descriptor(
-            &desc.primitive,
-            desc.depth_stencil.as_ref(),
-        ));
+        let mut mapped_multisample = web_sys::GpuMultisampleState::new();
+        mapped_multisample.count(desc.multisample.count);
+        mapped_multisample.mask(desc.multisample.mask as u32);
+        mapped_multisample.alpha_to_coverage_enabled(desc.multisample.alpha_to_coverage_enabled);
+        mapped_desc.multisample(&mapped_multisample);
 
-        if let Some(ref depth_stencil) = desc.depth_stencil {
-            mapped_desc.depth_stencil_state(&map_depth_stencil_state_descriptor(depth_stencil));
-        }
-
-        mapped_desc.vertex_state(&map_vertex_state_descriptor(&desc));
-        mapped_desc.sample_count(desc.multisample.count);
-        mapped_desc.sample_mask(desc.multisample.mask as u32);
-        mapped_desc.alpha_to_coverage_enabled(desc.multisample.alpha_to_coverage_enabled);
+        let mapped_primitive = map_primitive_state(&desc.primitive);
+        mapped_desc.primitive(&mapped_primitive);
 
         Sendable(device.0.create_render_pipeline(&mapped_desc))
     }
@@ -1289,7 +1395,7 @@ impl crate::Context for Context {
         desc: &crate::ComputePipelineDescriptor,
     ) -> Self::ComputePipelineId {
         let mapped_compute_stage =
-            web_sys::GpuProgrammableStageDescriptor::new(&desc.entry_point, &desc.module.id.0);
+            web_sys::GpuProgrammableStage::new(&desc.entry_point, &desc.module.id.0);
         let mut mapped_desc = web_sys::GpuComputePipelineDescriptor::new(&mapped_compute_stage);
         if let Some(layout) = desc.layout {
             mapped_desc.layout(&layout.id.0);
@@ -1350,6 +1456,8 @@ impl crate::Context for Context {
         mapped_desc.mag_filter(map_filter_mode(desc.mag_filter));
         mapped_desc.min_filter(map_filter_mode(desc.min_filter));
         mapped_desc.mipmap_filter(map_filter_mode(desc.mipmap_filter));
+        // TODO: `max_anisotropy` is not available on `desc` yet
+        // mapped_desc.max_anisotropy(desc.max_anisotropy);
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
@@ -1679,18 +1787,13 @@ impl crate::Context for Context {
             .color_attachments
             .iter()
             .map(|ca| {
+                let load_value = match ca.ops.load {
+                    crate::LoadOp::Clear(color) => wasm_bindgen::JsValue::from(map_color(color)),
+                    crate::LoadOp::Load => wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
+                };
+
                 let mut mapped_color_attachment =
-                    web_sys::GpuRenderPassColorAttachmentDescriptor::new(
-                        &ca.attachment.id.0,
-                        &match ca.ops.load {
-                            crate::LoadOp::Clear(color) => {
-                                wasm_bindgen::JsValue::from(map_color(color))
-                            }
-                            crate::LoadOp::Load => {
-                                wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load)
-                            }
-                        },
-                    );
+                    web_sys::GpuRenderPassColorAttachment::new(&load_value, &ca.attachment.id.0);
 
                 if let Some(rt) = ca.resolve_target {
                     mapped_color_attachment.resolve_target(&rt.id.0);
@@ -1704,7 +1807,9 @@ impl crate::Context for Context {
 
         let mut mapped_desc = web_sys::GpuRenderPassDescriptor::new(&mapped_color_attachments);
 
-        // TODO: label
+        if let Some(label) = desc.label {
+            mapped_desc.label(label);
+        }
 
         if let Some(dsa) = &desc.depth_stencil_attachment {
             let (depth_load_op, depth_store_op) = match dsa.depth_ops {
@@ -1722,7 +1827,7 @@ impl crate::Context for Context {
                     web_sys::GpuStoreOp::Store,
                 ),
             };
-            let (stencil_load_op, stencil_store_op) = match dsa.depth_ops {
+            let (stencil_load_op, stencil_store_op) = match dsa.stencil_ops {
                 Some(ref ops) => {
                     let load_op = match ops.load {
                         crate::LoadOp::Clear(value) => wasm_bindgen::JsValue::from(value),
@@ -1737,14 +1842,13 @@ impl crate::Context for Context {
                     web_sys::GpuStoreOp::Store,
                 ),
             };
-            let mapped_depth_stencil_attachment =
-                web_sys::GpuRenderPassDepthStencilAttachmentDescriptor::new(
-                    &dsa.attachment.id.0,
-                    &depth_load_op,
-                    depth_store_op,
-                    &stencil_load_op,
-                    stencil_store_op,
-                );
+            let mapped_depth_stencil_attachment = web_sys::GpuRenderPassDepthStencilAttachment::new(
+                &depth_load_op,
+                depth_store_op,
+                &stencil_load_op,
+                stencil_store_op,
+                &dsa.attachment.id.0,
+            );
 
             mapped_desc.depth_stencil_attachment(&mapped_depth_stencil_attachment);
         }
@@ -1857,7 +1961,7 @@ impl crate::Context for Context {
         data_layout: wgt::TextureDataLayout,
         size: wgt::Extent3d,
     ) {
-        let mut mapped_data_layout = web_sys::GpuTextureDataLayout::new();
+        let mut mapped_data_layout = web_sys::GpuImageDataLayout::new();
         mapped_data_layout.bytes_per_row(data_layout.bytes_per_row);
         mapped_data_layout.rows_per_image(data_layout.rows_per_image);
         mapped_data_layout.offset(data_layout.offset as f64);
