@@ -260,7 +260,6 @@ pub struct Writer {
     // so it may require us to duplicate the type!
     struct_type_handles: crate::FastHashMap<Handle<crate::Type>, crate::StorageAccess>,
     gl450_ext_inst_id: Word,
-    layouter: Layouter,
     temp_chain: Vec<Word>,
 }
 
@@ -291,7 +290,6 @@ impl Writer {
             cached: CachedExpressions::default(),
             struct_type_handles: crate::FastHashMap::default(),
             gl450_ext_inst_id,
-            layouter: Layouter::default(),
             temp_chain: Vec::new(),
         })
     }
@@ -322,12 +320,7 @@ impl Writer {
             Ok(*e.get())
         } else {
             match lookup_ty {
-                LookupType::Handle(handle) => {
-                    match self.physical_layout.make_local(&arena[handle].inner) {
-                        Some(local) => self.get_type_id(arena, LookupType::Local(local)),
-                        None => self.write_type_declaration_arena(arena, handle),
-                    }
-                }
+                LookupType::Handle(_handle) => unreachable!("Handles are populated at start"),
                 LookupType::Local(local_ty) => self.write_type_declaration_local(arena, local_ty),
             }
         }
@@ -716,10 +709,28 @@ impl Writer {
     fn write_type_declaration_arena(
         &mut self,
         arena: &Arena<crate::Type>,
+        layouter: &Layouter,
         handle: Handle<crate::Type>,
     ) -> Result<Word, Error> {
         let ty = &arena[handle];
+
+        if let Some(local) = self.physical_layout.make_local(&ty.inner) {
+            match self.lookup_type.entry(LookupType::Local(local)) {
+                // if it's already known as local, re-use it
+                Entry::Occupied(e) => {
+                    let id = *e.into_mut();
+                    self.lookup_type.insert(LookupType::Handle(handle), id);
+                    return Ok(id);
+                }
+                // also register the type as "local", to avoid duplication
+                Entry::Vacant(e) => {
+                    let id = self.id_count + 1; // has to match the next ID
+                    e.insert(id);
+                }
+            }
+        }
         let id = self.generate_id();
+        self.lookup_type.insert(LookupType::Handle(handle), id);
 
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(ref name) = ty.name {
@@ -728,18 +739,7 @@ impl Writer {
         }
 
         let instruction = match ty.inner {
-            crate::TypeInner::Scalar { kind, width } => {
-                self.lookup_type.insert(
-                    LookupType::Local(LocalType::Value {
-                        vector_size: None,
-                        kind,
-                        width,
-                        pointer_class: None,
-                    }),
-                    id,
-                );
-                self.write_scalar(id, kind, width)
-            }
+            crate::TypeInner::Scalar { kind, width } => self.write_scalar(id, kind, width),
             crate::TypeInner::Vector { size, kind, width } => {
                 let scalar_id = self.get_type_id(
                     arena,
@@ -750,15 +750,6 @@ impl Writer {
                         pointer_class: None,
                     }),
                 )?;
-                self.lookup_type.insert(
-                    LookupType::Local(LocalType::Value {
-                        vector_size: Some(size),
-                        kind,
-                        width,
-                        pointer_class: None,
-                    }),
-                    id,
-                );
                 Instruction::type_vector(id, scalar_id, size)
             }
             crate::TypeInner::Matrix {
@@ -769,20 +760,12 @@ impl Writer {
                 let vector_id = self.get_type_id(
                     arena,
                     LookupType::Local(LocalType::Value {
-                        vector_size: Some(columns),
+                        vector_size: Some(rows),
                         kind: crate::ScalarKind::Float,
                         width,
                         pointer_class: None,
                     }),
                 )?;
-                self.lookup_type.insert(
-                    LookupType::Local(LocalType::Matrix {
-                        columns,
-                        rows,
-                        width,
-                    }),
-                    id,
-                );
                 Instruction::type_matrix(id, vector_id, columns)
             }
             crate::TypeInner::Image {
@@ -842,7 +825,7 @@ impl Writer {
                 let mut current_offset = 0;
                 let mut member_ids = Vec::with_capacity(members.len());
                 for (index, member) in members.iter().enumerate() {
-                    let (placement, _) = self.layouter.member_placement(current_offset, member);
+                    let (placement, _) = layouter.member_placement(current_offset, member);
                     self.annotations.push(Instruction::member_decorate(
                         id,
                         index as u32,
@@ -901,13 +884,6 @@ impl Writer {
             crate::TypeInner::Pointer { base, class } => {
                 let type_id = self.get_type_id(arena, LookupType::Handle(base))?;
                 let raw_class = self.physical_layout.map_storage_class(class);
-                self.lookup_type.insert(
-                    LookupType::Local(LocalType::Pointer {
-                        base,
-                        class: raw_class,
-                    }),
-                    id,
-                );
                 Instruction::type_pointer(id, raw_class, type_id)
             }
             crate::TypeInner::ValuePointer {
@@ -926,103 +902,99 @@ impl Writer {
                         pointer_class: None,
                     }),
                 )?;
-                self.lookup_type.insert(
-                    LookupType::Local(LocalType::Value {
-                        vector_size: size,
-                        kind,
-                        width,
-                        pointer_class: Some(raw_class),
-                    }),
-                    id,
-                );
                 Instruction::type_pointer(id, raw_class, type_id)
             }
         };
 
-        self.lookup_type.insert(LookupType::Handle(handle), id);
         instruction.to_words(&mut self.logical_layout.declarations);
         Ok(id)
     }
 
-    fn write_constant_type(
+    fn write_constant_scalar(
         &mut self,
         id: Word,
-        inner: &crate::ConstantInner,
+        value: &crate::ScalarValue,
+        width: crate::Bytes,
         types: &Arena<crate::Type>,
     ) -> Result<(), Error> {
-        let instruction = match *inner {
-            crate::ConstantInner::Scalar { width, ref value } => {
-                let type_id = self.get_type_id(
-                    types,
-                    LookupType::Local(LocalType::Value {
-                        vector_size: None,
-                        kind: value.scalar_kind(),
-                        width,
-                        pointer_class: None,
-                    }),
-                )?;
-                let (solo, pair);
-                match *value {
-                    crate::ScalarValue::Sint(val) => {
-                        let words = match width {
-                            4 => {
-                                solo = [val as u32];
-                                &solo[..]
-                            }
-                            8 => {
-                                pair = [(val >> 32) as u32, val as u32];
-                                &pair
-                            }
-                            _ => unreachable!(),
-                        };
-                        Instruction::constant(type_id, id, words)
+        let type_id = self.get_type_id(
+            types,
+            LookupType::Local(LocalType::Value {
+                vector_size: None,
+                kind: value.scalar_kind(),
+                width,
+                pointer_class: None,
+            }),
+        )?;
+        let (solo, pair);
+        let instruction = match *value {
+            crate::ScalarValue::Sint(val) => {
+                let words = match width {
+                    4 => {
+                        solo = [val as u32];
+                        &solo[..]
                     }
-                    crate::ScalarValue::Uint(val) => {
-                        let words = match width {
-                            4 => {
-                                solo = [val as u32];
-                                &solo[..]
-                            }
-                            8 => {
-                                pair = [(val >> 32) as u32, val as u32];
-                                &pair
-                            }
-                            _ => unreachable!(),
-                        };
-                        Instruction::constant(type_id, id, words)
+                    8 => {
+                        pair = [(val >> 32) as u32, val as u32];
+                        &pair
                     }
-                    crate::ScalarValue::Float(val) => {
-                        let words = match width {
-                            4 => {
-                                solo = [(val as f32).to_bits()];
-                                &solo[..]
-                            }
-                            8 => {
-                                let bits = f64::to_bits(val);
-                                pair = [(bits >> 32) as u32, bits as u32];
-                                &pair
-                            }
-                            _ => unreachable!(),
-                        };
-                        Instruction::constant(type_id, id, words)
-                    }
-                    crate::ScalarValue::Bool(true) => Instruction::constant_true(type_id, id),
-                    crate::ScalarValue::Bool(false) => Instruction::constant_false(type_id, id),
-                }
+                    _ => unreachable!(),
+                };
+                Instruction::constant(type_id, id, words)
             }
-            crate::ConstantInner::Composite { ty, ref components } => {
-                let mut constituent_ids = Vec::with_capacity(components.len());
-                for constituent in components.iter() {
-                    let constituent_id = self.lookup_constant[constituent];
-                    constituent_ids.push(constituent_id);
-                }
-
-                let type_id = self.get_type_id(types, LookupType::Handle(ty))?;
-                Instruction::constant_composite(type_id, id, constituent_ids.as_slice())
+            crate::ScalarValue::Uint(val) => {
+                let words = match width {
+                    4 => {
+                        solo = [val as u32];
+                        &solo[..]
+                    }
+                    8 => {
+                        pair = [(val >> 32) as u32, val as u32];
+                        &pair
+                    }
+                    _ => unreachable!(),
+                };
+                Instruction::constant(type_id, id, words)
             }
+            crate::ScalarValue::Float(val) => {
+                let words = match width {
+                    4 => {
+                        solo = [(val as f32).to_bits()];
+                        &solo[..]
+                    }
+                    8 => {
+                        let bits = f64::to_bits(val);
+                        pair = [(bits >> 32) as u32, bits as u32];
+                        &pair
+                    }
+                    _ => unreachable!(),
+                };
+                Instruction::constant(type_id, id, words)
+            }
+            crate::ScalarValue::Bool(true) => Instruction::constant_true(type_id, id),
+            crate::ScalarValue::Bool(false) => Instruction::constant_false(type_id, id),
         };
 
         instruction.to_words(&mut self.logical_layout.declarations);
+        Ok(())
+    }
+
+    fn write_constant_composite(
+        &mut self,
+        id: Word,
+        ty: Handle<crate::Type>,
+        components: &[Handle<crate::Constant>],
+        types: &Arena<crate::Type>,
+    ) -> Result<(), Error> {
+        let mut constituent_ids = Vec::with_capacity(components.len());
+        for constituent in components.iter() {
+            let constituent_id = self.lookup_constant[constituent];
+            constituent_ids.push(constituent_id);
+        }
+
+        let type_id = self.get_type_id(types, LookupType::Handle(ty))?;
+        Instruction::constant_composite(type_id, id, constituent_ids.as_slice())
+            .to_words(&mut self.logical_layout.declarations);
         Ok(())
     }
 
@@ -1108,9 +1080,8 @@ impl Writer {
     fn write_global_variable(
         &mut self,
         ir_module: &crate::Module,
-        handle: Handle<crate::GlobalVariable>,
+        global_variable: &crate::GlobalVariable,
     ) -> Result<(Instruction, Word, spirv::StorageClass), Error> {
-        let global_variable = &ir_module.global_variables[handle];
         let id = self.generate_id();
 
         let class = self
@@ -1801,11 +1772,12 @@ impl Writer {
 
                         //TODO: cache this!
                         let zero_id = self.generate_id();
-                        let zero_inner = crate::ConstantInner::Scalar {
-                            width: 4,
-                            value: crate::ScalarValue::Float(0.0),
-                        };
-                        self.write_constant_type(zero_id, &zero_inner, &ir_module.types)?;
+                        self.write_constant_scalar(
+                            zero_id,
+                            &crate::ScalarValue::Float(0.0),
+                            4,
+                            &ir_module.types,
+                        )?;
                         inst.add_operand(spirv::ImageOperands::LOD.bits());
                         inst.add_operand(zero_id);
 
@@ -2375,23 +2347,57 @@ impl Writer {
                 .push(Instruction::source(spirv::SourceLanguage::GLSL, 450));
         }
 
+        // first, output all the scalar constants
         for (handle, constant) in ir_module.constants.iter() {
-            let id = self.generate_id();
-            self.lookup_constant.insert(handle, id);
-            if self.flags.contains(WriterFlags::DEBUG) {
-                if let Some(ref name) = constant.name {
-                    self.debugs.push(Instruction::name(id, name));
+            match constant.inner {
+                crate::ConstantInner::Composite { .. } => continue,
+                crate::ConstantInner::Scalar { width, ref value } => {
+                    let id = self.generate_id();
+                    self.lookup_constant.insert(handle, id);
+                    if self.flags.contains(WriterFlags::DEBUG) {
+                        if let Some(ref name) = constant.name {
+                            self.debugs.push(Instruction::name(id, name));
+                        }
+                    }
+                    self.write_constant_scalar(id, value, width, &ir_module.types)?;
                 }
             }
-            self.write_constant_type(id, &constant.inner, &ir_module.types)?;
         }
 
-        self.global_variables.clear();
-        for (handle, var) in ir_module.global_variables.iter() {
+        // then gather the struct type handles, then affect types
+        self.struct_type_handles.clear();
+        for (_, var) in ir_module.global_variables.iter() {
             if let crate::TypeInner::Struct { .. } = ir_module.types[var.ty].inner {
                 self.struct_type_handles.insert(var.ty, var.storage_access);
             }
-            let (instruction, id, class) = self.write_global_variable(ir_module, handle)?;
+        }
+
+        // then all types, some of them may rely on constants and struct type set
+        for (handle, _) in ir_module.types.iter() {
+            self.write_type_declaration_arena(&ir_module.types, &mod_info.layouter, handle)?;
+        }
+
+        // the all the composite constants, they rely on types
+        for (handle, constant) in ir_module.constants.iter() {
+            match constant.inner {
+                crate::ConstantInner::Scalar { .. } => continue,
+                crate::ConstantInner::Composite { ty, ref components } => {
+                    let id = self.generate_id();
+                    self.lookup_constant.insert(handle, id);
+                    if self.flags.contains(WriterFlags::DEBUG) {
+                        if let Some(ref name) = constant.name {
+                            self.debugs.push(Instruction::name(id, name));
+                        }
+                    }
+                    self.write_constant_composite(id, ty, components, &ir_module.types)?;
+                }
+            }
+        }
+
+        // now write all globals
+        self.global_variables.clear();
+        for (_, var) in ir_module.global_variables.iter() {
+            let (instruction, id, class) = self.write_global_variable(ir_module, var)?;
             instruction.to_words(&mut self.logical_layout.declarations);
             self.global_variables.push(GlobalVariable {
                 id,
@@ -2400,12 +2406,14 @@ impl Writer {
             });
         }
 
+        // all functions
         for (handle, ir_function) in ir_module.functions.iter() {
             let info = &mod_info[handle];
             let id = self.write_function(ir_function, info, ir_module, None)?;
             self.lookup_function.insert(handle, id);
         }
 
+        // and entry points
         for (ep_index, ir_ep) in ir_module.entry_points.iter().enumerate() {
             let info = mod_info.get_entry_point(ep_index);
             let ep_instruction = self.write_entry_point(ir_ep, info, ir_module)?;
@@ -2446,9 +2454,6 @@ impl Writer {
         self.lookup_function.clear();
         self.lookup_function_type.clear();
         self.lookup_function_call.clear();
-
-        self.layouter
-            .initialize(&ir_module.types, &ir_module.constants);
 
         self.write_logical_layout(ir_module, info)?;
         self.write_physical_layout();

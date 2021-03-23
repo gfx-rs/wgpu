@@ -5,6 +5,8 @@ pub type Alignment = NonZeroU32;
 
 /// Alignment information for a type.
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct TypeLayout {
     pub size: u32,
     pub alignment: Alignment,
@@ -14,6 +16,8 @@ pub struct TypeLayout {
 /// It uses the default layout algorithm/table, described in
 /// https://github.com/gpuweb/gpuweb/issues/1393
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Layouter {
     layouts: Vec<TypeLayout>,
 }

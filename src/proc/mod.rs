@@ -5,7 +5,7 @@ mod namer;
 mod terminator;
 mod typifier;
 
-pub use layouter::{Alignment, Layouter};
+pub use layouter::{Alignment, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
 pub use typifier::{ResolveContext, ResolveError, TypeResolution};

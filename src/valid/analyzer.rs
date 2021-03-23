@@ -715,13 +715,6 @@ impl ModuleInfo {
     }
 }
 
-impl ops::Index<Handle<crate::Function>> for ModuleInfo {
-    type Output = FunctionInfo;
-    fn index(&self, handle: Handle<crate::Function>) -> &FunctionInfo {
-        &self.functions[handle.index()]
-    }
-}
-
 #[test]
 fn uniform_control_flow() {
     use crate::{Expression as E, Statement as S};

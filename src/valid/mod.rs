@@ -10,9 +10,11 @@ use crate::{
     FastHashSet,
 };
 use bit_set::BitSet;
+use std::ops;
 
 //TODO: analyze the model at the same time as we validate it,
 // merge the corresponding matches over expressions and statements.
+
 pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, UniformityRequirements};
 pub use expression::ExpressionError;
 pub use function::{CallError, FunctionError, LocalVariableError};
@@ -35,6 +37,14 @@ bitflags::bitflags! {
 pub struct ModuleInfo {
     functions: Vec<FunctionInfo>,
     entry_points: Vec<FunctionInfo>,
+    pub layouter: Layouter,
+}
+
+impl ops::Index<Handle<crate::Function>> for ModuleInfo {
+    type Output = FunctionInfo;
+    fn index(&self, handle: Handle<crate::Function>) -> &Self::Output {
+        &self.functions[handle.index()]
+    }
 }
 
 #[derive(Debug)]
@@ -174,10 +184,6 @@ impl Validator {
     pub fn validate(&mut self, module: &crate::Module) -> Result<ModuleInfo, ValidationError> {
         self.reset_types(module.types.len());
 
-        let mut mod_info = ModuleInfo {
-            functions: Vec::with_capacity(module.functions.len()),
-            entry_points: Vec::with_capacity(module.entry_points.len()),
-        };
         let layouter = Layouter::new(&module.types, &module.constants);
 
         for (handle, constant) in module.constants.iter() {
@@ -209,6 +215,12 @@ impl Validator {
                     error,
                 })?;
         }
+
+        let mut mod_info = ModuleInfo {
+            functions: Vec::with_capacity(module.functions.len()),
+            entry_points: Vec::with_capacity(module.entry_points.len()),
+            layouter,
+        };
 
         for (handle, fun) in module.functions.iter() {
             match self.validate_function(fun, module, &mod_info) {
