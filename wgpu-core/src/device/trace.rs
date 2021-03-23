@@ -108,9 +108,9 @@ pub enum Action<'a> {
         queued: bool,
     },
     WriteTexture {
-        to: crate::command::TextureCopyView,
+        to: crate::command::ImageCopyTexture,
         data: FileName,
-        layout: wgt::TextureDataLayout,
+        layout: wgt::ImageDataLayout,
         size: wgt::Extent3d,
     },
     Submit(crate::SubmissionIndex, Vec<Command>),
@@ -128,18 +128,18 @@ pub enum Command {
         size: wgt::BufferAddress,
     },
     CopyBufferToTexture {
-        src: crate::command::BufferCopyView,
-        dst: crate::command::TextureCopyView,
+        src: crate::command::ImageCopyBuffer,
+        dst: crate::command::ImageCopyTexture,
         size: wgt::Extent3d,
     },
     CopyTextureToBuffer {
-        src: crate::command::TextureCopyView,
-        dst: crate::command::BufferCopyView,
+        src: crate::command::ImageCopyTexture,
+        dst: crate::command::ImageCopyBuffer,
         size: wgt::Extent3d,
     },
     CopyTextureToTexture {
-        src: crate::command::TextureCopyView,
-        dst: crate::command::TextureCopyView,
+        src: crate::command::ImageCopyTexture,
+        dst: crate::command::ImageCopyTexture,
         size: wgt::Extent3d,
     },
     WriteTimestamp {

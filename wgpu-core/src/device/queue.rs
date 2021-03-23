@@ -7,7 +7,7 @@ use crate::device::trace::Action;
 use crate::{
     command::{
         texture_copy_view_to_hal, validate_linear_texture_data, validate_texture_copy_range,
-        CommandAllocator, CommandBuffer, CopySide, TextureCopyView, TransferError, BITS_PER_BYTE,
+        CommandAllocator, CommandBuffer, CopySide, ImageCopyTexture, TransferError, BITS_PER_BYTE,
     },
     conv,
     device::{alloc, DeviceError, WaitIdleError},
@@ -294,9 +294,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn queue_write_texture<B: GfxBackend>(
         &self,
         queue_id: id::QueueId,
-        destination: &TextureCopyView,
+        destination: &ImageCopyTexture,
         data: &[u8],
-        data_layout: &wgt::TextureDataLayout,
+        data_layout: &wgt::ImageDataLayout,
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::write_texture");
