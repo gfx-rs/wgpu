@@ -96,7 +96,7 @@
                 ),
                 target_colors: [
                     (
-                        attachment: Id(0, 1, Empty),
+                        view: Id(0, 1, Empty),
                         resolve_target: None,
                         channel: (
                             load_op: Clear,
