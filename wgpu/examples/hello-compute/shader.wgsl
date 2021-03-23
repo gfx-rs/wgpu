@@ -23,6 +23,11 @@ fn collatz_iterations(n_base: u32) -> u32{
             n = n / 2u;
         }
         else {
+            // Overflow? (i.e. 3*n + 1 > 0xffffffffu?)
+            if (n >= 1431655765u) {   // 0x55555555u
+                return 4294967295u;   // 0xffffffffu
+            }
+
             n = 3u * n + 1u;
         }
         i = i + 1u;

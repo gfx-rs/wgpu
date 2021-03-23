@@ -1,6 +1,9 @@
 use std::{borrow::Cow, convert::TryInto, str::FromStr};
 use wgpu::util::DeviceExt;
 
+// Indicates a u32 overflow in an intermediate Collatz value
+const OVERFLOW: u32 = 0xffffffff;
+
 async fn run() {
     let numbers = if std::env::args().len() <= 1 {
         let default = vec![1, 2, 3, 4];
@@ -13,10 +16,19 @@ async fn run() {
             .collect()
     };
 
-    let times = execute_gpu(numbers).await;
-    println!("Times: {:?}", times);
+    let steps = execute_gpu(numbers).await;
+
+    let disp_steps: Vec<String> = steps
+        .iter()
+        .map(|&n| match n {
+            OVERFLOW => "OVERFLOW".to_string(),
+            _ => n.to_string(),
+        })
+        .collect();
+
+    println!("Steps: [{}]", disp_steps.join(", "));
     #[cfg(target_arch = "wasm32")]
-    log::info!("Times: {:?}", times);
+    log::info!("Steps: [{}]", disp_steps.join(", "));
 }
 
 async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
@@ -192,6 +204,15 @@ mod tests {
     fn test_compute_2() {
         let input = vec![5, 23, 10, 9];
         pollster::block_on(assert_execute_gpu(input, vec![5, 15, 6, 19]));
+    }
+
+    #[test]
+    fn test_compute_overflow() {
+        let input = vec![77031, 837799, 8400511, 63728127];
+        pollster::block_on(assert_execute_gpu(
+            input,
+            vec![350, 524, OVERFLOW, OVERFLOW],
+        ));
     }
 
     #[test]
