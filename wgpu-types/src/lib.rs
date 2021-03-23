@@ -34,7 +34,7 @@ pub type DynamicOffset = u32;
 ///
 /// This doesn't apply to [`Queue::write_texture`].
 ///
-/// [`bytes_per_row`]: TextureDataLayout::bytes_per_row
+/// [`bytes_per_row`]: ImageDataLayout::bytes_per_row
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 /// Bound uniform/storage buffer offsets must be aligned to this number.
 pub const BIND_BUFFER_ALIGNMENT: BufferAddress = 256;
@@ -2502,7 +2502,7 @@ impl<T> Default for RenderBundleDescriptor<Option<T>> {
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct TextureDataLayout {
+pub struct ImageDataLayout {
     /// Offset into the buffer that is the start of the texture. Must be a multiple of texture block size.
     /// For non-compressed textures, this is 1.
     pub offset: BufferAddress,
@@ -2765,11 +2765,11 @@ pub struct BindGroupLayoutEntry {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct BufferCopyView<B> {
+pub struct ImageCopyBuffer<B> {
     /// The buffer to be copied to/from.
     pub buffer: B,
     /// The layout of the texture data in this buffer.
-    pub layout: TextureDataLayout,
+    pub layout: ImageDataLayout,
 }
 
 /// View of a texture which can be used to copy to/from a buffer/texture.
@@ -2777,7 +2777,7 @@ pub struct BufferCopyView<B> {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct TextureCopyView<T> {
+pub struct ImageCopyTexture<T> {
     /// The texture to be copied to/from.
     pub texture: T,
     /// The target mip level of the texture.

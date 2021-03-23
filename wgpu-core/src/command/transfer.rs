@@ -23,8 +23,8 @@ use std::iter;
 
 pub(crate) const BITS_PER_BYTE: u32 = 8;
 
-pub type BufferCopyView = wgt::BufferCopyView<BufferId>;
-pub type TextureCopyView = wgt::TextureCopyView<TextureId>;
+pub type ImageCopyBuffer = wgt::ImageCopyBuffer<BufferId>;
+pub type ImageCopyTexture = wgt::ImageCopyTexture<TextureId>;
 
 #[derive(Clone, Debug)]
 pub enum CopySide {
@@ -106,7 +106,7 @@ pub enum CopyError {
 //TODO: we currently access each texture twice for a transfer,
 // once only to get the aspect flags, which is unfortunate.
 pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
-    view: &TextureCopyView,
+    view: &ImageCopyTexture,
     size: &Extent3d,
     texture_guard: &Storage<Texture<B>, TextureId>,
 ) -> Result<
@@ -155,7 +155,7 @@ pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
 /// Function copied with some modifications from webgpu standard <https://gpuweb.github.io/gpuweb/#copy-between-buffer-texture>
 /// If successful, returns number of buffer bytes required for this copy.
 pub(crate) fn validate_linear_texture_data(
-    layout: &wgt::TextureDataLayout,
+    layout: &wgt::ImageDataLayout,
     format: wgt::TextureFormat,
     buffer_size: BufferAddress,
     buffer_side: CopySide,
@@ -248,7 +248,7 @@ pub(crate) fn validate_linear_texture_data(
 
 /// Function copied with minor modifications from webgpu standard <https://gpuweb.github.io/gpuweb/#valid-texture-copy-range>
 pub(crate) fn validate_texture_copy_range(
-    texture_copy_view: &TextureCopyView,
+    texture_copy_view: &ImageCopyTexture,
     texture_format: wgt::TextureFormat,
     texture_dimension: hal::image::Kind,
     texture_side: CopySide,
@@ -468,8 +468,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
         &self,
         command_encoder_id: CommandEncoderId,
-        source: &BufferCopyView,
-        destination: &TextureCopyView,
+        source: &ImageCopyBuffer,
+        destination: &ImageCopyTexture,
         copy_size: &Extent3d,
     ) -> Result<(), CopyError> {
         profiling::scope!("CommandEncoder::copy_buffer_to_texture");
@@ -618,8 +618,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_copy_texture_to_buffer<B: GfxBackend>(
         &self,
         command_encoder_id: CommandEncoderId,
-        source: &TextureCopyView,
-        destination: &BufferCopyView,
+        source: &ImageCopyTexture,
+        destination: &ImageCopyBuffer,
         copy_size: &Extent3d,
     ) -> Result<(), CopyError> {
         profiling::scope!("CommandEncoder::copy_texture_to_buffer");
@@ -771,8 +771,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_copy_texture_to_texture<B: GfxBackend>(
         &self,
         command_encoder_id: CommandEncoderId,
-        source: &TextureCopyView,
-        destination: &TextureCopyView,
+        source: &ImageCopyTexture,
+        destination: &ImageCopyTexture,
         copy_size: &Extent3d,
     ) -> Result<(), CopyError> {
         profiling::scope!("CommandEncoder::copy_texture_to_texture");
