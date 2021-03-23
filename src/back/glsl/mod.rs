@@ -518,9 +518,11 @@ impl<'a, W: Write> Writer<'a, W> {
 
                     // Finally write the name and end the global with a `;`
                     // The leading space is important
-                    writeln!(self.out, " {};", self.get_global_name(handle, global))?;
-
+                    let global_name = self.get_global_name(handle, global);
+                    writeln!(self.out, " {};", global_name)?;
                     writeln!(self.out)?;
+
+                    self.reflection_names.insert(global.ty, global_name);
                 }
                 // glsl has no concept of samplers so we just ignore it
                 TypeInner::Sampler { .. } => continue,
@@ -2058,7 +2060,8 @@ impl<'a, W: Write> Writer<'a, W> {
         let mut uniforms = FastHashMap::default();
 
         for sampling in info.sampling_set.iter() {
-            let tex_name = self.names[&NameKey::GlobalVariable(sampling.image)].clone();
+            let global = self.module.global_variables[sampling.image].clone();
+            let tex_name = self.reflection_names[&global.ty].clone();
 
             match mappings.entry(tex_name) {
                 Entry::Vacant(v) => {
@@ -2089,13 +2092,6 @@ impl<'a, W: Write> Writer<'a, W> {
                     _ => (),
                 },
                 _ => continue,
-            }
-            let tex_name = self.names[&NameKey::GlobalVariable(handle)].clone();
-            if let Entry::Vacant(e) = mappings.entry(tex_name) {
-                e.insert(TextureMapping {
-                    texture: handle,
-                    sampler: None,
-                });
             }
         }
 
