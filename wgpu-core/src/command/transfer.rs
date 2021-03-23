@@ -45,14 +45,14 @@ pub enum TransferError {
     MissingCopySrcUsageFlag,
     #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
     MissingCopyDstUsageFlag(Option<BufferId>, Option<TextureId>),
-    #[error("copy of {start_offset}..{end_offset} would end up overruning the bounds of the {side:?} buffer of size {buffer_size}")]
+    #[error("copy of {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}")]
     BufferOverrun {
         start_offset: BufferAddress,
         end_offset: BufferAddress,
         buffer_size: BufferAddress,
         side: CopySide,
     },
-    #[error("copy of {dimension:?} {start_offset}..{end_offset} would end up overruning the bounds of the {side:?} texture of {dimension:?} size {texture_size}")]
+    #[error("copy of {dimension:?} {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} texture of {dimension:?} size {texture_size}")]
     TextureOverrun {
         start_offset: u32,
         end_offset: u32,

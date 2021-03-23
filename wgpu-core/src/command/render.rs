@@ -2258,7 +2258,7 @@ pub mod render_ffi {
     /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given `label`
-    /// is a valid null-terminated stricng.
+    /// is a valid null-terminated string.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_push_debug_group(
         pass: &mut RenderPass,
@@ -2282,7 +2282,7 @@ pub mod render_ffi {
     /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given `label`
-    /// is a valid null-terminated stricng.
+    /// is a valid null-terminated string.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_insert_debug_marker(
         pass: &mut RenderPass,
