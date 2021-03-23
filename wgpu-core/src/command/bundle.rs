@@ -1311,7 +1311,7 @@ pub mod bundle_ffi {
     /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given `label`
-    /// is a valid null-terminated stricng.
+    /// is a valid null-terminated string.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_bundle_push_debug_group(
         _bundle: &mut RenderBundleEncoder,
@@ -1328,7 +1328,7 @@ pub mod bundle_ffi {
     /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given `label`
-    /// is a valid null-terminated stricng.
+    /// is a valid null-terminated string.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_bundle_insert_debug_marker(
         _bundle: &mut RenderBundleEncoder,

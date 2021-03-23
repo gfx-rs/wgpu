@@ -407,7 +407,7 @@ bitflags::bitflags! {
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
         /// Note: even when supported by GPU hardware, 64-bit floating point operations are
-        /// frequently between 16 and 64 _times_ slower than equivelent operations on 32-bit floats.
+        /// frequently between 16 and 64 _times_ slower than equivalent operations on 32-bit floats.
         ///
         /// Supported Platforms:
         /// - Vulkan
@@ -2842,12 +2842,12 @@ bitflags::bitflags! {
     ///
     /// The amount of values written when resolved depends
     /// on the amount of flags. If 3 flags are enabled, 3
-    /// 64-bit values will be writen per-query.
+    /// 64-bit values will be written per-query.
     ///
     /// The order they are written is the order they are declared
     /// in this bitflags. If you enabled `CLIPPER_PRIMITIVES_OUT`
     /// and `COMPUTE_SHADER_INVOCATIONS`, it would write 16 bytes,
-    /// the first 8 bytes being the primative out value, the last 8
+    /// the first 8 bytes being the primitive out value, the last 8
     /// bytes being the compute shader invocation count.
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2868,7 +2868,7 @@ bitflags::bitflags! {
         /// derivatives.
         const FRAGMENT_SHADER_INVOCATIONS = 0x08;
         /// Amount of times a compute shader is invoked. This will
-        /// be equivilent to the dispatch count times the workgroup size.
+        /// be equivalent to the dispatch count times the workgroup size.
         const COMPUTE_SHADER_INVOCATIONS = 0x10;
     }
 }

@@ -150,7 +150,7 @@ pub enum ResolveError {
         end_query: u32,
         query_set_size: u32,
     },
-    #[error("Resolving queries {start_query}..{end_query} ({stride} byte queries) will end up overruning the bounds of the destination buffer of size {buffer_size} using offsets {buffer_start_offset}..{buffer_end_offset}")]
+    #[error("Resolving queries {start_query}..{end_query} ({stride} byte queries) will end up overrunning the bounds of the destination buffer of size {buffer_size} using offsets {buffer_start_offset}..{buffer_end_offset}")]
     BufferOverrun {
         start_query: u32,
         end_query: u32,
