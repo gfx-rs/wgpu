@@ -97,9 +97,9 @@ pub struct PassChannel<V> {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
-pub struct ColorAttachmentDescriptor {
+pub struct RenderPassColorAttachment {
     /// The view to use as an attachment.
-    pub attachment: id::TextureViewId,
+    pub view: id::TextureViewId,
     /// The view that will receive the resolved output if multisampling is used.
     pub resolve_target: Option<id::TextureViewId>,
     /// What operations will be performed on this color attachment.
@@ -111,16 +111,16 @@ pub struct ColorAttachmentDescriptor {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
-pub struct DepthStencilAttachmentDescriptor {
+pub struct RenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
-    pub attachment: id::TextureViewId,
+    pub view: id::TextureViewId,
     /// What operations will be performed on the depth part of the attachment.
     pub depth: PassChannel<f32>,
     /// What operations will be performed on the stencil part of the attachment.
     pub stencil: PassChannel<u32>,
 }
 
-impl DepthStencilAttachmentDescriptor {
+impl RenderPassDepthStencilAttachment {
     fn is_read_only(&self, aspects: hal::format::Aspects) -> Result<bool, RenderPassErrorInner> {
         if aspects.contains(hal::format::Aspects::DEPTH) && !self.depth.read_only {
             return Ok(false);
@@ -143,17 +143,17 @@ impl DepthStencilAttachmentDescriptor {
 pub struct RenderPassDescriptor<'a> {
     pub label: Label<'a>,
     /// The color attachments of the render pass.
-    pub color_attachments: Cow<'a, [ColorAttachmentDescriptor]>,
+    pub color_attachments: Cow<'a, [RenderPassColorAttachment]>,
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<&'a DepthStencilAttachmentDescriptor>,
+    pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachment>,
 }
 
 #[cfg_attr(feature = "serial-pass", derive(Deserialize, Serialize))]
 pub struct RenderPass {
     base: BasePass<RenderCommand>,
     parent_id: id::CommandEncoderId,
-    color_targets: ArrayVec<[ColorAttachmentDescriptor; MAX_COLOR_TARGETS]>,
-    depth_stencil_target: Option<DepthStencilAttachmentDescriptor>,
+    color_targets: ArrayVec<[RenderPassColorAttachment; MAX_COLOR_TARGETS]>,
+    depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
 }
 
 impl RenderPass {
@@ -512,8 +512,8 @@ struct RenderPassInfo<'a, B: hal::Backend> {
 impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
     fn start(
         raw: &mut B::CommandBuffer,
-        color_attachments: &[ColorAttachmentDescriptor],
-        depth_stencil_attachment: Option<&DepthStencilAttachmentDescriptor>,
+        color_attachments: &[RenderPassColorAttachment],
+        depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         cmd_buf: &CommandBuffer<B>,
         device: &Device<B>,
         view_guard: &'a Storage<TextureView<B>, id::TextureViewId>,
@@ -562,8 +562,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 Some(at) => {
                     let view = trackers
                         .views
-                        .use_extend(&*view_guard, at.attachment, (), ())
-                        .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.attachment))?;
+                        .use_extend(&*view_guard, at.view, (), ())
+                        .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
                     add_view(view, "depth")?;
 
                     depth_stencil_aspects = view.aspects;
@@ -620,8 +620,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             for at in color_attachments {
                 let view = trackers
                     .views
-                    .use_extend(&*view_guard, at.attachment, (), ())
-                    .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.attachment))?;
+                    .use_extend(&*view_guard, at.view, (), ())
+                    .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
                 add_view(view, "color")?;
 
                 let layouts = match view.inner {
@@ -818,7 +818,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         let view_data = AttachmentData {
             colors: color_attachments
                 .iter()
-                .map(|at| view_guard.get(at.attachment).unwrap())
+                .map(|at| view_guard.get(at.view).unwrap())
                 .collect(),
             resolves: color_attachments
                 .iter()
@@ -826,7 +826,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 .map(|attachment| view_guard.get(attachment).unwrap())
                 .collect(),
             depth_stencil: depth_stencil_attachment
-                .map(|at| view_guard.get(at.attachment).unwrap()),
+                .map(|at| view_guard.get(at.view).unwrap()),
         };
         let extent = extent.ok_or(RenderPassErrorInner::MissingAttachments)?;
         let fb_key = FramebufferKey {
@@ -1015,8 +1015,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<RenderCommand>,
-        color_attachments: &[ColorAttachmentDescriptor],
-        depth_stencil_attachment: Option<&DepthStencilAttachmentDescriptor>,
+        color_attachments: &[RenderPassColorAttachment],
+        depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
     ) -> Result<(), RenderPassError> {
         profiling::scope!("CommandEncoder::run_render_pass");
         let scope = PassErrorScope::Pass(encoder_id);
