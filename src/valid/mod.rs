@@ -136,6 +136,26 @@ impl crate::TypeInner {
             Self::Array { .. } | Self::Image { .. } | Self::Sampler { .. } => false,
         }
     }
+
+    fn image_storage_coordinates(&self) -> Option<crate::ImageDimension> {
+        match *self {
+            Self::Scalar {
+                kind: crate::ScalarKind::Sint,
+                ..
+            } => Some(crate::ImageDimension::D1),
+            Self::Vector {
+                size: crate::VectorSize::Bi,
+                kind: crate::ScalarKind::Sint,
+                ..
+            } => Some(crate::ImageDimension::D2),
+            Self::Vector {
+                size: crate::VectorSize::Tri,
+                kind: crate::ScalarKind::Sint,
+                ..
+            } => Some(crate::ImageDimension::D3),
+            _ => None,
+        }
+    }
 }
 
 impl Validator {

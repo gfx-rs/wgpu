@@ -83,12 +83,10 @@ pub enum FunctionError {
         pointer: Handle<crate::Expression>,
         value: Handle<crate::Expression>,
     },
-    #[error("The image array can't be indexed by {0:?}")]
-    InvalidArrayIndex(Handle<crate::Expression>),
     #[error("The expression {0:?} is currupted")]
     InvalidExpression(Handle<crate::Expression>),
-    #[error("The expression {0:?} is not an image")]
-    InvalidImage(Handle<crate::Expression>),
+    #[error("Image store parameters are invalid")]
+    InvalidImageStore(#[source] ExpressionError),
     #[error("Call to {function:?} is invalid")]
     InvalidCall {
         function: Handle<crate::Function>,
@@ -120,6 +118,7 @@ struct BlockContext<'a> {
     info: &'a FunctionInfo,
     expressions: &'a Arena<crate::Expression>,
     types: &'a Arena<crate::Type>,
+    global_vars: &'a Arena<crate::GlobalVariable>,
     functions: &'a Arena<crate::Function>,
     return_type: Option<Handle<crate::Type>>,
 }
@@ -131,6 +130,7 @@ impl<'a> BlockContext<'a> {
             info,
             expressions: &fun.expressions,
             types: &module.types,
+            global_vars: &module.global_variables,
             functions: &module.functions,
             return_type: fun.result.as_ref().map(|fr| fr.ty),
         }
@@ -142,6 +142,7 @@ impl<'a> BlockContext<'a> {
             info: self.info,
             expressions: self.expressions,
             types: self.types,
+            global_vars: self.global_vars,
             functions: self.functions,
             return_type: self.return_type,
         }
@@ -329,7 +330,7 @@ impl super::Validator {
                     let mut current = pointer;
                     loop {
                         let _ = context.resolve_type(current)?;
-                        match context.expressions[current] {
+                        match *context.get_expression(current)? {
                             crate::Expression::Access { base, .. }
                             | crate::Expression::AccessIndex { base, .. } => current = base,
                             crate::Expression::LocalVariable(_)
@@ -368,28 +369,82 @@ impl super::Validator {
                 }
                 S::ImageStore {
                     image,
-                    coordinate: _,
+                    coordinate,
                     array_index,
                     value,
                 } => {
-                    let _expected_coordinate_ty = match *context.get_expression(image)? {
-                        crate::Expression::GlobalVariable(_var_handle) => (), //TODO
-                        _ => return Err(FunctionError::InvalidImage(image)),
-                    };
-                    match *context.resolve_type(value)? {
-                        Ti::Scalar { .. } | Ti::Vector { .. } => {}
+                    //Note: this code uses a lot of `FunctionError::InvalidImageStore`,
+                    // and could probably be refactored.
+                    let var = match *context.get_expression(image)? {
+                        crate::Expression::GlobalVariable(var_handle) => {
+                            &context.global_vars[var_handle]
+                        }
                         _ => {
-                            return Err(FunctionError::InvalidStoreValue(value));
+                            return Err(FunctionError::InvalidImageStore(
+                                ExpressionError::ExpectedGlobalVariable,
+                            ))
                         }
-                    }
-                    if let Some(expr) = array_index {
-                        match *context.resolve_type(expr)? {
-                            Ti::Scalar {
-                                kind: crate::ScalarKind::Sint,
-                                width: _,
-                            } => (),
-                            _ => return Err(FunctionError::InvalidArrayIndex(expr)),
+                    };
+
+                    let value_ty = match context.types[var.ty].inner {
+                        Ti::Image {
+                            class,
+                            arrayed,
+                            dim,
+                        } => {
+                            match context
+                                .resolve_type(coordinate)?
+                                .image_storage_coordinates()
+                            {
+                                Some(coord_dim) if coord_dim == dim => {}
+                                _ => {
+                                    return Err(FunctionError::InvalidImageStore(
+                                        ExpressionError::InvalidImageCoordinateType(
+                                            dim, coordinate,
+                                        ),
+                                    ))
+                                }
+                            };
+                            if arrayed != array_index.is_some() {
+                                return Err(FunctionError::InvalidImageStore(
+                                    ExpressionError::InvalidImageArrayIndex,
+                                ));
+                            }
+                            if let Some(expr) = array_index {
+                                match *context.resolve_type(expr)? {
+                                    Ti::Scalar {
+                                        kind: crate::ScalarKind::Sint,
+                                        width: _,
+                                    } => {}
+                                    _ => {
+                                        return Err(FunctionError::InvalidImageStore(
+                                            ExpressionError::InvalidImageArrayIndexType(expr),
+                                        ))
+                                    }
+                                }
+                            }
+                            match class {
+                                crate::ImageClass::Storage(format) => crate::TypeInner::Vector {
+                                    kind: format.into(),
+                                    size: crate::VectorSize::Quad,
+                                    width: 4,
+                                },
+                                _ => {
+                                    return Err(FunctionError::InvalidImageStore(
+                                        ExpressionError::InvalidImageClass(class),
+                                    ))
+                                }
+                            }
                         }
+                        _ => {
+                            return Err(FunctionError::InvalidImageStore(
+                                ExpressionError::ExpectedImageType(var.ty),
+                            ))
+                        }
+                    };
+
+                    if *context.resolve_type(value)? != value_ty {
+                        return Err(FunctionError::InvalidStoreValue(value));
                     }
                 }
                 S::Call {

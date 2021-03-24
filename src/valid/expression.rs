@@ -75,7 +75,7 @@ pub enum ExpressionError {
     InvalidImageArrayIndexType(Handle<crate::Expression>),
     #[error("Image other index type of {0:?} is not an integer scalar")]
     InvalidImageOtherIndexType(Handle<crate::Expression>),
-    #[error("Image coordinate index type of {1:?} does not match dimension {0:?}")]
+    #[error("Image coordinate type of {1:?} does not match dimension {0:?}")]
     InvalidImageCoordinateType(crate::ImageDimension, Handle<crate::Expression>),
     #[error("Comparison sampling mismatch: image has class {image:?}, but the sampler is comparison={sampler}, and the reference was provided={has_ref}")]
     ComparisonSamplingMismatch {
@@ -543,34 +543,14 @@ impl super::Validator {
                         arrayed,
                         dim,
                     } => {
-                        match (dim, resolver.resolve(coordinate)?) {
-                            (
-                                crate::ImageDimension::D1,
-                                &Ti::Scalar {
-                                    kind: crate::ScalarKind::Sint,
-                                    ..
-                                },
-                            )
-                            | (
-                                crate::ImageDimension::D2,
-                                &Ti::Vector {
-                                    kind: crate::ScalarKind::Sint,
-                                    ..
-                                },
-                            )
-                            | (
-                                crate::ImageDimension::D3,
-                                &Ti::Vector {
-                                    kind: crate::ScalarKind::Sint,
-                                    ..
-                                },
-                            ) => {}
+                        match resolver.resolve(coordinate)?.image_storage_coordinates() {
+                            Some(coord_dim) if coord_dim == dim => {}
                             _ => {
                                 return Err(ExpressionError::InvalidImageCoordinateType(
                                     dim, coordinate,
                                 ))
                             }
-                        }
+                        };
                         let needs_index = match class {
                             crate::ImageClass::Storage { .. } => false,
                             _ => true,
