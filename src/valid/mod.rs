@@ -32,6 +32,17 @@ bitflags::bitflags! {
     }
 }
 
+bitflags::bitflags! {
+    /// Validation flags.
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    pub struct ShaderStages: u8 {
+        const VERTEX = 0x1;
+        const FRAGMENT = 0x2;
+        const COMPUTE = 0x4;
+    }
+}
+
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct ModuleInfo {

@@ -1,4 +1,4 @@
-use super::FunctionInfo;
+use super::{FunctionInfo, ShaderStages, TypeFlags};
 use crate::{
     arena::{Arena, Handle},
     proc::ResolveError,
@@ -59,6 +59,12 @@ pub enum ExpressionError {
     ExpectedGlobalVariable,
     #[error("Calling an undeclared function {0:?}")]
     CallToUndeclaredFunction(Handle<crate::Function>),
+    #[error("Needs to be an image instead of {0:?}")]
+    ExpectedImageType(Handle<crate::Type>),
+    #[error("Needs to be an image instead of {0:?}")]
+    ExpectedSamplerType(Handle<crate::Type>),
+    #[error("Unable to operate on image class {0:?}")]
+    InvalidImageClass(crate::ImageClass),
 }
 
 struct ExpressionTypeResolver<'a> {
@@ -88,7 +94,8 @@ impl super::Validator {
         function: &crate::Function,
         module: &crate::Module,
         info: &FunctionInfo,
-    ) -> Result<(), ExpressionError> {
+        other_infos: &[FunctionInfo],
+    ) -> Result<ShaderStages, ExpressionError> {
         use crate::{Expression as E, ScalarKind as Sk, TypeInner as Ti};
 
         let resolver = ExpressionTypeResolver {
@@ -97,7 +104,7 @@ impl super::Validator {
             info,
         };
 
-        match *expression {
+        let stages = match *expression {
             E::Access { base, index } => {
                 match *resolver.resolve(base)? {
                     Ti::Vector { .. }
@@ -124,6 +131,7 @@ impl super::Validator {
                         return Err(ExpressionError::InvalidIndexType(index));
                     }
                 }
+                ShaderStages::all()
             }
             E::AccessIndex { base, index } => {
                 let limit = match *resolver.resolve(base)? {
@@ -147,12 +155,14 @@ impl super::Validator {
                 if index >= limit {
                     return Err(ExpressionError::IndexOutOfBounds(base, index));
                 }
+                ShaderStages::all()
             }
             E::Constant(handle) => {
                 let _ = module
                     .constants
                     .try_get(handle)
                     .ok_or(ExpressionError::ConstantDoesntExist(handle))?;
+                ShaderStages::all()
             }
             E::Compose { ref components, ty } => {
                 match module
@@ -269,31 +279,42 @@ impl super::Validator {
                         return Err(ExpressionError::InvalidComposeType(ty));
                     }
                 }
+                ShaderStages::all()
             }
             E::FunctionArgument(index) => {
                 if index >= function.arguments.len() as u32 {
                     return Err(ExpressionError::FunctionArgumentDoesntExist(index));
                 }
+                ShaderStages::all()
             }
             E::GlobalVariable(handle) => {
                 let _ = module
                     .global_variables
                     .try_get(handle)
                     .ok_or(ExpressionError::GlobalVarDoesntExist(handle))?;
+                ShaderStages::all()
             }
             E::LocalVariable(handle) => {
                 let _ = function
                     .local_variables
                     .try_get(handle)
                     .ok_or(ExpressionError::LocalVarDoesntExist(handle))?;
+                ShaderStages::all()
             }
-            E::Load { pointer } => match *resolver.resolve(pointer)? {
-                Ti::Pointer { .. } | Ti::ValuePointer { .. } => {}
-                ref other => {
-                    log::error!("Loading {:?}", other);
-                    return Err(ExpressionError::InvalidPointerType(pointer));
+            E::Load { pointer } => {
+                match *resolver.resolve(pointer)? {
+                    Ti::Pointer { base, .. }
+                        if self.types[base.index()]
+                            .flags
+                            .contains(TypeFlags::SIZED | TypeFlags::DATA) => {}
+                    Ti::ValuePointer { .. } => {}
+                    ref other => {
+                        log::error!("Loading {:?}", other);
+                        return Err(ExpressionError::InvalidPointerType(pointer));
+                    }
                 }
-            },
+                ShaderStages::all()
+            }
             #[allow(unused)]
             E::ImageSample {
                 image,
@@ -303,16 +324,43 @@ impl super::Validator {
                 offset,
                 level,
                 depth_ref,
-            } => {}
+            } => ShaderStages::all(),
             #[allow(unused)]
             E::ImageLoad {
                 image,
                 coordinate,
                 array_index,
                 index,
-            } => {}
-            #[allow(unused)]
-            E::ImageQuery { image, query } => {}
+            } => ShaderStages::all(),
+            E::ImageQuery { image, query } => {
+                match function.expressions[image] {
+                    crate::Expression::GlobalVariable(var_handle) => {
+                        let var = &module.global_variables[var_handle];
+                        match module.types[var.ty].inner {
+                            Ti::Image { class, arrayed, .. } => {
+                                let can_level = match class {
+                                    crate::ImageClass::Sampled { multi, .. } => !multi,
+                                    crate::ImageClass::Storage { .. } => false,
+                                    crate::ImageClass::Depth { .. } => true,
+                                };
+                                let good = match query {
+                                    crate::ImageQuery::NumLayers => arrayed,
+                                    crate::ImageQuery::Size { level: Some(_) }
+                                    | crate::ImageQuery::NumLevels => can_level,
+                                    crate::ImageQuery::Size { level: None }
+                                    | crate::ImageQuery::NumSamples => !can_level,
+                                };
+                                if !good {
+                                    return Err(ExpressionError::InvalidImageClass(class));
+                                }
+                            }
+                            _ => return Err(ExpressionError::ExpectedImageType(var.ty)),
+                        }
+                    }
+                    _ => return Err(ExpressionError::ExpectedGlobalVariable),
+                }
+                ShaderStages::all()
+            }
             E::Unary { op, expr } => {
                 use crate::UnaryOperator as Uo;
                 let inner = resolver.resolve(expr)?;
@@ -326,6 +374,7 @@ impl super::Validator {
                         return Err(ExpressionError::InvalidUnaryOperandType(op, expr));
                     }
                 }
+                ShaderStages::all()
             }
             E::Binary { op, left, right } => {
                 use crate::BinaryOperator as Bo;
@@ -472,6 +521,7 @@ impl super::Validator {
                 if !good {
                     return Err(ExpressionError::InvalidBinaryOperandTypes(op, left, right));
                 }
+                ShaderStages::all()
             }
             E::Select {
                 condition,
@@ -500,11 +550,10 @@ impl super::Validator {
                 if !condition_good || accept_inner != reject_inner {
                     return Err(ExpressionError::InvalidSelectTypes);
                 }
+                ShaderStages::all()
             }
             #[allow(unused)]
-            E::Derivative { axis, expr } => {
-                //TODO: check stage
-            }
+            E::Derivative { axis, expr } => ShaderStages::FRAGMENT,
             E::Relational { fun, argument } => {
                 use crate::RelationalFunction as Rf;
                 let argument_inner = resolver.resolve(argument)?;
@@ -529,6 +578,7 @@ impl super::Validator {
                         }
                     },
                 }
+                ShaderStages::all()
             }
             #[allow(unused)]
             E::Math {
@@ -536,23 +586,22 @@ impl super::Validator {
                 arg,
                 arg1,
                 arg2,
-            } => {}
+            } => ShaderStages::all(),
             #[allow(unused)]
             E::As {
                 expr,
                 kind,
                 convert,
-            } => {}
-            #[allow(unused)]
-            E::Call(function) => {}
+            } => ShaderStages::all(),
+            E::Call(function) => other_infos[function.index()].available_stages,
             E::ArrayLength(expr) => match *resolver.resolve(expr)? {
-                Ti::Array { .. } => {}
+                Ti::Array { .. } => ShaderStages::all(),
                 ref other => {
                     log::error!("Array length of {:?}", other);
                     return Err(ExpressionError::InvalidArrayType(expr));
                 }
             },
-        }
-        Ok(())
+        };
+        Ok(stages)
     }
 }

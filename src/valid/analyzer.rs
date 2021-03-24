@@ -6,7 +6,7 @@ Figures out the following properties:
   - expression reference counts
 !*/
 
-use super::{CallError, ExpressionError, FunctionError, ModuleInfo, ValidationFlags};
+use super::{CallError, ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
 use crate::{
     arena::{Arena, Handle},
     proc::{ResolveContext, TypeResolution},
@@ -164,6 +164,8 @@ impl ExpressionInfo {
 pub struct FunctionInfo {
     /// Validation flags.
     flags: ValidationFlags,
+    /// Set of shader stages where calling this function is valid.
+    pub available_stages: ShaderStages,
     /// Uniformity characteristics.
     pub uniformity: Uniformity,
     /// Function may kill the invocation.
@@ -676,6 +678,7 @@ impl ModuleInfo {
     ) -> Result<FunctionInfo, FunctionError> {
         let mut info = FunctionInfo {
             flags,
+            available_stages: ShaderStages::all(),
             uniformity: Uniformity::new(),
             may_kill: false,
             sampling_set: crate::FastHashSet::default(),
@@ -779,6 +782,7 @@ fn uniform_control_flow() {
 
     let mut info = FunctionInfo {
         flags: ValidationFlags::all(),
+        available_stages: ShaderStages::all(),
         uniformity: Uniformity::new(),
         may_kill: false,
         sampling_set: crate::FastHashSet::default(),

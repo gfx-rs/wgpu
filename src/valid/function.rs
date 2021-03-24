@@ -453,7 +453,7 @@ impl super::Validator {
         module: &crate::Module,
         mod_info: &ModuleInfo,
     ) -> Result<FunctionInfo, FunctionError> {
-        let info = mod_info.process_function(fun, module, self.flags)?;
+        let mut info = mod_info.process_function(fun, module, self.flags)?;
 
         for (var_handle, var) in fun.local_variables.iter() {
             self.validate_local_var(var, &module.types, &module.constants)
@@ -482,8 +482,16 @@ impl super::Validator {
                 self.valid_expression_set.insert(handle.index());
             }
             if !self.flags.contains(ValidationFlags::EXPRESSIONS) {
-                if let Err(error) = self.validate_expression(handle, expr, fun, module, &info) {
-                    return Err(FunctionError::Expression { handle, error });
+                match self.validate_expression(
+                    handle,
+                    expr,
+                    fun,
+                    module,
+                    &info,
+                    &mod_info.functions,
+                ) {
+                    Ok(stages) => info.available_stages &= stages,
+                    Err(error) => return Err(FunctionError::Expression { handle, error }),
                 }
             }
         }

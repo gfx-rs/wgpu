@@ -8,6 +8,9 @@ expression: output
             flags: (
                 bits: 7,
             ),
+            available_stages: (
+                bits: 7,
+            ),
             uniformity: (
                 non_uniform_result: Some(44),
                 requirements: (
@@ -1004,6 +1007,9 @@ expression: output
         ),
         (
             flags: (
+                bits: 7,
+            ),
+            available_stages: (
                 bits: 7,
             ),
             uniformity: (
@@ -2632,6 +2638,9 @@ expression: output
     entry_points: [
         (
             flags: (
+                bits: 7,
+            ),
+            available_stages: (
                 bits: 7,
             ),
             uniformity: (

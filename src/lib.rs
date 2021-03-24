@@ -120,7 +120,6 @@ pub enum ShaderStage {
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[allow(missing_docs)] // The names are self evident
 pub enum StorageClass {
     /// Function locals.
     Function,

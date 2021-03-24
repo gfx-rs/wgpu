@@ -1,6 +1,6 @@
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
-    Disalignment, FunctionError, ModuleInfo, TypeFlags,
+    Disalignment, FunctionError, ModuleInfo, ShaderStages, TypeFlags,
 };
 use crate::arena::{Arena, Handle};
 
@@ -56,6 +56,8 @@ pub enum EntryPointError {
     UnexpectedWorkgroupSize,
     #[error("Workgroup size is out of range")]
     OutOfRangeWorkgroupSize,
+    #[error("Uses operations forbidden at this stage")]
+    ForbiddenStageOperations,
     #[error("Global variable {0:?} is used incorrectly as {1:?}")]
     InvalidGlobalUsage(Handle<crate::GlobalVariable>, GlobalUse),
     #[error("Bindings for {0:?} conflict with other resource")]
@@ -370,7 +372,17 @@ impl super::Validator {
             return Err(EntryPointError::UnexpectedWorkgroupSize);
         }
 
+        let stage_bit = match ep.stage {
+            crate::ShaderStage::Vertex => ShaderStages::VERTEX,
+            crate::ShaderStage::Fragment => ShaderStages::FRAGMENT,
+            crate::ShaderStage::Compute => ShaderStages::COMPUTE,
+        };
+
         let info = self.validate_function(&ep.function, module, &mod_info)?;
+
+        if !info.available_stages.contains(stage_bit) {
+            return Err(EntryPointError::ForbiddenStageOperations);
+        }
 
         self.location_mask.clear();
         for (index, fa) in ep.function.arguments.iter().enumerate() {
