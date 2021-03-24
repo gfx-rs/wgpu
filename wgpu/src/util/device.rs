@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::{convert::TryFrom, num::NonZeroU32};
 
 /// Describes a [Buffer](crate::Buffer) when allocating.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -115,7 +115,7 @@ impl DeviceExt for crate::Device {
                 let end_offset = binary_offset + data_size as usize;
 
                 queue.write_texture(
-                    crate::TextureCopyView {
+                    crate::ImageCopyTexture {
                         texture: &texture,
                         mip_level: mip as u32,
                         origin: crate::Origin3d {
@@ -125,10 +125,14 @@ impl DeviceExt for crate::Device {
                         },
                     },
                     &data[binary_offset..end_offset],
-                    crate::TextureDataLayout {
+                    crate::ImageDataLayout {
                         offset: 0,
-                        bytes_per_row,
-                        rows_per_image: mip_physical.height,
+                        bytes_per_row: Some(
+                            NonZeroU32::new(bytes_per_row).expect("invalid bytes per row"),
+                        ),
+                        rows_per_image: Some(
+                            NonZeroU32::new(mip_physical.height).expect("invalid height"),
+                        ),
                     },
                     mip_physical,
                 );

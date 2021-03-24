@@ -528,15 +528,15 @@ mod pass_impl {
     }
 }
 
-fn map_buffer_copy_view(view: crate::BufferCopyView) -> wgc::command::BufferCopyView {
-    wgc::command::BufferCopyView {
+fn map_buffer_copy_view(view: crate::ImageCopyBuffer) -> wgc::command::ImageCopyBuffer {
+    wgc::command::ImageCopyBuffer {
         buffer: view.buffer.id.id,
         layout: view.layout,
     }
 }
 
-fn map_texture_copy_view(view: crate::TextureCopyView) -> wgc::command::TextureCopyView {
-    wgc::command::TextureCopyView {
+fn map_texture_copy_view(view: crate::ImageCopyTexture) -> wgc::command::ImageCopyTexture {
+    wgc::command::ImageCopyTexture {
         texture: view.texture.id.id,
         mip_level: view.mip_level,
         origin: view.origin,
@@ -774,11 +774,10 @@ impl crate::Context for Context {
         desc: &wgt::SwapChainDescriptor,
     ) -> Self::SwapChainId {
         let global = &self.0;
-        match wgc::gfx_select!(
-            device.id => global.device_create_swap_chain(device.id, *surface, desc)
-        ) {
-            Ok(sc) => sc,
-            Err(err) => self.handle_error_fatal(err, "Device::create_swap_chain"),
+        let (sc, error) = wgc::gfx_select!(device.id => global.device_create_swap_chain(device.id, *surface, desc));
+        match error {
+            Some(e) => self.handle_error_fatal(e, "Device::create_swap_chain"),
+            None => sc,
         }
     }
 
@@ -1522,8 +1521,8 @@ impl crate::Context for Context {
     fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
-        source: crate::BufferCopyView,
-        destination: crate::TextureCopyView,
+        source: crate::ImageCopyBuffer,
+        destination: crate::ImageCopyTexture,
         copy_size: wgt::Extent3d,
     ) {
         let global = &self.0;
@@ -1544,8 +1543,8 @@ impl crate::Context for Context {
     fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
-        source: crate::TextureCopyView,
-        destination: crate::BufferCopyView,
+        source: crate::ImageCopyTexture,
+        destination: crate::ImageCopyBuffer,
         copy_size: wgt::Extent3d,
     ) {
         let global = &self.0;
@@ -1566,8 +1565,8 @@ impl crate::Context for Context {
     fn command_encoder_copy_texture_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
-        source: crate::TextureCopyView,
-        destination: crate::TextureCopyView,
+        source: crate::ImageCopyTexture,
+        destination: crate::ImageCopyTexture,
         copy_size: wgt::Extent3d,
     ) {
         let global = &self.0;
@@ -1673,16 +1672,16 @@ impl crate::Context for Context {
         let colors = desc
             .color_attachments
             .iter()
-            .map(|ca| wgc::command::ColorAttachmentDescriptor {
-                attachment: ca.attachment.id,
+            .map(|ca| wgc::command::RenderPassColorAttachment {
+                view: ca.view.id,
                 resolve_target: ca.resolve_target.map(|rt| rt.id),
                 channel: map_pass_channel(Some(&ca.ops)),
             })
             .collect::<ArrayVec<[_; wgc::device::MAX_COLOR_TARGETS]>>();
 
         let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
-            wgc::command::DepthStencilAttachmentDescriptor {
-                attachment: dsa.attachment.id,
+            wgc::command::RenderPassDepthStencilAttachment {
+                view: dsa.view.id,
                 depth: map_pass_channel(dsa.depth_ops.as_ref()),
                 stencil: map_pass_channel(dsa.stencil_ops.as_ref()),
             }
@@ -1800,9 +1799,9 @@ impl crate::Context for Context {
     fn queue_write_texture(
         &self,
         queue: &Self::QueueId,
-        texture: crate::TextureCopyView,
+        texture: crate::ImageCopyTexture,
         data: &[u8],
-        data_layout: wgt::TextureDataLayout,
+        data_layout: wgt::ImageDataLayout,
         size: wgt::Extent3d,
     ) {
         let global = &self.0;

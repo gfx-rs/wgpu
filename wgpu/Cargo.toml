@@ -28,20 +28,20 @@ cross = ["wgc/cross"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "c831c5512ac528775d983c747b78535cc585b9e0"
+rev = "9c98ebc48cc53ec696e073da510bef9a819b1916"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "c831c5512ac528775d983c747b78535cc585b9e0"
+rev = "9c98ebc48cc53ec696e073da510bef9a819b1916"
 features = ["raw-window-handle"]
 optional = true
 
 [dependencies.wgt]
 package = "wgpu-types"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "c831c5512ac528775d983c747b78535cc585b9e0"
+rev = "9c98ebc48cc53ec696e073da510bef9a819b1916"
 
 [dependencies]
 arrayvec = "0.5"
