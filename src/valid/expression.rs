@@ -65,6 +65,18 @@ pub enum ExpressionError {
     ExpectedSamplerType(Handle<crate::Type>),
     #[error("Unable to operate on image class {0:?}")]
     InvalidImageClass(crate::ImageClass),
+    #[error("Derivatives can only be taken from scalar and vector floats")]
+    InvalidDerivative,
+    #[error("Image array index parameter is misplaced")]
+    InvalidImageArrayIndex,
+    #[error("Image other index parameter is misplaced")]
+    InvalidImageOtherIndex,
+    #[error("Image array index type of {0:?} is not an integer scalar")]
+    InvalidImageArrayIndexType(Handle<crate::Expression>),
+    #[error("Image other index type of {0:?} is not an integer scalar")]
+    InvalidImageOtherIndexType(Handle<crate::Expression>),
+    #[error("Image coordinate index type of {1:?} does not match dimension {0:?}")]
+    InvalidImageCoordinateType(crate::ImageDimension, Handle<crate::Expression>),
 }
 
 struct ExpressionTypeResolver<'a> {
@@ -325,39 +337,111 @@ impl super::Validator {
                 level,
                 depth_ref,
             } => ShaderStages::all(),
-            #[allow(unused)]
             E::ImageLoad {
                 image,
                 coordinate,
                 array_index,
                 index,
-            } => ShaderStages::all(),
-            E::ImageQuery { image, query } => {
-                match function.expressions[image] {
+            } => {
+                let var = match function.expressions[image] {
                     crate::Expression::GlobalVariable(var_handle) => {
-                        let var = &module.global_variables[var_handle];
-                        match module.types[var.ty].inner {
-                            Ti::Image { class, arrayed, .. } => {
-                                let can_level = match class {
-                                    crate::ImageClass::Sampled { multi, .. } => !multi,
-                                    crate::ImageClass::Storage { .. } => false,
-                                    crate::ImageClass::Depth { .. } => true,
-                                };
-                                let good = match query {
-                                    crate::ImageQuery::NumLayers => arrayed,
-                                    crate::ImageQuery::Size { level: Some(_) }
-                                    | crate::ImageQuery::NumLevels => can_level,
-                                    crate::ImageQuery::Size { level: None }
-                                    | crate::ImageQuery::NumSamples => !can_level,
-                                };
-                                if !good {
-                                    return Err(ExpressionError::InvalidImageClass(class));
-                                }
-                            }
-                            _ => return Err(ExpressionError::ExpectedImageType(var.ty)),
-                        }
+                        &module.global_variables[var_handle]
                     }
                     _ => return Err(ExpressionError::ExpectedGlobalVariable),
+                };
+                match module.types[var.ty].inner {
+                    Ti::Image {
+                        class,
+                        arrayed,
+                        dim,
+                    } => {
+                        match (dim, resolver.resolve(coordinate)?) {
+                            (
+                                crate::ImageDimension::D1,
+                                &Ti::Scalar {
+                                    kind: crate::ScalarKind::Sint,
+                                    ..
+                                },
+                            )
+                            | (
+                                crate::ImageDimension::D2,
+                                &Ti::Vector {
+                                    kind: crate::ScalarKind::Sint,
+                                    ..
+                                },
+                            )
+                            | (
+                                crate::ImageDimension::D3,
+                                &Ti::Vector {
+                                    kind: crate::ScalarKind::Sint,
+                                    ..
+                                },
+                            ) => {}
+                            _ => {
+                                return Err(ExpressionError::InvalidImageCoordinateType(
+                                    dim, coordinate,
+                                ))
+                            }
+                        }
+                        let needs_index = match class {
+                            crate::ImageClass::Storage { .. } => false,
+                            _ => true,
+                        };
+                        if arrayed != array_index.is_some() {
+                            return Err(ExpressionError::InvalidImageArrayIndex);
+                        }
+                        if needs_index != index.is_some() {
+                            return Err(ExpressionError::InvalidImageOtherIndex);
+                        }
+                        if let Some(expr) = array_index {
+                            match *resolver.resolve(expr)? {
+                                Ti::Scalar {
+                                    kind: crate::ScalarKind::Sint,
+                                    width: _,
+                                } => {}
+                                _ => return Err(ExpressionError::InvalidImageArrayIndexType(expr)),
+                            }
+                        }
+                        if let Some(expr) = index {
+                            match *resolver.resolve(expr)? {
+                                Ti::Scalar {
+                                    kind: crate::ScalarKind::Sint,
+                                    width: _,
+                                } => {}
+                                _ => return Err(ExpressionError::InvalidImageOtherIndexType(expr)),
+                            }
+                        }
+                    }
+                    _ => return Err(ExpressionError::ExpectedImageType(var.ty)),
+                }
+                ShaderStages::all()
+            }
+            E::ImageQuery { image, query } => {
+                let var = match function.expressions[image] {
+                    crate::Expression::GlobalVariable(var_handle) => {
+                        &module.global_variables[var_handle]
+                    }
+                    _ => return Err(ExpressionError::ExpectedGlobalVariable),
+                };
+                match module.types[var.ty].inner {
+                    Ti::Image { class, arrayed, .. } => {
+                        let can_level = match class {
+                            crate::ImageClass::Sampled { multi, .. } => !multi,
+                            crate::ImageClass::Storage { .. } => false,
+                            crate::ImageClass::Depth { .. } => true,
+                        };
+                        let good = match query {
+                            crate::ImageQuery::NumLayers => arrayed,
+                            crate::ImageQuery::Size { level: Some(_) }
+                            | crate::ImageQuery::NumLevels => can_level,
+                            crate::ImageQuery::Size { level: None }
+                            | crate::ImageQuery::NumSamples => !can_level,
+                        };
+                        if !good {
+                            return Err(ExpressionError::InvalidImageClass(class));
+                        }
+                    }
+                    _ => return Err(ExpressionError::ExpectedImageType(var.ty)),
                 }
                 ShaderStages::all()
             }
@@ -552,8 +636,20 @@ impl super::Validator {
                 }
                 ShaderStages::all()
             }
-            #[allow(unused)]
-            E::Derivative { axis, expr } => ShaderStages::FRAGMENT,
+            E::Derivative { axis: _, expr } => {
+                match *resolver.resolve(expr)? {
+                    Ti::Scalar {
+                        kind: crate::ScalarKind::Float,
+                        ..
+                    }
+                    | Ti::Vector {
+                        kind: crate::ScalarKind::Float,
+                        ..
+                    } => {}
+                    _ => return Err(ExpressionError::InvalidDerivative),
+                }
+                ShaderStages::FRAGMENT
+            }
             E::Relational { fun, argument } => {
                 use crate::RelationalFunction as Rf;
                 let argument_inner = resolver.resolve(argument)?;
