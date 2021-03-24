@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{binding_model::BindEntryMap, FastHashMap};
-use naga::proc::{analyzer::GlobalUse, Layouter};
+use naga::valid::GlobalUse;
 use std::collections::hash_map::Entry;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
@@ -680,8 +680,7 @@ impl Interface {
         list.push(varying);
     }
 
-    pub fn new(module: &naga::Module, analysis: &naga::proc::analyzer::Analysis) -> Self {
-        let layouter = Layouter::new(&module.types, &module.constants);
+    pub fn new(module: &naga::Module, info: &naga::valid::ModuleInfo) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
@@ -694,8 +693,7 @@ impl Interface {
                     block: true,
                     members: _,
                 } => {
-                    //TODO: fix the Naga's resolve to include one element of a dynamic array
-                    let actual_size = layouter.resolve(var.ty).size.max(1);
+                    let actual_size = info.layouter[var.ty].size;
                     ResourceType::Buffer {
                         size: wgt::BufferSize::new(actual_size as u64).unwrap(),
                     }
@@ -727,7 +725,7 @@ impl Interface {
         let mut entry_points = FastHashMap::default();
         entry_points.reserve(module.entry_points.len());
         for (index, entry_point) in (&module.entry_points).iter().enumerate() {
-            let info = analysis.get_entry_point(index);
+            let info = info.get_entry_point(index);
             let mut ep = EntryPoint::default();
             for arg in entry_point.function.arguments.iter() {
                 Self::populate(&mut ep.inputs, arg.binding.as_ref(), arg.ty, &module.types);
