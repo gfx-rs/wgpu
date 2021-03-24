@@ -788,7 +788,7 @@ impl<B: GfxBackend> Device<B> {
             };
 
         let required_level_count =
-            desc.base_mip_level + desc.level_count.map_or(1, |count| count.get());
+            desc.base_mip_level + desc.mip_level_count.map_or(1, |count| count.get());
         let required_layer_count =
             desc.base_array_layer + desc.array_layer_count.map_or(1, |count| count.get());
         let level_end = texture.full_range.levels.end;
@@ -819,7 +819,7 @@ impl<B: GfxBackend> Device<B> {
         }
 
         let end_level = desc
-            .level_count
+            .mip_level_count
             .map_or(level_end, |_| required_level_count as u8);
         let end_layer = desc
             .array_layer_count
@@ -849,7 +849,7 @@ impl<B: GfxBackend> Device<B> {
         let range = hal::image::SubresourceRange {
             aspects,
             level_start: desc.base_mip_level as _,
-            level_count: desc.level_count.map(|v| v.get() as _),
+            level_count: desc.mip_level_count.map(|v| v.get() as _),
             layer_start: desc.base_array_layer as _,
             layer_count: desc.array_layer_count.map(|v| v.get() as _),
         };
