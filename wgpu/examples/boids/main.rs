@@ -268,8 +268,8 @@ impl framework::Example for Example {
         _spawner: &framework::Spawner,
     ) {
         // create render pass descriptor and its color attachments
-        let color_attachments = [wgpu::RenderPassColorAttachmentDescriptor {
-            attachment: &frame.view,
+        let color_attachments = [wgpu::RenderPassColorAttachment {
+            view: &frame.view,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
