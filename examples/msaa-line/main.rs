@@ -261,14 +261,14 @@ impl framework::Example for Example {
                 store: true,
             };
             let rpass_color_attachment = if self.sample_count == 1 {
-                wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &frame.view,
+                wgpu::RenderPassColorAttachment {
+                    view: &frame.view,
                     resolve_target: None,
                     ops,
                 }
             } else {
-                wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &self.multisampled_framebuffer,
+                wgpu::RenderPassColorAttachment {
+                    view: &self.multisampled_framebuffer,
                     resolve_target: Some(&frame.view),
                     ops,
                 }

@@ -29,15 +29,15 @@ pub use wgt::{
     BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, BufferBindingType,
     BufferSize, BufferUsage, Color, ColorTargetState, ColorWrite, CommandBufferDescriptor,
     CompareFunction, DepthBiasState, DepthStencilState, DeviceType, DynamicOffset, Extent3d, Face,
-    Features, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, MultisampleState,
-    Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
-    PrimitiveTopology, PushConstantRange, QuerySetDescriptor, QueryType, SamplerBorderColor,
-    ShaderFlags, ShaderLocation, ShaderStage, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureDataLayout,
-    TextureDimension, TextureFormat, TextureSampleType, TextureUsage, TextureViewDimension,
-    VertexAttribute, VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
-    VERTEX_STRIDE_ALIGNMENT,
+    Features, FilterMode, FrontFace, ImageDataLayout, IndexFormat, InputStepMode, Limits,
+    MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode,
+    PrimitiveState, PrimitiveTopology, PushConstantRange, QuerySetDescriptor, QueryType,
+    SamplerBorderColor, ShaderFlags, ShaderLocation, ShaderStage, StencilFaceState,
+    StencilOperation, StencilState, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus,
+    TextureAspect, TextureDimension, TextureFormat, TextureSampleType, TextureUsage,
+    TextureViewDimension, VertexAttribute, VertexFormat, BIND_BUFFER_ALIGNMENT,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C};
@@ -356,22 +356,22 @@ trait Context: Debug + Send + Sized + Sync {
     fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
-        source: BufferCopyView,
-        destination: TextureCopyView,
+        source: ImageCopyBuffer,
+        destination: ImageCopyTexture,
         copy_size: Extent3d,
     );
     fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
-        source: TextureCopyView,
-        destination: BufferCopyView,
+        source: ImageCopyTexture,
+        destination: ImageCopyBuffer,
         copy_size: Extent3d,
     );
     fn command_encoder_copy_texture_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
-        source: TextureCopyView,
-        destination: TextureCopyView,
+        source: ImageCopyTexture,
+        destination: ImageCopyTexture,
         copy_size: Extent3d,
     );
 
@@ -432,9 +432,9 @@ trait Context: Debug + Send + Sized + Sync {
     fn queue_write_texture(
         &self,
         queue: &Self::QueueId,
-        texture: TextureCopyView,
+        texture: ImageCopyTexture,
         data: &[u8],
-        data_layout: TextureDataLayout,
+        data_layout: ImageDataLayout,
         size: Extent3d,
     );
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
@@ -1002,9 +1002,9 @@ impl<V: Default> Default for Operations<V> {
 
 /// Describes a color attachment to a [`RenderPass`].
 #[derive(Clone, Debug)]
-pub struct RenderPassColorAttachmentDescriptor<'a> {
+pub struct RenderPassColorAttachment<'a> {
     /// The view to use as an attachment.
-    pub attachment: &'a TextureView,
+    pub view: &'a TextureView,
     /// The view that will receive the resolved output if multisampling is used.
     pub resolve_target: Option<&'a TextureView>,
     /// What operations will be performed on this color attachment.
@@ -1013,9 +1013,9 @@ pub struct RenderPassColorAttachmentDescriptor<'a> {
 
 /// Describes a depth/stencil attachment to a [`RenderPass`].
 #[derive(Clone, Debug)]
-pub struct RenderPassDepthStencilAttachmentDescriptor<'a> {
+pub struct RenderPassDepthStencilAttachment<'a> {
     /// The view to use as an attachment.
-    pub attachment: &'a TextureView,
+    pub view: &'a TextureView,
     /// What operations will be performed on the depth part of the attachment.
     pub depth_ops: Option<Operations<f32>>,
     /// What operations will be performed on the stencil part of the attachment.
@@ -1162,9 +1162,9 @@ pub struct RenderPassDescriptor<'a, 'b> {
     /// Debug label of the render pass. This will show up in graphics debuggers for easy identification.
     pub label: Option<&'b str>,
     /// The color attachments of the render pass.
-    pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],
+    pub color_attachments: &'b [RenderPassColorAttachment<'a>],
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<'a>>,
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'a>>,
 }
 
 /// Describes how the vertex buffer is interpreted.
@@ -1242,13 +1242,13 @@ pub struct ComputePipelineDescriptor<'a> {
     pub entry_point: &'a str,
 }
 
-pub use wgt::BufferCopyView as BufferCopyViewBase;
+pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// View of a buffer which can be used to copy to/from a texture.
-pub type BufferCopyView<'a> = BufferCopyViewBase<&'a Buffer>;
+pub type ImageCopyBuffer<'a> = ImageCopyBufferBase<&'a Buffer>;
 
-pub use wgt::TextureCopyView as TextureCopyViewBase;
+pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 /// View of a texture which can be used to copy to/from a buffer/texture.
-pub type TextureCopyView<'a> = TextureCopyViewBase<&'a Texture>;
+pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
 
 /// Describes a [`BindGroupLayout`].
 #[derive(Clone, Debug)]
@@ -2003,8 +2003,8 @@ impl CommandEncoder {
     /// - `source.layout.bytes_per_row` isn't divisible by [`COPY_BYTES_PER_ROW_ALIGNMENT`].
     pub fn copy_buffer_to_texture(
         &mut self,
-        source: BufferCopyView,
-        destination: TextureCopyView,
+        source: ImageCopyBuffer,
+        destination: ImageCopyTexture,
         copy_size: Extent3d,
     ) {
         Context::command_encoder_copy_buffer_to_texture(
@@ -2025,8 +2025,8 @@ impl CommandEncoder {
     /// - `source.layout.bytes_per_row` isn't divisible by [`COPY_BYTES_PER_ROW_ALIGNMENT`].
     pub fn copy_texture_to_buffer(
         &mut self,
-        source: TextureCopyView,
-        destination: BufferCopyView,
+        source: ImageCopyTexture,
+        destination: ImageCopyBuffer,
         copy_size: Extent3d,
     ) {
         Context::command_encoder_copy_texture_to_buffer(
@@ -2047,8 +2047,8 @@ impl CommandEncoder {
     /// - Copy would overrun either texture
     pub fn copy_texture_to_texture(
         &mut self,
-        source: TextureCopyView,
-        destination: TextureCopyView,
+        source: ImageCopyTexture,
+        destination: ImageCopyTexture,
         copy_size: Extent3d,
     ) {
         Context::command_encoder_copy_texture_to_texture(
@@ -2289,7 +2289,7 @@ impl<'a> RenderPass<'a> {
 
 /// [`Features::MULTI_DRAW_INDIRECT`] must be enabled on the device in order to call these functions.
 impl<'a> RenderPass<'a> {
-    /// Disptaches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
+    /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// `count` draw calls are issued.
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
@@ -2317,7 +2317,7 @@ impl<'a> RenderPass<'a> {
             .multi_draw_indirect(&indirect_buffer.id, indirect_offset, count);
     }
 
-    /// Disptaches multiple draw calls from the active index buffer and the active vertex buffers,
+    /// Dispatches multiple draw calls from the active index buffer and the active vertex buffers,
     /// based on the contents of the `indirect_buffer`. `count` draw calls are issued.
     ///
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
@@ -2397,7 +2397,7 @@ impl<'a> RenderPass<'a> {
         );
     }
 
-    /// Disptaches multiple draw calls from the active index buffer and the active vertex buffers,
+    /// Dispatches multiple draw calls from the active index buffer and the active vertex buffers,
     /// based on the contents of the `indirect_buffer`. The count buffer is read to determine how many draws to issue.
     ///
     /// The indirect buffer must be long enough to account for `max_count` draws, however only `count` will
@@ -2496,7 +2496,7 @@ impl<'a> RenderPass<'a> {
     }
 }
 
-/// [`Features::PIPEILNE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
+/// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
 impl<'a> RenderPass<'a> {
     /// Start a pipeline statistics query on this render pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
@@ -2601,7 +2601,7 @@ impl<'a> ComputePass<'a> {
     }
 }
 
-/// [`Features::PIPEILNE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
+/// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
 impl<'a> ComputePass<'a> {
     /// Start a pipeline statistics query on this render pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
@@ -2804,9 +2804,9 @@ impl Queue {
     /// internally to happen at the start of the next `submit()` call.
     pub fn write_texture(
         &self,
-        texture: TextureCopyView,
+        texture: ImageCopyTexture,
         data: &[u8],
-        data_layout: TextureDataLayout,
+        data_layout: ImageDataLayout,
         size: Extent3d,
     ) {
         Context::queue_write_texture(&*self.context, &self.id, texture, data, data_layout, size)

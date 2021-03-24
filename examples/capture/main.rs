@@ -45,7 +45,7 @@ async fn create_red_image_with_dimensions(
         .await
         .unwrap();
 
-    // It is a webgpu requirement that BufferCopyView.layout.bytes_per_row % wgpu::COPY_BYTES_PER_ROW_ALIGNMENT == 0
+    // It is a WebGPU requirement that ImageCopyBuffer.layout.bytes_per_row % wgpu::COPY_BYTES_PER_ROW_ALIGNMENT == 0
     // So we calculate padded_bytes_per_row by rounding unpadded_bytes_per_row
     // up to the next multiple of wgpu::COPY_BYTES_PER_ROW_ALIGNMENT.
     // https://en.wikipedia.org/wiki/Data_structure_alignment#Computing_padding
@@ -81,8 +81,8 @@ async fn create_red_image_with_dimensions(
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
+            color_attachments: &[wgpu::RenderPassColorAttachment {
+                view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::RED),
@@ -94,17 +94,20 @@ async fn create_red_image_with_dimensions(
 
         // Copy the data from the texture to the buffer
         encoder.copy_texture_to_buffer(
-            wgpu::TextureCopyView {
+            wgpu::ImageCopyTexture {
                 texture: &texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
-            wgpu::BufferCopyView {
+            wgpu::ImageCopyBuffer {
                 buffer: &output_buffer,
-                layout: wgpu::TextureDataLayout {
+                layout: wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: buffer_dimensions.padded_bytes_per_row as u32,
-                    rows_per_image: 0,
+                    bytes_per_row: Some(
+                        std::num::NonZeroU32::new(buffer_dimensions.padded_bytes_per_row as u32)
+                            .unwrap(),
+                    ),
+                    rows_per_image: None,
                 },
             },
             texture_extent,
