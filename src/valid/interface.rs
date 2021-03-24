@@ -1,6 +1,6 @@
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
-    Disalignment, FunctionError, ModuleInfo, ShaderStages, TypeFlags,
+    Disalignment, FunctionError, ModuleInfo, ShaderStages, TypeFlags, ValidationFlags,
 };
 use crate::arena::{Arena, Handle};
 
@@ -275,10 +275,12 @@ impl super::Validator {
                 match types[var.ty].inner {
                     crate::TypeInner::Struct { block: true, .. } => {
                         if let Err((ty_handle, ref disalignment)) = type_info.storage_layout {
-                            return Err(GlobalVariableError::Alignment(
-                                ty_handle,
-                                disalignment.clone(),
-                            ));
+                            if self.flags.contains(ValidationFlags::STRUCT_LAYOUTS) {
+                                return Err(GlobalVariableError::Alignment(
+                                    ty_handle,
+                                    disalignment.clone(),
+                                ));
+                            }
                         }
                     }
                     _ => return Err(GlobalVariableError::InvalidType),
@@ -293,10 +295,12 @@ impl super::Validator {
                 match types[var.ty].inner {
                     crate::TypeInner::Struct { block: true, .. } => {
                         if let Err((ty_handle, ref disalignment)) = type_info.uniform_layout {
-                            return Err(GlobalVariableError::Alignment(
-                                ty_handle,
-                                disalignment.clone(),
-                            ));
+                            if self.flags.contains(ValidationFlags::STRUCT_LAYOUTS) {
+                                return Err(GlobalVariableError::Alignment(
+                                    ty_handle,
+                                    disalignment.clone(),
+                                ));
+                            }
                         }
                     }
                     _ => return Err(GlobalVariableError::InvalidType),

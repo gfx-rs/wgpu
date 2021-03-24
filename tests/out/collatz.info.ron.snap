@@ -6,7 +6,7 @@ expression: output
     functions: [
         (
             flags: (
-                bits: 7,
+                bits: 15,
             ),
             available_stages: (
                 bits: 7,
@@ -351,7 +351,7 @@ expression: output
     entry_points: [
         (
             flags: (
-                bits: 7,
+                bits: 15,
             ),
             available_stages: (
                 bits: 7,

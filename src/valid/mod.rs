@@ -26,9 +26,14 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     pub struct ValidationFlags: u8 {
+        /// Expressions.
         const EXPRESSIONS = 0x1;
+        /// Statements and blocks of them.
         const BLOCKS = 0x2;
+        /// Uniformity of control flow for operations that require it.
         const CONTROL_FLOW_UNIFORMITY = 0x4;
+        /// Host-shareable structure layouts.
+        const STRUCT_LAYOUTS = 0x8;
     }
 }
 

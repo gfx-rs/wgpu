@@ -209,19 +209,19 @@ impl super::Validator {
                             }
                         }
 
-                        let effective_alignment = match stride {
+                        let effective_stride = match stride {
                             Some(stride) => stride.get(),
                             None => base_layout.size,
                         };
                         let uniform_layout =
-                            if effective_alignment & UNIFORM_LAYOUT_ALIGNMENT_MASK == 0 {
+                            if effective_stride & UNIFORM_LAYOUT_ALIGNMENT_MASK == 0 {
                                 base_info.uniform_layout.clone()
                             } else {
                                 Err((
                                     handle,
                                     Disalignment::ArrayStride {
-                                        stride: effective_alignment,
-                                        alignment: effective_alignment,
+                                        stride: effective_stride,
+                                        alignment: UNIFORM_LAYOUT_ALIGNMENT_MASK + 1,
                                     },
                                 ))
                             };
@@ -295,12 +295,17 @@ impl super::Validator {
                     storage_layout = storage_layout.or_else(|_| base_info.storage_layout.clone());
                 }
 
-                if uniform_layout.is_ok() && offset % UNIFORM_LAYOUT_ALIGNMENT_MASK == 0 {
+                // disabled temporarily, see https://github.com/gpuweb/gpuweb/issues/1558
+                const CHECK_STRUCT_SIZE: bool = false;
+                if CHECK_STRUCT_SIZE
+                    && uniform_layout.is_ok()
+                    && offset & UNIFORM_LAYOUT_ALIGNMENT_MASK != 0
+                {
                     uniform_layout = Err((
                         handle,
                         Disalignment::StructSize {
                             size: offset,
-                            alignment: UNIFORM_LAYOUT_ALIGNMENT_MASK,
+                            alignment: UNIFORM_LAYOUT_ALIGNMENT_MASK + 1,
                         },
                     ));
                 }
