@@ -798,15 +798,19 @@ fn map_texture_view_dimension(
     }
 }
 
-fn map_buffer_copy_view(view: crate::BufferCopyView) -> web_sys::GpuImageCopyBuffer {
+fn map_buffer_copy_view(view: crate::ImageCopyBuffer) -> web_sys::GpuImageCopyBuffer {
     let mut mapped = web_sys::GpuImageCopyBuffer::new(&view.buffer.id.0);
-    mapped.bytes_per_row(view.layout.bytes_per_row);
-    mapped.rows_per_image(view.layout.rows_per_image);
+    if let Some(bytes_per_row) = view.layout.bytes_per_row {
+        mapped.bytes_per_row(bytes_per_row.get());
+    }
+    if let Some(rows_per_image) = view.layout.rows_per_image {
+        mapped.rows_per_image(rows_per_image.get());
+    }
     mapped.offset(view.layout.offset as f64);
     mapped
 }
 
-fn map_texture_copy_view(view: crate::TextureCopyView) -> web_sys::GpuImageCopyTexture {
+fn map_texture_copy_view(view: crate::ImageCopyTexture) -> web_sys::GpuImageCopyTexture {
     let mut mapped = web_sys::GpuImageCopyTexture::new(&view.texture.id.0);
     mapped.mip_level(view.mip_level);
     mapped.origin(&map_origin_3d(view.origin));
@@ -1719,8 +1723,8 @@ impl crate::Context for Context {
     fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
-        source: crate::BufferCopyView,
-        destination: crate::TextureCopyView,
+        source: crate::ImageCopyBuffer,
+        destination: crate::ImageCopyTexture,
         copy_size: wgt::Extent3d,
     ) {
         encoder.copy_buffer_to_texture_with_gpu_extent_3d_dict(
@@ -1733,8 +1737,8 @@ impl crate::Context for Context {
     fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
-        source: crate::TextureCopyView,
-        destination: crate::BufferCopyView,
+        source: crate::ImageCopyTexture,
+        destination: crate::ImageCopyBuffer,
         copy_size: wgt::Extent3d,
     ) {
         encoder.copy_texture_to_buffer_with_gpu_extent_3d_dict(
@@ -1747,8 +1751,8 @@ impl crate::Context for Context {
     fn command_encoder_copy_texture_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
-        source: crate::TextureCopyView,
-        destination: crate::TextureCopyView,
+        source: crate::ImageCopyTexture,
+        destination: crate::ImageCopyTexture,
         copy_size: wgt::Extent3d,
     ) {
         encoder.copy_texture_to_texture_with_gpu_extent_3d_dict(
@@ -1793,7 +1797,7 @@ impl crate::Context for Context {
                 };
 
                 let mut mapped_color_attachment =
-                    web_sys::GpuRenderPassColorAttachment::new(&load_value, &ca.attachment.id.0);
+                    web_sys::GpuRenderPassColorAttachment::new(&load_value, &ca.view.id.0);
 
                 if let Some(rt) = ca.resolve_target {
                     mapped_color_attachment.resolve_target(&rt.id.0);
@@ -1847,7 +1851,7 @@ impl crate::Context for Context {
                 depth_store_op,
                 &stencil_load_op,
                 stencil_store_op,
-                &dsa.attachment.id.0,
+                &dsa.view.id.0,
             );
 
             mapped_desc.depth_stencil_attachment(&mapped_depth_stencil_attachment);
@@ -1956,14 +1960,18 @@ impl crate::Context for Context {
     fn queue_write_texture(
         &self,
         queue: &Self::QueueId,
-        texture: crate::TextureCopyView,
+        texture: crate::ImageCopyTexture,
         data: &[u8],
-        data_layout: wgt::TextureDataLayout,
+        data_layout: wgt::ImageDataLayout,
         size: wgt::Extent3d,
     ) {
         let mut mapped_data_layout = web_sys::GpuImageDataLayout::new();
-        mapped_data_layout.bytes_per_row(data_layout.bytes_per_row);
-        mapped_data_layout.rows_per_image(data_layout.rows_per_image);
+        if let Some(bytes_per_row) = data_layout.bytes_per_row {
+            mapped_data_layout.bytes_per_row(bytes_per_row.get());
+        }
+        if let Some(rows_per_image) = data_layout.rows_per_image {
+            mapped_data_layout.rows_per_image(rows_per_image.get());
+        }
         mapped_data_layout.offset(data_layout.offset as f64);
 
         /* Skip the copy once gecko allows BufferSource instead of ArrayBuffer
