@@ -1369,7 +1369,7 @@ impl crate::Context for Context {
             dimension: desc.dimension,
             aspect: desc.aspect,
             base_mip_level: desc.base_mip_level,
-            level_count: desc.level_count,
+            mip_level_count: desc.mip_level_count,
             base_array_layer: desc.base_array_layer,
             array_layer_count: desc.array_layer_count,
         };

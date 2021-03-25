@@ -1131,7 +1131,7 @@ impl crate::Context for Context {
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&**spv))
             }
             crate::ShaderSource::Wgsl(ref code) => {
-                use naga::{back::spv, front::wgsl, proc::Validator};
+                use naga::{back::spv, front::wgsl, valid::Validator};
                 let module = wgsl::parse_str(code).unwrap();
                 let mut capabilities = HashSet::default();
                 capabilities.insert(spv::Capability::Shader);
@@ -1140,7 +1140,9 @@ impl crate::Context for Context {
                     flags: spv::WriterFlags::empty(),
                     capabilities,
                 };
-                let analysis = Validator::new().validate(&module).unwrap();
+                let analysis = Validator::new(naga::valid::ValidationFlags::all())
+                    .validate(&module)
+                    .unwrap();
                 let words = spv::write_vec(&module, &analysis, &options).unwrap();
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&words[..]))
             }
@@ -1609,7 +1611,7 @@ impl crate::Context for Context {
             mapped.array_layer_count(count.get());
         }
         mapped.base_mip_level(desc.base_mip_level);
-        if let Some(count) = desc.level_count {
+        if let Some(count) = desc.mip_level_count {
             mapped.mip_level_count(count.get());
         }
         if let Some(label) = desc.label {
