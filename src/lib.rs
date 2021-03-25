@@ -20,13 +20,16 @@ emitted in order to take effect. This happens in one of the following ways:
 
 !*/
 
+// TODO: use `strip_prefix` instead when Rust 1.45 <= MSRV
 #![allow(
+    renamed_and_removed_lints,
+    unknown_lints, // requires Rust 1.51
     clippy::new_without_default,
     clippy::unneeded_field_pattern,
-    clippy::match_like_matches_macro
+    clippy::match_like_matches_macro,
+    clippy::manual_strip,
+    clippy::unknown_clippy_lints,
 )]
-// TODO: use `strip_prefix` instead when Rust 1.45 <= MSRV
-#![allow(clippy::manual_strip, clippy::unknown_clippy_lints)]
 #![warn(
     trivial_casts,
     trivial_numeric_casts,

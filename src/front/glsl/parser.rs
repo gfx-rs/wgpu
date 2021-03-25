@@ -1,4 +1,4 @@
-#![allow(clippy::panic, clippy::needless_lifetimes)]
+#![allow(clippy::panic, clippy::needless_lifetimes, clippy::upper_case_acronyms)]
 use pomelo::pomelo;
 pomelo! {
     //%verbose;
