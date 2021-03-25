@@ -58,7 +58,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     // Loads the shader from the SPIR-V file.arrayvec
     let mut flags = wgpu::ShaderFlags::VALIDATION;
     match adapter.get_info().backend {
-        wgpu::Backend::Vulkan | wgpu::Backend::Metal => {
+        wgpu::Backend::Vulkan | wgpu::Backend::Metal | wgpu::Backend::Gl => {
             flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION;
         }
         _ => {}
