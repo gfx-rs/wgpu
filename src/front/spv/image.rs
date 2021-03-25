@@ -205,10 +205,11 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let coordinate_id = self.next()?;
         let value_id = self.next()?;
 
-        if words_left != 0 {
-            let image_ops = self.next()?;
+        let image_ops = if words_left != 0 { self.next()? } else { 0 };
+
+        if image_ops != 0 {
             let other = spirv::ImageOperands::from_bits_truncate(image_ops);
-            log::warn!("Skipping {:?}", other);
+            log::warn!("Unknown image write ops {:?}", other);
             for _ in 1..words_left {
                 self.next()?;
             }
@@ -258,11 +259,17 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let image_id = self.next()?;
         let coordinate_id = self.next()?;
 
-        let mut index = None;
-        while words_left != 0 {
-            let image_ops = self.next()?;
+        let mut image_ops = if words_left != 0 {
             words_left -= 1;
-            match spirv::ImageOperands::from_bits_truncate(image_ops) {
+            self.next()?
+        } else {
+            0
+        };
+
+        let mut index = None;
+        while image_ops != 0 {
+            let bit = 1 << image_ops.trailing_zeros();
+            match spirv::ImageOperands::from_bits_truncate(bit) {
                 spirv::ImageOperands::LOD => {
                     let lod_expr = self.next()?;
                     let lod_handle = self.lookup_expression.lookup(lod_expr)?.handle;
@@ -276,13 +283,14 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     words_left -= 1;
                 }
                 other => {
-                    log::warn!("Skipping {:?}", other);
+                    log::warn!("Unknown image load op {:?}", other);
                     for _ in 0..words_left {
                         self.next()?;
                     }
                     break;
                 }
             }
+            image_ops ^= bit;
         }
 
         let image_lexp = self.lookup_expression.lookup(image_id)?;
@@ -335,11 +343,18 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let sampled_image_id = self.next()?;
         let coordinate_id = self.next()?;
 
-        let mut level = crate::SampleLevel::Auto;
-        while words_left != 0 {
-            let image_ops = self.next()?;
+        let mut image_ops = if words_left != 0 {
             words_left -= 1;
-            match spirv::ImageOperands::from_bits_truncate(image_ops) {
+            self.next()?
+        } else {
+            0
+        };
+
+        let mut level = crate::SampleLevel::Auto;
+        let mut offset = None;
+        while image_ops != 0 {
+            let bit = 1 << image_ops.trailing_zeros();
+            match spirv::ImageOperands::from_bits_truncate(bit) {
                 spirv::ImageOperands::BIAS => {
                     let bias_expr = self.next()?;
                     let bias_handle = self.lookup_expression.lookup(bias_expr)?.handle;
@@ -352,14 +367,21 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     level = crate::SampleLevel::Exact(lod_handle);
                     words_left -= 1;
                 }
+                spirv::ImageOperands::CONST_OFFSET => {
+                    let offset_constant = self.next()?;
+                    let offset_handle = self.lookup_constant.lookup(offset_constant)?.handle;
+                    offset = Some(offset_handle);
+                    words_left -= 1;
+                }
                 other => {
-                    log::warn!("Skipping {:?}", other);
+                    log::warn!("Unknown image sample op {:?}", other);
                     for _ in 0..words_left {
                         self.next()?;
                     }
                     break;
                 }
             }
+            image_ops ^= bit;
         }
 
         let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
@@ -400,7 +422,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             sampler: si_lexp.sampler,
             coordinate,
             array_index,
-            offset: None, //TODO
+            offset,
             level,
             depth_ref: None,
         };
@@ -427,11 +449,18 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let coordinate_id = self.next()?;
         let dref_id = self.next()?;
 
-        let mut level = crate::SampleLevel::Auto;
-        while words_left != 0 {
-            let image_ops = self.next()?;
+        let mut image_ops = if words_left != 0 {
             words_left -= 1;
-            match spirv::ImageOperands::from_bits_truncate(image_ops) {
+            self.next()?
+        } else {
+            0
+        };
+
+        let mut level = crate::SampleLevel::Auto;
+        let mut offset = None;
+        while image_ops != 0 {
+            let bit = 1 << image_ops.trailing_zeros();
+            match spirv::ImageOperands::from_bits_truncate(bit) {
                 spirv::ImageOperands::BIAS => {
                     let bias_expr = self.next()?;
                     let bias_handle = self.lookup_expression.lookup(bias_expr)?.handle;
@@ -444,14 +473,21 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     level = crate::SampleLevel::Exact(lod_handle);
                     words_left -= 1;
                 }
+                spirv::ImageOperands::CONST_OFFSET => {
+                    let offset_constant = self.next()?;
+                    let offset_handle = self.lookup_constant.lookup(offset_constant)?.handle;
+                    offset = Some(offset_handle);
+                    words_left -= 1;
+                }
                 other => {
-                    log::warn!("Skipping {:?}", other);
+                    log::warn!("Unknown image sample dref op {:?}", other);
                     for _ in 0..words_left {
                         self.next()?;
                     }
                     break;
                 }
             }
+            image_ops ^= bit;
         }
 
         let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
@@ -501,7 +537,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             sampler: si_lexp.sampler,
             coordinate,
             array_index,
-            offset: None, //TODO
+            offset,
             level,
             depth_ref: Some(dref_lexp.handle),
         };
