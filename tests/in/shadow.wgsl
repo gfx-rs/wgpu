@@ -23,7 +23,7 @@ var<storage> s_lights: [[access(read)]] Lights;
 [[group(0), binding(2)]]
 var t_shadow: texture_depth_2d_array;
 [[group(0), binding(3)]]
-var sampler_shadow: sampler;
+var sampler_shadow: sampler_comparison;
 
 fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
     if (homogeneous_coords.w <= 0.0) {

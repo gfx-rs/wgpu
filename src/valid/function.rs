@@ -536,7 +536,7 @@ impl super::Validator {
             if expr.needs_pre_emit() {
                 self.valid_expression_set.insert(handle.index());
             }
-            if !self.flags.contains(ValidationFlags::EXPRESSIONS) {
+            if self.flags.contains(ValidationFlags::EXPRESSIONS) {
                 match self.validate_expression(
                     handle,
                     expr,
