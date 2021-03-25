@@ -605,6 +605,7 @@ pub(crate) struct Texture {
 pub(crate) struct CommandEncoder {
     id: wgc::id::CommandEncoderId,
     error_sink: ErrorSink,
+    open: bool,
 }
 
 impl crate::Context for Context {
@@ -1195,6 +1196,7 @@ impl crate::Context for Context {
         CommandEncoder {
             id,
             error_sink: Arc::clone(&device.error_sink),
+            open: true,
         }
     }
 
@@ -1449,6 +1451,12 @@ impl crate::Context for Context {
     fn shader_module_drop(&self, shader_module: &Self::ShaderModuleId) {
         let global = &self.0;
         wgc::gfx_select!(*shader_module => global.shader_module_drop(*shader_module))
+    }
+    fn command_encoder_drop(&self, command_encoder: &Self::CommandEncoderId) {
+        if command_encoder.open {
+            let global = &self.0;
+            wgc::gfx_select!(command_encoder.id => global.command_encoder_drop(command_encoder.id))
+        }
     }
     fn command_buffer_drop(&self, command_buffer: &Self::CommandBufferId) {
         let global = &self.0;
@@ -1717,8 +1725,9 @@ impl crate::Context for Context {
         }
     }
 
-    fn command_encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId {
+    fn command_encoder_finish(&self, mut encoder: Self::CommandEncoderId) -> Self::CommandBufferId {
         let descriptor = wgt::CommandBufferDescriptor::default();
+        encoder.open = false; // prevent the drop
         let global = &self.0;
         let (id, error) =
             wgc::gfx_select!(encoder.id => global.command_encoder_finish(encoder.id, &descriptor));

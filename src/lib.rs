@@ -328,6 +328,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn bind_group_layout_drop(&self, bind_group_layout: &Self::BindGroupLayoutId);
     fn pipeline_layout_drop(&self, pipeline_layout: &Self::PipelineLayoutId);
     fn shader_module_drop(&self, shader_module: &Self::ShaderModuleId);
+    fn command_encoder_drop(&self, command_encoder: &Self::CommandEncoderId);
     fn command_buffer_drop(&self, command_buffer: &Self::CommandBufferId);
     fn render_bundle_drop(&self, render_bundle: &Self::RenderBundleId);
     fn compute_pipeline_drop(&self, pipeline: &Self::ComputePipelineId);
@@ -395,7 +396,7 @@ trait Context: Debug + Send + Sized + Sync {
         encoder: &Self::CommandEncoderId,
         pass: &mut Self::RenderPassId,
     );
-    fn command_encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId;
+    fn command_encoder_finish(&self, encoder: Self::CommandEncoderId) -> Self::CommandBufferId;
 
     fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str);
     fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str);
@@ -844,10 +845,20 @@ impl Drop for CommandBuffer {
 #[derive(Debug)]
 pub struct CommandEncoder {
     context: Arc<C>,
-    id: <C as Context>::CommandEncoderId,
+    id: Option<<C as Context>::CommandEncoderId>,
     /// This type should be !Send !Sync, because it represents an allocation on this thread's
     /// command buffer.
     _p: PhantomData<*const u8>,
+}
+
+impl Drop for CommandEncoder {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            if let Some(id) = self.id.take() {
+                self.context.command_encoder_drop(&id);
+            }
+        }
+    }
 }
 
 /// In-progress recording of a render pass.
@@ -1514,7 +1525,11 @@ impl Device {
     pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor) -> CommandEncoder {
         CommandEncoder {
             context: Arc::clone(&self.context),
-            id: Context::device_create_command_encoder(&*self.context, &self.id, desc),
+            id: Some(Context::device_create_command_encoder(
+                &*self.context,
+                &self.id,
+                desc,
+            )),
             _p: Default::default(),
         }
     }
@@ -1939,10 +1954,13 @@ impl Drop for TextureView {
 
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
-    pub fn finish(self) -> CommandBuffer {
+    pub fn finish(mut self) -> CommandBuffer {
         CommandBuffer {
             context: Arc::clone(&self.context),
-            id: Some(Context::command_encoder_finish(&*self.context, &self.id)),
+            id: Some(Context::command_encoder_finish(
+                &*self.context,
+                self.id.take().unwrap(),
+            )),
         }
     }
 
@@ -1953,8 +1971,9 @@ impl CommandEncoder {
         &'a mut self,
         desc: &RenderPassDescriptor<'a, '_>,
     ) -> RenderPass<'a> {
+        let id = self.id.as_ref().unwrap();
         RenderPass {
-            id: Context::command_encoder_begin_render_pass(&*self.context, &self.id, desc),
+            id: Context::command_encoder_begin_render_pass(&*self.context, id, desc),
             parent: self,
         }
     }
@@ -1963,8 +1982,9 @@ impl CommandEncoder {
     ///
     /// This function returns a [`ComputePass`] object which records a single compute pass.
     pub fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor) -> ComputePass {
+        let id = self.id.as_ref().unwrap();
         ComputePass {
-            id: Context::command_encoder_begin_compute_pass(&*self.context, &self.id, desc),
+            id: Context::command_encoder_begin_compute_pass(&*self.context, id, desc),
             parent: self,
         }
     }
@@ -1985,7 +2005,7 @@ impl CommandEncoder {
     ) {
         Context::command_encoder_copy_buffer_to_buffer(
             &*self.context,
-            &self.id,
+            self.id.as_ref().unwrap(),
             &source.id,
             source_offset,
             &destination.id,
@@ -2009,7 +2029,7 @@ impl CommandEncoder {
     ) {
         Context::command_encoder_copy_buffer_to_texture(
             &*self.context,
-            &self.id,
+            self.id.as_ref().unwrap(),
             source,
             destination,
             copy_size,
@@ -2031,7 +2051,7 @@ impl CommandEncoder {
     ) {
         Context::command_encoder_copy_texture_to_buffer(
             &*self.context,
-            &self.id,
+            self.id.as_ref().unwrap(),
             source,
             destination,
             copy_size,
@@ -2053,7 +2073,7 @@ impl CommandEncoder {
     ) {
         Context::command_encoder_copy_texture_to_texture(
             &*self.context,
-            &self.id,
+            self.id.as_ref().unwrap(),
             source,
             destination,
             copy_size,
@@ -2062,17 +2082,20 @@ impl CommandEncoder {
 
     /// Inserts debug marker.
     pub fn insert_debug_marker(&mut self, label: &str) {
-        Context::command_encoder_insert_debug_marker(&*self.context, &self.id, label);
+        let id = self.id.as_ref().unwrap();
+        Context::command_encoder_insert_debug_marker(&*self.context, id, label);
     }
 
     /// Start record commands and group it into debug marker group.
     pub fn push_debug_group(&mut self, label: &str) {
-        Context::command_encoder_push_debug_group(&*self.context, &self.id, label);
+        let id = self.id.as_ref().unwrap();
+        Context::command_encoder_push_debug_group(&*self.context, id, label);
     }
 
     /// Stops command recording and creates debug group.
     pub fn pop_debug_group(&mut self) {
-        Context::command_encoder_pop_debug_group(&*self.context, &self.id);
+        let id = self.id.as_ref().unwrap();
+        Context::command_encoder_pop_debug_group(&*self.context, id);
     }
 }
 
@@ -2088,7 +2111,7 @@ impl CommandEncoder {
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
         Context::command_encoder_write_timestamp(
             &*self.context,
-            &self.id,
+            self.id.as_ref().unwrap(),
             &query_set.id,
             query_index,
         )
@@ -2109,7 +2132,7 @@ impl CommandEncoder {
     ) {
         Context::command_encoder_resolve_query_set(
             &*self.context,
-            &self.id,
+            self.id.as_ref().unwrap(),
             &query_set.id,
             query_range.start,
             query_range.end - query_range.start,
@@ -2515,9 +2538,10 @@ impl<'a> RenderPass<'a> {
 impl<'a> Drop for RenderPass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
+            let parent_id = self.parent.id.as_ref().unwrap();
             self.parent
                 .context
-                .command_encoder_end_render_pass(&self.parent.id, &mut self.id);
+                .command_encoder_end_render_pass(parent_id, &mut self.id);
         }
     }
 }
@@ -2620,9 +2644,10 @@ impl<'a> ComputePass<'a> {
 impl<'a> Drop for ComputePass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
+            let parent_id = self.parent.id.as_ref().unwrap();
             self.parent
                 .context
-                .command_encoder_end_compute_pass(&self.parent.id, &mut self.id);
+                .command_encoder_end_compute_pass(parent_id, &mut self.id);
         }
     }
 }
