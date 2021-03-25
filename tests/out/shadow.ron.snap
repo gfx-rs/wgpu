@@ -1046,7 +1046,7 @@ expression: output
                 ),
                 As(
                     expr: 69,
-                    kind: Uint,
+                    kind: Sint,
                     convert: true,
                 ),
                 ImageSample(

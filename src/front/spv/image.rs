@@ -88,7 +88,7 @@ fn extract_image_coordinates(
         };
         let array_index_f32 = expressions.append(extra_expr);
         let array_index = expressions.append(crate::Expression::As {
-            kind: crate::ScalarKind::Uint,
+            kind: crate::ScalarKind::Sint,
             expr: array_index_f32,
             convert: true,
         });
