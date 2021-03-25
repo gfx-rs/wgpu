@@ -317,8 +317,14 @@ impl<B: GfxBackend> Adapter<B> {
             return Err(GetSwapChainPreferredFormatError::NotFound);
         }
 
-        // If no formats were returned, use Bgra8UnormSrgb
-        Ok(wgt::TextureFormat::Bgra8UnormSrgb)
+        let is_webgl = cfg!(gl) && cfg!(target_arch = "wasm32");
+
+        // If no formats were returned, use Bgra8UnormSrgb (native/WebGPU) and Rgba8UnormSrgb (WebGL)
+        if is_webgl {
+            Ok(wgt::TextureFormat::Rgba8UnormSrgb)
+        } else {
+            Ok(wgt::TextureFormat::Bgra8UnormSrgb)
+        }
     }
 
     pub(crate) fn get_texture_format_features(
