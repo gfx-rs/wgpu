@@ -59,7 +59,7 @@ pub enum CreateShaderModuleError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    Validation(#[from] naga::proc::ValidationError),
+    Validation(#[from] naga::valid::ValidationError),
     #[error("missing required device features {0:?}")]
     MissingFeature(wgt::Features),
 }

@@ -1017,7 +1017,7 @@ impl<B: GfxBackend> Device<B> {
         let (naga_result, interface) = match module {
             // If succeeded, then validate it and attempt to give it to gfx-hal directly.
             Some(module) if desc.flags.contains(wgt::ShaderFlags::VALIDATION) || spv.is_none() => {
-                let analysis = naga::proc::Validator::new().validate(&module)?;
+                let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all()).validate(&module)?;
                 if !self.features.contains(wgt::Features::PUSH_CONSTANTS)
                     && module
                         .global_variables
@@ -1028,8 +1028,8 @@ impl<B: GfxBackend> Device<B> {
                         wgt::Features::PUSH_CONSTANTS,
                     ));
                 }
-                let interface = validation::Interface::new(&module, &analysis);
-                let shader = hal::device::NagaShader { module, analysis };
+                let interface = validation::Interface::new(&module, &info);
+                let shader = hal::device::NagaShader { module, info };
                 let naga_result = if desc
                     .flags
                     .contains(wgt::ShaderFlags::EXPERIMENTAL_TRANSLATION)
@@ -1061,7 +1061,7 @@ impl<B: GfxBackend> Device<B> {
                         let shader = maybe_shader.unwrap();
                         naga::back::spv::write_vec(
                             &shader.module,
-                            &shader.analysis,
+                            &shader.info,
                             &self.spv_options,
                         )
                         .map(Cow::Owned)
