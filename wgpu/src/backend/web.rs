@@ -1670,6 +1670,10 @@ impl crate::Context for Context {
         // Dropped automatically
     }
 
+    fn command_encoder_drop(&self, _command_encoder: &Self::CommandEncoderId) {
+        // Dropped automatically
+    }
+
     fn command_buffer_drop(&self, _command_buffer: &Self::CommandBufferId) {
         // Dropped automatically
     }
@@ -1868,7 +1872,7 @@ impl crate::Context for Context {
         pass.0.end_pass();
     }
 
-    fn command_encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId {
+    fn command_encoder_finish(&self, encoder: Self::CommandEncoderId) -> Self::CommandBufferId {
         Sendable(match encoder.label() {
             Some(ref label) => {
                 let mut mapped_desc = web_sys::GpuCommandBufferDescriptor::new();
