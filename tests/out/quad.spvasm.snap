@@ -15,6 +15,8 @@ OpExecutionMode %47 OriginUpperLeft
 OpSource GLSL 450
 OpName %3 "c_scale"
 OpName %9 "VertexOutput"
+OpMemberName %9 0 "uv"
+OpMemberName %9 1 "position"
 OpName %12 "u_texture"
 OpName %14 "u_sampler"
 OpName %16 "out"
@@ -27,6 +29,8 @@ OpName %28 "main"
 OpName %44 "uv"
 OpName %47 "main"
 OpName %47 "main"
+OpMemberDecorate %9 0 Offset 0
+OpMemberDecorate %9 1 Offset 8
 OpDecorate %12 DescriptorSet 0
 OpDecorate %12 Binding 0
 OpDecorate %14 DescriptorSet 0

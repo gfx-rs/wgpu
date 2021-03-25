@@ -14,6 +14,8 @@ OpEntryPoint Fragment %108 "fs_main" %101 %104 %107
 OpExecutionMode %108 OriginUpperLeft
 OpSource GLSL 450
 OpName %12 "VertexOutput"
+OpMemberName %12 0 "position"
+OpMemberName %12 1 "uv"
 OpName %14 "Data"
 OpMemberName %14 0 "proj_inv"
 OpMemberName %14 1 "view"
@@ -32,6 +34,8 @@ OpName %101 "position"
 OpName %104 "uv"
 OpName %108 "fs_main"
 OpName %108 "fs_main"
+OpMemberDecorate %12 0 Offset 0
+OpMemberDecorate %12 1 Offset 16
 OpDecorate %14 Block
 OpMemberDecorate %14 0 Offset 0
 OpMemberDecorate %14 0 ColMajor

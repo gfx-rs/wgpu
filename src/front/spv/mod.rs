@@ -2406,7 +2406,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let mut members = Vec::with_capacity(inst.wc as usize - 2);
         let mut member_type_ids = Vec::with_capacity(members.capacity());
-        let mut host_shared = false;
         for i in 0..u32::from(inst.wc) - 2 {
             let type_id = self.next()?;
             member_type_ids.push(type_id);
@@ -2415,8 +2414,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 .future_member_decor
                 .remove(&(id, i))
                 .unwrap_or_default();
-            // this is a bit of a hack
-            host_shared |= decor.offset.is_some();
             members.push(crate::StructMember {
                 name: decor.name,
                 ty,
@@ -2427,7 +2424,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
 
         let inner = crate::TypeInner::Struct {
-            block: block_decor.is_some() || host_shared,
+            block: block_decor.is_some(),
             members,
         };
         let ty_handle = module.types.append(crate::Type {

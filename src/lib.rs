@@ -393,6 +393,7 @@ pub enum TypeInner {
     },
     /// User-defined structure.
     Struct {
+        /// This is a top-level host-shareable structure.
         block: bool,
         members: Vec<StructMember>,
     },

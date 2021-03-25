@@ -81,6 +81,12 @@ impl super::Instruction {
     //  Extension Instructions
     //
 
+    pub(super) fn extension(name: &str) -> Self {
+        let mut instruction = Self::new(Op::Extension);
+        instruction.add_operands(helpers::string_to_words(name));
+        instruction
+    }
+
     pub(super) fn ext_inst_import(id: Word, name: &str) -> Self {
         let mut instruction = Self::new(Op::ExtInstImport);
         instruction.set_result(id);

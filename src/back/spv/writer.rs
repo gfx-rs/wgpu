@@ -1,5 +1,6 @@
-/*! Standard Portable Intermediate Representation (SPIR-V) backend !*/
-use super::{Instruction, LogicalLayout, Options, PhysicalLayout, WriterFlags};
+use super::{
+    helpers::map_storage_class, Instruction, LogicalLayout, Options, PhysicalLayout, WriterFlags,
+};
 use crate::{
     arena::{Arena, Handle},
     proc::{Layouter, TypeResolution},
@@ -141,7 +142,7 @@ impl PhysicalLayout {
             },
             crate::TypeInner::Pointer { base, class } => LocalType::Pointer {
                 base,
-                class: self.map_storage_class(class),
+                class: map_storage_class(class),
             },
             crate::TypeInner::ValuePointer {
                 size,
@@ -152,7 +153,7 @@ impl PhysicalLayout {
                 vector_size: size,
                 kind,
                 width,
-                pointer_class: Some(self.map_storage_class(class)),
+                pointer_class: Some(map_storage_class(class)),
             },
             _ => return None,
         })
@@ -266,9 +267,6 @@ pub struct Writer {
     lookup_constant: crate::FastHashMap<Handle<crate::Constant>, Word>,
     global_variables: Vec<GlobalVariable>,
     cached: CachedExpressions,
-    // TODO: this is a type property that depends on the global variable that uses it
-    // so it may require us to duplicate the type!
-    struct_type_handles: crate::FastHashMap<Handle<crate::Type>, crate::StorageAccess>,
     gl450_ext_inst_id: Word,
     temp_chain: Vec<Word>,
 }
@@ -283,6 +281,7 @@ impl Writer {
         let mut id_gen = IdGenerator::default();
         let gl450_ext_inst_id = id_gen.next();
         let void_type = id_gen.next();
+
         Ok(Writer {
             physical_layout: PhysicalLayout::new(raw_version),
             logical_layout: LogicalLayout::default(),
@@ -299,7 +298,6 @@ impl Writer {
             lookup_constant: crate::FastHashMap::default(),
             global_variables: Vec::new(),
             cached: CachedExpressions::default(),
-            struct_type_handles: crate::FastHashMap::default(),
             gl450_ext_inst_id,
             temp_chain: Vec::new(),
         })
@@ -815,18 +813,10 @@ impl Writer {
                     crate::ArraySize::Dynamic => Instruction::type_runtime_array(id, type_id),
                 }
             }
-            crate::TypeInner::Struct {
-                block: true,
-                ref members,
-            } => {
-                if let Some(&access) = self.struct_type_handles.get(&handle) {
-                    let decoration = if access.is_empty() {
-                        spirv::Decoration::Block
-                    } else {
-                        spirv::Decoration::BufferBlock
-                    };
+            crate::TypeInner::Struct { block, ref members } => {
+                if block {
                     self.annotations
-                        .push(Instruction::decorate(id, decoration, &[]));
+                        .push(Instruction::decorate(id, spirv::Decoration::Block, &[]));
                 }
 
                 let mut current_offset = 0;
@@ -877,20 +867,9 @@ impl Writer {
                 }
                 Instruction::type_struct(id, member_ids.as_slice())
             }
-            crate::TypeInner::Struct {
-                block: false,
-                ref members,
-            } => {
-                let mut member_ids = Vec::with_capacity(members.len());
-                for member in members {
-                    let member_id = self.get_type_id(arena, LookupType::Handle(member.ty))?;
-                    member_ids.push(member_id);
-                }
-                Instruction::type_struct(id, member_ids.as_slice())
-            }
             crate::TypeInner::Pointer { base, class } => {
                 let type_id = self.get_type_id(arena, LookupType::Handle(base))?;
-                let raw_class = self.physical_layout.map_storage_class(class);
+                let raw_class = map_storage_class(class);
                 Instruction::type_pointer(id, raw_class, type_id)
             }
             crate::TypeInner::ValuePointer {
@@ -899,7 +878,7 @@ impl Writer {
                 width,
                 class,
             } => {
-                let raw_class = self.physical_layout.map_storage_class(class);
+                let raw_class = map_storage_class(class);
                 let type_id = self.get_type_id(
                     arena,
                     LookupType::Local(LocalType::Value {
@@ -1091,9 +1070,7 @@ impl Writer {
     ) -> Result<(Instruction, Word, spirv::StorageClass), Error> {
         let id = self.id_gen.next();
 
-        let class = self
-            .physical_layout
-            .map_storage_class(global_variable.class);
+        let class = map_storage_class(global_variable.class);
         self.check(class.required_capabilities())?;
 
         let init_word = global_variable
@@ -2345,6 +2322,15 @@ impl Writer {
         ir_module: &crate::Module,
         mod_info: &ModuleInfo,
     ) -> Result<(), Error> {
+        let has_storage_buffers = ir_module
+            .global_variables
+            .iter()
+            .any(|(_, var)| var.class == crate::StorageClass::Storage);
+        if self.physical_layout.version < 0x10300 && has_storage_buffers {
+            // enable the storage buffer class on < SPV-1.3
+            Instruction::extension("SPV_KHR_storage_buffer_storage_class")
+                .to_words(&mut self.logical_layout.extensions);
+        }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
             .to_words(&mut self.logical_layout.ext_inst_imports);
@@ -2368,14 +2354,6 @@ impl Writer {
                     }
                     self.write_constant_scalar(id, value, width, &ir_module.types)?;
                 }
-            }
-        }
-
-        // then gather the struct type handles, then affect types
-        self.struct_type_handles.clear();
-        for (_, var) in ir_module.global_variables.iter() {
-            if let crate::TypeInner::Struct { .. } = ir_module.types[var.ty].inner {
-                self.struct_type_handles.insert(var.ty, var.storage_access);
             }
         }
 

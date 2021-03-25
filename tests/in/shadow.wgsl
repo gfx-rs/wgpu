@@ -6,7 +6,6 @@ struct Globals {
 [[group(0), binding(0)]]
 var<uniform> u_globals: Globals;
 
-[[block]]
 struct Light {
     proj: mat4x4<f32>;
     pos: vec4<f32>;

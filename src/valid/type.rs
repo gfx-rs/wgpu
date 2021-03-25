@@ -14,6 +14,8 @@ bitflags::bitflags! {
         const INTERFACE = 0x4;
         /// Can be used for host-shareable structures.
         const HOST_SHARED = 0x8;
+        /// This is a top-level host-shareable type.
+        const BLOCK = 0x10;
     }
 }
 
@@ -61,6 +63,8 @@ pub enum TypeError {
         size: u32,
         base_size: u32,
     },
+    #[error("The composite type contains a block structure")]
+    NestedBlock,
 }
 
 // Only makes sense if `flags.contains(HOST_SHARED)`
@@ -163,6 +167,9 @@ impl super::Validator {
                 if !base_info.flags.contains(TypeFlags::DATA | TypeFlags::SIZED) {
                     return Err(TypeError::InvalidArrayBaseType(base));
                 }
+                if base_info.flags.contains(TypeFlags::BLOCK) {
+                    return Err(TypeError::NestedBlock);
+                }
 
                 let base_layout = &layouter[base];
                 if let Some(stride) = stride {
@@ -239,7 +246,10 @@ impl super::Validator {
                 }
             }
             Ti::Struct { block, ref members } => {
-                let mut flags = TypeFlags::all();
+                let mut flags = TypeFlags::DATA
+                    | TypeFlags::SIZED
+                    | TypeFlags::HOST_SHARED
+                    | TypeFlags::INTERFACE;
                 let mut uniform_layout = Ok(());
                 let mut storage_layout = Ok(());
                 let mut offset = 0;
@@ -248,13 +258,16 @@ impl super::Validator {
                         return Err(TypeError::UnresolvedBase(member.ty));
                     }
                     let base_info = &self.types[member.ty.index()];
-                    flags &= base_info.flags;
                     if !base_info.flags.contains(TypeFlags::DATA) {
                         return Err(TypeError::InvalidData(member.ty));
                     }
                     if block && !base_info.flags.contains(TypeFlags::INTERFACE) {
                         return Err(TypeError::InvalidBlockType(member.ty));
                     }
+                    if base_info.flags.contains(TypeFlags::BLOCK) {
+                        return Err(TypeError::NestedBlock);
+                    }
+                    flags &= base_info.flags;
 
                     let base_layout = &layouter[member.ty];
                     let (range, _alignment) = layouter.member_placement(offset, member);
@@ -293,6 +306,9 @@ impl super::Validator {
 
                     uniform_layout = uniform_layout.or_else(|_| base_info.uniform_layout.clone());
                     storage_layout = storage_layout.or_else(|_| base_info.storage_layout.clone());
+                }
+                if block {
+                    flags |= TypeFlags::BLOCK;
                 }
 
                 // disabled temporarily, see https://github.com/gpuweb/gpuweb/issues/1558

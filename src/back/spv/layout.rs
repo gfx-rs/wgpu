@@ -23,26 +23,6 @@ impl PhysicalLayout {
         sink.extend(iter::once(self.bound));
         sink.extend(iter::once(self.instruction_schema));
     }
-
-    pub(super) fn supports_storage_buffers(&self) -> bool {
-        self.version >= 0x10300
-    }
-
-    pub(super) fn map_storage_class(&self, class: crate::StorageClass) -> spirv::StorageClass {
-        match class {
-            crate::StorageClass::Handle => spirv::StorageClass::UniformConstant,
-            crate::StorageClass::Function => spirv::StorageClass::Function,
-            crate::StorageClass::Private => spirv::StorageClass::Private,
-            crate::StorageClass::Storage if self.supports_storage_buffers() => {
-                spirv::StorageClass::StorageBuffer
-            }
-            crate::StorageClass::Storage | crate::StorageClass::Uniform => {
-                spirv::StorageClass::Uniform
-            }
-            crate::StorageClass::WorkGroup => spirv::StorageClass::Workgroup,
-            crate::StorageClass::PushConstant => spirv::StorageClass::PushConstant,
-        }
-    }
 }
 
 impl LogicalLayout {

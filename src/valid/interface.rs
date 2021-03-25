@@ -272,42 +272,32 @@ impl super::Validator {
         let (allowed_storage_access, required_type_flags, is_resource) = match var.class {
             crate::StorageClass::Function => return Err(GlobalVariableError::InvalidUsage),
             crate::StorageClass::Storage => {
-                match types[var.ty].inner {
-                    crate::TypeInner::Struct { block: true, .. } => {
-                        if let Err((ty_handle, ref disalignment)) = type_info.storage_layout {
-                            if self.flags.contains(ValidationFlags::STRUCT_LAYOUTS) {
-                                return Err(GlobalVariableError::Alignment(
-                                    ty_handle,
-                                    disalignment.clone(),
-                                ));
-                            }
-                        }
+                if let Err((ty_handle, ref disalignment)) = type_info.storage_layout {
+                    if self.flags.contains(ValidationFlags::STRUCT_LAYOUTS) {
+                        return Err(GlobalVariableError::Alignment(
+                            ty_handle,
+                            disalignment.clone(),
+                        ));
                     }
-                    _ => return Err(GlobalVariableError::InvalidType),
                 }
                 (
                     crate::StorageAccess::all(),
-                    TypeFlags::DATA | TypeFlags::HOST_SHARED,
+                    TypeFlags::DATA | TypeFlags::HOST_SHARED | TypeFlags::BLOCK,
                     true,
                 )
             }
             crate::StorageClass::Uniform => {
-                match types[var.ty].inner {
-                    crate::TypeInner::Struct { block: true, .. } => {
-                        if let Err((ty_handle, ref disalignment)) = type_info.uniform_layout {
-                            if self.flags.contains(ValidationFlags::STRUCT_LAYOUTS) {
-                                return Err(GlobalVariableError::Alignment(
-                                    ty_handle,
-                                    disalignment.clone(),
-                                ));
-                            }
-                        }
+                if let Err((ty_handle, ref disalignment)) = type_info.uniform_layout {
+                    if self.flags.contains(ValidationFlags::STRUCT_LAYOUTS) {
+                        return Err(GlobalVariableError::Alignment(
+                            ty_handle,
+                            disalignment.clone(),
+                        ));
                     }
-                    _ => return Err(GlobalVariableError::InvalidType),
                 }
                 (
                     crate::StorageAccess::empty(),
-                    TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::HOST_SHARED,
+                    TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::HOST_SHARED | TypeFlags::BLOCK,
                     true,
                 )
             }
