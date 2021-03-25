@@ -369,7 +369,7 @@ impl framework::Example for Example {
                     dimension: Some(wgpu::TextureViewDimension::D2),
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: 0,
-                    level_count: None,
+                    mip_level_count: None,
                     base_array_layer: i as u32,
                     array_layer_count: NonZeroU32::new(1),
                 }))
