@@ -1068,7 +1068,7 @@ pub struct TextureViewDescriptor<'a> {
     /// Mip level count.
     /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
     /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
-    pub level_count: Option<NonZeroU32>,
+    pub mip_level_count: Option<NonZeroU32>,
     /// Base array layer.
     pub base_array_layer: u32,
     /// Layer count.

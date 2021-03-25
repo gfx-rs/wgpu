@@ -22,8 +22,7 @@ impl Error for ContextError {
 
 impl super::Context {
     pub(super) fn format_error(&self, err: &(impl Error + 'static)) -> String {
-        let mut err_descs = Vec::new();
-        err_descs.push(self.format_pretty_any(err));
+        let mut err_descs = vec![self.format_pretty_any(err)];
 
         let mut source_opt = err.source();
         while let Some(source) = source_opt {
