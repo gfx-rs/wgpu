@@ -546,6 +546,40 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    fn parse_expr_shift_op(
+        &mut self,
+        expressions: &mut Arena<crate::Expression>,
+        op: crate::BinaryOperator,
+    ) -> Result<(), Error> {
+        let result_type_id = self.next()?;
+        let result_id = self.next()?;
+        let p1_id = self.next()?;
+        let p2_id = self.next()?;
+
+        let p1_lexp = self.lookup_expression.lookup(p1_id)?;
+        let p2_lexp = self.lookup_expression.lookup(p2_id)?;
+        // convert the shift to Uint
+        let p2_handle = expressions.append(crate::Expression::As {
+            expr: p2_lexp.handle,
+            kind: crate::ScalarKind::Uint,
+            convert: false,
+        });
+
+        let expr = crate::Expression::Binary {
+            op,
+            left: p1_lexp.handle,
+            right: p2_handle,
+        };
+        self.lookup_expression.insert(
+            result_id,
+            LookupExpression {
+                handle: expressions.append(expr),
+                type_id: result_type_id,
+            },
+        );
+        Ok(())
+    }
+
     fn insert_composite(
         &self,
         root_expr: Handle<crate::Expression>,
@@ -1158,16 +1192,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::ShiftRightLogical => {
                     inst.expect(5)?;
                     //TODO: convert input and result to usigned
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::ShiftRight)?;
+                    self.parse_expr_shift_op(expressions, crate::BinaryOperator::ShiftRight)?;
                 }
                 Op::ShiftRightArithmetic => {
                     inst.expect(5)?;
                     //TODO: convert input and result to signed
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::ShiftRight)?;
+                    self.parse_expr_shift_op(expressions, crate::BinaryOperator::ShiftRight)?;
                 }
                 Op::ShiftLeftLogical => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::ShiftLeft)?;
+                    self.parse_expr_shift_op(expressions, crate::BinaryOperator::ShiftLeft)?;
                 }
                 // Sampling
                 Op::Image => {
