@@ -34,10 +34,10 @@ pub use wgt::{
     PrimitiveState, PrimitiveTopology, PushConstantRange, QuerySetDescriptor, QueryType,
     SamplerBorderColor, ShaderFlags, ShaderLocation, ShaderStage, StencilFaceState,
     StencilOperation, StencilState, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus,
-    TextureAspect, TextureDimension, TextureFormat, TextureSampleType, TextureUsage,
-    TextureViewDimension, VertexAttribute, VertexFormat, BIND_BUFFER_ALIGNMENT,
-    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
-    QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
+    TextureFormatFeatures, TextureSampleType, TextureUsage, TextureViewDimension, VertexAttribute,
+    VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    PUSH_CONSTANT_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C};
