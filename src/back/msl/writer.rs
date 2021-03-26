@@ -109,6 +109,7 @@ impl crate::StorageClass {
         match *self {
             crate::StorageClass::Uniform
             | crate::StorageClass::Storage
+            | crate::StorageClass::Private
             | crate::StorageClass::Handle => true,
             _ => false,
         }
@@ -117,14 +118,15 @@ impl crate::StorageClass {
     fn get_name(&self, global_use: GlobalUse) -> Option<&'static str> {
         match *self {
             Self::Handle => None,
-            Self::Uniform => Some("constant"),
+            Self::Uniform | Self::PushConstant => Some("constant"),
             //TODO: should still be "constant" for read-only buffers
             Self::Storage => Some(if global_use.contains(GlobalUse::WRITE) {
                 "device"
             } else {
-                "storage "
+                "storage"
             }),
-            Self::Private | Self::Function | Self::WorkGroup | Self::PushConstant => Some(""),
+            Self::Private | Self::Function => Some("thread"),
+            Self::WorkGroup => Some("threadgroup"),
         }
     }
 }
@@ -1386,11 +1388,11 @@ impl<W: Write> Writer<W> {
                 };
                 write!(self.out, "{}", INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;
-                if let Some(value) = var.init {
-                    let value_str = &self.names[&NameKey::Constant(value)];
-                    write!(self.out, " = {}", value_str)?;
-                }
-                writeln!(self.out, ";")?;
+                let value_str = match var.init {
+                    Some(value) => &self.names[&NameKey::Constant(value)],
+                    None => "{}",
+                };
+                writeln!(self.out, " = {};", value_str)?;
             }
 
             // Now refactor the inputs in a way that the rest of the code expects
