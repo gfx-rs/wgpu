@@ -522,19 +522,37 @@ impl<W: Write> Writer<W> {
                 condition,
                 accept,
                 reject,
-            } => {
-                if !is_scoped {
-                    write!(self.out, "(")?;
+            } => match *context.resolve_type(condition) {
+                crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Bool,
+                    ..
+                } => {
+                    if !is_scoped {
+                        write!(self.out, "(")?;
+                    }
+                    self.put_expression(condition, context, false)?;
+                    write!(self.out, " ? ")?;
+                    self.put_expression(accept, context, false)?;
+                    write!(self.out, " : ")?;
+                    self.put_expression(reject, context, false)?;
+                    if !is_scoped {
+                        write!(self.out, ")")?;
+                    }
                 }
-                self.put_expression(condition, context, false)?;
-                write!(self.out, " ? ")?;
-                self.put_expression(accept, context, false)?;
-                write!(self.out, " : ")?;
-                self.put_expression(reject, context, false)?;
-                if !is_scoped {
+                crate::TypeInner::Vector {
+                    kind: crate::ScalarKind::Bool,
+                    ..
+                } => {
+                    write!(self.out, "{}::select(", NAMESPACE)?;
+                    self.put_expression(accept, context, true)?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(reject, context, true)?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(condition, context, true)?;
                     write!(self.out, ")")?;
                 }
-            }
+                _ => return Err(Error::Validation),
+            },
             crate::Expression::Derivative { axis, expr } => {
                 let op = match axis {
                     crate::DerivativeAxis::X => "dfdx",
