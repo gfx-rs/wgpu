@@ -54,7 +54,7 @@ kernel void main1(
     type1 pos1;
     type1 vel1;
     type i = const_0u;
-    if ((global_invocation_id.x >= NUM_PARTICLES)) {
+    if (global_invocation_id.x >= NUM_PARTICLES) {
         return;
     }
     vPos = particlesSrc.particles[global_invocation_id.x].pos;
@@ -65,48 +65,48 @@ kernel void main1(
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            i = (i + const_1u);
+            i = i + const_1u;
         }
         loop_init = false;
-        if ((i >= NUM_PARTICLES)) {
+        if (i >= NUM_PARTICLES) {
             break;
         }
-        if ((i == global_invocation_id.x)) {
+        if (i == global_invocation_id.x) {
             continue;
         }
         pos1 = particlesSrc.particles[i].pos;
         vel1 = particlesSrc.particles[i].vel;
-        if ((metal::distance(pos1, vPos) < params.rule1Distance)) {
-            cMass = (cMass + pos1);
-            cMassCount = (cMassCount + const_1i);
+        if (metal::distance(pos1, vPos) < params.rule1Distance) {
+            cMass = cMass + pos1;
+            cMassCount = cMassCount + const_1i;
         }
-        if ((metal::distance(pos1, vPos) < params.rule2Distance)) {
-            colVel = (colVel - (pos1 - vPos));
+        if (metal::distance(pos1, vPos) < params.rule2Distance) {
+            colVel = colVel - (pos1 - vPos);
         }
-        if ((metal::distance(pos1, vPos) < params.rule3Distance)) {
-            cVel = (cVel + vel1);
-            cVelCount = (cVelCount + const_1i);
+        if (metal::distance(pos1, vPos) < params.rule3Distance) {
+            cVel = cVel + vel1;
+            cVelCount = cVelCount + const_1i;
         }
     }
-    if ((cMassCount > const_0i)) {
-        cMass = ((cMass * (const_1f / static_cast<float>(cMassCount))) - vPos);
+    if (cMassCount > const_0i) {
+        cMass = (cMass * (const_1f / static_cast<float>(cMassCount))) - vPos;
     }
-    if ((cVelCount > const_0i)) {
-        cVel = (cVel * (const_1f / static_cast<float>(cVelCount)));
+    if (cVelCount > const_0i) {
+        cVel = cVel * (const_1f / static_cast<float>(cVelCount));
     }
-    vVel = (((vVel + (cMass * params.rule1Scale)) + (colVel * params.rule2Scale)) + (cVel * params.rule3Scale));
-    vVel = (metal::normalize(vVel) * metal::clamp(metal::length(vVel), const_0f, const_0_10f));
-    vPos = (vPos + (vVel * params.deltaT));
-    if ((vPos.x < const_n1f)) {
+    vVel = ((vVel + (cMass * params.rule1Scale)) + (colVel * params.rule2Scale)) + (cVel * params.rule3Scale);
+    vVel = metal::normalize(vVel) * metal::clamp(metal::length(vVel), const_0f, const_0_10f);
+    vPos = vPos + (vVel * params.deltaT);
+    if (vPos.x < const_n1f) {
         vPos.x = const_1f;
     }
-    if ((vPos.x > const_1f)) {
+    if (vPos.x > const_1f) {
         vPos.x = const_n1f;
     }
-    if ((vPos.y < const_n1f)) {
+    if (vPos.y < const_n1f) {
         vPos.y = const_1f;
     }
-    if ((vPos.y > const_1f)) {
+    if (vPos.y > const_1f) {
         vPos.y = const_n1f;
     }
     particlesDst.particles[global_invocation_id.x].pos = vPos;

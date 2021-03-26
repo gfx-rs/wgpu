@@ -41,11 +41,11 @@ type7 fetch_shadow(
     type4 t_shadow,
     type5 sampler_shadow
 ) {
-    if ((homogeneous_coords.w <= const_0f)) {
+    if (homogeneous_coords.w <= const_0f) {
         return const_1f;
     }
-    float _expr15 = (const_1f / homogeneous_coords.w);
-    float _expr28 = t_shadow.sample_compare(sampler_shadow, (((metal::float2(homogeneous_coords.x, homogeneous_coords.y) * metal::float2(const_0_50f, const_n0_50f)) * _expr15) + metal::float2(const_0_50f, const_0_50f)), static_cast<int>(light_id), (homogeneous_coords.z * _expr15));
+    float _expr15 = const_1f / homogeneous_coords.w;
+    float _expr28 = t_shadow.sample_compare(sampler_shadow, ((metal::float2(homogeneous_coords.x, homogeneous_coords.y) * metal::float2(const_0_50f, const_n0_50f)) * _expr15) + metal::float2(const_0_50f, const_0_50f), static_cast<int>(light_id), homogeneous_coords.z * _expr15);
     return _expr28;
 }
 
@@ -70,15 +70,15 @@ fragment fs_mainOutput fs_main(
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            i = (i + const_1u);
+            i = i + const_1u;
         }
         loop_init = false;
-        if ((i >= metal::min(u_globals.num_lights.x, c_max_lights))) {
+        if (i >= metal::min(u_globals.num_lights.x, c_max_lights)) {
             break;
         }
         Light _expr21 = s_lights.data[i];
-        type7 _expr25 = fetch_shadow(i, (_expr21.proj * position), t_shadow, sampler_shadow);
-        color1 = (color1 + ((_expr25 * metal::max(const_0f, metal::dot(metal::normalize(raw_normal), metal::normalize((metal::float3(_expr21.pos.x, _expr21.pos.y, _expr21.pos.z) - metal::float3(position.x, position.y, position.z)))))) * metal::float3(_expr21.color.x, _expr21.color.y, _expr21.color.z)));
+        type7 _expr25 = fetch_shadow(i, _expr21.proj * position, t_shadow, sampler_shadow);
+        color1 = color1 + ((_expr25 * metal::max(const_0f, metal::dot(metal::normalize(raw_normal), metal::normalize(metal::float3(_expr21.pos.x, _expr21.pos.y, _expr21.pos.z) - metal::float3(position.x, position.y, position.z))))) * metal::float3(_expr21.color.x, _expr21.color.y, _expr21.color.z));
     }
     return fs_mainOutput { metal::float4(color1, const_1f) };
 }

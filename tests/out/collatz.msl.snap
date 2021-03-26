@@ -22,15 +22,15 @@ type collatz_iterations(
     type i = const_0u;
     n = n_base;
     while(true) {
-        if ((n <= const_1u)) {
+        if (n <= const_1u) {
             break;
         }
-        if (((n % const_2u) == const_0u)) {
-            n = (n / const_2u);
+        if ((n % const_2u) == const_0u) {
+            n = n / const_2u;
         } else {
-            n = ((const_3u * n) + const_1u);
+            n = (const_3u * n) + const_1u;
         }
-        i = (i + const_1u);
+        i = i + const_1u;
     }
     return i;
 }

@@ -183,7 +183,7 @@ impl<W: Write> Writer<W> {
             if i != 0 {
                 write!(self.out, ", ")?;
             }
-            self.put_expression(handle, context)?;
+            self.put_expression(handle, context, true)?;
         }
         write!(self.out, ")")?;
         Ok(())
@@ -196,10 +196,10 @@ impl<W: Write> Writer<W> {
         level: Option<Handle<crate::Expression>>,
         context: &ExpressionContext,
     ) -> Result<(), Error> {
-        self.put_expression(image, context)?;
+        self.put_expression(image, context, false)?;
         write!(self.out, ".get_{}(", query)?;
         if let Some(expr) = level {
-            self.put_expression(expr, context)?;
+            self.put_expression(expr, context, true)?;
         }
         write!(self.out, ")")?;
         Ok(())
@@ -209,6 +209,7 @@ impl<W: Write> Writer<W> {
         &mut self,
         expr_handle: Handle<crate::Expression>,
         context: &ExpressionContext,
+        is_scoped: bool,
     ) -> Result<(), Error> {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
@@ -225,13 +226,13 @@ impl<W: Write> Writer<W> {
         log::trace!("expression {:?} = {:?}", expr_handle, expression);
         match *expression {
             crate::Expression::Access { base, index } => {
-                self.put_expression(base, context)?;
+                self.put_expression(base, context, false)?;
                 write!(self.out, "[")?;
-                self.put_expression(index, context)?;
+                self.put_expression(index, context, true)?;
                 write!(self.out, "]")?;
             }
             crate::Expression::AccessIndex { base, index } => {
-                self.put_expression(base, context)?;
+                self.put_expression(base, context, false)?;
                 let base_res = &context.info[base].ty;
                 let mut resolved = base_res.inner_with(&context.module.types);
                 let base_ty_handle = match *resolved {
@@ -300,7 +301,7 @@ impl<W: Write> Writer<W> {
                             if i != 0 {
                                 write!(self.out, ", ")?;
                             }
-                            self.put_expression(component, context)?;
+                            self.put_expression(component, context, true)?;
                         }
                         write!(self.out, "}}")?;
                     }
@@ -335,7 +336,7 @@ impl<W: Write> Writer<W> {
             }
             crate::Expression::Load { pointer } => {
                 //write!(self.out, "*")?;
-                self.put_expression(pointer, context)?;
+                self.put_expression(pointer, context, is_scoped)?;
             }
             crate::Expression::ImageSample {
                 image,
@@ -350,18 +351,18 @@ impl<W: Write> Writer<W> {
                     Some(_) => "sample_compare",
                     None => "sample",
                 };
-                self.put_expression(image, context)?;
+                self.put_expression(image, context, false)?;
                 write!(self.out, ".{}(", op)?;
-                self.put_expression(sampler, context)?;
+                self.put_expression(sampler, context, true)?;
                 write!(self.out, ", ")?;
-                self.put_expression(coordinate, context)?;
+                self.put_expression(coordinate, context, true)?;
                 if let Some(expr) = array_index {
                     write!(self.out, ", ")?;
-                    self.put_expression(expr, context)?;
+                    self.put_expression(expr, context, true)?;
                 }
                 if let Some(dref) = depth_ref {
                     write!(self.out, ", ")?;
-                    self.put_expression(dref, context)?;
+                    self.put_expression(dref, context, true)?;
                 }
                 match level {
                     crate::SampleLevel::Auto => {}
@@ -370,19 +371,19 @@ impl<W: Write> Writer<W> {
                     }
                     crate::SampleLevel::Exact(h) => {
                         write!(self.out, ", level(")?;
-                        self.put_expression(h, context)?;
+                        self.put_expression(h, context, true)?;
                         write!(self.out, ")")?;
                     }
                     crate::SampleLevel::Bias(h) => {
                         write!(self.out, ", bias(")?;
-                        self.put_expression(h, context)?;
+                        self.put_expression(h, context, true)?;
                         write!(self.out, ")")?;
                     }
                     crate::SampleLevel::Gradient { x, y } => {
                         write!(self.out, ", gradient(")?;
-                        self.put_expression(x, context)?;
+                        self.put_expression(x, context, true)?;
                         write!(self.out, ", ")?;
-                        self.put_expression(y, context)?;
+                        self.put_expression(y, context, true)?;
                         write!(self.out, ")")?;
                     }
                 }
@@ -398,16 +399,16 @@ impl<W: Write> Writer<W> {
                 array_index,
                 index,
             } => {
-                self.put_expression(image, context)?;
+                self.put_expression(image, context, false)?;
                 write!(self.out, ".read(")?;
-                self.put_expression(coordinate, context)?;
+                self.put_expression(coordinate, context, true)?;
                 if let Some(expr) = array_index {
                     write!(self.out, ", ")?;
-                    self.put_expression(expr, context)?;
+                    self.put_expression(expr, context, true)?;
                 }
                 if let Some(index) = index {
                     write!(self.out, ", ")?;
-                    self.put_expression(index, context)?;
+                    self.put_expression(index, context, true)?;
                 }
                 write!(self.out, ")")?;
             }
@@ -452,17 +453,17 @@ impl<W: Write> Writer<W> {
                 }
                 crate::ImageQuery::NumLevels => {
                     write!(self.out, "int(")?;
-                    self.put_expression(image, context)?;
+                    self.put_expression(image, context, false)?;
                     write!(self.out, ".get_num_mip_levels())")?;
                 }
                 crate::ImageQuery::NumLayers => {
                     write!(self.out, "int(")?;
-                    self.put_expression(image, context)?;
+                    self.put_expression(image, context, false)?;
                     write!(self.out, ".get_array_size())")?;
                 }
                 crate::ImageQuery::NumSamples => {
                     write!(self.out, "int(")?;
-                    self.put_expression(image, context)?;
+                    self.put_expression(image, context, false)?;
                     write!(self.out, ".get_num_samples())")?;
                 }
             },
@@ -472,7 +473,7 @@ impl<W: Write> Writer<W> {
                     crate::UnaryOperator::Not => "!",
                 };
                 write!(self.out, "{}", op_str)?;
-                self.put_expression(expr, context)?;
+                self.put_expression(expr, context, false)?;
             }
             crate::Expression::Binary { op, left, right } => {
                 let op_str = match op {
@@ -501,16 +502,20 @@ impl<W: Write> Writer<W> {
                     .ok_or(Error::UnsupportedBinaryOp(op))?;
                 if op == crate::BinaryOperator::Modulo && kind == crate::ScalarKind::Float {
                     write!(self.out, "fmod(")?;
-                    self.put_expression(left, context)?;
+                    self.put_expression(left, context, true)?;
                     write!(self.out, ", ")?;
-                    self.put_expression(right, context)?;
+                    self.put_expression(right, context, true)?;
                     write!(self.out, ")")?;
                 } else {
-                    write!(self.out, "(")?;
-                    self.put_expression(left, context)?;
+                    if !is_scoped {
+                        write!(self.out, "(")?;
+                    }
+                    self.put_expression(left, context, false)?;
                     write!(self.out, " {} ", op_str)?;
-                    self.put_expression(right, context)?;
-                    write!(self.out, ")")?;
+                    self.put_expression(right, context, false)?;
+                    if !is_scoped {
+                        write!(self.out, ")")?;
+                    }
                 }
             }
             crate::Expression::Select {
@@ -518,13 +523,17 @@ impl<W: Write> Writer<W> {
                 accept,
                 reject,
             } => {
-                write!(self.out, "(")?;
-                self.put_expression(condition, context)?;
+                if !is_scoped {
+                    write!(self.out, "(")?;
+                }
+                self.put_expression(condition, context, false)?;
                 write!(self.out, " ? ")?;
-                self.put_expression(accept, context)?;
+                self.put_expression(accept, context, false)?;
                 write!(self.out, " : ")?;
-                self.put_expression(reject, context)?;
-                write!(self.out, ")")?;
+                self.put_expression(reject, context, false)?;
+                if !is_scoped {
+                    write!(self.out, ")")?;
+                }
             }
             crate::Expression::Derivative { axis, expr } => {
                 let op = match axis {
@@ -628,7 +637,7 @@ impl<W: Write> Writer<W> {
                 };
                 let op = if convert { "static_cast" } else { "as_type" };
                 write!(self.out, "{}<{}{}>(", op, scalar, size)?;
-                self.put_expression(expr, context)?;
+                self.put_expression(expr, context, true)?;
                 write!(self.out, ")")?;
             }
             // has to be a named expression
@@ -701,7 +710,7 @@ impl<W: Write> Writer<W> {
                         if min_ref_count <= context.expression.info[handle].ref_count {
                             write!(self.out, "{}", level)?;
                             self.start_baking_expression(handle, &context.expression)?;
-                            self.put_expression(handle, &context.expression)?;
+                            self.put_expression(handle, &context.expression, true)?;
                             writeln!(self.out, ";")?;
                             self.named_expressions.insert(handle.index());
                         }
@@ -720,7 +729,7 @@ impl<W: Write> Writer<W> {
                     ref reject,
                 } => {
                     write!(self.out, "{}if (", level)?;
-                    self.put_expression(condition, &context.expression)?;
+                    self.put_expression(condition, &context.expression, true)?;
                     writeln!(self.out, ") {{")?;
                     self.put_block(level.next(), accept, context)?;
                     if !reject.is_empty() {
@@ -735,7 +744,7 @@ impl<W: Write> Writer<W> {
                     ref default,
                 } => {
                     write!(self.out, "{}switch(", level)?;
-                    self.put_expression(selector, &context.expression)?;
+                    self.put_expression(selector, &context.expression, true)?;
                     writeln!(self.out, ") {{")?;
                     let lcase = level.next();
                     for case in cases.iter() {
@@ -789,7 +798,7 @@ impl<W: Write> Writer<W> {
                                 } => {
                                     let tmp = "_tmp";
                                     write!(self.out, "{}const auto {} = ", level, tmp)?;
-                                    self.put_expression(expr_handle, &context.expression)?;
+                                    self.put_expression(expr_handle, &context.expression, true)?;
                                     writeln!(self.out, ";")?;
                                     write!(self.out, "{}return {} {{", level, struct_name)?;
                                     for index in 0..members.len() as u32 {
@@ -801,14 +810,14 @@ impl<W: Write> Writer<W> {
                                 }
                                 _ => {
                                     write!(self.out, "{}return {} {{ ", level, struct_name)?;
-                                    self.put_expression(expr_handle, &context.expression)?;
+                                    self.put_expression(expr_handle, &context.expression, true)?;
                                 }
                             }
                             write!(self.out, " }}")?;
                         }
                         None => {
                             write!(self.out, "{}return ", level)?;
-                            self.put_expression(expr_handle, &context.expression)?;
+                            self.put_expression(expr_handle, &context.expression, true)?;
                         }
                     }
                     writeln!(self.out, ";")?;
@@ -821,9 +830,9 @@ impl<W: Write> Writer<W> {
                 }
                 crate::Statement::Store { pointer, value } => {
                     write!(self.out, "{}", level)?;
-                    self.put_expression(pointer, &context.expression)?;
+                    self.put_expression(pointer, &context.expression, true)?;
                     write!(self.out, " = ")?;
-                    self.put_expression(value, &context.expression)?;
+                    self.put_expression(value, &context.expression, true)?;
                     writeln!(self.out, ";")?;
                 }
                 crate::Statement::ImageStore {
@@ -833,14 +842,14 @@ impl<W: Write> Writer<W> {
                     value,
                 } => {
                     write!(self.out, "{}", level)?;
-                    self.put_expression(image, &context.expression)?;
+                    self.put_expression(image, &context.expression, false)?;
                     write!(self.out, ".write(")?;
-                    self.put_expression(value, &context.expression)?;
+                    self.put_expression(value, &context.expression, true)?;
                     write!(self.out, ", ")?;
-                    self.put_expression(coordinate, &context.expression)?;
+                    self.put_expression(coordinate, &context.expression, true)?;
                     if let Some(expr) = array_index {
                         write!(self.out, ", ")?;
-                        self.put_expression(expr, &context.expression)?;
+                        self.put_expression(expr, &context.expression, true)?;
                     }
                     writeln!(self.out, ");")?;
                 }
@@ -861,7 +870,7 @@ impl<W: Write> Writer<W> {
                         if i != 0 {
                             write!(self.out, ", ")?;
                         }
-                        self.put_expression(handle, &context.expression)?;
+                        self.put_expression(handle, &context.expression, true)?;
                     }
                     // follow-up with any global resources used
                     let mut separate = !arguments.is_empty();
@@ -1513,8 +1522,8 @@ fn test_stack_size() {
     }
     let stack_size = max_addr - min_addr;
     // check the size (in debug only)
-    // last observed macOS value: 20672
-    if stack_size > 21000 {
+    // last observed macOS value: 21920
+    if stack_size > 22000 {
         panic!("`put_expression` stack size {} is too large!", stack_size);
     }
 }

@@ -39,11 +39,11 @@ vertex vs_mainOutput vs_main(
     type4 tmp1_;
     type4 tmp2_;
     VertexOutput out;
-    tmp1_ = (static_cast<int>(vertex_index) / const_2i);
-    tmp2_ = (static_cast<int>(vertex_index) & const_1i);
-    type _expr24 = metal::float4(((static_cast<float>(tmp1_) * const_4f) - const_1f), ((static_cast<float>(tmp2_) * const_4f) - const_1f), const_0f, const_1f);
-    metal::float4 _expr50 = (r_data.proj_inv * _expr24);
-    out.uv = (metal::transpose(metal::float3x3(metal::float3(r_data.view[0].x, r_data.view[0].y, r_data.view[0].z), metal::float3(r_data.view[1].x, r_data.view[1].y, r_data.view[1].z), metal::float3(r_data.view[2].x, r_data.view[2].y, r_data.view[2].z))) * metal::float3(_expr50.x, _expr50.y, _expr50.z));
+    tmp1_ = static_cast<int>(vertex_index) / const_2i;
+    tmp2_ = static_cast<int>(vertex_index) & const_1i;
+    type _expr24 = metal::float4((static_cast<float>(tmp1_) * const_4f) - const_1f, (static_cast<float>(tmp2_) * const_4f) - const_1f, const_0f, const_1f);
+    metal::float4 _expr50 = r_data.proj_inv * _expr24;
+    out.uv = metal::transpose(metal::float3x3(metal::float3(r_data.view[0].x, r_data.view[0].y, r_data.view[0].z), metal::float3(r_data.view[1].x, r_data.view[1].y, r_data.view[1].z), metal::float3(r_data.view[2].x, r_data.view[2].y, r_data.view[2].z))) * metal::float3(_expr50.x, _expr50.y, _expr50.z);
     out.position = _expr24;
     const auto _tmp = out;
     return vs_mainOutput { _tmp.position, _tmp.uv };
