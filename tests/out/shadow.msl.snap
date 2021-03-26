@@ -5,6 +5,14 @@ expression: msl
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+constexpr constant float const_0f = 0.0;
+constexpr constant float const_1f = 1.0;
+constexpr constant float const_0_50f = 0.5;
+constexpr constant float const_n0_50f = -0.5;
+constexpr constant float const_0_05f = 0.05;
+constexpr constant unsigned c_max_lights = 10u;
+constexpr constant unsigned const_0u = 0u;
+constexpr constant unsigned const_1u = 1u;
 typedef metal::uint4 type;
 struct Globals {
     type num_lights;
@@ -26,15 +34,7 @@ typedef uint type6;
 typedef float type7;
 typedef metal::float2 type8;
 typedef metal::float3 type9;
-constexpr constant float const_0f = 0.0;
-constexpr constant float const_1f = 1.0;
-constexpr constant float const_0_50f = 0.5;
-constexpr constant float const_n0_50f = -0.5;
-constexpr constant float const_0_05f = 0.05;
 constexpr constant type9 c_ambient = type9(const_0_05f, const_0_05f, const_0_05f);
-constexpr constant unsigned c_max_lights = 10u;
-constexpr constant unsigned const_0u = 0u;
-constexpr constant unsigned const_1u = 1u;
 type7 fetch_shadow(
     type6 light_id,
     type2 homogeneous_coords,

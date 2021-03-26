@@ -5,6 +5,15 @@ expression: msl
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+constexpr constant unsigned NUM_PARTICLES = 1500u;
+constexpr constant float const_0f = 0.0;
+constexpr constant int const_0i = 0;
+constexpr constant unsigned const_0u = 0u;
+constexpr constant int const_1i = 1;
+constexpr constant unsigned const_1u = 1u;
+constexpr constant float const_1f = 1.0;
+constexpr constant float const_0_10f = 0.1;
+constexpr constant float const_n1f = -1.0;
 typedef uint type;
 typedef metal::float2 type1;
 struct Particle {
@@ -27,15 +36,6 @@ struct Particles {
 };
 typedef metal::uint3 type4;
 typedef int type5;
-constexpr constant unsigned NUM_PARTICLES = 1500u;
-constexpr constant float const_0f = 0.0;
-constexpr constant int const_0i = 0;
-constexpr constant unsigned const_0u = 0u;
-constexpr constant int const_1i = 1;
-constexpr constant unsigned const_1u = 1u;
-constexpr constant float const_1f = 1.0;
-constexpr constant float const_0_10f = 0.1;
-constexpr constant float const_n1f = -1.0;
 struct main1Input {
 };
 kernel void main1(

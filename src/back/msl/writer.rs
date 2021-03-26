@@ -501,7 +501,7 @@ impl<W: Write> Writer<W> {
                     .scalar_kind()
                     .ok_or(Error::UnsupportedBinaryOp(op))?;
                 if op == crate::BinaryOperator::Modulo && kind == crate::ScalarKind::Float {
-                    write!(self.out, "fmod(")?;
+                    write!(self.out, "{}::fmod(", NAMESPACE)?;
                     self.put_expression(left, context, true)?;
                     write!(self.out, ", ")?;
                     self.put_expression(right, context, true)?;
@@ -907,8 +907,9 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out)?;
 
+        self.write_scalar_constants(module)?;
         self.write_type_defs(module)?;
-        self.write_constants(module)?;
+        self.write_composite_constants(module)?;
         self.write_functions(module, info, options)
     }
 
@@ -1076,43 +1077,60 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_constants(&mut self, module: &crate::Module) -> Result<(), Error> {
+    fn write_scalar_constants(&mut self, module: &crate::Module) -> Result<(), Error> {
         for (handle, constant) in module.constants.iter() {
-            write!(self.out, "constexpr constant ")?;
-            let name = &self.names[&NameKey::Constant(handle)];
             match constant.inner {
                 crate::ConstantInner::Scalar {
                     width: _,
                     ref value,
-                } => match *value {
-                    crate::ScalarValue::Sint(value) => {
-                        write!(self.out, "int {} = {}", name, value)?;
-                    }
-                    crate::ScalarValue::Uint(value) => {
-                        write!(self.out, "unsigned {} = {}u", name, value)?;
-                    }
-                    crate::ScalarValue::Float(value) => {
-                        write!(self.out, "float {} = {}", name, value)?;
-                        if value.fract() == 0.0 {
-                            write!(self.out, ".0")?;
+                } => {
+                    let name = &self.names[&NameKey::Constant(handle)];
+                    write!(self.out, "constexpr constant ")?;
+                    match *value {
+                        crate::ScalarValue::Sint(value) => {
+                            write!(self.out, "int {} = {}", name, value)?;
+                        }
+                        crate::ScalarValue::Uint(value) => {
+                            write!(self.out, "unsigned {} = {}u", name, value)?;
+                        }
+                        crate::ScalarValue::Float(value) => {
+                            write!(self.out, "float {} = {}", name, value)?;
+                            if value.fract() == 0.0 {
+                                write!(self.out, ".0")?;
+                            }
+                        }
+                        crate::ScalarValue::Bool(value) => {
+                            write!(self.out, "bool {} = {}", name, value)?;
                         }
                     }
-                    crate::ScalarValue::Bool(value) => {
-                        write!(self.out, "bool {} = {}", name, value)?;
-                    }
-                },
+                    writeln!(self.out, ";")?;
+                }
+                crate::ConstantInner::Composite { .. } => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn write_composite_constants(&mut self, module: &crate::Module) -> Result<(), Error> {
+        for (handle, constant) in module.constants.iter() {
+            match constant.inner {
+                crate::ConstantInner::Scalar { .. } => {}
                 crate::ConstantInner::Composite { ty, ref components } => {
+                    let name = &self.names[&NameKey::Constant(handle)];
                     let ty_name = &self.names[&NameKey::Type(ty)];
-                    write!(self.out, "{} {} = {}(", ty_name, name, ty_name)?;
+                    write!(
+                        self.out,
+                        "constexpr constant {} {} = {}(",
+                        ty_name, name, ty_name
+                    )?;
                     for (i, &sub_handle) in components.iter().enumerate() {
                         let separator = if i != 0 { ", " } else { "" };
                         let sub_name = &self.names[&NameKey::Constant(sub_handle)];
                         write!(self.out, "{}{}", separator, sub_name)?;
                     }
-                    write!(self.out, ")")?;
+                    writeln!(self.out, ");")?;
                 }
             }
-            writeln!(self.out, ";")?;
         }
         Ok(())
     }
