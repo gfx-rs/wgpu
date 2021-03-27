@@ -797,6 +797,34 @@ pub struct BlendState {
     pub alpha: BlendComponent,
 }
 
+impl BlendState {
+    /// Blend mode that does no color blending, just overwrites the output with the contents of the shader.
+    pub const REPLACE: Self = Self {
+        color: BlendComponent::REPLACE,
+        alpha: BlendComponent::REPLACE,
+    };
+
+    /// Blend mode that does standard alpha blending with non-premultiplied alpha.
+    pub const ALPHA_BLENDING: Self = Self {
+        color: BlendComponent {
+            src_factor: BlendFactor::SrcAlpha,
+            dst_factor: BlendFactor::OneMinusSrcAlpha,
+            operation: BlendOperation::Add,
+        },
+        alpha: BlendComponent::REPLACE,
+    };
+
+    /// Blend mode that does standard alpha blending with premultiplied alpha.
+    pub const PREMULTIPLIEDALPHA_BLENDING: Self = Self {
+        color: BlendComponent {
+            src_factor: BlendFactor::One,
+            dst_factor: BlendFactor::OneMinusSrcAlpha,
+            operation: BlendOperation::Add,
+        },
+        alpha: BlendComponent::REPLACE,
+    };
+}
+
 /// Describes the color state of a render pipeline.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
