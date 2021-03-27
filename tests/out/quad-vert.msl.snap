@@ -1,0 +1,75 @@
+---
+source: tests/snapshots.rs
+expression: msl
+---
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+constexpr constant unsigned const_0u = 0u;
+constexpr constant unsigned const_1u = 1u;
+constexpr constant unsigned const_2u = 2u;
+constexpr constant unsigned const_3u = 3u;
+constexpr constant unsigned const_1u1 = 1u;
+constexpr constant int const_0i = 0;
+constexpr constant float const_0f = 0.0;
+constexpr constant float const_1f = 1.0;
+typedef float type;
+typedef metal::float2 type1;
+typedef thread type1 *type2;
+typedef thread type1 *type3;
+typedef metal::float4 type4;
+typedef uint type5;
+typedef type type6[const_1u1];
+struct gl_PerVertex {
+    type4 gl_Position;
+    type gl_PointSize;
+    type6 gl_ClipDistance;
+    type6 gl_CullDistance;
+};
+typedef thread gl_PerVertex *type7;
+typedef int type8;
+typedef thread type4 *type9;
+struct type10 {
+    type1 member;
+    type4 gl_Position1;
+    type gl_PointSize1;
+    type6 gl_ClipDistance1;
+};
+void main1(
+    type1 v_uv,
+    type1 a_uv,
+    gl_PerVertex _,
+    type1 a_pos
+) {
+    v_uv = a_uv;
+    type1 _expr9 = a_pos;
+    _.gl_Position = metal::float4(_expr9.x, _expr9.y, const_0f, const_1f);
+    return;
+}
+
+struct main2Input {
+    type1 a_uv1 [[attribute(1)]];
+    type1 a_pos1 [[attribute(0)]];
+};
+struct main2Output {
+    type1 member [[user(loc0)]];
+    type4 gl_Position1 [[position]];
+    type gl_PointSize1 [[point_size]];
+    type6 gl_ClipDistance1 [[clip_distance]];
+};
+vertex main2Output main2(
+  main2Input varyings [[stage_in]]
+) {
+    type1 v_uv = {};
+    type1 a_uv = {};
+    gl_PerVertex _ = {};
+    type1 a_pos = {};
+    const auto a_uv1 = varyings.a_uv1;
+    const auto a_pos1 = varyings.a_pos1;
+    a_uv = a_uv1;
+    a_pos = a_pos1;
+    main1(v_uv, a_uv, _, a_pos);
+    const auto _tmp = type10 {v_uv, _.gl_Position, _.gl_PointSize, {_.gl_ClipDistance[0]}};
+    return main2Output { _tmp.member, _tmp.gl_Position1, _tmp.gl_PointSize1, {_tmp.gl_ClipDistance1[0]} };
+}
+

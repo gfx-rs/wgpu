@@ -205,6 +205,39 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn put_initialization_component(
+        &mut self,
+        component: Handle<crate::Expression>,
+        context: &ExpressionContext,
+    ) -> Result<(), Error> {
+        // we can't initialize the array members just like other members,
+        // we have to unwrap them one level deeper...
+        let component_res = &context.info[component].ty;
+        if let crate::TypeInner::Array {
+            size: crate::ArraySize::Constant(const_handle),
+            ..
+        } = *component_res.inner_with(&context.module.types)
+        {
+            //HACK: we are forcefully duplicating the expression here,
+            // it would be nice to find a more C++ idiomatic solution for initializing array members
+            let size = context.module.constants[const_handle]
+                .to_array_length()
+                .unwrap();
+            write!(self.out, "{{")?;
+            for j in 0..size {
+                if j != 0 {
+                    write!(self.out, ",")?;
+                }
+                self.put_expression(component, context, false)?;
+                write!(self.out, "[{}]", j)?;
+            }
+            write!(self.out, "}}")?;
+        } else {
+            self.put_expression(component, context, true)?;
+        }
+        Ok(())
+    }
+
     fn put_expression(
         &mut self,
         expr_handle: Handle<crate::Expression>,
@@ -301,7 +334,7 @@ impl<W: Write> Writer<W> {
                             if i != 0 {
                                 write!(self.out, ", ")?;
                             }
-                            self.put_expression(component, context, true)?;
+                            self.put_initialization_component(component, context)?;
                         }
                         write!(self.out, "}}")?;
                     }
@@ -819,11 +852,31 @@ impl<W: Write> Writer<W> {
                                     self.put_expression(expr_handle, &context.expression, true)?;
                                     writeln!(self.out, ";")?;
                                     write!(self.out, "{}return {} {{", level, struct_name)?;
-                                    for index in 0..members.len() as u32 {
+                                    for (index, member) in members.iter().enumerate() {
                                         let comma = if index == 0 { "" } else { "," };
-                                        let name =
-                                            &self.names[&NameKey::StructMember(result_ty, index)];
-                                        write!(self.out, "{} {}.{}", comma, tmp, name)?;
+                                        let name = &self.names
+                                            [&NameKey::StructMember(result_ty, index as u32)];
+                                        // logic similar to `put_initialization_component`
+                                        if let crate::TypeInner::Array {
+                                            size: crate::ArraySize::Constant(const_handle),
+                                            ..
+                                        } = context.expression.module.types[member.ty].inner
+                                        {
+                                            let size = context.expression.module.constants
+                                                [const_handle]
+                                                .to_array_length()
+                                                .unwrap();
+                                            write!(self.out, "{} {{", comma)?;
+                                            for j in 0..size {
+                                                if j != 0 {
+                                                    write!(self.out, ",")?;
+                                                }
+                                                write!(self.out, "{}.{}[{}]", tmp, name, j)?;
+                                            }
+                                            write!(self.out, "}}")?;
+                                        } else {
+                                            write!(self.out, "{} {}.{}", comma, tmp, name)?;
+                                        }
                                     }
                                 }
                                 _ => {
