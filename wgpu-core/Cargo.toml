@@ -33,7 +33,7 @@ smallvec = "1"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 thiserror = "1"
 
-gpu-alloc = { version = "0.3", features = ["tracing"] }
+gpu-alloc = { version = "=0.3.0", features = ["tracing"] }
 gpu-descriptor = { version = "0.1", features = ["tracing"] }
 naga = { version = "0.3.1", features = ["spv-in", "spv-out", "wgsl-in"] }
 
