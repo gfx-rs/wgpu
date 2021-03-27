@@ -285,6 +285,12 @@ fn convert_spv(name: &str, targets: Targets) {
 
 #[cfg(feature = "spv-in")]
 #[test]
+fn convert_spv_quad_vert() {
+    convert_spv("quad-vert", Targets::empty());
+}
+
+#[cfg(feature = "spv-in")]
+#[test]
 fn convert_spv_shadow() {
     convert_spv("shadow", Targets::IR | Targets::ANALYSIS);
 }

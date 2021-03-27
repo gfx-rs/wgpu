@@ -235,20 +235,47 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             for &v_id in ep.variable_ids.iter() {
                 let lvar = self.lookup_variable.lookup(v_id)?;
                 if let super::Variable::Output(ref result) = lvar.inner {
-                    members.push(crate::StructMember {
-                        name: None,
-                        ty: result.ty,
-                        binding: result.binding.clone(),
-                        size: None,
-                        align: None,
-                    });
-                    // populate just the globals first, then do `Load` in a
-                    // separate step, so that we can get a range.
-                    components.push(
-                        function
-                            .expressions
-                            .append(crate::Expression::GlobalVariable(lvar.handle)),
-                    );
+                    let expr_handle = function
+                        .expressions
+                        .append(crate::Expression::GlobalVariable(lvar.handle));
+                    match module.types[result.ty].inner {
+                        crate::TypeInner::Struct {
+                            members: ref sub_members,
+                            ..
+                        } => {
+                            for (index, sm) in sub_members.iter().enumerate() {
+                                if sm.binding.is_none() {
+                                    // unrecognized binding, skip
+                                    continue;
+                                }
+                                members.push(crate::StructMember {
+                                    name: sm.name.clone(),
+                                    ty: sm.ty,
+                                    binding: sm.binding.clone(),
+                                    size: None,
+                                    align: None,
+                                });
+                                components.push(function.expressions.append(
+                                    crate::Expression::AccessIndex {
+                                        base: expr_handle,
+                                        index: index as u32,
+                                    },
+                                ));
+                            }
+                        }
+                        _ => {
+                            members.push(crate::StructMember {
+                                name: None,
+                                ty: result.ty,
+                                binding: result.binding.clone(),
+                                size: None,
+                                align: None,
+                            });
+                            // populate just the globals first, then do `Load` in a
+                            // separate step, so that we can get a range.
+                            components.push(expr_handle);
+                        }
+                    }
                 }
             }
 

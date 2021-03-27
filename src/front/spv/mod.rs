@@ -2414,10 +2414,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 .future_member_decor
                 .remove(&(id, i))
                 .unwrap_or_default();
+            let binding = decor.io_binding().ok();
             members.push(crate::StructMember {
                 name: decor.name,
                 ty,
-                binding: None,
+                binding,
                 size: None, //TODO
                 align: None,
             });
@@ -2871,7 +2872,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 (inner, var)
             }
             ExtendedClass::Output => {
-                let binding = dec.io_binding()?;
+                // For output interface blocks. this would be a structure.
+                let binding = dec.io_binding().ok();
                 let var = crate::GlobalVariable {
                     name: dec.name,
                     class: crate::StorageClass::Private,
@@ -2882,7 +2884,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 };
                 let inner = Variable::Output(crate::FunctionResult {
                     ty: effective_ty,
-                    binding: Some(binding),
+                    binding,
                 });
                 (inner, var)
             }
