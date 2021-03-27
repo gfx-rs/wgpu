@@ -764,6 +764,13 @@ impl BlendComponent {
         operation: BlendOperation::Add,
     };
 
+    /// Blend state of (1 * src) + ((1 - src_alpha) * dst)
+    pub const OVER: Self = BlendComponent {
+        src_factor: BlendFactor::One,
+        dst_factor: BlendFactor::OneMinusSrcAlpha,
+        operation: BlendOperation::Add,
+    };
+
     /// Returns true if the state relies on the constant color, which is
     /// set independently on a render command encoder.
     pub fn uses_color(&self) -> bool {
@@ -795,6 +802,30 @@ pub struct BlendState {
     pub color: BlendComponent,
     /// Alpha equation.
     pub alpha: BlendComponent,
+}
+
+impl BlendState {
+    /// Blend mode that does no color blending, just overwrites the output with the contents of the shader.
+    pub const REPLACE: Self = Self {
+        color: BlendComponent::REPLACE,
+        alpha: BlendComponent::REPLACE,
+    };
+
+    /// Blend mode that does standard alpha blending with non-premultiplied alpha.
+    pub const ALPHA_BLENDING: Self = Self {
+        color: BlendComponent {
+            src_factor: BlendFactor::SrcAlpha,
+            dst_factor: BlendFactor::OneMinusSrcAlpha,
+            operation: BlendOperation::Add,
+        },
+        alpha: BlendComponent::OVER,
+    };
+
+    /// Blend mode that does standard alpha blending with premultiplied alpha.
+    pub const PREMULTIPLIED_ALPHA_BLENDING: Self = Self {
+        color: BlendComponent::OVER,
+        alpha: BlendComponent::OVER,
+    };
 }
 
 /// Describes the color state of a render pipeline.
