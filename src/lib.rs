@@ -779,6 +779,7 @@ pub struct SwitchCase {
     pub fall_through: bool,
 }
 
+//TODO: consider removing `Clone`. It's not valid to clone `Statement::Emit` anyway.
 /// Instructions which make up an executable block.
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug)]

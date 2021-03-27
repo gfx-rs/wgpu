@@ -75,8 +75,8 @@ pub enum Error<'a> {
     BadTypeCast(&'a str),
     #[error(transparent)]
     InvalidResolve(ResolveError),
-    #[error("invalid statement {0:?}, expected {1}")]
-    InvalidStatement(crate::Statement, &'a str),
+    #[error("for(;;) initializer is not an assignment or a function call")]
+    InvalidForInitializer,
     #[error("resource type {0:?} is invalid")]
     InvalidResourceType(Handle<crate::Type>),
     #[error("unknown import: `{0}`")]
@@ -2232,14 +2232,9 @@ impl Parser {
                         is_uniform_control_flow,
                     )?;
                     if block.len() != num_statements {
-                        match block.last().unwrap() {
-                            &crate::Statement::Store { .. } | &crate::Statement::Call { .. } => {}
-                            other => {
-                                return Err(Error::InvalidStatement(
-                                    other.clone(),
-                                    "variable, assignment or function call",
-                                ))
-                            }
+                        match *block.last().unwrap() {
+                            crate::Statement::Store { .. } | crate::Statement::Call { .. } => {}
+                            _ => return Err(Error::InvalidForInitializer),
                         }
                     }
                 };
