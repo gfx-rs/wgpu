@@ -440,7 +440,7 @@ impl super::Validator {
                             match module.types[ty].inner {
                                 Ti::Vector {
                                     size,
-                                    kind: crate::ScalarKind::Float,
+                                    kind: crate::ScalarKind::Sint,
                                     ..
                                 } => size as u32 == num_components,
                                 _ => false,
