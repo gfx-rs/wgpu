@@ -617,9 +617,9 @@ dependencies = [
 
 [[package]]
 name = "gpu-alloc"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e7724b9aef57ea36d70faf54e0ee6265f86e41de16bed8333efdeab5b00e16b"
+checksum = "7b1304d1eb36580851a7e3b61c955626b535b180fdd22a7c8fc7a9c6804c5da1"
 dependencies = [
  "bitflags",
  "gpu-alloc-types",

@@ -15,9 +15,9 @@ struct MemoryDevice<'a, B: hal::Backend>(&'a B::Device);
 impl<B: hal::Backend> MemoryAllocator<B> {
     pub fn new(mem_props: hal::adapter::MemoryProperties, limits: hal::Limits) -> Self {
         let mem_config = gpu_alloc::Config {
-            dedicated_treshold: 32 << 20,
-            preferred_dedicated_treshold: 8 << 20,
-            transient_dedicated_treshold: 128 << 20,
+            dedicated_threshold: 32 << 20,
+            preferred_dedicated_threshold: 8 << 20,
+            transient_dedicated_threshold: 128 << 20,
             linear_chunk: 128 << 20,
             minimal_buddy_size: 1 << 10,
             initial_buddy_dedicated_size: 8 << 20,
