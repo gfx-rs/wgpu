@@ -403,17 +403,17 @@ impl<W: Write> Writer<W> {
                         //TODO: do we support Zero on `Sampled` image classes?
                     }
                     crate::SampleLevel::Exact(h) => {
-                        write!(self.out, ", level(")?;
+                        write!(self.out, ", {}::level(", NAMESPACE)?;
                         self.put_expression(h, context, true)?;
                         write!(self.out, ")")?;
                     }
                     crate::SampleLevel::Bias(h) => {
-                        write!(self.out, ", bias(")?;
+                        write!(self.out, ", {}::bias(", NAMESPACE)?;
                         self.put_expression(h, context, true)?;
                         write!(self.out, ")")?;
                     }
                     crate::SampleLevel::Gradient { x, y } => {
-                        write!(self.out, ", gradient(")?;
+                        write!(self.out, ", {}::gradient(", NAMESPACE)?;
                         self.put_expression(x, context, true)?;
                         write!(self.out, ", ")?;
                         self.put_expression(y, context, true)?;
@@ -1611,8 +1611,8 @@ fn test_stack_size() {
     }
     let stack_size = max_addr - min_addr;
     // check the size (in debug only)
-    // last observed macOS value: 21920
-    if stack_size > 22000 {
+    // last observed macOS value: 22112
+    if stack_size > 22200 {
         panic!("`put_expression` stack size {} is too large!", stack_size);
     }
 }
