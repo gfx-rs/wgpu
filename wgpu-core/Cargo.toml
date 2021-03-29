@@ -36,7 +36,8 @@ serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
 thiserror = "1"
 
-gpu-alloc = { version = "0.3" }
+# Update to 0.4 when it will be available
+gpu-alloc = { git = "https://github.com/zakarumych/gpu-alloc.git", rev = "560ad651aa8f7aefcee8f5bcf41e67a84561bcda" }
 gpu-descriptor = { version = "0.1" }
 
 hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx", rev = "2ac006f7fe86f32dd5b5e07f9daf44cd876a66f0" }
