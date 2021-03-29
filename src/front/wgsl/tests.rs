@@ -227,6 +227,19 @@ fn parse_texture_load() {
 }
 
 #[test]
+fn parse_texture_store() {
+    parse_str(
+        "
+        var t: [[access(write)]] texture_storage_2d<rgba8unorm>;
+        fn foo() {
+            textureStore(t, vec2<i32>(10, 20), vec4<f32>(0.0, 1.0, 2.0, 3.0));
+        }
+    ",
+    )
+    .unwrap();
+}
+
+#[test]
 fn parse_texture_query() {
     parse_str(
         "
