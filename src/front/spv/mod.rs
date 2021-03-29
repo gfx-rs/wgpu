@@ -1503,11 +1503,33 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(5)?;
                     self.parse_expr_binary_op(expressions, crate::BinaryOperator::LogicalAnd)?;
                 }
-                op if inst.op >= Op::IEqual && inst.op <= Op::FUnordGreaterThanEqual => {
+                Op::IEqual
+                | Op::INotEqual
+                | Op::UGreaterThan
+                | Op::SGreaterThan
+                | Op::UGreaterThanEqual
+                | Op::SGreaterThanEqual
+                | Op::ULessThan
+                | Op::SLessThan
+                | Op::ULessThanEqual
+                | Op::SLessThanEqual
+                | Op::FOrdEqual
+                | Op::FUnordEqual
+                | Op::FOrdNotEqual
+                | Op::FUnordNotEqual
+                | Op::FOrdLessThan
+                | Op::FUnordLessThan
+                | Op::FOrdGreaterThan
+                | Op::FUnordGreaterThan
+                | Op::FOrdLessThanEqual
+                | Op::FUnordLessThanEqual
+                | Op::FOrdGreaterThanEqual
+                | Op::FUnordGreaterThanEqual => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, map_binary_operator(op)?)?;
+                    let operator = map_binary_operator(inst.op)?;
+                    self.parse_expr_binary_op(expressions, operator)?;
                 }
-                op if inst.op >= Op::Any && inst.op <= Op::IsNormal => {
+                Op::Any | Op::All | Op::IsNan | Op::IsInf | Op::IsFinite | Op::IsNormal => {
                     inst.expect(4)?;
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
@@ -1516,7 +1538,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let arg_lexp = self.lookup_expression.lookup(arg_id)?;
 
                     let expr = crate::Expression::Relational {
-                        fun: map_relational_fun(op)?,
+                        fun: map_relational_fun(inst.op)?,
                         argument: arg_lexp.handle,
                     };
                     self.lookup_expression.insert(
@@ -1772,7 +1794,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 specialization: None,
                 inner: crate::ConstantInner::Scalar {
                     width: 4,
-                    value: crate::ScalarValue::Uint(i),
+                    value: crate::ScalarValue::Sint(i),
                 },
             });
             self.index_constants.push(handle);
