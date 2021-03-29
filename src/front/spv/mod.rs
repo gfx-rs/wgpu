@@ -580,6 +580,31 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    fn parse_expr_derivative(
+        &mut self,
+        expressions: &mut Arena<crate::Expression>,
+        axis: crate::DerivativeAxis,
+    ) -> Result<(), Error> {
+        let result_type_id = self.next()?;
+        let result_id = self.next()?;
+        let arg_id = self.next()?;
+
+        let arg_lexp = self.lookup_expression.lookup(arg_id)?;
+
+        let expr = crate::Expression::Derivative {
+            axis,
+            expr: arg_lexp.handle,
+        };
+        self.lookup_expression.insert(
+            result_id,
+            LookupExpression {
+                handle: expressions.append(expr),
+                type_id: result_type_id,
+            },
+        );
+        Ok(())
+    }
+
     fn insert_composite(
         &self,
         root_expr: Handle<crate::Expression>,
@@ -1653,6 +1678,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         merge_block_id,
                         continue_block_id,
                     });
+                }
+                Op::DPdx | Op::DPdxFine | Op::DPdxCoarse => {
+                    self.parse_expr_derivative(expressions, crate::DerivativeAxis::X)?;
+                }
+                Op::DPdy | Op::DPdyFine | Op::DPdyCoarse => {
+                    self.parse_expr_derivative(expressions, crate::DerivativeAxis::Y)?;
+                }
+                Op::Fwidth | Op::FwidthFine | Op::FwidthCoarse => {
+                    self.parse_expr_derivative(expressions, crate::DerivativeAxis::Width)?;
                 }
                 _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
             }
