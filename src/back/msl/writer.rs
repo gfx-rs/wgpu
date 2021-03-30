@@ -33,33 +33,40 @@ struct TypedGlobalVariable<'a> {
     names: &'a FastHashMap<NameKey, String>,
     handle: Handle<crate::GlobalVariable>,
     usage: GlobalUse,
+    reference: bool,
 }
 
 impl<'a> TypedGlobalVariable<'a> {
     fn try_fmt<W: Write>(&self, out: &mut W) -> Result<(), Error> {
         let var = &self.module.global_variables[self.handle];
         let name = &self.names[&NameKey::GlobalVariable(self.handle)];
-        let ty = &self.module.types[var.ty];
         let ty_name = &self.names[&NameKey::Type(var.ty)];
 
-        let (space_qualifier, reference) = match ty.inner {
-            crate::TypeInner::Struct { .. } => match var.class {
-                crate::StorageClass::Uniform | crate::StorageClass::Storage => {
-                    let space = if self.usage.contains(GlobalUse::WRITE) {
-                        "device "
-                    } else {
-                        "constant "
-                    };
-                    (space, "&")
-                }
-                _ => ("", ""),
-            },
-            _ => ("", ""),
+        let (space, access, reference) = match var.class.get_name(self.usage) {
+            Some(space) if self.reference => {
+                let access = match var.class {
+                    crate::StorageClass::Private | crate::StorageClass::WorkGroup
+                        if !self.usage.contains(GlobalUse::WRITE) =>
+                    {
+                        "const"
+                    }
+                    _ => "",
+                };
+                (space, access, "&")
+            }
+            _ => ("", "", ""),
         };
+
         Ok(write!(
             out,
-            "{}{}{} {}",
-            space_qualifier, ty_name, reference, name
+            "{}{}{}{}{}{} {}",
+            space,
+            if space.is_empty() { "" } else { " " },
+            ty_name,
+            if access.is_empty() { "" } else { " " },
+            access,
+            reference,
+            name,
         )?)
     }
 }
@@ -123,7 +130,7 @@ impl crate::StorageClass {
             Self::Storage => Some(if global_use.contains(GlobalUse::WRITE) {
                 "device"
             } else {
-                "storage"
+                "constant"
             }),
             Self::Private | Self::Function => Some("thread"),
             Self::WorkGroup => Some("threadgroup"),
@@ -1243,6 +1250,7 @@ impl<W: Write> Writer<W> {
                     names: &self.names,
                     handle,
                     usage: fun_info[handle],
+                    reference: true,
                 };
                 let separator = separate(index + 1 != pass_through_globals.len());
                 write!(self.out, "{}", INDENT)?;
@@ -1444,6 +1452,7 @@ impl<W: Write> Writer<W> {
                     names: &self.names,
                     handle,
                     usage,
+                    reference: true,
                 };
                 let separator = if is_first_argument {
                     is_first_argument = false;
@@ -1479,6 +1488,7 @@ impl<W: Write> Writer<W> {
                     names: &self.names,
                     handle,
                     usage,
+                    reference: false,
                 };
                 write!(self.out, "{}", INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;

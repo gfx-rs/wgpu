@@ -36,10 +36,10 @@ struct type10 {
     type6 gl_ClipDistance1;
 };
 void main1(
-    type1 v_uv,
-    type1 a_uv,
-    gl_PerVertex _,
-    type1 a_pos
+    thread type1& v_uv,
+    thread type1 const& a_uv,
+    thread gl_PerVertex& _,
+    thread type1 const& a_pos
 ) {
     v_uv = a_uv;
     type1 _expr9 = a_pos;
