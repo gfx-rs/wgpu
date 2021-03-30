@@ -1,6 +1,9 @@
 # Change Log
 
-### v0.7 (2021-01-31)
+### v0.7.1 (2021-03-30)
+- Fix the WASM build by pinning the `sync` dependency
+
+## v0.7 (2021-01-31)
 - See https://github.com/gfx-rs/wgpu/blob/v0.7/CHANGELOG.md#v07-2020-08-30
 - Features:
 	- (beta) WGSL support
