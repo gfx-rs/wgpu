@@ -81,7 +81,7 @@ fn create_texels(size: usize) -> Vec<u8> {
             iter::once(0xFF - (count * 5) as u8)
                 .chain(iter::once(0xFF - (count * 15) as u8))
                 .chain(iter::once(0xFF - (count * 50) as u8))
-                .chain(iter::once(1))
+                .chain(iter::once(0xFF))
         })
         .collect()
 }
