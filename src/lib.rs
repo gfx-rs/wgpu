@@ -1055,7 +1055,7 @@ pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextureViewDescriptor<'a> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Label<'a>,
     /// Format of the texture view. At this time, it must be the same as the underlying format of the texture.
     pub format: Option<TextureFormat>,
     /// The dimension of the texture view. For 1D textures, this must be `1D`. For 2D textures it must be one of
@@ -1083,7 +1083,7 @@ pub struct TextureViewDescriptor<'a> {
 #[derive(Clone, Debug)]
 pub struct PipelineLayoutDescriptor<'a> {
     /// Debug label of the pipeline layout. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Label<'a>,
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
     pub bind_group_layouts: &'a [&'a BindGroupLayout],
@@ -1099,7 +1099,7 @@ pub struct PipelineLayoutDescriptor<'a> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SamplerDescriptor<'a> {
     /// Debug label of the sampler. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Label<'a>,
     /// How to deal with out of bounds accesses in the u (i.e. x) direction
     pub address_mode_u: AddressMode,
     /// How to deal with out of bounds accesses in the v (i.e. y) direction
@@ -1157,7 +1157,7 @@ pub struct BindGroupEntry<'a> {
 #[derive(Clone, Debug)]
 pub struct BindGroupDescriptor<'a> {
     /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Label<'a>,
     /// The [`BindGroupLayout`] that corresponds to this bind group.
     pub layout: &'a BindGroupLayout,
     /// The resources to bind to this bind group.
@@ -1171,7 +1171,7 @@ pub struct BindGroupDescriptor<'a> {
 #[derive(Clone, Debug, Default)]
 pub struct RenderPassDescriptor<'a, 'b> {
     /// Debug label of the render pass. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'b str>,
+    pub label: Label<'a>,
     /// The color attachments of the render pass.
     pub color_attachments: &'b [RenderPassColorAttachment<'a>],
     /// The depth and stencil attachment of the render pass, if any.
@@ -1217,7 +1217,7 @@ pub struct FragmentState<'a> {
 #[derive(Clone, Debug)]
 pub struct RenderPipelineDescriptor<'a> {
     /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
     pub layout: Option<&'a PipelineLayout>,
     /// The compiled vertex stage, its entry point, and the input buffers layout.
@@ -1236,14 +1236,14 @@ pub struct RenderPipelineDescriptor<'a> {
 #[derive(Clone, Debug, Default)]
 pub struct ComputePassDescriptor<'a> {
     /// Debug label of the compute pass. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Label<'a>,
 }
 
 /// Describes a compute pipeline.
 #[derive(Clone, Debug)]
 pub struct ComputePipelineDescriptor<'a> {
     /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
     pub layout: Option<&'a PipelineLayout>,
     /// The compiled shader module for this stage.
@@ -1265,7 +1265,7 @@ pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
 #[derive(Clone, Debug)]
 pub struct BindGroupLayoutDescriptor<'a> {
     /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Label<'a>,
 
     /// Array of entries in this BindGroupLayout
     pub entries: &'a [BindGroupLayoutEntry],
@@ -1275,7 +1275,7 @@ pub struct BindGroupLayoutDescriptor<'a> {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct RenderBundleEncoderDescriptor<'a> {
     /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Label<'a>,
     /// The formats of the color attachments that this render bundle is capable to rendering to. This
     /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
     pub color_formats: &'a [TextureFormat],

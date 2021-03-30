@@ -4,7 +4,7 @@ use std::{convert::TryFrom, num::NonZeroU32};
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BufferInitDescriptor<'a> {
     /// Debug label of a buffer. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: crate::Label<'a>,
     /// Contents of a buffer on creation.
     pub contents: &'a [u8],
     /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
