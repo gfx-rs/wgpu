@@ -185,6 +185,27 @@ impl Example {
         let mx_correction = framework::OPENGL_TO_WGPU_MATRIX;
         mx_correction * mx_projection * mx_view
     }
+
+    fn create_depth_texture(
+        sc_desc: &wgpu::SwapChainDescriptor,
+        device: &wgpu::Device,
+    ) -> wgpu::TextureView {
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: sc_desc.width,
+                height: sc_desc.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: Self::DEPTH_FORMAT,
+            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+            label: None,
+        });
+
+        depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
+    }
 }
 
 impl framework::Example for Example {
@@ -637,19 +658,7 @@ impl framework::Example for Example {
             }
         };
 
-        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: sc_desc.width,
-                height: sc_desc.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-            label: None,
-        });
+        let forward_depth = Self::create_depth_texture(sc_desc, device);
 
         Example {
             entities,
@@ -657,7 +666,7 @@ impl framework::Example for Example {
             lights_are_dirty: true,
             shadow_pass,
             forward_pass,
-            forward_depth: depth_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+            forward_depth,
             light_storage_buf,
             entity_uniform_buf,
             entity_bind_group,
@@ -683,20 +692,7 @@ impl framework::Example for Example {
             bytemuck::cast_slice(mx_ref),
         );
 
-        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: sc_desc.width,
-                height: sc_desc.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-            label: None,
-        });
-        self.forward_depth = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.forward_depth = Self::create_depth_texture(sc_desc, device);
     }
 
     fn render(
