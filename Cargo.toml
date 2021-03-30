@@ -115,8 +115,8 @@ test = true
 #wasm-bindgen = { path = "../wasm-bindgen" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "=0.2.72" # remember to change version in wiki as well
-web-sys = { version = "=0.3.49", features = [
+wasm-bindgen = "=0.2.73" # remember to change version in wiki as well
+web-sys = { version = "=0.3.50", features = [
     "Document",
     "Navigator",
     "Node",
@@ -241,8 +241,8 @@ web-sys = { version = "=0.3.49", features = [
     "HtmlCanvasElement",
     "Window",
 ]}
-js-sys = "0.3.49"
-wasm-bindgen-futures = "0.4.22"
+js-sys = "0.3.50"
+wasm-bindgen-futures = "0.4.23"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 console_error_panic_hook = "0.1.6"
