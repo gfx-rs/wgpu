@@ -1033,6 +1033,7 @@ impl<B: GfxBackend> Device<B> {
                 let naga_result = if desc
                     .flags
                     .contains(wgt::ShaderFlags::EXPERIMENTAL_TRANSLATION)
+                    || !cfg!(feature = "cross")
                 {
                     match unsafe { self.raw.create_shader_module_from_naga(shader) } {
                         Ok(raw) => Ok(raw),
