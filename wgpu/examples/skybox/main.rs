@@ -69,7 +69,30 @@ pub struct Skybox {
     staging_belt: wgpu::util::StagingBelt,
 }
 
-const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
+impl Skybox {
+    const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
+
+    fn create_depth_texture(
+        sc_desc: &wgpu::SwapChainDescriptor,
+        device: &wgpu::Device,
+    ) -> wgpu::TextureView {
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: sc_desc.width,
+                height: sc_desc.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: Self::DEPTH_FORMAT,
+            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+            label: None,
+        });
+
+        depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
+    }
+}
 
 impl framework::Example for Skybox {
     fn optional_features() -> wgpu::Features {
@@ -204,7 +227,7 @@ impl framework::Example for Skybox {
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
+                format: Self::DEPTH_FORMAT,
                 depth_write_enabled: false,
                 depth_compare: wgpu::CompareFunction::LessEqual,
                 stencil: wgpu::StencilState::default(),
@@ -235,7 +258,7 @@ impl framework::Example for Skybox {
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
+                format: Self::DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::LessEqual,
                 stencil: wgpu::StencilState::default(),
@@ -337,19 +360,7 @@ impl framework::Example for Skybox {
             label: None,
         });
 
-        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: sc_desc.width,
-                height: sc_desc.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: DEPTH_FORMAT,
-            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-            label: None,
-        });
+        let depth_view = Self::create_depth_texture(sc_desc, device);
 
         Skybox {
             camera,
@@ -358,7 +369,7 @@ impl framework::Example for Skybox {
             bind_group,
             uniform_buf,
             entities,
-            depth_view: depth_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+            depth_view,
             staging_belt: wgpu::util::StagingBelt::new(0x100),
         }
     }
@@ -379,9 +390,10 @@ impl framework::Example for Skybox {
     fn resize(
         &mut self,
         sc_desc: &wgpu::SwapChainDescriptor,
-        _device: &wgpu::Device,
+        device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) {
+        self.depth_view = Self::create_depth_texture(sc_desc, device);
         self.camera.screen_size = (sc_desc.width, sc_desc.height);
     }
 
