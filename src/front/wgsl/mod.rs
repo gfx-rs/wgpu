@@ -1271,37 +1271,43 @@ impl Parser {
         self.scopes.push(Scope::SingularExpr);
         //TODO: refactor this to avoid backing up
         let backup = lexer.clone();
-        let handle = match lexer.next().0 {
+        let (allow_deref, handle) = match lexer.next().0 {
             Token::Operation('-') => {
                 let expr = crate::Expression::Unary {
                     op: crate::UnaryOperator::Negate,
                     expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
                 };
-                ctx.expressions.append(expr)
+                (true, ctx.expressions.append(expr))
             }
             Token::Operation('!') => {
                 let expr = crate::Expression::Unary {
                     op: crate::UnaryOperator::Not,
                     expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
                 };
-                ctx.expressions.append(expr)
+                (true, ctx.expressions.append(expr))
+            }
+            Token::Operation('&') => {
+                let handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                (false, handle)
             }
             Token::Word(word) => {
-                match self.parse_function_call_inner(lexer, word, ctx.reborrow())? {
+                let handle = match self.parse_function_call_inner(lexer, word, ctx.reborrow())? {
                     Some(handle) => handle,
                     None => {
                         *lexer = backup;
                         self.parse_primary_expression(lexer, ctx.reborrow())?
                     }
-                }
+                };
+                (true, handle)
             }
             _ => {
                 *lexer = backup;
-                self.parse_primary_expression(lexer, ctx.reborrow())?
+                let handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                (true, handle)
             }
         };
 
-        let post_handle = self.parse_postfix(lexer, ctx, handle, true)?;
+        let post_handle = self.parse_postfix(lexer, ctx, handle, allow_deref)?;
         self.scopes.pop();
         Ok(post_handle)
     }

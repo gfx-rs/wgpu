@@ -274,3 +274,15 @@ fn parse_expressions() {
         const z: bool = !(0.0 == 1.0);
     }").unwrap();
 }
+
+#[test]
+fn parse_pointers() {
+    parse_str(
+        "fn foo() {
+        var x: f32 = 1.0;
+        const px = &x;
+        const py = frexp(0.5, px);
+    }",
+    )
+    .unwrap();
+}
