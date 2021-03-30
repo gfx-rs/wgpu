@@ -1962,7 +1962,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // Else the function name is one of the glsl provided bitcast functions
             Expression::As {
                 expr,
-                kind,
+                kind: target_kind,
                 convert,
             } => {
                 let inner = ctx.info[expr].ty.inner_with(&self.module.types);
@@ -1970,7 +1970,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     // this is similar to `write_type`, but with the target kind
                     match *inner {
                         TypeInner::Scalar { kind: _, width } => {
-                            write!(self.out, "{}", glsl_scalar(kind, width)?.full)?
+                            write!(self.out, "{}", glsl_scalar(target_kind, width)?.full)?
                         }
                         TypeInner::Vector {
                             size,
@@ -1979,7 +1979,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         } => write!(
                             self.out,
                             "{}vec{}",
-                            glsl_scalar(kind, width)?.prefix,
+                            glsl_scalar(target_kind, width)?.prefix,
                             size as u8
                         )?,
                         ref other => unreachable!("unexpected cast of {:?}", other),
@@ -1989,15 +1989,18 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(
                         self.out,
                         "{}",
-                        match (source_kind, kind) {
+                        match (source_kind, target_kind) {
                             (ScalarKind::Float, ScalarKind::Sint) => "floatBitsToInt",
                             (ScalarKind::Float, ScalarKind::Uint) => "floatBitsToUInt",
                             (ScalarKind::Sint, ScalarKind::Float) => "intBitsToFloat",
                             (ScalarKind::Uint, ScalarKind::Float) => "uintBitsToFloat",
+                            // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
+                            (ScalarKind::Uint, ScalarKind::Sint) => "int",
+                            (ScalarKind::Sint, ScalarKind::Uint) => "uint",
                             _ => {
                                 return Err(Error::Custom(format!(
                                     "Cannot bitcast {:?} to {:?}",
-                                    source_kind, kind
+                                    source_kind, target_kind
                                 )));
                             }
                         }
