@@ -34,7 +34,7 @@ typedef uint type6;
 typedef float type7;
 typedef metal::float2 type8;
 typedef metal::float3 type9;
-constexpr constant type9 c_ambient = type9(const_0_05f, const_0_05f, const_0_05f);
+constexpr constant type9 c_ambient = {const_0_05f, const_0_05f, const_0_05f};
 type7 fetch_shadow(
     type6 light_id,
     type2 homogeneous_coords,

@@ -1189,17 +1189,13 @@ impl<W: Write> Writer<W> {
                 crate::ConstantInner::Composite { ty, ref components } => {
                     let name = &self.names[&NameKey::Constant(handle)];
                     let ty_name = &self.names[&NameKey::Type(ty)];
-                    write!(
-                        self.out,
-                        "constexpr constant {} {} = {}(",
-                        ty_name, name, ty_name
-                    )?;
+                    write!(self.out, "constexpr constant {} {} = {{", ty_name, name,)?;
                     for (i, &sub_handle) in components.iter().enumerate() {
                         let separator = if i != 0 { ", " } else { "" };
                         let sub_name = &self.names[&NameKey::Constant(sub_handle)];
                         write!(self.out, "{}{}", separator, sub_name)?;
                     }
-                    writeln!(self.out, ");")?;
+                    writeln!(self.out, "}};")?;
                 }
             }
         }
