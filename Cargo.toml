@@ -185,7 +185,7 @@ web-sys = { version = "=0.3.46", features = [
 ]}
 js-sys = "0.3.46"
 wasm-bindgen-futures = "0.4.19"
-syn = { version = "=1.0.65", optional = true }
+syn = "=1.0.65"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 console_error_panic_hook = "0.1.6"
