@@ -76,9 +76,9 @@ pub enum Error {
     Validation,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum EntryPointError {
-    #[error("bind source for {0:?} is missing from the map")]
+    #[error("mapping of {0:?} is missing")]
     MissingBinding(BindSource),
 }
 
