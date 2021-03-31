@@ -16,7 +16,7 @@ all-features = true
 [lib]
 
 [features]
-default = ["cross"]
+default = []
 trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
 # Make Vulkan backend available on platforms where it is by default not, e.g. macOS
@@ -45,6 +45,7 @@ rev = "41f106d7fc8e2ca49b21aed0919fa6cc67317f7f"
 
 [dependencies]
 arrayvec = "0.5"
+log = "0.4"
 parking_lot = "0.11"
 profiling = { version = "0.1.10", default-features = false } # Need 0.1.10+ to avoid compliation error with proc macros off.
 raw-window-handle = "0.3"
