@@ -538,6 +538,65 @@ impl Default for Limits {
     }
 }
 
+/// Lists various ways the underlying platform does not conform to the WebGPU standard.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DownlevelProperties {
+    /// The device supports compiling and using compute shaders.
+    pub compute_shaders: bool,
+    /// Which collections of features shaders support. Defined in terms of D3D's shader models.
+    pub shader_model: ShaderModel,
+    /// Supports creating storage images.
+    pub storage_images: bool,
+    /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil attachment.
+    pub read_only_depth_stencil: bool,
+    /// Supports:
+    /// - copy_image_to_image
+    /// - copy_buffer_to_image and copy_image_to_buffer with a buffer without a MAP_* usage
+    pub device_local_image_copies: bool,
+    /// Supports textures with mipmaps which have a non power of two size.
+    pub non_power_of_two_mipmapped_textures: bool,
+    /// Supports samplers with anisotropic filtering
+    pub anisotropic_filtering: bool,
+}
+
+impl Default for DownlevelProperties {
+    // Note, this defaults to all on, as that is the default assumption in wgpu.
+    // gfx-hal's equivalent structure defaults to all off.
+    fn default() -> Self {
+        Self {
+            compute_shaders: true,
+            shader_model: ShaderModel::Sm5,
+            storage_images: true,
+            read_only_depth_stencil: true,
+            device_local_image_copies: true,
+            non_power_of_two_mipmapped_textures: true,
+            anisotropic_filtering: true,
+        }
+    }
+}
+
+impl DownlevelProperties {
+    /// Returns true if the underlying platform offers complete support of the baseline WebGPU standard.
+    ///
+    /// If this returns false, some parts of the API will result in validation errors where they would not normally.
+    /// These parts can be determined by the values in this structure.
+    pub fn is_webgpu_compliant(self) -> bool {
+        self == Self::default()
+    }
+}
+
+/// Collections of shader features a device supports if they support less than WebGPU normally allows.
+// TODO: Fill out the differences between shader models more completely
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ShaderModel {
+    /// Extremely limited shaders, including a total instruction limit.
+    Sm2,
+    /// Missing minor features and storage images.
+    Sm4,
+    /// WebGPU supports shader module 5.
+    Sm5,
+}
+
 /// Supported physical device types.
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]

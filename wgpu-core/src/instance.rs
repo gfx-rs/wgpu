@@ -122,6 +122,7 @@ pub struct Adapter<B: hal::Backend> {
     features: wgt::Features,
     pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
+    downlevel: wgt::DownlevelProperties,
     life_guard: LifeGuard,
 }
 
@@ -274,11 +275,28 @@ impl<B: GfxBackend> Adapter<B> {
                 .max(MIN_PUSH_CONSTANT_SIZE), // As an extension, the default is always 0, so define a separate minimum.
         };
 
+        let downlevel = wgt::DownlevelProperties {
+            compute_shaders: properties.downlevel.compute_shaders,
+            shader_model: match properties.downlevel.shader_model {
+                hal::DownlevelShaderModel::ShaderModel2 => wgt::ShaderModel::Sm2,
+                hal::DownlevelShaderModel::ShaderModel4 => wgt::ShaderModel::Sm4,
+                hal::DownlevelShaderModel::ShaderModel5 => wgt::ShaderModel::Sm5,
+            },
+            storage_images: properties.downlevel.storage_images,
+            read_only_depth_stencil: properties.downlevel.read_only_depth_stencil,
+            device_local_image_copies: properties.downlevel.device_local_image_copies,
+            non_power_of_two_mipmapped_textures: properties
+                .downlevel
+                .non_power_of_two_mipmapped_textures,
+            anisotropic_filtering: private_features.anisotropic_filtering,
+        };
+
         Self {
             raw,
             features,
             private_features,
             limits,
+            downlevel,
             life_guard: LifeGuard::new("<Adapter>"),
         }
     }
@@ -523,6 +541,7 @@ impl<B: GfxBackend> Adapter<B> {
             mem_props,
             limits,
             self.private_features,
+            self.downlevel,
             desc,
             trace_path,
         )
@@ -923,6 +942,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_guard
             .get(adapter_id)
             .map(|adapter| adapter.limits.clone())
+            .map_err(|_| InvalidAdapter)
+    }
+
+    pub fn adapter_downlevel_properties<B: GfxBackend>(
+        &self,
+        adapter_id: AdapterId,
+    ) -> Result<wgt::DownlevelProperties, InvalidAdapter> {
+        profiling::scope!("Adapter::downlevel_properties");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (adapter_guard, _) = hub.adapters.read(&mut token);
+        adapter_guard
+            .get(adapter_id)
+            .map(|adapter| adapter.downlevel)
             .map_err(|_| InvalidAdapter)
     }
 
