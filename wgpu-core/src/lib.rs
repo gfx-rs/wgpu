@@ -237,6 +237,17 @@ struct PrivateFeatures {
     texture_d24_s8: bool,
 }
 
+const DOWNLEVEL_WARNING_MESSAGE: &str = "The underlying API or device in use does not \
+support enough features to be a fully compliant implementation of WebGPU. A subset of the features can still be used. \
+If you are running this program on native and not in a browser and wish to limit the features you use to the supported subset, \
+call Adapter::downlevel_properties or Device::downlevel_properties to get a listing of the features the current \
+platform is supports.";
+const DOWNLEVEL_ERROR_WARNING_MESSAGE: &str = "This is not an invalid use of WebGPU: the underlying API or device does not \
+support enough features to be a fully compliant implementation. A subset of the features can still be used. \
+If you are running this program on native and not in a browser and wish to work around this issue, call \
+Adapter::downlevel_properties or Device::downlevel_properties to get a listing of the features the current \
+platform is supports.";
+
 #[macro_export]
 macro_rules! gfx_select {
     ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {

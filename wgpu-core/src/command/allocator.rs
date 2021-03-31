@@ -84,11 +84,13 @@ pub struct CommandAllocator<B: hal::Backend> {
 }
 
 impl<B: GfxBackend> CommandAllocator<B> {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn allocate(
         &self,
         device_id: Stored<DeviceId>,
         device: &B::Device,
         limits: wgt::Limits,
+        downlevel: wgt::DownlevelProperties,
         private_features: PrivateFeatures,
         label: &crate::Label,
         #[cfg(feature = "trace")] enable_tracing: bool,
@@ -131,6 +133,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
             used_swap_chains: Default::default(),
             buffer_memory_init_actions: Default::default(),
             limits,
+            downlevel,
             private_features,
             has_labels: label.is_some(),
             #[cfg(feature = "trace")]

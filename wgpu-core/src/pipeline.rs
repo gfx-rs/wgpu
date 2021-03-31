@@ -7,7 +7,7 @@ use crate::{
     device::{DeviceError, RenderPassContext},
     hub::Resource,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
-    validation, Label, LifeGuard, Stored,
+    validation, Label, LifeGuard, Stored, DOWNLEVEL_ERROR_WARNING_MESSAGE,
 };
 use std::borrow::Cow;
 use thiserror::Error;
@@ -115,6 +115,11 @@ pub enum CreateComputePipelineError {
     Stage(validation::StageError),
     #[error("Internal error: {0}")]
     Internal(String),
+    #[error(
+        "Compute shaders are not supported by the underlying platform. {}",
+        DOWNLEVEL_ERROR_WARNING_MESSAGE
+    )]
+    ComputeShadersUnsupported,
 }
 
 #[derive(Debug)]
