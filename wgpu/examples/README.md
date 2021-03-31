@@ -7,12 +7,13 @@ For the simplest examples without using any helping code (see `framework.rs` her
 
 Notably, `capture` example shows rendering without a surface/window. It reads back the contents and saves them to a file.
 
+All the examples use [WGSL](https://gpuweb.github.io/gpuweb/wgsl.html) shaders unless specified otherwise.
+
 All framework-based examples render to the window.
 
 ## Feature matrix
 | Feature                      | boids  | cube   | mipmap | msaa-line | shadow | skybox | texture-arrays | water  | conservative-raster |
 | ---------------------------- | ------ | ------ | ------ | --------- | ------ | ------ | -------------- | ------ | ------------------- |
-| WGSL shaders                 | :star: | :star: | :star: | :star:    | :star: | :star: |                | :star: | :star:              |
 | vertex attributes            | :star: | :star: |        | :star:    | :star: | :star: | :star:         | :star: |                     |
 | instancing                   | :star: |        |        |           |        |        |                |        |                     |
 | lines and points             |        |        |        | :star:    |        |        |                |        | :star:              |
@@ -34,6 +35,7 @@ All framework-based examples render to the window.
 | render bundles               |        |        |        | :star:    |        |        |                | :star: |                     |
 | compute passes               | :star: |        |        |           |        |        |                |        |                     |
 | *optional extensions*        |        |        |        |           |        |        | :star:         |        |                     |
+| - SPIR-V shaders             |        |        |        |           |        |        | :star:         |        |                     |
 | - binding indexing           |        |        |        |           |        |        | :star:         |        |                     |
 | - push constants             |        |        |        |           |        |        | :star:         |        |                     |
 | - depth clamping             |        |        |        |           | :star: |        |                |        |                     |
