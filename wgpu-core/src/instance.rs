@@ -7,7 +7,7 @@ use crate::{
     device::{Device, DeviceDescriptor},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId, Valid},
-    LabelHelpers, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
+    LabelHelpers, LifeGuard, PrivateFeatures, Stored, DOWNLEVEL_WARNING_MESSAGE, MAX_BIND_GROUPS,
 };
 
 use wgt::{Backend, BackendBit, PowerPreference, BIND_BUFFER_ALIGNMENT};
@@ -395,6 +395,10 @@ impl<B: GfxBackend> Adapter<B> {
             return Err(RequestDeviceError::UnsupportedFeature(
                 desc.features - self.features,
             ));
+        }
+
+        if !self.downlevel.is_webgpu_compliant() {
+            log::warn!("{}", DOWNLEVEL_WARNING_MESSAGE);
         }
 
         // Verify feature preconditions

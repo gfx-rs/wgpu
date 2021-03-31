@@ -1861,6 +1861,10 @@ impl<B: GfxBackend> Device<B> {
         ),
         pipeline::CreateComputePipelineError,
     > {
+        if !self.downlevel.compute_shaders {
+            return Err(pipeline::CreateComputePipelineError::ComputeShadersUnsupported);
+        }
+
         //TODO: only lock mutable if the layout is derived
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
         let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
@@ -3723,6 +3727,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 dev_stored,
                 &device.raw,
                 device.limits.clone(),
+                device.downlevel,
                 device.private_features,
                 &desc.label,
                 #[cfg(feature = "trace")]

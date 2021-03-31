@@ -48,6 +48,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) used_swap_chains: SmallVec<[Stored<id::SwapChainId>; 1]>,
     pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     limits: wgt::Limits,
+    downlevel: wgt::DownlevelProperties,
     private_features: PrivateFeatures,
     has_labels: bool,
     #[cfg(feature = "trace")]
