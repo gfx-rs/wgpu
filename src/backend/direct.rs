@@ -1,10 +1,11 @@
 use crate::{
     backend::{error::ContextError, native_gpu_future},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
-    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, Features, Label,
-    Limits, LoadOp, MapMode, Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
-    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor, ShaderSource,
-    SwapChainStatus, TextureDescriptor, TextureFormat, TextureViewDescriptor,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    DownlevelProperties, Features, Label, Limits, LoadOp, MapMode, Operations,
+    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderSource, SwapChainStatus, TextureDescriptor,
+    TextureFormat, TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
@@ -731,6 +732,14 @@ impl crate::Context for Context {
         }
     }
 
+    fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> DownlevelProperties {
+        let global = &self.0;
+        match wgc::gfx_select!(*adapter => global.adapter_downlevel_properties(*adapter)) {
+            Ok(downlevel) => downlevel,
+            Err(err) => self.handle_error_fatal(err, "Adapter::downlevel_properties"),
+        }
+    }
+
     fn adapter_get_info(&self, adapter: &wgc::id::AdapterId) -> AdapterInfo {
         let global = &self.0;
         match wgc::gfx_select!(*adapter => global.adapter_get_info(*adapter)) {
@@ -765,6 +774,14 @@ impl crate::Context for Context {
         match wgc::gfx_select!(device.id => global.device_limits(device.id)) {
             Ok(limits) => limits,
             Err(err) => self.handle_error_fatal(err, "Device::limits"),
+        }
+    }
+
+    fn device_downlevel_properties(&self, device: &Self::DeviceId) -> DownlevelProperties {
+        let global = &self.0;
+        match wgc::gfx_select!(device.id => global.device_downlevel_properties(device.id)) {
+            Ok(limits) => limits,
+            Err(err) => self.handle_error_fatal(err, "Device::downlevel_properties"),
         }
     }
 
