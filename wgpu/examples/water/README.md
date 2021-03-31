@@ -11,14 +11,8 @@ water
 ├── point_gen.rs ------------- Hexagon point generation
 ├── README.md ---------------- This readme
 ├── screenshot.png ----------- Screenshot
-├── terrain_shader.frag ------ Terrain fragment shader
-├── terrain_shader.frag.spv -- Compiled terrain fragment shader
-├── terrain_shader.vert ------ Terrain vertex shader
-├── terrain_shader.vert.spv -- Compiled terrain vertex shader
-├── water_shader.frag -------- Water fragment shader
-├── water_shader.frag.spv ---- Compiled water fragment shader
-├── water_shader.vert -------- Water vertex shader
-└── water_shader.vert.spv ---- Compiled water vertex shader
+├── terrain.wgsl ------------- WGSL Shader for terrain
+└── water.wgsl --------------- WGSL Shader for water
 ```
 
 ## To run
