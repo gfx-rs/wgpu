@@ -1080,6 +1080,11 @@ impl crate::Context for Context {
         }
     }
 
+    fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> wgt::DownlevelProperties {
+        // WebGPU is assumed to be fully compliant
+        wgt::DownlevelProperties::default()
+    }
+
     fn adapter_get_info(&self, _adapter: &Self::AdapterId) -> wgt::AdapterInfo {
         // TODO: web-sys has no way of getting information on adapters
         wgt::AdapterInfo {
@@ -1107,6 +1112,11 @@ impl crate::Context for Context {
     fn device_limits(&self, _device: &Self::DeviceId) -> wgt::Limits {
         // TODO
         wgt::Limits::default()
+    }
+
+    fn device_downlevel_properties(&self, _device: &Self::DeviceId) -> wgt::DownlevelProperties {
+        // WebGPU is assumed to be fully compliant
+        wgt::DownlevelProperties::default()
     }
 
     fn device_create_swap_chain(
