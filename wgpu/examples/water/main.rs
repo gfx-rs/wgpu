@@ -5,7 +5,7 @@ mod point_gen;
 
 use bytemuck::{Pod, Zeroable};
 use cgmath::Point3;
-use std::{iter, mem};
+use std::{borrow::Cow, iter, mem};
 use wgpu::util::DeviceExt;
 
 ///
@@ -263,7 +263,7 @@ impl Example {
 impl framework::Example for Example {
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        _adapter: &wgpu::Adapter,
+        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -486,14 +486,23 @@ impl framework::Example for Example {
         });
 
         // Upload/compile them to GPU code.
-        let water_vs_module =
-            device.create_shader_module(&wgpu::include_spirv!("water_shader.vert.spv"));
-        let water_fs_module =
-            device.create_shader_module(&wgpu::include_spirv!("water_shader.frag.spv"));
-        let terrain_vs_module =
-            device.create_shader_module(&wgpu::include_spirv!("terrain_shader.vert.spv"));
-        let terrain_fs_module =
-            device.create_shader_module(&wgpu::include_spirv!("terrain_shader.frag.spv"));
+        let mut flags = wgpu::ShaderFlags::VALIDATION;
+        match adapter.get_info().backend {
+            wgpu::Backend::Metal | wgpu::Backend::Vulkan => {
+                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION
+            }
+            _ => (), //TODO
+        }
+        let terrain_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: Some("terrain"),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("terrain.wgsl"))),
+            flags,
+        });
+        let water_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: Some("water"),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("water.wgsl"))),
+            flags,
+        });
 
         // Create the render pipelines. These describe how the data will flow through the GPU, and what
         // constraints and modifiers it will have.
@@ -503,8 +512,8 @@ impl framework::Example for Example {
             layout: Some(&water_pipeline_layout),
             // Vertex shader and input buffers
             vertex: wgpu::VertexState {
-                module: &water_vs_module,
-                entry_point: "main",
+                module: &water_module,
+                entry_point: "vs_main",
                 // Layout of our vertices. This should match the structs
                 // which are uploaded to the GPU. This should also be
                 // ensured by tagging on either a `#[repr(C)]` onto a
@@ -518,8 +527,8 @@ impl framework::Example for Example {
             },
             // Fragment shader and output targets
             fragment: Some(wgpu::FragmentState {
-                module: &water_fs_module,
-                entry_point: "main",
+                module: &water_module,
+                entry_point: "fs_main",
                 // Describes how the colour will be interpolated
                 // and assigned to the output attachment.
                 targets: &[wgpu::ColorTargetState {
@@ -572,8 +581,8 @@ impl framework::Example for Example {
             label: Some("terrain"),
             layout: Some(&terrain_pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &terrain_vs_module,
-                entry_point: "main",
+                module: &terrain_module,
+                entry_point: "vs_main",
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: terrain_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
@@ -581,8 +590,8 @@ impl framework::Example for Example {
                 }],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &terrain_fs_module,
-                entry_point: "main",
+                module: &terrain_module,
+                entry_point: "fs_main",
                 targets: &[sc_desc.format.into()],
             }),
             primitive: wgpu::PrimitiveState {

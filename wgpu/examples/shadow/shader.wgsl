@@ -43,7 +43,6 @@ fn vs_main(
 
 // fragment shader
 
-[[block]]
 struct Light {
     proj: mat4x4<f32>;
     pos: vec4<f32>;
