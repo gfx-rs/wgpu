@@ -1,7 +1,6 @@
 // This should match `NUM_PARTICLES` on the Rust side.
 const NUM_PARTICLES: u32 = 1500u;
 
-[[block]]
 struct Particle {
   pos : vec2<f32>;
   vel : vec2<f32>;
