@@ -212,6 +212,49 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn put_image_size_query(
+        &mut self,
+        image: Handle<crate::Expression>,
+        level: Option<Handle<crate::Expression>>,
+        context: &ExpressionContext,
+    ) -> Result<(), Error> {
+        //Note: MSL only has separate width/height/depth queries,
+        // so compose the result of them.
+        let dim = match *context.resolve_type(image) {
+            crate::TypeInner::Image { dim, .. } => dim,
+            ref other => unreachable!("Unexpected type {:?}", other),
+        };
+        match dim {
+            crate::ImageDimension::D1 => {
+                write!(self.out, "int(")?;
+                self.put_image_query(image, "width", level, context)?;
+                write!(self.out, ")")?;
+            }
+            crate::ImageDimension::D2 => {
+                write!(self.out, "int2(")?;
+                self.put_image_query(image, "width", level, context)?;
+                write!(self.out, ", ")?;
+                self.put_image_query(image, "height", level, context)?;
+                write!(self.out, ")")?;
+            }
+            crate::ImageDimension::D3 => {
+                write!(self.out, "int3(")?;
+                self.put_image_query(image, "width", level, context)?;
+                write!(self.out, ", ")?;
+                self.put_image_query(image, "height", level, context)?;
+                write!(self.out, ", ")?;
+                self.put_image_query(image, "depth", level, context)?;
+                write!(self.out, ")")?;
+            }
+            crate::ImageDimension::Cube => {
+                write!(self.out, "int(")?;
+                self.put_image_query(image, "width", level, context)?;
+                write!(self.out, ").xxx")?;
+            }
+        }
+        Ok(())
+    }
+
     fn put_storage_image_coordinate(
         &mut self,
         expr: Handle<crate::Expression>,
@@ -473,40 +516,7 @@ impl<W: Write> Writer<W> {
             // so a conversion is needed.
             crate::Expression::ImageQuery { image, query } => match query {
                 crate::ImageQuery::Size { level } => {
-                    //Note: MSL only has separate width/height/depth queries,
-                    // so compose the result of them.
-                    let dim = match *context.resolve_type(image) {
-                        crate::TypeInner::Image { dim, .. } => dim,
-                        ref other => unreachable!("Unexpected type {:?}", other),
-                    };
-                    match dim {
-                        crate::ImageDimension::D1 => {
-                            write!(self.out, "int(")?;
-                            self.put_image_query(image, "width", level, context)?;
-                            write!(self.out, ")")?;
-                        }
-                        crate::ImageDimension::D2 => {
-                            write!(self.out, "int2(")?;
-                            self.put_image_query(image, "width", level, context)?;
-                            write!(self.out, ", ")?;
-                            self.put_image_query(image, "height", level, context)?;
-                            write!(self.out, ")")?;
-                        }
-                        crate::ImageDimension::D3 => {
-                            write!(self.out, "int3(")?;
-                            self.put_image_query(image, "width", level, context)?;
-                            write!(self.out, ", ")?;
-                            self.put_image_query(image, "height", level, context)?;
-                            write!(self.out, ", ")?;
-                            self.put_image_query(image, "depth", level, context)?;
-                            write!(self.out, ")")?;
-                        }
-                        crate::ImageDimension::Cube => {
-                            write!(self.out, "int(")?;
-                            self.put_image_query(image, "width", level, context)?;
-                            write!(self.out, ").xxx")?;
-                        }
-                    }
+                    self.put_image_size_query(image, level, context)?;
                 }
                 crate::ImageQuery::NumLevels => {
                     write!(self.out, "int(")?;
@@ -1680,8 +1690,8 @@ fn test_stack_size() {
     }
     let stack_size = max_addr - min_addr;
     // check the size (in debug only)
-    // last observed macOS value: 22112
-    if stack_size > 22200 {
-        panic!("`put_expression` stack size {} is too large!", stack_size);
+    // last observed macOS value: 18768
+    if stack_size < 18000 || stack_size > 19500 {
+        panic!("`put_expression` stack size {} has changed!", stack_size);
     }
 }
