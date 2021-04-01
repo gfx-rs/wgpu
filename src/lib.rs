@@ -179,8 +179,9 @@ trait Context: Debug + Send + Sized + Sync {
     type SwapChainOutputDetail: Send;
 
     type RequestAdapterFuture: Future<Output = Option<Self::AdapterId>> + Send;
-    type RequestDeviceFuture: Future<Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>>
-        + Send;
+    type RequestDeviceFuture: Future<
+        Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>,
+    > + Send;
     type MapAsyncFuture: Future<Output = Result<(), BufferAsyncError>> + Send;
 
     fn init(backends: BackendBit) -> Self;
@@ -447,6 +448,10 @@ trait Context: Debug + Send + Sized + Sync {
         command_buffers: I,
     );
     fn queue_get_timestamp_period(&self, queue: &Self::QueueId) -> f32;
+
+    fn start_capture(&self, device: &Self::DeviceId);
+
+    fn stop_capture(&self, device: &Self::DeviceId);
 }
 
 /// Context for all other wgpu objects. Instance of wgpu.
@@ -1649,6 +1654,16 @@ impl Device {
     /// Set a callback for errors that are not handled in error scopes.
     pub fn on_uncaptured_error(&self, handler: impl UncapturedErrorHandler) {
         self.context.device_on_uncaptured_error(&self.id, handler);
+    }
+
+    /// Starts frame capture.
+    pub fn start_capture(&self) {
+        Context::start_capture(&*self.context, &self.id)
+    }
+
+    /// Stops frame capture.
+    pub fn stop_capture(&self) {
+        Context::stop_capture(&*self.context, &self.id)
     }
 }
 
