@@ -6,8 +6,11 @@ edition = "2018"
 description = "Shader translation infrastructure"
 homepage = "https://github.com/gfx-rs/naga"
 repository = "https://github.com/gfx-rs/naga"
-keywords = ["shader", "SPIR-V"]
+keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 bitflags = "1"
