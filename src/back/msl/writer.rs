@@ -996,6 +996,13 @@ impl<W: Write> Writer<W> {
             let name = &self.names[&NameKey::Type(handle)];
             let global_use = GlobalUse::all(); //TODO
             match ty.inner {
+                // work around Metal toolchain bug with `uint` typedef
+                crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    ..
+                } => {
+                    writeln!(self.out, "typedef metal::uint {};", name)?;
+                }
                 crate::TypeInner::Scalar { kind, .. } => {
                     writeln!(self.out, "typedef {} {};", scalar_kind_string(kind), name)?;
                 }

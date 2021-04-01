@@ -9,7 +9,7 @@ constexpr constant unsigned const_0u = 0u;
 constexpr constant unsigned const_1u = 1u;
 constexpr constant unsigned const_2u = 2u;
 constexpr constant unsigned const_3u = 3u;
-typedef uint type;
+typedef metal::uint type;
 typedef type type1[1];
 struct PrimeIndices {
     type1 data;

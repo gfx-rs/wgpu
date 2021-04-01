@@ -18,7 +18,7 @@ typedef metal::float2 type1;
 typedef thread type1 *type2;
 typedef thread type1 *type3;
 typedef metal::float4 type4;
-typedef uint type5;
+typedef metal::uint type5;
 typedef type type6[const_1u];
 struct gl_PerVertex {
     type4 gl_Position;

@@ -21,7 +21,7 @@ struct Data {
     type2 proj_inv;
     type2 view;
 };
-typedef uint type3;
+typedef metal::uint type3;
 typedef int type4;
 typedef metal::float3x3 type5;
 typedef metal::texturecube<float, metal::access::sample> type6;

@@ -14,7 +14,7 @@ constexpr constant unsigned const_1u = 1u;
 constexpr constant float const_1f = 1.0;
 constexpr constant float const_0_10f = 0.1;
 constexpr constant float const_n1f = -1.0;
-typedef uint type;
+typedef metal::uint type;
 typedef metal::float2 type1;
 struct Particle {
     type1 pos;

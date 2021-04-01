@@ -30,7 +30,7 @@ struct Lights {
 };
 typedef metal::depth2d_array<float, metal::access::sample> type4;
 typedef metal::sampler type5;
-typedef uint type6;
+typedef metal::uint type6;
 typedef float type7;
 typedef metal::float2 type8;
 typedef metal::float3 type9;
