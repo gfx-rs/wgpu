@@ -42,8 +42,8 @@ void main1(
     thread type1 const& a_pos
 ) {
     v_uv = a_uv;
-    type1 _expr9 = a_pos;
-    _.gl_Position = metal::float4(_expr9.x, _expr9.y, const_0f, const_1f);
+    type1 _expr13 = a_pos;
+    _.gl_Position = metal::float4(_expr13.x, _expr13.y, const_0f, const_1f);
     return;
 }
 

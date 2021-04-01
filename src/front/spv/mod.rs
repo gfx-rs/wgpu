@@ -347,6 +347,7 @@ pub struct Parser<I> {
     function_call_graph: GraphMap<spirv::Word, (), petgraph::Directed>,
     options: Options,
     index_constants: Vec<Handle<crate::Constant>>,
+    index_constant_expressions: Vec<Handle<crate::Expression>>,
 }
 
 impl<I: Iterator<Item = u32>> Parser<I> {
@@ -375,6 +376,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             function_call_graph: GraphMap::new(),
             options: options.clone(),
             index_constants: Vec::new(),
+            index_constant_expressions: Vec::new(),
         }
     }
 
@@ -891,14 +893,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         _ => return Err(Error::InvalidVectorType(root_type_lookup.handle)),
                     };
 
-                    let mut index_expr =
-                        expressions.append(crate::Expression::Constant(self.index_constants[0]));
                     let mut handle = expressions.append(crate::Expression::Access {
                         base: root_lexp.handle,
-                        index: index_expr,
+                        index: self.index_constant_expressions[0],
                     });
-                    for &index in self.index_constants[1..num_components].iter() {
-                        index_expr = expressions.append(crate::Expression::Constant(index));
+                    for &index_expr in self.index_constant_expressions[1..num_components].iter() {
                         let access_expr = expressions.append(crate::Expression::Access {
                             base: root_lexp.handle,
                             index: index_expr,
@@ -942,8 +941,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         _ => return Err(Error::InvalidVectorType(root_type_lookup.handle)),
                     };
                     let mut components = Vec::with_capacity(num_components);
-                    for &index in self.index_constants[..num_components].iter() {
-                        let index_expr = expressions.append(crate::Expression::Constant(index));
+                    for &index_expr in self.index_constant_expressions[..num_components].iter() {
                         let access_expr = expressions.append(crate::Expression::Access {
                             base: root_lexp.handle,
                             index: index_expr,
@@ -1719,6 +1717,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     handle,
                 },
             );
+        }
+        // register special constants
+        self.index_constant_expressions.clear();
+        for &con_handle in self.index_constants.iter() {
+            let handle = expressions.append(crate::Expression::Constant(con_handle));
+            self.index_constant_expressions.push(handle);
         }
         // register constants
         for (&id, con) in self.lookup_constant.iter() {
