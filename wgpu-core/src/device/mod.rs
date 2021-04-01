@@ -1861,7 +1861,11 @@ impl<B: GfxBackend> Device<B> {
         ),
         pipeline::CreateComputePipelineError,
     > {
-        if !self.downlevel.flags.contains(wgt::DownlevelFlags::COMPUTE_SHADERS) {
+        if !self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::COMPUTE_SHADERS)
+        {
             return Err(pipeline::CreateComputePipelineError::ComputeShadersUnsupported);
         }
 
@@ -4762,5 +4766,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         self.buffer_unmap_inner::<B>(buffer_id)
             //Note: outside inner function so no locks are held when calling the callback
             .map(|pending_callback| fire_map_callbacks(pending_callback.into_iter()))
+    }
+
+    pub fn start_capture<B: GfxBackend>(
+        &self,
+        device_id: id::DeviceId,
+    ) -> Result<(), InvalidDevice> {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, _) = hub.devices.read(&mut token);
+        let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        device.raw.start_capture();
+        Ok(())
+    }
+
+    pub fn stop_capture<B: GfxBackend>(
+        &self,
+        device_id: id::DeviceId,
+    ) -> Result<(), InvalidDevice> {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, _) = hub.devices.read(&mut token);
+        let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        device.raw.stop_capture();
+        Ok(())
     }
 }
