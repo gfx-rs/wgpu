@@ -1861,7 +1861,7 @@ impl<B: GfxBackend> Device<B> {
         ),
         pipeline::CreateComputePipelineError,
     > {
-        if !self.downlevel.compute_shaders {
+        if !self.downlevel.flags.contains(wgt::DownlevelFlags::COMPUTE_SHADERS) {
             return Err(pipeline::CreateComputePipelineError::ComputeShadersUnsupported);
         }
 

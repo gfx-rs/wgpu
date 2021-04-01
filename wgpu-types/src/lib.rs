@@ -541,22 +541,10 @@ impl Default for Limits {
 /// Lists various ways the underlying platform does not conform to the WebGPU standard.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DownlevelProperties {
-    /// The device supports compiling and using compute shaders.
-    pub compute_shaders: bool,
+    /// Combined boolean flags.
+    pub flags: DownlevelFlags,
     /// Which collections of features shaders support. Defined in terms of D3D's shader models.
     pub shader_model: ShaderModel,
-    /// Supports creating storage images.
-    pub storage_images: bool,
-    /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil attachment.
-    pub read_only_depth_stencil: bool,
-    /// Supports:
-    /// - copy_image_to_image
-    /// - copy_buffer_to_image and copy_image_to_buffer with a buffer without a MAP_* usage
-    pub device_local_image_copies: bool,
-    /// Supports textures with mipmaps which have a non power of two size.
-    pub non_power_of_two_mipmapped_textures: bool,
-    /// Supports samplers with anisotropic filtering
-    pub anisotropic_filtering: bool,
 }
 
 impl Default for DownlevelProperties {
@@ -564,13 +552,8 @@ impl Default for DownlevelProperties {
     // gfx-hal's equivalent structure defaults to all off.
     fn default() -> Self {
         Self {
-            compute_shaders: true,
+            flags: DownlevelFlags::COMPLIANT,
             shader_model: ShaderModel::Sm5,
-            storage_images: true,
-            read_only_depth_stencil: true,
-            device_local_image_copies: true,
-            non_power_of_two_mipmapped_textures: true,
-            anisotropic_filtering: true,
         }
     }
 }
@@ -582,6 +565,28 @@ impl DownlevelProperties {
     /// These parts can be determined by the values in this structure.
     pub fn is_webgpu_compliant(self) -> bool {
         self == Self::default()
+    }
+}
+
+bitflags::bitflags! {
+    /// Binary flags listing various ways the underlying platform does not conform to the WebGPU standard.
+    pub struct DownlevelFlags: u32 {
+        /// The device supports compiling and using compute shaders.
+        const COMPUTE_SHADERS = 0x0000_0001;
+        /// Supports creating storage images.
+        const STORAGE_IMAGES = 0x0000_0002;
+        /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil attachment.
+        const READ_ONLY_DEPTH_STENCIL = 0x0000_0004;
+        /// Supports:
+        /// - copy_image_to_image
+        /// - copy_buffer_to_image and copy_image_to_buffer with a buffer without a MAP_* usage
+        const DEVICE_LOCAL_IMAGE_COPIES = 0x0000_0008;
+        /// Supports textures with mipmaps which have a non power of two size.
+        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0010;
+        /// Supports samplers with anisotropic filtering
+        const ANISOTROPIC_FILTERING = 0x0000_0020;
+        /// All flags are in their compliant state.
+        const COMPLIANT = 0x0000_003F; 
     }
 }
 
