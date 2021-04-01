@@ -266,6 +266,13 @@ fn convert_wgsl_shadow() {
 
 #[cfg(feature = "wgsl-in")]
 #[test]
+fn convert_wgsl_image_copy() {
+    //SPIR-V is blocked by https://github.com/gfx-rs/naga/issues/646
+    convert_wgsl("image-copy", Targets::METAL);
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
 fn convert_wgsl_texture_array() {
     convert_wgsl("texture-array", Targets::SPIRV);
 }

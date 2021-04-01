@@ -1,0 +1,8 @@
+(
+	spv_version: (1, 1),
+	spv_capabilities: [ Shader, Image1D, Sampled1D ],
+	mtl_bindings: {
+		(stage: Compute, group: 0, binding: 1): (texture: Some(0), mutable: false),
+		(stage: Compute, group: 0, binding: 2): (texture: Some(1), mutable: true),
+	}
+)

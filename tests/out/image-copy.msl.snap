@@ -1,0 +1,27 @@
+---
+source: tests/snapshots.rs
+expression: msl
+---
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+constexpr constant int const_10i = 10;
+constexpr constant int const_20i = 20;
+typedef metal::texture2d<uint, metal::access::read> type;
+typedef metal::texture1d<uint, metal::access::write> type1;
+typedef metal::uint3 type2;
+typedef metal::uint2 type3;
+typedef metal::int2 type4;
+struct main1Input {
+};
+kernel void main1(
+  type2 local_id [[thread_position_in_threadgroup]]
+, type image_src [[texture(0)]]
+, type1 image_dst [[texture(1)]]
+) {
+    metal::int2 _expr12 = (int2(image_src.get_width(), image_src.get_height()) * static_cast<int2>(metal::uint2(local_id.x, local_id.y))) % metal::int2(const_10i, const_20i);
+    metal::uint4 _expr13 = image_src.read(metal::uint2(_expr12));
+    image_dst.write(_expr13, metal::uint(_expr12.x));
+    return;
+}
+
