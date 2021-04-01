@@ -825,8 +825,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 .filter_map(|at| at.resolve_target)
                 .map(|attachment| view_guard.get(attachment).unwrap())
                 .collect(),
-            depth_stencil: depth_stencil_attachment
-                .map(|at| view_guard.get(at.view).unwrap()),
+            depth_stencil: depth_stencil_attachment.map(|at| view_guard.get(at.view).unwrap()),
         };
         let extent = extent.ok_or(RenderPassErrorInner::MissingAttachments)?;
         let fb_key = FramebufferKey {
