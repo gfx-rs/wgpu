@@ -750,6 +750,67 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn put_return_value(
+        &mut self,
+        level: Level,
+        expr_handle: Handle<crate::Expression>,
+        result_struct: Option<&str>,
+        context: &ExpressionContext,
+    ) -> Result<(), Error> {
+        match result_struct {
+            Some(struct_name) => {
+                let result_ty = context.function.result.as_ref().unwrap().ty;
+                match context.module.types[result_ty].inner {
+                    crate::TypeInner::Struct {
+                        block: _,
+                        ref members,
+                    } => {
+                        let tmp = "_tmp";
+                        write!(self.out, "{}const auto {} = ", level, tmp)?;
+                        self.put_expression(expr_handle, context, true)?;
+                        writeln!(self.out, ";")?;
+                        write!(self.out, "{}return {} {{", level, struct_name)?;
+                        for (index, member) in members.iter().enumerate() {
+                            let comma = if index == 0 { "" } else { "," };
+                            let name = &self.names[&NameKey::StructMember(result_ty, index as u32)];
+                            // logic similar to `put_initialization_component`
+                            if let crate::TypeInner::Array {
+                                size: crate::ArraySize::Constant(const_handle),
+                                ..
+                            } = context.module.types[member.ty].inner
+                            {
+                                let size = context.module.constants[const_handle]
+                                    .to_array_length()
+                                    .unwrap();
+                                write!(self.out, "{} {{", comma)?;
+                                for j in 0..size {
+                                    if j != 0 {
+                                        write!(self.out, ",")?;
+                                    }
+                                    write!(self.out, "{}.{}[{}]", tmp, name, j)?;
+                                }
+                                write!(self.out, "}}")?;
+                            } else {
+                                write!(self.out, "{} {}.{}", comma, tmp, name)?;
+                            }
+                        }
+                    }
+                    _ => {
+                        write!(self.out, "{}return {} {{ ", level, struct_name)?;
+                        self.put_expression(expr_handle, context, true)?;
+                    }
+                }
+                write!(self.out, " }}")?;
+            }
+            None => {
+                write!(self.out, "{}return ", level)?;
+                self.put_expression(expr_handle, context, true)?;
+            }
+        }
+        writeln!(self.out, ";")?;
+        Ok(())
+    }
+
     fn start_baking_expression(
         &mut self,
         handle: Handle<crate::Expression>,
@@ -883,59 +944,12 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Return {
                     value: Some(expr_handle),
                 } => {
-                    match context.result_struct {
-                        Some(struct_name) => {
-                            let result_ty = context.expression.function.result.as_ref().unwrap().ty;
-                            match context.expression.module.types[result_ty].inner {
-                                crate::TypeInner::Struct {
-                                    block: _,
-                                    ref members,
-                                } => {
-                                    let tmp = "_tmp";
-                                    write!(self.out, "{}const auto {} = ", level, tmp)?;
-                                    self.put_expression(expr_handle, &context.expression, true)?;
-                                    writeln!(self.out, ";")?;
-                                    write!(self.out, "{}return {} {{", level, struct_name)?;
-                                    for (index, member) in members.iter().enumerate() {
-                                        let comma = if index == 0 { "" } else { "," };
-                                        let name = &self.names
-                                            [&NameKey::StructMember(result_ty, index as u32)];
-                                        // logic similar to `put_initialization_component`
-                                        if let crate::TypeInner::Array {
-                                            size: crate::ArraySize::Constant(const_handle),
-                                            ..
-                                        } = context.expression.module.types[member.ty].inner
-                                        {
-                                            let size = context.expression.module.constants
-                                                [const_handle]
-                                                .to_array_length()
-                                                .unwrap();
-                                            write!(self.out, "{} {{", comma)?;
-                                            for j in 0..size {
-                                                if j != 0 {
-                                                    write!(self.out, ",")?;
-                                                }
-                                                write!(self.out, "{}.{}[{}]", tmp, name, j)?;
-                                            }
-                                            write!(self.out, "}}")?;
-                                        } else {
-                                            write!(self.out, "{} {}.{}", comma, tmp, name)?;
-                                        }
-                                    }
-                                }
-                                _ => {
-                                    write!(self.out, "{}return {} {{ ", level, struct_name)?;
-                                    self.put_expression(expr_handle, &context.expression, true)?;
-                                }
-                            }
-                            write!(self.out, " }}")?;
-                        }
-                        None => {
-                            write!(self.out, "{}return ", level)?;
-                            self.put_expression(expr_handle, &context.expression, true)?;
-                        }
-                    }
-                    writeln!(self.out, ";")?;
+                    self.put_return_value(
+                        level.clone(),
+                        expr_handle,
+                        context.result_struct,
+                        &context.expression,
+                    )?;
                 }
                 crate::Statement::Return { value: None } => {
                     writeln!(self.out, "{}return;", level)?;
@@ -1704,7 +1718,7 @@ fn test_stack_size() {
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
         // last observed macOS value: 18768
-        if stack_size < 18000 || stack_size > 19500 {
+        if stack_size < 18000 || stack_size > 20000 {
             panic!("`put_expression` stack size {} has changed!", stack_size);
         }
     }
@@ -1718,8 +1732,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
-        // last observed macOS value: 15616
-        if stack_size < 15000 || stack_size > 16200 {
+        // last observed macOS value: 12736
+        if stack_size < 12000 || stack_size > 13500 {
             panic!("`put_block` stack size {} has changed!", stack_size);
         }
     }
