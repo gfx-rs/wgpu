@@ -2021,6 +2021,10 @@ impl crate::Context for Context {
     fn queue_get_timestamp_period(&self, _queue: &Self::QueueId) -> f32 {
         1.0 //TODO
     }
+
+    fn start_capture(&self, device: &Self::DeviceId) {}
+
+    fn stop_capture(&self, device: &Self::DeviceId) {}
 }
 
 pub(crate) type SwapChainOutputDetail = ();
