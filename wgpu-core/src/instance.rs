@@ -275,20 +275,39 @@ impl<B: GfxBackend> Adapter<B> {
                 .max(MIN_PUSH_CONSTANT_SIZE), // As an extension, the default is always 0, so define a separate minimum.
         };
 
+        let mut downlevel_flags = wgt::DownlevelFlags::empty();
+        downlevel_flags.set(
+            wgt::DownlevelFlags::COMPUTE_SHADERS,
+            properties.downlevel.compute_shaders,
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::STORAGE_IMAGES,
+            properties.downlevel.storage_images,
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL,
+            properties.downlevel.read_only_depth_stencil,
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::DEVICE_LOCAL_IMAGE_COPIES,
+            properties.downlevel.device_local_image_copies,
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES,
+            properties.downlevel.non_power_of_two_mipmapped_textures,
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::ANISOTROPIC_FILTERING,
+            private_features.anisotropic_filtering,
+        );
+
         let downlevel = wgt::DownlevelProperties {
-            compute_shaders: properties.downlevel.compute_shaders,
+            flags: downlevel_flags,
             shader_model: match properties.downlevel.shader_model {
                 hal::DownlevelShaderModel::ShaderModel2 => wgt::ShaderModel::Sm2,
                 hal::DownlevelShaderModel::ShaderModel4 => wgt::ShaderModel::Sm4,
                 hal::DownlevelShaderModel::ShaderModel5 => wgt::ShaderModel::Sm5,
             },
-            storage_images: properties.downlevel.storage_images,
-            read_only_depth_stencil: properties.downlevel.read_only_depth_stencil,
-            device_local_image_copies: properties.downlevel.device_local_image_copies,
-            non_power_of_two_mipmapped_textures: properties
-                .downlevel
-                .non_power_of_two_mipmapped_textures,
-            anisotropic_filtering: private_features.anisotropic_filtering,
         };
 
         Self {
