@@ -907,11 +907,40 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "{}{}::discard_fragment();", level, NAMESPACE)?;
                 }
                 crate::Statement::Store { pointer, value } => {
-                    write!(self.out, "{}", level)?;
-                    self.put_expression(pointer, &context.expression, true)?;
-                    write!(self.out, " = ")?;
-                    self.put_expression(value, &context.expression, true)?;
-                    writeln!(self.out, ";")?;
+                    // we can't assign fixed-size arrays
+                    let pointer_info = &context.expression.info[pointer];
+                    let array_size =
+                        match *pointer_info.ty.inner_with(&context.expression.module.types) {
+                            crate::TypeInner::Pointer { base, .. } => {
+                                match context.expression.module.types[base].inner {
+                                    crate::TypeInner::Array {
+                                        size: crate::ArraySize::Constant(ch),
+                                        ..
+                                    } => Some(ch),
+                                    _ => None,
+                                }
+                            }
+                            _ => None,
+                        };
+                    match array_size {
+                        Some(const_handle) => {
+                            let size = context.expression.module.constants[const_handle]
+                                .to_array_length()
+                                .unwrap();
+                            write!(self.out, "{}for(int _i=0; _i<{}; ++_i) ", level, size)?;
+                            self.put_expression(pointer, &context.expression, true)?;
+                            write!(self.out, "[_i] = ")?;
+                            self.put_expression(value, &context.expression, true)?;
+                            writeln!(self.out, "[_i];")?;
+                        }
+                        None => {
+                            write!(self.out, "{}", level)?;
+                            self.put_expression(pointer, &context.expression, true)?;
+                            write!(self.out, " = ")?;
+                            self.put_expression(value, &context.expression, true)?;
+                            writeln!(self.out, ";")?;
+                        }
+                    }
                 }
                 crate::Statement::ImageStore {
                     image,
