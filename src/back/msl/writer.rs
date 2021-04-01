@@ -212,6 +212,23 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn put_storage_image_coordinate(
+        &mut self,
+        expr: Handle<crate::Expression>,
+        context: &ExpressionContext,
+    ) -> Result<(), Error> {
+        // coordinates in IR are int, but Metal expects uint
+        let size_str = match *context.info[expr].ty.inner_with(&context.module.types) {
+            crate::TypeInner::Scalar { .. } => "",
+            crate::TypeInner::Vector { size, .. } => vector_size_string(size),
+            _ => return Err(Error::Validation),
+        };
+        write!(self.out, "{}::uint{}(", NAMESPACE, size_str)?;
+        self.put_expression(expr, context, true)?;
+        write!(self.out, ")")?;
+        Ok(())
+    }
+
     fn put_initialization_component(
         &mut self,
         component: Handle<crate::Expression>,
@@ -441,7 +458,7 @@ impl<W: Write> Writer<W> {
             } => {
                 self.put_expression(image, context, false)?;
                 write!(self.out, ".read(")?;
-                self.put_expression(coordinate, context, true)?;
+                self.put_storage_image_coordinate(coordinate, context)?;
                 if let Some(expr) = array_index {
                     write!(self.out, ", ")?;
                     self.put_expression(expr, context, true)?;
@@ -953,7 +970,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ".write(")?;
                     self.put_expression(value, &context.expression, true)?;
                     write!(self.out, ", ")?;
-                    self.put_expression(coordinate, &context.expression, true)?;
+                    self.put_storage_image_coordinate(coordinate, &context.expression)?;
                     if let Some(expr) = array_index {
                         write!(self.out, ", ")?;
                         self.put_expression(expr, &context.expression, true)?;
