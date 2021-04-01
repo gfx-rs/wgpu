@@ -78,6 +78,8 @@ pub struct Writer<W> {
     namer: Namer,
     #[cfg(test)]
     put_expression_stack_pointers: crate::FastHashSet<*const ()>,
+    #[cfg(test)]
+    put_block_stack_pointers: crate::FastHashSet<*const ()>,
 }
 
 fn scalar_kind_string(kind: crate::ScalarKind) -> &'static str {
@@ -172,6 +174,8 @@ impl<W: Write> Writer<W> {
             namer: Namer::default(),
             #[cfg(test)]
             put_expression_stack_pointers: Default::default(),
+            #[cfg(test)]
+            put_block_stack_pointers: Default::default(),
         }
     }
 
@@ -785,6 +789,12 @@ impl<W: Write> Writer<W> {
         statements: &[crate::Statement],
         context: &StatementContext,
     ) -> Result<(), Error> {
+        // Add to the set in order to track the stack size.
+        #[cfg(test)]
+        #[allow(trivial_casts)]
+        self.put_block_stack_pointers
+            .insert(&level as *const _ as *const ());
+
         for statement in statements {
             log::trace!("statement[{}] {:?}", level.0, statement);
             match *statement {
@@ -1683,15 +1693,34 @@ fn test_stack_size() {
     // process the module
     let mut writer = Writer::new(String::new());
     writer.write(&module, &info, &Default::default()).unwrap();
-    let (mut min_addr, mut max_addr) = (!0usize, 0usize);
-    for pointer in writer.put_expression_stack_pointers {
-        min_addr = min_addr.min(pointer as usize);
-        max_addr = max_addr.max(pointer as usize);
+
+    {
+        // check expression stack
+        let mut addresses = !0usize..0usize;
+        for pointer in writer.put_expression_stack_pointers {
+            addresses.start = addresses.start.min(pointer as usize);
+            addresses.end = addresses.end.max(pointer as usize);
+        }
+        let stack_size = addresses.end - addresses.start;
+        // check the size (in debug only)
+        // last observed macOS value: 18768
+        if stack_size < 18000 || stack_size > 19500 {
+            panic!("`put_expression` stack size {} has changed!", stack_size);
+        }
     }
-    let stack_size = max_addr - min_addr;
-    // check the size (in debug only)
-    // last observed macOS value: 18768
-    if stack_size < 18000 || stack_size > 19500 {
-        panic!("`put_expression` stack size {} has changed!", stack_size);
+
+    {
+        // check block stack
+        let mut addresses = !0usize..0usize;
+        for pointer in writer.put_block_stack_pointers {
+            addresses.start = addresses.start.min(pointer as usize);
+            addresses.end = addresses.end.max(pointer as usize);
+        }
+        let stack_size = addresses.end - addresses.start;
+        // check the size (in debug only)
+        // last observed macOS value: 15616
+        if stack_size < 15000 || stack_size > 16200 {
+            panic!("`put_block` stack size {} has changed!", stack_size);
+        }
     }
 }
