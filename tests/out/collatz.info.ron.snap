@@ -265,10 +265,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
-                        kind: Uint,
-                        width: 4,
-                    )),
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -293,10 +290,7 @@ expression: output
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
-                        kind: Uint,
-                        width: 4,
-                    )),
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
