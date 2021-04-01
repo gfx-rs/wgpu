@@ -538,6 +538,70 @@ impl Default for Limits {
     }
 }
 
+/// Lists various ways the underlying platform does not conform to the WebGPU standard.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DownlevelProperties {
+    /// Combined boolean flags.
+    pub flags: DownlevelFlags,
+    /// Which collections of features shaders support. Defined in terms of D3D's shader models.
+    pub shader_model: ShaderModel,
+}
+
+impl Default for DownlevelProperties {
+    // Note, this defaults to all on, as that is the default assumption in wgpu.
+    // gfx-hal's equivalent structure defaults to all off.
+    fn default() -> Self {
+        Self {
+            flags: DownlevelFlags::COMPLIANT,
+            shader_model: ShaderModel::Sm5,
+        }
+    }
+}
+
+impl DownlevelProperties {
+    /// Returns true if the underlying platform offers complete support of the baseline WebGPU standard.
+    ///
+    /// If this returns false, some parts of the API will result in validation errors where they would not normally.
+    /// These parts can be determined by the values in this structure.
+    pub fn is_webgpu_compliant(self) -> bool {
+        self == Self::default()
+    }
+}
+
+bitflags::bitflags! {
+    /// Binary flags listing various ways the underlying platform does not conform to the WebGPU standard.
+    pub struct DownlevelFlags: u32 {
+        /// The device supports compiling and using compute shaders.
+        const COMPUTE_SHADERS = 0x0000_0001;
+        /// Supports creating storage images.
+        const STORAGE_IMAGES = 0x0000_0002;
+        /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil attachment.
+        const READ_ONLY_DEPTH_STENCIL = 0x0000_0004;
+        /// Supports:
+        /// - copy_image_to_image
+        /// - copy_buffer_to_image and copy_image_to_buffer with a buffer without a MAP_* usage
+        const DEVICE_LOCAL_IMAGE_COPIES = 0x0000_0008;
+        /// Supports textures with mipmaps which have a non power of two size.
+        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0010;
+        /// Supports samplers with anisotropic filtering
+        const ANISOTROPIC_FILTERING = 0x0000_0020;
+        /// All flags are in their compliant state.
+        const COMPLIANT = 0x0000_003F; 
+    }
+}
+
+/// Collections of shader features a device supports if they support less than WebGPU normally allows.
+// TODO: Fill out the differences between shader models more completely
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ShaderModel {
+    /// Extremely limited shaders, including a total instruction limit.
+    Sm2,
+    /// Missing minor features and storage images.
+    Sm4,
+    /// WebGPU supports shader module 5.
+    Sm5,
+}
+
 /// Supported physical device types.
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]

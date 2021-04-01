@@ -284,6 +284,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) private_features: PrivateFeatures,
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
+    pub(crate) downlevel: wgt::DownlevelProperties,
     spv_options: naga::back::spv::Options,
     //TODO: move this behind another mutex. This would allow several methods to switch
     // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
@@ -307,6 +308,7 @@ impl<B: GfxBackend> Device<B> {
         mem_props: hal::adapter::MemoryProperties,
         hal_limits: hal::Limits,
         private_features: PrivateFeatures,
+        downlevel: wgt::DownlevelProperties,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Self, CreateDeviceError> {
@@ -376,6 +378,7 @@ impl<B: GfxBackend> Device<B> {
             private_features,
             limits: desc.limits.clone(),
             features: desc.features,
+            downlevel,
             spv_options,
             pending_writes: queue::PendingWrites::new(),
         })
@@ -1017,7 +1020,8 @@ impl<B: GfxBackend> Device<B> {
         let (naga_result, interface) = match module {
             // If succeeded, then validate it and attempt to give it to gfx-hal directly.
             Some(module) if desc.flags.contains(wgt::ShaderFlags::VALIDATION) || spv.is_none() => {
-                let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all()).validate(&module)?;
+                let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all())
+                    .validate(&module)?;
                 if !self.features.contains(wgt::Features::PUSH_CONSTANTS)
                     && module
                         .global_variables
@@ -1060,12 +1064,8 @@ impl<B: GfxBackend> Device<B> {
                     None => {
                         // Produce a SPIR-V from the Naga module
                         let shader = maybe_shader.unwrap();
-                        naga::back::spv::write_vec(
-                            &shader.module,
-                            &shader.info,
-                            &self.spv_options,
-                        )
-                        .map(Cow::Owned)
+                        naga::back::spv::write_vec(&shader.module, &shader.info, &self.spv_options)
+                            .map(Cow::Owned)
                     }
                 };
                 match spv {
@@ -1861,6 +1861,10 @@ impl<B: GfxBackend> Device<B> {
         ),
         pipeline::CreateComputePipelineError,
     > {
+        if !self.downlevel.flags.contains(wgt::DownlevelFlags::COMPUTE_SHADERS) {
+            return Err(pipeline::CreateComputePipelineError::ComputeShadersUnsupported);
+        }
+
         //TODO: only lock mutable if the layout is derived
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
         let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
@@ -2654,6 +2658,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
 
         Ok(device.limits.clone())
+    }
+
+    pub fn device_downlevel_properties<B: GfxBackend>(
+        &self,
+        device_id: id::DeviceId,
+    ) -> Result<wgt::DownlevelProperties, InvalidDevice> {
+        profiling::scope!("Device::downlevel_properties");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, _) = hub.devices.read(&mut token);
+        let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+
+        Ok(device.downlevel)
     }
 
     pub fn device_create_buffer<B: GfxBackend>(
@@ -3709,6 +3727,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 dev_stored,
                 &device.raw,
                 device.limits.clone(),
+                device.downlevel,
                 device.private_features,
                 &desc.label,
                 #[cfg(feature = "trace")]
