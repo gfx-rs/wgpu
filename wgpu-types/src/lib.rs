@@ -586,7 +586,7 @@ bitflags::bitflags! {
         /// Supports samplers with anisotropic filtering
         const ANISOTROPIC_FILTERING = 0x0000_0020;
         /// All flags are in their compliant state.
-        const COMPLIANT = 0x0000_003F; 
+        const COMPLIANT = 0x0000_003F;
     }
 }
 

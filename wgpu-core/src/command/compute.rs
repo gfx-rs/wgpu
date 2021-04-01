@@ -275,11 +275,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if !cmd_buf.downlevel.flags.contains(wgt::DownlevelFlags::COMPUTE_SHADERS) {
+        if !cmd_buf
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::COMPUTE_SHADERS)
+        {
             return Err(ComputePassError {
                 scope: PassErrorScope::Pass(encoder_id),
                 inner: ComputePassErrorInner::ComputeShadersUnsupported,
-            })
+            });
         }
 
         if let Some(ref label) = base.label {
