@@ -279,12 +279,41 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 }
             }
 
-            let old_len = function.expressions.len();
-            for component in components.iter_mut() {
-                *component = function.expressions.append(crate::Expression::Load {
-                    pointer: *component,
+            let position_index = members.iter().position(|member| match member.binding {
+                Some(crate::Binding::BuiltIn(crate::BuiltIn::Position)) => true,
+                _ => false,
+            });
+            if let Some(component_index) = position_index {
+                let old_len = function.expressions.len();
+                let global_expr = components[component_index];
+                let access_expr = function.expressions.append(crate::Expression::AccessIndex {
+                    base: global_expr,
+                    index: 1,
+                });
+                let load_expr = function.expressions.append(crate::Expression::Load {
+                    pointer: access_expr,
+                });
+                let neg_expr = function.expressions.append(crate::Expression::Unary {
+                    op: crate::UnaryOperator::Negate,
+                    expr: load_expr,
+                });
+                function.body.push(crate::Statement::Emit(
+                    function.expressions.range_from(old_len),
+                ));
+                function.body.push(crate::Statement::Store {
+                    pointer: access_expr,
+                    value: neg_expr,
                 });
             }
+
+            let old_len = function.expressions.len();
+            for component in components.iter_mut() {
+                let load_expr = crate::Expression::Load {
+                    pointer: *component,
+                };
+                *component = function.expressions.append(load_expr);
+            }
+
             match members.len() {
                 0 => {}
                 1 => {

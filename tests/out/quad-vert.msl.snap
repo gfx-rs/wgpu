@@ -69,6 +69,7 @@ vertex main2Output main2(
     a_uv = a_uv1;
     a_pos = a_pos1;
     main1(v_uv, a_uv, _, a_pos);
+    _.gl_Position.y = -_.gl_Position.y;
     const auto _tmp = type10 {v_uv, _.gl_Position, _.gl_PointSize, {_.gl_ClipDistance[0]}};
     return main2Output { _tmp.member, _tmp.gl_Position1, _tmp.gl_PointSize1, {_tmp.gl_ClipDistance1[0]} };
 }

@@ -1825,6 +1825,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             crate::Module::default()
         };
 
+        // register indexing constants
         self.index_constants.clear();
         for i in 0..4 {
             let handle = module.constants.append(crate::Constant {
