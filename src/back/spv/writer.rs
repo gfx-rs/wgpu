@@ -53,10 +53,15 @@ struct LocalVariable {
     instruction: Instruction,
 }
 
-#[derive(Default)]
+struct ResultMember {
+    id: Word,
+    type_id: Word,
+    built_in: Option<crate::BuiltIn>,
+}
+
 struct EntryPointContext {
     argument_ids: Vec<Word>,
-    result_ids_typed: Vec<(Word, Word)>,
+    results: Vec<ResultMember>,
 }
 
 #[derive(Default)]
@@ -362,6 +367,24 @@ impl Writer {
         id
     }
 
+    fn get_index_constant(
+        &mut self,
+        index: Word,
+        types: &Arena<crate::Type>,
+    ) -> Result<Word, Error> {
+        let type_id = self.get_type_id(
+            types,
+            LookupType::Local(LocalType::Value {
+                vector_size: None,
+                kind: crate::ScalarKind::Sint,
+                width: 4,
+                pointer_class: None,
+            }),
+        )?;
+        //TODO: cache this
+        Ok(self.create_constant(type_id, &[index]))
+    }
+
     fn write_function(
         &mut self,
         ir_function: &crate::Function,
@@ -398,7 +421,10 @@ impl Writer {
 
         let prelude_id = self.id_gen.next();
         let mut prelude = Block::new(prelude_id);
-        let mut ep_context = EntryPointContext::default();
+        let mut ep_context = EntryPointContext {
+            argument_ids: Vec::new(),
+            results: Vec::new(),
+        };
 
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
         for argument in ir_function.arguments.iter() {
@@ -465,7 +491,11 @@ impl Writer {
                         let varying_id =
                             self.write_varying(ir_module, class, None, result.ty, binding)?;
                         list.push(varying_id);
-                        ep_context.result_ids_typed.push((varying_id, type_id));
+                        ep_context.results.push(ResultMember {
+                            id: varying_id,
+                            type_id,
+                            built_in: binding.to_built_in(),
+                        });
                     } else if let crate::TypeInner::Struct {
                         block: _,
                         ref members,
@@ -479,7 +509,11 @@ impl Writer {
                             let varying_id =
                                 self.write_varying(ir_module, class, name, member.ty, binding)?;
                             list.push(varying_id);
-                            ep_context.result_ids_typed.push((varying_id, type_id));
+                            ep_context.results.push(ResultMember {
+                                id: varying_id,
+                                type_id,
+                                built_in: binding.to_built_in(),
+                            });
                         }
                     } else {
                         unreachable!("Missing result binding on an entry point");
@@ -1900,16 +1934,7 @@ impl Writer {
                     base
                 }
                 crate::Expression::AccessIndex { base, index } => {
-                    let const_ty_id = self.get_type_id(
-                        &ir_module.types,
-                        LookupType::Local(LocalType::Value {
-                            vector_size: None,
-                            kind: crate::ScalarKind::Sint,
-                            width: 4,
-                            pointer_class: None,
-                        }),
-                    )?;
-                    let const_id = self.create_constant(const_ty_id, &[index]);
+                    let const_id = self.get_index_constant(index, &ir_module.types)?;
                     self.temp_chain.push(const_id);
                     base
                 }
@@ -1956,6 +1981,77 @@ impl Writer {
             }
             ref other => unreachable!("Unexpected global expression {:?}", other),
         }
+    }
+
+    fn write_entry_point_return(
+        &mut self,
+        value_id: Word,
+        ir_result: &crate::FunctionResult,
+        type_arena: &Arena<crate::Type>,
+        result_members: &[ResultMember],
+        body: &mut Vec<Instruction>,
+    ) -> Result<(), Error> {
+        for (index, res_member) in result_members.iter().enumerate() {
+            let member_value_id = match ir_result.binding {
+                Some(_) => value_id,
+                None => {
+                    let member_value_id = self.id_gen.next();
+                    body.push(Instruction::composite_extract(
+                        res_member.type_id,
+                        member_value_id,
+                        value_id,
+                        &[index as u32],
+                    ));
+                    member_value_id
+                }
+            };
+
+            body.push(Instruction::store(res_member.id, member_value_id, None));
+
+            // Flip Y coordinate to adjust for coordinate space difference
+            // between SPIR-V and our IR.
+            if res_member.built_in == Some(crate::BuiltIn::Position) {
+                let access_id = self.id_gen.next();
+                let float_ptr_type_id = self.get_type_id(
+                    type_arena,
+                    LookupType::Local(LocalType::Value {
+                        vector_size: None,
+                        kind: crate::ScalarKind::Float,
+                        width: 4,
+                        pointer_class: Some(spirv::StorageClass::Output),
+                    }),
+                )?;
+                let index_y_id = self.get_index_constant(1, type_arena)?;
+                body.push(Instruction::access_chain(
+                    float_ptr_type_id,
+                    access_id,
+                    res_member.id,
+                    &[index_y_id],
+                ));
+
+                let load_id = self.id_gen.next();
+                let float_type_id = self.get_type_id(
+                    type_arena,
+                    LookupType::Local(LocalType::Value {
+                        vector_size: None,
+                        kind: crate::ScalarKind::Float,
+                        width: 4,
+                        pointer_class: None,
+                    }),
+                )?;
+                body.push(Instruction::load(float_type_id, load_id, access_id, None));
+
+                let neg_id = self.id_gen.next();
+                body.push(Instruction::unary(
+                    spirv::Op::FNegate,
+                    float_type_id,
+                    neg_id,
+                    load_id,
+                ));
+                body.push(Instruction::store(access_id, neg_id, None));
+            }
+        }
+        Ok(())
     }
 
     //TODO: put most of these into a `BlockContext` structure!
@@ -2193,30 +2289,13 @@ impl Writer {
                         // If this is an entry point, and we need to return anything,
                         // let's instead store the output variables and return `void`.
                         Some(ref context) => {
-                            let result = ir_function.result.as_ref().unwrap();
-                            if result.binding.is_none() {
-                                for (index, &(varying_id, type_id)) in
-                                    context.result_ids_typed.iter().enumerate()
-                                {
-                                    let member_value_id = self.id_gen.next();
-                                    block.body.push(Instruction::composite_extract(
-                                        type_id,
-                                        member_value_id,
-                                        value_id,
-                                        &[index as u32],
-                                    ));
-                                    block.body.push(Instruction::store(
-                                        varying_id,
-                                        member_value_id,
-                                        None,
-                                    ));
-                                }
-                            } else {
-                                let (varying_id, _) = context.result_ids_typed[0];
-                                block
-                                    .body
-                                    .push(Instruction::store(varying_id, value_id, None));
-                            };
+                            self.write_entry_point_return(
+                                value_id,
+                                ir_function.result.as_ref().unwrap(),
+                                &ir_module.types,
+                                &context.results,
+                                &mut block.body,
+                            )?;
                             Instruction::return_void()
                         }
                         None => Instruction::return_value(value_id),
