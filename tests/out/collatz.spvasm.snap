@@ -5,7 +5,7 @@ expression: dis
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 62
+; Bound: 61
 OpCapability Shader
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
@@ -49,7 +49,6 @@ OpDecorate %45 BuiltIn GlobalInvocationId
 %53 = OpTypePointer StorageBuffer %4
 %55 = OpTypeInt 32 1
 %56 = OpConstant  %55  0
-%60 = OpConstant  %55  0
 %18 = OpFunction  %4  None %19
 %17 = OpFunctionParameter  %4
 %16 = OpLabel
@@ -107,7 +106,7 @@ OpBranch %50
 %57 = OpAccessChain  %53  %11 %56 %54
 %58 = OpLoad  %4  %57
 %59 = OpFunctionCall  %4  %18 %58
-%61 = OpAccessChain  %53  %11 %60 %52
-OpStore %61 %59
+%60 = OpAccessChain  %53  %11 %56 %52
+OpStore %60 %59
 OpReturn
 OpFunctionEnd

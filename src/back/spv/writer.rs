@@ -11,6 +11,7 @@ use std::{collections::hash_map::Entry, ops};
 use thiserror::Error;
 
 const BITS_PER_BYTE: crate::Bytes = 8;
+const CACHED_CONSTANT_INDICES: usize = 8;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
@@ -269,7 +270,8 @@ pub struct Writer {
     lookup_function: crate::FastHashMap<Handle<crate::Function>, Word>,
     lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
     lookup_function_call: crate::FastHashMap<Handle<crate::Expression>, Word>,
-    lookup_constant: crate::FastHashMap<Handle<crate::Constant>, Word>,
+    constant_ids: Vec<Word>,
+    index_constant_ids: Vec<Word>,
     global_variables: Vec<GlobalVariable>,
     cached: CachedExpressions,
     gl450_ext_inst_id: Word,
@@ -300,7 +302,8 @@ impl Writer {
             lookup_function: crate::FastHashMap::default(),
             lookup_function_type: crate::FastHashMap::default(),
             lookup_function_call: crate::FastHashMap::default(),
-            lookup_constant: crate::FastHashMap::default(),
+            constant_ids: Vec::new(),
+            index_constant_ids: Vec::new(),
             global_variables: Vec::new(),
             cached: CachedExpressions::default(),
             gl450_ext_inst_id,
@@ -372,6 +375,14 @@ impl Writer {
         index: Word,
         types: &Arena<crate::Type>,
     ) -> Result<Word, Error> {
+        while self.index_constant_ids.len() <= index as usize {
+            self.index_constant_ids.push(0);
+        }
+        let cached = self.index_constant_ids[index as usize];
+        if cached != 0 {
+            return Ok(cached);
+        }
+
         let type_id = self.get_type_id(
             types,
             LookupType::Local(LocalType::Value {
@@ -381,8 +392,10 @@ impl Writer {
                 pointer_class: None,
             }),
         )?;
-        //TODO: cache this
-        Ok(self.create_constant(type_id, &[index]))
+
+        let id = self.create_constant(type_id, &[index]);
+        self.index_constant_ids[index as usize] = id;
+        Ok(id)
     }
 
     fn write_function(
@@ -405,7 +418,7 @@ impl Writer {
 
             let init_word = variable
                 .init
-                .map(|constant| self.lookup_constant[&constant]);
+                .map(|constant| self.constant_ids[constant.index()]);
             let pointer_type_id =
                 self.get_pointer_id(&ir_module.types, variable.ty, spirv::StorageClass::Function)?;
             let instruction = Instruction::variable(
@@ -841,7 +854,7 @@ impl Writer {
                 let type_id = self.get_type_id(arena, LookupType::Handle(base))?;
                 match size {
                     crate::ArraySize::Constant(const_handle) => {
-                        let length_id = self.lookup_constant[&const_handle];
+                        let length_id = self.constant_ids[const_handle.index()];
                         Instruction::type_array(id, type_id, length_id)
                     }
                     crate::ArraySize::Dynamic => Instruction::type_runtime_array(id, type_id),
@@ -935,8 +948,14 @@ impl Writer {
         id: Word,
         value: &crate::ScalarValue,
         width: crate::Bytes,
+        debug_name: Option<&String>,
         types: &Arena<crate::Type>,
     ) -> Result<(), Error> {
+        if self.flags.contains(WriterFlags::DEBUG) {
+            if let Some(name) = debug_name {
+                self.debugs.push(Instruction::name(id, name));
+            }
+        }
         let type_id = self.get_type_id(
             types,
             LookupType::Local(LocalType::Value {
@@ -951,6 +970,17 @@ impl Writer {
             crate::ScalarValue::Sint(val) => {
                 let words = match width {
                     4 => {
+                        if debug_name.is_none()
+                            && 0 <= val
+                            && val < CACHED_CONSTANT_INDICES as i64
+                            && self.index_constant_ids.get(val as usize).unwrap_or(&0) == &0
+                        {
+                            // cache this as an indexing constant
+                            while self.index_constant_ids.len() <= val as usize {
+                                self.index_constant_ids.push(0);
+                            }
+                            self.index_constant_ids[val as usize] = id;
+                        }
                         solo = [val as u32];
                         &solo[..]
                     }
@@ -1008,7 +1038,7 @@ impl Writer {
     ) -> Result<(), Error> {
         let mut constituent_ids = Vec::with_capacity(components.len());
         for constituent in components.iter() {
-            let constituent_id = self.lookup_constant[constituent];
+            let constituent_id = self.constant_ids[constituent.index()];
             constituent_ids.push(constituent_id);
         }
 
@@ -1109,7 +1139,7 @@ impl Writer {
 
         let init_word = global_variable
             .init
-            .map(|constant| self.lookup_constant[&constant]);
+            .map(|constant| self.constant_ids[constant.index()]);
         let pointer_type_id = self.get_pointer_id(&ir_module.types, global_variable.ty, class)?;
         let instruction = Instruction::variable(pointer_type_id, id, class, init_word);
 
@@ -1345,7 +1375,7 @@ impl Writer {
                 }
             }
             crate::Expression::GlobalVariable(handle) => self.global_variables[handle.index()].id,
-            crate::Expression::Constant(handle) => self.lookup_constant[&handle],
+            crate::Expression::Constant(handle) => self.constant_ids[handle.index()],
             crate::Expression::Compose {
                 ty: _,
                 ref components,
@@ -1794,6 +1824,7 @@ impl Writer {
                             zero_id,
                             &crate::ScalarValue::Float(0.0),
                             4,
+                            None,
                             &ir_module.types,
                         )?;
                         inst.add_operand(spirv::ImageOperands::LOD.bits());
@@ -1862,7 +1893,7 @@ impl Writer {
                 };
 
                 if let Some(offset_const) = offset {
-                    let offset_id = self.lookup_constant[&offset_const];
+                    let offset_id = self.constant_ids[offset_const.index()];
                     main_instruction.add_operand(spirv::ImageOperands::CONST_OFFSET.bits());
                     main_instruction.add_operand(offset_id);
                 }
@@ -2419,19 +2450,22 @@ impl Writer {
                 .push(Instruction::source(spirv::SourceLanguage::GLSL, 450));
         }
 
+        self.constant_ids.clear();
+        self.constant_ids.resize(ir_module.constants.len(), 0);
         // first, output all the scalar constants
         for (handle, constant) in ir_module.constants.iter() {
             match constant.inner {
                 crate::ConstantInner::Composite { .. } => continue,
                 crate::ConstantInner::Scalar { width, ref value } => {
                     let id = self.id_gen.next();
-                    self.lookup_constant.insert(handle, id);
-                    if self.flags.contains(WriterFlags::DEBUG) {
-                        if let Some(ref name) = constant.name {
-                            self.debugs.push(Instruction::name(id, name));
-                        }
-                    }
-                    self.write_constant_scalar(id, value, width, &ir_module.types)?;
+                    self.constant_ids[handle.index()] = id;
+                    self.write_constant_scalar(
+                        id,
+                        value,
+                        width,
+                        constant.name.as_ref(),
+                        &ir_module.types,
+                    )?;
                 }
             }
         }
@@ -2447,7 +2481,7 @@ impl Writer {
                 crate::ConstantInner::Scalar { .. } => continue,
                 crate::ConstantInner::Composite { ty, ref components } => {
                     let id = self.id_gen.next();
-                    self.lookup_constant.insert(handle, id);
+                    self.constant_ids[handle.index()] = id;
                     if self.flags.contains(WriterFlags::DEBUG) {
                         if let Some(ref name) = constant.name {
                             self.debugs.push(Instruction::name(id, name));
@@ -2457,6 +2491,7 @@ impl Writer {
                 }
             }
         }
+        debug_assert_eq!(self.constant_ids.iter().position(|&id| id == 0), None);
 
         // now write all globals
         self.global_variables.clear();

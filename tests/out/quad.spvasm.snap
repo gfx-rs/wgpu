@@ -5,13 +5,13 @@ expression: dis
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 66
+; Bound: 65
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %28 "main" %19 %22 %24 %26
-OpEntryPoint Fragment %52 "main" %49 %51
-OpExecutionMode %52 OriginUpperLeft
+OpEntryPoint Fragment %51 "main" %48 %50
+OpExecutionMode %51 OriginUpperLeft
 OpSource GLSL 450
 OpName %3 "c_scale"
 OpName %9 "VertexOutput"
@@ -26,9 +26,9 @@ OpName %24 "uv"
 OpName %26 "position"
 OpName %28 "main"
 OpName %28 "main"
-OpName %49 "uv"
-OpName %52 "main"
-OpName %52 "main"
+OpName %48 "uv"
+OpName %51 "main"
+OpName %51 "main"
 OpMemberDecorate %9 0 Offset 0
 OpMemberDecorate %9 1 Offset 16
 OpDecorate %12 DescriptorSet 0
@@ -39,8 +39,8 @@ OpDecorate %19 Location 0
 OpDecorate %22 Location 1
 OpDecorate %24 Location 0
 OpDecorate %26 BuiltIn Position
-OpDecorate %49 Location 0
-OpDecorate %51 Location 0
+OpDecorate %48 Location 0
+OpDecorate %50 Location 0
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpConstant  %4  1.2
@@ -70,11 +70,10 @@ OpDecorate %51 Location 0
 %35 = OpTypePointer Function %8
 %38 = OpConstant  %32  1
 %44 = OpTypePointer Output %4
-%45 = OpConstant  %32  1
-%49 = OpVariable  %20  Input
-%51 = OpVariable  %27  Output
-%56 = OpTypeSampledImage %10
-%60 = OpTypeBool
+%48 = OpVariable  %20  Input
+%50 = OpVariable  %27  Output
+%55 = OpTypeSampledImage %10
+%59 = OpTypeBool
 %28 = OpFunction  %2  None %29
 %18 = OpLabel
 %16 = OpVariable  %17  Function
@@ -93,30 +92,30 @@ OpStore %39 %37
 OpStore %24 %41
 %42 = OpCompositeExtract  %8  %40 1
 OpStore %26 %42
-%43 = OpAccessChain  %44  %26 %45
-%46 = OpLoad  %4  %43
-%47 = OpFNegate  %4  %46
-OpStore %43 %47
+%43 = OpAccessChain  %44  %26 %38
+%45 = OpLoad  %4  %43
+%46 = OpFNegate  %4  %45
+OpStore %43 %46
 OpReturn
 OpFunctionEnd
-%52 = OpFunction  %2  None %29
-%48 = OpLabel
-%50 = OpLoad  %7  %49
-%53 = OpLoad  %10  %12
-%54 = OpLoad  %11  %14
-OpBranch %55
-%55 = OpLabel
-%57 = OpSampledImage  %56  %53 %54
-%58 = OpImageSampleImplicitLod  %8  %57 %50
-%59 = OpCompositeExtract  %4  %58 3
-%61 = OpFOrdEqual  %60  %59 %5
-OpSelectionMerge %62 None
-OpBranchConditional %61 %63 %62
-%63 = OpLabel
-OpKill
+%51 = OpFunction  %2  None %29
+%47 = OpLabel
+%49 = OpLoad  %7  %48
+%52 = OpLoad  %10  %12
+%53 = OpLoad  %11  %14
+OpBranch %54
+%54 = OpLabel
+%56 = OpSampledImage  %55  %52 %53
+%57 = OpImageSampleImplicitLod  %8  %56 %49
+%58 = OpCompositeExtract  %4  %57 3
+%60 = OpFOrdEqual  %59  %58 %5
+OpSelectionMerge %61 None
+OpBranchConditional %60 %62 %61
 %62 = OpLabel
-%64 = OpCompositeExtract  %4  %58 3
-%65 = OpVectorTimesScalar  %8  %58 %64
-OpStore %51 %65
+OpKill
+%61 = OpLabel
+%63 = OpCompositeExtract  %4  %57 3
+%64 = OpVectorTimesScalar  %8  %57 %63
+OpStore %50 %64
 OpReturn
 OpFunctionEnd
