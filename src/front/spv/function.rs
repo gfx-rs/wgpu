@@ -279,31 +279,34 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 }
             }
 
-            let position_index = members.iter().position(|member| match member.binding {
-                Some(crate::Binding::BuiltIn(crate::BuiltIn::Position)) => true,
-                _ => false,
-            });
-            if let Some(component_index) = position_index {
-                let old_len = function.expressions.len();
-                let global_expr = components[component_index];
-                let access_expr = function.expressions.append(crate::Expression::AccessIndex {
-                    base: global_expr,
-                    index: 1,
+            if self.options.adjust_coordinate_space {
+                let position_index = members.iter().position(|member| match member.binding {
+                    Some(crate::Binding::BuiltIn(crate::BuiltIn::Position)) => true,
+                    _ => false,
                 });
-                let load_expr = function.expressions.append(crate::Expression::Load {
-                    pointer: access_expr,
-                });
-                let neg_expr = function.expressions.append(crate::Expression::Unary {
-                    op: crate::UnaryOperator::Negate,
-                    expr: load_expr,
-                });
-                function.body.push(crate::Statement::Emit(
-                    function.expressions.range_from(old_len),
-                ));
-                function.body.push(crate::Statement::Store {
-                    pointer: access_expr,
-                    value: neg_expr,
-                });
+                if let Some(component_index) = position_index {
+                    // The IR is Y-up, while SPIR-V is Y-down.
+                    let old_len = function.expressions.len();
+                    let global_expr = components[component_index];
+                    let access_expr = function.expressions.append(crate::Expression::AccessIndex {
+                        base: global_expr,
+                        index: 1,
+                    });
+                    let load_expr = function.expressions.append(crate::Expression::Load {
+                        pointer: access_expr,
+                    });
+                    let neg_expr = function.expressions.append(crate::Expression::Unary {
+                        op: crate::UnaryOperator::Negate,
+                        expr: load_expr,
+                    });
+                    function.body.push(crate::Statement::Emit(
+                        function.expressions.range_from(old_len),
+                    ));
+                    function.body.push(crate::Statement::Store {
+                        pointer: access_expr,
+                        value: neg_expr,
+                    });
+                }
             }
 
             let old_len = function.expressions.len();

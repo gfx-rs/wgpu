@@ -6,6 +6,8 @@ use std::{env, error::Error, path::Path};
 #[derive(Default)]
 struct Parameters {
     #[cfg(feature = "spv-in")]
+    spv_adjust_coordinate_space: bool,
+    #[cfg(feature = "spv-in")]
     spv_flow_dump_prefix: Option<String>,
     #[cfg(feature = "spv-out")]
     spv: naga::back::spv::Options,
@@ -102,6 +104,7 @@ fn main() {
         #[cfg(feature = "spv-in")]
         "spv" => {
             let options = naga::front::spv::Options {
+                adjust_coordinate_space: params.spv_adjust_coordinate_space,
                 flow_graph_dump_prefix: params.spv_flow_dump_prefix.map(std::path::PathBuf::from),
             };
             let input = fs::read(input_path).unwrap();

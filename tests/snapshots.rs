@@ -279,10 +279,13 @@ fn convert_wgsl_texture_array() {
 }
 
 #[cfg(feature = "spv-in")]
-fn convert_spv(name: &str, targets: Targets) {
+fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
     let module = naga::front::spv::parse_u8_slice(
         &std::fs::read(format!("tests/in/{}{}", name, ".spv")).expect("Couldn't find spv file"),
-        &Default::default(),
+        &naga::front::spv::Options {
+            adjust_coordinate_space,
+            flow_graph_dump_prefix: None,
+        },
     )
     .unwrap();
     check_targets(&module, name, targets);
@@ -294,13 +297,13 @@ fn convert_spv(name: &str, targets: Targets) {
 #[cfg(feature = "spv-in")]
 #[test]
 fn convert_spv_quad_vert() {
-    convert_spv("quad-vert", Targets::METAL);
+    convert_spv("quad-vert", false, Targets::METAL);
 }
 
 #[cfg(feature = "spv-in")]
 #[test]
 fn convert_spv_shadow() {
-    convert_spv("shadow", Targets::IR | Targets::ANALYSIS);
+    convert_spv("shadow", true, Targets::IR | Targets::ANALYSIS);
 }
 
 #[cfg(feature = "glsl-in")]

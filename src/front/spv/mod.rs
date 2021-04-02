@@ -312,9 +312,22 @@ enum ExtendedClass {
     Output,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Options {
+    /// The IR coordinate space matches all the APIs except SPIR-V,
+    /// so by default we flip the Y coordinate of the `BuiltIn::Position`.
+    /// This flag can be used to avoid this.
+    pub adjust_coordinate_space: bool,
     pub flow_graph_dump_prefix: Option<PathBuf>,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            adjust_coordinate_space: true,
+            flow_graph_dump_prefix: None,
+        }
+    }
 }
 
 pub struct Parser<I> {
