@@ -2,6 +2,8 @@
 	spv_flow_dump_prefix: "",
 	spv_version: (1, 0),
 	spv_capabilities: [ Shader ],
+	spv_debug: true,
+	spv_adjust_coordinate_space: false,
 	mtl_bindings: {
 		(stage: Compute, group: 0, binding: 0): (buffer: Some(0), mutable: true),
 	}

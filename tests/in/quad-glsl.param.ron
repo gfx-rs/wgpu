@@ -1,5 +1,7 @@
 (
 	spv_version: (1, 0),
 	spv_capabilities: [ Shader ],
+	spv_debug: true,
+	spv_adjust_coordinate_space: true,
 	mtl_bindings: {}
 )

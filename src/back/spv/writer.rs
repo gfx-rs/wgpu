@@ -2041,7 +2041,9 @@ impl Writer {
 
             // Flip Y coordinate to adjust for coordinate space difference
             // between SPIR-V and our IR.
-            if res_member.built_in == Some(crate::BuiltIn::Position) {
+            if self.flags.contains(WriterFlags::ADJUST_COORDINATE_SPACE)
+                && res_member.built_in == Some(crate::BuiltIn::Position)
+            {
                 let access_id = self.id_gen.next();
                 let float_ptr_type_id = self.get_type_id(
                     type_arena,

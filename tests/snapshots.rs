@@ -45,6 +45,10 @@ struct Parameters {
     spv_version: (u8, u8),
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_capabilities: naga::FastHashSet<spirv::Capability>,
+    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+    spv_debug: bool,
+    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+    spv_adjust_coordinate_space: bool,
     #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
     mtl_bindings: naga::FastHashMap<BindSource, BindTarget>,
 }
@@ -126,9 +130,16 @@ fn check_output_spv(
     use naga::back::spv;
     use rspirv::binary::Disassemble;
 
+    let mut flags = spv::WriterFlags::empty();
+    if params.spv_debug {
+        flags |= spv::WriterFlags::DEBUG;
+    }
+    if params.spv_adjust_coordinate_space {
+        flags |= spv::WriterFlags::ADJUST_COORDINATE_SPACE;
+    }
     let options = spv::Options {
         lang_version: params.spv_version,
-        flags: spv::WriterFlags::DEBUG,
+        flags,
         capabilities: params.spv_capabilities.clone(),
     };
 
