@@ -100,6 +100,9 @@ pub struct Options {
     pub spirv_cross_compatibility: bool,
     /// Don't panic on missing bindings, instead generate invalid MSL.
     pub fake_missing_bindings: bool,
+    /// Allow `BuiltIn::PointSize` in the vertex shader.
+    /// Metal doesn't like this for non-point primitive topologies.
+    pub allow_point_size: bool,
 }
 
 impl Default for Options {
@@ -109,6 +112,7 @@ impl Default for Options {
             binding_map: BindingMap::default(),
             spirv_cross_compatibility: false,
             fake_missing_bindings: true,
+            allow_point_size: true,
         }
     }
 }

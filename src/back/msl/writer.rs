@@ -150,6 +150,7 @@ struct ExpressionContext<'a> {
     origin: FunctionOrigin,
     info: &'a FunctionInfo,
     module: &'a crate::Module,
+    options: &'a Options,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -770,8 +771,16 @@ impl<W: Write> Writer<W> {
                         self.put_expression(expr_handle, context, true)?;
                         writeln!(self.out, ";")?;
                         write!(self.out, "{}return {} {{", level, struct_name)?;
+                        let mut is_first = true;
                         for (index, member) in members.iter().enumerate() {
-                            let comma = if index == 0 { "" } else { "," };
+                            if !context.options.allow_point_size
+                                && member.binding
+                                    == Some(crate::Binding::BuiltIn(crate::BuiltIn::PointSize))
+                            {
+                                continue;
+                            }
+                            let comma = if is_first { "" } else { "," };
+                            is_first = false;
                             let name = &self.names[&NameKey::StructMember(result_ty, index as u32)];
                             // logic similar to `put_initialization_component`
                             if let crate::TypeInner::Array {
@@ -1373,6 +1382,7 @@ impl<W: Write> Writer<W> {
                     origin: FunctionOrigin::Handle(fun_handle),
                     info: fun_info,
                     module,
+                    options,
                 },
                 mod_info,
                 result_struct: None,
@@ -1501,6 +1511,11 @@ impl<W: Write> Writer<W> {
                     for (name, ty, binding) in result_members {
                         let type_name = &self.names[&NameKey::Type(ty)];
                         let binding = binding.ok_or(Error::Validation)?;
+                        if !options.allow_point_size
+                            && *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize)
+                        {
+                            continue;
+                        }
                         let resolved = options.resolve_local_binding(binding, out_mode)?;
                         write!(self.out, "{}{} {}", INDENT, type_name, name)?;
                         resolved.try_fmt_decorated(&mut self.out, "")?;
@@ -1655,6 +1670,7 @@ impl<W: Write> Writer<W> {
                     origin: FunctionOrigin::EntryPoint(ep_index as _),
                     info: fun_info,
                     module,
+                    options,
                 },
                 mod_info,
                 result_struct: Some(&stage_out_name),

@@ -176,6 +176,7 @@ fn check_output_msl(
         binding_map,
         spirv_cross_compatibility: false,
         fake_missing_bindings: false,
+        allow_point_size: true,
     };
 
     let (msl, _) = msl::write_string(module, info, &options).unwrap();
