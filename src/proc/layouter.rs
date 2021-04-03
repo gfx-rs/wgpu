@@ -30,7 +30,7 @@ impl Layouter {
     }
 
     pub fn round_up(alignment: NonZeroU32, offset: u32) -> u32 {
-        match offset & alignment.get() {
+        match offset & (alignment.get() - 1) {
             0 => offset,
             other => offset + alignment.get() - other,
         }

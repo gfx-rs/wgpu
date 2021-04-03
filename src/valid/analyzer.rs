@@ -134,7 +134,7 @@ pub struct SamplingKey {
     pub sampler: Handle<crate::GlobalVariable>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct ExpressionInfo {
@@ -159,6 +159,7 @@ impl ExpressionInfo {
     }
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct FunctionInfo {

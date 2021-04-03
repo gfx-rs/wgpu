@@ -185,6 +185,7 @@ fn main() {
         Some(ref string) => string,
         None => {
             println!("{:#?}", module);
+            println!("{:#?}", info);
             return;
         }
     };
