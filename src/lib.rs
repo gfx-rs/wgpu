@@ -179,9 +179,8 @@ trait Context: Debug + Send + Sized + Sync {
     type SwapChainOutputDetail: Send;
 
     type RequestAdapterFuture: Future<Output = Option<Self::AdapterId>> + Send;
-    type RequestDeviceFuture: Future<
-        Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>,
-    > + Send;
+    type RequestDeviceFuture: Future<Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>>
+        + Send;
     type MapAsyncFuture: Future<Output = Result<(), BufferAsyncError>> + Send;
 
     fn init(backends: BackendBit) -> Self;
