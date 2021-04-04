@@ -2417,7 +2417,10 @@ impl Writer {
         if block.termination.is_none() {
             block.termination = Some(match exit_id {
                 Some(id) => Instruction::branch(id),
-                None => Instruction::return_void(),
+                // This can happen if the last branch had all the paths
+                // leading out of the graph (i.e. returning).
+                // So it doesn't matter what we do here, but it has to be valid.
+                None => Instruction::branch(label_id),
             });
         }
 
