@@ -915,7 +915,7 @@ impl<W: Write> Writer<W> {
                     for case in cases.iter() {
                         writeln!(self.out, "{}case {}: {{", lcase, case.value)?;
                         self.put_block(lcase.next(), &case.body, context)?;
-                        if case.fall_through {
+                        if !case.fall_through {
                             writeln!(self.out, "{}break;", lcase.next())?;
                         }
                         writeln!(self.out, "{}}}", lcase)?;
