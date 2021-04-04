@@ -50,7 +50,6 @@ pub use crate::arena::{Arena, Handle, Range};
 use std::{
     collections::{HashMap, HashSet},
     hash::BuildHasherDefault,
-    num::NonZeroU32,
 };
 
 #[cfg(feature = "deserialize")]
@@ -166,8 +165,10 @@ pub enum BuiltIn {
     WorkGroupSize,
 }
 
-/// Number of bytes.
+/// Number of bytes per scalar.
 pub type Bytes = u8;
+/// Number of bytes per complex type.
+pub type Span = u32;
 
 /// Number of components in a vector.
 #[repr(u8)]
@@ -244,10 +245,8 @@ pub struct StructMember {
     pub ty: Handle<Type>,
     /// For I/O structs, defines the binding.
     pub binding: Option<Binding>,
-    /// Overrides the size computed off the type.
-    pub size: Option<NonZeroU32>,
-    /// Overrides the alignment computed off the type.
-    pub align: Option<NonZeroU32>,
+    /// Size occupied by the member.
+    pub span: Span,
 }
 
 /// The number of dimensions an image has.
@@ -392,7 +391,7 @@ pub enum TypeInner {
     Array {
         base: Handle<Type>,
         size: ArraySize,
-        stride: Option<NonZeroU32>,
+        stride: Span,
     },
     /// User-defined structure.
     Struct {

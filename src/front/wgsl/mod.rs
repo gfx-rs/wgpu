@@ -3,6 +3,7 @@
 //! [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
 
 mod conv;
+mod layout;
 mod lexer;
 #[cfg(test)]
 mod tests;
@@ -560,6 +561,7 @@ impl<'a> std::error::Error for ParseError<'a> {
 pub struct Parser {
     scopes: Vec<Scope>,
     lookup_type: FastHashMap<String, Handle<crate::Type>>,
+    layouter: layout::Layouter,
 }
 
 impl Parser {
@@ -567,6 +569,7 @@ impl Parser {
         Parser {
             scopes: Vec::new(),
             lookup_type: FastHashMap::default(),
+            layouter: Default::default(),
         }
     }
 
@@ -1507,7 +1510,9 @@ impl Parser {
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<Vec<crate::StructMember>, Error<'a>> {
+        let mut offset = 0;
         let mut members = Vec::new();
+
         lexer.expect(Token::Paren('{'))?;
         loop {
             let (mut size, mut align) = (None, None);
@@ -1558,12 +1563,18 @@ impl Parser {
             let (ty, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
             lexer.expect(Token::Separator(';'))?;
 
+            self.layouter.update(type_arena, const_arena);
+            let placement = self.layouter.member_placement(offset, ty, align, size);
+            if placement.pad != 0 {
+                members.last_mut().unwrap().span += placement.pad;
+            }
+            offset += placement.pad + placement.span;
+
             members.push(crate::StructMember {
                 name: Some(name.to_owned()),
                 ty,
                 binding: bind_parser.finish()?,
-                size,
-                align,
+                span: placement.span,
             });
         }
     }
@@ -1708,12 +1719,12 @@ impl Parser {
                     crate::ArraySize::Dynamic
                 };
                 lexer.expect_generic_paren('>')?;
+                let stride = match attribute.stride {
+                    Some(stride) => stride.get(),
+                    None => type_arena[base].inner.span(const_arena),
+                };
 
-                crate::TypeInner::Array {
-                    base,
-                    size,
-                    stride: attribute.stride,
-                }
+                crate::TypeInner::Array { base, size, stride }
             }
             "sampler" => crate::TypeInner::Sampler { comparison: false },
             "sampler_comparison" => crate::TypeInner::Sampler { comparison: true },
@@ -1916,14 +1927,8 @@ impl Parser {
 
         let storage_access = attribute.access;
         let name = lexer.next_ident()?;
-        let handle = self.parse_type_decl_name(
-            lexer,
-            name,
-            debug_name,
-            attribute,
-            type_arena,
-            const_arena,
-        )?;
+        let handle =
+            self.parse_type_decl_name(lexer, name, debug_name, attribute, type_arena, const_arena)?;
         self.scopes.pop();
         Ok((handle, storage_access))
     }
@@ -2671,6 +2676,7 @@ impl Parser {
     pub fn parse<'a>(&mut self, source: &'a str) -> Result<crate::Module, ParseError<'a>> {
         self.scopes.clear();
         self.lookup_type.clear();
+        self.layouter.clear();
 
         let mut module = crate::Module::default();
         let mut lexer = Lexer::new(source);

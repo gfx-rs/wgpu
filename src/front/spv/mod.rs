@@ -2419,17 +2419,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let length_id = self.next()?;
         let length_const = self.lookup_constant.lookup(length_id)?;
 
-        let decor = self.future_decor.remove(&id);
+        let decor = self.future_decor.remove(&id).unwrap_or_default();
+        let base = self.lookup_type.lookup(type_id)?.handle;
         let inner = crate::TypeInner::Array {
-            base: self.lookup_type.lookup(type_id)?.handle,
+            base,
             size: crate::ArraySize::Constant(length_const.handle),
-            stride: decor.as_ref().and_then(|dec| dec.array_stride),
+            stride: match decor.array_stride {
+                Some(stride) => stride.get(),
+                None => module.types[base].inner.span(&module.constants),
+            },
         };
         self.lookup_type.insert(
             id,
             LookupType {
                 handle: module.types.append(crate::Type {
-                    name: decor.and_then(|dec| dec.name),
+                    name: decor.name,
                     inner,
                 }),
                 base_id: Some(type_id),
@@ -2448,17 +2452,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let id = self.next()?;
         let type_id = self.next()?;
 
-        let decor = self.future_decor.remove(&id);
+        let decor = self.future_decor.remove(&id).unwrap_or_default();
+        let base = self.lookup_type.lookup(type_id)?.handle;
         let inner = crate::TypeInner::Array {
             base: self.lookup_type.lookup(type_id)?.handle,
             size: crate::ArraySize::Dynamic,
-            stride: decor.as_ref().and_then(|dec| dec.array_stride),
+            stride: match decor.array_stride {
+                Some(stride) => stride.get(),
+                None => module.types[base].inner.span(&module.constants),
+            },
         };
         self.lookup_type.insert(
             id,
             LookupType {
                 handle: module.types.append(crate::Type {
-                    name: decor.and_then(|dec| dec.name),
+                    name: decor.name,
                     inner,
                 }),
                 base_id: Some(type_id),
@@ -2478,8 +2486,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let parent_decor = self.future_decor.remove(&id);
         let block_decor = parent_decor.as_ref().and_then(|decor| decor.block.clone());
 
-        let mut members = Vec::with_capacity(inst.wc as usize - 2);
+        let mut members = Vec::<crate::StructMember>::with_capacity(inst.wc as usize - 2);
         let mut member_type_ids = Vec::with_capacity(members.capacity());
+        let mut last_offset = 0;
         for i in 0..u32::from(inst.wc) - 2 {
             let type_id = self.next()?;
             member_type_ids.push(type_id);
@@ -2489,12 +2498,24 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 .remove(&(id, i))
                 .unwrap_or_default();
             let binding = decor.io_binding().ok();
+
+            if let Some(offset) = decor.offset {
+                if offset != last_offset {
+                    if let Some(member) = members.last_mut() {
+                        // add padding, if necessary
+                        member.span = offset - (last_offset - member.span);
+                    }
+                    last_offset = offset;
+                }
+            }
+            let span = module.types[ty].inner.span(&module.constants);
+            last_offset += span;
+
             members.push(crate::StructMember {
                 name: decor.name,
                 ty,
                 binding,
-                size: None, //TODO
-                align: None,
+                span,
             });
         }
 

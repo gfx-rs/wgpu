@@ -248,13 +248,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                                     // unrecognized binding, skip
                                     continue;
                                 }
-                                members.push(crate::StructMember {
-                                    name: sm.name.clone(),
-                                    ty: sm.ty,
-                                    binding: sm.binding.clone(),
-                                    size: None,
-                                    align: None,
-                                });
+                                members.push(sm.clone());
                                 components.push(function.expressions.append(
                                     crate::Expression::AccessIndex {
                                         base: expr_handle,
@@ -268,8 +262,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                                 name: None,
                                 ty: result.ty,
                                 binding: result.binding.clone(),
-                                size: None,
-                                align: None,
+                                span: module.types[result.ty].inner.span(&module.constants),
                             });
                             // populate just the globals first, then do `Load` in a
                             // separate step, so that we can get a range.

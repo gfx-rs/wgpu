@@ -729,8 +729,7 @@ pomelo! {
                 binding: None, //TODO
                 //TODO: if the struct is a uniform struct, these values have to reflect
                 // std140 layout. Otherwise, std430.
-                size: None,
-                align: None,
+                span: extra.module.types[ty].inner.span(&extra.module.constants),
             }).collect()
         } else {
             return Err(ErrorKind::SemanticError("Struct member can't be void".into()))

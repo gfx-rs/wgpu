@@ -3,7 +3,7 @@ use super::{
 };
 use crate::{
     arena::{Arena, Handle},
-    proc::{Layouter, TypeResolution},
+    proc::TypeResolution,
     valid::{FunctionInfo, ModuleInfo},
 };
 use spirv::Word;
@@ -760,10 +760,10 @@ impl Writer {
     fn write_type_declaration_arena(
         &mut self,
         arena: &Arena<crate::Type>,
-        layouter: &Layouter,
         handle: Handle<crate::Type>,
     ) -> Result<Word, Error> {
         let ty = &arena[handle];
+        let decorate_layout = true; //TODO?
 
         let id = if let Some(local) = self.physical_layout.make_local(&ty.inner) {
             match self.lookup_type.entry(LookupType::Local(local)) {
@@ -845,11 +845,11 @@ impl Writer {
             }
             crate::TypeInner::Sampler { comparison: _ } => Instruction::type_sampler(id),
             crate::TypeInner::Array { base, size, stride } => {
-                if let Some(array_stride) = stride {
+                if decorate_layout {
                     self.annotations.push(Instruction::decorate(
                         id,
                         Decoration::ArrayStride,
-                        &[array_stride.get()],
+                        &[stride],
                     ));
                 }
 
@@ -871,14 +871,15 @@ impl Writer {
                 let mut current_offset = 0;
                 let mut member_ids = Vec::with_capacity(members.len());
                 for (index, member) in members.iter().enumerate() {
-                    let (placement, _) = layouter.member_placement(current_offset, member);
-                    self.annotations.push(Instruction::member_decorate(
-                        id,
-                        index as u32,
-                        Decoration::Offset,
-                        &[placement.start],
-                    ));
-                    current_offset = placement.end;
+                    if decorate_layout {
+                        self.annotations.push(Instruction::member_decorate(
+                            id,
+                            index as u32,
+                            Decoration::Offset,
+                            &[current_offset],
+                        ));
+                        current_offset += member.span;
+                    }
 
                     if self.flags.contains(WriterFlags::DEBUG) {
                         if let Some(ref name) = member.name {
@@ -1073,11 +1074,8 @@ impl Writer {
 
         match *binding {
             crate::Binding::Location(location, interpolation) => {
-                self.annotations.push(Instruction::decorate(
-                    id,
-                    Decoration::Location,
-                    &[location],
-                ));
+                self.annotations
+                    .push(Instruction::decorate(id, Decoration::Location, &[location]));
                 let interp_decoration = match interpolation {
                     Some(crate::Interpolation::Linear) => Some(Decoration::NoPerspective),
                     Some(crate::Interpolation::Flat) => Some(Decoration::Flat),
@@ -2540,7 +2538,7 @@ impl Writer {
 
         // then all types, some of them may rely on constants and struct type set
         for (handle, _) in ir_module.types.iter() {
-            self.write_type_declaration_arena(&ir_module.types, &mod_info.layouter, handle)?;
+            self.write_type_declaration_arena(&ir_module.types, handle)?;
         }
 
         // the all the composite constants, they rely on types

@@ -6,7 +6,6 @@ mod r#type;
 
 use crate::{
     arena::{Arena, Handle},
-    proc::Layouter,
     FastHashSet,
 };
 use bit_set::BitSet;
@@ -54,7 +53,6 @@ bitflags::bitflags! {
 pub struct ModuleInfo {
     functions: Vec<FunctionInfo>,
     entry_points: Vec<FunctionInfo>,
-    pub layouter: Layouter,
 }
 
 impl ops::Index<Handle<crate::Function>> for ModuleInfo {
@@ -221,8 +219,6 @@ impl Validator {
     pub fn validate(&mut self, module: &crate::Module) -> Result<ModuleInfo, ValidationError> {
         self.reset_types(module.types.len());
 
-        let layouter = Layouter::new(&module.types, &module.constants);
-
         for (handle, constant) in module.constants.iter() {
             self.validate_constant(handle, &module.constants, &module.types)
                 .map_err(|error| ValidationError::Constant {
@@ -235,7 +231,7 @@ impl Validator {
         // doing after the globals, so that `type_flags` is ready
         for (handle, ty) in module.types.iter() {
             let ty_info = self
-                .validate_type(ty, handle, &module.constants, &layouter)
+                .validate_type(handle, &module.types, &module.constants)
                 .map_err(|error| ValidationError::Type {
                     handle,
                     name: ty.name.clone().unwrap_or_default(),
@@ -256,7 +252,6 @@ impl Validator {
         let mut mod_info = ModuleInfo {
             functions: Vec::with_capacity(module.functions.len()),
             entry_points: Vec::with_capacity(module.entry_points.len()),
-            layouter,
         };
 
         for (handle, fun) in module.functions.iter() {

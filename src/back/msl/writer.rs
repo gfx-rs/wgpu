@@ -1389,6 +1389,14 @@ impl<W: Write> Writer<W> {
                             first_time: false,
                         };
                         writeln!(self.out, "{}{} {};", INDENT, base_name, member_name)?;
+                        // quick and dirty way to figure out if we need this...
+                        if member.binding.is_none() {
+                            let pad =
+                                member.span - module.types[member.ty].inner.span(&module.constants);
+                            if pad != 0 {
+                                writeln!(self.out, "{}char _pad{}[{}];", INDENT, index, pad)?;
+                            }
+                        }
                     }
                     writeln!(self.out, "}};")?;
                 }

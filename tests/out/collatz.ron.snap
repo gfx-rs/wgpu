@@ -16,7 +16,7 @@ expression: output
             inner: Array(
                 base: 1,
                 size: Dynamic,
-                stride: Some(4),
+                stride: 4,
             ),
         ),
         (
@@ -28,8 +28,7 @@ expression: output
                         name: Some("data"),
                         ty: 2,
                         binding: None,
-                        size: None,
-                        align: None,
+                        span: 4,
                     ),
                 ],
             ),
