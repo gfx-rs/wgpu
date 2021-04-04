@@ -326,9 +326,8 @@ impl<B: GfxBackend> Device<B> {
         let spv_options = {
             use naga::back::spv;
             let mut flags = spv::WriterFlags::empty();
-            if cfg!(debug_assertions) {
-                flags |= spv::WriterFlags::DEBUG;
-            }
+            flags.set(spv::WriterFlags::DEBUG, cfg!(debug_assertions));
+            //Note: we don't adjust the coordinate space, because `NDC_Y_UP` is required.
             spv::Options {
                 lang_version: (1, 0),
                 capabilities: [
