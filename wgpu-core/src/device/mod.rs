@@ -988,8 +988,11 @@ impl<B: GfxBackend> Device<B> {
         let (spv, module) = match source {
             pipeline::ShaderModuleSource::SpirV(spv) => {
                 // Parse the given shader code and store its representation.
-                let parser =
-                    naga::front::spv::Parser::new(spv.iter().cloned(), &Default::default());
+                let options = naga::front::spv::Options {
+                    adjust_coordinate_space: false, // we require NDC_Y_UP feature
+                    flow_graph_dump_prefix: None,
+                };
+                let parser = naga::front::spv::Parser::new(spv.iter().cloned(), &options);
                 let module = match parser.parse() {
                     Ok(module) => Some(module),
                     Err(err) => {
