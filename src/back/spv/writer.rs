@@ -1748,6 +1748,23 @@ impl Writer {
                         class: crate::ImageClass::Storage { .. },
                         ..
                     } => Instruction::image_read(result_type_id, id, image_id, coordinate_id),
+                    crate::TypeInner::Image {
+                        class: crate::ImageClass::Depth,
+                        ..
+                    } => {
+                        // Vulkan doesn't know about our `Depth` class, and it returns `vec4<f32>`,
+                        // so we need to grab the first component out of it.
+                        let load_result_type_id = self.get_type_id(
+                            &ir_module.types,
+                            LookupType::Local(LocalType::Value {
+                                vector_size: Some(crate::VectorSize::Quad),
+                                kind: crate::ScalarKind::Float,
+                                width: 4,
+                                pointer_class: None,
+                            }),
+                        )?;
+                        Instruction::image_fetch(load_result_type_id, id, image_id, coordinate_id)
+                    }
                     _ => Instruction::image_fetch(result_type_id, id, image_id, coordinate_id),
                 };
 
@@ -1764,8 +1781,16 @@ impl Writer {
                     instruction.add_operand(index_id);
                 }
 
-                block.body.push(instruction);
-                id
+                if instruction.type_id != Some(result_type_id) {
+                    let sub_id = self.id_gen.next();
+                    let index_id = self.get_index_constant(0, &ir_module.types)?;
+                    let sub_instruction =
+                        Instruction::vector_extract_dynamic(result_type_id, sub_id, id, index_id);
+                    block.body.push(sub_instruction);
+                    sub_id
+                } else {
+                    id
+                }
             }
             crate::Expression::ImageSample {
                 image,
@@ -1780,6 +1805,28 @@ impl Writer {
                 // image
                 let image_id = self.get_expression_global(ir_function, image);
                 let image_type = fun_info[image].ty.handle().unwrap();
+                // Vulkan doesn't know about our `Depth` class, and it returns `vec4<f32>`,
+                // so we need to grab the first component out of it.
+                let needs_sub_access = match ir_module.types[image_type].inner {
+                    crate::TypeInner::Image {
+                        class: crate::ImageClass::Depth,
+                        ..
+                    } => depth_ref.is_none(),
+                    _ => false,
+                };
+                let sample_result_type_id = if needs_sub_access {
+                    self.get_type_id(
+                        &ir_module.types,
+                        LookupType::Local(LocalType::Value {
+                            vector_size: Some(crate::VectorSize::Quad),
+                            kind: crate::ScalarKind::Float,
+                            width: 4,
+                            pointer_class: None,
+                        }),
+                    )?
+                } else {
+                    result_type_id
+                };
 
                 // OpTypeSampledImage
                 let sampled_image_type_id = self.get_type_id(
@@ -1810,7 +1857,7 @@ impl Writer {
                 let mut main_instruction = match level {
                     crate::SampleLevel::Zero => {
                         let mut inst = Instruction::image_sample(
-                            result_type_id,
+                            sample_result_type_id,
                             id,
                             SampleLod::Explicit,
                             sampled_image_id,
@@ -1833,7 +1880,7 @@ impl Writer {
                         inst
                     }
                     crate::SampleLevel::Auto => Instruction::image_sample(
-                        result_type_id,
+                        sample_result_type_id,
                         id,
                         SampleLod::Implicit,
                         sampled_image_id,
@@ -1842,7 +1889,7 @@ impl Writer {
                     ),
                     crate::SampleLevel::Exact(lod_handle) => {
                         let mut inst = Instruction::image_sample(
-                            result_type_id,
+                            sample_result_type_id,
                             id,
                             SampleLod::Explicit,
                             sampled_image_id,
@@ -1858,7 +1905,7 @@ impl Writer {
                     }
                     crate::SampleLevel::Bias(bias_handle) => {
                         let mut inst = Instruction::image_sample(
-                            result_type_id,
+                            sample_result_type_id,
                             id,
                             SampleLod::Implicit,
                             sampled_image_id,
@@ -1874,7 +1921,7 @@ impl Writer {
                     }
                     crate::SampleLevel::Gradient { x, y } => {
                         let mut inst = Instruction::image_sample(
-                            result_type_id,
+                            sample_result_type_id,
                             id,
                             SampleLod::Explicit,
                             sampled_image_id,
@@ -1899,7 +1946,17 @@ impl Writer {
                 }
 
                 block.body.push(main_instruction);
-                id
+
+                if needs_sub_access {
+                    let sub_id = self.id_gen.next();
+                    let index_id = self.get_index_constant(0, &ir_module.types)?;
+                    let sub_instruction =
+                        Instruction::vector_extract_dynamic(result_type_id, sub_id, id, index_id);
+                    block.body.push(sub_instruction);
+                    sub_id
+                } else {
+                    id
+                }
             }
             crate::Expression::Select {
                 condition,
