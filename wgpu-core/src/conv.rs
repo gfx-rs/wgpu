@@ -809,23 +809,16 @@ pub fn map_primitive_state_to_rasterizer(
     depth_stencil: Option<&wgt::DepthStencilState>,
 ) -> hal::pso::Rasterizer {
     use hal::pso;
-    let (depth_clamping, depth_bias) = match depth_stencil {
-        Some(dsd) => {
-            let bias = if dsd.bias.is_enabled() {
-                Some(pso::State::Static(pso::DepthBias {
-                    const_factor: dsd.bias.constant as f32,
-                    slope_factor: dsd.bias.slope_scale,
-                    clamp: dsd.bias.clamp,
-                }))
-            } else {
-                None
-            };
-            (dsd.clamp_depth, bias)
-        }
-        None => (false, None),
+    let depth_bias = match depth_stencil {
+        Some(dsd) if dsd.bias.is_enabled() => Some(pso::State::Static(pso::DepthBias {
+            const_factor: dsd.bias.constant as f32,
+            slope_factor: dsd.bias.slope_scale,
+            clamp: dsd.bias.clamp,
+        })),
+        _ => None,
     };
     pso::Rasterizer {
-        depth_clamping,
+        depth_clamping: desc.clamp_depth,
         polygon_mode: match desc.polygon_mode {
             wgt::PolygonMode::Fill => pso::PolygonMode::Fill,
             wgt::PolygonMode::Line => pso::PolygonMode::Line,
