@@ -1023,6 +1023,11 @@ pub struct PrimitiveState {
     /// The face culling mode.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub cull_mode: Option<Face>,
+    /// If set to true, the polygon depth is clamped to 0-1 range instead of being clipped.
+    ///
+    /// Enabling this requires `Features::DEPTH_CLAMPING` to be enabled.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    pub clamp_depth: bool,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
     ///
     /// Setting this to something other than `Fill` requires `Features::NON_FILL_POLYGON_MODE` to be enabled.
@@ -1751,11 +1756,6 @@ pub struct DepthStencilState {
     /// Depth bias state.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub bias: DepthBiasState,
-    /// If enabled polygon depth is clamped to 0-1 range instead of being clipped.
-    ///
-    /// Requires `Features::DEPTH_CLAMPING` enabled.
-    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
-    pub clamp_depth: bool,
 }
 
 impl DepthStencilState {

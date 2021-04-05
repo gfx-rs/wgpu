@@ -2121,17 +2121,9 @@ impl<B: GfxBackend> Device<B> {
                 .map(conv::map_color_target_state)
                 .collect(),
         };
-        let depth_stencil = match depth_stencil_state {
-            Some(dsd) => {
-                if dsd.clamp_depth && !self.features.contains(wgt::Features::DEPTH_CLAMPING) {
-                    return Err(pipeline::CreateRenderPipelineError::MissingFeature(
-                        wgt::Features::DEPTH_CLAMPING,
-                    ));
-                }
-                conv::map_depth_stencil_state(dsd)
-            }
-            None => hal::pso::DepthStencilDesc::default(),
-        };
+        let depth_stencil = depth_stencil_state
+            .map(conv::map_depth_stencil_state)
+            .unwrap_or_default();
 
         // TODO
         let baked_states = hal::pso::BakedStates {
@@ -2141,6 +2133,11 @@ impl<B: GfxBackend> Device<B> {
             depth_bounds: None,
         };
 
+        if desc.primitive.clamp_depth && !self.features.contains(wgt::Features::DEPTH_CLAMPING) {
+            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
+                wgt::Features::DEPTH_CLAMPING,
+            ));
+        }
         if desc.primitive.polygon_mode != wgt::PolygonMode::Fill
             && !self.features.contains(wgt::Features::NON_FILL_POLYGON_MODE)
         {
