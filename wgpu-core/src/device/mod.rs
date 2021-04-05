@@ -286,6 +286,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelProperties,
     spv_options: naga::back::spv::Options,
+    pipeline_cache: B::PipelineCache,
     //TODO: move this behind another mutex. This would allow several methods to switch
     // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
     pending_writes: queue::PendingWrites<B>,
@@ -343,6 +344,10 @@ impl<B: GfxBackend> Device<B> {
             }
         };
 
+        // todo: allow passing in the pipeline cache data.
+        let pipeline_cache = unsafe { raw.create_pipeline_cache(None) }
+            .map_err(|_| CreateDeviceError::OutOfMemory)?;
+
         Ok(Self {
             raw,
             adapter_id,
@@ -379,6 +384,7 @@ impl<B: GfxBackend> Device<B> {
             features: desc.features,
             downlevel,
             spv_options,
+            pipeline_cache,
             pending_writes: queue::PendingWrites::new(),
         })
     }
@@ -1948,21 +1954,22 @@ impl<B: GfxBackend> Device<B> {
             parent,
         };
 
-        let raw =
-            unsafe { self.raw.create_compute_pipeline(&pipeline_desc, None) }.map_err(|err| {
-                match err {
-                    hal::pso::CreationError::OutOfMemory(_) => {
-                        pipeline::CreateComputePipelineError::Device(DeviceError::OutOfMemory)
-                    }
-                    hal::pso::CreationError::ShaderCreationError(_, error) => {
-                        pipeline::CreateComputePipelineError::Internal(error)
-                    }
-                    _ => {
-                        log::error!("failed to create compute pipeline: {}", err);
-                        pipeline::CreateComputePipelineError::Device(DeviceError::OutOfMemory)
-                    }
-                }
-            })?;
+        let raw = unsafe {
+            self.raw
+                .create_compute_pipeline(&pipeline_desc, Some(&self.pipeline_cache))
+        }
+        .map_err(|err| match err {
+            hal::pso::CreationError::OutOfMemory(_) => {
+                pipeline::CreateComputePipelineError::Device(DeviceError::OutOfMemory)
+            }
+            hal::pso::CreationError::ShaderCreationError(_, error) => {
+                pipeline::CreateComputePipelineError::Internal(error)
+            }
+            _ => {
+                log::error!("failed to create compute pipeline: {}", err);
+                pipeline::CreateComputePipelineError::Device(DeviceError::OutOfMemory)
+            }
+        })?;
 
         let pipeline = pipeline::ComputePipeline {
             raw,
@@ -2403,25 +2410,25 @@ impl<B: GfxBackend> Device<B> {
             flags,
             parent,
         };
-        // TODO: cache
-        let raw =
-            unsafe { self.raw.create_graphics_pipeline(&pipeline_desc, None) }.map_err(|err| {
-                match err {
-                    hal::pso::CreationError::OutOfMemory(_) => {
-                        pipeline::CreateRenderPipelineError::Device(DeviceError::OutOfMemory)
-                    }
-                    hal::pso::CreationError::ShaderCreationError(stage, error) => {
-                        pipeline::CreateRenderPipelineError::Internal {
-                            stage: conv::map_hal_flags_to_shader_stage(stage),
-                            error,
-                        }
-                    }
-                    _ => {
-                        log::error!("failed to create graphics pipeline: {}", err);
-                        pipeline::CreateRenderPipelineError::Device(DeviceError::OutOfMemory)
-                    }
+        let raw = unsafe {
+            self.raw
+                .create_graphics_pipeline(&pipeline_desc, Some(&self.pipeline_cache))
+        }
+        .map_err(|err| match err {
+            hal::pso::CreationError::OutOfMemory(_) => {
+                pipeline::CreateRenderPipelineError::Device(DeviceError::OutOfMemory)
+            }
+            hal::pso::CreationError::ShaderCreationError(stage, error) => {
+                pipeline::CreateRenderPipelineError::Internal {
+                    stage: conv::map_hal_flags_to_shader_stage(stage),
+                    error,
                 }
-            })?;
+            }
+            _ => {
+                log::error!("failed to create graphics pipeline: {}", err);
+                pipeline::CreateRenderPipelineError::Device(DeviceError::OutOfMemory)
+            }
+        })?;
 
         let pass_context = RenderPassContext {
             attachments: AttachmentData {
