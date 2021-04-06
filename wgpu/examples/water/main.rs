@@ -570,7 +570,6 @@ impl framework::Example for Example {
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
-                clamp_depth: false,
             }),
             // No multisampling is used.
             multisample: wgpu::MultisampleState::default(),
@@ -605,7 +604,6 @@ impl framework::Example for Example {
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
-                clamp_depth: false,
             }),
             multisample: wgpu::MultisampleState::default(),
         });
