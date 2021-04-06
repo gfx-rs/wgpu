@@ -603,6 +603,8 @@ fn map_primitive_state(primitive: &wgt::PrimitiveState) -> web_sys::GpuPrimitive
         PrimitiveTopology::TriangleStrip => pt::TriangleStrip,
     });
 
+    //mapped.clamp_depth(primitive.clamp_depth);
+
     mapped
 }
 
@@ -647,7 +649,6 @@ fn map_stencil_state_face(desc: &wgt::StencilFaceState) -> web_sys::GpuStencilFa
 
 fn map_depth_stencil_state(desc: &wgt::DepthStencilState) -> web_sys::GpuDepthStencilState {
     let mut mapped = web_sys::GpuDepthStencilState::new(map_texture_format(desc.format));
-    mapped.clamp_depth(desc.clamp_depth);
     mapped.depth_bias(desc.bias.constant);
     mapped.depth_bias_clamp(desc.bias.clamp);
     mapped.depth_bias_slope_scale(desc.bias.slope_scale);
