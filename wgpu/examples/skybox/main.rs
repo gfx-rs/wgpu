@@ -232,7 +232,6 @@ impl framework::Example for Skybox {
                 depth_compare: wgpu::CompareFunction::LessEqual,
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
-                clamp_depth: false,
             }),
             multisample: wgpu::MultisampleState::default(),
         });
@@ -263,7 +262,6 @@ impl framework::Example for Skybox {
                 depth_compare: wgpu::CompareFunction::LessEqual,
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
-                clamp_depth: false,
             }),
             multisample: wgpu::MultisampleState::default(),
         });

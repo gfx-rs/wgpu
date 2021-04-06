@@ -507,6 +507,7 @@ impl framework::Example for Example {
                     topology: wgpu::PrimitiveTopology::TriangleList,
                     front_face: wgpu::FrontFace::Ccw,
                     cull_mode: Some(wgpu::Face::Back),
+                    clamp_depth: device.features().contains(wgpu::Features::DEPTH_CLAMPING),
                     ..Default::default()
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
@@ -519,7 +520,6 @@ impl framework::Example for Example {
                         slope_scale: 2.0,
                         clamp: 0.0,
                     },
-                    clamp_depth: device.features().contains(wgpu::Features::DEPTH_CLAMPING),
                 }),
                 multisample: wgpu::MultisampleState::default(),
             });
@@ -646,7 +646,6 @@ impl framework::Example for Example {
                     depth_compare: wgpu::CompareFunction::Less,
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState::default(),
-                    clamp_depth: false,
                 }),
                 multisample: wgpu::MultisampleState::default(),
             });
