@@ -37,7 +37,7 @@ smallvec = "1"
 thiserror = "1"
 
 # Update to 0.4 when it will be available
-gpu-alloc = { git = "https://github.com/zakarumych/gpu-alloc.git", rev = "560ad651aa8f7aefcee8f5bcf41e67a84561bcda" }
+gpu-alloc = { git = "https://github.com/zakarumych/gpu-alloc.git", rev = "2cd1ad650cdd24d1647b6041f77ced0cbf1ff2a6" }
 gpu-descriptor = { version = "0.1" }
 
 hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx", rev = "2a93d52661aafcbd6441ea83e739c8ced906cd21" }
