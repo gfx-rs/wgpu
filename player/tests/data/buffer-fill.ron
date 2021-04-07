@@ -1,0 +1,37 @@
+(
+    features: (bits: 0x0000_0001_0000_0000),
+    expectations: [
+        (
+            name: "basic",
+            buffer: (index: 0, epoch: 1),
+            offset: 0,
+            data: Raw([
+                0x00, 0x00, 0x00, 0x00,
+                0x78, 0x56, 0x34, 0x12,
+                0x78, 0x56, 0x34, 0x12,
+                0x00, 0x00, 0x00, 0x00,
+            ]),
+        )
+    ],
+    actions: [
+        CreateBuffer(
+            Id(0, 1, Empty),
+            (
+                label: None,
+                size: 16,
+                usage: (
+                    bits: 41,
+                ),
+                mapped_at_creation: false,
+            ),
+        ),
+        Submit(1, [
+            FillBuffer(
+                dst: Id(0, 1, Empty),
+                offset: 4,
+                size: Some(8),
+                data: 0x12345678,
+            )
+        ]),
+    ],
+)
