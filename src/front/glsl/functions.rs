@@ -241,11 +241,7 @@ impl Program<'_> {
             } else {
                 let ty = &self.module.types[var.ty];
                 // anonymous structs
-                if let TypeInner::Struct {
-                    block: _,
-                    ref members,
-                } = ty.inner
-                {
+                if let TypeInner::Struct { ref members, .. } = ty.inner {
                     let base = self
                         .context
                         .expressions

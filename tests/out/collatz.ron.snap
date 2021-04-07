@@ -22,15 +22,16 @@ expression: output
         (
             name: Some("PrimeIndices"),
             inner: Struct(
-                block: true,
+                level: Root,
                 members: [
                     (
                         name: Some("data"),
                         ty: 2,
                         binding: None,
-                        span: 4,
+                        offset: 0,
                     ),
                 ],
+                span: 4,
             ),
         ),
         (

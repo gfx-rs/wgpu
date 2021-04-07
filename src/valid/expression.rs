@@ -179,10 +179,7 @@ impl super::Validator {
                     } => module.constants[handle].to_array_length().unwrap(),
                     Ti::Array { .. } => !0, // can't statically know, but need run-time checks
                     Ti::Pointer { .. } => !0, //TODO
-                    Ti::Struct {
-                        ref members,
-                        block: _,
-                    } => members.len() as u32,
+                    Ti::Struct { ref members, .. } => members.len() as u32,
                     ref other => {
                         log::error!("Indexing of {:?}", other);
                         return Err(ExpressionError::InvalidBaseType(base));
@@ -289,10 +286,7 @@ impl super::Validator {
                             }
                         }
                     }
-                    Ti::Struct {
-                        block: _,
-                        ref members,
-                    } => {
+                    Ti::Struct { ref members, .. } => {
                         for (index, (member, &comp)) in members.iter().zip(components).enumerate() {
                             let tin = resolver.resolve(comp)?;
                             if tin != &module.types[member.ty].inner {

@@ -77,11 +77,7 @@ impl Namer {
             let ty_name = self.call_or(&ty.name, "type");
             output.insert(NameKey::Type(ty_handle), ty_name);
 
-            if let crate::TypeInner::Struct {
-                block: _,
-                ref members,
-            } = ty.inner
-            {
+            if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
                 for (index, member) in members.iter().enumerate() {
                     let name = self.call_or(&member.name, "member");
                     output.insert(NameKey::StructMember(ty_handle, index as u32), name);

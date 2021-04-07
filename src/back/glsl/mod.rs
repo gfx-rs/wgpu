@@ -448,11 +448,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // This are always ordered because of the IR is structured in a way that you can't make a
         // struct without adding all of it's members first
         for (handle, ty) in self.module.types.iter() {
-            if let TypeInner::Struct {
-                block: _,
-                ref members,
-            } = ty.inner
-            {
+            if let TypeInner::Struct { ref members, .. } = ty.inner {
                 // No needed to write a struct that also should be written as a global variable
                 let is_global_struct = self
                     .module
@@ -670,11 +666,12 @@ impl<'a, W: Write> Writer<'a, W> {
             // glsl has no pointer types so just write types as normal and loads are skipped
             TypeInner::Pointer { base, .. } => self.write_type(base),
             TypeInner::Struct {
-                block: true,
+                level: crate::StructLevel::Root,
                 ref members,
+                span: _,
             } => self.write_struct(true, ty, members),
             // glsl structs are written as just the struct name if it isn't a block
-            TypeInner::Struct { block: false, .. } => {
+            TypeInner::Struct { .. } => {
                 // Get the struct name
                 let name = &self.names[&NameKey::Type(ty)];
                 write!(self.out, "{}", name)?;
@@ -790,10 +787,7 @@ impl<'a, W: Write> Writer<'a, W> {
         output: bool,
     ) -> Result<(), Error> {
         match self.module.types[ty].inner {
-            crate::TypeInner::Struct {
-                block: _,
-                ref members,
-            } => {
+            crate::TypeInner::Struct { ref members, .. } => {
                 for member in members {
                     self.write_varying(member.binding.as_ref(), member.ty, output)?;
                 }
@@ -918,10 +912,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, " {}", name)?;
                 write!(self.out, " = ")?;
                 match self.module.types[arg.ty].inner {
-                    crate::TypeInner::Struct {
-                        block: _,
-                        ref members,
-                    } => {
+                    crate::TypeInner::Struct { ref members, .. } => {
                         self.write_type(arg.ty)?;
                         write!(self.out, "(")?;
                         for (index, member) in members.iter().enumerate() {
@@ -1338,10 +1329,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         if let Some(ref result) = ep.function.result {
                             let value = value.unwrap();
                             match self.module.types[result.ty].inner {
-                                crate::TypeInner::Struct {
-                                    block: _,
-                                    ref members,
-                                } => {
+                                crate::TypeInner::Struct { ref members, .. } => {
                                     for (index, member) in members.iter().enumerate() {
                                         let varying_name = VaryingName {
                                             binding: member.binding.as_ref().unwrap(),

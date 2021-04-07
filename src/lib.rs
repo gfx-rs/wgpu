@@ -50,6 +50,7 @@ pub use crate::arena::{Arena, Handle, Range};
 use std::{
     collections::{HashMap, HashSet},
     hash::BuildHasherDefault,
+    num::NonZeroU32,
 };
 
 #[cfg(feature = "deserialize")]
@@ -167,8 +168,7 @@ pub enum BuiltIn {
 
 /// Number of bytes per scalar.
 pub type Bytes = u8;
-/// Number of bytes per complex type.
-pub type Span = u32;
+pub type Alignment = NonZeroU32;
 
 /// Number of components in a vector.
 #[repr(u8)]
@@ -245,8 +245,8 @@ pub struct StructMember {
     pub ty: Handle<Type>,
     /// For I/O structs, defines the binding.
     pub binding: Option<Binding>,
-    /// Size occupied by the member.
-    pub span: Span,
+    /// Offset from the beginning from the struct.
+    pub offset: u32,
 }
 
 /// The number of dimensions an image has.
@@ -345,6 +345,18 @@ pub enum ImageClass {
     Storage(StorageFormat),
 }
 
+/// Qualifier of the type level, at which a struct can be used.
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum StructLevel {
+    /// This is a root level struct, it can't be nested inside
+    /// other composite types.
+    Root,
+    /// This is a normal struct, and it has to be aligned for nesting.
+    Normal { alignment: Alignment },
+}
+
 /// A data type declared in the module.
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -391,13 +403,13 @@ pub enum TypeInner {
     Array {
         base: Handle<Type>,
         size: ArraySize,
-        stride: Span,
+        stride: u32,
     },
     /// User-defined structure.
     Struct {
-        /// This is a top-level host-shareable structure.
-        block: bool,
+        level: StructLevel,
         members: Vec<StructMember>,
+        span: u32,
     },
     /// Possibly multidimensional array of texels.
     Image {

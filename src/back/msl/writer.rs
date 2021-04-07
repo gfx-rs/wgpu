@@ -1000,10 +1000,7 @@ impl<W: Write> Writer<W> {
             Some(struct_name) => {
                 let result_ty = context.function.result.as_ref().unwrap().ty;
                 match context.module.types[result_ty].inner {
-                    crate::TypeInner::Struct {
-                        block: _,
-                        ref members,
-                    } => {
+                    crate::TypeInner::Struct { ref members, .. } => {
                         let tmp = "_tmp";
                         write!(self.out, "{}const auto {} = ", level, tmp)?;
                         self.put_expression(expr_handle, context, true)?;
@@ -1373,12 +1370,16 @@ impl<W: Write> Writer<W> {
                         }
                     }
                 }
-                crate::TypeInner::Struct {
-                    block: _,
-                    ref members,
-                } => {
+                crate::TypeInner::Struct { ref members, .. } => {
                     writeln!(self.out, "struct {} {{", name)?;
+                    let mut last_offset = 0;
                     for (index, member) in members.iter().enumerate() {
+                        // quick and dirty way to figure out if we need this...
+                        if member.binding.is_none() && member.offset > last_offset {
+                            let pad = member.offset - last_offset;
+                            //TODO: adjust the struct initializers
+                            writeln!(self.out, "{}char _pad{}[{}];", INDENT, index, pad)?;
+                        }
                         let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
                         let base_name = TypeContext {
                             handle: member.ty,
@@ -1389,13 +1390,16 @@ impl<W: Write> Writer<W> {
                             first_time: false,
                         };
                         writeln!(self.out, "{}{} {};", INDENT, base_name, member_name)?;
-                        // quick and dirty way to figure out if we need this...
-                        if member.binding.is_none() {
-                            let pad =
-                                member.span - module.types[member.ty].inner.span(&module.constants);
-                            if pad != 0 {
-                                writeln!(self.out, "{}char _pad{}[{}];", INDENT, index, pad)?;
-                            }
+                        let ty_inner = &module.types[member.ty].inner;
+                        last_offset = member.offset + ty_inner.span(&module.constants);
+                        // for 3-component vectors, add one component
+                        if let crate::TypeInner::Vector {
+                            size: crate::VectorSize::Tri,
+                            kind: _,
+                            width,
+                        } = *ty_inner
+                        {
+                            last_offset += width as u32;
                         }
                     }
                     writeln!(self.out, "}};")?;
@@ -1728,10 +1732,7 @@ impl<W: Write> Writer<W> {
             let mut argument_members = Vec::new();
             for (arg_index, arg) in fun.arguments.iter().enumerate() {
                 match module.types[arg.ty].inner {
-                    crate::TypeInner::Struct {
-                        block: _,
-                        ref members,
-                    } => {
+                    crate::TypeInner::Struct { ref members, .. } => {
                         for (member_index, member) in members.iter().enumerate() {
                             argument_members.push((
                                 NameKey::StructMember(arg.ty, member_index as u32),
@@ -1778,10 +1779,8 @@ impl<W: Write> Writer<W> {
             let result_type_name = match fun.result {
                 Some(ref result) => {
                     let mut result_members = Vec::new();
-                    if let crate::TypeInner::Struct {
-                        block: _,
-                        ref members,
-                    } = module.types[result.ty].inner
+                    if let crate::TypeInner::Struct { ref members, .. } =
+                        module.types[result.ty].inner
                     {
                         for (member_index, member) in members.iter().enumerate() {
                             result_members.push((
@@ -1959,10 +1958,7 @@ impl<W: Write> Writer<W> {
                 let arg_name =
                     &self.names[&NameKey::EntryPointArgument(ep_index as _, arg_index as u32)];
                 match module.types[arg.ty].inner {
-                    crate::TypeInner::Struct {
-                        block: _,
-                        ref members,
-                    } => {
+                    crate::TypeInner::Struct { ref members, .. } => {
                         let struct_name = &self.names[&NameKey::Type(arg.ty)];
                         write!(
                             self.out,

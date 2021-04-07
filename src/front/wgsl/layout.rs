@@ -1,7 +1,5 @@
 use crate::arena::{Arena, Handle};
-use std::num::NonZeroU32;
-
-pub type Alignment = NonZeroU32;
+use std::{num::NonZeroU32, ops};
 
 /// Alignment information for a type.
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
@@ -9,7 +7,7 @@ pub type Alignment = NonZeroU32;
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct TypeLayout {
     pub size: u32,
-    pub alignment: Alignment,
+    pub alignment: crate::Alignment,
 }
 
 /// Helper processor that derives the sizes of all types.
@@ -22,17 +20,12 @@ pub struct Layouter {
     layouts: Vec<TypeLayout>,
 }
 
-pub struct Placement {
-    pub pad: crate::Span,
-    pub span: crate::Span,
-}
-
 impl Layouter {
     pub fn clear(&mut self) {
         self.layouts.clear();
     }
 
-    pub fn round_up(alignment: Alignment, offset: u32) -> u32 {
+    pub fn round_up(alignment: crate::Alignment, offset: u32) -> u32 {
         match offset & (alignment.get() - 1) {
             0 => offset,
             other => offset + alignment.get() - other,
@@ -43,9 +36,9 @@ impl Layouter {
         &self,
         offset: u32,
         ty: Handle<crate::Type>,
-        align: Option<Alignment>,
+        align: Option<crate::Alignment>,
         size: Option<NonZeroU32>,
-    ) -> Placement {
+    ) -> (ops::Range<u32>, crate::Alignment) {
         let layout = self.layouts[ty.index()];
         let alignment = align.unwrap_or(layout.alignment);
         let start = Self::round_up(alignment, offset);
@@ -53,10 +46,7 @@ impl Layouter {
             Some(size) => size.get(),
             None => layout.size,
         };
-        Placement {
-            pad: start - offset,
-            span,
-        }
+        (start..start + span, alignment)
     }
 
     pub fn update(&mut self, types: &Arena<crate::Type>, constants: &Arena<crate::Constant>) {
@@ -66,7 +56,7 @@ impl Layouter {
             let layout = match ty.inner {
                 Ti::Scalar { width, .. } => TypeLayout {
                     size,
-                    alignment: Alignment::new(width as u32).unwrap(),
+                    alignment: crate::Alignment::new(width as u32).unwrap(),
                 },
                 Ti::Vector {
                     size: vec_size,
@@ -80,7 +70,7 @@ impl Layouter {
                         } else {
                             2
                         };
-                        Alignment::new((count * width) as u32).unwrap()
+                        crate::Alignment::new((count * width) as u32).unwrap()
                     },
                 },
                 Ti::Matrix {
@@ -91,36 +81,31 @@ impl Layouter {
                     size,
                     alignment: {
                         let count = if rows >= crate::VectorSize::Tri { 4 } else { 2 };
-                        Alignment::new((count * width) as u32).unwrap()
+                        crate::Alignment::new((count * width) as u32).unwrap()
                     },
                 },
                 Ti::Pointer { .. } | Ti::ValuePointer { .. } => TypeLayout {
                     size,
-                    alignment: Alignment::new(1).unwrap(),
+                    alignment: crate::Alignment::new(1).unwrap(),
                 },
                 Ti::Array { stride, .. } => TypeLayout {
                     size,
-                    alignment: Alignment::new(stride).unwrap(),
+                    alignment: crate::Alignment::new(stride).unwrap(),
                 },
                 Ti::Struct {
-                    block: _,
-                    ref members,
-                } => {
-                    let mut total = 0;
-                    let mut biggest_alignment = Alignment::new(1).unwrap();
-                    for member in members {
-                        let layout = self.layouts[member.ty.index()];
-                        biggest_alignment = biggest_alignment.max(layout.alignment);
-                        total += member.span;
-                    }
-                    TypeLayout {
-                        size: Self::round_up(biggest_alignment, total),
-                        alignment: biggest_alignment,
-                    }
-                }
+                    ref level,
+                    members: _,
+                    span,
+                } => TypeLayout {
+                    size: span,
+                    alignment: match *level {
+                        crate::StructLevel::Root => crate::Alignment::new(1).unwrap(),
+                        crate::StructLevel::Normal { alignment } => alignment,
+                    },
+                },
                 Ti::Image { .. } | Ti::Sampler { .. } => TypeLayout {
                     size,
-                    alignment: Alignment::new(1).unwrap(),
+                    alignment: crate::Alignment::new(1).unwrap(),
                 },
             };
             debug_assert!(ty.inner.span(constants) <= layout.size);

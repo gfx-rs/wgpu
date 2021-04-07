@@ -239,8 +239,9 @@ impl VaryingContext<'_> {
                 match self.types[self.ty].inner {
                     //TODO: check the member types
                     crate::TypeInner::Struct {
-                        block: false,
+                        level: crate::StructLevel::Normal { .. },
                         ref members,
+                        ..
                     } => {
                         for (index, member) in members.iter().enumerate() {
                             self.ty = member.ty;

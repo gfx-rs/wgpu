@@ -514,15 +514,21 @@ pomelo! {
         if i.1 == "gl_PerVertex" {
             None
         } else {
-            let block = !t.is_empty();
+            let level = if t.is_empty() {
+                //TODO
+                crate::StructLevel::Normal { alignment: crate::Alignment::new(1).unwrap() }
+            } else {
+                crate::StructLevel::Root
+            };
             Some(VarDeclaration {
                 type_qualifiers: t,
                 ids_initializers: vec![(None, None)],
                 ty: extra.module.types.fetch_or_append(Type{
                     name: Some(i.1),
                     inner: TypeInner::Struct {
-                        block,
+                        level,
                         members: sdl,
+                        span: 0, //TODO
                     },
                 }),
             })
@@ -531,15 +537,21 @@ pomelo! {
 
     declaration ::= type_qualifier(t) Identifier(i1) LeftBrace
         struct_declaration_list(sdl) RightBrace Identifier(i2) Semicolon {
-        let block = !t.is_empty();
+        let level = if t.is_empty() {
+            //TODO
+            crate::StructLevel::Normal { alignment: crate::Alignment::new(1).unwrap() }
+        } else {
+            crate::StructLevel::Root
+        };
         Some(VarDeclaration {
             type_qualifiers: t,
             ids_initializers: vec![(Some(i2.1), None)],
             ty: extra.module.types.fetch_or_append(Type{
                 name: Some(i1.1),
                 inner: TypeInner::Struct {
-                    block,
+                    level,
                     members: sdl,
+                    span: 0, //TODO
                 },
             }),
         })
@@ -706,8 +718,9 @@ pomelo! {
         Type{
             name: Some(i.1),
             inner: TypeInner::Struct {
-                block: false,
+                level: crate::StructLevel::Normal { alignment: crate::Alignment::new(1).unwrap() },
                 members: vec![],
+                span: 0,
             }
         }
     }
@@ -729,7 +742,7 @@ pomelo! {
                 binding: None, //TODO
                 //TODO: if the struct is a uniform struct, these values have to reflect
                 // std140 layout. Otherwise, std430.
-                span: extra.module.types[ty].inner.span(&extra.module.constants),
+                offset: 0,
             }).collect()
         } else {
             return Err(ErrorKind::SemanticError("Struct member can't be void".into()))

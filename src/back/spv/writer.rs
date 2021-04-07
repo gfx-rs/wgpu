@@ -455,10 +455,8 @@ impl Writer {
                         .body
                         .push(Instruction::load(argument_type_id, id, varying_id, None));
                     id
-                } else if let crate::TypeInner::Struct {
-                    block: _,
-                    ref members,
-                } = ir_module.types[argument.ty].inner
+                } else if let crate::TypeInner::Struct { ref members, .. } =
+                    ir_module.types[argument.ty].inner
                 {
                     let struct_id = self.id_gen.next();
                     let mut constituent_ids = Vec::with_capacity(members.len());
@@ -509,10 +507,8 @@ impl Writer {
                             type_id,
                             built_in: binding.to_built_in(),
                         });
-                    } else if let crate::TypeInner::Struct {
-                        block: _,
-                        ref members,
-                    } = ir_module.types[result.ty].inner
+                    } else if let crate::TypeInner::Struct { ref members, .. } =
+                        ir_module.types[result.ty].inner
                     {
                         for member in members {
                             let type_id =
@@ -862,13 +858,16 @@ impl Writer {
                     crate::ArraySize::Dynamic => Instruction::type_runtime_array(id, type_id),
                 }
             }
-            crate::TypeInner::Struct { block, ref members } => {
-                if block {
+            crate::TypeInner::Struct {
+                ref level,
+                ref members,
+                span: _,
+            } => {
+                if let crate::StructLevel::Root = *level {
                     self.annotations
                         .push(Instruction::decorate(id, Decoration::Block, &[]));
                 }
 
-                let mut current_offset = 0;
                 let mut member_ids = Vec::with_capacity(members.len());
                 for (index, member) in members.iter().enumerate() {
                     if decorate_layout {
@@ -876,9 +875,8 @@ impl Writer {
                             id,
                             index as u32,
                             Decoration::Offset,
-                            &[current_offset],
+                            &[member.offset],
                         ));
-                        current_offset += member.span;
                     }
 
                     if self.flags.contains(WriterFlags::DEBUG) {

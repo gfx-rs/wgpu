@@ -79,20 +79,12 @@ impl super::TypeInner {
                 size,
                 kind: _,
                 width,
-            } => {
-                //let count = if size >= super::VectorSize::Tri { 4 } else { 2 };
-                let count = size as u8; //TEMP
-                (count * width) as u32
-            }
+            } => (size as u8 * width) as u32,
             Self::Matrix {
                 columns,
                 rows,
                 width,
-            } => {
-                //let count = if rows >= super::VectorSize::Tri { 4 } else { 2 };
-                let count = rows as u8; //TEMP
-                (columns as u8 * count * width) as u32
-            }
+            } => (columns as u8 * rows as u8 * width) as u32,
             Self::Pointer { .. } | Self::ValuePointer { .. } => POINTER_SPAN,
             Self::Array {
                 base: _,
@@ -108,10 +100,7 @@ impl super::TypeInner {
                 };
                 count * stride
             }
-            Self::Struct {
-                block: _,
-                ref members,
-            } => members.iter().map(|m| m.span).sum(),
+            Self::Struct { span, .. } => span,
             Self::Image { .. } | Self::Sampler { .. } => 0,
         }
     }

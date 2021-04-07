@@ -262,7 +262,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                                 name: None,
                                 ty: result.ty,
                                 binding: result.binding.clone(),
-                                span: module.types[result.ty].inner.span(&module.constants),
+                                offset: 0,
                             });
                             // populate just the globals first, then do `Load` in a
                             // separate step, so that we can get a range.
@@ -328,8 +328,11 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     let ty = module.types.append(crate::Type {
                         name: None,
                         inner: crate::TypeInner::Struct {
-                            block: false,
+                            level: crate::StructLevel::Normal {
+                                alignment: crate::Alignment::new(1).unwrap(),
+                            },
                             members,
+                            span: 0xFFFF, // shouldn't matter
                         },
                     });
                     let result_expr = function

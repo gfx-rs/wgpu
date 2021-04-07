@@ -178,10 +178,7 @@ impl<'a> ResolveContext<'a> {
                     })
                 }
                 Ti::Array { base, .. } => TypeResolution::Handle(base),
-                Ti::Struct {
-                    block: _,
-                    ref members,
-                } => {
+                Ti::Struct { ref members, .. } => {
                     let member = members
                         .get(index as usize)
                         .ok_or(ResolveError::OutOfBoundsIndex { expr: base, index })?;
@@ -234,10 +231,7 @@ impl<'a> ResolveContext<'a> {
                             class,
                         }
                     }
-                    Ti::Struct {
-                        block: _,
-                        ref members,
-                    } => {
+                    Ti::Struct { ref members, .. } => {
                         let member = members
                             .get(index as usize)
                             .ok_or(ResolveError::OutOfBoundsIndex { expr: base, index })?;

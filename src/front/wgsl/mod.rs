@@ -1509,8 +1509,9 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
-    ) -> Result<Vec<crate::StructMember>, Error<'a>> {
+    ) -> Result<(Vec<crate::StructMember>, u32, crate::Alignment), Error<'a>> {
         let mut offset = 0;
+        let mut alignment = crate::Alignment::new(1).unwrap();
         let mut members = Vec::new();
 
         lexer.expect(Token::Paren('{'))?;
@@ -1556,7 +1557,7 @@ impl Parser {
 
             let name = match lexer.next() {
                 (Token::Word(word), _) => word,
-                (Token::Paren('}'), _) => return Ok(members),
+                (Token::Paren('}'), _) => return Ok((members, offset, alignment)),
                 other => return Err(Error::Unexpected(other, "field name")),
             };
             lexer.expect(Token::Separator(':'))?;
@@ -1564,17 +1565,15 @@ impl Parser {
             lexer.expect(Token::Separator(';'))?;
 
             self.layouter.update(type_arena, const_arena);
-            let placement = self.layouter.member_placement(offset, ty, align, size);
-            if placement.pad != 0 {
-                members.last_mut().unwrap().span += placement.pad;
-            }
-            offset += placement.pad + placement.span;
+            let (range, align) = self.layouter.member_placement(offset, ty, align, size);
+            alignment = alignment.max(align);
+            offset = range.end;
 
             members.push(crate::StructMember {
                 name: Some(name.to_owned()),
                 ty,
                 binding: bind_parser.finish()?,
-                span: placement.span,
+                offset: range.start,
             });
         }
     }
@@ -2556,13 +2555,18 @@ impl Parser {
             (Token::Separator(';'), _) => {}
             (Token::Word("struct"), _) => {
                 let name = lexer.next_ident()?;
-                let members =
+                let (members, span, alignment) =
                     self.parse_struct_body(lexer, &mut module.types, &mut module.constants)?;
                 let ty = module.types.fetch_or_append(crate::Type {
                     name: Some(name.to_string()),
                     inner: crate::TypeInner::Struct {
-                        block: is_block,
+                        level: if is_block {
+                            crate::StructLevel::Root
+                        } else {
+                            crate::StructLevel::Normal { alignment }
+                        },
                         members,
+                        span,
                     },
                 });
                 self.lookup_type.insert(name.to_owned(), ty);

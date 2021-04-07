@@ -2488,7 +2488,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let mut members = Vec::<crate::StructMember>::with_capacity(inst.wc as usize - 2);
         let mut member_type_ids = Vec::with_capacity(members.capacity());
-        let mut last_offset = 0;
         for i in 0..u32::from(inst.wc) - 2 {
             let type_id = self.next()?;
             member_type_ids.push(type_id);
@@ -2499,28 +2498,40 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 .unwrap_or_default();
             let binding = decor.io_binding().ok();
 
-            if let Some(offset) = decor.offset {
-                if offset != last_offset {
-                    if let Some(member) = members.last_mut() {
-                        // add padding, if necessary
-                        member.span = offset - (last_offset - member.span);
+            let offset = match decor.offset {
+                Some(offset) => offset,
+                None => match members.last() {
+                    Some(member) => {
+                        member.offset + module.types[member.ty].inner.span(&module.constants)
                     }
-                    last_offset = offset;
-                }
-            }
-            let span = module.types[ty].inner.span(&module.constants);
-            last_offset += span;
-
+                    None => 0,
+                },
+            };
             members.push(crate::StructMember {
                 name: decor.name,
                 ty,
                 binding,
-                span,
+                offset,
             });
         }
 
+        //TODO: we should be able to do better than this.
+        const STRUCT_ALIGNMENT: u32 = 16;
+
         let inner = crate::TypeInner::Struct {
-            block: block_decor.is_some(),
+            level: match block_decor {
+                Some(_) => crate::StructLevel::Root,
+                None => crate::StructLevel::Normal {
+                    alignment: crate::Alignment::new(STRUCT_ALIGNMENT).unwrap(),
+                },
+            },
+            span: match members.last() {
+                Some(member) => {
+                    let end = member.offset + module.types[member.ty].inner.span(&module.constants);
+                    ((end - 1) | (STRUCT_ALIGNMENT - 1)) + 1
+                }
+                None => STRUCT_ALIGNMENT,
+            },
             members,
         };
         let ty_handle = module.types.append(crate::Type {
