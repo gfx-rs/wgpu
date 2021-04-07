@@ -1,4 +1,6 @@
-use super::{keywords::RESERVED, Error, LocationMode, Options, SubOptions, TranslationInfo};
+use super::{
+    keywords::RESERVED, sampler as sm, Error, LocationMode, Options, SubOptions, TranslationInfo,
+};
 use crate::{
     arena::Handle,
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
@@ -163,6 +165,7 @@ struct StatementContext<'a> {
     expression: ExpressionContext<'a>,
     mod_info: &'a ModuleInfo,
     result_struct: Option<&'a str>,
+    inline_global_handles: &'a BitSet,
 }
 
 impl<W: Write> Writer<W> {
@@ -1043,7 +1046,10 @@ impl<W: Write> Writer<W> {
                     let mut separate = !arguments.is_empty();
                     let fun_info = &context.mod_info[function];
                     for (handle, var) in context.expression.module.global_variables.iter() {
-                        if !fun_info[handle].is_empty() && var.class.needs_pass_through() {
+                        if !fun_info[handle].is_empty()
+                            && !context.inline_global_handles.contains(handle.index())
+                            && var.class.needs_pass_through()
+                        {
                             let name = &self.names[&NameKey::GlobalVariable(handle)];
                             if separate {
                                 write!(self.out, ", ")?;
@@ -1316,6 +1322,63 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn write_inline_sampler(
+        &mut self,
+        sampler: &sm::InlineSampler,
+        stage: crate::ShaderStage,
+        handle: Handle<crate::GlobalVariable>,
+    ) -> Result<(), Error> {
+        write!(
+            self.out,
+            "constexpr sampler ism_{}_{:?}(",
+            handle.index(),
+            stage
+        )?;
+        for (&letter, address) in ['s', 't', 'r'].iter().zip(sampler.address.iter()) {
+            write!(
+                self.out,
+                "{}{}_address::{},",
+                INDENT,
+                letter,
+                address.as_str()
+            )?;
+        }
+        write!(
+            self.out,
+            "{}mag_filter::{},",
+            INDENT,
+            sampler.mag_filter.as_str()
+        )?;
+        write!(
+            self.out,
+            "{}min_filter::{},",
+            INDENT,
+            sampler.min_filter.as_str()
+        )?;
+        if let Some(filter) = sampler.mip_filter {
+            write!(self.out, "{}mip_filter::{},", INDENT, filter.as_str())?;
+        }
+        // avoid setting it on platforms that don't support it
+        if sampler.border_color != sm::BorderColor::TransparentBlack {
+            write!(
+                self.out,
+                "{}border_color::{},",
+                INDENT,
+                sampler.border_color.as_str()
+            )?;
+        }
+        if sampler.compare_func != sm::CompareFunc::Never {
+            write!(
+                self.out,
+                "{}compare_func::{},",
+                INDENT,
+                sampler.compare_func.as_str()
+            )?;
+        }
+        writeln!(self.out, "{}coord::normalized);", INDENT)?;
+        Ok(())
+    }
+
     // Returns the array of mapped entry point names.
     fn write_functions(
         &mut self,
@@ -1324,12 +1387,38 @@ impl<W: Write> Writer<W> {
         options: &Options,
         sub_options: &SubOptions,
     ) -> Result<TranslationInfo, Error> {
+        // first, write down immutable samplers as const expressions
+        let mut inline_global_handles = BitSet::new();
+        for (handle, var) in module.global_variables.iter() {
+            let binding = match var.binding {
+                Some(ref binding) => binding,
+                None => continue,
+            };
+            for &stage in [
+                crate::ShaderStage::Vertex,
+                crate::ShaderStage::Fragment,
+                crate::ShaderStage::Compute,
+            ]
+            .iter()
+            {
+                if let Ok(resolved) = options.resolve_global_binding(stage, binding) {
+                    if let Some(sampler) = resolved.as_inline_sampler(options) {
+                        inline_global_handles.insert(handle.index());
+                        self.write_inline_sampler(sampler, stage, handle)?;
+                    }
+                }
+            }
+        }
+
         let mut pass_through_globals = Vec::new();
         for (fun_handle, fun) in module.functions.iter() {
             let fun_info = &mod_info[fun_handle];
             pass_through_globals.clear();
             for (handle, var) in module.global_variables.iter() {
-                if !fun_info[handle].is_empty() && var.class.needs_pass_through() {
+                if !fun_info[handle].is_empty()
+                    && !inline_global_handles.contains(handle.index())
+                    && var.class.needs_pass_through()
+                {
                     pass_through_globals.push(handle);
                 }
             }
@@ -1388,6 +1477,7 @@ impl<W: Write> Writer<W> {
                 },
                 mod_info,
                 result_struct: None,
+                inline_global_handles: &inline_global_handles,
             };
             self.named_expressions.clear();
             self.put_block(Level(1), &fun.body, &context)?;
@@ -1558,7 +1648,10 @@ impl<W: Write> Writer<W> {
             }
             for (handle, var) in module.global_variables.iter() {
                 let usage = fun_info[handle];
-                if usage.is_empty() || var.class == crate::StorageClass::Private {
+                if usage.is_empty()
+                    || var.class == crate::StorageClass::Private
+                    || inline_global_handles.contains(handle.index())
+                {
                     continue;
                 }
                 let tyvar = TypedGlobalVariable {
@@ -1676,6 +1769,7 @@ impl<W: Write> Writer<W> {
                 },
                 mod_info,
                 result_struct: Some(&stage_out_name),
+                inline_global_handles: &inline_global_handles,
             };
             self.named_expressions.clear();
             self.put_block(Level(1), &fun.body, &context)?;

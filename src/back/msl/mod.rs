@@ -195,7 +195,7 @@ impl Options {
 }
 
 impl ResolvedBinding {
-    fn _as_inline_sampler<'a>(&self, options: &'a Options) -> Option<&'a sampler::InlineSampler> {
+    fn as_inline_sampler<'a>(&self, options: &'a Options) -> Option<&'a sampler::InlineSampler> {
         match *self {
             Self::Resource(BindTarget {
                 sampler: Some(BindSamplerTarget::Inline(handle)),

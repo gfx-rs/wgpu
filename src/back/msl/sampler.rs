@@ -1,4 +1,4 @@
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Coord {
     Normalized,
     Pixel,
@@ -10,7 +10,7 @@ impl Default for Coord {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Address {
     Repeat,
     MirroredRepeat,
@@ -25,7 +25,19 @@ impl Default for Address {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+impl Address {
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            Self::Repeat => "repeat",
+            Self::MirroredRepeat => "mirrored_repeat",
+            Self::ClampToEdge => "clamp_to_edge",
+            Self::ClampToZero => "clamp_to_zero",
+            Self::ClampToBorder => "clamp_to_border",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BorderColor {
     TransparentBlack,
     OpaqueBlack,
@@ -38,10 +50,29 @@ impl Default for BorderColor {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+impl BorderColor {
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            Self::TransparentBlack => "transparent_black",
+            Self::OpaqueBlack => "opaque_black",
+            Self::OpaqueWhite => "opaque_white",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Filter {
     Nearest,
     Linear,
+}
+
+impl Filter {
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            Self::Nearest => "nearest",
+            Self::Linear => "linear",
+        }
+    }
 }
 
 impl Default for Filter {
@@ -50,7 +81,7 @@ impl Default for Filter {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CompareFunc {
     Never,
     Less,
@@ -65,6 +96,21 @@ pub enum CompareFunc {
 impl Default for CompareFunc {
     fn default() -> Self {
         Self::Never
+    }
+}
+
+impl CompareFunc {
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            Self::Never => "never",
+            Self::Less => "less",
+            Self::LessEqual => "less_equal",
+            Self::Greater => "greater",
+            Self::GreaterEqual => "greater_equal",
+            Self::Equal => "equal",
+            Self::NotEqual => "not_equal",
+            Self::Always => "always",
+        }
     }
 }
 
