@@ -535,6 +535,14 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const VERTEX_WRITABLE_STORAGE = 0x0000_0020_0000_0000;
+        /// Enables buffer & texture fill functions on command buffer.
+        ///
+        /// Supported platforms:
+        /// - All
+        ///
+        /// This is a native only feature.
+        const BUFFER_AND_TEXTURE_FILL = 0x0000_0030_0000_0000;
+
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).
@@ -2163,7 +2171,7 @@ bitflags::bitflags! {
         /// operation.
         const COPY_SRC = 4;
         /// Allow a buffer to be the destination buffer for a [`CommandEncoder::copy_buffer_to_buffer`], [`CommandEncoder::copy_texture_to_buffer`],
-        /// or [`Queue::write_buffer`] operation.
+        /// [`CommandEncoder::fill_buffer`] or [`Queue::write_buffer`] operation.
         const COPY_DST = 8;
         /// Allow a buffer to be the index buffer in a draw operation.
         const INDEX = 16;

@@ -3872,6 +3872,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &device.raw,
                 device.limits.clone(),
                 device.downlevel,
+                device.features,
                 device.private_features,
                 &desc.label,
                 #[cfg(feature = "trace")]

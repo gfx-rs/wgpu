@@ -142,6 +142,12 @@ pub enum Command {
         dst: crate::command::ImageCopyTexture,
         size: wgt::Extent3d,
     },
+    FillBuffer {
+        dst: id::BufferId,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
+        data: u32,
+    },
     WriteTimestamp {
         query_set_id: id::QuerySetId,
         query_index: u32,

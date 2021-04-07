@@ -91,6 +91,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
         device: &B::Device,
         limits: wgt::Limits,
         downlevel: wgt::DownlevelProperties,
+        features: wgt::Features,
         private_features: PrivateFeatures,
         label: &crate::Label,
         #[cfg(feature = "trace")] enable_tracing: bool,
@@ -135,6 +136,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
             limits,
             downlevel,
             private_features,
+            support_fill_buffer_texture: features.contains(wgt::Features::BUFFER_AND_TEXTURE_FILL),
             has_labels: label.is_some(),
             #[cfg(feature = "trace")]
             commands: if enable_tracing {
