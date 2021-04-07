@@ -1,4 +1,8 @@
+#[cfg(feature = "deserialize")]
+use serde::Deserialize;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Coord {
     Normalized,
     Pixel,
@@ -11,6 +15,7 @@ impl Default for Coord {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Address {
     Repeat,
     MirroredRepeat,
@@ -38,6 +43,7 @@ impl Address {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum BorderColor {
     TransparentBlack,
     OpaqueBlack,
@@ -61,6 +67,7 @@ impl BorderColor {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Filter {
     Nearest,
     Linear,
@@ -82,6 +89,7 @@ impl Default for Filter {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum CompareFunc {
     Never,
     Less,
@@ -115,6 +123,7 @@ impl CompareFunc {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct InlineSampler {
     pub coord: Coord,
     pub address: [Address; 3],

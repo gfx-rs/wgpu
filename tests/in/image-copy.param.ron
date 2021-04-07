@@ -3,8 +3,5 @@
 	spv_capabilities: [ Shader, Image1D, Sampled1D ],
 	spv_debug: true,
 	spv_adjust_coordinate_space: false,
-	mtl_bindings: {
-		(stage: Compute, group: 0, binding: 1): (texture: Some(0), mutable: false),
-		(stage: Compute, group: 0, binding: 2): (texture: Some(1), mutable: true),
-	}
+	msl_custom: false,
 )

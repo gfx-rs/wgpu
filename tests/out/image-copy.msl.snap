@@ -16,8 +16,8 @@ struct main1Input {
 };
 kernel void main1(
   type2 local_id [[thread_position_in_threadgroup]]
-, type image_src [[texture(0)]]
-, type1 image_dst [[texture(1)]]
+, type image_src [[user(fake0)]]
+, type1 image_dst [[user(fake0)]]
 ) {
     metal::int2 _expr12 = (int2(image_src.get_width(), image_src.get_height()) * static_cast<int2>(metal::uint2(local_id.x, local_id.y))) % metal::int2(const_10i, const_20i);
     metal::uint4 _expr13 = image_src.read(metal::uint2(_expr12));

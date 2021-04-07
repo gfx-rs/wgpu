@@ -4,9 +4,16 @@
 	spv_capabilities: [ Shader ],
 	spv_debug: false,
 	spv_adjust_coordinate_space: false,
-	mtl_bindings: {
-		(stage: Vertex, group: 0, binding: 0): (buffer: Some(0)),
-		(stage: Fragment, group: 0, binding: 1): (texture: Some(0)),
-		(stage: Fragment, group: 0, binding: 2): (sampler: Some(1)),
-	}
+	msl_custom: true,
+	msl: (
+		lang_version: (2, 1),
+		binding_map: {
+			(stage: Vertex, group: 0, binding: 0): (buffer: Some(0)),
+			(stage: Fragment, group: 0, binding: 1): (texture: Some(0)),
+			(stage: Fragment, group: 0, binding: 2): (sampler: Some(Resource(1))),
+		},
+		inline_samplers: [],
+		spirv_cross_compatibility: false,
+		fake_missing_bindings: false,
+	)
 )

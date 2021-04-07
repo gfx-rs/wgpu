@@ -45,8 +45,8 @@ struct main2Output {
 };
 fragment main2Output main2(
   main2Input varyings1 [[stage_in]]
-, type3 u_texture [[texture(0)]]
-, type4 u_sampler [[sampler(0)]]
+, type3 u_texture [[user(fake0)]]
+, type4 u_sampler [[user(fake0)]]
 ) {
     const auto uv2 = varyings1.uv2;
     metal::float4 _expr4 = u_texture.sample(u_sampler, uv2);

@@ -9,36 +9,6 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Hash, PartialEq, Eq, serde::Deserialize)]
-enum Stage {
-    Vertex,
-    Fragment,
-    Compute,
-}
-
-#[derive(Hash, PartialEq, Eq, serde::Deserialize)]
-struct BindSource {
-    stage: Stage,
-    group: u32,
-    binding: u32,
-}
-
-#[derive(serde::Deserialize)]
-struct BindTarget {
-    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
-    #[serde(default)]
-    buffer: Option<u8>,
-    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
-    #[serde(default)]
-    texture: Option<u8>,
-    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
-    #[serde(default)]
-    sampler: Option<u8>,
-    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
-    #[serde(default)]
-    mutable: bool,
-}
-
 #[derive(Default, serde::Deserialize)]
 struct Parameters {
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
@@ -49,8 +19,11 @@ struct Parameters {
     spv_debug: bool,
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_adjust_coordinate_space: bool,
-    #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
-    mtl_bindings: naga::FastHashMap<BindSource, BindTarget>,
+    #[cfg(all(feature = "deserialize", feature = "msl-out"))]
+    #[serde(default)]
+    msl: naga::back::msl::Options,
+    #[cfg(all(not(feature = "deserialize"), feature = "msl-out"))]
+    msl_custom: bool,
 }
 
 #[allow(dead_code)]
@@ -162,38 +135,23 @@ fn check_output_msl(
 ) {
     use naga::back::msl;
 
-    let mut binding_map = msl::BindingMap::default();
-    for (key, value) in params.mtl_bindings.iter() {
-        binding_map.insert(
-            msl::BindSource {
-                stage: match key.stage {
-                    Stage::Vertex => naga::ShaderStage::Vertex,
-                    Stage::Fragment => naga::ShaderStage::Fragment,
-                    Stage::Compute => naga::ShaderStage::Compute,
-                },
-                group: key.group,
-                binding: key.binding,
-            },
-            msl::BindTarget {
-                buffer: value.buffer,
-                texture: value.texture,
-                sampler: value.sampler.map(msl::BindSamplerTarget::Resource),
-                mutable: value.mutable,
-            },
-        );
-    }
-    let options = msl::Options {
-        lang_version: (1, 0),
-        binding_map,
-        inline_samplers: naga::Arena::new(),
-        spirv_cross_compatibility: false,
-        fake_missing_bindings: false,
+    #[cfg_attr(feature = "deserialize", allow(unused_variables))]
+    let default_options = msl::Options::default();
+    #[cfg(feature = "deserialize")]
+    let options = &params.msl;
+    #[cfg(not(feature = "deserialize"))]
+    let options = if params.msl_custom {
+        println!("Skipping {}", name);
+        return;
+    } else {
+        &default_options
     };
+
     let sub_options = msl::SubOptions {
         allow_point_size: true,
     };
 
-    let (msl, _) = msl::write_string(module, info, &options, &sub_options).unwrap();
+    let (msl, _) = msl::write_string(module, info, options, &sub_options).unwrap();
 
     with_snapshot_settings(|| {
         insta::assert_snapshot!(format!("{}.msl", name), msl);

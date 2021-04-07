@@ -3,6 +3,5 @@
 	spv_capabilities: [ Shader ],
 	spv_debug: false,
 	spv_adjust_coordinate_space: false,
-	mtl_bindings: {
-	}
+	msl_custom: false,
 )

@@ -4,9 +4,5 @@
 	spv_capabilities: [ Shader ],
 	spv_debug: true,
 	spv_adjust_coordinate_space: false,
-	mtl_bindings: {
-		(stage: Fragment, group: 0, binding: 0): (texture: Some(0)),
-		(stage: Fragment, group: 0, binding: 1): (texture: Some(1)),
-		(stage: Fragment, group: 0, binding: 2): (sampler: Some(0)),
-	}
+	msl_custom: false,
 )

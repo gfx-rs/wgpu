@@ -37,20 +37,27 @@ mod writer;
 pub use writer::Writer;
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum BindSamplerTarget {
     Resource(u8),
     Inline(Handle<sampler::InlineSampler>),
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct BindTarget {
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub buffer: Option<u8>,
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub texture: Option<u8>,
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub sampler: Option<BindSamplerTarget>,
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub mutable: bool,
 }
 
 #[derive(Clone, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct BindSource {
     pub stage: crate::ShaderStage,
     pub group: u32,
@@ -102,6 +109,7 @@ enum LocationMode {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Options {
     /// (Major, Minor) target version of the Metal Shading Language.
     pub lang_version: (u8, u8),
@@ -129,6 +137,7 @@ impl Default for Options {
 
 // A subset of options that are meant to be changed per pipeline.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct SubOptions {
     /// Allow `BuiltIn::PointSize` in the vertex shader.
     /// Metal doesn't like this for non-point primitive topologies.
