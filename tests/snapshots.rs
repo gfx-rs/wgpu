@@ -177,7 +177,7 @@ fn check_output_msl(
             msl::BindTarget {
                 buffer: value.buffer,
                 texture: value.texture,
-                sampler: value.sampler,
+                sampler: value.sampler.map(msl::BindSamplerTarget::Resource),
                 mutable: value.mutable,
             },
         );
@@ -185,12 +185,15 @@ fn check_output_msl(
     let options = msl::Options {
         lang_version: (1, 0),
         binding_map,
+        inline_samplers: naga::Arena::new(),
         spirv_cross_compatibility: false,
         fake_missing_bindings: false,
+    };
+    let sub_options = msl::SubOptions {
         allow_point_size: true,
     };
 
-    let (msl, _) = msl::write_string(module, info, &options).unwrap();
+    let (msl, _) = msl::write_string(module, info, &options, &sub_options).unwrap();
 
     with_snapshot_settings(|| {
         insta::assert_snapshot!(format!("{}.msl", name), msl);

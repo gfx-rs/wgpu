@@ -1,4 +1,4 @@
-use super::{keywords::RESERVED, Error, LocationMode, Options, TranslationInfo};
+use super::{keywords::RESERVED, Error, LocationMode, Options, SubOptions, TranslationInfo};
 use crate::{
     arena::Handle,
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
@@ -150,7 +150,7 @@ struct ExpressionContext<'a> {
     origin: FunctionOrigin,
     info: &'a FunctionInfo,
     module: &'a crate::Module,
-    options: &'a Options,
+    sub_options: &'a SubOptions,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -773,7 +773,7 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "{}return {} {{", level, struct_name)?;
                         let mut is_first = true;
                         for (index, member) in members.iter().enumerate() {
-                            if !context.options.allow_point_size
+                            if !context.sub_options.allow_point_size
                                 && member.binding
                                     == Some(crate::Binding::BuiltIn(crate::BuiltIn::PointSize))
                             {
@@ -1076,6 +1076,7 @@ impl<W: Write> Writer<W> {
         module: &crate::Module,
         info: &ModuleInfo,
         options: &Options,
+        sub_options: &SubOptions,
     ) -> Result<TranslationInfo, Error> {
         self.names.clear();
         self.namer.reset(module, RESERVED, &mut self.names);
@@ -1087,7 +1088,7 @@ impl<W: Write> Writer<W> {
         self.write_scalar_constants(module)?;
         self.write_type_defs(module)?;
         self.write_composite_constants(module)?;
-        self.write_functions(module, info, options)
+        self.write_functions(module, info, options, sub_options)
     }
 
     fn write_type_defs(&mut self, module: &crate::Module) -> Result<(), Error> {
@@ -1321,6 +1322,7 @@ impl<W: Write> Writer<W> {
         module: &crate::Module,
         mod_info: &ModuleInfo,
         options: &Options,
+        sub_options: &SubOptions,
     ) -> Result<TranslationInfo, Error> {
         let mut pass_through_globals = Vec::new();
         for (fun_handle, fun) in module.functions.iter() {
@@ -1382,7 +1384,7 @@ impl<W: Write> Writer<W> {
                     origin: FunctionOrigin::Handle(fun_handle),
                     info: fun_info,
                     module,
-                    options,
+                    sub_options,
                 },
                 mod_info,
                 result_struct: None,
@@ -1511,7 +1513,7 @@ impl<W: Write> Writer<W> {
                     for (name, ty, binding) in result_members {
                         let type_name = &self.names[&NameKey::Type(ty)];
                         let binding = binding.ok_or(Error::Validation)?;
-                        if !options.allow_point_size
+                        if !sub_options.allow_point_size
                             && *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize)
                         {
                             continue;
@@ -1670,7 +1672,7 @@ impl<W: Write> Writer<W> {
                     origin: FunctionOrigin::EntryPoint(ep_index as _),
                     info: fun_info,
                     module,
-                    options,
+                    sub_options,
                 },
                 mod_info,
                 result_struct: Some(&stage_out_name),
@@ -1722,7 +1724,9 @@ fn test_stack_size() {
         .unwrap();
     // process the module
     let mut writer = Writer::new(String::new());
-    writer.write(&module, &info, &Default::default()).unwrap();
+    writer
+        .write(&module, &info, &Default::default(), &Default::default())
+        .unwrap();
 
     {
         // check expression stack
