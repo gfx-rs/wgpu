@@ -165,7 +165,6 @@ struct StatementContext<'a> {
     expression: ExpressionContext<'a>,
     mod_info: &'a ModuleInfo,
     result_struct: Option<&'a str>,
-    inline_global_handles: &'a BitSet,
 }
 
 impl<W: Write> Writer<W> {
@@ -1046,10 +1045,7 @@ impl<W: Write> Writer<W> {
                     let mut separate = !arguments.is_empty();
                     let fun_info = &context.mod_info[function];
                     for (handle, var) in context.expression.module.global_variables.iter() {
-                        if !fun_info[handle].is_empty()
-                            && !context.inline_global_handles.contains(handle.index())
-                            && var.class.needs_pass_through()
-                        {
+                        if !fun_info[handle].is_empty() && var.class.needs_pass_through() {
                             let name = &self.names[&NameKey::GlobalVariable(handle)];
                             if separate {
                                 write!(self.out, ", ")?;
@@ -1322,60 +1318,64 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_inline_sampler(
+    fn put_inline_sampler_properties(
         &mut self,
+        level: Level,
         sampler: &sm::InlineSampler,
-        stage: crate::ShaderStage,
-        handle: Handle<crate::GlobalVariable>,
     ) -> Result<(), Error> {
-        write!(
-            self.out,
-            "constexpr sampler ism_{}_{:?}(",
-            handle.index(),
-            stage
-        )?;
         for (&letter, address) in ['s', 't', 'r'].iter().zip(sampler.address.iter()) {
-            write!(
+            writeln!(
                 self.out,
-                "{}{}_address::{},",
-                INDENT,
+                "{}{}::{}_address::{},",
+                level,
+                NAMESPACE,
                 letter,
-                address.as_str()
+                address.as_str(),
             )?;
         }
-        write!(
+        writeln!(
             self.out,
-            "{}mag_filter::{},",
-            INDENT,
-            sampler.mag_filter.as_str()
+            "{}{}::mag_filter::{},",
+            level,
+            NAMESPACE,
+            sampler.mag_filter.as_str(),
         )?;
-        write!(
+        writeln!(
             self.out,
-            "{}min_filter::{},",
-            INDENT,
-            sampler.min_filter.as_str()
+            "{}{}::min_filter::{},",
+            level,
+            NAMESPACE,
+            sampler.min_filter.as_str(),
         )?;
         if let Some(filter) = sampler.mip_filter {
-            write!(self.out, "{}mip_filter::{},", INDENT, filter.as_str())?;
+            writeln!(
+                self.out,
+                "{}{}::mip_filter::{},",
+                level,
+                NAMESPACE,
+                filter.as_str(),
+            )?;
         }
         // avoid setting it on platforms that don't support it
         if sampler.border_color != sm::BorderColor::TransparentBlack {
-            write!(
+            writeln!(
                 self.out,
-                "{}border_color::{},",
-                INDENT,
-                sampler.border_color.as_str()
+                "{}{}::border_color::{},",
+                level,
+                NAMESPACE,
+                sampler.border_color.as_str(),
             )?;
         }
         if sampler.compare_func != sm::CompareFunc::Never {
-            write!(
+            writeln!(
                 self.out,
-                "{}compare_func::{},",
-                INDENT,
-                sampler.compare_func.as_str()
+                "{}{}::compare_func::{},",
+                level,
+                NAMESPACE,
+                sampler.compare_func.as_str(),
             )?;
         }
-        writeln!(self.out, "{}coord::normalized);", INDENT)?;
+        writeln!(self.out, "{}{}::coord::normalized", NAMESPACE, level)?;
         Ok(())
     }
 
@@ -1387,38 +1387,12 @@ impl<W: Write> Writer<W> {
         options: &Options,
         sub_options: &SubOptions,
     ) -> Result<TranslationInfo, Error> {
-        // first, write down immutable samplers as const expressions
-        let mut inline_global_handles = BitSet::new();
-        for (handle, var) in module.global_variables.iter() {
-            let binding = match var.binding {
-                Some(ref binding) => binding,
-                None => continue,
-            };
-            for &stage in [
-                crate::ShaderStage::Vertex,
-                crate::ShaderStage::Fragment,
-                crate::ShaderStage::Compute,
-            ]
-            .iter()
-            {
-                if let Ok(resolved) = options.resolve_global_binding(stage, binding) {
-                    if let Some(sampler) = resolved.as_inline_sampler(options) {
-                        inline_global_handles.insert(handle.index());
-                        self.write_inline_sampler(sampler, stage, handle)?;
-                    }
-                }
-            }
-        }
-
         let mut pass_through_globals = Vec::new();
         for (fun_handle, fun) in module.functions.iter() {
             let fun_info = &mod_info[fun_handle];
             pass_through_globals.clear();
             for (handle, var) in module.global_variables.iter() {
-                if !fun_info[handle].is_empty()
-                    && !inline_global_handles.contains(handle.index())
-                    && var.class.needs_pass_through()
-                {
+                if !fun_info[handle].is_empty() && var.class.needs_pass_through() {
                     pass_through_globals.push(handle);
                 }
             }
@@ -1477,7 +1451,6 @@ impl<W: Write> Writer<W> {
                 },
                 mod_info,
                 result_struct: None,
-                inline_global_handles: &inline_global_handles,
             };
             self.named_expressions.clear();
             self.put_block(Level(1), &fun.body, &context)?;
@@ -1648,12 +1621,20 @@ impl<W: Write> Writer<W> {
             }
             for (handle, var) in module.global_variables.iter() {
                 let usage = fun_info[handle];
-                if usage.is_empty()
-                    || var.class == crate::StorageClass::Private
-                    || inline_global_handles.contains(handle.index())
-                {
+                if usage.is_empty() || var.class == crate::StorageClass::Private {
                     continue;
                 }
+                let resolved = var
+                    .binding
+                    .as_ref()
+                    .map(|binding| options.resolve_global_binding(ep.stage, binding).unwrap());
+                if let Some(ref resolved) = resolved {
+                    // Inline samplers are be defined in the EP body
+                    if resolved.as_inline_sampler(options).is_some() {
+                        continue;
+                    }
+                }
+
                 let tyvar = TypedGlobalVariable {
                     module,
                     names: &self.names,
@@ -1669,8 +1650,7 @@ impl<W: Write> Writer<W> {
                 };
                 write!(self.out, "{} ", separator)?;
                 tyvar.try_fmt(&mut self.out)?;
-                if let Some(ref binding) = var.binding {
-                    let resolved = options.resolve_global_binding(ep.stage, binding).unwrap();
+                if let Some(resolved) = resolved {
                     resolved.try_fmt_decorated(&mut self.out, "")?;
                 }
                 if let Some(value) = var.init {
@@ -1687,23 +1667,38 @@ impl<W: Write> Writer<W> {
             // so we put them here, just like the locals.
             for (handle, var) in module.global_variables.iter() {
                 let usage = fun_info[handle];
-                if usage.is_empty() || var.class != crate::StorageClass::Private {
+                if usage.is_empty() {
                     continue;
                 }
-                let tyvar = TypedGlobalVariable {
-                    module,
-                    names: &self.names,
-                    handle,
-                    usage,
-                    reference: false,
-                };
-                write!(self.out, "{}", INDENT)?;
-                tyvar.try_fmt(&mut self.out)?;
-                let value_str = match var.init {
-                    Some(value) => &self.names[&NameKey::Constant(value)],
-                    None => "{}",
-                };
-                writeln!(self.out, " = {};", value_str)?;
+                if var.class == crate::StorageClass::Private {
+                    let tyvar = TypedGlobalVariable {
+                        module,
+                        names: &self.names,
+                        handle,
+                        usage,
+                        reference: false,
+                    };
+                    write!(self.out, "{}", INDENT)?;
+                    tyvar.try_fmt(&mut self.out)?;
+                    let value_str = match var.init {
+                        Some(value) => &self.names[&NameKey::Constant(value)],
+                        None => "{}",
+                    };
+                    writeln!(self.out, " = {};", value_str)?;
+                } else if let Some(ref binding) = var.binding {
+                    // write an inline sampler
+                    let resolved = options.resolve_global_binding(ep.stage, binding).unwrap();
+                    if let Some(sampler) = resolved.as_inline_sampler(options) {
+                        let name = &self.names[&NameKey::GlobalVariable(handle)];
+                        writeln!(
+                            self.out,
+                            "{}constexpr {}::sampler {}(",
+                            INDENT, NAMESPACE, name
+                        )?;
+                        self.put_inline_sampler_properties(Level(2), sampler)?;
+                        writeln!(self.out, "{});", INDENT)?;
+                    }
+                }
             }
 
             // Now refactor the inputs in a way that the rest of the code expects
@@ -1769,7 +1764,6 @@ impl<W: Write> Writer<W> {
                 },
                 mod_info,
                 result_struct: Some(&stage_out_name),
-                inline_global_handles: &inline_global_handles,
             };
             self.named_expressions.clear();
             self.put_block(Level(1), &fun.body, &context)?;
