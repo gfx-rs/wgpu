@@ -47,7 +47,7 @@ pub fn map_interpolation(word: &str) -> Result<crate::Interpolation, Error<'_>> 
         "centroid" => Ok(crate::Interpolation::Centroid),
         "sample" => Ok(crate::Interpolation::Sample),
         "perspective" => Ok(crate::Interpolation::Perspective),
-        _ => Err(Error::UnknownDecoration(word)),
+        _ => Err(Error::UnknownAttribute(word)),
     }
 }
 

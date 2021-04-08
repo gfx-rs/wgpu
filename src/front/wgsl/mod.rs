@@ -83,8 +83,8 @@ pub enum Error<'a> {
     UnknownImport(&'a str),
     #[error("unknown storage class: `{0}`")]
     UnknownStorageClass(&'a str),
-    #[error("unknown decoration: `{0}`")]
-    UnknownDecoration(&'a str),
+    #[error("unknown attribute: `{0}`")]
+    UnknownAttribute(&'a str),
     #[error("unknown scalar kind: `{0}`")]
     UnknownScalarKind(&'a str),
     #[error("unknown builtin: `{0}`")]
@@ -404,14 +404,14 @@ impl Composition {
 }
 
 #[derive(Default)]
-struct TypeDecoration {
+struct TypeAttributes {
     stride: Option<NonZeroU32>,
     access: crate::StorageAccess,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Scope {
-    Decoration,
+    Attribute,
     ImportDecl,
     VariableDecl,
     TypeDecl,
@@ -453,7 +453,7 @@ impl BindingParser {
                 self.interpolation = Some(conv::map_interpolation(raw)?);
                 lexer.expect(Token::Paren(')'))?;
             }
-            _ => return Err(Error::UnknownDecoration(name)),
+            _ => return Err(Error::UnknownAttribute(name)),
         }
         Ok(())
     }
@@ -988,7 +988,7 @@ impl Parser {
                     lexer,
                     name,
                     None,
-                    TypeDecoration::default(),
+                    TypeAttributes::default(),
                     type_arena,
                     const_arena,
                 )?;
@@ -1072,7 +1072,7 @@ impl Parser {
                 } else {
                     let inner = self.parse_type_decl_impl(
                         lexer,
-                        TypeDecoration::default(),
+                        TypeAttributes::default(),
                         word,
                         ctx.types,
                         ctx.constants,
@@ -1513,7 +1513,7 @@ impl Parser {
             let (mut size, mut align) = (None, None);
             let mut bind_parser = BindingParser::default();
             if lexer.skip(Token::DoubleParen('[')) {
-                self.scopes.push(Scope::Decoration);
+                self.scopes.push(Scope::Attribute);
                 let mut ready = true;
                 loop {
                     match lexer.next() {
@@ -1543,7 +1543,7 @@ impl Parser {
                             }
                             ready = false;
                         }
-                        other => return Err(Error::Unexpected(other, "decoration separator")),
+                        other => return Err(Error::Unexpected(other, "attribute separator")),
                     }
                 }
                 self.scopes.pop();
@@ -1571,7 +1571,7 @@ impl Parser {
     fn parse_type_decl_impl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        decoration: TypeDecoration,
+        attribute: TypeAttributes,
         word: &'a str,
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
@@ -1712,7 +1712,7 @@ impl Parser {
                 crate::TypeInner::Array {
                     base,
                     size,
-                    stride: decoration.stride,
+                    stride: attribute.stride,
                 }
             }
             "sampler" => crate::TypeInner::Sampler { comparison: false },
@@ -1853,13 +1853,13 @@ impl Parser {
         })
     }
 
-    /// Parse type declaration of a given name and decoration.
+    /// Parse type declaration of a given name and attribute.
     fn parse_type_decl_name<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
         name: &'a str,
         debug_name: Option<&'a str>,
-        decoration: TypeDecoration,
+        attribute: TypeAttributes,
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<Handle<crate::Type>, Error<'a>> {
@@ -1867,7 +1867,7 @@ impl Parser {
             Some(&handle) => handle,
             None => {
                 let inner =
-                    self.parse_type_decl_impl(lexer, decoration, name, type_arena, const_arena)?;
+                    self.parse_type_decl_impl(lexer, attribute, name, type_arena, const_arena)?;
                 type_arena.fetch_or_append(crate::Type {
                     name: debug_name.map(|s| s.to_string()),
                     inner,
@@ -1884,15 +1884,15 @@ impl Parser {
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<(Handle<crate::Type>, crate::StorageAccess), Error<'a>> {
         self.scopes.push(Scope::TypeDecl);
-        let mut decoration = TypeDecoration::default();
+        let mut attribute = TypeAttributes::default();
 
         if lexer.skip(Token::DoubleParen('[')) {
-            self.scopes.push(Scope::Decoration);
+            self.scopes.push(Scope::Attribute);
             loop {
                 match lexer.next() {
                     (Token::Word("access"), _) => {
                         lexer.expect(Token::Paren('('))?;
-                        decoration.access = match lexer.next_ident()? {
+                        attribute.access = match lexer.next_ident()? {
                             "read" => crate::StorageAccess::LOAD,
                             "write" => crate::StorageAccess::STORE,
                             "read_write" => crate::StorageAccess::all(),
@@ -1902,25 +1902,25 @@ impl Parser {
                     }
                     (Token::Word("stride"), _) => {
                         lexer.expect(Token::Paren('('))?;
-                        decoration.stride = Some(
+                        attribute.stride = Some(
                             NonZeroU32::new(lexer.next_uint_literal()?).ok_or(Error::ZeroStride)?,
                         );
                         lexer.expect(Token::Paren(')'))?;
                     }
                     (Token::DoubleParen(']'), _) => break,
-                    other => return Err(Error::Unexpected(other, "type decoration")),
+                    other => return Err(Error::Unexpected(other, "type attribute")),
                 }
             }
             self.scopes.pop();
         }
 
-        let storage_access = decoration.access;
+        let storage_access = attribute.access;
         let name = lexer.next_ident()?;
         let handle = self.parse_type_decl_name(
             lexer,
             name,
             debug_name,
-            decoration,
+            attribute,
             type_arena,
             const_arena,
         )?;
@@ -2361,7 +2361,7 @@ impl Parser {
         }
 
         let mut bind_parser = BindingParser::default();
-        self.scopes.push(Scope::Decoration);
+        self.scopes.push(Scope::Attribute);
         loop {
             let word = lexer.next_ident()?;
             bind_parser.parse(lexer, word)?;
@@ -2370,7 +2370,7 @@ impl Parser {
                     break;
                 }
                 (Token::Separator(','), _) => {}
-                other => return Err(Error::Unexpected(other, "decoration separator")),
+                other => return Err(Error::Unexpected(other, "attribute separator")),
             }
         }
         self.scopes.pop();
@@ -2465,7 +2465,7 @@ impl Parser {
         module: &mut crate::Module,
         lookup_global_expression: &mut FastHashMap<&'a str, crate::Expression>,
     ) -> Result<bool, Error<'a>> {
-        // read decorations
+        // read attributes
         let mut binding = None;
         // Perspective is the default qualifier.
         let mut stage = None;
@@ -2475,7 +2475,7 @@ impl Parser {
 
         if lexer.skip(Token::DoubleParen('[')) {
             let (mut bind_index, mut bind_group) = (None, None);
-            self.scopes.push(Scope::Decoration);
+            self.scopes.push(Scope::Attribute);
             loop {
                 match lexer.next_ident()? {
                     "binding" => {
@@ -2527,14 +2527,14 @@ impl Parser {
                         };
                         early_depth_test = Some(crate::EarlyDepthTest { conservative });
                     }
-                    word => return Err(Error::UnknownDecoration(word)),
+                    word => return Err(Error::UnknownAttribute(word)),
                 }
                 match lexer.next() {
                     (Token::DoubleParen(']'), _) => {
                         break;
                     }
                     (Token::Separator(','), _) => {}
-                    other => return Err(Error::Unexpected(other, "decoration separator")),
+                    other => return Err(Error::Unexpected(other, "attribute separator")),
                 }
             }
             if let (Some(group), Some(index)) = (bind_group, bind_index) {
@@ -2663,7 +2663,7 @@ impl Parser {
 
         match binding {
             None => Ok(true),
-            // we had the decoration but no var?
+            // we had the attribute but no var?
             Some(_) => Err(Error::Other),
         }
     }
