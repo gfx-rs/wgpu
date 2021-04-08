@@ -39,12 +39,12 @@ impl<B: hal::Backend> QueryResetMap<B> {
         query: u32,
     ) -> bool {
         let (index, epoch, _) = id.unzip();
-        let vec_pair = self
+        let (vec, _) = self
             .map
             .entry(index)
             .or_insert_with(|| (vec![false; query_set.desc.count as usize], epoch));
 
-        std::mem::replace(&mut vec_pair.0[query as usize], true)
+        std::mem::replace(&mut vec[query as usize], true)
     }
 
     pub fn reset_queries(
@@ -62,8 +62,9 @@ impl<B: hal::Backend> QueryResetMap<B> {
             // Need to find all "runs" of values which need resets. If the state vector is:
             // [false, true, true, false, true], we want to reset [1..3, 4..5]. This minimizes
             // the amount of resets needed.
+            let mut state_iter = state.into_iter().chain(iter::once(false)).enumerate();
             let mut run_start: Option<u32> = None;
-            for (idx, value) in state.into_iter().chain(iter::once(false)).enumerate() {
+            while let Some((idx, value)) = state_iter.next() {
                 match (run_start, value) {
                     // We're inside of a run, do nothing
                     (Some(..), true) => {}
@@ -150,7 +151,7 @@ pub enum ResolveError {
         end_query: u32,
         query_set_size: u32,
     },
-    #[error("Resolving queries {start_query}..{end_query} ({stride} byte queries) will end up overrunning the bounds of the destination buffer of size {buffer_size} using offsets {buffer_start_offset}..{buffer_end_offset}")]
+    #[error("Resolving queries {start_query}..{end_query} ({stride} byte queries) will end up overruning the bounds of the destination buffer of size {buffer_size} using offsets {buffer_start_offset}..{buffer_end_offset}")]
     BufferOverrun {
         start_query: u32,
         end_query: u32,
@@ -173,7 +174,7 @@ impl<B: GfxBackend> QuerySet<B> {
         if let Some(reset) = reset_state {
             let used = reset.use_query_set(query_set_id, self, query_index);
             if used {
-                return Err(QueryUseError::UsedTwiceInsideRenderpass { query_index });
+                return Err(QueryUseError::UsedTwiceInsideRenderpass { query_index }.into());
             }
         }
 
@@ -182,14 +183,16 @@ impl<B: GfxBackend> QuerySet<B> {
             return Err(QueryUseError::IncompatibleType {
                 query_type,
                 set_type: simple_set_type,
-            });
+            }
+            .into());
         }
 
         if query_index >= self.desc.count {
             return Err(QueryUseError::OutOfBounds {
                 query_index,
                 query_set_size: self.desc.count,
-            });
+            }
+            .into());
         }
 
         let hal_query = hal::query::Query::<B> {
@@ -246,7 +249,8 @@ impl<B: GfxBackend> QuerySet<B> {
             return Err(QueryUseError::AlreadyStarted {
                 active_query_index: old_idx,
                 new_query_index: query_index,
-            });
+            }
+            .into());
         }
 
         unsafe {

@@ -17,7 +17,12 @@ fn main() {
     #[cfg(feature = "winit")]
     use winit::{event_loop::EventLoop, window::WindowBuilder};
 
-    env_logger::init();
+    wgpu_subscriber::initialize_default_subscriber(
+        std::env::var("WGPU_CHROME_TRACE")
+            .as_ref()
+            .map(Path::new)
+            .ok(),
+    );
 
     #[cfg(feature = "renderdoc")]
     #[cfg_attr(feature = "winit", allow(unused))]
@@ -139,12 +144,8 @@ fn main() {
                                     desc.height,
                                 ));
                                 resize_desc = Some(desc);
-                                break;
                             } else {
-                                let (_, error) = gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
-                                if let Some(e) = error {
-                                    panic!("{:?}", e);
-                                }
+                                gfx_select!(device => global.device_create_swap_chain(device, surface, &desc)).unwrap();
                             }
                         }
                         Some(trace::Action::PresentSwapChain(id)) => {
@@ -162,10 +163,7 @@ fn main() {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(_) => {
                         if let Some(desc) = resize_desc.take() {
-                            let (_, error) = gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
-                            if let Some(e) = error {
-                                panic!("{:?}", e);
-                            }
+                            gfx_select!(device => global.device_create_swap_chain(device, surface, &desc)).unwrap();
                         }
                     }
                     WindowEvent::KeyboardInput {

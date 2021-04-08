@@ -127,10 +127,10 @@ impl Test<'_> {
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);
             let buffer = wgc::id::TypedId::zip(expect.buffer.index, expect.buffer.epoch, backend);
-            let (ptr, size) =
-                wgc::gfx_select!(device => global.buffer_get_mapped_range(buffer, expect.offset, wgt::BufferSize::new(expect.data.len() as wgt::BufferAddress)))
+            let ptr =
+                wgc::gfx_select!(device => global.buffer_get_mapped_range(buffer, expect.offset, None))
                     .unwrap();
-            let contents = unsafe { slice::from_raw_parts(ptr, size as usize) };
+            let contents = unsafe { slice::from_raw_parts(ptr, expect.data.len()) };
             let expected_data = match expect.data {
                 ExpectedData::Raw(vec) => vec,
                 ExpectedData::File(name, size) => {
@@ -217,7 +217,12 @@ impl Corpus {
 
 #[test]
 fn test_api() {
-    env_logger::init();
+    wgpu_subscriber::initialize_default_subscriber(
+        std::env::var("WGPU_CHROME_TRACE")
+            .as_ref()
+            .map(Path::new)
+            .ok(),
+    );
 
     Corpus::run_from(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data/all.ron"))
 }

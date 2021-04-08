@@ -12,9 +12,10 @@ use crate::{
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, BufferUse, Texture},
+    span,
     track::{TrackerSet, UsageConflict},
     validation::{check_buffer_usage, MissingBufferUsageError},
-    Label, DOWNLEVEL_ERROR_WARNING_MESSAGE,
+    Label,
 };
 
 use hal::command::CommandBuffer as _;
@@ -153,11 +154,6 @@ pub enum ComputePassErrorInner {
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("cannot pop debug group, because number of pushed debug groups is zero")]
     InvalidPopDebugGroup,
-    #[error(
-        "Compute shaders are not supported by the underlying platform. {}",
-        DOWNLEVEL_ERROR_WARNING_MESSAGE
-    )]
-    ComputeShadersUnsupported,
     #[error(transparent)]
     Dispatch(#[from] DispatchError),
     #[error(transparent)]
@@ -225,7 +221,7 @@ impl State {
             self.trackers.merge_extend(&bind_group_guard[id].used)?;
         }
 
-        log::trace!("Encoding dispatch barriers");
+        tracing::trace!("Encoding dispatch barriers");
 
         CommandBuffer::insert_barriers(
             raw_cmd_buf,
@@ -257,7 +253,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<ComputeCommand>,
     ) -> Result<(), ComputePassError> {
-        profiling::scope!("CommandEncoder::run_compute_pass");
+        span!(_guard, INFO, "CommandEncoder::run_compute_pass");
         let scope = PassErrorScope::Pass(encoder_id);
 
         let hub = B::hub(self);
@@ -272,17 +268,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(crate::device::trace::Command::RunComputePass {
                 base: BasePass::from_ref(base),
-            });
-        }
-
-        if !cmd_buf
-            .downlevel
-            .flags
-            .contains(wgt::DownlevelFlags::COMPUTE_SHADERS)
-        {
-            return Err(ComputePassError {
-                scope: PassErrorScope::Pass(encoder_id),
-                inner: ComputePassErrorInner::ComputeShadersUnsupported,
             });
         }
 
@@ -664,7 +649,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 pub mod compute_ffi {
     use super::{ComputeCommand, ComputePass};
-    use crate::{id, RawString};
+    use crate::{id, span, RawString};
     use std::{convert::TryInto, ffi, slice};
     use wgt::{BufferAddress, DynamicOffset};
 
@@ -672,6 +657,8 @@ pub mod compute_ffi {
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `offset_length` elements.
+    // TODO: There might be other safety issues, such as using the unsafe
+    // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_set_bind_group(
         pass: &mut ComputePass,
@@ -680,6 +667,7 @@ pub mod compute_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
+        span!(_guard, DEBUG, "ComputePass::set_bind_group");
         pass.base.commands.push(ComputeCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
@@ -697,15 +685,12 @@ pub mod compute_ffi {
         pass: &mut ComputePass,
         pipeline_id: id::ComputePipelineId,
     ) {
+        span!(_guard, DEBUG, "ComputePass::set_pipeline");
         pass.base
             .commands
             .push(ComputeCommand::SetPipeline(pipeline_id));
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given pointer is
-    /// valid for `size_bytes` bytes.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_set_push_constant(
         pass: &mut ComputePass,
@@ -713,6 +698,7 @@ pub mod compute_ffi {
         size_bytes: u32,
         data: *const u8,
     ) {
+        span!(_guard, DEBUG, "ComputePass::set_push_constant");
         assert_eq!(
             offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
@@ -748,6 +734,7 @@ pub mod compute_ffi {
         groups_y: u32,
         groups_z: u32,
     ) {
+        span!(_guard, DEBUG, "ComputePass::dispatch");
         pass.base
             .commands
             .push(ComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
@@ -759,21 +746,19 @@ pub mod compute_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
+        span!(_guard, DEBUG, "ComputePass::dispatch_indirect");
         pass.base
             .commands
             .push(ComputeCommand::DispatchIndirect { buffer_id, offset });
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given `label`
-    /// is a valid null-terminated string.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_push_debug_group(
         pass: &mut ComputePass,
         label: RawString,
         color: u32,
     ) {
+        span!(_guard, DEBUG, "ComputePass::push_debug_group");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -785,19 +770,17 @@ pub mod compute_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_compute_pass_pop_debug_group(pass: &mut ComputePass) {
+        span!(_guard, DEBUG, "ComputePass::pop_debug_group");
         pass.base.commands.push(ComputeCommand::PopDebugGroup);
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given `label`
-    /// is a valid null-terminated string.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_insert_debug_marker(
         pass: &mut ComputePass,
         label: RawString,
         color: u32,
     ) {
+        span!(_guard, DEBUG, "ComputePass::insert_debug_marker");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -808,11 +791,13 @@ pub mod compute_ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_write_timestamp(
+    pub unsafe extern "C" fn wgpu_compute_pass_write_timestamp(
         pass: &mut ComputePass,
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) {
+        span!(_guard, DEBUG, "ComputePass::write_timestamp");
+
         pass.base.commands.push(ComputeCommand::WriteTimestamp {
             query_set_id,
             query_index,
@@ -820,11 +805,17 @@ pub mod compute_ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_begin_pipeline_statistics_query(
+    pub unsafe extern "C" fn wgpu_compute_pass_begin_pipeline_statistics_query(
         pass: &mut ComputePass,
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) {
+        span!(
+            _guard,
+            DEBUG,
+            "ComputePass::begin_pipeline_statistics query"
+        );
+
         pass.base
             .commands
             .push(ComputeCommand::BeginPipelineStatisticsQuery {
@@ -834,7 +825,11 @@ pub mod compute_ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_end_pipeline_statistics_query(pass: &mut ComputePass) {
+    pub unsafe extern "C" fn wgpu_compute_pass_end_pipeline_statistics_query(
+        pass: &mut ComputePass,
+    ) {
+        span!(_guard, DEBUG, "ComputePass::end_pipeline_statistics_query");
+
         pass.base
             .commands
             .push(ComputeCommand::EndPipelineStatisticsQuery);

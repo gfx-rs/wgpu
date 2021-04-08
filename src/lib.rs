@@ -126,8 +126,8 @@ enum QueueWriteAction {
         offset: wgt::BufferAddress,
     },
     Texture {
-        dst: wgt::ImageCopyTexture<id::TextureId>,
-        layout: wgt::ImageDataLayout,
+        dst: wgt::TextureCopyView<id::TextureId>,
+        layout: wgt::TextureDataLayout,
         size: wgt::Extent3d,
     },
 }

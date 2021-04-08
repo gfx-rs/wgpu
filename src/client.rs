@@ -135,7 +135,6 @@ pub struct PrimitiveState<'a> {
     front_face: wgt::FrontFace,
     cull_mode: Option<&'a wgt::Face>,
     polygon_mode: wgt::PolygonMode,
-    clamp_depth: bool,
 }
 
 impl PrimitiveState<'_> {
@@ -146,8 +145,6 @@ impl PrimitiveState<'_> {
             front_face: self.front_face.clone(),
             cull_mode: self.cull_mode.cloned(),
             polygon_mode: self.polygon_mode,
-            clamp_depth: self.clamp_depth,
-            conservative: false,
         }
     }
 }
@@ -251,7 +248,7 @@ pub struct TextureViewDescriptor<'a> {
     dimension: Option<&'a wgt::TextureViewDimension>,
     aspect: wgt::TextureAspect,
     base_mip_level: u32,
-    mip_level_count: Option<NonZeroU32>,
+    level_count: Option<NonZeroU32>,
     base_array_layer: u32,
     array_layer_count: Option<NonZeroU32>,
 }
@@ -527,7 +524,7 @@ pub extern "C" fn wgpu_client_create_texture_view(
         dimension: desc.dimension.cloned(),
         aspect: desc.aspect,
         base_mip_level: desc.base_mip_level,
-        mip_level_count: desc.mip_level_count,
+        level_count: desc.level_count,
         base_array_layer: desc.base_array_layer,
         array_layer_count: desc.array_layer_count,
     };
@@ -639,9 +636,9 @@ pub unsafe extern "C" fn wgpu_compute_pass_destroy(pass: *mut wgc::command::Comp
 #[repr(C)]
 pub struct RenderPassDescriptor {
     pub label: RawString,
-    pub color_attachments: *const wgc::command::RenderPassColorAttachment,
+    pub color_attachments: *const wgc::command::ColorAttachmentDescriptor,
     pub color_attachments_length: usize,
-    pub depth_stencil_attachment: *const wgc::command::RenderPassDepthStencilAttachment,
+    pub depth_stencil_attachment: *const wgc::command::DepthStencilAttachmentDescriptor,
 }
 
 #[no_mangle]
@@ -958,8 +955,8 @@ pub unsafe extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
 
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_command_encoder_copy_texture_to_buffer(
-    src: wgc::command::ImageCopyTexture,
-    dst: wgc::command::ImageCopyBuffer,
+    src: wgc::command::TextureCopyView,
+    dst: wgc::command::BufferCopyView,
     size: wgt::Extent3d,
     bb: &mut ByteBuf,
 ) {
@@ -969,8 +966,8 @@ pub unsafe extern "C" fn wgpu_command_encoder_copy_texture_to_buffer(
 
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_command_encoder_copy_buffer_to_texture(
-    src: wgc::command::ImageCopyBuffer,
-    dst: wgc::command::ImageCopyTexture,
+    src: wgc::command::BufferCopyView,
+    dst: wgc::command::TextureCopyView,
     size: wgt::Extent3d,
     bb: &mut ByteBuf,
 ) {
@@ -980,8 +977,8 @@ pub unsafe extern "C" fn wgpu_command_encoder_copy_buffer_to_texture(
 
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
-    src: wgc::command::ImageCopyTexture,
-    dst: wgc::command::ImageCopyTexture,
+    src: wgc::command::TextureCopyView,
+    dst: wgc::command::TextureCopyView,
     size: wgt::Extent3d,
     bb: &mut ByteBuf,
 ) {
@@ -1012,8 +1009,8 @@ pub unsafe extern "C" fn wgpu_queue_write_buffer(
 
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_queue_write_texture(
-    dst: wgt::ImageCopyTexture<id::TextureId>,
-    layout: wgt::ImageDataLayout,
+    dst: wgt::TextureCopyView<id::TextureId>,
+    layout: wgt::TextureDataLayout,
     size: wgt::Extent3d,
     bb: &mut ByteBuf,
 ) {

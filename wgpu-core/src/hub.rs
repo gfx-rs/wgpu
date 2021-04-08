@@ -15,6 +15,7 @@ use crate::{
     instance::{Adapter, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     resource::{Buffer, Sampler, Texture, TextureView},
+    span,
     swap_chain::SwapChain,
     Epoch, Index,
 };
@@ -217,6 +218,7 @@ impl<T, I: TypedId> Storage<T, I> {
                 }
                 _ => None,
             })
+            .into_iter()
     }
 }
 
@@ -584,7 +586,7 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
 
         let mut devices = self.devices.data.write();
         for element in devices.map.iter_mut() {
-            if let Element::Occupied(ref mut device, _) = *element {
+            if let Element::Occupied(device, _) = element {
                 device.prepare_to_die();
             }
         }
@@ -760,7 +762,7 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn new(name: &str, factory: G, backends: wgt::BackendBit) -> Self {
-        profiling::scope!("Global::new");
+        span!(_guard, INFO, "Global::new");
         Self {
             instance: Instance::new(name, 1, backends),
             surfaces: Registry::without_backend(&factory, "Surface"),
@@ -779,7 +781,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            log::info!("Dropping Global");
+            tracing::info!("Dropping Global");
             let mut surface_guard = self.surfaces.data.write();
 
             // destroy hubs

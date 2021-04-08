@@ -7,7 +7,7 @@ use crate::{
     device::{Device, DeviceDescriptor},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId, Valid},
-    LabelHelpers, LifeGuard, PrivateFeatures, Stored, DOWNLEVEL_WARNING_MESSAGE, MAX_BIND_GROUPS,
+    span, LabelHelpers, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
 };
 
 use wgt::{Backend, BackendBit, PowerPreference, BIND_BUFFER_ALIGNMENT};
@@ -122,13 +122,12 @@ pub struct Adapter<B: hal::Backend> {
     features: wgt::Features,
     pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
-    downlevel: wgt::DownlevelProperties,
     life_guard: LifeGuard,
 }
 
 impl<B: GfxBackend> Adapter<B> {
     fn new(raw: hal::adapter::Adapter<B>) -> Self {
-        profiling::scope!("Adapter::new");
+        span!(_guard, INFO, "Adapter::new");
 
         let adapter_features = raw.physical_device.features();
         let properties = raw.physical_device.properties();
@@ -192,10 +191,6 @@ impl<B: GfxBackend> Adapter<B> {
         features.set(
             wgt::Features::SHADER_FLOAT64,
             adapter_features.contains(hal::Features::SHADER_FLOAT64),
-        );
-        features.set(
-            wgt::Features::CONSERVATIVE_RASTERIZATION,
-            adapter_features.contains(hal::Features::CONSERVATIVE_RASTERIZATION),
         );
         #[cfg(not(target_os = "ios"))]
         //TODO: https://github.com/gfx-rs/gfx/issues/3346
@@ -275,47 +270,11 @@ impl<B: GfxBackend> Adapter<B> {
                 .max(MIN_PUSH_CONSTANT_SIZE), // As an extension, the default is always 0, so define a separate minimum.
         };
 
-        let mut downlevel_flags = wgt::DownlevelFlags::empty();
-        downlevel_flags.set(
-            wgt::DownlevelFlags::COMPUTE_SHADERS,
-            properties.downlevel.compute_shaders,
-        );
-        downlevel_flags.set(
-            wgt::DownlevelFlags::STORAGE_IMAGES,
-            properties.downlevel.storage_images,
-        );
-        downlevel_flags.set(
-            wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL,
-            properties.downlevel.read_only_depth_stencil,
-        );
-        downlevel_flags.set(
-            wgt::DownlevelFlags::DEVICE_LOCAL_IMAGE_COPIES,
-            properties.downlevel.device_local_image_copies,
-        );
-        downlevel_flags.set(
-            wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES,
-            properties.downlevel.non_power_of_two_mipmapped_textures,
-        );
-        downlevel_flags.set(
-            wgt::DownlevelFlags::ANISOTROPIC_FILTERING,
-            private_features.anisotropic_filtering,
-        );
-
-        let downlevel = wgt::DownlevelProperties {
-            flags: downlevel_flags,
-            shader_model: match properties.downlevel.shader_model {
-                hal::DownlevelShaderModel::ShaderModel2 => wgt::ShaderModel::Sm2,
-                hal::DownlevelShaderModel::ShaderModel4 => wgt::ShaderModel::Sm4,
-                hal::DownlevelShaderModel::ShaderModel5 => wgt::ShaderModel::Sm5,
-            },
-        };
-
         Self {
             raw,
             features,
             private_features,
             limits,
-            downlevel,
             life_guard: LifeGuard::new("<Adapter>"),
         }
     }
@@ -324,7 +283,7 @@ impl<B: GfxBackend> Adapter<B> {
         &self,
         surface: &mut Surface,
     ) -> Result<wgt::TextureFormat, GetSwapChainPreferredFormatError> {
-        profiling::scope!("Adapter::get_swap_chain_preferred_format");
+        span!(_guard, INFO, "Adapter::get_swap_chain_preferred_format");
 
         let formats = {
             let surface = B::get_surface_mut(surface);
@@ -416,17 +375,13 @@ impl<B: GfxBackend> Adapter<B> {
             ));
         }
 
-        if !self.downlevel.is_webgpu_compliant() {
-            log::warn!("{}", DOWNLEVEL_WARNING_MESSAGE);
-        }
-
         // Verify feature preconditions
         if desc
             .features
             .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
             && self.raw.info.device_type == hal::adapter::DeviceType::DiscreteGpu
         {
-            log::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
+            tracing::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
         }
 
         let phd = &self.raw.physical_device;
@@ -442,7 +397,7 @@ impl<B: GfxBackend> Adapter<B> {
             | hal::Features::IMAGE_CUBE_ARRAY;
         let mut enabled_features = available_features & wishful_features;
         if enabled_features != wishful_features {
-            log::warn!(
+            tracing::warn!(
                 "Missing internal features: {:?}",
                 wishful_features - enabled_features
             );
@@ -509,11 +464,6 @@ impl<B: GfxBackend> Adapter<B> {
             hal::Features::SHADER_FLOAT64,
             desc.features.contains(wgt::Features::SHADER_FLOAT64),
         );
-        enabled_features.set(
-            hal::Features::CONSERVATIVE_RASTERIZATION,
-            desc.features
-                .contains(wgt::Features::CONSERVATIVE_RASTERIZATION),
-        );
 
         let family = self
             .raw
@@ -564,7 +514,6 @@ impl<B: GfxBackend> Adapter<B> {
             mem_props,
             limits,
             self.private_features,
-            self.downlevel,
             desc,
             trace_path,
         )
@@ -650,7 +599,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         handle: &impl raw_window_handle::HasRawWindowHandle,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        profiling::scope!("Instance::create_surface");
+        span!(_guard, INFO, "Instance::create_surface");
 
         let surface = unsafe {
             backends_map! {
@@ -658,7 +607,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     inst
                     .as_ref()
                     .and_then(|inst| inst.create_surface(handle).map_err(|e| {
-                        log::warn!("Error: {:?}", e);
+                        tracing::warn!("Error: {:?}", e);
                     }).ok())
                 };
 
@@ -688,17 +637,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         layer: *mut std::ffi::c_void,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        profiling::scope!("Instance::instance_create_surface_metal");
+        span!(_guard, INFO, "Instance::instance_create_surface_metal");
 
-        let surface = Surface {
-            #[cfg(feature = "gfx-backend-vulkan")]
-            vulkan: None, //TODO: create_surface_from_layer ?
-            metal: self.instance.metal.as_ref().map(|inst| {
-                // we don't want to link to metal-rs for this
-                #[allow(clippy::transmute_ptr_to_ref)]
-                inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
-            }),
-        };
+        let surface =
+            Surface {
+                #[cfg(feature = "vulkan-portability")]
+                vulkan: None, //TODO: create_surface_from_layer ?
+                metal: self.instance.metal.as_ref().map(|inst| {
+                    inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
+                }),
+            };
 
         let mut token = Token::root();
         let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
@@ -706,14 +654,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn surface_drop(&self, id: SurfaceId) {
-        profiling::scope!("Surface::drop");
+        span!(_guard, INFO, "Surface::drop");
         let mut token = Token::root();
         let (surface, _) = self.surfaces.unregister(id, &mut token);
         self.instance.destroy_surface(surface.unwrap());
     }
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
-        profiling::scope!("Instance::enumerate_adapters");
+        span!(_guard, INFO, "Instance::enumerate_adapters");
 
         let instance = &self.instance;
         let mut token = Token::root();
@@ -721,12 +669,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         backends_map! {
             let map = |(instance_field, backend, backend_info, backend_hub)| {
-                if let Some(ref inst) = *instance_field {
+                if let Some(inst) = instance_field {
                     let hub = backend_hub(self);
                     if let Some(id_backend) = inputs.find(backend) {
                         for raw in inst.enumerate_adapters() {
                             let adapter = Adapter::new(raw);
-                            log::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
+                            tracing::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
                             let id = hub.adapters
                                 .prepare(id_backend.clone())
                                 .assign(adapter, &mut token);
@@ -756,7 +704,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &RequestAdapterOptions,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Result<AdapterId, RequestAdapterError> {
-        profiling::scope!("Instance::pick_adapter");
+        span!(_guard, INFO, "Instance::pick_adapter");
 
         let instance = &self.instance;
         let mut token = Token::root();
@@ -779,7 +727,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         backends_map! {
             let map = |(instance_backend, id_backend, surface_backend)| {
-                match *instance_backend {
+                match instance_backend {
                     Some(ref inst) if id_backend.is_some() => {
                         let mut adapters = inst.enumerate_adapters();
                         if let Some(surface_backend) = compatible_surface.and_then(surface_backend) {
@@ -874,7 +822,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let map = |(info_adapter, id_backend, mut adapters_backend, backend_hub)| {
                 if selected < adapters_backend.len() {
                     let adapter = Adapter::new(adapters_backend.swap_remove(selected));
-                    log::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
+                    tracing::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
                     let id = backend_hub(self).adapters
                         .prepare(id_backend.take().unwrap())
                         .assign(adapter, &mut token);
@@ -903,7 +851,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             id_dx11.take(),
             id_gl.take(),
         );
-        log::warn!("Some adapters are present, but enumerating them failed!");
+        tracing::warn!("Some adapters are present, but enumerating them failed!");
         Err(RequestAdapterError::NotFound)
     }
 
@@ -911,7 +859,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::AdapterInfo, InvalidAdapter> {
-        profiling::scope!("Adapter::get_info");
+        span!(_guard, INFO, "Adapter::get_info");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -927,7 +875,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: AdapterId,
         format: wgt::TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
-        profiling::scope!("Adapter::get_texture_format_features");
+        span!(_guard, INFO, "Adapter::get_texture_format_features");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -942,7 +890,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::Features, InvalidAdapter> {
-        profiling::scope!("Adapter::features");
+        span!(_guard, INFO, "Adapter::features");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -957,7 +905,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::Limits, InvalidAdapter> {
-        profiling::scope!("Adapter::limits");
+        span!(_guard, INFO, "Adapter::limits");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -968,23 +916,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| InvalidAdapter)
     }
 
-    pub fn adapter_downlevel_properties<B: GfxBackend>(
-        &self,
-        adapter_id: AdapterId,
-    ) -> Result<wgt::DownlevelProperties, InvalidAdapter> {
-        profiling::scope!("Adapter::downlevel_properties");
-
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let (adapter_guard, _) = hub.adapters.read(&mut token);
-        adapter_guard
-            .get(adapter_id)
-            .map(|adapter| adapter.downlevel)
-            .map_err(|_| InvalidAdapter)
-    }
-
     pub fn adapter_drop<B: GfxBackend>(&self, adapter_id: AdapterId) {
-        profiling::scope!("Adapter::drop");
+        span!(_guard, INFO, "Adapter::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1009,7 +942,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
     ) -> (DeviceId, Option<RequestDeviceError>) {
-        profiling::scope!("Adapter::request_device");
+        span!(_guard, INFO, "Adapter::request_device");
 
         let hub = B::hub(self);
         let mut token = Token::root();

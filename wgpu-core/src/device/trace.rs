@@ -26,7 +26,6 @@ pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
     }
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
@@ -108,9 +107,9 @@ pub enum Action<'a> {
         queued: bool,
     },
     WriteTexture {
-        to: crate::command::ImageCopyTexture,
+        to: crate::command::TextureCopyView,
         data: FileName,
-        layout: wgt::ImageDataLayout,
+        layout: wgt::TextureDataLayout,
         size: wgt::Extent3d,
     },
     Submit(crate::SubmissionIndex, Vec<Command>),
@@ -128,18 +127,18 @@ pub enum Command {
         size: wgt::BufferAddress,
     },
     CopyBufferToTexture {
-        src: crate::command::ImageCopyBuffer,
-        dst: crate::command::ImageCopyTexture,
+        src: crate::command::BufferCopyView,
+        dst: crate::command::TextureCopyView,
         size: wgt::Extent3d,
     },
     CopyTextureToBuffer {
-        src: crate::command::ImageCopyTexture,
-        dst: crate::command::ImageCopyBuffer,
+        src: crate::command::TextureCopyView,
+        dst: crate::command::BufferCopyView,
         size: wgt::Extent3d,
     },
     CopyTextureToTexture {
-        src: crate::command::ImageCopyTexture,
-        dst: crate::command::ImageCopyTexture,
+        src: crate::command::TextureCopyView,
+        dst: crate::command::TextureCopyView,
         size: wgt::Extent3d,
     },
     WriteTimestamp {
@@ -158,8 +157,8 @@ pub enum Command {
     },
     RunRenderPass {
         base: crate::command::BasePass<crate::command::RenderCommand>,
-        target_colors: Vec<crate::command::RenderPassColorAttachment>,
-        target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
+        target_colors: Vec<crate::command::ColorAttachmentDescriptor>,
+        target_depth_stencil: Option<crate::command::DepthStencilAttachmentDescriptor>,
     },
 }
 
@@ -175,7 +174,7 @@ pub struct Trace {
 #[cfg(feature = "trace")]
 impl Trace {
     pub fn new(path: &std::path::Path) -> Result<Self, std::io::Error> {
-        log::info!("Tracing into '{:?}'", path);
+        tracing::info!("Tracing into '{:?}'", path);
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
         file.write_all(b"[\n")?;
         Ok(Self {
@@ -199,7 +198,7 @@ impl Trace {
                 let _ = writeln!(self.file, "{},", string);
             }
             Err(e) => {
-                log::warn!("RON serialization failure: {:?}", e);
+                tracing::warn!("RON serialization failure: {:?}", e);
             }
         }
     }

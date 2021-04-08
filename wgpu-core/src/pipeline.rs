@@ -7,7 +7,7 @@ use crate::{
     device::{DeviceError, RenderPassContext},
     hub::Resource,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
-    validation, Label, LifeGuard, Stored, DOWNLEVEL_ERROR_WARNING_MESSAGE,
+    validation, Label, LifeGuard, Stored,
 };
 use std::borrow::Cow;
 use thiserror::Error;
@@ -59,7 +59,7 @@ pub enum CreateShaderModuleError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    Validation(#[from] naga::valid::ValidationError),
+    Validation(#[from] naga::proc::ValidationError),
     #[error("missing required device features {0:?}")]
     MissingFeature(wgt::Features),
 }
@@ -113,13 +113,6 @@ pub enum CreateComputePipelineError {
     Implicit(#[from] ImplicitLayoutError),
     #[error(transparent)]
     Stage(validation::StageError),
-    #[error("Internal error: {0}")]
-    Internal(String),
-    #[error(
-        "Compute shaders are not supported by the underlying platform. {}",
-        DOWNLEVEL_ERROR_WARNING_MESSAGE
-    )]
-    ComputeShadersUnsupported,
 }
 
 #[derive(Debug)]
@@ -231,8 +224,6 @@ pub enum CreateRenderPipelineError {
         strip_index_format: Option<wgt::IndexFormat>,
         topology: wgt::PrimitiveTopology,
     },
-    #[error("Conservative Rasterization is only supported for wgt::PolygonMode::Fill")]
-    ConservativeRasterizationNonFillPolygonMode,
     #[error("missing required device features {0:?}")]
     MissingFeature(wgt::Features),
     #[error("error in stage {flag:?}")]
@@ -240,11 +231,6 @@ pub enum CreateRenderPipelineError {
         flag: wgt::ShaderStage,
         #[source]
         error: validation::StageError,
-    },
-    #[error("Internal error in stage {stage:?}: {error}")]
-    Internal {
-        stage: wgt::ShaderStage,
-        error: String,
     },
 }
 

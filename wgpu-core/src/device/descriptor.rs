@@ -37,7 +37,7 @@ impl<B: hal::Backend> DescriptorAllocator<B> {
             )
         }
         .map_err(|err| {
-            log::warn!("Descriptor set allocation failed: {}", err);
+            tracing::warn!("Descriptor set allocation failed: {}", err);
             DeviceError::OutOfMemory
         })
     }
