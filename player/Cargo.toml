@@ -33,15 +33,5 @@ path = "../wgpu-core"
 package = "wgpu-core"
 features = ["replay", "raw-window-handle"]
 
-#[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies.gfx-backend-metal]
-#git = "https://github.com/gfx-rs/gfx"
-#rev = "" # insert revision here
-#features = ["auto-capture"]
-
-[dependencies.wgpu-subscriber]
-git = "https://github.com/gfx-rs/subscriber.git"
-rev = "cdc9feb53f152f9c41905ed9efeff2c1ed214361"
-version = "0.1"
-
 [dev-dependencies]
 serde = "1"

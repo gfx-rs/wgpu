@@ -10,7 +10,7 @@ use crate::{
     },
     id, instance,
     memory_init_tracker::{MemoryInitKind, MemoryInitTracker, MemoryInitTrackerAction},
-    pipeline, resource, span, swap_chain,
+    pipeline, resource, swap_chain,
     track::{BufferState, TextureSelector, TextureState, TrackerSet},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers, LifeGuard, MultiRefCount, PrivateFeatures, Stored,
@@ -114,12 +114,13 @@ impl<T> AttachmentData<T> {
 }
 
 pub(crate) type AttachmentDataVec<T> = ArrayVec<[T; MAX_COLOR_TARGETS + MAX_COLOR_TARGETS + 1]>;
-
 pub(crate) type RenderPassKey = AttachmentData<(hal::pass::Attachment, hal::image::Layout)>;
-pub(crate) type FramebufferKey = (
-    AttachmentData<hal::image::FramebufferAttachment>,
-    wgt::Extent3d,
-);
+#[derive(Debug, Eq, Hash, PartialEq)]
+pub(crate) struct FramebufferKey {
+    pub(crate) attachments: AttachmentData<hal::image::FramebufferAttachment>,
+    pub(crate) extent: wgt::Extent3d,
+    pub(crate) samples: hal::image::NumSamples,
+}
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
@@ -155,8 +156,8 @@ impl RenderPassContext {
         if self.attachments.depth_stencil != other.attachments.depth_stencil {
             return Err(
                 RenderPassCompatibilityError::IncompatibleDepthStencilAttachment(
-                    self.attachments.depth_stencil.clone(),
-                    other.attachments.depth_stencil.clone(),
+                    self.attachments.depth_stencil,
+                    other.attachments.depth_stencil,
                 ),
             );
         }
@@ -283,6 +284,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) private_features: PrivateFeatures,
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
+    pub(crate) downlevel: wgt::DownlevelProperties,
     spv_options: naga::back::spv::Options,
     //TODO: move this behind another mutex. This would allow several methods to switch
     // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
@@ -298,6 +300,7 @@ pub enum CreateDeviceError {
 }
 
 impl<B: GfxBackend> Device<B> {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         raw: B::Device,
         adapter_id: Stored<id::AdapterId>,
@@ -305,6 +308,7 @@ impl<B: GfxBackend> Device<B> {
         mem_props: hal::adapter::MemoryProperties,
         hal_limits: hal::Limits,
         private_features: PrivateFeatures,
+        downlevel: wgt::DownlevelProperties,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Self, CreateDeviceError> {
@@ -315,16 +319,15 @@ impl<B: GfxBackend> Device<B> {
         let descriptors = descriptor::DescriptorAllocator::new();
         #[cfg(not(feature = "trace"))]
         match trace_path {
-            Some(_) => tracing::error!("Feature 'trace' is not enabled"),
+            Some(_) => log::error!("Feature 'trace' is not enabled"),
             None => (),
         }
 
         let spv_options = {
             use naga::back::spv;
             let mut flags = spv::WriterFlags::empty();
-            if cfg!(debug_assertions) {
-                flags |= spv::WriterFlags::DEBUG;
-            }
+            flags.set(spv::WriterFlags::DEBUG, cfg!(debug_assertions));
+            //Note: we don't adjust the coordinate space, because `NDC_Y_UP` is required.
             spv::Options {
                 lang_version: (1, 0),
                 capabilities: [
@@ -366,14 +369,15 @@ impl<B: GfxBackend> Device<B> {
                     Some(Mutex::new(trace))
                 }
                 Err(e) => {
-                    tracing::error!("Unable to start a trace in '{:?}': {:?}", path, e);
+                    log::error!("Unable to start a trace in '{:?}': {:?}", path, e);
                     None
                 }
             }),
             hal_limits,
             private_features,
             limits: desc.limits.clone(),
-            features: desc.features.clone(),
+            features: desc.features,
+            downlevel,
             spv_options,
             pending_writes: queue::PendingWrites::new(),
         })
@@ -558,12 +562,14 @@ impl<B: GfxBackend> Device<B> {
             flags
         };
 
-        let mut buffer = unsafe { self.raw.create_buffer(desc.size.max(1), usage) }.map_err(
-            |err| match err {
-                hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                _ => panic!("failed to create buffer: {}", err),
-            },
-        )?;
+        let mut buffer = unsafe {
+            self.raw
+                .create_buffer(desc.size.max(1), usage, hal::memory::SparseFlags::empty())
+        }
+        .map_err(|err| match err {
+            hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+            _ => panic!("failed to create buffer: {}", err),
+        })?;
         if let Some(ref label) = desc.label {
             unsafe { self.raw.set_buffer_name(&mut buffer, label) };
         }
@@ -678,6 +684,7 @@ impl<B: GfxBackend> Device<B> {
                     format,
                     hal::image::Tiling::Optimal,
                     usage,
+                    hal::memory::SparseFlags::empty(),
                     view_caps,
                 )
                 .map_err(|err| match err {
@@ -783,7 +790,7 @@ impl<B: GfxBackend> Device<B> {
             };
 
         let required_level_count =
-            desc.base_mip_level + desc.level_count.map_or(1, |count| count.get());
+            desc.base_mip_level + desc.mip_level_count.map_or(1, |count| count.get());
         let required_layer_count =
             desc.base_array_layer + desc.array_layer_count.map_or(1, |count| count.get());
         let level_end = texture.full_range.levels.end;
@@ -814,7 +821,7 @@ impl<B: GfxBackend> Device<B> {
         }
 
         let end_level = desc
-            .level_count
+            .mip_level_count
             .map_or(level_end, |_| required_level_count as u8);
         let end_layer = desc
             .array_layer_count
@@ -844,7 +851,7 @@ impl<B: GfxBackend> Device<B> {
         let range = hal::image::SubresourceRange {
             aspects,
             level_start: desc.base_mip_level as _,
-            level_count: desc.level_count.map(|v| v.get() as _),
+            level_count: desc.mip_level_count.map(|v| v.get() as _),
             layer_start: desc.base_array_layer as _,
             layer_count: desc.array_layer_count.map(|v| v.get() as _),
         };
@@ -857,7 +864,7 @@ impl<B: GfxBackend> Device<B> {
                     conv::map_texture_view_dimension(view_dim),
                     conv::map_texture_format(format, self.private_features),
                     hal::format::Swizzle::NO,
-                    range.clone(),
+                    range,
                 )
                 .or(Err(resource::CreateTextureViewError::OutOfMemory))?
         };
@@ -981,15 +988,18 @@ impl<B: GfxBackend> Device<B> {
         let (spv, module) = match source {
             pipeline::ShaderModuleSource::SpirV(spv) => {
                 // Parse the given shader code and store its representation.
-                let parser =
-                    naga::front::spv::Parser::new(spv.iter().cloned(), &Default::default());
+                let options = naga::front::spv::Options {
+                    adjust_coordinate_space: false, // we require NDC_Y_UP feature
+                    flow_graph_dump_prefix: None,
+                };
+                let parser = naga::front::spv::Parser::new(spv.iter().cloned(), &options);
                 let module = match parser.parse() {
                     Ok(module) => Some(module),
                     Err(err) => {
                         // TODO: eventually, when Naga gets support for all features,
                         // we want to convert these to a hard error,
-                        tracing::warn!("Failed to parse shader SPIR-V code: {:?}", err);
-                        tracing::warn!("Shader module will not be validated or reflected");
+                        log::warn!("Failed to parse shader SPIR-V code: {:?}", err);
+                        log::warn!("Shader module will not be validated or reflected");
                         None
                     }
                 };
@@ -1001,7 +1011,7 @@ impl<B: GfxBackend> Device<B> {
                 match naga::front::wgsl::parse_str(&code) {
                     Ok(module) => (None, Some(module)),
                     Err(err) => {
-                        tracing::error!("Failed to parse WGSL code: {}", err);
+                        log::error!("Failed to parse WGSL code: {}", err);
                         return Err(pipeline::CreateShaderModuleError::Parsing);
                     }
                 }
@@ -1012,7 +1022,8 @@ impl<B: GfxBackend> Device<B> {
         let (naga_result, interface) = match module {
             // If succeeded, then validate it and attempt to give it to gfx-hal directly.
             Some(module) if desc.flags.contains(wgt::ShaderFlags::VALIDATION) || spv.is_none() => {
-                let analysis = naga::proc::Validator::new().validate(&module)?;
+                let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all())
+                    .validate(&module)?;
                 if !self.features.contains(wgt::Features::PUSH_CONSTANTS)
                     && module
                         .global_variables
@@ -1023,16 +1034,17 @@ impl<B: GfxBackend> Device<B> {
                         wgt::Features::PUSH_CONSTANTS,
                     ));
                 }
-                let interface = validation::Interface::new(&module, &analysis);
-                let shader = hal::device::NagaShader { module, analysis };
+                let interface = validation::Interface::new(&module, &info);
+                let shader = hal::device::NagaShader { module, info };
                 let naga_result = if desc
                     .flags
                     .contains(wgt::ShaderFlags::EXPERIMENTAL_TRANSLATION)
+                    || !cfg!(feature = "cross")
                 {
                     match unsafe { self.raw.create_shader_module_from_naga(shader) } {
                         Ok(raw) => Ok(raw),
                         Err((hal::device::ShaderError::CompilationFailed(msg), shader)) => {
-                            tracing::warn!("Shader module compilation failed: {}", msg);
+                            log::warn!("Shader module compilation failed: {}", msg);
                             Err(Some(shader))
                         }
                         Err((_, shader)) => Err(Some(shader)),
@@ -1054,12 +1066,8 @@ impl<B: GfxBackend> Device<B> {
                     None => {
                         // Produce a SPIR-V from the Naga module
                         let shader = maybe_shader.unwrap();
-                        naga::back::spv::write_vec(
-                            &shader.module,
-                            &shader.analysis,
-                            &self.spv_options,
-                        )
-                        .map(Cow::Owned)
+                        naga::back::spv::write_vec(&shader.module, &shader.info, &self.spv_options)
+                            .map(Cow::Owned)
                     }
                 };
                 match spv {
@@ -1079,7 +1087,7 @@ impl<B: GfxBackend> Device<B> {
                     return Err(DeviceError::OutOfMemory.into());
                 }
                 Err(error) => {
-                    tracing::error!("Shader error: {}", error);
+                    log::error!("Shader error: {}", error);
                     return Err(pipeline::CreateShaderModuleError::Parsing);
                 }
             },
@@ -1103,8 +1111,8 @@ impl<B: GfxBackend> Device<B> {
         key: &RenderPassKey,
     ) -> Result<B::RenderPass, hal::device::OutOfMemory> {
         let mut color_ids = [(0, hal::image::Layout::ColorAttachmentOptimal); MAX_COLOR_TARGETS];
-        for i in 0..key.colors.len() {
-            color_ids[i].0 = i;
+        for (index, color) in color_ids[..key.colors.len()].iter_mut().enumerate() {
+            color.0 = index;
         }
         let depth_id = key.depth_stencil.as_ref().map(|_| {
             (
@@ -1120,7 +1128,7 @@ impl<B: GfxBackend> Device<B> {
             resolves: &[],
             preserves: &[],
         };
-        let all = key.all().map(|(at, _)| at.clone());
+        let all = key.all().map(|&(ref at, _)| at.clone());
 
         unsafe {
             self.raw
@@ -1135,7 +1143,7 @@ impl<B: GfxBackend> Device<B> {
     ) -> Option<id::BindGroupLayoutId> {
         guard
             .iter(self_id.backend())
-            .find(|(_, bgl)| bgl.device_id.value.0 == self_id && bgl.entries == *entry_map)
+            .find(|&(_, ref bgl)| bgl.device_id.value.0 == self_id && bgl.entries == *entry_map)
             .map(|(id, value)| {
                 value.multi_ref_count.inc();
                 id
@@ -1310,7 +1318,7 @@ impl<B: GfxBackend> Device<B> {
                         _ => {
                             return Err(Error::WrongBindingType {
                                 binding,
-                                actual: decl.ty.clone(),
+                                actual: decl.ty,
                                 expected: "UniformBuffer, StorageBuffer or ReadonlyStorageBuffer",
                             })
                         }
@@ -1422,7 +1430,7 @@ impl<B: GfxBackend> Device<B> {
                         _ => {
                             return Err(Error::WrongBindingType {
                                 binding,
-                                actual: decl.ty.clone(),
+                                actual: decl.ty,
                                 expected: "Sampler",
                             })
                         }
@@ -1525,7 +1533,7 @@ impl<B: GfxBackend> Device<B> {
                         }
                         _ => return Err(Error::WrongBindingType {
                             binding,
-                            actual: decl.ty.clone(),
+                            actual: decl.ty,
                             expected:
                                 "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
                         }),
@@ -1595,7 +1603,7 @@ impl<B: GfxBackend> Device<B> {
                                 _ => {
                                     return Err(Error::WrongBindingType {
                                         binding,
-                                        actual: decl.ty.clone(),
+                                        actual: decl.ty,
                                         expected: "SampledTextureArray",
                                     })
                                 }
@@ -1808,7 +1816,7 @@ impl<B: GfxBackend> Device<B> {
         let mut ids = implicit_context.ok_or(pipeline::ImplicitLayoutError::MissingIds(0))?;
         let group_count = derived_group_layouts.len();
         if ids.group_ids.len() < group_count {
-            tracing::error!(
+            log::error!(
                 "Not enough bind group IDs ({}) specified for the implicit layout ({})",
                 ids.group_ids.len(),
                 derived_group_layouts.len()
@@ -1855,6 +1863,14 @@ impl<B: GfxBackend> Device<B> {
         ),
         pipeline::CreateComputePipelineError,
     > {
+        if !self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::COMPUTE_SHADERS)
+        {
+            return Err(pipeline::CreateComputePipelineError::ComputeShadersUnsupported);
+        }
+
         //TODO: only lock mutable if the layout is derived
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
         let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
@@ -1935,10 +1951,15 @@ impl<B: GfxBackend> Device<B> {
         let raw =
             unsafe { self.raw.create_compute_pipeline(&pipeline_desc, None) }.map_err(|err| {
                 match err {
-                    hal::pso::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    hal::pso::CreationError::OutOfMemory(_) => {
+                        pipeline::CreateComputePipelineError::Device(DeviceError::OutOfMemory)
+                    }
+                    hal::pso::CreationError::ShaderCreationError(_, error) => {
+                        pipeline::CreateComputePipelineError::Internal(error)
+                    }
                     _ => {
-                        tracing::error!("failed to create compute pipeline: {}", err);
-                        DeviceError::OutOfMemory
+                        log::error!("failed to create compute pipeline: {}", err);
+                        pipeline::CreateComputePipelineError::Device(DeviceError::OutOfMemory)
                     }
                 }
             })?;
@@ -2100,17 +2121,9 @@ impl<B: GfxBackend> Device<B> {
                 .map(conv::map_color_target_state)
                 .collect(),
         };
-        let depth_stencil = match depth_stencil_state {
-            Some(dsd) => {
-                if dsd.clamp_depth && !self.features.contains(wgt::Features::DEPTH_CLAMPING) {
-                    return Err(pipeline::CreateRenderPipelineError::MissingFeature(
-                        wgt::Features::DEPTH_CLAMPING,
-                    ));
-                }
-                conv::map_depth_stencil_state(dsd)
-            }
-            None => hal::pso::DepthStencilDesc::default(),
-        };
+        let depth_stencil = depth_stencil_state
+            .map(conv::map_depth_stencil_state)
+            .unwrap_or_default();
 
         // TODO
         let baked_states = hal::pso::BakedStates {
@@ -2120,12 +2133,33 @@ impl<B: GfxBackend> Device<B> {
             depth_bounds: None,
         };
 
+        if desc.primitive.clamp_depth && !self.features.contains(wgt::Features::DEPTH_CLAMPING) {
+            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
+                wgt::Features::DEPTH_CLAMPING,
+            ));
+        }
         if desc.primitive.polygon_mode != wgt::PolygonMode::Fill
             && !self.features.contains(wgt::Features::NON_FILL_POLYGON_MODE)
         {
             return Err(pipeline::CreateRenderPipelineError::MissingFeature(
                 wgt::Features::NON_FILL_POLYGON_MODE,
             ));
+        }
+
+        if desc.primitive.conservative
+            && !self
+                .features
+                .contains(wgt::Features::CONSERVATIVE_RASTERIZATION)
+        {
+            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
+                wgt::Features::CONSERVATIVE_RASTERIZATION,
+            ));
+        }
+
+        if desc.primitive.conservative && desc.primitive.polygon_mode != wgt::PolygonMode::Fill {
+            return Err(
+                pipeline::CreateRenderPipelineError::ConservativeRasterizationNonFillPolygonMode,
+            );
         }
 
         if desc.layout.is_none() {
@@ -2227,8 +2261,8 @@ impl<B: GfxBackend> Device<B> {
             }
         };
 
-        let fragment = match &desc.fragment {
-            Some(fragment) => {
+        let fragment = match desc.fragment {
+            Some(ref fragment) => {
                 let entry_point_name = &fragment.stage.entry_point;
                 let flag = wgt::ShaderStage::FRAGMENT;
 
@@ -2282,7 +2316,7 @@ impl<B: GfxBackend> Device<B> {
                 match io.get(&(i as wgt::ShaderLocation)) {
                     Some(output) if validation::check_texture_format(state.format, output) => {}
                     Some(output) => {
-                        tracing::warn!(
+                        log::warn!(
                             "Incompatible fragment output[{}] from shader: {:?}, expected {:?}",
                             i,
                             output,
@@ -2296,7 +2330,7 @@ impl<B: GfxBackend> Device<B> {
                     }
                     None if state.write_mask.is_empty() => {}
                     None => {
-                        tracing::warn!("Missing fragment output[{}], expected {:?}", i, state,);
+                        log::warn!("Missing fragment output[{}], expected {:?}", i, state,);
                         return Err(pipeline::CreateRenderPipelineError::MissingOutput {
                             index: i as u8,
                         });
@@ -2370,10 +2404,18 @@ impl<B: GfxBackend> Device<B> {
         let raw =
             unsafe { self.raw.create_graphics_pipeline(&pipeline_desc, None) }.map_err(|err| {
                 match err {
-                    hal::pso::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    hal::pso::CreationError::OutOfMemory(_) => {
+                        pipeline::CreateRenderPipelineError::Device(DeviceError::OutOfMemory)
+                    }
+                    hal::pso::CreationError::ShaderCreationError(stage, error) => {
+                        pipeline::CreateRenderPipelineError::Internal {
+                            stage: conv::map_hal_flags_to_shader_stage(stage),
+                            error,
+                        }
+                    }
                     _ => {
-                        tracing::error!("failed to create graphics pipeline: {}", err);
-                        DeviceError::OutOfMemory
+                        log::error!("failed to create graphics pipeline: {}", err);
+                        pipeline::CreateRenderPipelineError::Device(DeviceError::OutOfMemory)
                     }
                 }
             })?;
@@ -2382,9 +2424,7 @@ impl<B: GfxBackend> Device<B> {
             attachments: AttachmentData {
                 colors: color_states.iter().map(|state| state.format).collect(),
                 resolves: ArrayVec::new(),
-                depth_stencil: depth_stencil_state
-                    .as_ref()
-                    .map(|state| state.format.clone()),
+                depth_stencil: depth_stencil_state.as_ref().map(|state| state.format),
             },
             sample_count: samples,
         };
@@ -2431,7 +2471,7 @@ impl<B: GfxBackend> Device<B> {
         token: &mut Token<Self>,
     ) -> Result<(), WaitIdleError> {
         if self.last_completed_submission_index() <= submission_index {
-            tracing::info!("Waiting for submission {:?}", submission_index);
+            log::info!("Waiting for submission {:?}", submission_index);
             self.lock_life(token)
                 .triage_submissions(&self.raw, true)
                 .map(|_| ())
@@ -2470,7 +2510,7 @@ impl<B: hal::Backend> Device<B> {
     pub(crate) fn prepare_to_die(&mut self) {
         let mut life_tracker = self.life_tracker.lock();
         if let Err(error) = life_tracker.triage_submissions(&self.raw, true) {
-            tracing::error!("failed to triage submissions: {}", error);
+            log::error!("failed to triage submissions: {}", error);
         }
         life_tracker.cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
     }
@@ -2578,7 +2618,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: id::AdapterId,
         surface_id: id::SurfaceId,
     ) -> Result<TextureFormat, instance::GetSwapChainPreferredFormatError> {
-        span!(_guard, INFO, "Adapter::get_swap_chain_preferred_format");
+        profiling::scope!("Adapter::get_swap_chain_preferred_format");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2599,7 +2639,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
     ) -> Result<wgt::Features, InvalidDevice> {
-        span!(_guard, INFO, "Device::features");
+        profiling::scope!("Device::features");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2613,7 +2653,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
     ) -> Result<wgt::Limits, InvalidDevice> {
-        span!(_guard, INFO, "Device::limits");
+        profiling::scope!("Device::limits");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2623,13 +2663,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(device.limits.clone())
     }
 
+    pub fn device_downlevel_properties<B: GfxBackend>(
+        &self,
+        device_id: id::DeviceId,
+    ) -> Result<wgt::DownlevelProperties, InvalidDevice> {
+        profiling::scope!("Device::downlevel_properties");
+
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, _) = hub.devices.read(&mut token);
+        let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+
+        Ok(device.downlevel)
+    }
+
     pub fn device_create_buffer<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
         desc: &resource::BufferDescriptor,
         id_in: Input<G, id::BufferId>,
     ) -> (id::BufferId, Option<resource::CreateBufferError>) {
-        span!(_guard, INFO, "Device::create_buffer");
+        profiling::scope!("Device::create_buffer");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2738,7 +2792,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let id = fid.assign(buffer, &mut token);
-            tracing::info!("Created buffer {:?} with {:?}", id, desc);
+            log::info!("Created buffer {:?} with {:?}", id, desc);
 
             device
                 .trackers
@@ -2783,7 +2837,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         data: &[u8],
     ) -> Result<(), resource::BufferAccessError> {
-        span!(_guard, INFO, "Device::set_buffer_sub_data");
+        profiling::scope!("Device::set_buffer_sub_data");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2811,8 +2865,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let (_, block) = buffer.raw.as_mut().unwrap();
-        block.write_bytes(&device.raw, offset, data)?;
+        buffer
+            .raw
+            .as_mut()
+            .unwrap()
+            .1
+            .write_bytes(&device.raw, offset, data)?;
 
         Ok(())
     }
@@ -2824,7 +2882,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         data: &mut [u8],
     ) -> Result<(), resource::BufferAccessError> {
-        span!(_guard, INFO, "Device::get_buffer_sub_data");
+        profiling::scope!("Device::get_buffer_sub_data");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2840,8 +2898,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         check_buffer_usage(buffer.usage, wgt::BufferUsage::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        let (_, block) = buffer.raw.as_mut().unwrap();
-        block.read_bytes(&device.raw, offset, data)?;
+        buffer
+            .raw
+            .as_mut()
+            .unwrap()
+            .1
+            .read_bytes(&device.raw, offset, data)?;
 
         Ok(())
     }
@@ -2854,7 +2916,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
     ) -> Result<(), resource::DestroyError> {
-        span!(_guard, INFO, "Buffer::destroy");
+        profiling::scope!("Buffer::destroy");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2862,7 +2924,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: lock pending writes separately, keep the device read-only
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
-        tracing::info!("Buffer {:?} is destroyed", buffer_id);
+        log::info!("Buffer {:?} is destroyed", buffer_id);
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let buffer = buffer_guard
             .get_mut(buffer_id)
@@ -2897,12 +2959,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn buffer_drop<B: GfxBackend>(&self, buffer_id: id::BufferId, wait: bool) {
-        span!(_guard, INFO, "Buffer::drop");
+        profiling::scope!("Buffer::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        tracing::info!("Buffer {:?} is dropped", buffer_id);
+        log::info!("Buffer {:?} is dropped", buffer_id);
         let (ref_count, last_submit_index, device_id) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             match buffer_guard.get_mut(buffer_id) {
@@ -2940,7 +3002,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if wait {
             match device.wait_for_submit(last_submit_index, &mut token) {
                 Ok(()) => (),
-                Err(e) => tracing::error!("Failed to wait for buffer {:?}: {:?}", buffer_id, e),
+                Err(e) => log::error!("Failed to wait for buffer {:?}: {:?}", buffer_id, e),
             }
         }
     }
@@ -2951,7 +3013,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
-        span!(_guard, INFO, "Device::create_texture");
+        profiling::scope!("Device::create_texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2981,7 +3043,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = texture.life_guard.add_ref();
 
             let id = fid.assign(texture, &mut token);
-            tracing::info!("Created texture {:?} with {:?}", id, desc);
+            log::info!("Created texture {:?} with {:?}", id, desc);
 
             device
                 .trackers
@@ -3004,7 +3066,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         texture_id: id::TextureId,
     ) -> Result<(), resource::DestroyError> {
-        span!(_guard, INFO, "Texture::destroy");
+        profiling::scope!("Texture::destroy");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3012,7 +3074,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: lock pending writes separately, keep the device read-only
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
-        tracing::info!("Buffer {:?} is destroyed", texture_id);
+        log::info!("Buffer {:?} is destroyed", texture_id);
         let (mut texture_guard, _) = hub.textures.write(&mut token);
         let texture = texture_guard
             .get_mut(texture_id)
@@ -3047,7 +3109,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn texture_drop<B: GfxBackend>(&self, texture_id: id::TextureId, wait: bool) {
-        span!(_guard, INFO, "Texture::drop");
+        profiling::scope!("Texture::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3090,7 +3152,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if wait {
             match device.wait_for_submit(last_submit_index, &mut token) {
                 Ok(()) => (),
-                Err(e) => tracing::error!("Failed to wait for texture {:?}: {:?}", texture_id, e),
+                Err(e) => log::error!("Failed to wait for texture {:?}: {:?}", texture_id, e),
             }
         }
     }
@@ -3101,7 +3163,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureViewDescriptor,
         id_in: Input<G, id::TextureViewId>,
     ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
-        span!(_guard, INFO, "Texture::create_view");
+        profiling::scope!("Texture::create_view");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3153,7 +3215,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         texture_view_id: id::TextureViewId,
         wait: bool,
     ) -> Result<(), resource::TextureViewDestroyError> {
-        span!(_guard, INFO, "TextureView::drop");
+        profiling::scope!("TextureView::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3196,7 +3258,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if wait {
             match device.wait_for_submit(last_submit_index, &mut token) {
                 Ok(()) => (),
-                Err(e) => tracing::error!(
+                Err(e) => log::error!(
                     "Failed to wait for texture view {:?}: {:?}",
                     texture_view_id,
                     e
@@ -3212,7 +3274,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::SamplerDescriptor,
         id_in: Input<G, id::SamplerId>,
     ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
-        span!(_guard, INFO, "Device::create_sampler");
+        profiling::scope!("Device::create_sampler");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3256,7 +3318,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn sampler_drop<B: GfxBackend>(&self, sampler_id: id::SamplerId) {
-        span!(_guard, INFO, "Sampler::drop");
+        profiling::scope!("Sampler::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3293,7 +3355,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::BindGroupLayoutId,
         Option<binding_model::CreateBindGroupLayoutError>,
     ) {
-        span!(_guard, INFO, "Device::create_bind_group_layout");
+        profiling::scope!("Device::create_bind_group_layout");
 
         let mut token = Token::root();
         let hub = B::hub(self);
@@ -3358,7 +3420,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         bind_group_layout_id: id::BindGroupLayoutId,
     ) {
-        span!(_guard, INFO, "BindGroupLayout::drop");
+        profiling::scope!("BindGroupLayout::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3391,7 +3453,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::PipelineLayoutId,
         Option<binding_model::CreatePipelineLayoutError>,
     ) {
-        span!(_guard, INFO, "Device::create_pipeline_layout");
+        profiling::scope!("Device::create_pipeline_layout");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3431,7 +3493,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn pipeline_layout_drop<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {
-        span!(_guard, INFO, "PipelineLayout::drop");
+        profiling::scope!("PipelineLayout::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3467,7 +3529,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &binding_model::BindGroupDescriptor,
         id_in: Input<G, id::BindGroupId>,
     ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
-        span!(_guard, INFO, "Device::create_bind_group");
+        profiling::scope!("Device::create_bind_group");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3505,7 +3567,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = bind_group.life_guard.add_ref();
 
             let id = fid.assign(bind_group, &mut token);
-            tracing::debug!(
+            log::debug!(
                 "Bind group {:?} {:#?}",
                 id,
                 hub.bind_groups.read(&mut token).0[id].used
@@ -3529,7 +3591,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn bind_group_drop<B: GfxBackend>(&self, bind_group_id: id::BindGroupId) {
-        span!(_guard, INFO, "BindGroup::drop");
+        profiling::scope!("BindGroup::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3567,7 +3629,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
     ) {
-        span!(_guard, INFO, "Device::create_shader_module");
+        profiling::scope!("Device::create_shader_module");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3620,7 +3682,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn shader_module_drop<B: GfxBackend>(&self, shader_module_id: id::ShaderModuleId) {
-        span!(_guard, INFO, "ShaderModule::drop");
+        profiling::scope!("ShaderModule::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3646,7 +3708,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Input<G, id::CommandEncoderId>,
     ) -> (id::CommandEncoderId, Option<command::CommandAllocatorError>) {
-        span!(_guard, INFO, "Device::create_command_encoder");
+        profiling::scope!("Device::create_command_encoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3668,6 +3730,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 dev_stored,
                 &device.raw,
                 device.limits.clone(),
+                device.downlevel,
                 device.private_features,
                 &desc.label,
                 #[cfg(feature = "trace")]
@@ -3698,7 +3761,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn command_encoder_drop<B: GfxBackend>(&self, command_encoder_id: id::CommandEncoderId) {
-        span!(_guard, INFO, "CommandEncoder::drop");
+        profiling::scope!("CommandEncoder::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3715,7 +3778,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn command_buffer_drop<B: GfxBackend>(&self, command_buffer_id: id::CommandBufferId) {
-        span!(_guard, INFO, "CommandBuffer::drop");
+        profiling::scope!("CommandBuffer::drop");
         self.command_encoder_drop::<B>(command_buffer_id)
     }
 
@@ -3727,7 +3790,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::RenderBundleEncoderId,
         Option<command::CreateRenderBundleError>,
     ) {
-        span!(_guard, INFO, "Device::create_render_bundle_encoder");
+        profiling::scope!("Device::create_render_bundle_encoder");
         let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id, None) {
             Ok(encoder) => (encoder, None),
             Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
@@ -3741,7 +3804,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &command::RenderBundleDescriptor,
         id_in: Input<G, id::RenderBundleId>,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
-        span!(_guard, INFO, "RenderBundleEncoder::finish");
+        profiling::scope!("RenderBundleEncoder::finish");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3770,7 +3833,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
 
-            tracing::debug!("Render bundle {:#?}", render_bundle.used);
+            log::debug!("Render bundle {:#?}", render_bundle.used);
             let ref_count = render_bundle.life_guard.add_ref();
             let id = fid.assign(render_bundle, &mut token);
 
@@ -3792,7 +3855,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn render_bundle_drop<B: GfxBackend>(&self, render_bundle_id: id::RenderBundleId) {
-        span!(_guard, INFO, "RenderBundle::drop");
+        profiling::scope!("RenderBundle::drop");
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -3825,7 +3888,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &wgt::QuerySetDescriptor,
         id_in: Input<G, id::QuerySetId>,
     ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
-        span!(_guard, INFO, "Device::create_query_set");
+        profiling::scope!("Device::create_query_set");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3909,7 +3972,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn query_set_drop<B: GfxBackend>(&self, query_set_id: id::QuerySetId) {
-        span!(_guard, INFO, "QuerySet::drop");
+        profiling::scope!("QuerySet::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3949,7 +4012,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         pipeline::ImplicitBindGroupCount,
         Option<pipeline::CreateRenderPipelineError>,
     ) {
-        span!(_guard, INFO, "Device::create_render_pipeline");
+        profiling::scope!("Device::create_render_pipeline");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4035,7 +4098,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn render_pipeline_drop<B: GfxBackend>(&self, render_pipeline_id: id::RenderPipelineId) {
-        span!(_guard, INFO, "RenderPipeline::drop");
+        profiling::scope!("RenderPipeline::drop");
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -4077,7 +4140,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         pipeline::ImplicitBindGroupCount,
         Option<pipeline::CreateComputePipelineError>,
     ) {
-        span!(_guard, INFO, "Device::create_compute_pipeline");
+        profiling::scope!("Device::create_compute_pipeline");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4163,7 +4226,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn compute_pipeline_drop<B: GfxBackend>(&self, compute_pipeline_id: id::ComputePipelineId) {
-        span!(_guard, INFO, "ComputePipeline::drop");
+        profiling::scope!("ComputePipeline::drop");
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -4199,8 +4262,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         surface_id: id::SurfaceId,
         desc: &wgt::SwapChainDescriptor,
-    ) -> Result<id::SwapChainId, swap_chain::CreateSwapChainError> {
-        span!(_guard, INFO, "Device::create_swap_chain");
+    ) -> (id::SwapChainId, Option<swap_chain::CreateSwapChainError>) {
+        profiling::scope!("Device::create_swap_chain");
 
         fn validate_swap_chain_descriptor(
             config: &mut hal::window::SwapchainConfig,
@@ -4213,7 +4276,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 || height < caps.extents.start().height
                 || height > caps.extents.end().height
             {
-                tracing::warn!(
+                log::warn!(
                     "Requested size {}x{} is outside of the supported range: {:?}",
                     width,
                     height,
@@ -4221,7 +4284,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
             if !caps.present_modes.contains(config.present_mode) {
-                tracing::warn!(
+                log::warn!(
                     "Surface does not support present mode: {:?}, falling back to {:?}",
                     config.present_mode,
                     hal::window::PresentMode::FIFO
@@ -4234,7 +4297,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Ok(())
         }
 
-        tracing::info!("creating swap chain {:?}", desc);
+        log::info!("creating swap chain {:?}", desc);
+        let sc_id = surface_id.to_swap_chain_id(B::VARIANT);
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -4242,84 +4306,98 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (mut swap_chain_guard, _) = hub.swap_chains.write(&mut token);
-        let device = device_guard
-            .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
-        let surface = surface_guard
-            .get_mut(surface_id)
-            .map_err(|_| swap_chain::CreateSwapChainError::InvalidSurface)?;
 
-        let (caps, formats) = {
-            let surface = B::get_surface_mut(surface);
-            let adapter = &adapter_guard[device.adapter_id.value];
-            let queue_family = &adapter.raw.queue_families[0];
-            if !surface.supports_queue_family(queue_family) {
-                return Err(swap_chain::CreateSwapChainError::UnsupportedQueueFamily);
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateSwapChain(sc_id, desc.clone()));
             }
-            let formats = surface.supported_formats(&adapter.raw.physical_device);
-            let caps = surface.capabilities(&adapter.raw.physical_device);
-            (caps, formats)
+
+            let surface = match surface_guard.get_mut(surface_id) {
+                Ok(surface) => surface,
+                Err(_) => break swap_chain::CreateSwapChainError::InvalidSurface,
+            };
+
+            let (caps, formats) = {
+                let surface = B::get_surface_mut(surface);
+                let adapter = &adapter_guard[device.adapter_id.value];
+                let queue_family = &adapter.raw.queue_families[0];
+                if !surface.supports_queue_family(queue_family) {
+                    break swap_chain::CreateSwapChainError::UnsupportedQueueFamily;
+                }
+                let formats = surface.supported_formats(&adapter.raw.physical_device);
+                let caps = surface.capabilities(&adapter.raw.physical_device);
+                (caps, formats)
+            };
+
+            let num_frames = swap_chain::DESIRED_NUM_FRAMES
+                .max(*caps.image_count.start())
+                .min(*caps.image_count.end());
+            let mut config = swap_chain::swap_chain_descriptor_to_hal(
+                &desc,
+                num_frames,
+                device.private_features,
+            );
+            if let Some(formats) = formats {
+                if !formats.contains(&config.format) {
+                    break swap_chain::CreateSwapChainError::UnsupportedFormat {
+                        requested: config.format,
+                        available: formats,
+                    };
+                }
+            }
+            if let Err(error) = validate_swap_chain_descriptor(&mut config, &caps) {
+                break error;
+            }
+            let framebuffer_attachment = config.framebuffer_attachment();
+
+            match unsafe { B::get_surface_mut(surface).configure_swapchain(&device.raw, config) } {
+                Ok(()) => (),
+                Err(hal::window::SwapchainError::OutOfMemory(_)) => {
+                    break DeviceError::OutOfMemory.into()
+                }
+                Err(hal::window::SwapchainError::DeviceLost(_)) => break DeviceError::Lost.into(),
+                Err(err) => panic!("failed to configure swap chain on creation: {}", err),
+            }
+
+            if let Some(sc) = swap_chain_guard.try_remove(sc_id) {
+                if sc.acquired_view_id.is_some() {
+                    break swap_chain::CreateSwapChainError::SwapChainOutputExists;
+                }
+                unsafe {
+                    device.raw.destroy_semaphore(sc.semaphore);
+                }
+            }
+
+            let swap_chain = swap_chain::SwapChain {
+                life_guard: LifeGuard::new("<SwapChain>"),
+                device_id: Stored {
+                    value: id::Valid(device_id),
+                    ref_count: device.life_guard.add_ref(),
+                },
+                desc: desc.clone(),
+                num_frames,
+                semaphore: match device.raw.create_semaphore() {
+                    Ok(sem) => sem,
+                    Err(_) => break DeviceError::OutOfMemory.into(),
+                },
+                acquired_view_id: None,
+                active_submission_index: 0,
+                framebuffer_attachment,
+            };
+            swap_chain_guard.insert(sc_id, swap_chain);
+
+            return (sc_id, None);
         };
-        let num_frames = swap_chain::DESIRED_NUM_FRAMES
-            .max(*caps.image_count.start())
-            .min(*caps.image_count.end());
-        let mut config =
-            swap_chain::swap_chain_descriptor_to_hal(&desc, num_frames, device.private_features);
-        if let Some(formats) = formats {
-            if !formats.contains(&config.format) {
-                return Err(swap_chain::CreateSwapChainError::UnsupportedFormat {
-                    requested: config.format,
-                    available: formats,
-                });
-            }
-        }
-        validate_swap_chain_descriptor(&mut config, &caps)?;
-        let framebuffer_attachment = config.framebuffer_attachment();
 
-        unsafe {
-            B::get_surface_mut(surface)
-                .configure_swapchain(&device.raw, config)
-                .map_err(|err| match err {
-                    hal::window::SwapchainError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    hal::window::SwapchainError::DeviceLost(_) => DeviceError::Lost,
-                    _ => panic!("failed to configure swap chain on creation: {}", err),
-                })?;
-        }
-
-        let sc_id = surface_id.to_swap_chain_id(B::VARIANT);
-        if let Some(sc) = swap_chain_guard.try_remove(sc_id) {
-            if !sc.acquired_view_id.is_none() {
-                return Err(swap_chain::CreateSwapChainError::SwapChainOutputExists);
-            }
-            unsafe {
-                device.raw.destroy_semaphore(sc.semaphore);
-            }
-        }
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace
-                .lock()
-                .add(trace::Action::CreateSwapChain(sc_id, desc.clone()));
-        }
-
-        let swap_chain = swap_chain::SwapChain {
-            life_guard: LifeGuard::new("<SwapChain>"),
-            device_id: Stored {
-                value: id::Valid(device_id),
-                ref_count: device.life_guard.add_ref(),
-            },
-            desc: desc.clone(),
-            num_frames,
-            semaphore: device
-                .raw
-                .create_semaphore()
-                .or(Err(DeviceError::OutOfMemory))?,
-            acquired_view_id: None,
-            active_submission_index: 0,
-            framebuffer_attachment,
-        };
-        swap_chain_guard.insert(sc_id, swap_chain);
-        Ok(sc_id)
+        swap_chain_guard.insert_error(sc_id, "");
+        (sc_id, Some(error))
     }
 
     #[cfg(feature = "replay")]
@@ -4348,7 +4426,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         force_wait: bool,
     ) -> Result<(), WaitIdleError> {
-        span!(_guard, INFO, "Device::poll");
+        profiling::scope!("Device::poll");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4368,7 +4446,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         force_wait: bool,
         callbacks: &mut Vec<BufferMapPendingCallback>,
     ) -> Result<(), WaitIdleError> {
-        span!(_guard, INFO, "Device::poll_devices");
+        profiling::scope!("Device::poll_devices");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4411,7 +4489,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_drop<B: GfxBackend>(&self, device_id: id::DeviceId) {
-        span!(_guard, INFO, "Device::drop");
+        profiling::scope!("Device::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4437,7 +4515,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         range: Range<BufferAddress>,
         op: resource::BufferMapOperation,
     ) -> Result<(), resource::BufferAccessError> {
-        span!(_guard, INFO, "Device::buffer_map_async");
+        profiling::scope!("Device::buffer_map_async");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4476,7 +4554,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     })
                 }
             };
-            tracing::debug!("Buffer {:?} map state -> Waiting", buffer_id);
+            log::debug!("Buffer {:?} map state -> Waiting", buffer_id);
 
             (buffer.device_id.value, buffer.life_guard.add_ref())
         };
@@ -4500,9 +4578,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        _size: Option<BufferSize>,
-    ) -> Result<*mut u8, resource::BufferAccessError> {
-        span!(_guard, INFO, "Device::buffer_get_mapped_range");
+        size: Option<BufferSize>,
+    ) -> Result<(*mut u8, u64), resource::BufferAccessError> {
+        profiling::scope!("Device::buffer_get_mapped_range");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4511,11 +4589,53 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(buffer_id)
             .map_err(|_| resource::BufferAccessError::Invalid)?;
 
+        let range_size = if let Some(size) = size {
+            size.into()
+        } else if offset > buffer.size {
+            0
+        } else {
+            buffer.size - offset
+        };
+
+        if offset % 8 != 0 {
+            return Err(resource::BufferAccessError::UnalignedOffset { offset });
+        }
+        if range_size % 4 != 0 {
+            return Err(resource::BufferAccessError::UnalignedRangeSize { range_size });
+        }
+
         match buffer.map_state {
-            resource::BufferMapState::Init { ptr, .. }
-            | resource::BufferMapState::Active { ptr, .. } => unsafe {
-                Ok(ptr.as_ptr().offset(offset as isize))
-            },
+            resource::BufferMapState::Init { ptr, .. } => {
+                // offset (u64) can not be < 0, so no need to validate the lower bound
+                if offset + range_size > buffer.size {
+                    return Err(resource::BufferAccessError::OutOfBoundsOverrun {
+                        index: offset + range_size - 1,
+                        max: buffer.size,
+                    });
+                }
+                unsafe { Ok((ptr.as_ptr().offset(offset as isize), range_size)) }
+            }
+            resource::BufferMapState::Active {
+                ptr, ref sub_range, ..
+            } => {
+                if offset < sub_range.offset {
+                    return Err(resource::BufferAccessError::OutOfBoundsUnderrun {
+                        index: offset,
+                        min: sub_range.offset,
+                    });
+                }
+                let range_end_offset = sub_range
+                    .size
+                    .map(|size| size + sub_range.offset)
+                    .unwrap_or(buffer.size);
+                if offset + range_size > range_end_offset {
+                    return Err(resource::BufferAccessError::OutOfBoundsOverrun {
+                        index: offset + range_size - 1,
+                        max: range_end_offset,
+                    });
+                }
+                unsafe { Ok((ptr.as_ptr().offset(offset as isize), range_size)) }
+            }
             resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
                 Err(resource::BufferAccessError::NotMapped)
             }
@@ -4526,7 +4646,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
     ) -> Result<Option<BufferMapPendingCallback>, resource::BufferAccessError> {
-        span!(_guard, INFO, "Device::buffer_unmap");
+        profiling::scope!("Device::buffer_unmap");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4538,7 +4658,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| resource::BufferAccessError::Invalid)?;
         let device = &mut device_guard[buffer.device_id.value];
 
-        tracing::debug!("Buffer {:?} map state -> Idle", buffer_id);
+        log::debug!("Buffer {:?} map state -> Idle", buffer_id);
         match mem::replace(&mut buffer.map_state, resource::BufferMapState::Idle) {
             resource::BufferMapState::Init {
                 ptr,
@@ -4645,5 +4765,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         self.buffer_unmap_inner::<B>(buffer_id)
             //Note: outside inner function so no locks are held when calling the callback
             .map(|pending_callback| fire_map_callbacks(pending_callback.into_iter()))
+    }
+
+    pub fn start_capture<B: GfxBackend>(
+        &self,
+        device_id: id::DeviceId,
+    ) -> Result<(), InvalidDevice> {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, _) = hub.devices.read(&mut token);
+        let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        device.raw.start_capture();
+        Ok(())
+    }
+
+    pub fn stop_capture<B: GfxBackend>(
+        &self,
+        device_id: id::DeviceId,
+    ) -> Result<(), InvalidDevice> {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, _) = hub.devices.read(&mut token);
+        let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        device.raw.stop_capture();
+        Ok(())
     }
 }

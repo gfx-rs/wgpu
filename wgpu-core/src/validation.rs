@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{binding_model::BindEntryMap, FastHashMap};
-use naga::proc::analyzer::GlobalUse;
+use naga::valid::GlobalUse;
 use std::collections::hash_map::Entry;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
@@ -170,71 +170,6 @@ pub enum StageError {
         location: wgt::ShaderLocation,
         error: InputError,
     },
-}
-
-fn get_aligned_type_size(
-    module: &naga::Module,
-    handle: naga::Handle<naga::Type>,
-    allow_unbound: bool,
-) -> wgt::BufferAddress {
-    use naga::TypeInner as Ti;
-    //TODO: take alignment into account!
-    match module.types[handle].inner {
-        Ti::Scalar { kind: _, width } => width as wgt::BufferAddress,
-        Ti::Vector {
-            size,
-            kind: _,
-            width,
-        } => size as wgt::BufferAddress * width as wgt::BufferAddress,
-        Ti::Matrix {
-            rows,
-            columns,
-            width,
-        } => {
-            rows as wgt::BufferAddress * columns as wgt::BufferAddress * width as wgt::BufferAddress
-        }
-        Ti::Pointer { .. } => 4,
-        Ti::Array {
-            base,
-            size: naga::ArraySize::Constant(const_handle),
-            stride,
-        } => {
-            let base_size = match stride {
-                Some(stride) => stride.get() as wgt::BufferAddress,
-                None => get_aligned_type_size(module, base, false),
-            };
-            let count = match module.constants[const_handle].inner {
-                naga::ConstantInner::Scalar {
-                    value: naga::ScalarValue::Uint(value),
-                    width: _,
-                } => value,
-                ref other => panic!("Invalid array size constant: {:?}", other),
-            };
-            base_size * count
-        }
-        Ti::Array {
-            base,
-            size: naga::ArraySize::Dynamic,
-            stride,
-        } if allow_unbound => match stride {
-            Some(stride) => stride.get() as wgt::BufferAddress,
-            None => get_aligned_type_size(module, base, false),
-        },
-        Ti::Struct {
-            block: _,
-            ref members,
-        } => {
-            let mut offset = 0;
-            for member in members {
-                offset += match member.span {
-                    Some(span) => span.get() as wgt::BufferAddress,
-                    None => get_aligned_type_size(module, member.ty, false),
-                }
-            }
-            offset
-        }
-        _ => panic!("Unexpected struct field"),
-    }
 }
 
 fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
@@ -690,26 +625,77 @@ pub fn check_texture_format(format: wgt::TextureFormat, output: &NumericType) ->
 pub type StageIo = FastHashMap<wgt::ShaderLocation, NumericType>;
 
 impl Interface {
-    pub fn new(module: &naga::Module, analysis: &naga::proc::analyzer::Analysis) -> Self {
+    fn populate(
+        list: &mut Vec<Varying>,
+        binding: Option<&naga::Binding>,
+        ty: naga::Handle<naga::Type>,
+        arena: &naga::Arena<naga::Type>,
+    ) {
+        let numeric_ty = match arena[ty].inner {
+            naga::TypeInner::Scalar { kind, width } => NumericType {
+                dim: NumericDimension::Scalar,
+                kind,
+                width,
+            },
+            naga::TypeInner::Vector { size, kind, width } => NumericType {
+                dim: NumericDimension::Vector(size),
+                kind,
+                width,
+            },
+            naga::TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => NumericType {
+                dim: NumericDimension::Matrix(columns, rows),
+                kind: naga::ScalarKind::Float,
+                width,
+            },
+            naga::TypeInner::Struct {
+                block: _,
+                ref members,
+            } => {
+                for member in members {
+                    Self::populate(list, member.binding.as_ref(), member.ty, arena);
+                }
+                return;
+            }
+            ref other => {
+                log::error!("Unexpected varying type: {:?}", other);
+                return;
+            }
+        };
+
+        let varying = match binding {
+            Some(&naga::Binding::Location(location, _)) => Varying::Local {
+                location,
+                ty: numeric_ty,
+            },
+            Some(&naga::Binding::BuiltIn(built_in)) => Varying::BuiltIn(built_in),
+            None => {
+                log::error!("Missing binding for a varying");
+                return;
+            }
+        };
+        list.push(varying);
+    }
+
+    pub fn new(module: &naga::Module, info: &naga::valid::ModuleInfo) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
             let (group, binding) = match var.binding {
-                Some(naga::Binding::Resource { group, binding }) => (group, binding),
+                Some(ref br) => (br.group, br.binding),
                 _ => continue,
             };
             let ty = match module.types[var.ty].inner {
                 naga::TypeInner::Struct {
                     block: true,
-                    ref members,
+                    members: _,
                 } => {
-                    let mut actual_size = 0;
-                    for (i, member) in members.iter().enumerate() {
-                        actual_size +=
-                            get_aligned_type_size(module, member.ty, i + 1 == members.len());
-                    }
+                    let actual_size = info.layouter[var.ty].size;
                     ResourceType::Buffer {
-                        size: wgt::BufferSize::new(actual_size).unwrap(),
+                        size: wgt::BufferSize::new(actual_size as u64).unwrap(),
                     }
                 }
                 naga::TypeInner::Image {
@@ -722,7 +708,10 @@ impl Interface {
                     class,
                 },
                 naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
-                ref other => panic!("Unexpected resource type: {:?}", other),
+                ref other => {
+                    log::error!("Unexpected resource type: {:?}", other);
+                    continue;
+                }
             };
             let handle = resources.append(Resource {
                 group,
@@ -735,58 +724,32 @@ impl Interface {
 
         let mut entry_points = FastHashMap::default();
         entry_points.reserve(module.entry_points.len());
-        for (&(stage, ref ep_name), _entry_point) in module.entry_points.iter() {
-            let info = analysis.get_entry_point(stage, ep_name);
+        for (index, entry_point) in (&module.entry_points).iter().enumerate() {
+            let info = info.get_entry_point(index);
             let mut ep = EntryPoint::default();
+            for arg in entry_point.function.arguments.iter() {
+                Self::populate(&mut ep.inputs, arg.binding.as_ref(), arg.ty, &module.types);
+            }
+            if let Some(ref result) = entry_point.function.result {
+                Self::populate(
+                    &mut ep.outputs,
+                    result.binding.as_ref(),
+                    result.ty,
+                    &module.types,
+                );
+            }
+
             for (var_handle, var) in module.global_variables.iter() {
                 let usage = info[var_handle];
                 if usage.is_empty() {
                     continue;
                 }
-
-                let varying = match var.binding {
-                    Some(naga::Binding::Resource { .. }) => {
-                        ep.resources.push((resource_mapping[&var_handle], usage));
-                        None
-                    }
-                    Some(naga::Binding::Location(location)) => {
-                        let ty = match module.types[var.ty].inner {
-                            naga::TypeInner::Scalar { kind, width } => NumericType {
-                                dim: NumericDimension::Scalar,
-                                kind,
-                                width,
-                            },
-                            naga::TypeInner::Vector { size, kind, width } => NumericType {
-                                dim: NumericDimension::Vector(size),
-                                kind,
-                                width,
-                            },
-                            naga::TypeInner::Matrix {
-                                columns,
-                                rows,
-                                width,
-                            } => NumericType {
-                                dim: NumericDimension::Matrix(columns, rows),
-                                kind: naga::ScalarKind::Float,
-                                width,
-                            },
-                            ref other => panic!("Unexpected varying type: {:?}", other),
-                        };
-                        Some(Varying::Local { location, ty })
-                    }
-                    Some(naga::Binding::BuiltIn(built_in)) => Some(Varying::BuiltIn(built_in)),
-                    _ => None,
-                };
-
-                if let Some(varying) = varying {
-                    match var.class {
-                        naga::StorageClass::Input => ep.inputs.push(varying),
-                        naga::StorageClass::Output => ep.outputs.push(varying),
-                        _ => (),
-                    }
+                if var.binding.is_some() {
+                    ep.resources.push((resource_mapping[&var_handle], usage));
                 }
             }
-            entry_points.insert((stage, ep_name.clone()), ep);
+
+            entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
         }
 
         Interface {
@@ -837,7 +800,7 @@ impl Interface {
                     .ok_or(BindingError::Missing)
                     .and_then(|set| {
                         let ty = res.derive_binding_type(usage)?;
-                        Ok(match set.entry(res.binding) {
+                        match set.entry(res.binding) {
                             Entry::Occupied(e) if e.get().ty != ty => {
                                 return Err(BindingError::InconsistentlyDerivedType)
                             }
@@ -852,7 +815,8 @@ impl Interface {
                                     count: None,
                                 });
                             }
-                        })
+                        }
+                        Ok(())
                     }),
             };
             if let Err(error) = result {

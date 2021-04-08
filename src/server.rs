@@ -215,7 +215,7 @@ pub unsafe extern "C" fn wgpu_server_buffer_get_mapped_range(
         start,
         size
     ))
-    .unwrap()
+    .unwrap().0
 }
 
 #[no_mangle]
@@ -556,8 +556,8 @@ pub extern "C" fn wgpu_server_command_buffer_drop(global: &Global, self_id: id::
 pub unsafe extern "C" fn wgpu_server_encoder_copy_texture_to_buffer(
     global: &Global,
     self_id: id::CommandEncoderId,
-    source: &wgc::command::TextureCopyView,
-    destination: &wgc::command::BufferCopyView,
+    source: &wgc::command::ImageCopyTexture,
+    destination: &wgc::command::ImageCopyBuffer,
     size: &wgt::Extent3d,
 ) {
     gfx_select!(self_id => global.command_encoder_copy_texture_to_buffer(self_id, source, destination, size)).unwrap();

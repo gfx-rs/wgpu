@@ -130,7 +130,7 @@ impl PendingTransition<BufferState> {
         self,
         buf: &'a resource::Buffer<B>,
     ) -> hal::memory::Barrier<'a, B> {
-        tracing::trace!("\tbuffer -> {:?}", self);
+        log::trace!("\tbuffer -> {:?}", self);
         let &(ref target, _) = buf.raw.as_ref().expect("Buffer is destroyed");
         hal::memory::Barrier::Buffer {
             states: conv::map_buffer_state(self.usage.start)
@@ -148,7 +148,7 @@ impl PendingTransition<TextureState> {
         self,
         tex: &'a resource::Texture<B>,
     ) -> hal::memory::Barrier<'a, B> {
-        tracing::trace!("\ttexture -> {:?}", self);
+        log::trace!("\ttexture -> {:?}", self);
         let &(ref target, _) = tex.raw.as_ref().expect("Texture is destroyed");
         let aspects = tex.aspects;
         hal::memory::Barrier::Image {
@@ -195,6 +195,10 @@ impl<S: ResourceState + fmt::Debug> fmt::Debug for ResourceTracker<S> {
     }
 }
 
+#[allow(
+    // Explicit lifetimes are easier to reason about here.
+    clippy::needless_lifetimes,
+)]
 impl<S: ResourceState> ResourceTracker<S> {
     /// Create a new empty tracker.
     pub fn new(backend: wgt::Backend) -> Self {

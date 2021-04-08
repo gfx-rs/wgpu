@@ -11,15 +11,14 @@ use crate::{
     },
     conv,
     device::{
-        AttachmentData, AttachmentDataVec, Device, RenderPassCompatibilityError, RenderPassContext,
-        RenderPassKey, RenderPassLock, MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS,
+        AttachmentData, AttachmentDataVec, Device, FramebufferKey, RenderPassCompatibilityError,
+        RenderPassContext, RenderPassKey, RenderPassLock, MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS,
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     pipeline::PipelineFlags,
     resource::{BufferUse, Texture, TextureUse, TextureView, TextureViewInner},
-    span,
     track::{TextureSelector, TrackerSet, UsageConflict},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
@@ -98,9 +97,9 @@ pub struct PassChannel<V> {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
-pub struct ColorAttachmentDescriptor {
+pub struct RenderPassColorAttachment {
     /// The view to use as an attachment.
-    pub attachment: id::TextureViewId,
+    pub view: id::TextureViewId,
     /// The view that will receive the resolved output if multisampling is used.
     pub resolve_target: Option<id::TextureViewId>,
     /// What operations will be performed on this color attachment.
@@ -112,16 +111,16 @@ pub struct ColorAttachmentDescriptor {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
-pub struct DepthStencilAttachmentDescriptor {
+pub struct RenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
-    pub attachment: id::TextureViewId,
+    pub view: id::TextureViewId,
     /// What operations will be performed on the depth part of the attachment.
     pub depth: PassChannel<f32>,
     /// What operations will be performed on the stencil part of the attachment.
     pub stencil: PassChannel<u32>,
 }
 
-impl DepthStencilAttachmentDescriptor {
+impl RenderPassDepthStencilAttachment {
     fn is_read_only(&self, aspects: hal::format::Aspects) -> Result<bool, RenderPassErrorInner> {
         if aspects.contains(hal::format::Aspects::DEPTH) && !self.depth.read_only {
             return Ok(false);
@@ -144,17 +143,17 @@ impl DepthStencilAttachmentDescriptor {
 pub struct RenderPassDescriptor<'a> {
     pub label: Label<'a>,
     /// The color attachments of the render pass.
-    pub color_attachments: Cow<'a, [ColorAttachmentDescriptor]>,
+    pub color_attachments: Cow<'a, [RenderPassColorAttachment]>,
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<&'a DepthStencilAttachmentDescriptor>,
+    pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachment>,
 }
 
 #[cfg_attr(feature = "serial-pass", derive(Deserialize, Serialize))]
 pub struct RenderPass {
     base: BasePass<RenderCommand>,
     parent_id: id::CommandEncoderId,
-    color_targets: ArrayVec<[ColorAttachmentDescriptor; MAX_COLOR_TARGETS]>,
-    depth_stencil_target: Option<DepthStencilAttachmentDescriptor>,
+    color_targets: ArrayVec<[RenderPassColorAttachment; MAX_COLOR_TARGETS]>,
+    depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
 }
 
 impl RenderPass {
@@ -187,7 +186,7 @@ impl RenderPass {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        span!(_guard, DEBUG, "RenderPass::set_index_buffer");
+        profiling::scope!("RenderPass::set_index_buffer");
         self.base.commands.push(RenderCommand::SetIndexBuffer {
             buffer_id,
             index_format,
@@ -513,8 +512,8 @@ struct RenderPassInfo<'a, B: hal::Backend> {
 impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
     fn start(
         raw: &mut B::CommandBuffer,
-        color_attachments: &[ColorAttachmentDescriptor],
-        depth_stencil_attachment: Option<&DepthStencilAttachmentDescriptor>,
+        color_attachments: &[RenderPassColorAttachment],
+        depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         cmd_buf: &CommandBuffer<B>,
         device: &Device<B>,
         view_guard: &'a Storage<TextureView<B>, id::TextureViewId>,
@@ -563,8 +562,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 Some(at) => {
                     let view = trackers
                         .views
-                        .use_extend(&*view_guard, at.attachment, (), ())
-                        .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.attachment))?;
+                        .use_extend(&*view_guard, at.view, (), ())
+                        .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
                     add_view(view, "depth")?;
 
                     depth_stencil_aspects = view.aspects;
@@ -621,8 +620,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             for at in color_attachments {
                 let view = trackers
                     .views
-                    .use_extend(&*view_guard, at.attachment, (), ())
-                    .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.attachment))?;
+                    .use_extend(&*view_guard, at.view, (), ())
+                    .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
                 add_view(view, "color")?;
 
                 let layouts = match view.inner {
@@ -804,7 +803,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     inputs: &[],
                     preserves: &[],
                 };
-                let all = entry.key().all().map(|(at, _)| at.clone());
+                let all = entry.key().all().map(|&(ref at, _)| at.clone());
 
                 let pass = unsafe {
                     device
@@ -819,21 +818,21 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         let view_data = AttachmentData {
             colors: color_attachments
                 .iter()
-                .map(|at| view_guard.get(at.attachment).unwrap())
+                .map(|at| view_guard.get(at.view).unwrap())
                 .collect(),
             resolves: color_attachments
                 .iter()
                 .filter_map(|at| at.resolve_target)
                 .map(|attachment| view_guard.get(attachment).unwrap())
                 .collect(),
-            depth_stencil: depth_stencil_attachment
-                .map(|at| view_guard.get(at.attachment).unwrap()),
+            depth_stencil: depth_stencil_attachment.map(|at| view_guard.get(at.view).unwrap()),
         };
         let extent = extent.ok_or(RenderPassErrorInner::MissingAttachments)?;
-        let fb_key = (
-            view_data.map(|view| view.framebuffer_attachment.clone()),
+        let fb_key = FramebufferKey {
+            attachments: view_data.map(|view| view.framebuffer_attachment.clone()),
             extent,
-        );
+            samples: sample_count,
+        };
         let context = RenderPassContext {
             attachments: view_data.map(|view| view.format),
             sample_count,
@@ -848,7 +847,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         .raw
                         .create_framebuffer(
                             &render_pass,
-                            e.key().0.all().map(|fat| fat.clone()),
+                            e.key().attachments.all().cloned(),
                             conv::map_extent(&extent, wgt::TextureDimension::D3),
                         )
                         .or(Err(RenderPassErrorInner::OutOfMemory))?
@@ -874,7 +873,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             .zip(&rp_key.colors)
             .zip(raw_views.colors)
             .map(
-                |((at, (rat, _layout)), image_view)| hal::command::RenderAttachmentInfo {
+                |((at, &(ref rat, _layout)), image_view)| hal::command::RenderAttachmentInfo {
                     image_view,
                     clear_value: match at.channel.load_op {
                         LoadOp::Load => Default::default(),
@@ -1015,10 +1014,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<RenderCommand>,
-        color_attachments: &[ColorAttachmentDescriptor],
-        depth_stencil_attachment: Option<&DepthStencilAttachmentDescriptor>,
+        color_attachments: &[RenderPassColorAttachment],
+        depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
     ) -> Result<(), RenderPassError> {
-        span!(_guard, INFO, "CommandEncoder::run_render_pass");
+        profiling::scope!("CommandEncoder::run_render_pass");
         let scope = PassErrorScope::Pass(encoder_id);
 
         let hub = B::hub(self);
@@ -1051,7 +1050,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (texture_guard, mut token) = hub.textures.read(&mut token);
             let (view_guard, _) = hub.texture_views.read(&mut token);
 
-            tracing::trace!(
+            log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
                 encoder_id
             );
@@ -1923,7 +1922,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            tracing::trace!("Merging {:?} with the render pass", encoder_id);
+            log::trace!("Merging {:?} with the render pass", encoder_id);
             unsafe {
                 raw.end_render_pass();
             }
@@ -1945,7 +1944,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(crate::device::trace::Command::RunRenderPass {
                 base: BasePass::from_ref(base),
-                target_colors: color_attachments.iter().cloned().collect(),
+                target_colors: color_attachments.to_vec(),
                 target_depth_stencil: depth_stencil_attachment.cloned(),
             });
         }
@@ -1982,7 +1981,7 @@ pub mod render_ffi {
         super::{Rect, RenderCommand},
         RenderPass,
     };
-    use crate::{id, span, RawString};
+    use crate::{id, RawString};
     use std::{convert::TryInto, ffi, num::NonZeroU32, slice};
     use wgt::{BufferAddress, BufferSize, Color, DynamicOffset};
 
@@ -1990,8 +1989,6 @@ pub mod render_ffi {
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `offset_length` elements.
-    // TODO: There might be other safety issues, such as using the unsafe
-    // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_bind_group(
         pass: &mut RenderPass,
@@ -2000,7 +1997,6 @@ pub mod render_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        span!(_guard, DEBUG, "RenderPass::set_bind_group");
         pass.base.commands.push(RenderCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
@@ -2018,7 +2014,6 @@ pub mod render_ffi {
         pass: &mut RenderPass,
         pipeline_id: id::RenderPipelineId,
     ) {
-        span!(_guard, DEBUG, "RenderPass::set_pipeline");
         pass.base
             .commands
             .push(RenderCommand::SetPipeline(pipeline_id));
@@ -2032,7 +2027,6 @@ pub mod render_ffi {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        span!(_guard, DEBUG, "RenderPass::set_vertex_buffer");
         pass.base.commands.push(RenderCommand::SetVertexBuffer {
             slot,
             buffer_id,
@@ -2043,7 +2037,6 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_set_blend_color(pass: &mut RenderPass, color: &Color) {
-        span!(_guard, DEBUG, "RenderPass::set_blend_color");
         pass.base
             .commands
             .push(RenderCommand::SetBlendColor(*color));
@@ -2051,7 +2044,6 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_set_stencil_reference(pass: &mut RenderPass, value: u32) {
-        span!(_guard, DEBUG, "RenderPass::set_stencil_buffer");
         pass.base
             .commands
             .push(RenderCommand::SetStencilReference(value));
@@ -2067,7 +2059,6 @@ pub mod render_ffi {
         depth_min: f32,
         depth_max: f32,
     ) {
-        span!(_guard, DEBUG, "RenderPass::set_viewport");
         pass.base.commands.push(RenderCommand::SetViewport {
             rect: Rect { x, y, w, h },
             depth_min,
@@ -2083,12 +2074,15 @@ pub mod render_ffi {
         w: u32,
         h: u32,
     ) {
-        span!(_guard, DEBUG, "RenderPass::set_scissor_rect");
         pass.base
             .commands
             .push(RenderCommand::SetScissor(Rect { x, y, w, h }));
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given pointer is
+    /// valid for `size_bytes` bytes.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_push_constants(
         pass: &mut RenderPass,
@@ -2097,7 +2091,6 @@ pub mod render_ffi {
         size_bytes: u32,
         data: *const u8,
     ) {
-        span!(_guard, DEBUG, "RenderPass::set_push_constants");
         assert_eq!(
             offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
@@ -2135,7 +2128,6 @@ pub mod render_ffi {
         first_vertex: u32,
         first_instance: u32,
     ) {
-        span!(_guard, DEBUG, "RenderPass::draw");
         pass.base.commands.push(RenderCommand::Draw {
             vertex_count,
             instance_count,
@@ -2153,7 +2145,6 @@ pub mod render_ffi {
         base_vertex: i32,
         first_instance: u32,
     ) {
-        span!(_guard, DEBUG, "RenderPass::draw_indexed");
         pass.base.commands.push(RenderCommand::DrawIndexed {
             index_count,
             instance_count,
@@ -2169,7 +2160,6 @@ pub mod render_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        span!(_guard, DEBUG, "RenderPass::draw_indirect");
         pass.base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
@@ -2184,7 +2174,6 @@ pub mod render_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        span!(_guard, DEBUG, "RenderPass::draw_indexed_indirect");
         pass.base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
@@ -2200,7 +2189,6 @@ pub mod render_ffi {
         offset: BufferAddress,
         count: u32,
     ) {
-        span!(_guard, DEBUG, "RenderPass::multi_draw_indirect");
         pass.base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
@@ -2216,7 +2204,6 @@ pub mod render_ffi {
         offset: BufferAddress,
         count: u32,
     ) {
-        span!(_guard, DEBUG, "RenderPass::multi_draw_indexed_indirect");
         pass.base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
@@ -2234,7 +2221,6 @@ pub mod render_ffi {
         count_buffer_offset: BufferAddress,
         max_count: u32,
     ) {
-        span!(_guard, DEBUG, "RenderPass::multi_draw_indirect_count");
         pass.base
             .commands
             .push(RenderCommand::MultiDrawIndirectCount {
@@ -2256,11 +2242,6 @@ pub mod render_ffi {
         count_buffer_offset: BufferAddress,
         max_count: u32,
     ) {
-        span!(
-            _guard,
-            DEBUG,
-            "RenderPass::multi_draw_indexed_indirect_count"
-        );
         pass.base
             .commands
             .push(RenderCommand::MultiDrawIndirectCount {
@@ -2273,13 +2254,16 @@ pub mod render_ffi {
             });
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given `label`
+    /// is a valid null-terminated string.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_push_debug_group(
         pass: &mut RenderPass,
         label: RawString,
         color: u32,
     ) {
-        span!(_guard, DEBUG, "RenderPass::push_debug_group");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -2291,17 +2275,19 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_pop_debug_group(pass: &mut RenderPass) {
-        span!(_guard, DEBUG, "RenderPass::pop_debug_group");
         pass.base.commands.push(RenderCommand::PopDebugGroup);
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given `label`
+    /// is a valid null-terminated string.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_insert_debug_marker(
         pass: &mut RenderPass,
         label: RawString,
         color: u32,
     ) {
-        span!(_guard, DEBUG, "RenderPass::insert_debug_marker");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -2312,13 +2298,11 @@ pub mod render_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_write_timestamp(
+    pub extern "C" fn wgpu_render_pass_write_timestamp(
         pass: &mut RenderPass,
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) {
-        span!(_guard, DEBUG, "RenderPass::write_timestamp");
-
         pass.base.commands.push(RenderCommand::WriteTimestamp {
             query_set_id,
             query_index,
@@ -2326,13 +2310,11 @@ pub mod render_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_begin_pipeline_statistics_query(
+    pub extern "C" fn wgpu_render_pass_begin_pipeline_statistics_query(
         pass: &mut RenderPass,
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) {
-        span!(_guard, DEBUG, "RenderPass::begin_pipeline_statistics query");
-
         pass.base
             .commands
             .push(RenderCommand::BeginPipelineStatisticsQuery {
@@ -2342,21 +2324,22 @@ pub mod render_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_end_pipeline_statistics_query(pass: &mut RenderPass) {
-        span!(_guard, DEBUG, "RenderPass::end_pipeline_statistics_query");
-
+    pub extern "C" fn wgpu_render_pass_end_pipeline_statistics_query(pass: &mut RenderPass) {
         pass.base
             .commands
             .push(RenderCommand::EndPipelineStatisticsQuery);
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given pointer is
+    /// valid for `render_bundle_ids_length` elements.
     #[no_mangle]
     pub unsafe fn wgpu_render_pass_execute_bundles(
         pass: &mut RenderPass,
         render_bundle_ids: *const id::RenderBundleId,
         render_bundle_ids_length: usize,
     ) {
-        span!(_guard, DEBUG, "RenderPass::execute_bundles");
         for &bundle_id in slice::from_raw_parts(render_bundle_ids, render_bundle_ids_length) {
             pass.base
                 .commands

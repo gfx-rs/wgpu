@@ -1,6 +1,3 @@
-[[builtin(global_invocation_id)]]
-var global_id: vec3<u32>;
-
 [[block]]
 struct InOutBuffer {
     data: [[stride(4)]] array<u32>;
@@ -10,6 +7,6 @@ struct InOutBuffer {
 var<storage> buffer: [[access(read_write)]] InOutBuffer;
 
 [[stage(compute), workgroup_size(1)]]
-fn main() {
+fn main([[builtin(global_invocation_id)]] global_id: vec3<u32>) {
     buffer.data[global_id.x] = buffer.data[global_id.x] + global_id.x;
 }

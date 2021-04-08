@@ -6,11 +6,15 @@
  *  This API is used for targeting both Web and Native.
  */
 
-// The intra doc links to the wgpu crate in this crate actually succesfully link to the types in the wgpu crate, when built from the wgpu crate.
-// However when building from both the wgpu crate or this crate cargo doc will claim all the links cannot be resolved
-// despite the fact that it works fine when it needs to.
-// So we just disable those warnings.
-#![allow(broken_intra_doc_links)]
+#![allow(
+    // The intra doc links to the wgpu crate in this crate actually succesfully link to the types in the wgpu crate, when built from the wgpu crate.
+    // However when building from both the wgpu crate or this crate cargo doc will claim all the links cannot be resolved
+    // despite the fact that it works fine when it needs to.
+    // So we just disable those warnings.
+    broken_intra_doc_links,
+    // We don't use syntax sugar where it's not necessary.
+    clippy::match_like_matches_macro,
+)]
 #![warn(missing_docs)]
 
 #[cfg(feature = "serde")]
@@ -30,7 +34,7 @@ pub type DynamicOffset = u32;
 ///
 /// This doesn't apply to [`Queue::write_texture`].
 ///
-/// [`bytes_per_row`]: TextureDataLayout::bytes_per_row
+/// [`bytes_per_row`]: ImageDataLayout::bytes_per_row
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 /// Bound uniform/storage buffer offsets must be aligned to this number.
 pub const BIND_BUFFER_ALIGNMENT: BufferAddress = 256;
@@ -403,7 +407,7 @@ bitflags::bitflags! {
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
         /// Note: even when supported by GPU hardware, 64-bit floating point operations are
-        /// frequently between 16 and 64 _times_ slower than equivelent operations on 32-bit floats.
+        /// frequently between 16 and 64 _times_ slower than equivalent operations on 32-bit floats.
         ///
         /// Supported Platforms:
         /// - Vulkan
@@ -418,6 +422,17 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const VERTEX_ATTRIBUTE_64BIT = 0x0000_0000_4000_0000;
+        /// Allows the user to set a overestimation-conservative-rasterization in [`PrimitiveState::conservative`]
+        ///
+        /// Processing of degenerate triangles/lines is hardware specific.
+        /// Only triangles are supported.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const CONSERVATIVE_RASTERIZATION = 0x0000_0000_8000_0000;
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).
@@ -521,6 +536,70 @@ impl Default for Limits {
             max_push_constant_size: 0,
         }
     }
+}
+
+/// Lists various ways the underlying platform does not conform to the WebGPU standard.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DownlevelProperties {
+    /// Combined boolean flags.
+    pub flags: DownlevelFlags,
+    /// Which collections of features shaders support. Defined in terms of D3D's shader models.
+    pub shader_model: ShaderModel,
+}
+
+impl Default for DownlevelProperties {
+    // Note, this defaults to all on, as that is the default assumption in wgpu.
+    // gfx-hal's equivalent structure defaults to all off.
+    fn default() -> Self {
+        Self {
+            flags: DownlevelFlags::COMPLIANT,
+            shader_model: ShaderModel::Sm5,
+        }
+    }
+}
+
+impl DownlevelProperties {
+    /// Returns true if the underlying platform offers complete support of the baseline WebGPU standard.
+    ///
+    /// If this returns false, some parts of the API will result in validation errors where they would not normally.
+    /// These parts can be determined by the values in this structure.
+    pub fn is_webgpu_compliant(self) -> bool {
+        self == Self::default()
+    }
+}
+
+bitflags::bitflags! {
+    /// Binary flags listing various ways the underlying platform does not conform to the WebGPU standard.
+    pub struct DownlevelFlags: u32 {
+        /// The device supports compiling and using compute shaders.
+        const COMPUTE_SHADERS = 0x0000_0001;
+        /// Supports creating storage images.
+        const STORAGE_IMAGES = 0x0000_0002;
+        /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil attachment.
+        const READ_ONLY_DEPTH_STENCIL = 0x0000_0004;
+        /// Supports:
+        /// - copy_image_to_image
+        /// - copy_buffer_to_image and copy_image_to_buffer with a buffer without a MAP_* usage
+        const DEVICE_LOCAL_IMAGE_COPIES = 0x0000_0008;
+        /// Supports textures with mipmaps which have a non power of two size.
+        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0010;
+        /// Supports samplers with anisotropic filtering
+        const ANISOTROPIC_FILTERING = 0x0000_0020;
+        /// All flags are in their compliant state.
+        const COMPLIANT = 0x0000_003F;
+    }
+}
+
+/// Collections of shader features a device supports if they support less than WebGPU normally allows.
+// TODO: Fill out the differences between shader models more completely
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ShaderModel {
+    /// Extremely limited shaders, including a total instruction limit.
+    Sm2,
+    /// Missing minor features and storage images.
+    Sm4,
+    /// WebGPU supports shader module 5.
+    Sm5,
 }
 
 /// Supported physical device types.
@@ -749,6 +828,13 @@ impl BlendComponent {
         operation: BlendOperation::Add,
     };
 
+    /// Blend state of (1 * src) + ((1 - src_alpha) * dst)
+    pub const OVER: Self = BlendComponent {
+        src_factor: BlendFactor::One,
+        dst_factor: BlendFactor::OneMinusSrcAlpha,
+        operation: BlendOperation::Add,
+    };
+
     /// Returns true if the state relies on the constant color, which is
     /// set independently on a render command encoder.
     pub fn uses_color(&self) -> bool {
@@ -780,6 +866,30 @@ pub struct BlendState {
     pub color: BlendComponent,
     /// Alpha equation.
     pub alpha: BlendComponent,
+}
+
+impl BlendState {
+    /// Blend mode that does no color blending, just overwrites the output with the contents of the shader.
+    pub const REPLACE: Self = Self {
+        color: BlendComponent::REPLACE,
+        alpha: BlendComponent::REPLACE,
+    };
+
+    /// Blend mode that does standard alpha blending with non-premultiplied alpha.
+    pub const ALPHA_BLENDING: Self = Self {
+        color: BlendComponent {
+            src_factor: BlendFactor::SrcAlpha,
+            dst_factor: BlendFactor::OneMinusSrcAlpha,
+            operation: BlendOperation::Add,
+        },
+        alpha: BlendComponent::OVER,
+    };
+
+    /// Blend mode that does standard alpha blending with premultiplied alpha.
+    pub const PREMULTIPLIED_ALPHA_BLENDING: Self = Self {
+        color: BlendComponent::OVER,
+        alpha: BlendComponent::OVER,
+    };
 }
 
 /// Describes the color state of a render pipeline.
@@ -913,11 +1023,21 @@ pub struct PrimitiveState {
     /// The face culling mode.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub cull_mode: Option<Face>,
+    /// If set to true, the polygon depth is clamped to 0-1 range instead of being clipped.
+    ///
+    /// Enabling this requires `Features::DEPTH_CLAMPING` to be enabled.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    pub clamp_depth: bool,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
     ///
     /// Setting this to something other than `Fill` requires `Features::NON_FILL_POLYGON_MODE` to be enabled.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub polygon_mode: PolygonMode,
+    /// If set to true, the primitives are rendered with conservative overestimation. I.e. any rastered pixel touched by it is filled.
+    /// Only valid for PolygonMode::Fill!
+    ///
+    /// Enabling this requires `Features::CONSERVATIVE_RASTERIZATION` to be enabled.
+    pub conservative: bool,
 }
 
 /// Describes the multi-sampling state of a render pipeline.
@@ -1636,11 +1756,6 @@ pub struct DepthStencilState {
     /// Depth bias state.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub bias: DepthBiasState,
-    /// If enabled polygon depth is clamped to 0-1 range instead of being clipped.
-    ///
-    /// Requires `Features::DEPTH_CLAMPING` enabled.
-    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
-    pub clamp_depth: bool,
 }
 
 impl DepthStencilState {
@@ -2482,23 +2597,23 @@ impl<T> Default for RenderBundleDescriptor<Option<T>> {
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct TextureDataLayout {
+pub struct ImageDataLayout {
     /// Offset into the buffer that is the start of the texture. Must be a multiple of texture block size.
     /// For non-compressed textures, this is 1.
     pub offset: BufferAddress,
     /// Bytes per "row" of the image. This represents one row of pixels in the x direction. Compressed
-    /// textures include multiple rows of pixels in each "row". May be 0 for 1D texture copies.
+    /// textures include multiple rows of pixels in each "row".
+    /// Required if there are multiple rows (i.e. height or depth is more than one pixel or pixel block for compressed textures)
     ///
     /// Must be a multiple of 256 for [`CommandEncoder::copy_buffer_to_texture`] and [`CommandEncoder::copy_texture_to_buffer`].
     /// [`Queue::write_texture`] does not have this requirement.
     ///
     /// Must be a multiple of the texture block size. For non-compressed textures, this is 1.
-    pub bytes_per_row: u32,
+    pub bytes_per_row: Option<NonZeroU32>,
     /// Rows that make up a single "image". Each "image" is one layer in the z direction of a 3D image. May be larger
     /// than `copy_size.y`.
-    ///
-    /// May be 0 for 2D texture copies.
-    pub rows_per_image: u32,
+    /// Required if there are multiple images (i.e. the depth is more than one)
+    pub rows_per_image: Option<NonZeroU32>,
 }
 
 /// Specific type of a buffer binding.
@@ -2745,11 +2860,11 @@ pub struct BindGroupLayoutEntry {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct BufferCopyView<B> {
+pub struct ImageCopyBuffer<B> {
     /// The buffer to be copied to/from.
     pub buffer: B,
     /// The layout of the texture data in this buffer.
-    pub layout: TextureDataLayout,
+    pub layout: ImageDataLayout,
 }
 
 /// View of a texture which can be used to copy to/from a buffer/texture.
@@ -2757,7 +2872,7 @@ pub struct BufferCopyView<B> {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct TextureCopyView<T> {
+pub struct ImageCopyTexture<T> {
     /// The texture to be copied to/from.
     pub texture: T,
     /// The target mip level of the texture.
@@ -2822,12 +2937,12 @@ bitflags::bitflags! {
     ///
     /// The amount of values written when resolved depends
     /// on the amount of flags. If 3 flags are enabled, 3
-    /// 64-bit values will be writen per-query.
+    /// 64-bit values will be written per-query.
     ///
     /// The order they are written is the order they are declared
     /// in this bitflags. If you enabled `CLIPPER_PRIMITIVES_OUT`
     /// and `COMPUTE_SHADER_INVOCATIONS`, it would write 16 bytes,
-    /// the first 8 bytes being the primative out value, the last 8
+    /// the first 8 bytes being the primitive out value, the last 8
     /// bytes being the compute shader invocation count.
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2848,7 +2963,7 @@ bitflags::bitflags! {
         /// derivatives.
         const FRAGMENT_SHADER_INVOCATIONS = 0x08;
         /// Amount of times a compute shader is invoked. This will
-        /// be equivilent to the dispatch count times the workgroup size.
+        /// be equivalent to the dispatch count times the workgroup size.
         const COMPUTE_SHADER_INVOCATIONS = 0x10;
     }
 }

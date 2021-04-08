@@ -39,7 +39,7 @@ use crate::{
     device::DeviceError,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{DeviceId, SwapChainId, TextureViewId, Valid},
-    resource, span,
+    resource,
     track::TextureSelector,
     LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
 };
@@ -139,7 +139,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         swap_chain_id: SwapChainId,
         view_id_in: Input<G, TextureViewId>,
     ) -> Result<SwapChainOutput, SwapChainError> {
-        span!(_guard, INFO, "SwapChain::get_next_texture");
+        profiling::scope!("SwapChain::get_next_texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -172,11 +172,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Err(err) => (
                 None,
                 match err {
-                    hal::window::AcquireError::OutOfMemory(_) => Err(DeviceError::OutOfMemory)?,
+                    hal::window::AcquireError::OutOfMemory(_) => {
+                        return Err(DeviceError::OutOfMemory.into())
+                    }
                     hal::window::AcquireError::NotReady { .. } => SwapChainStatus::Timeout,
                     hal::window::AcquireError::OutOfDate(_) => SwapChainStatus::Outdated,
                     hal::window::AcquireError::SurfaceLost(_) => SwapChainStatus::Lost,
-                    hal::window::AcquireError::DeviceLost(_) => Err(DeviceError::Lost)?,
+                    hal::window::AcquireError::DeviceLost(_) => {
+                        return Err(DeviceError::Lost.into())
+                    }
                 },
             ),
         };
@@ -238,7 +242,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         swap_chain_id: SwapChainId,
     ) -> Result<SwapChainStatus, SwapChainError> {
-        span!(_guard, INFO, "SwapChain::present");
+        profiling::scope!("SwapChain::present");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -283,7 +287,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let queue = &mut device.queue_group.queues[0];
         let result = unsafe { queue.present(B::get_surface_mut(surface), image, sem) };
 
-        tracing::debug!(trace = true, "Presented. End of Frame");
+        log::debug!("Presented. End of Frame");
 
         match result {
             Ok(None) => Ok(SwapChainStatus::Good),

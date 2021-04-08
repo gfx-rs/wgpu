@@ -96,7 +96,7 @@
                 ),
                 target_colors: [
                     (
-                        attachment: Id(0, 1, Empty),
+                        view: Id(0, 1, Empty),
                         resolve_target: None,
                         channel: (
                             load_op: Clear,
@@ -123,8 +123,8 @@
                     buffer: Id(0, 1, Empty),
                     layout: (
                         offset: 0,
-                        bytes_per_row: 256,
-                        rows_per_image: 64,
+                        bytes_per_row: Some(256),
+                        rows_per_image: Some(64),
                     ),
                 ),
                 size: (

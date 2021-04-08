@@ -121,7 +121,7 @@ unsafe impl Sync for BufferMapOperation {}
 
 impl BufferMapOperation {
     pub(crate) fn call_error(self) {
-        tracing::error!("wgpu_buffer_map_async failed: buffer mapping is pending");
+        log::error!("wgpu_buffer_map_async failed: buffer mapping is pending");
         unsafe {
             (self.callback)(BufferMapAsyncStatus::Error, self.user_data);
         }
@@ -144,6 +144,22 @@ pub enum BufferAccessError {
     NotMapped,
     #[error("buffer map range does not respect `COPY_BUFFER_ALIGNMENT`")]
     UnalignedRange,
+    #[error("buffer offset invalid: offset {offset} must be multiple of 8")]
+    UnalignedOffset { offset: wgt::BufferAddress },
+    #[error("buffer range size invalid: range_size {range_size} must be multiple of 4")]
+    UnalignedRangeSize { range_size: wgt::BufferAddress },
+    #[error("buffer access out of bounds: index {index} would underrun the buffer (limit: {min})")]
+    OutOfBoundsUnderrun {
+        index: wgt::BufferAddress,
+        min: wgt::BufferAddress,
+    },
+    #[error(
+        "buffer access out of bounds: last index {index} would overrun the buffer (limit: {max})"
+    )]
+    OutOfBoundsOverrun {
+        index: wgt::BufferAddress,
+        max: wgt::BufferAddress,
+    },
 }
 
 #[derive(Debug)]
@@ -286,7 +302,7 @@ pub struct TextureViewDescriptor<'a> {
     /// Mip level count.
     /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
     /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
-    pub level_count: Option<NonZeroU32>,
+    pub mip_level_count: Option<NonZeroU32>,
     /// Base array layer.
     pub base_array_layer: u32,
     /// Layer count.
