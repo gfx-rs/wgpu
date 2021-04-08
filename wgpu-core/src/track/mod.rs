@@ -142,6 +142,15 @@ impl PendingTransition<BufferState> {
     }
 }
 
+impl From<PendingTransition<BufferState>> for UsageConflict {
+    fn from(e: PendingTransition<BufferState>) -> Self {
+        Self::Buffer {
+            id: e.id.0,
+            combined_use: e.usage.end,
+        }
+    }
+}
+
 impl PendingTransition<TextureState> {
     /// Produce the gfx-hal barrier corresponding to the transition.
     pub fn into_hal<'a, B: hal::Backend>(
@@ -163,6 +172,17 @@ impl PendingTransition<TextureState> {
                 layer_count: Some(self.selector.layers.end - self.selector.layers.start),
             },
             families: None,
+        }
+    }
+}
+
+impl From<PendingTransition<TextureState>> for UsageConflict {
+    fn from(e: PendingTransition<TextureState>) -> Self {
+        Self::Texture {
+            id: e.id.0,
+            mip_levels: e.selector.levels.start as u32..e.selector.levels.end as u32,
+            array_layers: e.selector.layers.start as u32..e.selector.layers.end as u32,
+            combined_use: e.usage.end,
         }
     }
 }
@@ -607,20 +627,8 @@ impl TrackerSet {
     /// Merge all the trackers of another instance by extending
     /// the usage. Panics on a conflict.
     pub fn merge_extend(&mut self, other: &Self) -> Result<(), UsageConflict> {
-        self.buffers
-            .merge_extend(&other.buffers)
-            .map_err(|e| UsageConflict::Buffer {
-                id: e.id.0,
-                combined_use: e.usage.end,
-            })?;
-        self.textures
-            .merge_extend(&other.textures)
-            .map_err(|e| UsageConflict::Texture {
-                id: e.id.0,
-                mip_levels: e.selector.levels.start as u32..e.selector.levels.end as u32,
-                array_layers: e.selector.layers.start as u32..e.selector.layers.end as u32,
-                combined_use: e.usage.end,
-            })?;
+        self.buffers.merge_extend(&other.buffers)?;
+        self.textures.merge_extend(&other.textures)?;
         self.views.merge_extend(&other.views).unwrap();
         self.bind_groups.merge_extend(&other.bind_groups).unwrap();
         self.samplers.merge_extend(&other.samplers).unwrap();
