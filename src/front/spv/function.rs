@@ -317,10 +317,9 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 *component = function.expressions.append(load_expr);
             }
 
-            match members.len() {
-                0 => {}
-                1 => {
-                    let member = members.remove(0);
+            match &members[..] {
+                [] => {}
+                [member] => {
                     function.body.push(crate::Statement::Emit(
                         function.expressions.range_from(old_len),
                     ));
@@ -329,7 +328,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     });
                     function.result = Some(crate::FunctionResult {
                         ty: member.ty,
-                        binding: member.binding,
+                        binding: member.binding.clone(),
                     });
                 }
                 _ => {
