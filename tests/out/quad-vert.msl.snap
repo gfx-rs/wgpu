@@ -13,57 +13,49 @@ constexpr constant unsigned const_1u = 1u;
 constexpr constant int const_0i1 = 0;
 constexpr constant float const_0f = 0.0;
 constexpr constant float const_1f = 1.0;
-typedef float type;
-typedef metal::float2 type1;
-typedef thread type1 *type2;
-typedef thread type1 *type3;
-typedef metal::float4 type4;
-typedef metal::uint type5;
-typedef type type6[const_1u];
+typedef float type6[const_1u];
 struct gl_PerVertex {
-    type4 gl_Position;
-    type gl_PointSize;
+    metal::float4 gl_Position;
+    float gl_PointSize;
     type6 gl_ClipDistance;
     type6 gl_CullDistance;
 };
-typedef thread gl_PerVertex *type7;
-typedef int type8;
-typedef thread type4 *type9;
 struct type10 {
-    type1 member;
-    type4 gl_Position1;
-    type gl_PointSize1;
+    metal::float2 member;
+    metal::float4 gl_Position1;
+    float gl_PointSize1;
     type6 gl_ClipDistance1;
 };
+
 void main1(
-    thread type1& v_uv,
-    thread type1 const& a_uv,
+    thread metal::float2& v_uv,
+    thread metal::float2 const& a_uv,
     thread gl_PerVertex& _,
-    thread type1 const& a_pos
+    thread metal::float2 const& a_pos
 ) {
     v_uv = a_uv;
-    type1 _expr13 = a_pos;
+    metal::float2 _expr13 = a_pos;
     _.gl_Position = metal::float4(_expr13.x, _expr13.y, const_0f, const_1f);
     return;
 }
 
 struct main2Input {
-    type1 a_uv1 [[attribute(1)]];
-    type1 a_pos1 [[attribute(0)]];
+    metal::float2 a_uv1 [[attribute(1)]];
+    metal::float2 a_pos1 [[attribute(0)]];
 };
 struct main2Output {
-    type1 member [[user(loc0)]];
-    type4 gl_Position1 [[position]];
-    type gl_PointSize1 [[point_size]];
+    metal::float2 member [[user(loc0)]];
+    metal::float4 gl_Position1 [[position]];
+    float gl_PointSize1 [[point_size]];
     type6 gl_ClipDistance1 [[clip_distance]];
 };
 vertex main2Output main2(
   main2Input varyings [[stage_in]]
 ) {
-    type1 v_uv = {};
-    type1 a_uv = {};
+    metal::float2 v_uv = {};
+    metal::float2 a_uv = {};
     gl_PerVertex _ = {};
-    type1 a_pos = {};
+    metal::float2 a_pos = {};
     const auto a_uv1 = varyings.a_uv1;
     const auto a_pos1 = varyings.a_pos1;
     a_uv = a_uv1;

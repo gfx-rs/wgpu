@@ -10,38 +10,31 @@ constexpr constant int const_1i = 1;
 constexpr constant float const_4f = 4.0;
 constexpr constant float const_1f = 1.0;
 constexpr constant float const_0f = 0.0;
-typedef metal::float4 type;
-typedef metal::float3 type1;
 struct VertexOutput {
-    type position;
-    type1 uv;
+    metal::float4 position;
+    metal::float3 uv;
 };
-typedef metal::float4x4 type2;
 struct Data {
-    type2 proj_inv;
-    type2 view;
+    metal::float4x4 proj_inv;
+    metal::float4x4 view;
 };
-typedef metal::uint type3;
-typedef int type4;
-typedef metal::float3x3 type5;
-typedef metal::texturecube<float, metal::access::sample> type6;
-typedef metal::sampler type7;
+
 struct vs_mainInput {
 };
 struct vs_mainOutput {
-    type position [[position]];
-    type1 uv [[user(loc0)]];
+    metal::float4 position [[position]];
+    metal::float3 uv [[user(loc0)]];
 };
 vertex vs_mainOutput vs_main(
-  type3 vertex_index [[vertex_id]]
+  metal::uint vertex_index [[vertex_id]]
 , constant Data& r_data [[buffer(0)]]
 ) {
-    type4 tmp1_;
-    type4 tmp2_;
+    int tmp1_;
+    int tmp2_;
     VertexOutput out;
     tmp1_ = static_cast<int>(vertex_index) / const_2i;
     tmp2_ = static_cast<int>(vertex_index) & const_1i;
-    type _expr24 = metal::float4((static_cast<float>(tmp1_) * const_4f) - const_1f, (static_cast<float>(tmp2_) * const_4f) - const_1f, const_0f, const_1f);
+    metal::float4 _expr24 = metal::float4((static_cast<float>(tmp1_) * const_4f) - const_1f, (static_cast<float>(tmp2_) * const_4f) - const_1f, const_0f, const_1f);
     metal::float4 _expr50 = r_data.proj_inv * _expr24;
     out.uv = metal::transpose(metal::float3x3(metal::float3(r_data.view[0].x, r_data.view[0].y, r_data.view[0].z), metal::float3(r_data.view[1].x, r_data.view[1].y, r_data.view[1].z), metal::float3(r_data.view[2].x, r_data.view[2].y, r_data.view[2].z))) * metal::float3(_expr50.x, _expr50.y, _expr50.z);
     out.position = _expr24;
@@ -49,16 +42,17 @@ vertex vs_mainOutput vs_main(
     return vs_mainOutput { _tmp.position, _tmp.uv };
 }
 
+
 struct fs_mainInput {
-    type1 uv [[user(loc0)]];
+    metal::float3 uv [[user(loc0)]];
 };
 struct fs_mainOutput {
-    type member1 [[color(0)]];
+    metal::float4 member1 [[color(0)]];
 };
 fragment fs_mainOutput fs_main(
   fs_mainInput varyings1 [[stage_in]]
-, type position [[position]]
-, type6 r_texture [[texture(0)]]
+, metal::float4 position [[position]]
+, metal::texturecube<float, metal::access::sample> r_texture [[texture(0)]]
 ) {
     constexpr metal::sampler r_sampler(
         metal::s_address::clamp_to_edge,

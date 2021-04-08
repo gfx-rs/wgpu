@@ -13,33 +13,25 @@ constexpr constant float const_0_05f = 0.05;
 constexpr constant unsigned c_max_lights = 10u;
 constexpr constant unsigned const_0u = 0u;
 constexpr constant unsigned const_1u = 1u;
-typedef metal::uint4 type;
 struct Globals {
-    type num_lights;
+    metal::uint4 num_lights;
 };
-typedef metal::float4x4 type1;
-typedef metal::float4 type2;
 struct Light {
-    type1 proj;
-    type2 pos;
-    type2 color;
+    metal::float4x4 proj;
+    metal::float4 pos;
+    metal::float4 color;
 };
 typedef Light type3[1];
 struct Lights {
     type3 data;
 };
-typedef metal::depth2d_array<float, metal::access::sample> type4;
-typedef metal::sampler type5;
-typedef metal::uint type6;
-typedef float type7;
-typedef metal::float2 type8;
-typedef metal::float3 type9;
-constexpr constant type9 c_ambient = {const_0_05f, const_0_05f, const_0_05f};
-type7 fetch_shadow(
-    type6 light_id,
-    type2 homogeneous_coords,
-    type4 t_shadow,
-    type5 sampler_shadow
+constexpr constant metal::float3 c_ambient = {const_0_05f, const_0_05f, const_0_05f};
+
+float fetch_shadow(
+    metal::uint light_id,
+    metal::float4 homogeneous_coords,
+    metal::depth2d_array<float, metal::access::sample> t_shadow,
+    metal::sampler sampler_shadow
 ) {
     if (homogeneous_coords.w <= const_0f) {
         return const_1f;
@@ -50,23 +42,23 @@ type7 fetch_shadow(
 }
 
 struct fs_mainInput {
-    type9 raw_normal [[user(loc0)]];
-    type2 position [[user(loc1)]];
+    metal::float3 raw_normal [[user(loc0)]];
+    metal::float4 position [[user(loc1)]];
 };
 struct fs_mainOutput {
-    type2 member [[color(0)]];
+    metal::float4 member [[color(0)]];
 };
 fragment fs_mainOutput fs_main(
   fs_mainInput varyings [[stage_in]]
 , constant Globals& u_globals [[user(fake0)]]
 , constant Lights& s_lights [[user(fake0)]]
-, type4 t_shadow [[user(fake0)]]
-, type5 sampler_shadow [[user(fake0)]]
+, metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
+, metal::sampler sampler_shadow [[user(fake0)]]
 ) {
     const auto raw_normal = varyings.raw_normal;
     const auto position = varyings.position;
-    type9 color1 = c_ambient;
-    type6 i = const_0u;
+    metal::float3 color1 = c_ambient;
+    metal::uint i = const_0u;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -77,7 +69,7 @@ fragment fs_mainOutput fs_main(
             break;
         }
         Light _expr21 = s_lights.data[i];
-        type7 _expr25 = fetch_shadow(i, _expr21.proj * position, t_shadow, sampler_shadow);
+        float _expr25 = fetch_shadow(i, _expr21.proj * position, t_shadow, sampler_shadow);
         color1 = color1 + ((_expr25 * metal::max(const_0f, metal::dot(metal::normalize(raw_normal), metal::normalize(metal::float3(_expr21.pos.x, _expr21.pos.y, _expr21.pos.z) - metal::float3(position.x, position.y, position.z))))) * metal::float3(_expr21.color.x, _expr21.color.y, _expr21.color.z));
     }
     return fs_mainOutput { metal::float4(color1, const_1f) };

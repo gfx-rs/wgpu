@@ -9,17 +9,16 @@ constexpr constant unsigned const_0u = 0u;
 constexpr constant unsigned const_1u = 1u;
 constexpr constant unsigned const_2u = 2u;
 constexpr constant unsigned const_3u = 3u;
-typedef metal::uint type;
-typedef type type1[1];
+typedef metal::uint type1[1];
 struct PrimeIndices {
     type1 data;
 };
-typedef metal::uint3 type2;
-type collatz_iterations(
-    type n_base
+
+metal::uint collatz_iterations(
+    metal::uint n_base
 ) {
-    type n;
-    type i = const_0u;
+    metal::uint n;
+    metal::uint i = const_0u;
     n = n_base;
     while(true) {
         if (n <= const_1u) {
@@ -38,10 +37,10 @@ type collatz_iterations(
 struct main1Input {
 };
 kernel void main1(
-  type2 global_id [[thread_position_in_grid]]
+  metal::uint3 global_id [[thread_position_in_grid]]
 , device PrimeIndices& v_indices [[user(fake0)]]
 ) {
-    type _expr9 = collatz_iterations(v_indices.data[global_id.x]);
+    metal::uint _expr9 = collatz_iterations(v_indices.data[global_id.x]);
     v_indices.data[global_id.x] = _expr9;
     return;
 }

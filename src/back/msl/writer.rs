@@ -3,7 +3,7 @@ use super::{
     TranslationInfo,
 };
 use crate::{
-    arena::Handle,
+    arena::{Arena, Handle},
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, GlobalUse, ModuleInfo},
     FastHashMap,
@@ -31,6 +31,154 @@ impl Display for Level {
     }
 }
 
+struct TypeContext<'a> {
+    handle: Handle<crate::Type>,
+    arena: &'a Arena<crate::Type>,
+    names: &'a FastHashMap<NameKey, String>,
+    usage: GlobalUse,
+    access: crate::StorageAccess,
+    first_time: bool,
+}
+
+impl<'a> Display for TypeContext<'a> {
+    fn fmt(&self, out: &mut Formatter<'_>) -> Result<(), FmtError> {
+        let ty = &self.arena[self.handle];
+        if ty.needs_alias() && !self.first_time {
+            let name = &self.names[&NameKey::Type(self.handle)];
+            return write!(out, "{}", name);
+        }
+
+        match ty.inner {
+            // work around Metal toolchain bug with `uint` typedef
+            crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Uint,
+                ..
+            } => {
+                write!(out, "metal::uint")
+            }
+            crate::TypeInner::Scalar { kind, .. } => {
+                write!(out, "{}", scalar_kind_string(kind))
+            }
+            crate::TypeInner::Vector { size, kind, .. } => {
+                write!(
+                    out,
+                    "{}::{}{}",
+                    NAMESPACE,
+                    scalar_kind_string(kind),
+                    vector_size_string(size),
+                )
+            }
+            crate::TypeInner::Matrix { columns, rows, .. } => {
+                write!(
+                    out,
+                    "{}::{}{}x{}",
+                    NAMESPACE,
+                    scalar_kind_string(crate::ScalarKind::Float),
+                    vector_size_string(columns),
+                    vector_size_string(rows),
+                )
+            }
+            crate::TypeInner::Pointer { base, class } => {
+                let sub = Self {
+                    arena: self.arena,
+                    names: self.names,
+                    handle: base,
+                    usage: self.usage,
+                    access: self.access,
+                    first_time: false,
+                };
+                let class_name = match class.get_name(self.usage) {
+                    Some(name) => name,
+                    None => return Ok(()),
+                };
+                write!(out, "{} {}*", class_name, sub)
+            }
+            crate::TypeInner::ValuePointer {
+                size: None,
+                kind,
+                width: _,
+                class,
+            } => {
+                let class_name = match class.get_name(self.usage) {
+                    Some(name) => name,
+                    None => return Ok(()),
+                };
+                write!(out, "{} {}*", class_name, scalar_kind_string(kind),)
+            }
+            crate::TypeInner::ValuePointer {
+                size: Some(size),
+                kind,
+                width: _,
+                class,
+            } => {
+                let class_name = match class.get_name(self.usage) {
+                    Some(name) => name,
+                    None => return Ok(()),
+                };
+                write!(
+                    out,
+                    "{} {}::{}{}*",
+                    class_name,
+                    NAMESPACE,
+                    scalar_kind_string(kind),
+                    vector_size_string(size),
+                )
+            }
+            crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => unreachable!(),
+            crate::TypeInner::Image {
+                dim,
+                arrayed,
+                class,
+            } => {
+                let dim_str = match dim {
+                    crate::ImageDimension::D1 => "1d",
+                    crate::ImageDimension::D2 => "2d",
+                    crate::ImageDimension::D3 => "3d",
+                    crate::ImageDimension::Cube => "cube",
+                };
+                let (texture_str, msaa_str, kind, access) = match class {
+                    crate::ImageClass::Sampled { kind, multi } => {
+                        ("texture", if multi { "_ms" } else { "" }, kind, "sample")
+                    }
+                    crate::ImageClass::Depth => ("depth", "", crate::ScalarKind::Float, "sample"),
+                    crate::ImageClass::Storage(format) => {
+                        let access = if self
+                            .access
+                            .contains(crate::StorageAccess::LOAD | crate::StorageAccess::STORE)
+                        {
+                            "read_write"
+                        } else if self.access.contains(crate::StorageAccess::STORE) {
+                            "write"
+                        } else if self.access.contains(crate::StorageAccess::LOAD) {
+                            "read"
+                        } else {
+                            unreachable!("module is not valid")
+                        };
+                        ("texture", "", format.into(), access)
+                    }
+                };
+                let base_name = scalar_kind_string(kind);
+                let array_str = if arrayed { "_array" } else { "" };
+                write!(
+                    out,
+                    "{}::{}{}{}{}<{}, {}::access::{}>",
+                    NAMESPACE,
+                    texture_str,
+                    dim_str,
+                    msaa_str,
+                    array_str,
+                    base_name,
+                    NAMESPACE,
+                    access,
+                )
+            }
+            crate::TypeInner::Sampler { comparison: _ } => {
+                write!(out, "{}::sampler", NAMESPACE)
+            }
+        }
+    }
+}
+
 struct TypedGlobalVariable<'a> {
     module: &'a crate::Module,
     names: &'a FastHashMap<NameKey, String>,
@@ -43,7 +191,14 @@ impl<'a> TypedGlobalVariable<'a> {
     fn try_fmt<W: Write>(&self, out: &mut W) -> Result<(), Error> {
         let var = &self.module.global_variables[self.handle];
         let name = &self.names[&NameKey::GlobalVariable(self.handle)];
-        let ty_name = &self.names[&NameKey::Type(var.ty)];
+        let ty_name = TypeContext {
+            handle: var.ty,
+            arena: &self.module.types,
+            names: self.names,
+            usage: self.usage,
+            access: var.storage_access,
+            first_time: false,
+        };
 
         let (space, access, reference) = match var.class.get_name(self.usage) {
             Some(space) if self.reference => {
@@ -139,6 +294,25 @@ impl crate::StorageClass {
             }),
             Self::Private | Self::Function => Some("thread"),
             Self::WorkGroup => Some("threadgroup"),
+        }
+    }
+}
+
+impl crate::Type {
+    // Returns `true` if we need to emit a type alias for this type.
+    fn needs_alias(&self) -> bool {
+        use crate::TypeInner as Ti;
+        match self.inner {
+            // value types are concise enough, we only alias them if they are named
+            Ti::Scalar { .. }
+            | Ti::Vector { .. }
+            | Ti::Matrix { .. }
+            | Ti::Pointer { .. }
+            | Ti::ValuePointer { .. } => self.name.is_some(),
+            // composite types are better to be aliased, regardless of the name
+            Ti::Struct { .. } | Ti::Array { .. } => true,
+            // handle types may be different, depending on the global var access, so we always inline them
+            Ti::Image { .. } | Ti::Sampler { .. } => false,
         }
     }
 }
@@ -830,7 +1004,14 @@ impl<W: Write> Writer<W> {
     ) -> Result<(), Error> {
         match context.info[handle].ty {
             TypeResolution::Handle(ty_handle) => {
-                let ty_name = &self.names[&NameKey::Type(ty_handle)];
+                let ty_name = TypeContext {
+                    handle: ty_handle,
+                    arena: &context.module.types,
+                    names: &self.names,
+                    usage: GlobalUse::all(),
+                    access: crate::StorageAccess::empty(),
+                    first_time: false,
+                };
                 write!(self.out, "{}", ty_name)?;
             }
             TypeResolution::Value(crate::TypeInner::Scalar { kind, .. }) => {
@@ -1096,92 +1277,25 @@ impl<W: Write> Writer<W> {
 
     fn write_type_defs(&mut self, module: &crate::Module) -> Result<(), Error> {
         for (handle, ty) in module.types.iter() {
+            if !ty.needs_alias() {
+                continue;
+            }
             let name = &self.names[&NameKey::Type(handle)];
             let global_use = GlobalUse::all(); //TODO
             match ty.inner {
-                // work around Metal toolchain bug with `uint` typedef
-                crate::TypeInner::Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    ..
-                } => {
-                    writeln!(self.out, "typedef metal::uint {};", name)?;
-                }
-                crate::TypeInner::Scalar { kind, .. } => {
-                    writeln!(self.out, "typedef {} {};", scalar_kind_string(kind), name)?;
-                }
-                crate::TypeInner::Vector { size, kind, .. } => {
-                    writeln!(
-                        self.out,
-                        "typedef {}::{}{} {};",
-                        NAMESPACE,
-                        scalar_kind_string(kind),
-                        vector_size_string(size),
-                        name
-                    )?;
-                }
-                crate::TypeInner::Matrix { columns, rows, .. } => {
-                    writeln!(
-                        self.out,
-                        "typedef {}::{}{}x{} {};",
-                        NAMESPACE,
-                        scalar_kind_string(crate::ScalarKind::Float),
-                        vector_size_string(columns),
-                        vector_size_string(rows),
-                        name
-                    )?;
-                }
-                crate::TypeInner::Pointer { base, class } => {
-                    let base_name = &self.names[&NameKey::Type(base)];
-                    let class_name = match class.get_name(global_use) {
-                        Some(name) => name,
-                        None => continue,
-                    };
-                    writeln!(self.out, "typedef {} {} *{};", class_name, base_name, name)?;
-                }
-                crate::TypeInner::ValuePointer {
-                    size: None,
-                    kind,
-                    width: _,
-                    class,
-                } => {
-                    let class_name = match class.get_name(global_use) {
-                        Some(name) => name,
-                        None => continue,
-                    };
-                    writeln!(
-                        self.out,
-                        "typedef {} {} *{};",
-                        class_name,
-                        scalar_kind_string(kind),
-                        name
-                    )?;
-                }
-                crate::TypeInner::ValuePointer {
-                    size: Some(size),
-                    kind,
-                    width: _,
-                    class,
-                } => {
-                    let class_name = match class.get_name(global_use) {
-                        Some(name) => name,
-                        None => continue,
-                    };
-                    writeln!(
-                        self.out,
-                        "typedef {} {}::{}{} {};",
-                        class_name,
-                        NAMESPACE,
-                        scalar_kind_string(kind),
-                        vector_size_string(size),
-                        name
-                    )?;
-                }
                 crate::TypeInner::Array {
                     base,
                     size,
                     stride: _,
                 } => {
-                    let base_name = &self.names[&NameKey::Type(base)];
+                    let base_name = TypeContext {
+                        handle: base,
+                        arena: &module.types,
+                        names: &self.names,
+                        usage: global_use,
+                        access: crate::StorageAccess::empty(),
+                        first_time: false,
+                    };
                     let size_str = match size {
                         crate::ArraySize::Constant(const_handle) => {
                             &self.names[&NameKey::Constant(const_handle)]
@@ -1197,68 +1311,28 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "struct {} {{", name)?;
                     for (index, member) in members.iter().enumerate() {
                         let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
-                        let base_name = &self.names[&NameKey::Type(member.ty)];
+                        let base_name = TypeContext {
+                            handle: member.ty,
+                            arena: &module.types,
+                            names: &self.names,
+                            usage: global_use,
+                            access: crate::StorageAccess::empty(),
+                            first_time: false,
+                        };
                         writeln!(self.out, "{}{} {};", INDENT, base_name, member_name)?;
                     }
                     writeln!(self.out, "}};")?;
                 }
-                crate::TypeInner::Image {
-                    dim,
-                    arrayed,
-                    class,
-                } => {
-                    let dim_str = match dim {
-                        crate::ImageDimension::D1 => "1d",
-                        crate::ImageDimension::D2 => "2d",
-                        crate::ImageDimension::D3 => "3d",
-                        crate::ImageDimension::Cube => "cube",
+                _ => {
+                    let ty_name = TypeContext {
+                        handle,
+                        arena: &module.types,
+                        names: &self.names,
+                        usage: global_use,
+                        access: crate::StorageAccess::empty(),
+                        first_time: true,
                     };
-                    let (texture_str, msaa_str, kind, access) = match class {
-                        crate::ImageClass::Sampled { kind, multi } => {
-                            ("texture", if multi { "_ms" } else { "" }, kind, "sample")
-                        }
-                        crate::ImageClass::Depth => {
-                            ("depth", "", crate::ScalarKind::Float, "sample")
-                        }
-                        crate::ImageClass::Storage(format) => {
-                            let (_, global) = module
-                                .global_variables
-                                .iter()
-                                .find(|&(_, ref var)| var.ty == handle)
-                                .expect("Unable to find a global variable using the image type");
-                            let access = if global
-                                .storage_access
-                                .contains(crate::StorageAccess::LOAD | crate::StorageAccess::STORE)
-                            {
-                                "read_write"
-                            } else if global.storage_access.contains(crate::StorageAccess::STORE) {
-                                "write"
-                            } else if global.storage_access.contains(crate::StorageAccess::LOAD) {
-                                "read"
-                            } else {
-                                return Err(Error::Validation);
-                            };
-                            ("texture", "", format.into(), access)
-                        }
-                    };
-                    let base_name = scalar_kind_string(kind);
-                    let array_str = if arrayed { "_array" } else { "" };
-                    writeln!(
-                        self.out,
-                        "typedef {}::{}{}{}{}<{}, {}::access::{}> {};",
-                        NAMESPACE,
-                        texture_str,
-                        dim_str,
-                        msaa_str,
-                        array_str,
-                        base_name,
-                        NAMESPACE,
-                        access,
-                        name
-                    )?;
-                }
-                crate::TypeInner::Sampler { comparison: _ } => {
-                    writeln!(self.out, "typedef {}::sampler {};", NAMESPACE, name)?;
+                    writeln!(self.out, "typedef {} {};", ty_name, name)?;
                 }
             }
         }
@@ -1305,7 +1379,14 @@ impl<W: Write> Writer<W> {
                 crate::ConstantInner::Scalar { .. } => {}
                 crate::ConstantInner::Composite { ty, ref components } => {
                     let name = &self.names[&NameKey::Constant(handle)];
-                    let ty_name = &self.names[&NameKey::Type(ty)];
+                    let ty_name = TypeContext {
+                        handle: ty,
+                        arena: &module.types,
+                        names: &self.names,
+                        usage: GlobalUse::empty(),
+                        access: crate::StorageAccess::empty(),
+                        first_time: false,
+                    };
                     write!(self.out, "constexpr constant {} {} = {{", ty_name, name,)?;
                     for (i, &sub_handle) in components.iter().enumerate() {
                         let separator = if i != 0 { ", " } else { "" };
@@ -1415,16 +1496,36 @@ impl<W: Write> Writer<W> {
                 }
             }
 
+            writeln!(self.out)?;
             let fun_name = &self.names[&NameKey::Function(fun_handle)];
-            let result_type_name = match fun.result {
-                Some(ref result) => &self.names[&NameKey::Type(result.ty)],
-                None => "void",
-            };
-            writeln!(self.out, "{} {}(", result_type_name, fun_name)?;
+            match fun.result {
+                Some(ref result) => {
+                    let ty_name = TypeContext {
+                        handle: result.ty,
+                        arena: &module.types,
+                        names: &self.names,
+                        usage: GlobalUse::empty(),
+                        access: crate::StorageAccess::empty(),
+                        first_time: false,
+                    };
+                    write!(self.out, "{}", ty_name)?;
+                }
+                None => {
+                    write!(self.out, "void")?;
+                }
+            }
+            writeln!(self.out, " {}(", fun_name)?;
 
             for (index, arg) in fun.arguments.iter().enumerate() {
                 let name = &self.names[&NameKey::FunctionArgument(fun_handle, index as u32)];
-                let param_type_name = &self.names[&NameKey::Type(arg.ty)];
+                let param_type_name = TypeContext {
+                    handle: arg.ty,
+                    arena: &module.types,
+                    names: &self.names,
+                    usage: GlobalUse::empty(),
+                    access: crate::StorageAccess::empty(),
+                    first_time: false,
+                };
                 let separator =
                     separate(!pass_through_globals.is_empty() || index + 1 != fun.arguments.len());
                 writeln!(
@@ -1449,7 +1550,14 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, ") {{")?;
 
             for (local_handle, local) in fun.local_variables.iter() {
-                let ty_name = &self.names[&NameKey::Type(local.ty)];
+                let ty_name = TypeContext {
+                    handle: local.ty,
+                    arena: &module.types,
+                    names: &self.names,
+                    usage: GlobalUse::empty(),
+                    access: crate::StorageAccess::empty(),
+                    first_time: false,
+                };
                 let local_name = &self.names[&NameKey::FunctionLocal(fun_handle, local_handle)];
                 write!(self.out, "{}{} {}", INDENT, ty_name, local_name)?;
                 if let Some(value) = local.init {
@@ -1473,7 +1581,6 @@ impl<W: Write> Writer<W> {
             self.named_expressions.clear();
             self.put_block(Level(1), &fun.body, &context)?;
             writeln!(self.out, "}}")?;
-            writeln!(self.out)?;
         }
 
         let mut info = TranslationInfo {
@@ -1503,6 +1610,7 @@ impl<W: Write> Writer<W> {
                 }
             }
 
+            writeln!(self.out)?;
             let fun_name = &self.names[&NameKey::EntryPoint(ep_index as _)];
             info.entry_point_names.push(Ok(fun_name.clone()));
 
@@ -1558,9 +1666,16 @@ impl<W: Write> Writer<W> {
                     };
                     varying_count += 1;
                     let name = &self.names[&name_key];
-                    let type_name = &self.names[&NameKey::Type(ty)];
+                    let ty_name = TypeContext {
+                        handle: ty,
+                        arena: &module.types,
+                        names: &self.names,
+                        usage: GlobalUse::empty(),
+                        access: crate::StorageAccess::empty(),
+                        first_time: false,
+                    };
                     let resolved = options.resolve_local_binding(binding, in_mode)?;
-                    write!(self.out, "{}{} {}", INDENT, type_name, name)?;
+                    write!(self.out, "{}{} {}", INDENT, ty_name, name)?;
                     resolved.try_fmt_decorated(&mut self.out, "")?;
                     writeln!(self.out, ";")?;
                 }
@@ -1592,7 +1707,14 @@ impl<W: Write> Writer<W> {
                     }
                     writeln!(self.out, "struct {} {{", stage_out_name)?;
                     for (name, ty, binding) in result_members {
-                        let type_name = &self.names[&NameKey::Type(ty)];
+                        let ty_name = TypeContext {
+                            handle: ty,
+                            arena: &module.types,
+                            names: &self.names,
+                            usage: GlobalUse::empty(),
+                            access: crate::StorageAccess::empty(),
+                            first_time: false,
+                        };
                         let binding = binding.ok_or(Error::Validation)?;
                         if !pipeline_options.allow_point_size
                             && *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize)
@@ -1600,7 +1722,7 @@ impl<W: Write> Writer<W> {
                             continue;
                         }
                         let resolved = options.resolve_local_binding(binding, out_mode)?;
-                        write!(self.out, "{}{} {}", INDENT, type_name, name)?;
+                        write!(self.out, "{}{} {}", INDENT, ty_name, name)?;
                         resolved.try_fmt_decorated(&mut self.out, "")?;
                         writeln!(self.out, ";")?;
                     }
@@ -1626,7 +1748,14 @@ impl<W: Write> Writer<W> {
                     _ => continue,
                 };
                 let name = &self.names[&name_key];
-                let type_name = &self.names[&NameKey::Type(ty)];
+                let ty_name = TypeContext {
+                    handle: ty,
+                    arena: &module.types,
+                    names: &self.names,
+                    usage: GlobalUse::empty(),
+                    access: crate::StorageAccess::empty(),
+                    first_time: false,
+                };
                 let resolved = options.resolve_local_binding(binding, in_mode)?;
                 let separator = if is_first_argument {
                     is_first_argument = false;
@@ -1634,7 +1763,7 @@ impl<W: Write> Writer<W> {
                 } else {
                     ','
                 };
-                write!(self.out, "{} {} {}", separator, type_name, name)?;
+                write!(self.out, "{} {} {}", separator, ty_name, name)?;
                 resolved.try_fmt_decorated(&mut self.out, "\n")?;
             }
             for (handle, var) in module.global_variables.iter() {
@@ -1763,7 +1892,14 @@ impl<W: Write> Writer<W> {
             //TODO: we can postpone this till the relevant expressions are emitted
             for (local_handle, local) in fun.local_variables.iter() {
                 let name = &self.names[&NameKey::EntryPointLocal(ep_index as _, local_handle)];
-                let ty_name = &self.names[&NameKey::Type(local.ty)];
+                let ty_name = TypeContext {
+                    handle: local.ty,
+                    arena: &module.types,
+                    names: &self.names,
+                    usage: GlobalUse::empty(),
+                    access: crate::StorageAccess::empty(),
+                    first_time: false,
+                };
                 write!(self.out, "{}{} {}", INDENT, ty_name, name)?;
                 if let Some(value) = local.init {
                     let value_str = &self.names[&NameKey::Constant(value)];

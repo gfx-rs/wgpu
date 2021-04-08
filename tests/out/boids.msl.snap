@@ -14,46 +14,42 @@ constexpr constant unsigned const_1u = 1u;
 constexpr constant float const_1f = 1.0;
 constexpr constant float const_0_10f = 0.1;
 constexpr constant float const_n1f = -1.0;
-typedef metal::uint type;
-typedef metal::float2 type1;
 struct Particle {
-    type1 pos;
-    type1 vel;
+    metal::float2 pos;
+    metal::float2 vel;
 };
-typedef float type2;
 struct SimParams {
-    type2 deltaT;
-    type2 rule1Distance;
-    type2 rule2Distance;
-    type2 rule3Distance;
-    type2 rule1Scale;
-    type2 rule2Scale;
-    type2 rule3Scale;
+    float deltaT;
+    float rule1Distance;
+    float rule2Distance;
+    float rule3Distance;
+    float rule1Scale;
+    float rule2Scale;
+    float rule3Scale;
 };
 typedef Particle type3[1];
 struct Particles {
     type3 particles;
 };
-typedef metal::uint3 type4;
-typedef int type5;
+
 struct main1Input {
 };
 kernel void main1(
-  type4 global_invocation_id [[thread_position_in_grid]]
+  metal::uint3 global_invocation_id [[thread_position_in_grid]]
 , constant SimParams& params [[buffer(0)]]
 , constant Particles& particlesSrc [[buffer(1)]]
 , device Particles& particlesDst [[buffer(2)]]
 ) {
-    type1 vPos;
-    type1 vVel;
-    type1 cMass;
-    type1 cVel;
-    type1 colVel;
-    type5 cMassCount = const_0i;
-    type5 cVelCount = const_0i;
-    type1 pos1;
-    type1 vel1;
-    type i = const_0u;
+    metal::float2 vPos;
+    metal::float2 vVel;
+    metal::float2 cMass;
+    metal::float2 cVel;
+    metal::float2 colVel;
+    int cMassCount = const_0i;
+    int cVelCount = const_0i;
+    metal::float2 pos1;
+    metal::float2 vel1;
+    metal::uint i = const_0u;
     if (global_invocation_id.x >= NUM_PARTICLES) {
         return;
     }
