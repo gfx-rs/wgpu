@@ -619,9 +619,9 @@ impl<W: Write> Writer<W> {
                     ..
                 } => {
                     write!(self.out, "{}::select(", NAMESPACE)?;
-                    self.put_expression(accept, context, true)?;
-                    write!(self.out, ", ")?;
                     self.put_expression(reject, context, true)?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(accept, context, true)?;
                     write!(self.out, ", ")?;
                     self.put_expression(condition, context, true)?;
                     write!(self.out, ")")?;
