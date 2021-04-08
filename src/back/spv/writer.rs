@@ -417,6 +417,10 @@ impl Writer {
         Ok(id)
     }
 
+    fn decorate(&mut self, id: Word, decoration: spirv::Decoration, operands: &[Word]) {
+        self.annotations.push(Instruction::decorate(id, decoration, operands));
+    }
+
     fn write_function(
         &mut self,
         ir_function: &crate::Function,
@@ -856,11 +860,7 @@ impl Writer {
             crate::TypeInner::Sampler { comparison: _ } => Instruction::type_sampler(id),
             crate::TypeInner::Array { base, size, stride } => {
                 if decorate_layout {
-                    self.annotations.push(Instruction::decorate(
-                        id,
-                        Decoration::ArrayStride,
-                        &[stride],
-                    ));
+                    self.decorate(id, Decoration::ArrayStride, &[stride]);
                 }
 
                 let type_id = self.get_type_id(arena, LookupType::Handle(base))?;
@@ -878,8 +878,7 @@ impl Writer {
                 span: _,
             } => {
                 if let crate::StructLevel::Root = *level {
-                    self.annotations
-                        .push(Instruction::decorate(id, Decoration::Block, &[]));
+                    self.decorate(id, Decoration::Block, &[]);
                 }
 
                 let mut member_ids = Vec::with_capacity(members.len());
@@ -1092,8 +1091,7 @@ impl Writer {
 
         match *binding {
             crate::Binding::Location(location, interpolation) => {
-                self.annotations
-                    .push(Instruction::decorate(id, Decoration::Location, &[location]));
+                self.decorate(id, Decoration::Location, &[location]);
                 let interp_decoration = match interpolation {
                     Some(crate::Interpolation::Linear) => Some(Decoration::NoPerspective),
                     Some(crate::Interpolation::Flat) => Some(Decoration::Flat),
@@ -1102,8 +1100,7 @@ impl Writer {
                     Some(crate::Interpolation::Perspective) | None => None,
                 };
                 if let Some(decoration) = interp_decoration {
-                    self.annotations
-                        .push(Instruction::decorate(id, decoration, &[]));
+                    self.decorate(id, decoration, &[]);
                 }
             }
             crate::Binding::BuiltIn(built_in) => {
@@ -1136,11 +1133,7 @@ impl Writer {
                     Bi::WorkGroupSize => BuiltIn::WorkgroupSize,
                 };
 
-                self.annotations.push(Instruction::decorate(
-                    id,
-                    Decoration::BuiltIn,
-                    &[built_in as u32],
-                ));
+                self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);
             }
         }
 
@@ -1177,21 +1170,12 @@ impl Writer {
             _ => None,
         };
         if let Some(decoration) = access_decoration {
-            self.annotations
-                .push(Instruction::decorate(id, decoration, &[]));
+            self.decorate(id, decoration, &[]);
         }
 
         if let Some(ref res_binding) = global_variable.binding {
-            self.annotations.push(Instruction::decorate(
-                id,
-                Decoration::DescriptorSet,
-                &[res_binding.group],
-            ));
-            self.annotations.push(Instruction::decorate(
-                id,
-                Decoration::Binding,
-                &[res_binding.binding],
-            ));
+            self.decorate(id, Decoration::DescriptorSet, &[res_binding.group]);
+            self.decorate(id, Decoration::Binding, &[res_binding.binding]);
         }
 
         // TODO Initializer is optional and not (yet) included in the IR
