@@ -147,11 +147,11 @@ fn check_output_msl(
         &default_options
     };
 
-    let sub_options = msl::SubOptions {
+    let pipeline_options = msl::PipelineOptions {
         allow_point_size: true,
     };
 
-    let (msl, _) = msl::write_string(module, info, options, &sub_options).unwrap();
+    let (msl, _) = msl::write_string(module, info, options, &pipeline_options).unwrap();
 
     with_snapshot_settings(|| {
         insta::assert_snapshot!(format!("{}.msl", name), msl);

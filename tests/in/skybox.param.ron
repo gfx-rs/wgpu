@@ -21,6 +21,8 @@
 				mip_filter: None,
 				border_color: TransparentBlack,
 				compare_func: Never,
+				lod_clamp: Some((start: 0.5, end: 10.0)),
+				max_anisotropy: Some(8),
 			),
 		],
 		spirv_cross_compatibility: false,

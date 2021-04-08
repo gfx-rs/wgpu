@@ -66,7 +66,7 @@ fragment fs_mainOutput fs_main(
         metal::r_address::clamp_to_edge,
         metal::mag_filter::linear,
         metal::min_filter::linear,
-metal        ::coord::normalized
+        metal::coord::normalized
     );
     const VertexOutput in = { position, varyings1.uv };
     metal::float4 _expr5 = r_texture.sample(r_sampler, in.uv);

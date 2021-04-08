@@ -202,10 +202,14 @@ fn main() {
         #[cfg(feature = "msl-out")]
         "metal" => {
             use naga::back::msl;
-            let sub_options = msl::SubOptions::default();
-            let (msl, _) =
-                msl::write_string(&module, info.as_ref().unwrap(), &params.msl, &sub_options)
-                    .unwrap_pretty();
+            let pipeline_options = msl::PipelineOptions::default();
+            let (msl, _) = msl::write_string(
+                &module,
+                info.as_ref().unwrap(),
+                &params.msl,
+                &pipeline_options,
+            )
+            .unwrap_pretty();
             fs::write(output_path, msl).unwrap();
         }
         #[cfg(feature = "spv-out")]

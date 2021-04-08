@@ -1,5 +1,6 @@
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
+use std::{num::NonZeroU32, ops::Range};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -11,6 +12,15 @@ pub enum Coord {
 impl Default for Coord {
     fn default() -> Self {
         Self::Normalized
+    }
+}
+
+impl Coord {
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            Self::Normalized => "normalized",
+            Self::Pixel => "pixel",
+        }
     }
 }
 
@@ -131,5 +141,7 @@ pub struct InlineSampler {
     pub mag_filter: Filter,
     pub min_filter: Filter,
     pub mip_filter: Option<Filter>,
+    pub lod_clamp: Option<Range<f32>>,
+    pub max_anisotropy: Option<NonZeroU32>,
     pub compare_func: CompareFunc,
 }

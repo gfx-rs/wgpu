@@ -31,7 +31,7 @@ use crate::{
 use std::fmt::{Error as FmtError, Write};
 
 mod keywords;
-mod sampler;
+pub mod sampler;
 mod writer;
 
 pub use writer::Writer;
@@ -138,15 +138,15 @@ impl Default for Options {
 // A subset of options that are meant to be changed per pipeline.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct SubOptions {
+pub struct PipelineOptions {
     /// Allow `BuiltIn::PointSize` in the vertex shader.
     /// Metal doesn't like this for non-point primitive topologies.
     pub allow_point_size: bool,
 }
 
-impl Default for SubOptions {
+impl Default for PipelineOptions {
     fn default() -> Self {
-        SubOptions {
+        PipelineOptions {
             allow_point_size: true,
         }
     }
@@ -281,10 +281,10 @@ pub fn write_string(
     module: &crate::Module,
     info: &ModuleInfo,
     options: &Options,
-    sub_options: &SubOptions,
+    pipeline_options: &PipelineOptions,
 ) -> Result<(String, TranslationInfo), Error> {
     let mut w = writer::Writer::new(String::new());
-    let info = w.write(module, info, options, sub_options)?;
+    let info = w.write(module, info, options, pipeline_options)?;
     Ok((w.finish(), info))
 }
 
