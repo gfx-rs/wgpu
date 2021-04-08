@@ -5,10 +5,6 @@ expression: msl
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-constexpr constant unsigned const_0u = 0u;
-constexpr constant unsigned const_1u = 1u;
-constexpr constant unsigned const_2u = 2u;
-constexpr constant unsigned const_3u = 3u;
 typedef metal::uint type1[1];
 struct PrimeIndices {
     type1 data;
@@ -18,18 +14,18 @@ metal::uint collatz_iterations(
     metal::uint n_base
 ) {
     metal::uint n;
-    metal::uint i = const_0u;
+    metal::uint i = 0u;
     n = n_base;
     while(true) {
-        if (n <= const_1u) {
+        if (n <= 1u) {
             break;
         }
-        if ((n % const_2u) == const_0u) {
-            n = n / const_2u;
+        if ((n % 2u) == 0u) {
+            n = n / 2u;
         } else {
-            n = (const_3u * n) + const_1u;
+            n = (3u * n) + 1u;
         }
-        i = i + const_1u;
+        i = i + 1u;
     }
     return i;
 }

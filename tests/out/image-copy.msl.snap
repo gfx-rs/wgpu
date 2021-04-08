@@ -5,8 +5,6 @@ expression: msl
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-constexpr constant int const_10i = 10;
-constexpr constant int const_20i = 20;
 
 struct main1Input {
 };
@@ -15,7 +13,7 @@ kernel void main1(
 , metal::texture2d<uint, metal::access::read> image_src [[user(fake0)]]
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
-    metal::int2 _expr12 = (int2(image_src.get_width(), image_src.get_height()) * static_cast<int2>(metal::uint2(local_id.x, local_id.y))) % metal::int2(const_10i, const_20i);
+    metal::int2 _expr12 = (int2(image_src.get_width(), image_src.get_height()) * static_cast<int2>(metal::uint2(local_id.x, local_id.y))) % metal::int2(10, 20);
     metal::uint4 _expr13 = image_src.read(metal::uint2(_expr12));
     image_dst.write(_expr13, metal::uint(_expr12.x));
     return;

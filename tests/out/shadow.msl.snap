@@ -5,14 +5,7 @@ expression: msl
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-constexpr constant float const_0f = 0.0;
-constexpr constant float const_1f = 1.0;
-constexpr constant float const_0_50f = 0.5;
-constexpr constant float const_n0_50f = -0.5;
-constexpr constant float const_0_05f = 0.05;
 constexpr constant unsigned c_max_lights = 10u;
-constexpr constant unsigned const_0u = 0u;
-constexpr constant unsigned const_1u = 1u;
 struct Globals {
     metal::uint4 num_lights;
 };
@@ -25,7 +18,7 @@ typedef Light type3[1];
 struct Lights {
     type3 data;
 };
-constexpr constant metal::float3 c_ambient = {const_0_05f, const_0_05f, const_0_05f};
+constexpr constant metal::float3 c_ambient = {0.05, 0.05, 0.05};
 
 float fetch_shadow(
     metal::uint light_id,
@@ -33,11 +26,11 @@ float fetch_shadow(
     metal::depth2d_array<float, metal::access::sample> t_shadow,
     metal::sampler sampler_shadow
 ) {
-    if (homogeneous_coords.w <= const_0f) {
-        return const_1f;
+    if (homogeneous_coords.w <= 0.0) {
+        return 1.0;
     }
-    float _expr15 = const_1f / homogeneous_coords.w;
-    float _expr28 = t_shadow.sample_compare(sampler_shadow, ((metal::float2(homogeneous_coords.x, homogeneous_coords.y) * metal::float2(const_0_50f, const_n0_50f)) * _expr15) + metal::float2(const_0_50f, const_0_50f), static_cast<int>(light_id), homogeneous_coords.z * _expr15);
+    float _expr15 = 1.0 / homogeneous_coords.w;
+    float _expr28 = t_shadow.sample_compare(sampler_shadow, ((metal::float2(homogeneous_coords.x, homogeneous_coords.y) * metal::float2(0.5, -0.5)) * _expr15) + metal::float2(0.5, 0.5), static_cast<int>(light_id), homogeneous_coords.z * _expr15);
     return _expr28;
 }
 
@@ -58,11 +51,11 @@ fragment fs_mainOutput fs_main(
     const auto raw_normal = varyings.raw_normal;
     const auto position = varyings.position;
     metal::float3 color1 = c_ambient;
-    metal::uint i = const_0u;
+    metal::uint i = 0u;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            i = i + const_1u;
+            i = i + 1u;
         }
         loop_init = false;
         if (i >= metal::min(u_globals.num_lights.x, c_max_lights)) {
@@ -70,8 +63,8 @@ fragment fs_mainOutput fs_main(
         }
         Light _expr21 = s_lights.data[i];
         float _expr25 = fetch_shadow(i, _expr21.proj * position, t_shadow, sampler_shadow);
-        color1 = color1 + ((_expr25 * metal::max(const_0f, metal::dot(metal::normalize(raw_normal), metal::normalize(metal::float3(_expr21.pos.x, _expr21.pos.y, _expr21.pos.z) - metal::float3(position.x, position.y, position.z))))) * metal::float3(_expr21.color.x, _expr21.color.y, _expr21.color.z));
+        color1 = color1 + ((_expr25 * metal::max(0.0, metal::dot(metal::normalize(raw_normal), metal::normalize(metal::float3(_expr21.pos.x, _expr21.pos.y, _expr21.pos.z) - metal::float3(position.x, position.y, position.z))))) * metal::float3(_expr21.color.x, _expr21.color.y, _expr21.color.z));
     }
-    return fs_mainOutput { metal::float4(color1, const_1f) };
+    return fs_mainOutput { metal::float4(color1, 1.0) };
 }
 

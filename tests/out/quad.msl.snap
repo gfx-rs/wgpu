@@ -6,8 +6,6 @@ expression: msl
 #include <simd/simd.h>
 
 constexpr constant float c_scale = 1.2;
-constexpr constant float const_0f = 0.0;
-constexpr constant float const_1f = 1.0;
 struct VertexOutput {
     metal::float2 uv;
     metal::float4 position;
@@ -28,7 +26,7 @@ vertex main1Output main1(
     const auto uv1 = varyings.uv1;
     VertexOutput out;
     out.uv = uv1;
-    out.position = metal::float4(c_scale * pos, const_0f, const_1f);
+    out.position = metal::float4(c_scale * pos, 0.0, 1.0);
     const auto _tmp = out;
     return main1Output { _tmp.uv, _tmp.position };
 }
@@ -47,7 +45,7 @@ fragment main2Output main2(
 ) {
     const auto uv2 = varyings1.uv2;
     metal::float4 _expr4 = u_texture.sample(u_sampler, uv2);
-    if (_expr4.w == const_0f) {
+    if (_expr4.w == 0.0) {
         metal::discard_fragment();
     }
     return main2Output { _expr4.w * _expr4 };

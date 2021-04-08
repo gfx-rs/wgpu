@@ -229,6 +229,42 @@ impl<'a> TypedGlobalVariable<'a> {
     }
 }
 
+struct ConstantContext<'a> {
+    handle: Handle<crate::Constant>,
+    arena: &'a Arena<crate::Constant>,
+    names: &'a FastHashMap<NameKey, String>,
+    first_time: bool,
+}
+
+impl<'a> Display for ConstantContext<'a> {
+    fn fmt(&self, out: &mut Formatter<'_>) -> Result<(), FmtError> {
+        let con = &self.arena[self.handle];
+        if con.needs_alias() && !self.first_time {
+            let name = &self.names[&NameKey::Constant(self.handle)];
+            return write!(out, "{}", name);
+        }
+
+        match con.inner {
+            crate::ConstantInner::Scalar { value, width: _ } => match value {
+                crate::ScalarValue::Sint(value) => {
+                    write!(out, "{}", value)
+                }
+                crate::ScalarValue::Uint(value) => {
+                    write!(out, "{}u", value)
+                }
+                crate::ScalarValue::Float(value) => {
+                    let suffix = if value.fract() == 0.0 { ".0" } else { "" };
+                    write!(out, "{}{}", value, suffix)
+                }
+                crate::ScalarValue::Bool(value) => {
+                    write!(out, "{}", value)
+                }
+            },
+            crate::ConstantInner::Composite { .. } => unreachable!("should be aliased"),
+        }
+    }
+}
+
 pub struct Writer<W> {
     out: W,
     names: FastHashMap<NameKey, String>,
@@ -299,7 +335,7 @@ impl crate::StorageClass {
 }
 
 impl crate::Type {
-    // Returns `true` if we need to emit a type alias for this type.
+    // Returns `true` if we need to emit an alias for this type.
     fn needs_alias(&self) -> bool {
         use crate::TypeInner as Ti;
         match self.inner {
@@ -313,6 +349,16 @@ impl crate::Type {
             Ti::Struct { .. } | Ti::Array { .. } => true,
             // handle types may be different, depending on the global var access, so we always inline them
             Ti::Image { .. } | Ti::Sampler { .. } => false,
+        }
+    }
+}
+
+impl crate::Constant {
+    // Returns `true` if we need to emit an alias for this constant.
+    fn needs_alias(&self) -> bool {
+        match self.inner {
+            crate::ConstantInner::Scalar { .. } => self.name.is_some(),
+            crate::ConstantInner::Composite { .. } => true,
         }
     }
 }
@@ -545,8 +591,13 @@ impl<W: Write> Writer<W> {
                 }
             }
             crate::Expression::Constant(handle) => {
-                let handle_name = &self.names[&NameKey::Constant(handle)];
-                write!(self.out, "{}", handle_name)?;
+                let coco = ConstantContext {
+                    handle,
+                    arena: &context.module.constants,
+                    names: &self.names,
+                    first_time: false,
+                };
+                write!(self.out, "{}", coco)?;
             }
             crate::Expression::Compose { ty, ref components } => {
                 let inner = &context.module.types[ty].inner;
@@ -670,8 +721,13 @@ impl<W: Write> Writer<W> {
                     }
                 }
                 if let Some(constant) = offset {
-                    let offset_str = &self.names[&NameKey::Constant(constant)];
-                    write!(self.out, ", {}", offset_str)?;
+                    let coco = ConstantContext {
+                        handle: constant,
+                        arena: &context.module.constants,
+                        names: &self.names,
+                        first_time: false,
+                    };
+                    write!(self.out, ", {}", coco)?;
                 }
                 write!(self.out, ")")?;
             }
@@ -914,8 +970,13 @@ impl<W: Write> Writer<W> {
                     size: crate::ArraySize::Constant(const_handle),
                     ..
                 } => {
-                    let size_str = &self.names[&NameKey::Constant(const_handle)];
-                    write!(self.out, "{}", size_str)?;
+                    let coco = ConstantContext {
+                        handle: const_handle,
+                        arena: &context.module.constants,
+                        names: &self.names,
+                        first_time: false,
+                    };
+                    write!(self.out, "{}", coco)?;
                 }
                 crate::TypeInner::Array { .. } => {
                     return Err(Error::FeatureNotImplemented(
@@ -1296,13 +1357,21 @@ impl<W: Write> Writer<W> {
                         access: crate::StorageAccess::empty(),
                         first_time: false,
                     };
-                    let size_str = match size {
+                    write!(self.out, "typedef {} {}", base_name, name)?;
+                    match size {
                         crate::ArraySize::Constant(const_handle) => {
-                            &self.names[&NameKey::Constant(const_handle)]
+                            let coco = ConstantContext {
+                                handle: const_handle,
+                                arena: &module.constants,
+                                names: &self.names,
+                                first_time: false,
+                            };
+                            writeln!(self.out, "[{}];", coco)?;
                         }
-                        crate::ArraySize::Dynamic => "1",
-                    };
-                    writeln!(self.out, "typedef {} {}[{}];", base_name, name, size_str)?;
+                        crate::ArraySize::Dynamic => {
+                            writeln!(self.out, "[1];")?;
+                        }
+                    }
                 }
                 crate::TypeInner::Struct {
                     block: _,
@@ -1345,29 +1414,33 @@ impl<W: Write> Writer<W> {
                 crate::ConstantInner::Scalar {
                     width: _,
                     ref value,
-                } => {
-                    let name = &self.names[&NameKey::Constant(handle)];
+                } if constant.name.is_some() => {
+                    debug_assert!(constant.needs_alias());
                     write!(self.out, "constexpr constant ")?;
                     match *value {
-                        crate::ScalarValue::Sint(value) => {
-                            write!(self.out, "int {} = {}", name, value)?;
+                        crate::ScalarValue::Sint(_) => {
+                            write!(self.out, "int")?;
                         }
-                        crate::ScalarValue::Uint(value) => {
-                            write!(self.out, "unsigned {} = {}u", name, value)?;
+                        crate::ScalarValue::Uint(_) => {
+                            write!(self.out, "unsigned")?;
                         }
-                        crate::ScalarValue::Float(value) => {
-                            write!(self.out, "float {} = {}", name, value)?;
-                            if value.fract() == 0.0 {
-                                write!(self.out, ".0")?;
-                            }
+                        crate::ScalarValue::Float(_) => {
+                            write!(self.out, "float")?;
                         }
-                        crate::ScalarValue::Bool(value) => {
-                            write!(self.out, "bool {} = {}", name, value)?;
+                        crate::ScalarValue::Bool(_) => {
+                            write!(self.out, "bool")?;
                         }
                     }
-                    writeln!(self.out, ";")?;
+                    let name = &self.names[&NameKey::Constant(handle)];
+                    let coco = ConstantContext {
+                        handle,
+                        arena: &module.constants,
+                        names: &self.names,
+                        first_time: true,
+                    };
+                    writeln!(self.out, " {} = {};", name, coco)?;
                 }
-                crate::ConstantInner::Composite { .. } => {}
+                _ => {}
             }
         }
         Ok(())
@@ -1378,6 +1451,7 @@ impl<W: Write> Writer<W> {
             match constant.inner {
                 crate::ConstantInner::Scalar { .. } => {}
                 crate::ConstantInner::Composite { ty, ref components } => {
+                    debug_assert!(constant.needs_alias());
                     let name = &self.names[&NameKey::Constant(handle)];
                     let ty_name = TypeContext {
                         handle: ty,
@@ -1390,8 +1464,13 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "constexpr constant {} {} = {{", ty_name, name,)?;
                     for (i, &sub_handle) in components.iter().enumerate() {
                         let separator = if i != 0 { ", " } else { "" };
-                        let sub_name = &self.names[&NameKey::Constant(sub_handle)];
-                        write!(self.out, "{}{}", separator, sub_name)?;
+                        let coco = ConstantContext {
+                            handle: sub_handle,
+                            arena: &module.constants,
+                            names: &self.names,
+                            first_time: false,
+                        };
+                        write!(self.out, "{}{}", separator, coco)?;
                     }
                     writeln!(self.out, "}};")?;
                 }
@@ -1561,8 +1640,13 @@ impl<W: Write> Writer<W> {
                 let local_name = &self.names[&NameKey::FunctionLocal(fun_handle, local_handle)];
                 write!(self.out, "{}{} {}", INDENT, ty_name, local_name)?;
                 if let Some(value) = local.init {
-                    let value_str = &self.names[&NameKey::Constant(value)];
-                    write!(self.out, " = {}", value_str)?;
+                    let coco = ConstantContext {
+                        handle: value,
+                        arena: &module.constants,
+                        names: &self.names,
+                        first_time: false,
+                    };
+                    write!(self.out, " = {}", coco)?;
                 }
                 writeln!(self.out, ";")?;
             }
@@ -1801,8 +1885,13 @@ impl<W: Write> Writer<W> {
                     resolved.try_fmt_decorated(&mut self.out, "")?;
                 }
                 if let Some(value) = var.init {
-                    let value_str = &self.names[&NameKey::Constant(value)];
-                    write!(self.out, " = {}", value_str)?;
+                    let coco = ConstantContext {
+                        handle: value,
+                        arena: &module.constants,
+                        names: &self.names,
+                        first_time: false,
+                    };
+                    write!(self.out, " = {}", coco)?;
                 }
                 writeln!(self.out)?;
             }
@@ -1827,11 +1916,20 @@ impl<W: Write> Writer<W> {
                     };
                     write!(self.out, "{}", INDENT)?;
                     tyvar.try_fmt(&mut self.out)?;
-                    let value_str = match var.init {
-                        Some(value) => &self.names[&NameKey::Constant(value)],
-                        None => "{}",
+                    match var.init {
+                        Some(value) => {
+                            let coco = ConstantContext {
+                                handle: value,
+                                arena: &module.constants,
+                                names: &self.names,
+                                first_time: false,
+                            };
+                            writeln!(self.out, " = {};", coco)?;
+                        }
+                        None => {
+                            writeln!(self.out, " = {{}};")?;
+                        }
                     };
-                    writeln!(self.out, " = {};", value_str)?;
                 } else if let Some(ref binding) = var.binding {
                     // write an inline sampler
                     let resolved = options.resolve_global_binding(ep.stage, binding).unwrap();
@@ -1902,8 +2000,13 @@ impl<W: Write> Writer<W> {
                 };
                 write!(self.out, "{}{} {}", INDENT, ty_name, name)?;
                 if let Some(value) = local.init {
-                    let value_str = &self.names[&NameKey::Constant(value)];
-                    write!(self.out, " = {}", value_str)?;
+                    let coco = ConstantContext {
+                        handle: value,
+                        arena: &module.constants,
+                        names: &self.names,
+                        first_time: false,
+                    };
+                    write!(self.out, " = {}", coco)?;
                 }
                 writeln!(self.out, ";")?;
             }

@@ -5,15 +5,7 @@ expression: msl
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-constexpr constant int const_0i = 0;
-constexpr constant int const_1i = 1;
-constexpr constant int const_2i = 2;
-constexpr constant int const_3i = 3;
-constexpr constant unsigned const_1u = 1u;
-constexpr constant int const_0i1 = 0;
-constexpr constant float const_0f = 0.0;
-constexpr constant float const_1f = 1.0;
-typedef float type6[const_1u];
+typedef float type6[1u];
 struct gl_PerVertex {
     metal::float4 gl_Position;
     float gl_PointSize;
@@ -35,7 +27,7 @@ void main1(
 ) {
     v_uv = a_uv;
     metal::float2 _expr13 = a_pos;
-    _.gl_Position = metal::float4(_expr13.x, _expr13.y, const_0f, const_1f);
+    _.gl_Position = metal::float4(_expr13.x, _expr13.y, 0.0, 1.0);
     return;
 }
 
