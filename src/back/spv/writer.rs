@@ -790,6 +790,8 @@ impl Writer {
             }
         }
 
+        use spirv::Decoration;
+
         let instruction = match ty.inner {
             crate::TypeInner::Scalar { kind, width } => self.write_scalar(id, kind, width),
             crate::TypeInner::Vector { size, kind, width } => {
@@ -846,7 +848,7 @@ impl Writer {
                 if let Some(array_stride) = stride {
                     self.annotations.push(Instruction::decorate(
                         id,
-                        spirv::Decoration::ArrayStride,
+                        Decoration::ArrayStride,
                         &[array_stride.get()],
                     ));
                 }
@@ -863,7 +865,7 @@ impl Writer {
             crate::TypeInner::Struct { block, ref members } => {
                 if block {
                     self.annotations
-                        .push(Instruction::decorate(id, spirv::Decoration::Block, &[]));
+                        .push(Instruction::decorate(id, Decoration::Block, &[]));
                 }
 
                 let mut current_offset = 0;
@@ -873,7 +875,7 @@ impl Writer {
                     self.annotations.push(Instruction::member_decorate(
                         id,
                         index as u32,
-                        spirv::Decoration::Offset,
+                        Decoration::Offset,
                         &[placement.start],
                     ));
                     current_offset = placement.end;
@@ -898,13 +900,13 @@ impl Writer {
                         self.annotations.push(Instruction::member_decorate(
                             id,
                             index as u32,
-                            spirv::Decoration::ColMajor,
+                            Decoration::ColMajor,
                             &[],
                         ));
                         self.annotations.push(Instruction::member_decorate(
                             id,
                             index as u32,
-                            spirv::Decoration::MatrixStride,
+                            Decoration::MatrixStride,
                             &[byte_stride as u32],
                         ));
                     }
@@ -1067,18 +1069,20 @@ impl Writer {
             }
         }
 
+        use spirv::{BuiltIn, Decoration};
+
         match *binding {
             crate::Binding::Location(location, interpolation) => {
                 self.annotations.push(Instruction::decorate(
                     id,
-                    spirv::Decoration::Location,
+                    Decoration::Location,
                     &[location],
                 ));
                 let interp_decoration = match interpolation {
-                    Some(crate::Interpolation::Linear) => Some(spirv::Decoration::NoPerspective),
-                    Some(crate::Interpolation::Flat) => Some(spirv::Decoration::Flat),
-                    Some(crate::Interpolation::Centroid) => Some(spirv::Decoration::Centroid),
-                    Some(crate::Interpolation::Sample) => Some(spirv::Decoration::Sample),
+                    Some(crate::Interpolation::Linear) => Some(Decoration::NoPerspective),
+                    Some(crate::Interpolation::Flat) => Some(Decoration::Flat),
+                    Some(crate::Interpolation::Centroid) => Some(Decoration::Centroid),
+                    Some(crate::Interpolation::Sample) => Some(Decoration::Sample),
                     Some(crate::Interpolation::Perspective) | None => None,
                 };
                 if let Some(decoration) = interp_decoration {
@@ -1091,34 +1095,34 @@ impl Writer {
                 let built_in = match built_in {
                     Bi::Position => {
                         if class == spirv::StorageClass::Output {
-                            spirv::BuiltIn::Position
+                            BuiltIn::Position
                         } else {
-                            spirv::BuiltIn::FragCoord
+                            BuiltIn::FragCoord
                         }
                     }
                     // vertex
-                    Bi::BaseInstance => spirv::BuiltIn::BaseInstance,
-                    Bi::BaseVertex => spirv::BuiltIn::BaseVertex,
-                    Bi::ClipDistance => spirv::BuiltIn::ClipDistance,
-                    Bi::InstanceIndex => spirv::BuiltIn::InstanceIndex,
-                    Bi::PointSize => spirv::BuiltIn::PointSize,
-                    Bi::VertexIndex => spirv::BuiltIn::VertexIndex,
+                    Bi::BaseInstance => BuiltIn::BaseInstance,
+                    Bi::BaseVertex => BuiltIn::BaseVertex,
+                    Bi::ClipDistance => BuiltIn::ClipDistance,
+                    Bi::InstanceIndex => BuiltIn::InstanceIndex,
+                    Bi::PointSize => BuiltIn::PointSize,
+                    Bi::VertexIndex => BuiltIn::VertexIndex,
                     // fragment
-                    Bi::FragDepth => spirv::BuiltIn::FragDepth,
-                    Bi::FrontFacing => spirv::BuiltIn::FrontFacing,
-                    Bi::SampleIndex => spirv::BuiltIn::SampleId,
-                    Bi::SampleMask => spirv::BuiltIn::SampleMask,
+                    Bi::FragDepth => BuiltIn::FragDepth,
+                    Bi::FrontFacing => BuiltIn::FrontFacing,
+                    Bi::SampleIndex => BuiltIn::SampleId,
+                    Bi::SampleMask => BuiltIn::SampleMask,
                     // compute
-                    Bi::GlobalInvocationId => spirv::BuiltIn::GlobalInvocationId,
-                    Bi::LocalInvocationId => spirv::BuiltIn::LocalInvocationId,
-                    Bi::LocalInvocationIndex => spirv::BuiltIn::LocalInvocationIndex,
-                    Bi::WorkGroupId => spirv::BuiltIn::WorkgroupId,
-                    Bi::WorkGroupSize => spirv::BuiltIn::WorkgroupSize,
+                    Bi::GlobalInvocationId => BuiltIn::GlobalInvocationId,
+                    Bi::LocalInvocationId => BuiltIn::LocalInvocationId,
+                    Bi::LocalInvocationIndex => BuiltIn::LocalInvocationIndex,
+                    Bi::WorkGroupId => BuiltIn::WorkgroupId,
+                    Bi::WorkGroupSize => BuiltIn::WorkgroupSize,
                 };
 
                 self.annotations.push(Instruction::decorate(
                     id,
-                    spirv::Decoration::BuiltIn,
+                    Decoration::BuiltIn,
                     &[built_in as u32],
                 ));
             }
@@ -1149,9 +1153,11 @@ impl Writer {
             }
         }
 
+        use spirv::Decoration;
+
         let access_decoration = match global_variable.storage_access {
-            crate::StorageAccess::LOAD => Some(spirv::Decoration::NonWritable),
-            crate::StorageAccess::STORE => Some(spirv::Decoration::NonReadable),
+            crate::StorageAccess::LOAD => Some(Decoration::NonWritable),
+            crate::StorageAccess::STORE => Some(Decoration::NonReadable),
             _ => None,
         };
         if let Some(decoration) = access_decoration {
@@ -1162,12 +1168,12 @@ impl Writer {
         if let Some(ref res_binding) = global_variable.binding {
             self.annotations.push(Instruction::decorate(
                 id,
-                spirv::Decoration::DescriptorSet,
+                Decoration::DescriptorSet,
                 &[res_binding.group],
             ));
             self.annotations.push(Instruction::decorate(
                 id,
-                spirv::Decoration::Binding,
+                Decoration::Binding,
                 &[res_binding.binding],
             ));
         }
