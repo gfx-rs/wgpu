@@ -338,13 +338,24 @@ impl FlowGraph {
                         condition,
                         true_id,
                         false_id,
-                    } => body.push(crate::Statement::If {
-                        condition,
-                        accept: self
-                            .naga_traverse(self.block_to_node[&true_id], Some(merge_node_index))?,
-                        reject: self
-                            .naga_traverse(self.block_to_node[&false_id], Some(merge_node_index))?,
-                    }),
+                    } => {
+                        let true_node_index = self.block_to_node[&true_id];
+                        let false_node_index = self.block_to_node[&false_id];
+
+                        body.push(crate::Statement::If {
+                            condition,
+                            accept: if true_node_index == merge_node_index {
+                                vec![crate::Statement::Break]
+                            } else {
+                                self.naga_traverse(true_node_index, Some(merge_node_index))?
+                            },
+                            reject: if false_node_index == merge_node_index {
+                                vec![crate::Statement::Break]
+                            } else {
+                                self.naga_traverse(false_node_index, Some(merge_node_index))?
+                            },
+                        });
+                    }
                     Terminator::Branch { target_id } => body.extend(
                         self.naga_traverse(self.block_to_node[&target_id], Some(merge_node_index))?,
                     ),
