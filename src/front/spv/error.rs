@@ -54,6 +54,5 @@ pub enum Error {
     InvalidEdgeClassification,
     FunctionCallCycle(spirv::Word),
     // incomplete implementation error
-    UnsupportedRowMajorMatrix,
     UnsupportedMatrixStride(spirv::Word),
 }

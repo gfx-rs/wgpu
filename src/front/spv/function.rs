@@ -63,6 +63,9 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
     }
 
     pub(super) fn parse_function(&mut self, module: &mut crate::Module) -> Result<(), Error> {
+        self.lookup_expression.clear();
+        self.lookup_load_override.clear();
+
         let result_type_id = self.next()?;
         let fun_id = self.next()?;
         let _fun_control = self.next()?;
