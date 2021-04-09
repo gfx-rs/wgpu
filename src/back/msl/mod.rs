@@ -57,6 +57,7 @@ pub struct BindTarget {
 }
 
 #[derive(Clone, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct BindSource {
     pub stage: crate::ShaderStage,
@@ -95,6 +96,8 @@ pub enum Error {
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum EntryPointError {
     #[error("mapping of {0:?} is missing")]
     MissingBinding(BindSource),
