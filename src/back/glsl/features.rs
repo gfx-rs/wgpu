@@ -26,7 +26,7 @@ bitflags::bitflags! {
         const TEXTURE_1D = 1 << 10;
         /// Interpolation and auxiliary qualifiers. Perspective, Flat, and
         /// Centroid are available in all GLSL versions we support.
-        const LINEAR_QUALIFIER = 1 << 11;
+        const NOPERSPECTIVE_QUALIFIER = 1 << 11;
         const SAMPLE_QUALIFIER = 1 << 12;
     }
 }
@@ -88,7 +88,7 @@ impl FeaturesManager {
         // 1D textures are supported by all core versions and aren't supported by an es versions
         // so use 0 that way the check will always be false and can be optimized away
         check_feature!(TEXTURE_1D, 0);
-        check_feature!(LINEAR_QUALIFIER, 130);
+        check_feature!(NOPERSPECTIVE_QUALIFIER, 130);
         check_feature!(SAMPLE_QUALIFIER, 400, 320);
 
         // Return an error if there are missing features
@@ -290,7 +290,7 @@ impl<'a, W> Writer<'a, W> {
             _ => {
                 if let Some(&Binding::Location(_, Some(interpolation))) = binding {
                     match interpolation {
-                        Interpolation::Linear => self.features.request(Features::LINEAR_QUALIFIER),
+                        Interpolation::Linear => self.features.request(Features::NOPERSPECTIVE_QUALIFIER),
                         Interpolation::Sample => self.features.request(Features::SAMPLE_QUALIFIER),
                         _ => ()
                     };

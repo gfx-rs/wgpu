@@ -1,0 +1,48 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+struct FragmentInput {
+    metal::float4 position;
+    metal::uint flat;
+    float linear;
+    metal::float2 centroid;
+    metal::float3 sample;
+    metal::float4 perspective;
+};
+
+struct main1Output {
+    metal::float4 position [[position]];
+    metal::uint flat [[user(loc0)]];
+    float linear [[user(loc1)]];
+    metal::float2 centroid [[user(loc2)]];
+    metal::float3 sample [[user(loc3)]];
+    metal::float4 perspective [[user(loc4)]];
+};
+vertex main1Output main1(
+) {
+    FragmentInput out;
+    out.position = metal::float4(2.0, 4.0, 5.0, 6.0);
+    out.flat = 8u;
+    out.linear = 27.0;
+    out.centroid = metal::float2(64.0, 125.0);
+    out.sample = metal::float3(216.0, 343.0, 512.0);
+    out.perspective = metal::float4(729.0, 1000.0, 1331.0, 1728.0);
+    const auto _tmp = out;
+    return main1Output { _tmp.position, _tmp.flat, _tmp.linear, _tmp.centroid, _tmp.sample, _tmp.perspective };
+}
+
+
+struct main2Input {
+    metal::uint flat [[user(loc0)]];
+    float linear [[user(loc1)]];
+    metal::float2 centroid [[user(loc2)]];
+    metal::float3 sample [[user(loc3)]];
+    metal::float4 perspective [[user(loc4)]];
+};
+fragment void main2(
+  main2Input varyings1 [[stage_in]]
+, metal::float4 position [[position]]
+) {
+    const FragmentInput val = { position, varyings1.flat, varyings1.linear, varyings1.centroid, varyings1.sample, varyings1.perspective };
+    return;
+}

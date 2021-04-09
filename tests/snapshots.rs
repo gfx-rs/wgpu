@@ -225,6 +225,7 @@ fn convert_wgsl() {
         ("image-copy", Targets::METAL),
         ("texture-array", Targets::SPIRV | Targets::METAL),
         ("operators", Targets::SPIRV | Targets::METAL | Targets::GLSL),
+        ("interpolate", Targets::SPIRV | Targets::METAL | Targets::GLSL),
     ];
 
     for &(name, targets) in inputs.iter() {
