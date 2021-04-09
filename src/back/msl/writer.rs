@@ -1821,7 +1821,7 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, "struct {} {{", stage_in_name)?;
                 for &(ref name_key, ty, binding) in argument_members.iter() {
                     let binding = match binding {
-                        Some(ref binding @ &crate::Binding::Location(..)) => binding,
+                        Some(ref binding @ &crate::Binding::Location { .. }) => binding,
                         _ => continue,
                     };
                     varying_count += 1;
@@ -2044,7 +2044,7 @@ impl<W: Write> Writer<W> {
                             if member_index != 0 {
                                 write!(self.out, ", ")?;
                             }
-                            if let Some(crate::Binding::Location(..)) = member.binding {
+                            if let Some(crate::Binding::Location { .. }) = member.binding {
                                 write!(self.out, "{}.", varyings_member_name)?;
                             }
                             write!(self.out, "{}", name)?;
@@ -2052,7 +2052,7 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, " }};")?;
                     }
                     _ => {
-                        if let Some(crate::Binding::Location(..)) = arg.binding {
+                        if let Some(crate::Binding::Location { .. }) = arg.binding {
                             writeln!(
                                 self.out,
                                 "{}const auto {} = {}.{};",

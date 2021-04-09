@@ -206,7 +206,7 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::InvalidBuiltInType(built_in));
                 }
             }
-            crate::Binding::Location(location, interpolation) => {
+            crate::Binding::Location { location, interpolation } => {
                 if !self.location_mask.insert(location as usize) {
                     return Err(VaryingError::BindingCollision { location });
                 }

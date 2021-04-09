@@ -251,10 +251,10 @@ impl Decoration {
             } => map_builtin(built_in).map(crate::Binding::BuiltIn),
             Decoration {
                 built_in: None,
-                location: Some(loc),
+                location: Some(location),
                 interpolation,
                 ..
-            } => Ok(crate::Binding::Location(loc, interpolation)),
+            } => Ok(crate::Binding::Location { location, interpolation }),
             _ => Err(Error::MissingDecoration(spirv::Decoration::Location)),
         }
     }

@@ -183,21 +183,21 @@ impl Options {
     ) -> Result<ResolvedBinding, Error> {
         match *binding {
             crate::Binding::BuiltIn(built_in) => Ok(ResolvedBinding::BuiltIn(built_in)),
-            crate::Binding::Location(index, _) => match mode {
-                LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(index)),
-                LocationMode::FragmentOutput => Ok(ResolvedBinding::Color(index)),
+            crate::Binding::Location { location, .. } => match mode {
+                LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
+                LocationMode::FragmentOutput => Ok(ResolvedBinding::Color(location)),
                 LocationMode::Intermediate => Ok(ResolvedBinding::User {
                     prefix: if self.spirv_cross_compatibility {
                         "locn"
                     } else {
                         "loc"
                     },
-                    index,
+                    index: location,
                 }),
                 LocationMode::Uniform => {
                     log::error!(
                         "Unexpected Binding::Location({}) for the Uniform mode",
-                        index
+                        location
                     );
                     Err(Error::Validation)
                 }

@@ -1517,17 +1517,26 @@
                     (
                         name: Some("in_normal_fs"),
                         ty: 2,
-                        binding: Some(Location(0, Some(Perspective))),
+                        binding: Some(Location(
+                            location: 0,
+                            interpolation: Some(Perspective),
+                        )),
                     ),
                     (
                         name: Some("in_position_fs"),
                         ty: 4,
-                        binding: Some(Location(1, Some(Perspective))),
+                        binding: Some(Location(
+                            location: 1,
+                            interpolation: Some(Perspective),
+                        )),
                     ),
                 ],
                 result: Some((
                     ty: 4,
-                    binding: Some(Location(0, None)),
+                    binding: Some(Location(
+                        location: 0,
+                        interpolation: None,
+                    )),
                 )),
                 local_variables: [],
                 expressions: [

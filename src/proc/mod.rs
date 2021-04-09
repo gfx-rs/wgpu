@@ -212,7 +212,7 @@ impl crate::Binding {
     pub fn to_built_in(&self) -> Option<crate::BuiltIn> {
         match *self {
             Self::BuiltIn(bi) => Some(bi),
-            Self::Location(..) => None,
+            Self::Location { .. } => None,
         }
     }
 }

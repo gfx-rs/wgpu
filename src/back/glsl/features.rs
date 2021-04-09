@@ -288,7 +288,10 @@ impl<'a, W> Writer<'a, W> {
                 }
             }
             _ => {
-                if let Some(&Binding::Location(_, Some(interpolation))) = binding {
+                if let Some(&Binding::Location {
+                    interpolation: Some(interpolation),
+                    ..
+                }) = binding {
                     match interpolation {
                         Interpolation::Linear => {
                             self.features.request(Features::NOPERSPECTIVE_QUALIFIER)

@@ -500,8 +500,8 @@ impl BindingParser {
     fn finish<'a>(self) -> Result<Option<crate::Binding>, Error<'a>> {
         match (self.location, self.built_in, self.interpolation) {
             (None, None, None) => Ok(None),
-            (Some(loc), None, interpolation) => {
-                Ok(Some(crate::Binding::Location(loc, interpolation)))
+            (Some(location), None, interpolation) => {
+                Ok(Some(crate::Binding::Location { location, interpolation }))
             }
             (None, Some(bi), None) => Ok(Some(crate::Binding::BuiltIn(bi))),
             (location, built_in, interpolation) => Err(Error::InconsistentBinding(

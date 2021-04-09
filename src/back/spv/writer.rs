@@ -1090,7 +1090,7 @@ impl Writer {
         use spirv::{BuiltIn, Decoration};
 
         match *binding {
-            crate::Binding::Location(location, interpolation) => {
+            crate::Binding::Location { location, interpolation } => {
                 self.decorate(id, Decoration::Location, &[location]);
                 let interp_decoration = match interpolation {
                     Some(crate::Interpolation::Linear) => Some(Decoration::NoPerspective),

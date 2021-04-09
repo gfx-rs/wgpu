@@ -344,7 +344,10 @@ impl FunctionInfo {
                         _ => false,
                     },
                     // only flat inputs are uniform
-                    Some(crate::Binding::Location(_, Some(crate::Interpolation::Flat))) => true,
+                    Some(crate::Binding::Location {
+                        interpolation: Some(crate::Interpolation::Flat),
+                        ..
+                    }) => true,
                     _ => false,
                 };
                 Uniformity {

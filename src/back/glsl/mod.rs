@@ -242,7 +242,7 @@ struct VaryingName<'a> {
 impl fmt::Display for VaryingName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self.binding {
-            Binding::Location(location, _) => {
+            Binding::Location { location, .. } => {
                 let prefix = match (self.stage, self.output) {
                     (ShaderStage::Compute, _) => unreachable!(),
                     // pipeline to vertex
@@ -794,7 +794,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             _ => {
                 let (location, interpolation) = match binding {
-                    Some(&Binding::Location(location, interpolation)) => (location, interpolation),
+                    Some(&Binding::Location { location, interpolation }) => (location, interpolation),
                     _ => return Ok(()),
                 };
                 // Write the interpolation modifier if needed
@@ -825,7 +825,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // Finally write the global name and end the global with a `;` and a newline
                 // Leading space is important
                 let vname = VaryingName {
-                    binding: &Binding::Location(location, None),
+                    binding: &Binding::Location { location, interpolation: None },
                     stage: self.entry_point.stage,
                     output,
                 };

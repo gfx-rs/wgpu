@@ -614,9 +614,9 @@ pomelo! {
     }
 
     layout_qualifier ::= Layout LeftParen layout_qualifier_id_list(l) RightParen {
-        if let Some(&(_, loc)) = l.iter().find(|&q| q.0.as_str() == "location") {
+        if let Some(&(_, location)) = l.iter().find(|&q| q.0.as_str() == "location") {
             let interpolation = None; //TODO
-            StructLayout::Binding(Binding::Location(loc, interpolation))
+            StructLayout::Binding(Binding::Location { location, interpolation })
         } else if let Some(&(_, binding)) = l.iter().find(|&q| q.0.as_str() == "binding") {
             let group = if let Some(&(_, set)) = l.iter().find(|&q| q.0.as_str() == "set") {
                 set
@@ -1133,7 +1133,7 @@ pomelo! {
                     let interpolation = d.type_qualifiers.iter().find_map(|tq| {
                         if let TypeQualifier::Interpolation(interp) = *tq { Some(interp) } else { None }
                     });
-                    if let Some(Binding::Location(_, ref mut interp)) = binding {
+                    if let Some(Binding::Location { interpolation: ref mut interp, .. }) = binding {
                         *interp = interpolation;
                     }
 

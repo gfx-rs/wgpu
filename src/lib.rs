@@ -465,7 +465,7 @@ pub enum Binding {
     /// Built-in shader variable.
     BuiltIn(BuiltIn),
     /// Indexed location.
-    Location(u32, Option<Interpolation>),
+    Location { location: u32, interpolation: Option<Interpolation> },
 }
 
 /// Pipeline binding information for global resources.

@@ -213,9 +213,10 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     });
                     let mut arg = arg.clone();
                     if ep.stage == crate::ShaderStage::Fragment {
-                        if let Some(crate::Binding::Location(_, ref mut interpolation @ None)) =
-                            arg.binding
-                        {
+                        if let Some(crate::Binding::Location {
+                            interpolation: ref mut interpolation @ None,
+                            ..
+                        }) = arg.binding {
                             *interpolation = Some(crate::Interpolation::Perspective);
                             // default
                         }
