@@ -2301,35 +2301,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let vector_type_lookup = self.lookup_type.lookup(vector_type_id)?;
         let inner = match module.types[vector_type_lookup.handle].inner {
-            crate::TypeInner::Vector { size, width, .. } => {
-                if let Some(Decoration {
-                    matrix_stride: Some(stride),
-                    ..
-                }) = decor
-                {
-                    if stride.get() != (size as u32) * (width as u32) {
-                        return Err(Error::UnsupportedMatrixStride(stride.get()));
-                    }
-                }
-                crate::TypeInner::Matrix {
-                    columns: map_vector_size(num_columns)?,
-                    rows: size,
-                    width,
-                }
-            }
+            crate::TypeInner::Vector { size, width, .. } => crate::TypeInner::Matrix {
+                columns: map_vector_size(num_columns)?,
+                rows: size,
+                width,
+            },
             _ => return Err(Error::InvalidInnerType(vector_type_id)),
         };
-
-        if let Some(Decoration {
-            matrix_major: Some(ref major),
-            ..
-        }) = decor
-        {
-            match *major {
-                Majority::Column => (),
-                Majority::Row => return Err(Error::UnsupportedRowMajorMatrix),
-            }
-        }
 
         self.lookup_type.insert(
             id,
@@ -2496,17 +2474,37 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 .future_member_decor
                 .remove(&(id, i))
                 .unwrap_or_default();
-            let binding = decor.io_binding().ok();
 
+            let binding = decor.io_binding().ok();
             let offset = match decor.offset {
                 Some(offset) => offset,
                 None => match members.last() {
                     Some(member) => {
+                        //TODO: is this needed?
+                        // If offsets are required, we can just put 0 here
                         member.offset + module.types[member.ty].inner.span(&module.constants)
                     }
                     None => 0,
                 },
             };
+
+            if let crate::TypeInner::Matrix {
+                columns: _,
+                rows,
+                width,
+            } = module.types[ty].inner
+            {
+                if let Some(stride) = decor.matrix_stride {
+                    if stride.get() != (rows as u32) * (width as u32) {
+                        return Err(Error::UnsupportedMatrixStride(stride.get()));
+                    }
+                }
+                match decor.matrix_major {
+                    None | Some(Majority::Column) => (),
+                    Some(Majority::Row) => return Err(Error::UnsupportedRowMajorMatrix),
+                }
+            }
+
             members.push(crate::StructMember {
                 name: decor.name,
                 ty,
