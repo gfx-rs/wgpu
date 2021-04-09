@@ -154,6 +154,25 @@ pub fn map_shader_stage_flags(shader_stage_flags: wgt::ShaderStage) -> hal::pso:
     value
 }
 
+pub fn map_hal_flags_to_shader_stage(
+    shader_stage_flags: hal::pso::ShaderStageFlags,
+) -> wgt::ShaderStage {
+    use hal::pso::ShaderStageFlags as H;
+    use wgt::ShaderStage as Ss;
+
+    let mut value = Ss::empty();
+    if shader_stage_flags.contains(H::VERTEX) {
+        value |= Ss::VERTEX;
+    }
+    if shader_stage_flags.contains(H::FRAGMENT) {
+        value |= Ss::FRAGMENT;
+    }
+    if shader_stage_flags.contains(H::COMPUTE) {
+        value |= Ss::COMPUTE;
+    }
+    value
+}
+
 pub fn map_extent(extent: &wgt::Extent3d, dim: wgt::TextureDimension) -> hal::image::Extent {
     hal::image::Extent {
         width: extent.width,
@@ -683,7 +702,7 @@ pub(crate) fn map_texture_state(
 }
 
 pub fn map_query_type(ty: &wgt::QueryType) -> (hal::query::Type, u32) {
-    match ty {
+    match *ty {
         wgt::QueryType::PipelineStatistics(pipeline_statistics) => {
             let mut ps = hal::query::PipelineStatistic::empty();
             ps.set(
@@ -790,23 +809,16 @@ pub fn map_primitive_state_to_rasterizer(
     depth_stencil: Option<&wgt::DepthStencilState>,
 ) -> hal::pso::Rasterizer {
     use hal::pso;
-    let (depth_clamping, depth_bias) = match depth_stencil {
-        Some(dsd) => {
-            let bias = if dsd.bias.is_enabled() {
-                Some(pso::State::Static(pso::DepthBias {
-                    const_factor: dsd.bias.constant as f32,
-                    slope_factor: dsd.bias.slope_scale,
-                    clamp: dsd.bias.clamp,
-                }))
-            } else {
-                None
-            };
-            (dsd.clamp_depth, bias)
-        }
-        None => (false, None),
+    let depth_bias = match depth_stencil {
+        Some(dsd) if dsd.bias.is_enabled() => Some(pso::State::Static(pso::DepthBias {
+            const_factor: dsd.bias.constant as f32,
+            slope_factor: dsd.bias.slope_scale,
+            clamp: dsd.bias.clamp,
+        })),
+        _ => None,
     };
     pso::Rasterizer {
-        depth_clamping,
+        depth_clamping: desc.clamp_depth,
         polygon_mode: match desc.polygon_mode {
             wgt::PolygonMode::Fill => pso::PolygonMode::Fill,
             wgt::PolygonMode::Line => pso::PolygonMode::Line,
@@ -822,7 +834,7 @@ pub fn map_primitive_state_to_rasterizer(
             wgt::FrontFace::Cw => pso::FrontFace::Clockwise,
         },
         depth_bias,
-        conservative: false,
+        conservative: desc.conservative,
         line_width: pso::State::Static(1.0),
     }
 }
