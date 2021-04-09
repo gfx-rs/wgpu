@@ -1390,26 +1390,50 @@ impl<W: Write> Writer<W> {
                             //TODO: adjust the struct initializers
                             writeln!(self.out, "{}char _pad{}[{}];", INDENT, index, pad)?;
                         }
-                        let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
-                        let base_name = TypeContext {
-                            handle: member.ty,
-                            arena: &module.types,
-                            names: &self.names,
-                            usage: global_use,
-                            access: crate::StorageAccess::empty(),
-                            first_time: false,
-                        };
-                        writeln!(self.out, "{}{} {};", INDENT, base_name, member_name)?;
                         let ty_inner = &module.types[member.ty].inner;
                         last_offset = member.offset + ty_inner.span(&module.constants);
-                        // for 3-component vectors, add one component
-                        if let crate::TypeInner::Vector {
-                            size: crate::VectorSize::Tri,
-                            kind: _,
-                            width,
-                        } = *ty_inner
-                        {
-                            last_offset += width as u32;
+                        let is_tight = match members.get(index + 1) {
+                            Some(next) => next.offset == last_offset,
+                            None => false,
+                        };
+                        let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
+
+                        match *ty_inner {
+                            // for a misaligned vec3, issue a packed vector
+                            crate::TypeInner::Vector {
+                                size: crate::VectorSize::Tri,
+                                kind,
+                                width: 4,
+                            } if member.offset & 0xF != 0 || is_tight => {
+                                writeln!(
+                                    self.out,
+                                    "{}packed_{}3 {};",
+                                    INDENT,
+                                    scalar_kind_string(kind),
+                                    member_name
+                                )?;
+                            }
+                            _ => {
+                                let base_name = TypeContext {
+                                    handle: member.ty,
+                                    arena: &module.types,
+                                    names: &self.names,
+                                    usage: global_use,
+                                    access: crate::StorageAccess::empty(),
+                                    first_time: false,
+                                };
+                                writeln!(self.out, "{}{} {};", INDENT, base_name, member_name)?;
+
+                                // for 3-component vectors, add one component
+                                if let crate::TypeInner::Vector {
+                                    size: crate::VectorSize::Tri,
+                                    kind: _,
+                                    width,
+                                } = *ty_inner
+                                {
+                                    last_offset += width as u32;
+                                }
+                            }
                         }
                     }
                     writeln!(self.out, "}};")?;
