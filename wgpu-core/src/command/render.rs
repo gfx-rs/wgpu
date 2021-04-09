@@ -972,7 +972,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     ra.selector.clone(),
                     ra.new_use,
                 )
-                .unwrap();
+                .map_err(UsageConflict::from)?;
 
             if let Some(usage) = ra.previous_use {
                 // Make the attachment tracks to be aware of the internal

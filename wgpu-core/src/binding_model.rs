@@ -10,7 +10,7 @@ use crate::{
     hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
     memory_init_tracker::MemoryInitTrackerAction,
-    track::{TrackerSet, DUMMY_SELECTOR},
+    track::{TrackerSet, UsageConflict, DUMMY_SELECTOR},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label, LifeGuard, MultiRefCount, Stored, MAX_BIND_GROUPS,
 };
@@ -136,6 +136,8 @@ pub enum CreateBindGroupError {
     DepthStencilAspect,
     #[error("the adapter does not support simultaneous read + write storage texture access for the format {0:?}")]
     StorageReadWriteNotSupported(wgt::TextureFormat),
+    #[error(transparent)]
+    ResourceUsageConflict(#[from] UsageConflict),
 }
 
 #[derive(Clone, Debug, Error)]

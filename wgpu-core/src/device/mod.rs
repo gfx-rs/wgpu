@@ -11,7 +11,7 @@ use crate::{
     id, instance,
     memory_init_tracker::{MemoryInitKind, MemoryInitTracker, MemoryInitTrackerAction},
     pipeline, resource, swap_chain,
-    track::{BufferState, TextureSelector, TextureState, TrackerSet},
+    track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers, LifeGuard, MultiRefCount, PrivateFeatures, Stored,
     SubmissionIndex, MAX_BIND_GROUPS,
@@ -1559,7 +1559,7 @@ impl<B: GfxBackend> Device<B> {
                                     view.selector.clone(),
                                     internal_use,
                                 )
-                                .unwrap();
+                                .map_err(UsageConflict::from)?;
                             check_texture_usage(texture.usage, pub_usage)?;
                             let image_layout =
                                 conv::map_texture_state(internal_use, view.aspects).1;
@@ -1623,7 +1623,7 @@ impl<B: GfxBackend> Device<B> {
                                             view.selector.clone(),
                                             internal_use,
                                         )
-                                        .unwrap();
+                                        .map_err(UsageConflict::from)?;
                                     check_texture_usage(texture.usage, pub_usage)?;
                                     let image_layout =
                                         conv::map_texture_state(internal_use, view.aspects).1;
