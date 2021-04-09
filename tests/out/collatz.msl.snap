@@ -36,8 +36,8 @@ kernel void main1(
   metal::uint3 global_id [[thread_position_in_grid]]
 , device PrimeIndices& v_indices [[user(fake0)]]
 ) {
-    metal::uint _expr9 = collatz_iterations(v_indices.data[global_id.x]);
-    v_indices.data[global_id.x] = _expr9;
+    metal::uint _e9 = collatz_iterations(v_indices.data[global_id.x]);
+    v_indices.data[global_id.x] = _e9;
     return;
 }
 

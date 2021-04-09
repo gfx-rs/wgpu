@@ -44,10 +44,10 @@ fragment main2Output main2(
 , metal::sampler u_sampler [[user(fake0)]]
 ) {
     const auto uv2 = varyings1.uv2;
-    metal::float4 _expr4 = u_texture.sample(u_sampler, uv2);
-    if (_expr4.w == 0.0) {
+    metal::float4 _e4 = u_texture.sample(u_sampler, uv2);
+    if (_e4.w == 0.0) {
         metal::discard_fragment();
     }
-    return main2Output { _expr4.w * _expr4 };
+    return main2Output { _e4.w * _e4 };
 }
 

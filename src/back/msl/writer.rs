@@ -16,7 +16,7 @@ use std::{
 
 const NAMESPACE: &str = "metal";
 const INDENT: &str = "    ";
-const BAKE_PREFIX: &str = "_expr";
+const BAKE_PREFIX: &str = "_e";
 
 #[derive(Clone)]
 struct Level(usize);
