@@ -1084,6 +1084,16 @@ impl<W: Write> Writer<W> {
                     vector_size_string(size)
                 )?;
             }
+            TypeResolution::Value(crate::TypeInner::Matrix { columns, rows, .. }) => {
+                write!(
+                    self.out,
+                    "{}::{}{}x{}",
+                    NAMESPACE,
+                    scalar_kind_string(crate::ScalarKind::Float),
+                    vector_size_string(columns),
+                    vector_size_string(rows),
+                )?;
+            }
             TypeResolution::Value(ref other) => {
                 log::error!("Type {:?} isn't a known local", other);
                 return Err(Error::FeatureNotImplemented("weird local type".to_string()));
