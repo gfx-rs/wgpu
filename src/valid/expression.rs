@@ -592,10 +592,10 @@ impl super::Validator {
                         };
                         let good = match query {
                             crate::ImageQuery::NumLayers => arrayed,
+                            crate::ImageQuery::Size { level: None } => true,
                             crate::ImageQuery::Size { level: Some(_) }
                             | crate::ImageQuery::NumLevels => can_level,
-                            crate::ImageQuery::Size { level: None }
-                            | crate::ImageQuery::NumSamples => !can_level,
+                            crate::ImageQuery::NumSamples => !can_level,
                         };
                         if !good {
                             return Err(ExpressionError::InvalidImageClass(class));
