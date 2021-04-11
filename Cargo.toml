@@ -39,6 +39,7 @@ deserialize = ["serde"]
 spv-in = ["petgraph", "spirv"]
 spv-out = ["spirv"]
 wgsl-in = ["codespan-reporting"]
+hlsl-out = []
 
 [[bin]]
 name = "convert"

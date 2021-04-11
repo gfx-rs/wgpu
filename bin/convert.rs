@@ -261,6 +261,13 @@ fn main() {
             let output = dot::write(&module, info.as_ref()).unwrap();
             fs::write(output_path, output).unwrap();
         }
+        #[cfg(feature = "hlsl-out")]
+        "hlsl" => {
+            use naga::back::hlsl;
+
+            let hlsl = hlsl::write_string(&module).unwrap_pretty();
+            fs::write(output_path, hlsl).unwrap();
+        }
         other => {
             let _ = params;
             panic!(

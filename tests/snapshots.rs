@@ -6,6 +6,7 @@ bitflags::bitflags! {
         const METAL = 0x8;
         const GLSL = 0x10;
         const DOT = 0x20;
+        const HLSL = 0x40;
     }
 }
 
@@ -89,6 +90,12 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
             with_snapshot_settings(|| {
                 insta::assert_snapshot!(format!("{}.dot", name), string);
             });
+        }
+    }
+    #[cfg(feature = "hlsl-out")]
+    {
+        if targets.contains(Targets::HLSL) {
+            check_output_hlsl(module, name);
         }
     }
 }
@@ -185,6 +192,16 @@ fn check_output_glsl(
     });
 }
 
+#[cfg(feature = "hlsl-out")]
+fn check_output_hlsl(module: &naga::Module, name: &str) {
+    use naga::back::hlsl;
+
+    let hlsl = hlsl::write_string(module).unwrap();
+    with_snapshot_settings(|| {
+        insta::assert_snapshot!(format!("{}.hlsl", name), hlsl);
+    });
+}
+
 #[cfg(feature = "wgsl-in")]
 fn convert_wgsl(name: &str, targets: Targets) {
     let module = naga::front::wgsl::parse_str(
@@ -207,7 +224,10 @@ fn convert_wgsl_quad() {
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_empty() {
-    convert_wgsl("empty", Targets::SPIRV | Targets::METAL | Targets::GLSL);
+    convert_wgsl(
+        "empty",
+        Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL,
+    );
 }
 
 #[cfg(feature = "wgsl-in")]

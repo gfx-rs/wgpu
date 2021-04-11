@@ -1,0 +1,11 @@
+---
+source: tests/snapshots.rs
+expression: hlsl
+
+---
+
+void main()
+{
+    return;
+}
+
