@@ -1531,7 +1531,7 @@ impl<W: Write> Writer<W> {
                         access: crate::StorageAccess::empty(),
                         first_time: false,
                     };
-                    write!(self.out, "constexpr constant {} {} = {{", ty_name, name,)?;
+                    write!(self.out, "constant {} {} = {{", ty_name, name,)?;
                     for (i, &sub_handle) in components.iter().enumerate() {
                         let separator = if i != 0 { ", " } else { "" };
                         let coco = ConstantContext {

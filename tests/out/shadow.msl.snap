@@ -18,7 +18,7 @@ typedef Light type3[1];
 struct Lights {
     type3 data;
 };
-constexpr constant metal::float3 c_ambient = {0.05, 0.05, 0.05};
+constant metal::float3 c_ambient = {0.05, 0.05, 0.05};
 
 float fetch_shadow(
     metal::uint light_id,
