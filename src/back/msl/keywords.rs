@@ -99,4 +99,10 @@ pub const RESERVED: &[&str] = &[
     "read_only",
     "write_only",
     "read_write",
+    // Metal reserved types
+    "llong",
+    "ullong",
+    "quad",
+    "complex",
+    "imaginary",
 ];
