@@ -895,6 +895,11 @@ impl<W: Write> Writer<W> {
             } => {
                 use crate::MathFunction as Mf;
 
+                let scalar_argument = match *context.resolve_type(arg) {
+                    crate::TypeInner::Scalar { .. } => true,
+                    _ => false,
+                };
+
                 let fun_name = match fun {
                     // comparison
                     Mf::Abs => "abs",
@@ -932,6 +937,7 @@ impl<W: Write> Writer<W> {
                     Mf::Outer => return Err(Error::UnsupportedCall(format!("{:?}", fun))),
                     Mf::Cross => "cross",
                     Mf::Distance => "distance",
+                    Mf::Length if scalar_argument => "abs",
                     Mf::Length => "length",
                     Mf::Normalize => "normalize",
                     Mf::FaceForward => "faceforward",
@@ -952,8 +958,16 @@ impl<W: Write> Writer<W> {
                     Mf::ReverseBits => "reverse_bits",
                 };
 
-                write!(self.out, "{}::{}", NAMESPACE, fun_name)?;
-                self.put_call_parameters(iter::once(arg).chain(arg1).chain(arg2), context)?;
+                if fun == Mf::Distance && scalar_argument {
+                    write!(self.out, "{}::abs(", NAMESPACE)?;
+                    self.put_expression(arg, context, false)?;
+                    write!(self.out, " - ")?;
+                    self.put_expression(arg1.unwrap(), context, false)?;
+                    write!(self.out, ")")?;
+                } else {
+                    write!(self.out, "{}::{}", NAMESPACE, fun_name)?;
+                    self.put_call_parameters(iter::once(arg).chain(arg1).chain(arg2), context)?;
+                }
             }
             crate::Expression::As {
                 expr,
@@ -2128,8 +2142,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
-        // last observed macOS value: 18768
-        if stack_size < 18000 || stack_size > 20000 {
+        // last observed macOS value: 20336
+        if stack_size < 19000 || stack_size > 21000 {
             panic!("`put_expression` stack size {} has changed!", stack_size);
         }
     }
