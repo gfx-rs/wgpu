@@ -651,10 +651,7 @@ impl Interface {
                 kind: naga::ScalarKind::Float,
                 width,
             },
-            naga::TypeInner::Struct {
-                block: _,
-                ref members,
-            } => {
+            naga::TypeInner::Struct { ref members, .. } => {
                 for member in members {
                     Self::populate(list, member.binding.as_ref(), member.ty, arena);
                 }
@@ -690,14 +687,12 @@ impl Interface {
             };
             let ty = match module.types[var.ty].inner {
                 naga::TypeInner::Struct {
-                    block: true,
+                    level: naga::StructLevel::Root,
                     members: _,
-                } => {
-                    let actual_size = info.layouter[var.ty].size;
-                    ResourceType::Buffer {
-                        size: wgt::BufferSize::new(actual_size as u64).unwrap(),
-                    }
-                }
+                    span,
+                } => ResourceType::Buffer {
+                    size: wgt::BufferSize::new(span as u64).unwrap(),
+                },
                 naga::TypeInner::Image {
                     dim,
                     arrayed,
