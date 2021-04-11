@@ -253,8 +253,16 @@ impl<'a> Display for ConstantContext<'a> {
                     write!(out, "{}u", value)
                 }
                 crate::ScalarValue::Float(value) => {
-                    let suffix = if value.fract() == 0.0 { ".0" } else { "" };
-                    write!(out, "{}{}", value, suffix)
+                    if value.is_infinite() {
+                        let sign = if value.is_sign_negative() { "-" } else { "" };
+                        write!(out, "{}INFINITY", sign)
+                    } else if value.is_nan() {
+                        write!(out, "NAN")
+                    } else {
+                        let suffix = if value.fract() == 0.0 { ".0" } else { "" };
+
+                        write!(out, "{}{}", value, suffix)
+                    }
                 }
                 crate::ScalarValue::Bool(value) => {
                     write!(out, "{}", value)
