@@ -123,7 +123,7 @@ pub enum Error<'a> {
     #[error("builtin {0:?} is not implemented")]
     UnimplementedBuiltin(crate::BuiltIn),
     #[error("expression {0} doesn't match its given type {1:?}")]
-    ConstTypeMismatch(&'a str, Handle<crate::Type>),
+    LetTypeMismatch(&'a str, Handle<crate::Type>),
     #[error("other error")]
     Other,
 }
@@ -1999,7 +1999,7 @@ impl Parser {
         self.scopes.push(Scope::Statement);
         let mut emitter = super::Emitter::default();
         match word {
-            "const" => {
+            "let" => {
                 emitter.start(context.expressions);
                 let name = lexer.next_ident()?;
                 let given_ty = if lexer.skip(Token::Separator(':')) {
@@ -2026,7 +2026,7 @@ impl Parser {
                             given_inner,
                             expr_inner
                         );
-                        return Err(Error::ConstTypeMismatch(name, ty));
+                        return Err(Error::LetTypeMismatch(name, ty));
                     }
                 }
                 block.extend(emitter.finish(context.expressions));
@@ -2584,7 +2584,7 @@ impl Parser {
                 self.lookup_type.insert(name.to_owned(), ty);
                 lexer.expect(Token::Separator(';'))?;
             }
-            (Token::Word("const"), _) => {
+            (Token::Word("let"), _) => {
                 let (name, explicit_ty, _access) = self.parse_variable_ident_decl(
                     lexer,
                     &mut module.types,
@@ -2611,7 +2611,7 @@ impl Parser {
                     crate::ConstantInner::Composite { ty, components: _ } => ty == explicit_ty,
                 };
                 if !type_match {
-                    return Err(Error::ConstTypeMismatch(name, explicit_ty));
+                    return Err(Error::LetTypeMismatch(name, explicit_ty));
                 }
                 //TODO: check `ty` against `const_handle`.
                 lexer.expect(Token::Separator(';'))?;

@@ -46,13 +46,13 @@ fn invalid_integer() {
 #[test]
 fn invalid_float() {
     err!(
-        "const scale: f32 = 1.1.;",
+        "let scale: f32 = 1.1.;",
         @r###"
     error: expected floating-point literal, found `1.1.`
-      ┌─ wgsl:1:20
+      ┌─ wgsl:1:18
       │
-    1 │ const scale: f32 = 1.1.;
-      │                    ^^^^ expected floating-point literal
+    1 │ let scale: f32 = 1.1.;
+      │                  ^^^^ expected floating-point literal
 
     "###
     );
@@ -62,13 +62,13 @@ fn invalid_float() {
 #[test]
 fn invalid_scalar_width() {
     err!(
-        "const scale: f32 = 1.1f1000;",
+        "let scale: f32 = 1.1f1000;",
         @r###"
     error: invalid width of `1000` for literal
-      ┌─ wgsl:1:20
+      ┌─ wgsl:1:18
       │
-    1 │ const scale: f32 = 1.1f1000;
-      │                    ^^^^^^^^ invalid width
+    1 │ let scale: f32 = 1.1f1000;
+      │                  ^^^^^^^^ invalid width
       │
       = note: valid width is 32
 

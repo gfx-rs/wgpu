@@ -9,8 +9,8 @@ fn main(
     //TODO: https://github.com/gpuweb/gpuweb/issues/1590
     //[[builtin(workgroup_size)]] wg_size: vec3<u32>
 ) {
-    const dim = textureDimensions(image_src);
-    const itc = dim * vec2<i32>(local_id.xy) % vec2<i32>(10, 20);
-    const value = textureLoad(image_src, itc);
+    let dim = textureDimensions(image_src);
+    let itc = dim * vec2<i32>(local_id.xy) % vec2<i32>(10, 20);
+    let value = textureLoad(image_src, itc);
     textureStore(image_dst, itc.x, value);
 }
