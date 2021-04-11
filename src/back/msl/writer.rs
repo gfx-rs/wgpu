@@ -91,7 +91,7 @@ impl<'a> Display for TypeContext<'a> {
                     Some(name) => name,
                     None => return Ok(()),
                 };
-                write!(out, "{} {}*", class_name, sub)
+                write!(out, "{} {}&", class_name, sub)
             }
             crate::TypeInner::ValuePointer {
                 size: None,
@@ -103,7 +103,7 @@ impl<'a> Display for TypeContext<'a> {
                     Some(name) => name,
                     None => return Ok(()),
                 };
-                write!(out, "{} {}*", class_name, scalar_kind_string(kind),)
+                write!(out, "{} {}&", class_name, scalar_kind_string(kind),)
             }
             crate::TypeInner::ValuePointer {
                 size: Some(size),
@@ -117,7 +117,7 @@ impl<'a> Display for TypeContext<'a> {
                 };
                 write!(
                     out,
-                    "{} {}::{}{}*",
+                    "{} {}::{}{}&",
                     class_name,
                     NAMESPACE,
                     scalar_kind_string(kind),
