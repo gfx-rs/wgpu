@@ -886,11 +886,17 @@ impl Writer {
                         }
                     }
 
+                    // The matrix decorations also go on arrays of matrices,
+                    // so lets check this first.
+                    let member_array_subty_inner = match arena[member.ty].inner {
+                        crate::TypeInner::Array { base, .. } => &arena[base].inner,
+                        ref other => other,
+                    };
                     if let crate::TypeInner::Matrix {
                         columns,
                         rows: _,
                         width,
-                    } = arena[member.ty].inner
+                    } = *member_array_subty_inner
                     {
                         let byte_stride = match columns {
                             crate::VectorSize::Bi => 2 * width,
