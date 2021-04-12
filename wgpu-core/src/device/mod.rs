@@ -27,7 +27,8 @@ use hal::{
 use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
 use wgt::{
-    BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat, TextureViewDimension,
+    BufferAddress, BufferSize, InputStepMode, TextureDimension,
+    TextureFormat, TextureViewDimension
 };
 
 use std::{
@@ -4525,7 +4526,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             HostMap::Write => (wgt::BufferUsage::MAP_WRITE, resource::BufferUse::MAP_WRITE),
         };
 
-        if range.start % wgt::COPY_BUFFER_ALIGNMENT != 0
+        if range.start % wgt::MAP_ALIGNMENT != 0
             || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
         {
             return Err(resource::BufferAccessError::UnalignedRange);
@@ -4597,10 +4598,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             buffer.size - offset
         };
 
-        if offset % 8 != 0 {
+        if offset % wgt::MAP_ALIGNMENT != 0 {
             return Err(resource::BufferAccessError::UnalignedOffset { offset });
         }
-        if range_size % 4 != 0 {
+        if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(resource::BufferAccessError::UnalignedRangeSize { range_size });
         }
 
