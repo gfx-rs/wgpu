@@ -28,7 +28,7 @@ use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
 use wgt::{
     BufferAddress, BufferSize, InputStepMode, TextureDimension,
-    TextureFormat, TextureViewDimension, MAP_ALIGNMENT, COPY_BUFFER_ALIGNMENT
+    TextureFormat, TextureViewDimension
 };
 
 use std::{
@@ -4598,10 +4598,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             buffer.size - offset
         };
 
-        if offset % MAP_ALIGNMENT != 0 {
+        if offset % wgt::MAP_ALIGNMENT != 0 {
             return Err(resource::BufferAccessError::UnalignedOffset { offset });
         }
-        if range_size % COPY_BUFFER_ALIGNMENT != 0 {
+        if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(resource::BufferAccessError::UnalignedRangeSize { range_size });
         }
 
