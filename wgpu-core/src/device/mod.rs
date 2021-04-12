@@ -4526,7 +4526,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             HostMap::Write => (wgt::BufferUsage::MAP_WRITE, resource::BufferUse::MAP_WRITE),
         };
 
-        if range.start % wgt::COPY_BUFFER_ALIGNMENT != 0
+        if range.start % wgt::MAP_ALIGNMENT != 0
             || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
         {
             return Err(resource::BufferAccessError::UnalignedRange);
