@@ -267,7 +267,7 @@ fn convert_wgsl_image_copy() {
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl_texture_array() {
-    convert_wgsl("texture-array", Targets::SPIRV);
+    convert_wgsl("texture-array", Targets::SPIRV | Targets::METAL);
 }
 
 #[cfg(feature = "spv-in")]
