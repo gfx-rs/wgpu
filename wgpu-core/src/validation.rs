@@ -117,8 +117,11 @@ pub enum BindingError {
     Missing,
     #[error("visibility flags don't include the shader stage")]
     Invisible,
-    #[error("load/store access flags {0:?} don't match the shader")]
-    WrongUsage(GlobalUse),
+    #[error("load/store access flags {actual:?} don't match the shader flags {expected:?}")]
+    WrongUsage {
+        actual: GlobalUse,
+        expected: GlobalUse,
+    },
     #[error("type on the shader side does not match the pipeline binding")]
     WrongType,
     #[error("buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
@@ -346,7 +349,7 @@ impl Resource {
                             },
                             wgt::TextureSampleType::Depth => naga::ImageClass::Depth,
                         };
-                        (class, GlobalUse::READ)
+                        (class, GlobalUse::READ | GlobalUse::QUERY)
                     }
                     BindingType::StorageTexture {
                         access,
@@ -377,7 +380,7 @@ impl Resource {
         if allowed_usage.contains(shader_usage) {
             Ok(())
         } else {
-            Err(BindingError::WrongUsage(shader_usage))
+            Err(BindingError::WrongUsage { actual: shader_usage, expected: allowed_usage })
         }
     }
 
