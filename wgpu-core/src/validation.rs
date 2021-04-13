@@ -380,7 +380,10 @@ impl Resource {
         if allowed_usage.contains(shader_usage) {
             Ok(())
         } else {
-            Err(BindingError::WrongUsage { actual: shader_usage, expected: allowed_usage })
+            Err(BindingError::WrongUsage {
+                actual: shader_usage,
+                expected: allowed_usage,
+            })
         }
     }
 
