@@ -12,6 +12,8 @@
 			(stage: Fragment, group: 0, binding: 1): (texture: Some(0)),
 			(stage: Fragment, group: 0, binding: 2): (sampler: Some(Inline(1))),
 		},
+		push_constants_map: (
+		),
 		inline_samplers: [
 			(
 				coord: Normalized,

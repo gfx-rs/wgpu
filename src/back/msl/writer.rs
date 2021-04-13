@@ -321,6 +321,7 @@ impl crate::StorageClass {
             crate::StorageClass::Uniform
             | crate::StorageClass::Storage
             | crate::StorageClass::Private
+            | crate::StorageClass::PushConstant
             | crate::StorageClass::Handle => true,
             _ => false,
         }
@@ -1751,7 +1752,12 @@ impl<W: Write> Writer<W> {
                     .find_map(|(var_handle, var)| {
                         if !fun_info[var_handle].is_empty() {
                             if let Some(ref br) = var.binding {
-                                if let Err(e) = options.resolve_global_binding(ep.stage, br) {
+                                if let Err(e) = options.resolve_resource_binding(ep.stage, br) {
+                                    return Some(e);
+                                }
+                            }
+                            if var.class == crate::StorageClass::PushConstant {
+                                if let Err(e) = options.resolve_push_constants(ep.stage) {
                                     return Some(e);
                                 }
                             }
@@ -1920,10 +1926,16 @@ impl<W: Write> Writer<W> {
                 if usage.is_empty() || var.class == crate::StorageClass::Private {
                     continue;
                 }
-                let resolved = var
-                    .binding
-                    .as_ref()
-                    .map(|binding| options.resolve_global_binding(ep.stage, binding).unwrap());
+                // the resolves have already been checked for `!fake_missing_bindings` case
+                let resolved = match var.class {
+                    crate::StorageClass::PushConstant => {
+                        options.resolve_push_constants(ep.stage).ok()
+                    }
+                    crate::StorageClass::WorkGroup => None,
+                    _ => options
+                        .resolve_resource_binding(ep.stage, var.binding.as_ref().unwrap())
+                        .ok(),
+                };
                 if let Some(ref resolved) = resolved {
                     // Inline samplers are be defined in the EP body
                     if resolved.as_inline_sampler(options).is_some() {
@@ -1997,7 +2009,7 @@ impl<W: Write> Writer<W> {
                     };
                 } else if let Some(ref binding) = var.binding {
                     // write an inline sampler
-                    let resolved = options.resolve_global_binding(ep.stage, binding).unwrap();
+                    let resolved = options.resolve_resource_binding(ep.stage, binding).unwrap();
                     if let Some(sampler) = resolved.as_inline_sampler(options) {
                         let name = &self.names[&NameKey::GlobalVariable(handle)];
                         writeln!(

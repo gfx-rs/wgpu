@@ -36,10 +36,12 @@ mod writer;
 
 pub use writer::Writer;
 
+pub type Slot = u8;
+
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum BindSamplerTarget {
-    Resource(u8),
+    Resource(Slot),
     Inline(Handle<sampler::InlineSampler>),
 }
 
@@ -47,9 +49,9 @@ pub enum BindSamplerTarget {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct BindTarget {
     #[cfg_attr(feature = "deserialize", serde(default))]
-    pub buffer: Option<u8>,
+    pub buffer: Option<Slot>,
     #[cfg_attr(feature = "deserialize", serde(default))]
-    pub texture: Option<u8>,
+    pub texture: Option<Slot>,
     #[cfg_attr(feature = "deserialize", serde(default))]
     pub sampler: Option<BindSamplerTarget>,
     #[cfg_attr(feature = "deserialize", serde(default))]
@@ -66,6 +68,18 @@ pub struct BindSource {
 }
 
 pub type BindingMap = FastHashMap<BindSource, BindTarget>;
+
+#[derive(Clone, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct PushConstantsMap {
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub vs_buffer: Option<Slot>,
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub fs_buffer: Option<Slot>,
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub cs_buffer: Option<Slot>,
+}
 
 enum ResolvedBinding {
     BuiltIn(crate::BuiltIn),
@@ -101,6 +115,8 @@ pub enum Error {
 pub enum EntryPointError {
     #[error("mapping of {0:?} is missing")]
     MissingBinding(BindSource),
+    #[error("mapping for push constants at stage {0:?} is missing")]
+    MissingPushConstants(crate::ShaderStage),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -118,6 +134,8 @@ pub struct Options {
     pub lang_version: (u8, u8),
     /// Binding model mapping to Metal.
     pub binding_map: BindingMap,
+    /// Push constants mapping to Metal.
+    pub push_constants_map: PushConstantsMap,
     /// Samplers to be inlined into the code.
     pub inline_samplers: Arena<sampler::InlineSampler>,
     /// Make it possible to link different stages via SPIRV-Cross.
@@ -131,6 +149,7 @@ impl Default for Options {
         Options {
             lang_version: (1, 0),
             binding_map: BindingMap::default(),
+            push_constants_map: PushConstantsMap::default(),
             inline_samplers: Arena::new(),
             spirv_cross_compatibility: false,
             fake_missing_bindings: true,
@@ -185,7 +204,7 @@ impl Options {
         }
     }
 
-    fn resolve_global_binding(
+    fn resolve_resource_binding(
         &self,
         stage: crate::ShaderStage,
         res_binding: &crate::ResourceBinding,
@@ -202,6 +221,30 @@ impl Options {
                 index: 0,
             }),
             None => Err(EntryPointError::MissingBinding(source)),
+        }
+    }
+
+    fn resolve_push_constants(
+        &self,
+        stage: crate::ShaderStage,
+    ) -> Result<ResolvedBinding, EntryPointError> {
+        let slot = match stage {
+            crate::ShaderStage::Vertex => self.push_constants_map.vs_buffer,
+            crate::ShaderStage::Fragment => self.push_constants_map.fs_buffer,
+            crate::ShaderStage::Compute => self.push_constants_map.cs_buffer,
+        };
+        match slot {
+            Some(slot) => Ok(ResolvedBinding::Resource(BindTarget {
+                buffer: Some(slot),
+                texture: None,
+                sampler: None,
+                mutable: false,
+            })),
+            None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
+                prefix: "fake",
+                index: 0,
+            }),
+            None => Err(EntryPointError::MissingPushConstants(stage)),
         }
     }
 }
