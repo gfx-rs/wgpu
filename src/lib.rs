@@ -556,7 +556,6 @@ impl MapContext {
             None => self.initial_range.end,
         };
 
-        // Switch this out with `Vec::remove_item` once that stabilizes.
         let index = self
             .sub_ranges
             .iter()
