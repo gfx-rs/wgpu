@@ -129,9 +129,9 @@ impl StagingBelt {
         encoder.copy_buffer_to_buffer(&chunk.buffer, chunk.offset, target, offset, size.get());
         let old_offset = chunk.offset;
         chunk.offset += size.get();
-        let remainder = chunk.offset % crate::COPY_BUFFER_ALIGNMENT;
+        let remainder = chunk.offset % crate::MAP_ALIGNMENT;
         if remainder != 0 {
-            chunk.offset += crate::COPY_BUFFER_ALIGNMENT - remainder;
+            chunk.offset += crate::MAP_ALIGNMENT - remainder;
         }
 
         self.active_chunks.push(chunk);
