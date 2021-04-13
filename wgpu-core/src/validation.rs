@@ -117,8 +117,11 @@ pub enum BindingError {
     Missing,
     #[error("visibility flags don't include the shader stage")]
     Invisible,
-    #[error("load/store access flags {0:?} don't match the shader")]
-    WrongUsage(GlobalUse),
+    #[error("The shader requires the load/store access flags {required:?} but only {allowed:?} is allowed")]
+    WrongUsage {
+        required: GlobalUse,
+        allowed: GlobalUse,
+    },
     #[error("type on the shader side does not match the pipeline binding")]
     WrongType,
     #[error("buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
@@ -253,7 +256,7 @@ impl Resource {
                         let global_use = match ty {
                             wgt::BufferBindingType::Uniform
                             | wgt::BufferBindingType::Storage { read_only: true } => {
-                                GlobalUse::READ
+                                GlobalUse::READ | GlobalUse::QUERY
                             }
                             wgt::BufferBindingType::Storage { read_only: _ } => GlobalUse::all(),
                         };
@@ -346,7 +349,7 @@ impl Resource {
                             },
                             wgt::TextureSampleType::Depth => naga::ImageClass::Depth,
                         };
-                        (class, GlobalUse::READ)
+                        (class, GlobalUse::READ | GlobalUse::QUERY)
                     }
                     BindingType::StorageTexture {
                         access,
@@ -356,8 +359,12 @@ impl Resource {
                         let naga_format = map_storage_format_to_naga(format)
                             .ok_or(BindingError::BadStorageFormat(format))?;
                         let usage = match access {
-                            wgt::StorageTextureAccess::ReadOnly => GlobalUse::READ,
-                            wgt::StorageTextureAccess::WriteOnly => GlobalUse::WRITE,
+                            wgt::StorageTextureAccess::ReadOnly => {
+                                GlobalUse::READ | GlobalUse::QUERY
+                            }
+                            wgt::StorageTextureAccess::WriteOnly => {
+                                GlobalUse::WRITE | GlobalUse::QUERY
+                            }
                             wgt::StorageTextureAccess::ReadWrite => GlobalUse::all(),
                         };
                         (naga::ImageClass::Storage(naga_format), usage)
@@ -377,7 +384,10 @@ impl Resource {
         if allowed_usage.contains(shader_usage) {
             Ok(())
         } else {
-            Err(BindingError::WrongUsage(shader_usage))
+            Err(BindingError::WrongUsage {
+                required: shader_usage,
+                allowed: allowed_usage,
+            })
         }
     }
 
