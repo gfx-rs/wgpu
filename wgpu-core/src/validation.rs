@@ -117,10 +117,10 @@ pub enum BindingError {
     Missing,
     #[error("visibility flags don't include the shader stage")]
     Invisible,
-    #[error("load/store access flags {actual:?} don't match the shader flags {expected:?}")]
+    #[error("The shader requires the load/store access flags {required:?} but only {allowed:?} is allowed")]
     WrongUsage {
-        actual: GlobalUse,
-        expected: GlobalUse,
+        required: GlobalUse,
+        allowed: GlobalUse,
     },
     #[error("type on the shader side does not match the pipeline binding")]
     WrongType,
@@ -381,8 +381,8 @@ impl Resource {
             Ok(())
         } else {
             Err(BindingError::WrongUsage {
-                actual: shader_usage,
-                expected: allowed_usage,
+                required: shader_usage,
+                allowed: allowed_usage,
             })
         }
     }
