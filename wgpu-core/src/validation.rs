@@ -256,7 +256,7 @@ impl Resource {
                         let global_use = match ty {
                             wgt::BufferBindingType::Uniform
                             | wgt::BufferBindingType::Storage { read_only: true } => {
-                                GlobalUse::READ
+                                GlobalUse::READ | GlobalUse::QUERY
                             }
                             wgt::BufferBindingType::Storage { read_only: _ } => GlobalUse::all(),
                         };
@@ -359,8 +359,12 @@ impl Resource {
                         let naga_format = map_storage_format_to_naga(format)
                             .ok_or(BindingError::BadStorageFormat(format))?;
                         let usage = match access {
-                            wgt::StorageTextureAccess::ReadOnly => GlobalUse::READ,
-                            wgt::StorageTextureAccess::WriteOnly => GlobalUse::WRITE,
+                            wgt::StorageTextureAccess::ReadOnly => {
+                                GlobalUse::READ | GlobalUse::QUERY
+                            }
+                            wgt::StorageTextureAccess::WriteOnly => {
+                                GlobalUse::WRITE | GlobalUse::QUERY
+                            }
                             wgt::StorageTextureAccess::ReadWrite => GlobalUse::all(),
                         };
                         (naga::ImageClass::Storage(naga_format), usage)
