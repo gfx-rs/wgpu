@@ -48,6 +48,7 @@ use std::{convert::TryInto, num::NonZeroU32, path::PathBuf};
 
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Shader,
+    spirv::Capability::VulkanMemoryModel,
     spirv::Capability::ClipDistance,
     spirv::Capability::CullDistance,
     spirv::Capability::SampleRateShading,
@@ -67,7 +68,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::UniformBufferArrayDynamicIndexing,
     spirv::Capability::StorageBufferArrayDynamicIndexing,
 ];
-pub const SUPPORTED_EXTENSIONS: &[&str] = &[];
+pub const SUPPORTED_EXTENSIONS: &[&str] = &["SPV_KHR_vulkan_memory_model"];
 pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
 
 #[derive(Copy, Clone)]
