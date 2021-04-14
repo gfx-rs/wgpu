@@ -1993,8 +1993,10 @@ impl Writer {
                 });
                 id
             }
-            ref other => {
-                log::error!("unimplemented {:?}", other);
+            crate::Expression::ImageQuery { .. } |
+            crate::Expression::Relational { .. } |
+            crate::Expression::ArrayLength(_) => {
+                log::error!("unimplemented {:?}", ir_function.expressions[expr_handle]);
                 return Err(Error::FeatureNotImplemented("expression"));
             }
         };
