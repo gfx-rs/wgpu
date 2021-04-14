@@ -27,8 +27,7 @@ use hal::{
 use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
 use wgt::{
-    BufferAddress, BufferSize, InputStepMode, TextureDimension,
-    TextureFormat, TextureViewDimension
+    BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat, TextureViewDimension,
 };
 
 use std::{
@@ -2081,7 +2080,7 @@ impl<B: GfxBackend> Device<B> {
                 });
                 io.insert(
                     attribute.shader_location,
-                    validation::NumericType::from_vertex_format(attribute.format),
+                    validation::InterfaceVar::vertex_attribute(attribute.format),
                 );
             }
         }
@@ -2315,7 +2314,8 @@ impl<B: GfxBackend> Device<B> {
         if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
             for (i, state) in color_states.iter().enumerate() {
                 match io.get(&(i as wgt::ShaderLocation)) {
-                    Some(output) if validation::check_texture_format(state.format, output) => {}
+                    Some(ref output)
+                        if validation::check_texture_format(state.format, &output.ty) => {}
                     Some(output) => {
                         log::warn!(
                             "Incompatible fragment output[{}] from shader: {:?}, expected {:?}",
@@ -4526,9 +4526,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             HostMap::Write => (wgt::BufferUsage::MAP_WRITE, resource::BufferUse::MAP_WRITE),
         };
 
-        if range.start % wgt::MAP_ALIGNMENT != 0
-            || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
-        {
+        if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(resource::BufferAccessError::UnalignedRange);
         }
 

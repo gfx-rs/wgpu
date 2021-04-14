@@ -45,9 +45,26 @@ pub struct NumericType {
     width: naga::Bytes,
 }
 
+#[derive(Clone, Debug)]
+pub struct InterfaceVar {
+    pub ty: NumericType,
+    interpolation: Option<naga::Interpolation>,
+    //TODO: https://github.com/gfx-rs/naga/pull/689
+    //sampling: Option<naga::Sampling>,
+}
+
+impl InterfaceVar {
+    pub fn vertex_attribute(format: wgt::VertexFormat) -> Self {
+        InterfaceVar {
+            ty: NumericType::from_vertex_format(format),
+            interpolation: None,
+        }
+    }
+}
+
 #[derive(Debug)]
 enum Varying {
-    Local { location: u32, ty: NumericType },
+    Local { location: u32, iv: InterfaceVar },
     BuiltIn(naga::BuiltIn),
 }
 
@@ -461,7 +478,7 @@ impl Resource {
 }
 
 impl NumericType {
-    pub fn from_vertex_format(format: wgt::VertexFormat) -> Self {
+    fn from_vertex_format(format: wgt::VertexFormat) -> Self {
         use naga::{ScalarKind as Sk, VectorSize as Vs};
         use wgt::VertexFormat as Vf;
 
@@ -625,6 +642,19 @@ impl NumericType {
             _ => false,
         }
     }
+
+    fn is_compatible_with(&self, other: &NumericType) -> bool {
+        if self.kind != other.kind {
+            return false;
+        }
+        match (self.dim, other.dim) {
+            (NumericDimension::Scalar, NumericDimension::Scalar) => true,
+            (NumericDimension::Scalar, NumericDimension::Vector(_)) => true,
+            (NumericDimension::Vector(_), NumericDimension::Vector(_)) => true,
+            (NumericDimension::Matrix(..), NumericDimension::Matrix(..)) => true,
+            _ => false,
+        }
+    }
 }
 
 /// Return true if the fragment `format` is covered by the provided `output`.
@@ -632,7 +662,7 @@ pub fn check_texture_format(format: wgt::TextureFormat, output: &NumericType) ->
     NumericType::from_texture_format(format).is_subtype_of(output)
 }
 
-pub type StageIo = FastHashMap<wgt::ShaderLocation, NumericType>;
+pub type StageIo = FastHashMap<wgt::ShaderLocation, InterfaceVar>;
 
 impl Interface {
     fn populate(
@@ -674,9 +704,12 @@ impl Interface {
         };
 
         let varying = match binding {
-            Some(&naga::Binding::Location(location, _)) => Varying::Local {
+            Some(&naga::Binding::Location(location, interpolation)) => Varying::Local {
                 location,
-                ty: numeric_ty,
+                iv: InterfaceVar {
+                    ty: numeric_ty,
+                    interpolation,
+                },
             },
             Some(&naga::Binding::BuiltIn(built_in)) => Varying::BuiltIn(built_in),
             None => {
@@ -835,13 +868,25 @@ impl Interface {
 
         for input in entry_point.inputs.iter() {
             match *input {
-                Varying::Local { location, ty } => {
+                Varying::Local { location, ref iv } => {
                     let result =
                         inputs
                             .get(&location)
                             .ok_or(InputError::Missing)
                             .and_then(|provided| {
-                                if ty.is_subtype_of(provided) {
+                                let compatible = match shader_stage {
+                                    // For vertex attributes, there are defaults filled out
+                                    // by the driver if data is not provided.
+                                    naga::ShaderStage::Vertex => {
+                                        iv.ty.is_compatible_with(&provided.ty)
+                                    }
+                                    naga::ShaderStage::Fragment => {
+                                        iv.ty.is_subtype_of(&provided.ty)
+                                            && iv.interpolation == provided.interpolation
+                                    }
+                                    naga::ShaderStage::Compute => false,
+                                };
+                                if compatible {
                                     Ok(())
                                 } else {
                                     Err(InputError::WrongType)
@@ -859,7 +904,7 @@ impl Interface {
             .outputs
             .iter()
             .filter_map(|output| match *output {
-                Varying::Local { location, ty } => Some((location, ty)),
+                Varying::Local { location, ref iv } => Some((location, iv.clone())),
                 Varying::BuiltIn(_) => None,
             })
             .collect();
