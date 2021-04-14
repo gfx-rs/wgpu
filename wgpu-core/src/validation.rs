@@ -4,7 +4,7 @@
 
 use crate::{binding_model::BindEntryMap, FastHashMap};
 use naga::valid::GlobalUse;
-use std::collections::hash_map::Entry;
+use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
@@ -38,11 +38,27 @@ enum NumericDimension {
     Matrix(naga::VectorSize, naga::VectorSize),
 }
 
+impl fmt::Display for NumericDimension {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Self::Scalar => write!(f, ""),
+            Self::Vector(size) => write!(f, "x{}", size as u8),
+            Self::Matrix(columns, rows) => write!(f, "x{}{}", columns as u8, rows as u8),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct NumericType {
     dim: NumericDimension,
     kind: naga::ScalarKind,
     width: naga::Bytes,
+}
+
+impl fmt::Display for NumericType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}{}{}", self.kind, self.width * 8, self.dim)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -59,6 +75,12 @@ impl InterfaceVar {
             ty: NumericType::from_vertex_format(format),
             interpolation: None,
         }
+    }
+}
+
+impl fmt::Display for InterfaceVar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} interpolated as {:?}", self.ty, self.interpolation)
     }
 }
 
@@ -166,8 +188,10 @@ pub enum BindingError {
 pub enum InputError {
     #[error("input is not provided by the earlier stage in the pipeline")]
     Missing,
-    #[error("input type is not compatible with the provided")]
-    WrongType,
+    #[error("input type is not compatible with the provided {0}")]
+    WrongType(NumericType),
+    #[error("input interpolation doesn't match provided {0:?}")]
+    InterpolationMismatch(Option<naga::Interpolation>),
 }
 
 /// Errors produced when validating a programmable stage of a pipeline.
@@ -175,19 +199,22 @@ pub enum InputError {
 pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,
-    #[error("unable to find an entry point at {0:?} stage")]
+    #[error("unable to find entry point '{0:?}'")]
     MissingEntryPoint(String),
-    #[error("error matching global binding at index {binding} in group {group} against the pipeline layout: {error}")]
+    #[error("error matching global binding at index {binding} in group {group} against the pipeline layout")]
     Binding {
         group: u32,
         binding: u32,
+        #[source]
         error: BindingError,
     },
     #[error(
-        "error matching the stage input at {location} against the previous stage outputs: {error}"
+        "error matching the stage input at {location} ({var}) against the previous stage outputs"
     )]
     Input {
         location: wgt::ShaderLocation,
+        var: InterfaceVar,
+        #[source]
         error: InputError,
     },
 }
@@ -881,19 +908,27 @@ impl Interface {
                                         iv.ty.is_compatible_with(&provided.ty)
                                     }
                                     naga::ShaderStage::Fragment => {
+                                        if iv.interpolation != provided.interpolation {
+                                            return Err(InputError::InterpolationMismatch(
+                                                provided.interpolation,
+                                            ));
+                                        }
                                         iv.ty.is_subtype_of(&provided.ty)
-                                            && iv.interpolation == provided.interpolation
                                     }
                                     naga::ShaderStage::Compute => false,
                                 };
                                 if compatible {
                                     Ok(())
                                 } else {
-                                    Err(InputError::WrongType)
+                                    Err(InputError::WrongType(provided.ty))
                                 }
                             });
                     if let Err(error) = result {
-                        return Err(StageError::Input { location, error });
+                        return Err(StageError::Input {
+                            location,
+                            var: iv.clone(),
+                            error,
+                        });
                     }
                 }
                 Varying::BuiltIn(_) => {}
