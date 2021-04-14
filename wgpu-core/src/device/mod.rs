@@ -940,6 +940,9 @@ impl<B: GfxBackend> Device<B> {
             Some(wgt::SamplerBorderColor::OpaqueWhite) => hal::image::BorderColor::OpaqueWhite,
         };
 
+        let filtering = [desc.min_filter, desc.mag_filter, desc.mipmap_filter]
+            .contains(&wgt::FilterMode::Linear);
+
         let info = hal::image::SamplerDesc {
             min_filter: conv::map_filter(desc.min_filter),
             mag_filter: conv::map_filter(desc.mag_filter),
@@ -975,6 +978,7 @@ impl<B: GfxBackend> Device<B> {
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
             comparison: info.comparison.is_some(),
+            filtering,
         })
     }
 
@@ -1412,7 +1416,7 @@ impl<B: GfxBackend> Device<B> {
                 Br::Sampler(id) => {
                     match decl.ty {
                         wgt::BindingType::Sampler {
-                            filtering: _, //TODO!!!
+                            filtering,
                             comparison,
                         } => {
                             let sampler = used
@@ -1422,7 +1426,19 @@ impl<B: GfxBackend> Device<B> {
 
                             // Check the actual sampler to also (not) be a comparison sampler
                             if sampler.comparison != comparison {
-                                return Err(Error::WrongSamplerComparison);
+                                return Err(Error::WrongSamplerComparison {
+                                    binding,
+                                    layout_cmp: comparison,
+                                    sampler_cmp: sampler.comparison,
+                                });
+                            }
+                            // Check the actual sampler to be non-filtering, if required
+                            if filtering < sampler.filtering {
+                                return Err(Error::WrongSamplerFiltering {
+                                    binding,
+                                    layout_flt: filtering,
+                                    sampler_flt: sampler.filtering,
+                                });
                             }
 
                             SmallVec::from([hal::pso::Descriptor::Sampler(&sampler.raw)])

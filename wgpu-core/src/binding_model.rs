@@ -43,6 +43,8 @@ pub enum CreateBindGroupLayoutError {
     TooManyBindings(BindingTypeMaxCountError),
 }
 
+//TODO: refactor this to move out `enum BindingError`.
+
 #[derive(Clone, Debug, Error)]
 pub enum CreateBindGroupError {
     #[error(transparent)]
@@ -130,8 +132,18 @@ pub enum CreateBindGroupError {
         layout_format: wgt::TextureFormat,
         view_format: wgt::TextureFormat,
     },
-    #[error("the given sampler is/is not a comparison sampler, while the layout type indicates otherwise")]
-    WrongSamplerComparison,
+    #[error("sampler binding {binding} expects comparison = {layout_cmp}, but given a sampler with comparison = {sampler_cmp}")]
+    WrongSamplerComparison {
+        binding: u32,
+        layout_cmp: bool,
+        sampler_cmp: bool,
+    },
+    #[error("sampler binding {binding} expects filtering = {layout_flt}, but given a sampler with filtering = {sampler_flt}")]
+    WrongSamplerFiltering {
+        binding: u32,
+        layout_flt: bool,
+        sampler_flt: bool,
+    },
     #[error("bound texture views can not have both depth and stencil aspects enabled")]
     DepthStencilAspect,
     #[error("the adapter does not support simultaneous read + write storage texture access for the format {0:?}")]
