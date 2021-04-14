@@ -606,7 +606,7 @@ pub enum ShaderModel {
 
 /// Supported physical device types.
 #[repr(u8)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum DeviceType {
@@ -809,7 +809,7 @@ impl Default for BlendOperation {
 
 /// Describes the blend component of a pipeline.
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BlendComponent {
@@ -824,14 +824,14 @@ pub struct BlendComponent {
 
 impl BlendComponent {
     /// Default blending state that replaces destination with the source.
-    pub const REPLACE: Self = BlendComponent {
+    pub const REPLACE: Self = Self {
         src_factor: BlendFactor::One,
         dst_factor: BlendFactor::Zero,
         operation: BlendOperation::Add,
     };
 
     /// Blend state of (1 * src) + ((1 - src_alpha) * dst)
-    pub const OVER: Self = BlendComponent {
+    pub const OVER: Self = Self {
         src_factor: BlendFactor::One,
         dst_factor: BlendFactor::OneMinusSrcAlpha,
         operation: BlendOperation::Add,
@@ -860,7 +860,7 @@ impl Default for BlendComponent {
 ///
 /// See the OpenGL or Vulkan spec for more information.
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BlendState {
@@ -1009,7 +1009,7 @@ impl Default for PolygonMode {
 
 /// Describes the state of primitive assembly and rasterization in a render pipeline.
 #[repr(C)]
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct PrimitiveState {
@@ -1044,7 +1044,7 @@ pub struct PrimitiveState {
 
 /// Describes the multi-sampling state of a render pipeline.
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct MultisampleState {
@@ -1720,7 +1720,7 @@ impl StencilState {
 
 /// Describes the biasing setting for the depth target.
 #[repr(C)]
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct DepthBiasState {
@@ -1822,7 +1822,7 @@ impl Default for StencilOperation {
 ///
 /// If you are not using stencil state, set this to [`StencilFaceState::IGNORE`].
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct StencilFaceState {
@@ -1908,7 +1908,7 @@ impl Default for InputStepMode {
 ///
 /// Arrays of these can be made with the [`vertex_attr_array`] macro. Vertex attributes are assumed to be tightly packed.
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct VertexAttribute {
@@ -2596,7 +2596,7 @@ impl<T> Default for RenderBundleDescriptor<Option<T>> {
 
 /// Layout of a texture in a buffer's memory.
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageDataLayout {
@@ -2837,7 +2837,7 @@ impl BindingType {
 }
 
 /// Describes a single binding inside a bind group.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BindGroupLayoutEntry {
@@ -2972,7 +2972,7 @@ bitflags::bitflags! {
 
 /// Argument buffer layout for draw_indirect commands.
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct DrawIndirectArgs {
     /// The number of vertices to draw.
     pub vertex_count: u32,
@@ -2986,7 +2986,7 @@ pub struct DrawIndirectArgs {
 
 /// Argument buffer layout for draw_indexed_indirect commands.
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct DrawIndexedIndirectArgs {
     /// The number of indices to draw.
     pub index_count: u32,
@@ -3002,7 +3002,7 @@ pub struct DrawIndexedIndirectArgs {
 
 /// Argument buffer layout for dispatch_indirect commands.
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct DispatchIndirectArgs {
     /// X dimension of the grid of workgroups to dispatch.
     pub group_size_x: u32,
