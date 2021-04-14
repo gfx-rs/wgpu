@@ -3377,7 +3377,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut entry_map = FastHashMap::default();
             for entry in desc.entries.iter() {
-                if entry_map.insert(entry.binding, entry.clone()).is_some() {
+                if entry_map.insert(entry.binding, *entry).is_some() {
                     break 'outer binding_model::CreateBindGroupLayoutError::ConflictBinding(
                         entry.binding,
                     );

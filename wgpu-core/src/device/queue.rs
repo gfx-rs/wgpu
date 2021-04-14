@@ -318,7 +318,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             trace.add(Action::WriteTexture {
                 to: destination.clone(),
                 data: data_path,
-                layout: data_layout.clone(),
+                layout: *data_layout,
                 size: *size,
             });
         }
