@@ -275,7 +275,8 @@ pub struct Writer {
     global_variables: Vec<GlobalVariable>,
     cached: CachedExpressions,
     gl450_ext_inst_id: Word,
-    temp_chain: Vec<Word>,
+    // Just a temporary list of SPIR-V ids
+    temp_list: Vec<Word>,
 }
 
 impl Writer {
@@ -307,7 +308,7 @@ impl Writer {
             global_variables: Vec::new(),
             cached: CachedExpressions::default(),
             gl450_ext_inst_id,
-            temp_chain: Vec::new(),
+            temp_list: Vec::new(),
         })
     }
 
@@ -1373,14 +1374,14 @@ impl Writer {
             crate::Expression::Constant(handle) => self.constant_ids[handle.index()],
             crate::Expression::Splat { size, value } => {
                 let value_id = self.cached[value];
-                self.temp_chain.clear();
-                self.temp_chain.resize(size as usize, value_id);
+                self.temp_list.clear();
+                self.temp_list.resize(size as usize, value_id);
 
                 let id = self.id_gen.next();
                 block.body.push(Instruction::composite_construct(
                     result_type_id,
                     id,
-                    &self.temp_chain,
+                    &self.temp_list,
                 ));
                 id
             }
@@ -1388,17 +1389,16 @@ impl Writer {
                 ty: _,
                 ref components,
             } => {
-                self.temp_chain.clear();
+                self.temp_list.clear();
                 for &component in components {
-                    let component_id = self.cached[component];
-                    self.temp_chain.push(component_id);
+                    self.temp_list.push(self.cached[component]);
                 }
 
                 let id = self.id_gen.next();
                 block.body.push(Instruction::composite_construct(
                     result_type_id,
                     id,
-                    &self.temp_chain,
+                    &self.temp_list,
                 ));
                 id
             }
@@ -1999,9 +1999,9 @@ impl Writer {
                 });
                 id
             }
-            crate::Expression::ImageQuery { .. } |
-            crate::Expression::Relational { .. } |
-            crate::Expression::ArrayLength(_) => {
+            crate::Expression::ImageQuery { .. }
+            | crate::Expression::Relational { .. }
+            | crate::Expression::ArrayLength(_) => {
                 log::error!("unimplemented {:?}", ir_function.expressions[expr_handle]);
                 return Err(Error::FeatureNotImplemented("expression"));
             }
@@ -2029,17 +2029,17 @@ impl Writer {
         };
         let result_type_id = self.get_type_id(&ir_module.types, result_lookup_ty)?;
 
-        self.temp_chain.clear();
+        self.temp_list.clear();
         let (root_id, class) = loop {
             expr_handle = match ir_function.expressions[expr_handle] {
                 crate::Expression::Access { base, index } => {
                     let index_id = self.cached[index];
-                    self.temp_chain.push(index_id);
+                    self.temp_list.push(index_id);
                     base
                 }
                 crate::Expression::AccessIndex { base, index } => {
                     let const_id = self.get_index_constant(index, &ir_module.types)?;
-                    self.temp_chain.push(const_id);
+                    self.temp_list.push(const_id);
                     base
                 }
                 crate::Expression::GlobalVariable(handle) => {
@@ -2054,16 +2054,16 @@ impl Writer {
             }
         };
 
-        let id = if self.temp_chain.is_empty() {
+        let id = if self.temp_list.is_empty() {
             root_id
         } else {
-            self.temp_chain.reverse();
+            self.temp_list.reverse();
             let id = self.id_gen.next();
             block.body.push(Instruction::access_chain(
                 result_type_id,
                 id,
                 root_id,
-                &self.temp_chain,
+                &self.temp_list,
             ));
             id
         };
@@ -2455,11 +2455,9 @@ impl Writer {
                     result,
                 } => {
                     let id = self.id_gen.next();
-                    self.temp_chain.clear();
-
+                    self.temp_list.clear();
                     for &argument in arguments {
-                        let arg_id = self.cached[argument];
-                        self.temp_chain.push(arg_id);
+                        self.temp_list.push(self.cached[argument]);
                     }
 
                     let type_id = match result {
@@ -2480,7 +2478,7 @@ impl Writer {
                         type_id,
                         id,
                         self.lookup_function[&local_function],
-                        &self.temp_chain,
+                        &self.temp_list,
                     ));
                 }
             }

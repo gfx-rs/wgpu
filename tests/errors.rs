@@ -20,7 +20,7 @@ fn check(input: &str, snapshot: &str) {
 fn function_without_identifier() {
     check(
         "fn () {}",
-r###"error: expected identifier, found '('
+        r###"error: expected identifier, found '('
   ┌─ wgsl:1:4
   │
 1 │ fn () {}
@@ -35,7 +35,7 @@ r###"error: expected identifier, found '('
 fn invalid_integer() {
     check(
         "fn foo([location(1.)] x: i32) {}",
-r###"error: expected identifier, found '['
+        r###"error: expected identifier, found '['
   ┌─ wgsl:1:8
   │
 1 │ fn foo([location(1.)] x: i32) {}
@@ -50,7 +50,7 @@ r###"error: expected identifier, found '['
 fn invalid_float() {
     check(
         "let scale: f32 = 1.1.;",
-r###"error: expected floating-point literal, found `1.1.`
+        r###"error: expected floating-point literal, found `1.1.`
   ┌─ wgsl:1:18
   │
 1 │ let scale: f32 = 1.1.;
@@ -65,7 +65,7 @@ r###"error: expected floating-point literal, found `1.1.`
 fn invalid_scalar_width() {
     check(
         "let scale: f32 = 1.1f1000;",
-r###"error: invalid width of `1000` for literal
+        r###"error: invalid width of `1000` for literal
   ┌─ wgsl:1:18
   │
 1 │ let scale: f32 = 1.1f1000;
@@ -88,7 +88,7 @@ fn vs_main() {
     var i: f32 = color.a;
 }
 "###,
-r###"error: invalid field accessor `a`
+        r###"error: invalid field accessor `a`
   ┌─ wgsl:5:24
   │
 5 │     var i: f32 = color.a;
