@@ -1412,7 +1412,7 @@ impl<B: GfxBackend> Device<B> {
                 Br::Sampler(id) => {
                     match decl.ty {
                         wgt::BindingType::Sampler {
-                            filtering: _,
+                            filtering: _, //TODO!!!
                             comparison,
                         } => {
                             let sampler = used
@@ -2233,12 +2233,15 @@ impl<B: GfxBackend> Device<B> {
 
             if let Some(ref interface) = shader_module.interface {
                 let provided_layouts = match desc.layout {
-                    Some(pipeline_layout_id) => Some(Device::get_introspection_bind_group_layouts(
-                        pipeline_layout_guard
+                    Some(pipeline_layout_id) => {
+                        let pipeline_layout = pipeline_layout_guard
                             .get(pipeline_layout_id)
-                            .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?,
-                        &*bgl_guard,
-                    )),
+                            .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
+                        Some(Device::get_introspection_bind_group_layouts(
+                            pipeline_layout,
+                            &*bgl_guard,
+                        ))
+                    }
                     None => None,
                 };
 
