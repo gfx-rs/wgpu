@@ -1433,7 +1433,7 @@ impl<B: GfxBackend> Device<B> {
                                 });
                             }
                             // Check the actual sampler to be non-filtering, if required
-                            if filtering < sampler.filtering {
+                            if sampler.filtering && !filtering {
                                 return Err(Error::WrongSamplerFiltering {
                                     binding,
                                     layout_flt: filtering,

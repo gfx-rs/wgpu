@@ -916,9 +916,9 @@ impl Interface {
                         sample_type: wgt::TextureSampleType::Float { filterable },
                         ..
                     } => match sampler_layout.ty {
-                        wgt::BindingType::Sampler { filtering, .. } if filtering > filterable => {
-                            Some(FilteringError::NonFilterable)
-                        }
+                        wgt::BindingType::Sampler {
+                            filtering: true, ..
+                        } if !filterable => Some(FilteringError::NonFilterable),
                         _ => None,
                     },
                     wgt::BindingType::Texture {
