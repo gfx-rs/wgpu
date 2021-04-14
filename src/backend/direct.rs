@@ -1008,9 +1008,9 @@ impl crate::Context for Context {
                 },
                 buffers: Borrowed(&vertex_buffers),
             },
-            primitive: desc.primitive.clone(),
+            primitive: desc.primitive,
             depth_stencil: desc.depth_stencil.clone(),
-            multisample: desc.multisample.clone(),
+            multisample: desc.multisample,
             fragment: desc.fragment.as_ref().map(|frag| pipe::FragmentState {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: frag.module.id,
