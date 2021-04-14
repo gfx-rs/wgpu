@@ -73,10 +73,10 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id : vec3<u32>) {
     }
   }
   if (cMassCount > 0) {
-    cMass = cMass * (1.0 / f32(cMassCount)) - vPos;
+    cMass = cMass / f32(cMassCount) - vPos;
   }
   if (cVelCount > 0) {
-    cVel = cVel * (1.0 / f32(cVelCount));
+    cVel = cVel / f32(cVelCount);
   }
 
   vVel = vVel + (cMass * params.rule1Scale) +

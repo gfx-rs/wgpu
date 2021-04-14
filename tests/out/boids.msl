@@ -73,10 +73,10 @@ kernel void main1(
         }
     }
     if (cMassCount > 0) {
-        cMass = (cMass * (1.0 / static_cast<float>(cMassCount))) - vPos;
+        cMass = (cMass / static_cast<float>(cMassCount)) - vPos;
     }
     if (cVelCount > 0) {
-        cVel = cVel * (1.0 / static_cast<float>(cVelCount));
+        cVel = cVel / static_cast<float>(cVelCount);
     }
     vVel = ((vVel + (cMass * params.rule1Scale)) + (colVel * params.rule2Scale)) + (cVel * params.rule3Scale);
     vVel = metal::normalize(vVel) * metal::clamp(metal::length(vVel), 0.0, 0.1);

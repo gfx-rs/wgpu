@@ -1184,9 +1184,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let lexp = self.lookup_expression.lookup(comp_id)?;
                         components.push(lexp.handle);
                     }
-                    let expr = crate::Expression::Compose {
-                        ty: self.lookup_type.lookup(result_type_id)?.handle,
-                        components,
+                    let ty = self.lookup_type.lookup(result_type_id)?.handle;
+                    let first = components[0];
+                    let expr = match type_arena[ty].inner {
+                        // this is an optimization to detect the splat
+                        crate::TypeInner::Vector { size, .. }
+                            if components.len() == size as usize
+                                && components[1..].iter().all(|&c| c == first) =>
+                        {
+                            crate::Expression::Splat { size, value: first }
+                        }
+                        _ => crate::Expression::Compose { ty, components },
                     };
                     self.lookup_expression.insert(
                         id,

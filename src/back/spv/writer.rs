@@ -1204,21 +1204,6 @@ impl Writer {
         }
     }
 
-    fn write_composite_construct(
-        &mut self,
-        base_type_id: Word,
-        constituent_ids: &[Word],
-        block: &mut Block,
-    ) -> Word {
-        let id = self.id_gen.next();
-        block.body.push(Instruction::composite_construct(
-            base_type_id,
-            id,
-            constituent_ids,
-        ));
-        id
-    }
-
     fn write_texture_coordinates(
         &mut self,
         ir_module: &crate::Module,
@@ -1290,11 +1275,13 @@ impl Writer {
                 }),
             )?;
 
-            self.write_composite_construct(
+            let id = self.id_gen.next();
+            block.body.push(Instruction::composite_construct(
                 extended_coordinate_type_id,
+                id,
                 &constituent_ids[..size as usize],
-                block,
-            )
+            ));
+            id
         } else {
             coordinate_id
         })
@@ -1384,17 +1371,36 @@ impl Writer {
             }
             crate::Expression::GlobalVariable(handle) => self.global_variables[handle.index()].id,
             crate::Expression::Constant(handle) => self.constant_ids[handle.index()],
+            crate::Expression::Splat { size, value } => {
+                let value_id = self.cached[value];
+                self.temp_chain.clear();
+                self.temp_chain.resize(size as usize, value_id);
+
+                let id = self.id_gen.next();
+                block.body.push(Instruction::composite_construct(
+                    result_type_id,
+                    id,
+                    &self.temp_chain,
+                ));
+                id
+            }
             crate::Expression::Compose {
                 ty: _,
                 ref components,
             } => {
-                //TODO: avoid allocation
-                let mut constituent_ids = Vec::with_capacity(components.len());
+                self.temp_chain.clear();
                 for &component in components {
                     let component_id = self.cached[component];
-                    constituent_ids.push(component_id);
+                    self.temp_chain.push(component_id);
                 }
-                self.write_composite_construct(result_type_id, &constituent_ids, block)
+
+                let id = self.id_gen.next();
+                block.body.push(Instruction::composite_construct(
+                    result_type_id,
+                    id,
+                    &self.temp_chain,
+                ));
+                id
             }
             crate::Expression::Unary { op, expr } => {
                 let id = self.id_gen.next();
@@ -2449,12 +2455,11 @@ impl Writer {
                     result,
                 } => {
                     let id = self.id_gen.next();
-                    //TODO: avoid heap allocation
-                    let mut argument_ids = vec![];
+                    self.temp_chain.clear();
 
                     for &argument in arguments {
                         let arg_id = self.cached[argument];
-                        argument_ids.push(arg_id);
+                        self.temp_chain.push(arg_id);
                     }
 
                     let type_id = match result {
@@ -2475,7 +2480,7 @@ impl Writer {
                         type_id,
                         id,
                         self.lookup_function[&local_function],
-                        argument_ids.as_slice(),
+                        &self.temp_chain,
                     ));
                 }
             }

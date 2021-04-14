@@ -969,12 +969,9 @@
                     left: 55,
                     right: 57,
                 ),
-                Compose(
-                    ty: 9,
-                    components: [
-                        13,
-                        13,
-                    ],
+                Splat(
+                    size: Bi,
+                    value: 13,
                 ),
                 Binary(
                     op: Add,

@@ -25,8 +25,7 @@ float fetch_shadow(
     if (homogeneous_coords.w <= 0.0) {
         return 1.0;
     }
-    float _e15 = 1.0 / homogeneous_coords.w;
-    float _e28 = t_shadow.sample_compare(sampler_shadow, ((metal::float2(homogeneous_coords.x, homogeneous_coords.y) * metal::float2(0.5, -0.5)) * _e15) + metal::float2(0.5, 0.5), static_cast<int>(light_id), homogeneous_coords.z * _e15);
+    float _e28 = t_shadow.sample_compare(sampler_shadow, ((metal::float2(homogeneous_coords.x, homogeneous_coords.y) * metal::float2(0.5, -0.5)) / homogeneous_coords.w) + metal::float2(0.5, 0.5), static_cast<int>(light_id), homogeneous_coords.z / homogeneous_coords.w);
     return _e28;
 }
 

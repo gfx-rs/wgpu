@@ -213,7 +213,7 @@
                             bits: 0,
                         ),
                     ),
-                    ref_count: 3,
+                    ref_count: 2,
                     assignable_global: None,
                     ty: Value(Scalar(
                         kind: Float,
@@ -838,7 +838,11 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(9),
+                    ty: Value(Vector(
+                        size: Bi,
+                        kind: Float,
+                        width: 4,
+                    )),
                 ),
                 (
                     uniformity: (
