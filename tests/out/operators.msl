@@ -1,0 +1,12 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+
+struct splatOutput {
+    metal::float4 member [[position]];
+};
+vertex splatOutput splat(
+) {
+    metal::float2 _e10 = ((1.0 + 2.0) - 3.0) / 4.0;
+    return splatOutput { metal::float4(_e10.x, _e10.y, _e10.x, _e10.y) + static_cast<float4>(5 % 2) };
+}

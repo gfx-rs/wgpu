@@ -195,72 +195,40 @@ fn check_output_hlsl(module: &naga::Module, destination: &PathBuf) {
 }
 
 #[cfg(feature = "wgsl-in")]
-fn convert_wgsl(name: &str, targets: Targets) {
+#[test]
+fn convert_wgsl() {
     let root = env!("CARGO_MANIFEST_DIR");
-    let module = naga::front::wgsl::parse_str(
-        &fs::read_to_string(format!("{}/{}/{}.wgsl", root, DIR_IN, name))
-            .expect("Couldn't find wgsl file"),
-    )
-    .unwrap();
-    check_targets(&module, name, targets);
-}
+    let inputs = [
+        (
+            "empty",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL,
+        ),
+        (
+            "quad",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::DOT,
+        ),
+        ("boids", Targets::SPIRV | Targets::METAL),
+        ("skybox", Targets::SPIRV | Targets::METAL | Targets::GLSL),
+        (
+            "collatz",
+            Targets::SPIRV | Targets::METAL | Targets::IR | Targets::ANALYSIS,
+        ),
+        ("shadow", Targets::SPIRV | Targets::METAL | Targets::GLSL),
+        //SPIR-V is blocked by https://github.com/gfx-rs/naga/issues/646
+        ("image-copy", Targets::METAL),
+        ("texture-array", Targets::SPIRV | Targets::METAL),
+        ("operators", Targets::SPIRV | Targets::METAL | Targets::GLSL),
+    ];
 
-#[cfg(feature = "wgsl-in")]
-#[test]
-fn convert_wgsl_quad() {
-    convert_wgsl(
-        "quad",
-        Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::DOT,
-    );
-}
-
-#[cfg(feature = "wgsl-in")]
-#[test]
-fn convert_wgsl_empty() {
-    convert_wgsl(
-        "empty",
-        Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL,
-    );
-}
-
-#[cfg(feature = "wgsl-in")]
-#[test]
-fn convert_wgsl_boids() {
-    convert_wgsl("boids", Targets::SPIRV | Targets::METAL);
-}
-
-#[cfg(feature = "wgsl-in")]
-#[test]
-fn convert_wgsl_skybox() {
-    convert_wgsl("skybox", Targets::SPIRV | Targets::METAL | Targets::GLSL);
-}
-
-#[cfg(feature = "wgsl-in")]
-#[test]
-fn convert_wgsl_collatz() {
-    convert_wgsl(
-        "collatz",
-        Targets::SPIRV | Targets::METAL | Targets::IR | Targets::ANALYSIS,
-    );
-}
-
-#[cfg(feature = "wgsl-in")]
-#[test]
-fn convert_wgsl_shadow() {
-    convert_wgsl("shadow", Targets::SPIRV | Targets::METAL | Targets::GLSL);
-}
-
-#[cfg(feature = "wgsl-in")]
-#[test]
-fn convert_wgsl_image_copy() {
-    //SPIR-V is blocked by https://github.com/gfx-rs/naga/issues/646
-    convert_wgsl("image-copy", Targets::METAL);
-}
-
-#[cfg(feature = "wgsl-in")]
-#[test]
-fn convert_wgsl_texture_array() {
-    convert_wgsl("texture-array", Targets::SPIRV | Targets::METAL);
+    for &(name, targets) in inputs.iter() {
+        println!("Processing '{}'", name);
+        let file = fs::read_to_string(format!("{}/{}/{}.wgsl", root, DIR_IN, name))
+            .expect("Couldn't find wgsl file");
+        match naga::front::wgsl::parse_str(&file) {
+            Ok(module) => check_targets(&module, name, targets),
+            Err(e) => panic!("{}", e),
+        }
+    }
 }
 
 #[cfg(feature = "spv-in")]

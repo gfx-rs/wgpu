@@ -1133,6 +1133,13 @@ impl Parser {
                         let last_component_inner = ctx.resolve_type(last_component)?;
                         match (&inner, last_component_inner) {
                             (
+                                &crate::TypeInner::Vector { size, .. },
+                                &crate::TypeInner::Scalar { .. },
+                            ) => crate::Expression::Splat {
+                                size,
+                                value: last_component,
+                            },
+                            (
                                 &crate::TypeInner::Scalar { .. },
                                 &crate::TypeInner::Scalar { .. },
                             )
@@ -1215,6 +1222,7 @@ impl Parser {
                         crate::TypeInner::Vector { size, kind, width } => {
                             match Composition::make(handle, size, name, name_span, ctx.expressions)?
                             {
+                                //TODO: Swizzling in IR
                                 Composition::Multi(size, components) => {
                                     let inner = crate::TypeInner::Vector { size, kind, width };
                                     crate::Expression::Compose {
@@ -1238,6 +1246,7 @@ impl Parser {
                             name_span,
                             ctx.expressions,
                         )? {
+                            //TODO: is this really supported?
                             Composition::Multi(columns, components) => {
                                 let inner = crate::TypeInner::Matrix {
                                     columns,
