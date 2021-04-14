@@ -1,7 +1,3 @@
----
-source: tests/snapshots.rs
-expression: output
----
 (
     functions: [
         (

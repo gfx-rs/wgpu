@@ -1,7 +1,3 @@
----
-source: tests/snapshots.rs
-expression: string
----
 #version 310 es
 
 precision highp float;
@@ -25,5 +21,4 @@ void main() {
     _fs2p_location0 = (_expr4[3] * _expr4);
     return;
 }
-
 

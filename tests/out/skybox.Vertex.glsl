@@ -1,7 +1,3 @@
----
-source: tests/snapshots.rs
-expression: string
----
 #version 310 es
 
 precision highp float;
@@ -33,5 +29,4 @@ void main() {
     _vs2fs_location0 = out1.uv;
     return;
 }
-
 

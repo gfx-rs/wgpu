@@ -1,7 +1,3 @@
----
-source: tests/snapshots.rs
-expression: msl
----
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -56,4 +52,3 @@ vertex main2Output main2(
     const auto _tmp = type10 {v_uv, _.gl_Position, _.gl_PointSize, {_.gl_ClipDistance[0]}};
     return main2Output { _tmp.member, _tmp.gl_Position1, _tmp.gl_PointSize1, {_tmp.gl_ClipDistance1[0]} };
 }
-

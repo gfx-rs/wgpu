@@ -1,7 +1,3 @@
----
-source: tests/snapshots.rs
-expression: string
----
 #version 310 es
 
 precision highp float;
@@ -25,5 +21,4 @@ void main() {
     gl_Position = out1.position;
     return;
 }
-
 

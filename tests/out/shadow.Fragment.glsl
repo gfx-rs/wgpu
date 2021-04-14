@@ -1,7 +1,3 @@
----
-source: tests/snapshots.rs
-expression: string
----
 #version 310 es
 
 precision highp float;
@@ -52,5 +48,4 @@ void main() {
     _fs2p_location0 = vec4(color1, 1.0);
     return;
 }
-
 

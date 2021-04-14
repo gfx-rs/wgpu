@@ -24,6 +24,8 @@ jobs:
         with:
           command: test
           args: --all-features
+      - name: Check snapshots
+        run: git diff --exit-code -- tests/out
   clippy:
     name: Clippy
     runs-on: ubuntu-latest

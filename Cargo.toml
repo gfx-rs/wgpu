@@ -46,9 +46,8 @@ name = "convert"
 path = "bin/convert.rs"
 
 [dev-dependencies]
-difference = "2.0"
+diff = "0.1"
 ron = "0.6"
 serde = { version = "1.0", features = ["derive"] }
 spirv = { package = "spirv_headers", version = "1.5", features = ["deserialize"] }
-insta = { version = "1.6", features = ["glob"] }
 rspirv = "0.7"
