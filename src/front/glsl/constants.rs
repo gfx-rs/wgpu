@@ -49,6 +49,8 @@ pub enum ConstantSolvingError {
     InvalidUnaryOpArg,
     #[error("Cannot apply the binary op to the arguments")]
     InvalidBinaryOpArgs,
+    #[error("Splat type is not registered")]
+    SplatType,
 }
 
 impl<'a> ConstantSolver<'a> {
@@ -63,6 +65,28 @@ impl<'a> ConstantSolver<'a> {
                 let index = self.solve(index)?;
 
                 self.access(base, self.constant_index(index)?)
+            }
+            Expression::Splat {
+                size,
+                value: splat_value,
+            } => {
+                let tgt = self.solve(splat_value)?;
+                let ty = match self.constants[tgt].inner {
+                    ConstantInner::Scalar { ref value, width } => {
+                        let kind = value.scalar_kind();
+                        self.types
+                            .fetch_if(|t| t.inner == crate::TypeInner::Vector { size, kind, width })
+                    }
+                    ConstantInner::Composite { .. } => None,
+                };
+                Ok(self.constants.fetch_or_append(Constant {
+                    name: None,
+                    specialization: None,
+                    inner: ConstantInner::Composite {
+                        ty: ty.ok_or(ConstantSolvingError::SplatType)?,
+                        components: vec![tgt; size as usize],
+                    },
+                }))
             }
             Expression::Compose { ty, ref components } => {
                 let components = components

@@ -608,6 +608,9 @@ impl<W: Write> Writer<W> {
                 };
                 write!(self.out, "{}", coco)?;
             }
+            crate::Expression::Splat { size: _, value } => {
+                self.put_expression(value, context, is_scoped)?;
+            }
             crate::Expression::Compose { ty, ref components } => {
                 let inner = &context.module.types[ty].inner;
                 match *inner {

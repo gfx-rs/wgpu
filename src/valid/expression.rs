@@ -31,6 +31,8 @@ pub enum ExpressionError {
     InvalidPointerType(Handle<crate::Expression>),
     #[error("Array length of {0:?} can't be done")]
     InvalidArrayType(Handle<crate::Expression>),
+    #[error("Splatting {0:?} can't be done")]
+    InvalidSplatType(Handle<crate::Expression>),
     #[error("Compose type {0:?} doesn't exist")]
     ComposeTypeDoesntExist(Handle<crate::Type>),
     #[error("Composing of type {0:?} can't be done")]
@@ -197,6 +199,13 @@ impl super::Validator {
                     .ok_or(ExpressionError::ConstantDoesntExist(handle))?;
                 ShaderStages::all()
             }
+            E::Splat { size: _, value } => match *resolver.resolve(value)? {
+                Ti::Scalar { .. } => ShaderStages::all(),
+                ref other => {
+                    log::error!("Splat scalar type {:?}", other);
+                    return Err(ExpressionError::InvalidSplatType(value));
+                }
+            },
             E::Compose { ref components, ty } => {
                 match module
                     .types

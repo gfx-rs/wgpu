@@ -183,6 +183,10 @@ fn write_fun(
                 (Cow::Owned(format!("AccessIndex[{}]", index)), 1)
             }
             E::Constant(_) => (Cow::Borrowed("Constant"), 2),
+            E::Splat { size, value } => {
+                edges.insert("value", value);
+                (Cow::Owned(format!("Splat{:?}", size)), 3)
+            }
             E::Compose { ref components, .. } => {
                 payload = Some(Payload::Arguments(components));
                 (Cow::Borrowed("Compose"), 3)

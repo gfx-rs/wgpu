@@ -79,6 +79,8 @@ pub enum ResolveError {
         ty: Handle<crate::Type>,
         indexed: bool,
     },
+    #[error("Invalid scalar {0:?}")]
+    InvalidScalar(Handle<crate::Expression>),
     #[error("Invalid pointer {0:?}")]
     InvalidPointer(Handle<crate::Expression>),
     #[error("Invalid image {0:?}")]
@@ -264,6 +266,15 @@ impl<'a> ResolveContext<'a> {
                     })
                 }
                 crate::ConstantInner::Composite { ty, components: _ } => TypeResolution::Handle(ty),
+            },
+            crate::Expression::Splat { size, value } => match *past(value).inner_with(types) {
+                Ti::Scalar { kind, width } => {
+                    TypeResolution::Value(Ti::Vector { size, kind, width })
+                }
+                ref other => {
+                    log::error!("Scalar type {:?}", other);
+                    return Err(ResolveError::InvalidScalar(value));
+                }
             },
             crate::Expression::Compose { ty, .. } => TypeResolution::Handle(ty),
             crate::Expression::FunctionArgument(index) => {

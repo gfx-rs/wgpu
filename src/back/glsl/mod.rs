@@ -1477,6 +1477,10 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::Constant(constant) => {
                 self.write_constant(&self.module.constants[constant])?
             }
+            // `Splat` is just writing `value`
+            Expression::Splat { size: _, value } => {
+                self.write_expr(value, ctx)?;
+            }
             // `Compose` is pretty simple we just write `type(components)` where `components` is a
             // comma separated list of expressions
             Expression::Compose { ty, ref components } => {

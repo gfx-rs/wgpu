@@ -683,6 +683,11 @@ pub enum Expression {
     },
     /// Constant value.
     Constant(Handle<Constant>),
+    /// Splat scalar into a vector.
+    Splat {
+        size: VectorSize,
+        value: Handle<Expression>,
+    },
     /// Composite expression.
     Compose {
         ty: Handle<Type>,
