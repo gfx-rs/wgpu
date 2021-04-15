@@ -210,8 +210,11 @@ impl VaryingContext<'_> {
                 if !self.location_mask.insert(location as usize) {
                     return Err(VaryingError::BindingCollision { location });
                 }
-                let needs_interpolation =
-                    self.stage == crate::ShaderStage::Fragment && !self.output;
+                let needs_interpolation = match self.stage {
+                    crate::ShaderStage::Vertex => self.output,
+                    crate::ShaderStage::Fragment => !self.output,
+                    _ => false,
+                };
                 if !needs_interpolation && interpolation.is_some() {
                     return Err(VaryingError::InvalidInterpolation);
                 }
