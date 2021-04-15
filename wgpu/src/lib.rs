@@ -2917,8 +2917,8 @@ impl SwapChain {
 }
 
 /// Type for the callback of uncaptured error handler
-pub trait UncapturedErrorHandler: Fn(Error) + Send + Sync + 'static {}
-impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + Sync + 'static {}
+pub trait UncapturedErrorHandler: Fn(Error) + Send + 'static {}
+impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + 'static {}
 
 /// Error type
 #[derive(Debug)]
@@ -2926,12 +2926,12 @@ pub enum Error {
     /// Out of memory error
     OutOfMemoryError {
         ///
-        source: Box<dyn error::Error + Send + Sync + 'static>,
+        source: Box<dyn error::Error + Send + 'static>,
     },
     /// Validation error, signifying a bug in code or data
     ValidationError {
         ///
-        source: Box<dyn error::Error + Send + Sync + 'static>,
+        source: Box<dyn error::Error + Send + 'static>,
         ///
         description: String,
     },
