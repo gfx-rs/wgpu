@@ -395,7 +395,7 @@ impl crate::RenderInner<Context> for RenderBundleEncoder {
 }
 
 impl crate::RenderPassInner<Context> for RenderPass {
-    fn set_blend_color(&mut self, color: wgt::Color) {
+    fn set_blend_constant(&mut self, color: wgt::Color) {
         self.0
             .set_blend_color_with_gpu_color_dict(&map_color(color));
     }
@@ -675,17 +675,17 @@ fn map_blend_factor(factor: wgt::BlendFactor) -> web_sys::GpuBlendFactor {
     match factor {
         BlendFactor::Zero => bf::Zero,
         BlendFactor::One => bf::One,
-        BlendFactor::SrcColor => bf::SrcColor,
-        BlendFactor::OneMinusSrcColor => bf::OneMinusSrcColor,
+        BlendFactor::Src => bf::SrcColor,
+        BlendFactor::OneMinusSrc => bf::OneMinusSrcColor,
         BlendFactor::SrcAlpha => bf::SrcAlpha,
         BlendFactor::OneMinusSrcAlpha => bf::OneMinusSrcAlpha,
-        BlendFactor::DstColor => bf::DstColor,
-        BlendFactor::OneMinusDstColor => bf::OneMinusDstColor,
+        BlendFactor::Dst => bf::DstColor,
+        BlendFactor::OneMinusDst => bf::OneMinusDstColor,
         BlendFactor::DstAlpha => bf::DstAlpha,
         BlendFactor::OneMinusDstAlpha => bf::OneMinusDstAlpha,
         BlendFactor::SrcAlphaSaturated => bf::SrcAlphaSaturated,
-        BlendFactor::BlendColor => bf::BlendColor,
-        BlendFactor::OneMinusBlendColor => bf::OneMinusBlendColor,
+        BlendFactor::Constant => bf::BlendColor,
+        BlendFactor::OneMinusConstant => bf::OneMinusBlendColor,
     }
 }
 

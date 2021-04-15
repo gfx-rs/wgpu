@@ -179,6 +179,7 @@ impl PrettyError for wgc::command::ExecutionError {
                 let name = wgc::gfx_select!(id => global.buffer_label(id));
                 ret.push_str(&format_label_line("buffer", &name));
             }
+            Self::Unimplemented(_reason) => {}
         };
         ret
     }
