@@ -19,10 +19,6 @@ water
 ```
 cargo run --example water
 ```
-## To recompile shaders 
-(requires make and `glslangvalidator`)
-```
-make
-```
+
 ## Screenshot
 ![Water example](./screenshot.png)
