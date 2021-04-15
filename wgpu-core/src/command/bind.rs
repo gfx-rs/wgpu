@@ -182,6 +182,9 @@ impl Binder {
             if old.push_constant_ranges != new.push_constant_ranges {
                 bind_range.start = 0;
             }
+        } else {
+            // if there was no pipeline layout, reset everything
+            bind_range.start = 0;
         }
 
         (bind_range.start, &self.payloads[bind_range])

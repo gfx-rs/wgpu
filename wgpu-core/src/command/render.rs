@@ -1141,22 +1141,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             bind_group,
                             &temp_offsets,
                         );
-                        if !entries.is_empty() {
-                            let pipeline_layout =
-                                &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
-                            let desc_sets = entries.iter().map(|e| {
-                                bind_group_guard[e.group_id.as_ref().unwrap().value]
-                                    .raw
-                                    .raw()
-                            });
-                            let offsets = entries.iter().flat_map(|e| &e.dynamic_offsets).cloned();
-                            unsafe {
-                                raw.bind_graphics_descriptor_sets(
-                                    pipeline_layout,
-                                    index as usize,
-                                    desc_sets,
-                                    offsets,
-                                );
+                        if let Some(pipeline_layout_id) = pipeline_layout_id {
+                            if !entries.is_empty() {
+                                let pipeline_layout =
+                                    &pipeline_layout_guard[pipeline_layout_id].raw;
+                                let desc_sets = entries.iter().map(|e| {
+                                    bind_group_guard[e.group_id.as_ref().unwrap().value]
+                                        .raw
+                                        .raw()
+                                });
+                                let offsets =
+                                    entries.iter().flat_map(|e| &e.dynamic_offsets).cloned();
+                                unsafe {
+                                    raw.bind_graphics_descriptor_sets(
+                                        pipeline_layout,
+                                        index as usize,
+                                        desc_sets,
+                                        offsets,
+                                    );
+                                }
                             }
                         }
                     }
