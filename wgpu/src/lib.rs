@@ -128,7 +128,7 @@ trait RenderInner<Ctx: Context> {
 }
 
 trait RenderPassInner<Ctx: Context>: RenderInner<Ctx> {
-    fn set_blend_color(&mut self, color: Color);
+    fn set_blend_constant(&mut self, color: Color);
     fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32);
     fn set_viewport(
         &mut self,
@@ -2183,8 +2183,8 @@ impl<'a> RenderPass<'a> {
     /// Sets the blend color as used by some of the blending modes.
     ///
     /// Subsequent blending tests will test against this value.
-    pub fn set_blend_color(&mut self, color: Color) {
-        self.id.set_blend_color(color)
+    pub fn set_blend_constant(&mut self, color: Color) {
+        self.id.set_blend_constant(color)
     }
 
     /// Sets the active index buffer.

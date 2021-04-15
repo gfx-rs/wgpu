@@ -336,8 +336,8 @@ mod pass_impl {
     }
 
     impl crate::RenderPassInner<Context> for wgc::command::RenderPass {
-        fn set_blend_color(&mut self, color: wgt::Color) {
-            wgpu_render_pass_set_blend_color(self, &color)
+        fn set_blend_constant(&mut self, color: wgt::Color) {
+            wgpu_render_pass_set_blend_constant(self, &color)
         }
         fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
             wgpu_render_pass_set_scissor_rect(self, x, y, width, height)
