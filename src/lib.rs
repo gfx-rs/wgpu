@@ -980,7 +980,7 @@ pub enum BindingResource<'a> {
 
 /// Operation to perform to the output attachment at the start of a renderpass.
 ///
-/// The render target must be cleared at least once before it's content be loaded.
+/// The render target must be cleared at least once before its content is loaded.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]

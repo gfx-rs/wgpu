@@ -101,7 +101,7 @@ impl DeviceExt for crate::Device {
 
                 // When uploading mips of compressed textures and the mip is supposed to be
                 // a size that isn't a multiple of the block size, the mip needs to be uploaded
-                // as it's "physical size" which is the size rounded up to the nearest block size.
+                // as its "physical size" which is the size rounded up to the nearest block size.
                 let mip_physical = mip_size.physical_size(desc.format);
 
                 // All these calculations are performed on the physical size as that's the
