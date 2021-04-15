@@ -1,7 +1,7 @@
 use super::{BackendResult, Error, Version, Writer};
 use crate::{
-    Bytes, ImageClass, ImageDimension, ScalarKind, ShaderStage, StorageClass, StorageFormat,
-    TypeInner,
+    Binding, Bytes, Handle, ImageClass, ImageDimension, Interpolation, ScalarKind, ShaderStage,
+    StorageClass, StorageFormat, Type, TypeInner,
 };
 use std::io::Write;
 
@@ -24,6 +24,10 @@ bitflags::bitflags! {
         const CONSERVATIVE_DEPTH = 1 << 9;
         /// Isn't supported in ES
         const TEXTURE_1D = 1 << 10;
+        /// Interpolation and auxiliary qualifiers. Perspective, Flat, and
+        /// Centroid are available in all GLSL versions we support.
+        const LINEAR_QUALIFIER = 1 << 11;
+        const SAMPLE_QUALIFIER = 1 << 12;
     }
 }
 
@@ -84,6 +88,8 @@ impl FeaturesManager {
         // 1D textures are supported by all core versions and aren't supported by an es versions
         // so use 0 that way the check will always be false and can be optimized away
         check_feature!(TEXTURE_1D, 0);
+        check_feature!(LINEAR_QUALIFIER, 130);
+        check_feature!(SAMPLE_QUALIFIER, 400, 320);
 
         // Return an error if there are missing features
         if missing.is_empty() {
@@ -183,6 +189,13 @@ impl<'a, W> Writer<'a, W> {
             }
         }
 
+        for arg in self.entry_point.function.arguments.iter() {
+            self.varying_required_features(arg.binding.as_ref(), arg.ty);
+        }
+        if let Some(ref result) = self.entry_point.function.result {
+            self.varying_required_features(result.binding.as_ref(), result.ty);
+        }
+
         if let ShaderStage::Compute = self.options.shader_stage {
             self.features.request(Features::COMPUTE_SHADER)
         }
@@ -264,6 +277,25 @@ impl<'a, W> Writer<'a, W> {
     fn scalar_required_features(&mut self, kind: ScalarKind, width: Bytes) {
         if kind == ScalarKind::Float && width == 8 {
             self.features.request(Features::DOUBLE_TYPE);
+        }
+    }
+
+    fn varying_required_features(&mut self,  binding: Option<&Binding>, ty: Handle<Type>) {
+        match self.module.types[ty].inner {
+            crate::TypeInner::Struct { ref members, .. } => {
+                for member in members {
+                    self.varying_required_features(member.binding.as_ref(), member.ty);
+                }
+            }
+            _ => {
+                if let Some(&Binding::Location(_, Some(interpolation))) = binding {
+                    match interpolation {
+                        Interpolation::Linear => self.features.request(Features::LINEAR_QUALIFIER),
+                        Interpolation::Sample => self.features.request(Features::SAMPLE_QUALIFIER),
+                        _ => ()
+                    };
+                }
+            }
         }
     }
 }
