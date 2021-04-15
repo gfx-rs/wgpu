@@ -27,8 +27,7 @@ use hal::{
 use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
 use wgt::{
-    BufferAddress, BufferSize, InputStepMode, TextureDimension,
-    TextureFormat, TextureViewDimension
+    BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat, TextureViewDimension,
 };
 
 use std::{
@@ -2433,8 +2432,8 @@ impl<B: GfxBackend> Device<B> {
         let mut flags = pipeline::PipelineFlags::empty();
         for state in color_states.iter() {
             if let Some(ref bs) = state.blend {
-                if bs.color.uses_color() | bs.alpha.uses_color() {
-                    flags |= pipeline::PipelineFlags::BLEND_COLOR;
+                if bs.color.uses_constant() | bs.alpha.uses_constant() {
+                    flags |= pipeline::PipelineFlags::BLEND_CONSTANT;
                 }
             }
         }
@@ -4526,9 +4525,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             HostMap::Write => (wgt::BufferUsage::MAP_WRITE, resource::BufferUse::MAP_WRITE),
         };
 
-        if range.start % wgt::MAP_ALIGNMENT != 0
-            || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
-        {
+        if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(resource::BufferAccessError::UnalignedRange);
         }
 

@@ -255,17 +255,17 @@ fn map_blend_factor(blend_factor: wgt::BlendFactor) -> hal::pso::Factor {
     match blend_factor {
         Bf::Zero => H::Zero,
         Bf::One => H::One,
-        Bf::SrcColor => H::SrcColor,
-        Bf::OneMinusSrcColor => H::OneMinusSrcColor,
+        Bf::Src => H::SrcColor,
+        Bf::OneMinusSrc => H::OneMinusSrcColor,
         Bf::SrcAlpha => H::SrcAlpha,
         Bf::OneMinusSrcAlpha => H::OneMinusSrcAlpha,
-        Bf::DstColor => H::DstColor,
-        Bf::OneMinusDstColor => H::OneMinusDstColor,
+        Bf::Dst => H::DstColor,
+        Bf::OneMinusDst => H::OneMinusDstColor,
         Bf::DstAlpha => H::DstAlpha,
         Bf::OneMinusDstAlpha => H::OneMinusDstAlpha,
         Bf::SrcAlphaSaturated => H::SrcAlphaSaturate,
-        Bf::BlendColor => H::ConstColor,
-        Bf::OneMinusBlendColor => H::OneMinusConstColor,
+        Bf::Constant => H::ConstColor,
+        Bf::OneMinusConstant => H::OneMinusConstColor,
     }
 }
 

@@ -326,7 +326,7 @@ impl VertexState {
 struct State {
     pipeline_flags: PipelineFlags,
     binder: Binder,
-    blend_color: OptionalState,
+    blend_constant: OptionalState,
     stencil_reference: u32,
     pipeline: StateChange<id::RenderPipelineId>,
     index: IndexState,
@@ -355,8 +355,8 @@ impl State {
         if self.pipeline.is_unset() {
             return Err(DrawError::MissingPipeline);
         }
-        if self.blend_color == OptionalState::Required {
-            return Err(DrawError::MissingBlendColor);
+        if self.blend_constant == OptionalState::Required {
+            return Err(DrawError::MissingBlendConstant);
         }
         if indexed {
             // Pipeline expects an index buffer
@@ -1068,7 +1068,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut state = State {
                 pipeline_flags: PipelineFlags::empty(),
                 binder: Binder::new(),
-                blend_color: OptionalState::Unused,
+                blend_constant: OptionalState::Unused,
                 stencil_reference: 0,
                 pipeline: StateChange::new(),
                 index: IndexState::default(),
@@ -1188,8 +1188,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         state
-                            .blend_color
-                            .require(pipeline.flags.contains(PipelineFlags::BLEND_COLOR));
+                            .blend_constant
+                            .require(pipeline.flags.contains(PipelineFlags::BLEND_CONSTANT));
 
                         unsafe {
                             raw.bind_graphics_pipeline(&pipeline.raw);
@@ -1377,8 +1377,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                         state.vertex.update_limits();
                     }
-                    RenderCommand::SetBlendColor(ref color) => {
-                        state.blend_color = OptionalState::Set;
+                    RenderCommand::SetBlendConstant(ref color) => {
+                        state.blend_constant = OptionalState::Set;
                         unsafe {
                             raw.set_blend_constants(conv::map_color_f32(color));
                         }
@@ -1911,6 +1911,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ExecutionError::DestroyedBuffer(id) => {
                                 RenderCommandError::DestroyedBuffer(id)
                             }
+                            ExecutionError::Unimplemented(what) => {
+                                RenderCommandError::Unimplemented(what)
+                            }
                         })
                         .map_pass_err(scope)?;
 
@@ -2036,10 +2039,10 @@ pub mod render_ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_blend_color(pass: &mut RenderPass, color: &Color) {
+    pub extern "C" fn wgpu_render_pass_set_blend_constant(pass: &mut RenderPass, color: &Color) {
         pass.base
             .commands
-            .push(RenderCommand::SetBlendColor(*color));
+            .push(RenderCommand::SetBlendConstant(*color));
     }
 
     #[no_mangle]

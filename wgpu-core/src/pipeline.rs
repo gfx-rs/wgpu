@@ -251,7 +251,7 @@ pub enum CreateRenderPipelineError {
 bitflags::bitflags! {
     #[repr(transparent)]
     pub struct PipelineFlags: u32 {
-        const BLEND_COLOR = 1;
+        const BLEND_CONSTANT = 1;
         const STENCIL_REFERENCE = 2;
         const WRITES_DEPTH_STENCIL = 4;
     }
