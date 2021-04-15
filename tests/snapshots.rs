@@ -33,6 +33,9 @@ struct Parameters {
     msl: naga::back::msl::Options,
     #[cfg(all(not(feature = "deserialize"), feature = "msl-out"))]
     msl_custom: bool,
+    #[cfg_attr(not(feature = "glsl-out"), allow(dead_code))]
+    #[serde(default)]
+    glsl_desktop_version: Option<u16>
 }
 
 #[allow(dead_code, unused_variables)]
@@ -78,7 +81,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     {
         if targets.contains(Targets::GLSL) {
             for ep in module.entry_points.iter() {
-                check_output_glsl(module, &info, &dest, ep.stage, &ep.name);
+                check_output_glsl(module, &info, &dest, ep.stage, &ep.name, &params);
             }
         }
     }
@@ -166,11 +169,15 @@ fn check_output_glsl(
     destination: &PathBuf,
     stage: naga::ShaderStage,
     ep_name: &str,
+    params: &Parameters,
 ) {
     use naga::back::glsl;
 
     let options = glsl::Options {
-        version: glsl::Version::Embedded(310),
+        version: match params.glsl_desktop_version {
+            Some(v) => glsl::Version::Desktop(v),
+            None => glsl::Version::Embedded(310),
+        },
         shader_stage: stage,
         entry_point: ep_name.to_string(),
     };
