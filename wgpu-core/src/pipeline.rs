@@ -197,6 +197,19 @@ pub struct RenderPipelineDescriptor<'a> {
 }
 
 #[derive(Clone, Debug, Error)]
+pub enum ColorStateError {
+    #[error("output is missing")]
+    Missing,
+    #[error("output format {pipeline} is incompatible with the shader {shader}")]
+    IncompatibleFormat {
+        pipeline: validation::NumericType,
+        shader: validation::NumericType,
+    },
+    #[error("blend factors for {0:?} must be `One`")]
+    InvalidMinMaxBlendFactors(wgt::BlendComponent),
+}
+
+#[derive(Clone, Debug, Error)]
 pub enum CreateRenderPipelineError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -204,10 +217,8 @@ pub enum CreateRenderPipelineError {
     InvalidLayout,
     #[error("unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
-    #[error("missing output at index {index}")]
-    MissingOutput { index: u8 },
-    #[error("incompatible output format at index {index}")]
-    IncompatibleOutputFormat { index: u8 },
+    #[error("color state [{0}] is invalid")]
+    ColorState(u8, #[source] ColorStateError),
     #[error("invalid sample count {0}")]
     InvalidSampleCount(u32),
     #[error("the number of vertex buffers {given} exceeds the limit {limit}")]
