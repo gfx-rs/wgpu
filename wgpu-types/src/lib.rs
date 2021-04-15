@@ -757,18 +757,18 @@ pub enum BlendFactor {
     Zero = 0,
     /// 1.0
     One = 1,
-    /// S.color
-    SrcColor = 2,
-    /// 1.0 - S.color
-    OneMinusSrcColor = 3,
+    /// S.component
+    Src = 2,
+    /// 1.0 - S.component
+    OneMinusSrc = 3,
     /// S.alpha
     SrcAlpha = 4,
     /// 1.0 - S.alpha
     OneMinusSrcAlpha = 5,
-    /// D.color
-    DstColor = 6,
-    /// 1.0 - D.color
-    OneMinusDstColor = 7,
+    /// D.component
+    Dst = 6,
+    /// 1.0 - D.component
+    OneMinusDst = 7,
     /// D.alpha
     DstAlpha = 8,
     /// 1.0 - D.alpha
@@ -776,9 +776,9 @@ pub enum BlendFactor {
     /// min(S.alpha, 1.0 - D.alpha)
     SrcAlphaSaturated = 10,
     /// Constant
-    BlendColor = 11,
+    Constant = 11,
     /// 1.0 - Constant
-    OneMinusBlendColor = 12,
+    OneMinusConstant = 12,
 }
 
 /// Alpha blend operation.
@@ -839,12 +839,12 @@ impl BlendComponent {
 
     /// Returns true if the state relies on the constant color, which is
     /// set independently on a render command encoder.
-    pub fn uses_color(&self) -> bool {
+    pub fn uses_constant(&self) -> bool {
         match (self.src_factor, self.dst_factor) {
-            (BlendFactor::BlendColor, _)
-            | (BlendFactor::OneMinusBlendColor, _)
-            | (_, BlendFactor::BlendColor)
-            | (_, BlendFactor::OneMinusBlendColor) => true,
+            (BlendFactor::Constant, _)
+            | (BlendFactor::OneMinusConstant, _)
+            | (_, BlendFactor::Constant)
+            | (_, BlendFactor::OneMinusConstant) => true,
             (_, _) => false,
         }
     }
