@@ -23,11 +23,7 @@ For the result type, if it's a structure, we re-compose it with a temporary valu
 holding the result.
 !*/
 
-use crate::{
-    arena::{Arena, Handle},
-    valid::ModuleInfo,
-    FastHashMap,
-};
+use crate::{arena::Handle, valid::ModuleInfo};
 use std::fmt::{Error as FmtError, Write};
 
 mod keywords;
@@ -37,15 +33,18 @@ mod writer;
 pub use writer::Writer;
 
 pub type Slot = u8;
+pub type InlineSamplerIndex = u8;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum BindSamplerTarget {
     Resource(Slot),
-    Inline(Handle<sampler::InlineSampler>),
+    Inline(InlineSamplerIndex),
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct BindTarget {
     #[cfg_attr(feature = "deserialize", serde(default))]
@@ -67,7 +66,7 @@ pub struct BindSource {
     pub binding: u32,
 }
 
-pub type BindingMap = FastHashMap<BindSource, BindTarget>;
+pub type BindingMap = std::collections::BTreeMap<BindSource, BindTarget>;
 
 #[derive(Clone, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -127,7 +126,8 @@ enum LocationMode {
     Uniform,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Options {
     /// (Major, Minor) target version of the Metal Shading Language.
@@ -137,7 +137,7 @@ pub struct Options {
     /// Push constants mapping to Metal.
     pub push_constants_map: PushConstantsMap,
     /// Samplers to be inlined into the code.
-    pub inline_samplers: Arena<sampler::InlineSampler>,
+    pub inline_samplers: Vec<sampler::InlineSampler>,
     /// Make it possible to link different stages via SPIRV-Cross.
     pub spirv_cross_compatibility: bool,
     /// Don't panic on missing bindings, instead generate invalid MSL.
@@ -150,7 +150,7 @@ impl Default for Options {
             lang_version: (1, 0),
             binding_map: BindingMap::default(),
             push_constants_map: PushConstantsMap::default(),
-            inline_samplers: Arena::new(),
+            inline_samplers: Vec::new(),
             spirv_cross_compatibility: false,
             fake_missing_bindings: true,
         }
@@ -158,7 +158,8 @@ impl Default for Options {
 }
 
 // A subset of options that are meant to be changed per pipeline.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
     /// Allow `BuiltIn::PointSize` in the vertex shader.
@@ -253,9 +254,9 @@ impl ResolvedBinding {
     fn as_inline_sampler<'a>(&self, options: &'a Options) -> Option<&'a sampler::InlineSampler> {
         match *self {
             Self::Resource(BindTarget {
-                sampler: Some(BindSamplerTarget::Inline(handle)),
+                sampler: Some(BindSamplerTarget::Inline(index)),
                 ..
-            }) => Some(&options.inline_samplers[handle]),
+            }) => Some(&options.inline_samplers[index as usize]),
             _ => None,
         }
     }

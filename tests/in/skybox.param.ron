@@ -10,7 +10,7 @@
 		binding_map: {
 			(stage: Vertex, group: 0, binding: 0): (buffer: Some(0)),
 			(stage: Fragment, group: 0, binding: 1): (texture: Some(0)),
-			(stage: Fragment, group: 0, binding: 2): (sampler: Some(Inline(1))),
+			(stage: Fragment, group: 0, binding: 2): (sampler: Some(Inline(0))),
 		},
 		push_constants_map: (
 		),

@@ -1,8 +1,11 @@
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
+#[cfg(feature = "serialize")]
+use serde::Serialize;
 use std::{num::NonZeroU32, ops::Range};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Coord {
     Normalized,
@@ -24,7 +27,8 @@ impl Coord {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Address {
     Repeat,
@@ -52,7 +56,8 @@ impl Address {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum BorderColor {
     TransparentBlack,
@@ -76,7 +81,8 @@ impl BorderColor {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Filter {
     Nearest,
@@ -98,7 +104,8 @@ impl Default for Filter {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum CompareFunc {
     Never,
@@ -133,6 +140,7 @@ impl CompareFunc {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct InlineSampler {
     pub coord: Coord,
@@ -144,4 +152,24 @@ pub struct InlineSampler {
     pub lod_clamp: Option<Range<f32>>,
     pub max_anisotropy: Option<NonZeroU32>,
     pub compare_func: CompareFunc,
+}
+
+impl Eq for InlineSampler {}
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl std::hash::Hash for InlineSampler {
+    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        self.coord.hash(hasher);
+        self.address.hash(hasher);
+        self.border_color.hash(hasher);
+        self.mag_filter.hash(hasher);
+        self.min_filter.hash(hasher);
+        self.mip_filter.hash(hasher);
+        self.lod_clamp
+            .as_ref()
+            .map(|range| (range.start.to_bits(), range.end.to_bits()))
+            .hash(hasher);
+        self.max_anisotropy.hash(hasher);
+        self.compare_func.hash(hasher);
+    }
 }
