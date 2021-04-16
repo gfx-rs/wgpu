@@ -949,7 +949,7 @@ impl super::Validator {
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                     }
-                    Mf::Atan2 | Mf::Pow | Mf::Distance => {
+                    Mf::Atan2 | Mf::Pow | Mf::Distance | Mf::Step => {
                         let arg1_ty = match (arg1_ty, arg2_ty) {
                             (Some(ty1), None) => ty1,
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
@@ -1006,7 +1006,7 @@ impl super::Validator {
                             ));
                         }
                     }
-                    Mf::Dot | Mf::Outer | Mf::Cross | Mf::Step | Mf::Reflect => {
+                    Mf::Dot | Mf::Outer | Mf::Cross | Mf::Reflect => {
                         let arg1_ty = match (arg1_ty, arg2_ty) {
                             (Some(ty1), None) => ty1,
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),

@@ -35,7 +35,7 @@ struct Parameters {
     msl_custom: bool,
     #[cfg_attr(not(feature = "glsl-out"), allow(dead_code))]
     #[serde(default)]
-    glsl_desktop_version: Option<u16>
+    glsl_desktop_version: Option<u16>,
 }
 
 #[allow(dead_code, unused_variables)]
@@ -225,7 +225,10 @@ fn convert_wgsl() {
         ("image-copy", Targets::METAL),
         ("texture-array", Targets::SPIRV | Targets::METAL),
         ("operators", Targets::SPIRV | Targets::METAL | Targets::GLSL),
-        ("interpolate", Targets::SPIRV | Targets::METAL | Targets::GLSL),
+        (
+            "interpolate",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

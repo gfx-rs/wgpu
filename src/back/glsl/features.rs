@@ -280,7 +280,7 @@ impl<'a, W> Writer<'a, W> {
         }
     }
 
-    fn varying_required_features(&mut self,  binding: Option<&Binding>, ty: Handle<Type>) {
+    fn varying_required_features(&mut self, binding: Option<&Binding>, ty: Handle<Type>) {
         match self.module.types[ty].inner {
             crate::TypeInner::Struct { ref members, .. } => {
                 for member in members {
@@ -290,9 +290,11 @@ impl<'a, W> Writer<'a, W> {
             _ => {
                 if let Some(&Binding::Location(_, Some(interpolation))) = binding {
                     match interpolation {
-                        Interpolation::Linear => self.features.request(Features::NOPERSPECTIVE_QUALIFIER),
+                        Interpolation::Linear => {
+                            self.features.request(Features::NOPERSPECTIVE_QUALIFIER)
+                        }
                         Interpolation::Sample => self.features.request(Features::SAMPLE_QUALIFIER),
-                        _ => ()
+                        _ => (),
                     };
                 }
             }
