@@ -17,7 +17,6 @@ OpName %15 "i"
 OpName %18 "collatz_iterations"
 OpName %45 "global_id"
 OpName %48 "main"
-OpName %48 "main"
 OpDecorate %8 ArrayStride 4
 OpDecorate %9 Block
 OpMemberDecorate %9 0 Offset 0

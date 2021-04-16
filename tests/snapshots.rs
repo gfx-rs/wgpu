@@ -229,6 +229,7 @@ fn convert_wgsl() {
             "interpolate",
             Targets::SPIRV | Targets::METAL | Targets::GLSL,
         ),
+        ("access", Targets::SPIRV | Targets::METAL),
     ];
 
     for &(name, targets) in inputs.iter() {

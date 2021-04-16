@@ -1,0 +1,50 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 31
+OpCapability Image1D
+OpCapability Shader
+OpCapability Sampled1D
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Vertex %19 "foo" %14 %17
+OpSource GLSL 450
+OpName %14 "vi"
+OpName %19 "foo"
+OpDecorate %12 ArrayStride 4
+OpDecorate %14 BuiltIn VertexIndex
+OpDecorate %17 BuiltIn Position
+%2 = OpTypeVoid
+%4 = OpTypeInt 32 1
+%3 = OpConstant  %4  5
+%5 = OpConstant  %4  1
+%6 = OpConstant  %4  2
+%7 = OpConstant  %4  3
+%8 = OpConstant  %4  4
+%9 = OpTypeInt 32 0
+%11 = OpTypeFloat 32
+%10 = OpTypeVector %11 4
+%12 = OpTypeArray %4 %3
+%15 = OpTypePointer Input %9
+%14 = OpVariable  %15  Input
+%18 = OpTypePointer Output %10
+%17 = OpVariable  %18  Output
+%20 = OpTypeFunction %2
+%23 = OpTypePointer Function %12
+%26 = OpTypePointer Function %4
+%28 = OpTypeVector %4 4
+%19 = OpFunction  %2  None %20
+%13 = OpLabel
+%24 = OpVariable  %23  Function
+%16 = OpLoad  %9  %14
+OpBranch %21
+%21 = OpLabel
+%22 = OpCompositeConstruct  %12  %5 %6 %7 %8 %3
+OpStore %24 %22
+%25 = OpAccessChain  %26  %24 %16
+%27 = OpLoad  %4  %25
+%29 = OpCompositeConstruct  %28  %27 %27 %27 %27
+%30 = OpConvertSToF  %10  %29
+OpStore %17 %30
+OpReturn
+OpFunctionEnd

@@ -29,7 +29,6 @@ OpName %71 "i"
 OpName %74 "raw_normal"
 OpName %77 "position"
 OpName %82 "fs_main"
-OpName %82 "fs_main"
 OpDecorate %14 Block
 OpMemberDecorate %14 0 Offset 0
 OpMemberDecorate %17 0 Offset 0

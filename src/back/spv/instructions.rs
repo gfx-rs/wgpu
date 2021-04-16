@@ -433,12 +433,12 @@ impl super::Instruction {
     }
 
     pub(super) fn store(
-        pointer_type_id: Word,
+        pointer_id: Word,
         object_id: Word,
         memory_access: Option<spirv::MemoryAccess>,
     ) -> Self {
         let mut instruction = Self::new(Op::Store);
-        instruction.add_operand(pointer_type_id);
+        instruction.add_operand(pointer_id);
         instruction.add_operand(object_id);
 
         if let Some(memory_access) = memory_access {

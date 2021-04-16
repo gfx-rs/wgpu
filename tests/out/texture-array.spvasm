@@ -16,7 +16,6 @@ OpName %14 "sampler"
 OpName %16 "pc"
 OpName %19 "tex_coord"
 OpName %24 "main"
-OpName %24 "main"
 OpDecorate %8 Block
 OpMemberDecorate %8 0 Offset 0
 OpDecorate %11 DescriptorSet 0

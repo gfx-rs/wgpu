@@ -70,6 +70,7 @@ struct Function {
     signature: Option<Instruction>,
     parameters: Vec<Instruction>,
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
+    internal_variables: Vec<LocalVariable>,
     blocks: Vec<Block>,
     entry_point_context: Option<EntryPointContext>,
 }
@@ -85,6 +86,9 @@ impl Function {
             if index == 0 {
                 for local_var in self.variables.values() {
                     local_var.instruction.to_words(sink);
+                }
+                for internal_var in self.internal_variables.iter() {
+                    internal_var.instruction.to_words(sink);
                 }
             }
             for instruction in block.body.iter() {
@@ -337,6 +341,20 @@ impl Writer {
                 LookupType::Local(local_ty) => self.write_type_declaration_local(arena, local_ty),
             }
         }
+    }
+
+    fn get_expression_type_id(
+        &mut self,
+        arena: &Arena<crate::Type>,
+        tr: &TypeResolution,
+    ) -> Result<Word, Error> {
+        let lookup_ty = match *tr {
+            TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
+            TypeResolution::Value(ref inner) => {
+                LookupType::Local(self.physical_layout.make_local(inner).unwrap())
+            }
+        };
+        self.get_type_id(arena, lookup_ty)
     }
 
     fn get_pointer_id(
@@ -648,11 +666,6 @@ impl Writer {
             }
         };
         self.check(exec_model.required_capabilities())?;
-
-        if self.flags.contains(WriterFlags::DEBUG) {
-            self.debugs
-                .push(Instruction::name(function_id, &entry_point.name));
-        }
 
         Ok(Instruction::entry_point(
             exec_model,
@@ -1288,23 +1301,74 @@ impl Writer {
         })
     }
 
-    /// Cache an expression for a value.
-    fn cache_expression_value<'a>(
+    #[allow(clippy::too_many_arguments)]
+    fn promote_access_expression_to_variable(
         &mut self,
-        ir_module: &'a crate::Module,
+        ir_types: &Arena<crate::Type>,
+        result_type_id: Word,
+        container_id: Word,
+        container_resolution: &TypeResolution,
+        index_id: Word,
+        element_ty: Handle<crate::Type>,
+        block: &mut Block,
+    ) -> Result<(Word, LocalVariable), Error> {
+        let container_type_id = self.get_expression_type_id(ir_types, container_resolution)?;
+        let pointer_type_id = self.id_gen.next();
+        Instruction::type_pointer(
+            pointer_type_id,
+            spirv::StorageClass::Function,
+            container_type_id,
+        )
+        .to_words(&mut self.logical_layout.declarations);
+
+        let variable = {
+            let id = self.id_gen.next();
+            LocalVariable {
+                id,
+                instruction: Instruction::variable(
+                    pointer_type_id,
+                    id,
+                    spirv::StorageClass::Function,
+                    None,
+                ),
+            }
+        };
+        block
+            .body
+            .push(Instruction::store(variable.id, container_id, None));
+
+        let element_pointer_id = self.id_gen.next();
+        let element_pointer_type_id =
+            self.get_pointer_id(ir_types, element_ty, spirv::StorageClass::Function)?;
+        block.body.push(Instruction::access_chain(
+            element_pointer_type_id,
+            element_pointer_id,
+            variable.id,
+            &[index_id],
+        ));
+        let id = self.id_gen.next();
+        block.body.push(Instruction::load(
+            result_type_id,
+            id,
+            element_pointer_id,
+            None,
+        ));
+
+        Ok((id, variable))
+    }
+
+    /// Cache an expression for a value.
+    fn cache_expression_value(
+        &mut self,
+        ir_module: &crate::Module,
         ir_function: &crate::Function,
         fun_info: &FunctionInfo,
         expr_handle: Handle<crate::Expression>,
         block: &mut Block,
         function: &mut Function,
     ) -> Result<(), Error> {
-        let result_lookup_ty = match fun_info[expr_handle].ty {
-            TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
-            TypeResolution::Value(ref inner) => {
-                LookupType::Local(self.physical_layout.make_local(inner).unwrap())
-            }
-        };
-        let result_type_id = self.get_type_id(&ir_module.types, result_lookup_ty)?;
+        let result_type_id =
+            self.get_expression_type_id(&ir_module.types, &fun_info[expr_handle].ty)?;
 
         let id = match ir_function.expressions[expr_handle] {
             crate::Expression::Access { base, index } => {
@@ -1318,10 +1382,10 @@ impl Writer {
                     0
                 } else {
                     let index_id = self.cached[index];
+                    let base_id = self.cached[base];
                     match *fun_info[base].ty.inner_with(&ir_module.types) {
                         crate::TypeInner::Vector { .. } => {
                             let id = self.id_gen.next();
-                            let base_id = self.cached[base];
                             block.body.push(Instruction::vector_extract_dynamic(
                                 result_type_id,
                                 id,
@@ -1330,7 +1394,21 @@ impl Writer {
                             ));
                             id
                         }
-                        //TODO: support `crate::TypeInner::Array { .. }` ?
+                        crate::TypeInner::Array {
+                            base: ty_element, ..
+                        } => {
+                            let (id, variable) = self.promote_access_expression_to_variable(
+                                &ir_module.types,
+                                result_type_id,
+                                base_id,
+                                &fun_info[base].ty,
+                                index_id,
+                                ty_element,
+                                block,
+                            )?;
+                            function.internal_variables.push(variable);
+                            id
+                        }
                         ref other => {
                             log::error!("Unable to access {:?}", other);
                             return Err(Error::FeatureNotImplemented("access for type"));

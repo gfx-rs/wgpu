@@ -1,0 +1,15 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+typedef int type3[5];
+
+struct fooInput {
+};
+struct fooOutput {
+    metal::float4 member [[position]];
+};
+vertex fooOutput foo(
+  metal::uint vi [[vertex_id]]
+) {
+    return fooOutput { static_cast<float4>(type3 {1, 2, 3, 4, 5}[vi]) };
+}

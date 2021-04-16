@@ -4,5 +4,5 @@
 	spv_debug: true,
 	spv_adjust_coordinate_space: true,
 	msl_custom: false,
-        glsl_desktop_version: Some(400)
+	glsl_desktop_version: Some(400)
 )

@@ -38,7 +38,6 @@ OpName %36 "vel"
 OpName %37 "i"
 OpName %40 "global_invocation_id"
 OpName %43 "main"
-OpName %43 "main"
 OpMemberDecorate %16 0 Offset 0
 OpMemberDecorate %16 1 Offset 8
 OpDecorate %17 Block

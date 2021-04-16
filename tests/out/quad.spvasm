@@ -21,9 +21,7 @@ OpName %22 "uv"
 OpName %24 "uv"
 OpName %26 "position"
 OpName %28 "main"
-OpName %28 "main"
 OpName %48 "uv"
-OpName %51 "main"
 OpName %51 "main"
 OpMemberDecorate %9 0 Offset 0
 OpMemberDecorate %9 1 Offset 16
