@@ -535,13 +535,13 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const VERTEX_WRITABLE_STORAGE = 0x0000_0020_0000_0000;
-        /// Enables buffer & texture fill functions on command buffer.
+        /// Enables buffer fill & image clear functions on command buffer.
         ///
         /// Supported platforms:
         /// - All
         ///
         /// This is a native only feature.
-        const BUFFER_AND_TEXTURE_FILL = 0x0000_0030_0000_0000;
+        const BUFFER_FILL_AND_IMAGE_CLEAR = 0x0000_0001_0000_0000;
 
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
@@ -2998,6 +2998,30 @@ pub struct ImageCopyTexture<T> {
     /// The base texel of the texture in the selected `mip_level`.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub origin: Origin3d,
+}
+
+/// Subresource range within an image, used for clear_image
+#[repr(C)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct ImageSubresourceRange {
+    /// Included aspects: color/depth/stencil
+    pub aspects: TextureAspect,
+    /// First mipmap level in this subresource
+    pub level_start: u8,
+    /// Number of sequential levels in this subresource.
+    ///
+    /// A value of `None` indicates the subresource contains
+    /// all of the remaining levels.
+    pub level_count: Option<u8>,
+    /// First layer in this subresource
+    pub layer_start: u16,
+    /// Number of sequential layers in this subresource.
+    ///
+    /// A value of `None` indicates the subresource contains
+    /// all of the remaining layers.
+    pub layer_count: Option<u16>,
 }
 
 /// Color variation to use when sampler addressing mode is [`AddressMode::ClampToBorder`]

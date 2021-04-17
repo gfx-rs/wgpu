@@ -148,6 +148,11 @@ pub enum Command {
         size: Option<wgt::BufferAddress>,
         data: u32,
     },
+    ClearImage {
+        dst: id::TextureId,
+        subresource_range: wgt::ImageSubresourceRange,
+        clear_color: wgt::Color,
+    },
     WriteTimestamp {
         query_set_id: id::QuerySetId,
         query_index: u32,

@@ -89,6 +89,13 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 } => self
                     .command_encoder_fill_buffer::<B>(encoder, dst, offset, size, data)
                     .unwrap(),
+                trace::Command::ClearImage {
+                    dst,
+                    subresource_range,
+                    clear_color,
+                } => self
+                    .command_encoder_clear_image::<B>(encoder, dst, subresource_range, clear_color)
+                    .unwrap(),
                 trace::Command::WriteTimestamp {
                     query_set_id,
                     query_index,

@@ -7,7 +7,7 @@ mod bind;
 mod bundle;
 mod compute;
 mod draw;
-mod fill;
+mod fill_clear;
 mod query;
 mod render;
 mod transfer;

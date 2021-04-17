@@ -1,10 +1,11 @@
 (
 	backends: (bits: 0xF),
 	tests: [
+		"bind-group.ron",
 		"buffer-copy.ron",
 		"buffer-fill.ron",
 		"buffer-zero-init.ron",
-		"bind-group.ron",
+		"image-clear.ron",
 		"quad.ron",
 	],
 )
