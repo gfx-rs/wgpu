@@ -361,6 +361,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             });
         }
 
+        module.apply_common_default_interpolation();
+
         self.lookup_expression.clear();
         self.lookup_sampled_image.clear();
         Ok(())

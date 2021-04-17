@@ -831,7 +831,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 // here, regardless of the version.
                 if let Some(sampling) = sampling {
                     if emit_interpolation_and_auxiliary {
-                        write!(self.out, "{} ", glsl_sampling(sampling))?;
+                        if let Some(qualifier) = glsl_sampling(sampling) {
+                            write!(self.out, "{} ", qualifier)?;
+                        }
                     }
                 }
 
@@ -2225,11 +2227,11 @@ fn glsl_interpolation(interpolation: Interpolation) -> &'static str {
 }
 
 /// Return the GLSL auxiliary qualifier for the given sampling value.
-fn glsl_sampling(sampling: Sampling) -> &'static str {
+fn glsl_sampling(sampling: Sampling) -> Option<&'static str> {
     match sampling {
-        Sampling::Center => "",
-        Sampling::Centroid => "centroid",
-        Sampling::Sample => "sample",
+        Sampling::Center => None,
+        Sampling::Centroid => Some("centroid"),
+        Sampling::Sample => Some("sample"),
     }
 }
 

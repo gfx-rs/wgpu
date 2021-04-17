@@ -9,7 +9,7 @@ struct VertexOutput {
 
 layout(location = 0) in vec2 _p2vs_location0;
 layout(location = 1) in vec2 _p2vs_location1;
-layout(location = 0) out vec2 _vs2fs_location0;
+smooth layout(location = 0) out vec2 _vs2fs_location0;
 
 void main() {
     vec2 pos = _p2vs_location0;

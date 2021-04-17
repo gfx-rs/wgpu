@@ -507,6 +507,10 @@ impl BindingParser {
         match (self.location, self.built_in, self.interpolation, self.sampling) {
             (None, None, None, None) => Ok(None),
             (Some(location), None, interpolation, sampling) => {
+                // Before handing over the completed `Module`, we call
+                // `apply_common_default_interpolation` to ensure that the interpolation and
+                // sampling have been explicitly specified on all vertex shader output and fragment
+                // shader input user bindings, so leaving them potentially `None` here is fine.
                 Ok(Some(crate::Binding::Location { location, interpolation, sampling }))
             }
             (None, Some(bi), None, None) => Ok(Some(crate::Binding::BuiltIn(bi))),
@@ -2769,6 +2773,7 @@ impl Parser {
                         log::error!("Reached the end of file, but scopes are not closed");
                         return Err(Error::Other.as_parse_error(lexer.source));
                     };
+                    module.apply_common_default_interpolation();
                     return Ok(module);
                 }
             }

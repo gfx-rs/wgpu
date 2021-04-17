@@ -1,5 +1,6 @@
 //! Module processing functionality.
 
+mod interpolator;
 mod namer;
 mod terminator;
 mod typifier;

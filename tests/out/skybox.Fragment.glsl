@@ -9,7 +9,7 @@ struct VertexOutput {
 
 uniform highp samplerCube _group_0_binding_1;
 
-layout(location = 0) in vec3 _vs2fs_location0;
+smooth layout(location = 0) in vec3 _vs2fs_location0;
 layout(location = 0) out vec4 _fs2p_location0;
 
 void main() {

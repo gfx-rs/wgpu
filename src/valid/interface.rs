@@ -36,6 +36,8 @@ pub enum VaryingError {
     InvalidType(Handle<crate::Type>),
     #[error("Interpolation is not valid")]
     InvalidInterpolation,
+    #[error("Interpolation must be specified on vertex shader outputs and fragment shader inputs")]
+    MissingInterpolation,
     #[error("BuiltIn {0:?} is not available at this stage")]
     InvalidBuiltInStage(crate::BuiltIn),
     #[error("BuiltIn type for {0:?} is invalid")]
@@ -210,28 +212,33 @@ impl VaryingContext<'_> {
                 if !self.location_mask.insert(location as usize) {
                     return Err(VaryingError::BindingCollision { location });
                 }
+
+                // Values passed from the vertex shader to the fragment shader must have their
+                // interpolation defaulted (i.e. not `None`) by the front end, as appropriate for
+                // that language. For anything other than floating-point scalars and vectors, the
+                // interpolation must be `Flat`.
                 let needs_interpolation = match self.stage {
                     crate::ShaderStage::Vertex => self.output,
                     crate::ShaderStage::Fragment => !self.output,
                     _ => false,
                 };
-                if !needs_interpolation && interpolation.is_some() {
-                    return Err(VaryingError::InvalidInterpolation);
-                }
-                // It doesn't make sense to specify a sampling when
-                // `interpolation` is `Flat`, but SPIR-V and GLSL both
-                // explicitly tolerate such combinations of decorators /
+
+                // It doesn't make sense to specify a sampling when `interpolation` is `Flat`, but
+                // SPIR-V and GLSL both explicitly tolerate such combinations of decorators /
                 // qualifiers, so we won't complain about that here.
                 let _ = sampling;
+
                 match ty_inner.scalar_kind() {
-                    Some(crate::ScalarKind::Float) => {}
-                    Some(_)
-                        if needs_interpolation
-                            && interpolation != Some(crate::Interpolation::Flat) =>
-                    {
-                        return Err(VaryingError::InvalidInterpolation);
+                    Some(crate::ScalarKind::Float) => {
+                        if needs_interpolation && interpolation.is_none() {
+                            return Err(VaryingError::MissingInterpolation);
+                        }
                     }
-                    Some(_) => {}
+                    Some(_) => {
+                        if needs_interpolation && interpolation != Some(crate::Interpolation::Flat) {
+                            return Err(VaryingError::InvalidInterpolation);
+                        }
+                    }
                     None => return Err(VaryingError::InvalidType(self.ty)),
                 }
             }
