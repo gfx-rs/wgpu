@@ -14,11 +14,8 @@ layout(location = 0) out vec2 _vs2fs_location0;
 void main() {
     vec2 pos = _p2vs_location0;
     vec2 uv1 = _p2vs_location1;
-    VertexOutput out1;
-    out1.uv = uv1;
-    out1.position = vec4((1.2 * pos), 0.0, 1.0);
-    _vs2fs_location0 = out1.uv;
-    gl_Position = out1.position;
+    _vs2fs_location0 = VertexOutput(uv1, vec4((1.2 * pos), 0.0, 1.0)).uv;
+    gl_Position = VertexOutput(uv1, vec4((1.2 * pos), 0.0, 1.0)).position;
     return;
 }
 

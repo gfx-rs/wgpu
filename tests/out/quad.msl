@@ -20,10 +20,7 @@ vertex main1Output main1(
 ) {
     const auto pos = varyings.pos;
     const auto uv1 = varyings.uv1;
-    VertexOutput out;
-    out.uv = uv1;
-    out.position = metal::float4(c_scale * pos, 0.0, 1.0);
-    const auto _tmp = out;
+    const auto _tmp = VertexOutput {uv1, metal::float4(c_scale * pos, 0.0, 1.0)};
     return main1Output { _tmp.uv, _tmp.position };
 }
 

@@ -10,7 +10,7 @@ mod tests;
 
 use crate::{
     arena::{Arena, Handle},
-    proc::{ensure_block_returns, ResolveContext, ResolveError},
+    proc::{ensure_block_returns, ResolveContext, ResolveError, TypeResolution},
     FastHashMap,
 };
 
@@ -1111,14 +1111,19 @@ impl Parser {
                     //TODO: resolve the duplicate call in `parse_singular_expression`
                     expr
                 } else {
-                    let inner = self.parse_type_decl_impl(
-                        lexer,
-                        TypeAttributes::default(),
-                        word,
-                        ctx.types,
-                        ctx.constants,
-                    )?;
-                    let kind = inner.scalar_kind();
+                    let ty_resolution = match self.lookup_type.get(word) {
+                        Some(&handle) => TypeResolution::Handle(handle),
+                        None => {
+                            let inner = self.parse_type_decl_impl(
+                                lexer,
+                                TypeAttributes::default(),
+                                word,
+                                ctx.types,
+                                ctx.constants,
+                            )?;
+                            TypeResolution::Value(inner)
+                        }
+                    };
 
                     lexer.expect(Token::Paren('('))?;
                     let mut components = Vec::new();
@@ -1130,8 +1135,15 @@ impl Parser {
                     }
                     lexer.expect(Token::Paren(')'))?;
                     let expr = if components.is_empty() {
-                        let last_component_inner = ctx.resolve_type(last_component)?;
-                        match (&inner, last_component_inner) {
+                        // We can't use the `TypeInner` returned by this because
+                        // `resolve_type` borrows context mutably.
+                        // Use it to insert into the right maps,
+                        // and then grab it again immutably.
+                        ctx.resolve_type(last_component)?;
+                        match (
+                            ty_resolution.inner_with(ctx.types),
+                            ctx.typifier.get(last_component, ctx.types),
+                        ) {
                             (
                                 &crate::TypeInner::Vector { size, .. },
                                 &crate::TypeInner::Scalar { .. },
@@ -1140,19 +1152,23 @@ impl Parser {
                                 value: last_component,
                             },
                             (
-                                &crate::TypeInner::Scalar { .. },
+                                &crate::TypeInner::Scalar { kind, .. },
                                 &crate::TypeInner::Scalar { .. },
                             )
                             | (
-                                &crate::TypeInner::Matrix { .. },
-                                &crate::TypeInner::Matrix { .. },
-                            )
-                            | (
-                                &crate::TypeInner::Vector { .. },
+                                &crate::TypeInner::Vector { kind, .. },
                                 &crate::TypeInner::Vector { .. },
                             ) => crate::Expression::As {
                                 expr: last_component,
-                                kind: kind.ok_or(Error::BadTypeCast(word))?,
+                                kind,
+                                convert: true,
+                            },
+                            (
+                                &crate::TypeInner::Matrix { .. },
+                                &crate::TypeInner::Matrix { .. },
+                            ) => crate::Expression::As {
+                                expr: last_component,
+                                kind: crate::ScalarKind::Float,
                                 convert: true,
                             },
                             _ => {
@@ -1160,8 +1176,13 @@ impl Parser {
                             }
                         }
                     } else {
+                        let ty = match ty_resolution {
+                            TypeResolution::Handle(handle) => handle,
+                            TypeResolution::Value(inner) => {
+                                ctx.types.fetch_or_append(crate::Type { name: None, inner })
+                            }
+                        };
                         components.push(last_component);
-                        let ty = ctx.types.fetch_or_append(crate::Type { name: None, inner });
                         crate::Expression::Compose { ty, components }
                     };
                     ctx.expressions.append(expr)
