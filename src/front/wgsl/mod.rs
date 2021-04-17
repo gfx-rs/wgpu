@@ -112,11 +112,12 @@ pub enum Error<'a> {
     ZeroSizeOrAlign,
     #[error("not a composite type: {0:?}")]
     NotCompositeType(Handle<crate::Type>),
-    #[error("Input/output binding is not consistent: location {0:?}, built-in {1:?} and interpolation {2:?}")]
+    #[error("Input/output binding is not consistent: location {0:?}, built-in {1:?}, interpolation {2:?}, and sampling {3:?}")]
     InconsistentBinding(
         Option<u32>,
         Option<crate::BuiltIn>,
         Option<crate::Interpolation>,
+        Option<crate::Sampling>,
     ),
     #[error("call to local `{0}(..)` can't be resolved")]
     UnknownLocalFunction(&'a str),
@@ -470,6 +471,7 @@ struct BindingParser {
     location: Option<u32>,
     built_in: Option<crate::BuiltIn>,
     interpolation: Option<crate::Interpolation>,
+    sampling: Option<crate::Sampling>,
 }
 
 impl BindingParser {
@@ -490,6 +492,10 @@ impl BindingParser {
                 lexer.expect(Token::Paren('('))?;
                 let raw = lexer.next_ident()?;
                 self.interpolation = Some(conv::map_interpolation(raw)?);
+                if lexer.skip(Token::Separator(',')) {
+                    let raw = lexer.next_ident()?;
+                    self.sampling = Some(conv::map_sampling(raw)?);
+                }
                 lexer.expect(Token::Paren(')'))?;
             }
             _ => return Err(Error::UnknownAttribute(name)),
@@ -498,16 +504,17 @@ impl BindingParser {
     }
 
     fn finish<'a>(self) -> Result<Option<crate::Binding>, Error<'a>> {
-        match (self.location, self.built_in, self.interpolation) {
-            (None, None, None) => Ok(None),
-            (Some(location), None, interpolation) => {
-                Ok(Some(crate::Binding::Location { location, interpolation }))
+        match (self.location, self.built_in, self.interpolation, self.sampling) {
+            (None, None, None, None) => Ok(None),
+            (Some(location), None, interpolation, sampling) => {
+                Ok(Some(crate::Binding::Location { location, interpolation, sampling }))
             }
-            (None, Some(bi), None) => Ok(Some(crate::Binding::BuiltIn(bi))),
-            (location, built_in, interpolation) => Err(Error::InconsistentBinding(
+            (None, Some(bi), None, None) => Ok(Some(crate::Binding::BuiltIn(bi))),
+            (location, built_in, interpolation, sampling) => Err(Error::InconsistentBinding(
                 location,
                 built_in,
                 interpolation,
+                sampling,
             )),
         }
     }

@@ -226,11 +226,23 @@ pub enum Interpolation {
     Linear,
     /// Indicates that no interpolation will be performed.
     Flat,
-    /// When used with multi-sampling rasterization, allow
-    /// a single interpolation location for an entire pixel.
+}
+
+/// The sampling qualifiers of a binding or struct field.
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum Sampling {
+    /// Interpolate the value at the center of the pixel.
+    Center,
+
+    /// Interpolate the value at a point that lies within all samples covered by
+    /// the fragment within the current primitive. In multisampling, use a
+    /// single value for all samples in the primitive.
     Centroid,
-    /// When used with multi-sampling rasterization, require
-    /// per-sample interpolation.
+
+    /// Interpolate the value at each sample location. In multisampling, invoke
+    /// the fragment shader once per sample.
     Sample,
 }
 
@@ -465,7 +477,11 @@ pub enum Binding {
     /// Built-in shader variable.
     BuiltIn(BuiltIn),
     /// Indexed location.
-    Location { location: u32, interpolation: Option<Interpolation> },
+    Location {
+        location: u32,
+        interpolation: Option<Interpolation>,
+        sampling: Option<Sampling>
+    },
 }
 
 /// Pipeline binding information for global resources.

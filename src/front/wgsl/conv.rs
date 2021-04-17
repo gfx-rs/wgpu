@@ -44,9 +44,15 @@ pub fn map_interpolation(word: &str) -> Result<crate::Interpolation, Error<'_>> 
     match word {
         "linear" => Ok(crate::Interpolation::Linear),
         "flat" => Ok(crate::Interpolation::Flat),
-        "centroid" => Ok(crate::Interpolation::Centroid),
-        "sample" => Ok(crate::Interpolation::Sample),
         "perspective" => Ok(crate::Interpolation::Perspective),
+        _ => Err(Error::UnknownAttribute(word)),
+    }
+}
+
+pub fn map_sampling(word: &str) -> Result<crate::Sampling, Error<'_>> {
+    match word {
+        "centroid" => Ok(crate::Sampling::Centroid),
+        "sample" => Ok(crate::Sampling::Sample),
         _ => Err(Error::UnknownAttribute(word)),
     }
 }

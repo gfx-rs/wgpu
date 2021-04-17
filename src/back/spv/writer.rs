@@ -1090,17 +1090,29 @@ impl Writer {
         use spirv::{BuiltIn, Decoration};
 
         match *binding {
-            crate::Binding::Location { location, interpolation } => {
+            crate::Binding::Location { location, interpolation, sampling } => {
                 self.decorate(id, Decoration::Location, &[location]);
-                let interp_decoration = match interpolation {
-                    Some(crate::Interpolation::Linear) => Some(Decoration::NoPerspective),
-                    Some(crate::Interpolation::Flat) => Some(Decoration::Flat),
-                    Some(crate::Interpolation::Centroid) => Some(Decoration::Centroid),
-                    Some(crate::Interpolation::Sample) => Some(Decoration::Sample),
-                    Some(crate::Interpolation::Perspective) | None => None,
-                };
-                if let Some(decoration) = interp_decoration {
-                    self.decorate(id, decoration, &[]);
+
+                match interpolation {
+                    // Perspective-correct interpolation is the default in SPIR-V.
+                    None | Some(crate::Interpolation::Perspective) => (),
+                    Some(crate::Interpolation::Flat) => {
+                        self.decorate(id, Decoration::Flat, &[]);
+                    }
+                    Some(crate::Interpolation::Linear) => {
+                        self.decorate(id, Decoration::NoPerspective, &[]);
+                    }
+                }
+
+                match sampling {
+                    // Center sampling is the default in SPIR-V.
+                    None | Some(crate::Sampling::Center) => (),
+                    Some(crate::Sampling::Centroid) => {
+                        self.decorate(id, Decoration::Centroid, &[]);
+                    }
+                    Some(crate::Sampling::Sample) => {
+                        self.decorate(id, Decoration::Sample, &[]);
+                    }
                 }
             }
             crate::Binding::BuiltIn(built_in) => {

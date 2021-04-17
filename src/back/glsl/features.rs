@@ -1,7 +1,7 @@
 use super::{BackendResult, Error, Version, Writer};
 use crate::{
-    Binding, Bytes, Handle, ImageClass, ImageDimension, Interpolation, ScalarKind, ShaderStage,
-    StorageClass, StorageFormat, Type, TypeInner,
+    Binding, Bytes, Handle, ImageClass, ImageDimension, Interpolation, Sampling, ScalarKind,
+    ShaderStage, StorageClass, StorageFormat, Type, TypeInner,
 };
 use std::io::Write;
 
@@ -289,16 +289,16 @@ impl<'a, W> Writer<'a, W> {
             }
             _ => {
                 if let Some(&Binding::Location {
-                    interpolation: Some(interpolation),
+                    interpolation,
+                    sampling,
                     ..
                 }) = binding {
-                    match interpolation {
-                        Interpolation::Linear => {
-                            self.features.request(Features::NOPERSPECTIVE_QUALIFIER)
-                        }
-                        Interpolation::Sample => self.features.request(Features::SAMPLE_QUALIFIER),
-                        _ => (),
-                    };
+                    if interpolation == Some(Interpolation::Linear) {
+                        self.features.request(Features::NOPERSPECTIVE_QUALIFIER);
+                    }
+                    if sampling == Some(Sampling::Sample) {
+                        self.features.request(Features::SAMPLE_QUALIFIER);
+                    }
                 }
             }
         }

@@ -2,7 +2,8 @@ use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind};
 use crate::{
     proc::ResolveContext, Arena, BinaryOperator, Binding, Constant, Expression, FastHashMap,
     Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable, Module,
-    RelationalFunction, ResourceBinding, ShaderStage, Statement, StorageClass, Type, UnaryOperator,
+    RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass, Type,
+    UnaryOperator,
 };
 
 #[derive(Debug)]
@@ -226,6 +227,7 @@ pub enum TypeQualifier {
     ResourceBinding(ResourceBinding),
     Binding(Binding),
     Interpolation(Interpolation),
+    Sampling(Sampling),
 }
 
 #[derive(Debug)]

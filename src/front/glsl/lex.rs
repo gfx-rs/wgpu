@@ -66,8 +66,8 @@ impl<'a> Iterator for Lexer<'a> {
                     "flat" => Token::Interpolation((meta, crate::Interpolation::Flat)),
                     "noperspective" => Token::Interpolation((meta, crate::Interpolation::Linear)),
                     "smooth" => Token::Interpolation((meta, crate::Interpolation::Perspective)),
-                    "centroid" => Token::Interpolation((meta, crate::Interpolation::Centroid)),
-                    "sample" => Token::Interpolation((meta, crate::Interpolation::Sample)),
+                    "centroid" => Token::Sampling((meta, crate::Sampling::Centroid)),
+                    "sample" => Token::Sampling((meta, crate::Sampling::Sample)),
                     // values
                     "true" => Token::BoolConstant((meta, true)),
                     "false" => Token::BoolConstant((meta, false)),

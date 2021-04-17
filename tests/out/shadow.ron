@@ -1520,6 +1520,7 @@
                         binding: Some(Location(
                             location: 0,
                             interpolation: Some(Perspective),
+                            sampling: None,
                         )),
                     ),
                     (
@@ -1528,6 +1529,7 @@
                         binding: Some(Location(
                             location: 1,
                             interpolation: Some(Perspective),
+                            sampling: None,
                         )),
                     ),
                 ],
@@ -1536,6 +1538,7 @@
                     binding: Some(Location(
                         location: 0,
                         interpolation: None,
+                        sampling: None,
                     )),
                 )),
                 local_variables: [],

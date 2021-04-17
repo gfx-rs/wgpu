@@ -220,6 +220,7 @@ struct Decoration {
     matrix_stride: Option<NonZeroU32>,
     matrix_major: Option<Majority>,
     interpolation: Option<crate::Interpolation>,
+    sampling: Option<crate::Sampling>,
     flags: DecorationFlags,
 }
 
@@ -253,8 +254,9 @@ impl Decoration {
                 built_in: None,
                 location: Some(location),
                 interpolation,
+                sampling,
                 ..
-            } => Ok(crate::Binding::Location { location, interpolation }),
+            } => Ok(crate::Binding::Location { location, interpolation, sampling }),
             _ => Err(Error::MissingDecoration(spirv::Decoration::Location)),
         }
     }
@@ -504,10 +506,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 dec.interpolation = Some(crate::Interpolation::Flat);
             }
             spirv::Decoration::Centroid => {
-                dec.interpolation = Some(crate::Interpolation::Centroid);
+                dec.sampling = Some(crate::Sampling::Centroid);
             }
             spirv::Decoration::Sample => {
-                dec.interpolation = Some(crate::Interpolation::Sample);
+                dec.sampling = Some(crate::Sampling::Sample);
             }
             spirv::Decoration::NonReadable => {
                 dec.flags |= DecorationFlags::NON_READABLE;

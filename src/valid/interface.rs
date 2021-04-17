@@ -206,7 +206,7 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::InvalidBuiltInType(built_in));
                 }
             }
-            crate::Binding::Location { location, interpolation } => {
+            crate::Binding::Location { location, interpolation, sampling } => {
                 if !self.location_mask.insert(location as usize) {
                     return Err(VaryingError::BindingCollision { location });
                 }
@@ -218,6 +218,11 @@ impl VaryingContext<'_> {
                 if !needs_interpolation && interpolation.is_some() {
                     return Err(VaryingError::InvalidInterpolation);
                 }
+                // It doesn't make sense to specify a sampling when
+                // `interpolation` is `Flat`, but SPIR-V and GLSL both
+                // explicitly tolerate such combinations of decorators /
+                // qualifiers, so we won't complain about that here.
+                let _ = sampling;
                 match ty_inner.scalar_kind() {
                     Some(crate::ScalarKind::Float) => {}
                     Some(_)

@@ -10,7 +10,7 @@ pomelo! {
             ConstantInner, Expression,
             Function, FunctionArgument, FunctionResult,
             GlobalVariable, Handle, Interpolation,
-            LocalVariable, ResourceBinding, ScalarValue, ScalarKind,
+            LocalVariable, ResourceBinding, Sampling, ScalarValue, ScalarKind,
             Statement, StorageAccess, StorageClass, StructMember,
             SwitchCase, Type, TypeInner, UnaryOperator,
         };
@@ -120,6 +120,8 @@ pomelo! {
     %type storage_qualifier StorageQualifier;
     %type interpolation_qualifier Interpolation;
     %type Interpolation Interpolation;
+    %type sampling_qualifier Sampling;
+    %type Sampling Sampling;
 
     // types
     %type fully_specified_type (Vec<TypeQualifier>, Option<Handle<Type>>);
@@ -613,10 +615,15 @@ pomelo! {
         i
     }
 
+    sampling_qualifier ::= Sampling((_, s)) {
+        s
+    }
+
     layout_qualifier ::= Layout LeftParen layout_qualifier_id_list(l) RightParen {
         if let Some(&(_, location)) = l.iter().find(|&q| q.0.as_str() == "location") {
             let interpolation = None; //TODO
-            StructLayout::Binding(Binding::Location { location, interpolation })
+            let sampling = None; //TODO
+            StructLayout::Binding(Binding::Location { location, interpolation, sampling })
         } else if let Some(&(_, binding)) = l.iter().find(|&q| q.0.as_str() == "binding") {
             let group = if let Some(&(_, set)) = l.iter().find(|&q| q.0.as_str() == "set") {
                 set
@@ -669,6 +676,9 @@ pomelo! {
     // single_type_qualifier ::= precision_qualifier;
     single_type_qualifier ::= interpolation_qualifier(i) {
         TypeQualifier::Interpolation(i)
+    }
+    single_type_qualifier ::= sampling_qualifier(i) {
+        TypeQualifier::Sampling(i)
     }
     // single_type_qualifier ::= invariant_qualifier;
     // single_type_qualifier ::= precise_qualifier;
@@ -1133,8 +1143,16 @@ pomelo! {
                     let interpolation = d.type_qualifiers.iter().find_map(|tq| {
                         if let TypeQualifier::Interpolation(interp) = *tq { Some(interp) } else { None }
                     });
-                    if let Some(Binding::Location { interpolation: ref mut interp, .. }) = binding {
+                    let sampling = d.type_qualifiers.iter().find_map(|tq| {
+                        if let TypeQualifier::Sampling(samp) = *tq { Some(samp) } else { None }
+                    });
+                    if let Some(Binding::Location {
+                        interpolation: ref mut interp,
+                        sampling: ref mut samp,
+                        ..
+                    }) = binding {
                         *interp = interpolation;
+                        *samp = sampling;
                     }
 
                     for (id, _initializer) in d.ids_initializers {

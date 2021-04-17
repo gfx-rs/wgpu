@@ -48,9 +48,10 @@ use crate::{
     valid::{FunctionInfo, ModuleInfo},
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant,
     ConstantInner, DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle,
-    ImageClass, Interpolation, LocalVariable, Module, RelationalFunction, ScalarKind, ScalarValue,
-    ShaderStage, Statement, StorageAccess, StorageClass, StorageFormat, StructMember, Type,
-    TypeInner, UnaryOperator,
+    ImageClass, Interpolation, LocalVariable, Module, RelationalFunction, Sampling, ScalarKind,
+    ScalarValue, ShaderStage, Statement, StorageAccess, StorageClass, StorageFormat, StructMember,
+    Type, TypeInner, UnaryOperator,
+
 };
 use features::FeaturesManager;
 use std::{
@@ -232,8 +233,10 @@ impl IdGenerator {
 /// Helper wrapper used to get a name for a varying
 ///
 /// Varying have different naming schemes depending on their binding:
-/// - Varyings with builtin bindings get the from [`glsl_built_in`](glsl_built_in)
-/// - Varyings with location bindings are named `_location_X` where `X` is the location
+/// - Varyings with builtin bindings get the from [`glsl_built_in`](glsl_built_in).
+/// - Varyings with location bindings are named `_S_location_X` where `S` is a
+///   prefix identifying which pipeline stage the varying connects, and `X` is
+///   the location.
 struct VaryingName<'a> {
     binding: &'a Binding,
     stage: ShaderStage,
@@ -793,16 +796,22 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
             }
             _ => {
-                let (location, interpolation) = match binding {
-                    Some(&Binding::Location { location, interpolation }) => (location, interpolation),
+                let (location, interpolation, sampling) = match binding {
+                    Some(&Binding::Location { location, interpolation, sampling }) => (location, interpolation, sampling),
                     _ => return Ok(()),
                 };
+
                 // Write the interpolation modifier if needed
                 //
-                // We ignore all interpolation modifiers that aren't used in input globals in fragment
-                // shaders or output globals in vertex shaders
+                // We ignore all interpolation and auxiliary modifiers that aren't used in fragment
+                // shaders' input globals or vertex shaders' output globals.
+                let emit_interpolation_and_auxiliary = match self.options.shader_stage {
+                    ShaderStage::Vertex => output,
+                    ShaderStage::Fragment => !output,
+                    _ => false,
+                };
                 if let Some(interp) = interpolation {
-                    if self.options.shader_stage == ShaderStage::Fragment {
+                    if emit_interpolation_and_auxiliary {
                         write!(self.out, "{} ", glsl_interpolation(interp))?;
                     }
                 }
@@ -811,13 +820,24 @@ impl<'a, W: Write> Writer<'a, W> {
                 if self.options.version.supports_explicit_locations() {
                     write!(
                         self.out,
-                        "layout(location = {}) {} ",
-                        location,
-                        if output { "out" } else { "in" }
-                    )?;
-                } else {
-                    write!(self.out, "{} ", if output { "out" } else { "in" })?;
+                        "layout(location = {}) ",
+                        location)?;
                 }
+
+                // Write the sampling auxiliary qualifier.
+                //
+                // Before GLSL 4.2, the `centroid` and `sample` qualifiers were required to appear
+                // immediately before the `in` / `out` qualifier, so we'll just follow that rule
+                // here, regardless of the version.
+                if let Some(sampling) = sampling {
+                    if emit_interpolation_and_auxiliary {
+                        write!(self.out, "{} ", glsl_sampling(sampling))?;
+                    }
+                }
+
+                // Write the input/output qualifier.
+                write!(self.out, "{} ", if output { "out" } else { "in" })?;
+
                 // Write the type
                 // `write_type` adds no leading or trailing spaces
                 self.write_type(ty)?;
@@ -825,7 +845,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // Finally write the global name and end the global with a `;` and a newline
                 // Leading space is important
                 let vname = VaryingName {
-                    binding: &Binding::Location { location, interpolation: None },
+                    binding: &Binding::Location { location, interpolation: None, sampling: None },
                     stage: self.entry_point.stage,
                     output,
                 };
@@ -2201,8 +2221,15 @@ fn glsl_interpolation(interpolation: Interpolation) -> &'static str {
         Interpolation::Perspective => "smooth",
         Interpolation::Linear => "noperspective",
         Interpolation::Flat => "flat",
-        Interpolation::Centroid => "centroid",
-        Interpolation::Sample => "sample",
+    }
+}
+
+/// Return the GLSL auxiliary qualifier for the given sampling value.
+fn glsl_sampling(sampling: Sampling) -> &'static str {
+    match sampling {
+        Sampling::Center => "",
+        Sampling::Centroid => "centroid",
+        Sampling::Sample => "sample",
     }
 }
 
