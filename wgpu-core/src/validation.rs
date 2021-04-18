@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{binding_model::BindEntryMap, FastHashMap};
+use crate::{binding_model::BindEntryMap, FastHashMap, FastHashSet};
 use naga::valid::GlobalUse;
 use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
@@ -25,8 +25,8 @@ enum ResourceType {
 
 #[derive(Debug)]
 struct Resource {
-    group: u32,
-    binding: u32,
+    name: Option<String>,
+    bind: naga::ResourceBinding,
     ty: ResourceType,
     class: naga::StorageClass,
 }
@@ -102,6 +102,7 @@ struct EntryPoint {
     outputs: Vec<Varying>,
     resources: Vec<(naga::Handle<Resource>, GlobalUse)>,
     spec_constants: Vec<SpecializationConstant>,
+    sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
 }
 
 #[derive(Debug)]
@@ -185,6 +186,14 @@ pub enum BindingError {
 }
 
 #[derive(Clone, Debug, Error)]
+pub enum FilteringError {
+    #[error("integer textures can't be sampled")]
+    Integer,
+    #[error("non-filterable float texture")]
+    NonFilterable,
+}
+
+#[derive(Clone, Debug, Error)]
 pub enum InputError {
     #[error("input is not provided by the earlier stage in the pipeline")]
     Missing,
@@ -201,12 +210,14 @@ pub enum StageError {
     InvalidModule,
     #[error("unable to find entry point '{0:?}'")]
     MissingEntryPoint(String),
-    #[error("error matching global binding at index {binding} in group {group} against the pipeline layout")]
-    Binding {
-        group: u32,
-        binding: u32,
+    #[error("error matching global {0:?} against the pipeline layout")]
+    Binding(naga::ResourceBinding, #[source] BindingError),
+    #[error("unable to filter the texture ({texture:?}) by the sampler ({sampler:?})")]
+    Filtering {
+        texture: naga::ResourceBinding,
+        sampler: naga::ResourceBinding,
         #[source]
-        error: BindingError,
+        error: FilteringError,
     },
     #[error(
         "error matching the stage input at {location} ({var}) against the previous stage outputs"
@@ -751,8 +762,8 @@ impl Interface {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
-            let (group, binding) = match var.binding {
-                Some(ref br) => (br.group, br.binding),
+            let bind = match var.binding {
+                Some(ref br) => br.clone(),
                 _ => continue,
             };
             let ty = match module.types[var.ty].inner {
@@ -779,8 +790,8 @@ impl Interface {
                 }
             };
             let handle = resources.append(Resource {
-                group,
-                binding,
+                name: var.name.clone(),
+                bind,
                 ty,
                 class: var.class,
             });
@@ -845,12 +856,13 @@ impl Interface {
             .get(&pair)
             .ok_or(StageError::MissingEntryPoint(pair.1))?;
 
+        // check resources visibility
         for &(handle, usage) in entry_point.resources.iter() {
             let res = &self.resources[handle];
             let result = match given_layouts {
                 Some(layouts) => layouts
-                    .get(res.group as usize)
-                    .and_then(|map| map.get(&res.binding))
+                    .get(res.bind.group as usize)
+                    .and_then(|map| map.get(&res.bind.binding))
                     .ok_or(BindingError::Missing)
                     .and_then(|entry| {
                         if entry.visibility.contains(stage_bit) {
@@ -861,11 +873,11 @@ impl Interface {
                     })
                     .and_then(|entry| res.check_binding_use(entry, usage)),
                 None => derived_layouts
-                    .get_mut(res.group as usize)
+                    .get_mut(res.bind.group as usize)
                     .ok_or(BindingError::Missing)
                     .and_then(|set| {
                         let ty = res.derive_binding_type(usage)?;
-                        match set.entry(res.binding) {
+                        match set.entry(res.bind.binding) {
                             Entry::Occupied(e) if e.get().ty != ty => {
                                 return Err(BindingError::InconsistentlyDerivedType)
                             }
@@ -874,7 +886,7 @@ impl Interface {
                             }
                             Entry::Vacant(e) => {
                                 e.insert(BindGroupLayoutEntry {
-                                    binding: res.binding,
+                                    binding: res.bind.binding,
                                     ty,
                                     visibility: stage_bit,
                                     count: None,
@@ -885,14 +897,52 @@ impl Interface {
                     }),
             };
             if let Err(error) = result {
-                return Err(StageError::Binding {
-                    group: res.group,
-                    binding: res.binding,
-                    error,
-                });
+                return Err(StageError::Binding(res.bind.clone(), error));
             }
         }
 
+        // check the compatibility between textures and samplers
+        if let Some(layouts) = given_layouts {
+            for &(texture_handle, sampler_handle) in entry_point.sampling_pairs.iter() {
+                let texture_bind = &self.resources[texture_handle].bind;
+                let sampler_bind = &self.resources[sampler_handle].bind;
+                let texture_layout = &layouts[texture_bind.group as usize][&texture_bind.binding];
+                let sampler_layout = &layouts[sampler_bind.group as usize][&sampler_bind.binding];
+                assert!(texture_layout.visibility.contains(stage_bit));
+                assert!(sampler_layout.visibility.contains(stage_bit));
+
+                let error = match texture_layout.ty {
+                    wgt::BindingType::Texture {
+                        sample_type: wgt::TextureSampleType::Float { filterable },
+                        ..
+                    } => match sampler_layout.ty {
+                        wgt::BindingType::Sampler {
+                            filtering: true, ..
+                        } if !filterable => Some(FilteringError::NonFilterable),
+                        _ => None,
+                    },
+                    wgt::BindingType::Texture {
+                        sample_type: wgt::TextureSampleType::Sint,
+                        ..
+                    }
+                    | wgt::BindingType::Texture {
+                        sample_type: wgt::TextureSampleType::Uint,
+                        ..
+                    } => Some(FilteringError::Integer),
+                    _ => None, // unreachable, really
+                };
+
+                if let Some(error) = error {
+                    return Err(StageError::Filtering {
+                        texture: texture_bind.clone(),
+                        sampler: sampler_bind.clone(),
+                        error,
+                    });
+                }
+            }
+        }
+
+        // check inputs compatibility
         for input in entry_point.inputs.iter() {
             match *input {
                 Varying::Local { location, ref iv } => {

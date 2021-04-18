@@ -446,6 +446,8 @@ pub struct Sampler<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
     /// `true` if this is a comparison sampler
     pub(crate) comparison: bool,
+    /// `true` if this is a filtering sampler
+    pub(crate) filtering: bool,
 }
 
 #[derive(Clone, Debug, Error)]
