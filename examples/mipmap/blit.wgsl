@@ -6,9 +6,9 @@ struct VertexOutput {
 [[stage(vertex)]]
 fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
     var out: VertexOutput;
-    const x = i32(vertex_index) / 2;
-    const y = i32(vertex_index) & 1;
-    const tc = vec2<f32>(
+    let x = i32(vertex_index) / 2;
+    let y = i32(vertex_index) & 1;
+    let tc = vec2<f32>(
         f32(x) * 2.0,
         f32(y) * 2.0
     );

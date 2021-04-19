@@ -12,7 +12,7 @@ var r_data: Locals;
 
 [[stage(vertex)]]
 fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
-    const pos = vec2<f32>(
+    let pos = vec2<f32>(
         100.0 * (1.0 - f32(vertex_index & 2u)),
         1000.0 * f32(vertex_index & 1u)
     );
