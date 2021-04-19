@@ -1,8 +1,8 @@
 [[stage(vertex)]]
 fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> [[builtin(position)]] vec4<f32> {
-    const i: i32 = i32(vertex_index % 3u);
-    const x: f32 = f32(i - 1) * 0.75;
-    const y: f32 = f32((i & 1) * 2 - 1) * 0.75 + x * 0.2 + 0.1;
+    let i: i32 = i32(vertex_index % 3u);
+    let x: f32 = f32(i - 1) * 0.75;
+    let y: f32 = f32((i & 1) * 2 - 1) * 0.75 + x * 0.2 + 0.1;
     return vec4<f32>(x, y, 0.0, 1.0);
 }
 

@@ -32,8 +32,8 @@ fn vs_main(
     [[location(0)]] position: vec4<i32>,
     [[location(1)]] normal: vec4<i32>,
 ) -> VertexOutput {
-    const w = u_entity.world;
-    const world_pos = u_entity.world * vec4<f32>(position);
+    let w = u_entity.world;
+    let world_pos = u_entity.world * vec4<f32>(position);
     var out: VertexOutput;
     out.world_normal = mat3x3<f32>(w.x.xyz, w.y.xyz, w.z.xyz) * vec3<f32>(normal.xyz);
     out.world_position = world_pos;
@@ -66,20 +66,20 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
         return 1.0;
     }
     // compensate for the Y-flip difference between the NDC and texture coordinates
-    const flip_correction = vec2<f32>(0.5, -0.5);
+    let flip_correction = vec2<f32>(0.5, -0.5);
     // compute texture coordinates for shadow lookup
-    const proj_correction = 1.0 / homogeneous_coords.w;
-    const light_local = homogeneous_coords.xy * flip_correction * proj_correction + vec2<f32>(0.5, 0.5);
+    let proj_correction = 1.0 / homogeneous_coords.w;
+    let light_local = homogeneous_coords.xy * flip_correction * proj_correction + vec2<f32>(0.5, 0.5);
     // do the lookup, using HW PCF and comparison
     return textureSampleCompare(t_shadow, sampler_shadow, light_local, i32(light_id), homogeneous_coords.z * proj_correction);
 }
 
-const c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
-const c_max_lights: u32 = 10u;
+let c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
+let c_max_lights: u32 = 10u;
 
 [[stage(fragment)]]
 fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
-    const normal = normalize(in.world_normal);
+    let normal = normalize(in.world_normal);
     // accumulate color
     var color: vec3<f32> = c_ambient;
     var i: u32 = 0u;
@@ -87,12 +87,12 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
         if (i >= min(u_globals.num_lights.x, c_max_lights)) {
             break;
         }
-        const light = s_lights.data[i];
+        let light = s_lights.data[i];
         // project into the light space
-        const shadow = fetch_shadow(i, light.proj * in.world_position);
+        let shadow = fetch_shadow(i, light.proj * in.world_position);
         // compute Lambertian diffuse term
-        const light_dir = normalize(light.pos.xyz - in.world_position.xyz);
-        const diffuse = max(0.0, dot(normal, light_dir));
+        let light_dir = normalize(light.pos.xyz - in.world_position.xyz);
+        let diffuse = max(0.0, dot(normal, light_dir));
         // add light contribution
         color = color + shadow * diffuse * light.color.xyz;
         continuing {

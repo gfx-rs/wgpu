@@ -20,9 +20,9 @@ var r_data: Data;
 [[stage(vertex)]]
 fn vs_sky([[builtin(vertex_index)]] vertex_index: u32) -> SkyOutput {
     // hacky way to draw a large triangle
-    const tmp1 = i32(vertex_index) / 2;
-    const tmp2 = i32(vertex_index) & 1;
-    const pos = vec4<f32>(
+    let tmp1 = i32(vertex_index) / 2;
+    let tmp2 = i32(vertex_index) & 1;
+    let pos = vec4<f32>(
         f32(tmp1) * 4.0 - 1.0,
         f32(tmp2) * 4.0 - 1.0,
         1.0,
@@ -30,8 +30,8 @@ fn vs_sky([[builtin(vertex_index)]] vertex_index: u32) -> SkyOutput {
     );
 
     // transposition = inversion for this orthonormal matrix
-    const inv_model_view = transpose(mat3x3<f32>(r_data.view.x.xyz, r_data.view.y.xyz, r_data.view.z.xyz));
-    const unprojected = r_data.proj_inv * pos;
+    let inv_model_view = transpose(mat3x3<f32>(r_data.view.x.xyz, r_data.view.y.xyz, r_data.view.z.xyz));
+    let unprojected = r_data.proj_inv * pos;
 
     var out: SkyOutput;
     out.uv = inv_model_view * unprojected.xyz;
@@ -69,10 +69,10 @@ fn fs_sky(in: SkyOutput) -> [[location(0)]] vec4<f32> {
 
 [[stage(fragment)]]
 fn fs_entity(in: EntityOutput) -> [[location(0)]] vec4<f32> {
-    const incident = normalize(in.view);
-    const normal = normalize(in.normal);
-    const reflected = incident - 2.0 * dot(normal, incident) * normal;
+    let incident = normalize(in.view);
+    let normal = normalize(in.normal);
+    let reflected = incident - 2.0 * dot(normal, incident) * normal;
 
-    const reflected_color = textureSample(r_texture, r_sampler, reflected);
+    let reflected_color = textureSample(r_texture, r_sampler, reflected);
     return vec4<f32>(0.1, 0.1, 0.1, 0.1) + 0.5 * reflected_color;
 }
