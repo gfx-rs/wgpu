@@ -6,7 +6,7 @@ pomelo! {
         use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{
             BOOL_WIDTH,
-            Arena, BinaryOperator, Binding, Block, Constant,
+            Arena, ArraySize, BinaryOperator, Binding, Block, Constant,
             ConstantInner, Expression,
             Function, FunctionArgument, FunctionResult,
             GlobalVariable, Handle, Interpolation,
@@ -592,6 +592,34 @@ pomelo! {
             ty,
         }
     }
+
+    single_declaration ::= fully_specified_type(t) Identifier(i) LeftBracket additive_expression(exp) RightBracket  {
+        let ty_item = t.1.ok_or_else(|| ErrorKind::SemanticError("Empty type for declaration".into()))?;
+
+        let array_size = if let Ok(constant) = extra.solve_constant(exp.expression) {
+            ArraySize::Constant(constant)
+        } else {
+            ArraySize::Dynamic
+        };
+
+        let item_size = extra.type_size(ty_item)?;
+
+        let ty = extra.module.types.fetch_or_append(Type {
+            inner: TypeInner::Array {
+                base: ty_item,
+                size: array_size,
+                stride: item_size as u32,
+            },
+            name: None,
+        });
+
+        VarDeclaration {
+            type_qualifiers: t.0,
+            ids_initializers: vec![(Some(i.1), None)],
+            ty,
+        }
+    }
+
     // single_declaration ::= fully_specified_type Identifier array_specifier;
     // single_declaration ::= fully_specified_type Identifier array_specifier Equal initializer;
     single_declaration ::= fully_specified_type(t) Identifier(i) Equal initializer(init) {

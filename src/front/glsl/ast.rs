@@ -1,9 +1,9 @@
 use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind};
 use crate::{
-    proc::ResolveContext, Arena, BinaryOperator, Binding, Constant, Expression, FastHashMap,
-    Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable, Module,
-    RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass, Type,
-    UnaryOperator,
+    proc::ResolveContext, Arena, ArraySize, BinaryOperator, Binding, Constant, Expression,
+    FastHashMap, Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable,
+    Module, RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass,
+    Type, UnaryOperator,
 };
 
 #[derive(Debug)]
@@ -143,6 +143,51 @@ impl<'a> Program<'a> {
         solver
             .solve(root)
             .map_err(|_| ErrorKind::SemanticError("Can't solve constant".into()))
+    }
+
+    pub fn type_size(&self, ty: Handle<Type>) -> Result<u8, ErrorKind> {
+        Ok(match self.module.types[ty].inner {
+            crate::TypeInner::Scalar { width, .. } => width,
+            crate::TypeInner::Vector { size, width, .. } => size as u8 * width,
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => columns as u8 * rows as u8 * width,
+            crate::TypeInner::Pointer { .. } => {
+                return Err(ErrorKind::NotImplemented("type size of pointer"))
+            }
+            crate::TypeInner::ValuePointer { .. } => {
+                return Err(ErrorKind::NotImplemented("type size of value pointer"))
+            }
+            crate::TypeInner::Array { size, stride, .. } => {
+                stride as u8
+                    * match size {
+                        ArraySize::Dynamic => {
+                            return Err(ErrorKind::NotImplemented("type size of dynamic array"))
+                        }
+                        ArraySize::Constant(constant) => {
+                            match self.module.constants[constant].inner {
+                                crate::ConstantInner::Scalar { width, .. } => width,
+                                crate::ConstantInner::Composite { .. } => {
+                                    return Err(ErrorKind::NotImplemented(
+                                        "type size of array with composite item size",
+                                    ))
+                                }
+                            }
+                        }
+                    }
+            }
+            crate::TypeInner::Struct { .. } => {
+                return Err(ErrorKind::NotImplemented("type size of struct"))
+            }
+            crate::TypeInner::Image { .. } => {
+                return Err(ErrorKind::NotImplemented("type size of image"))
+            }
+            crate::TypeInner::Sampler { .. } => {
+                return Err(ErrorKind::NotImplemented("type size of sampler"))
+            }
+        })
     }
 }
 
