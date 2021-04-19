@@ -573,7 +573,7 @@ impl framework::Example for Example {
                             visibility: wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::Sampler {
                                 comparison: true,
-                                filtering: false,
+                                filtering: true,
                             },
                             count: None,
                         },
