@@ -30,18 +30,18 @@ float fetch_shadow(
 }
 
 struct fs_mainInput {
-    metal::float3 raw_normal [[user(loc0)]];
-    metal::float4 position [[user(loc1)]];
+    metal::float3 raw_normal [[user(loc0), center_perspective]];
+    metal::float4 position [[user(loc1), center_perspective]];
 };
 struct fs_mainOutput {
     metal::float4 member [[color(0)]];
 };
 fragment fs_mainOutput fs_main(
   fs_mainInput varyings [[stage_in]]
-, constant Globals& u_globals [[user(fake0)]]
-, constant Lights& s_lights [[user(fake0)]]
-, metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
-, metal::sampler sampler_shadow [[user(fake0)]]
+, constant Globals& u_globals [[user(fake0), center_perspective]]
+, constant Lights& s_lights [[user(fake0), center_perspective]]
+, metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0), center_perspective]]
+, metal::sampler sampler_shadow [[user(fake0), center_perspective]]
 ) {
     const auto raw_normal = varyings.raw_normal;
     const auto position = varyings.position;

@@ -12,7 +12,7 @@ struct main1Input {
     metal::float2 uv1 [[attribute(1)]];
 };
 struct main1Output {
-    metal::float2 uv [[user(loc0)]];
+    metal::float2 uv [[user(loc0), center_perspective]];
     metal::float4 position [[position]];
 };
 vertex main1Output main1(
@@ -26,15 +26,15 @@ vertex main1Output main1(
 
 
 struct main2Input {
-    metal::float2 uv2 [[user(loc0)]];
+    metal::float2 uv2 [[user(loc0), center_perspective]];
 };
 struct main2Output {
     metal::float4 member1 [[color(0)]];
 };
 fragment main2Output main2(
   main2Input varyings1 [[stage_in]]
-, metal::texture2d<float, metal::access::sample> u_texture [[user(fake0)]]
-, metal::sampler u_sampler [[user(fake0)]]
+, metal::texture2d<float, metal::access::sample> u_texture [[user(fake0), center_perspective]]
+, metal::sampler u_sampler [[user(fake0), center_perspective]]
 ) {
     const auto uv2 = varyings1.uv2;
     metal::float4 _e4 = u_texture.sample(u_sampler, uv2);

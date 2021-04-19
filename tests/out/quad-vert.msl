@@ -32,7 +32,7 @@ struct main2Input {
     metal::float2 a_pos1 [[attribute(0)]];
 };
 struct main2Output {
-    metal::float2 member [[user(loc0)]];
+    metal::float2 member [[user(loc0), center_perspective]];
     metal::float4 gl_Position1 [[position]];
     float gl_PointSize1 [[point_size]];
     type6 gl_ClipDistance1 [[clip_distance]];

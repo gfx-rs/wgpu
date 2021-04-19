@@ -14,7 +14,7 @@ struct vs_mainInput {
 };
 struct vs_mainOutput {
     metal::float4 position [[position]];
-    metal::float3 uv [[user(loc0)]];
+    metal::float3 uv [[user(loc0), center_perspective]];
 };
 vertex vs_mainOutput vs_main(
   metal::uint vertex_index [[vertex_id]]
@@ -32,7 +32,7 @@ vertex vs_mainOutput vs_main(
 
 
 struct fs_mainInput {
-    metal::float3 uv [[user(loc0)]];
+    metal::float3 uv [[user(loc0), center_perspective]];
 };
 struct fs_mainOutput {
     metal::float4 member1 [[color(0)]];

@@ -84,8 +84,23 @@ enum ResolvedBinding {
     BuiltIn(crate::BuiltIn),
     Attribute(u32),
     Color(u32),
-    User { prefix: &'static str, index: u32 },
+    User {
+        prefix: &'static str,
+        index: u32,
+        interpolation: ResolvedInterpolation
+    },
     Resource(BindTarget),
+}
+
+#[derive(Copy, Clone)]
+enum ResolvedInterpolation {
+    CenterPerspective,
+    CenterNoPerspective,
+    CentroidPerspective,
+    CentroidNoPerspective,
+    SamplePerspective,
+    SampleNoPerspective,
+    Flat,
 }
 
 // Note: some of these should be removed in favor of proper IR validation.
@@ -183,7 +198,7 @@ impl Options {
     ) -> Result<ResolvedBinding, Error> {
         match *binding {
             crate::Binding::BuiltIn(built_in) => Ok(ResolvedBinding::BuiltIn(built_in)),
-            crate::Binding::Location { location, .. } => match mode {
+            crate::Binding::Location { location, interpolation, sampling } => match mode {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
                 LocationMode::FragmentOutput => Ok(ResolvedBinding::Color(location)),
                 LocationMode::Intermediate => Ok(ResolvedBinding::User {
@@ -193,6 +208,14 @@ impl Options {
                         "loc"
                     },
                     index: location,
+                    interpolation: {
+                        // unwrap: The verifier ensures that vertex shader outputs and fragment
+                        // shader inputs always have fully specified interpolation, and that
+                        // sampling is `None` only for Flat interpolation.
+                        let interpolation = interpolation.unwrap();
+                        let sampling = sampling.unwrap_or(crate::Sampling::Center);
+                        ResolvedInterpolation::from_binding(interpolation, sampling)
+                    }
                 }),
                 LocationMode::Uniform => {
                     log::error!(
@@ -220,6 +243,7 @@ impl Options {
             None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
                 index: 0,
+                interpolation: ResolvedInterpolation::CenterPerspective,
             }),
             None => Err(EntryPointError::MissingBinding(source)),
         }
@@ -244,6 +268,7 @@ impl Options {
             None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
                 index: 0,
+                interpolation: ResolvedInterpolation::CenterPerspective,
             }),
             None => Err(EntryPointError::MissingPushConstants(stage)),
         }
@@ -290,7 +315,10 @@ impl ResolvedBinding {
             }
             Self::Attribute(index) => write!(out, "attribute({})", index)?,
             Self::Color(index) => write!(out, "color({})", index)?,
-            Self::User { prefix, index } => write!(out, "user({}{})", prefix, index)?,
+            Self::User { prefix, index, interpolation } => {
+                write!(out, "user({}{}), ", prefix, index)?;
+                interpolation.try_fmt(out)?;
+            }
             Self::Resource(ref target) => {
                 if let Some(id) = target.buffer {
                     write!(out, "buffer({})", id)?;
@@ -311,6 +339,40 @@ impl ResolvedBinding {
         self.try_fmt(out)?;
         write!(out, "]]")?;
         write!(out, "{}", terminator)?;
+        Ok(())
+    }
+}
+
+impl ResolvedInterpolation {
+    fn from_binding(interpolation: crate::Interpolation,
+                    sampling: crate::Sampling)
+                    -> Self
+{
+        use crate::Interpolation as I;
+        use crate::Sampling as S;
+
+        match (interpolation, sampling) {
+            (I::Perspective, S::Center)   => Self::CenterPerspective,
+            (I::Perspective, S::Centroid) => Self::CentroidPerspective,
+            (I::Perspective, S::Sample)   => Self::SamplePerspective,
+            (I::Linear,      S::Center)   => Self::CenterNoPerspective,
+            (I::Linear,      S::Centroid) => Self::CentroidNoPerspective,
+            (I::Linear,      S::Sample)   => Self::SampleNoPerspective,
+            (I::Flat, _)                        => Self::Flat,
+        }
+    }
+
+    fn try_fmt<W: Write>(self, out: &mut W) -> Result<(), Error> {
+        let identifier = match self {
+            Self::CenterPerspective => "center_perspective",
+            Self::CenterNoPerspective => "center_no_perspective",
+            Self::CentroidPerspective => "centroid_perspective",
+            Self::CentroidNoPerspective => "centroid_no_perspective",
+            Self::SamplePerspective => "sample_perspective",
+            Self::SampleNoPerspective => "sample_no_perspective",
+            Self::Flat => "flat",
+        };
+        out.write_str(identifier)?;
         Ok(())
     }
 }
