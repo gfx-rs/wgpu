@@ -286,23 +286,24 @@ impl ResolvedBinding {
                     Bi::WorkGroupId => "threadgroup_position_in_grid",
                     Bi::WorkGroupSize => "dispatch_threads_per_threadgroup",
                 };
-                Ok(write!(out, "{}", name)?)
+                write!(out, "{}", name)?;
             }
-            Self::Attribute(index) => Ok(write!(out, "attribute({})", index)?),
-            Self::Color(index) => Ok(write!(out, "color({})", index)?),
-            Self::User { prefix, index } => Ok(write!(out, "user({}{})", prefix, index)?),
+            Self::Attribute(index) => write!(out, "attribute({})", index)?,
+            Self::Color(index) => write!(out, "color({})", index)?,
+            Self::User { prefix, index } => write!(out, "user({}{})", prefix, index)?,
             Self::Resource(ref target) => {
                 if let Some(id) = target.buffer {
-                    Ok(write!(out, "buffer({})", id)?)
+                    write!(out, "buffer({})", id)?;
                 } else if let Some(id) = target.texture {
-                    Ok(write!(out, "texture({})", id)?)
+                    write!(out, "texture({})", id)?;
                 } else if let Some(BindSamplerTarget::Resource(id)) = target.sampler {
-                    Ok(write!(out, "sampler({})", id)?)
+                    write!(out, "sampler({})", id)?;
                 } else {
-                    Err(Error::UnimplementedBindTarget(target.clone()))
+                    return Err(Error::UnimplementedBindTarget(target.clone()));
                 }
             }
         }
+        Ok(())
     }
 
     fn try_fmt_decorated<W: Write>(&self, out: &mut W, terminator: &str) -> Result<(), Error> {
