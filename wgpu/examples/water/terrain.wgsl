@@ -7,9 +7,9 @@ struct Uniforms {
 [[group(0), binding(0)]]
 var<uniform> uniforms: Uniforms;
 
-const light: vec3<f32> = vec3<f32>(150.0, 70.0, 0.0);
-const light_colour: vec3<f32> = vec3<f32>(1.0, 0.98, 0.82);
-const ambient: f32 = 0.2;
+let light: vec3<f32> = vec3<f32>(150.0, 70.0, 0.0);
+let light_colour: vec3<f32> = vec3<f32>(1.0, 0.98, 0.82);
+let ambient: f32 = 0.2;
 
 struct VertexOutput {
     [[builtin(position)]] position: vec4<f32>;
@@ -28,8 +28,8 @@ fn vs_main(
     out.position = uniforms.projection_view * vec4<f32>(position, 1.0);
 
     // https://www.desmos.com/calculator/nqgyaf8uvo
-    const normalized_light_direction = normalize(position - light);
-    const brightness_diffuse = clamp(dot(normalized_light_direction, normal), 0.2, 1.0);
+    let normalized_light_direction = normalize(position - light);
+    let brightness_diffuse = clamp(dot(normalized_light_direction, normal), 0.2, 1.0);
 
     out.colour = vec4<f32>(max((brightness_diffuse + ambient) * light_colour * colour.rgb, vec3<f32>(0.0, 0.0, 0.0)), colour.a);
     out.clip_dist = dot(vec4<f32>(position, 1.0), uniforms.clipping_plane);
