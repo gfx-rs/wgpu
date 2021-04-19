@@ -1,4 +1,4 @@
-.PHONY: all clean validate-spv validate-msl validate-glsl validate-dot
+.PHONY: all clean validate-spv validate-msl validate-glsl validate-dot validate-wgsl
 .SECONDARY: boids.metal quad.metal
 SNAPSHOTS_IN=tests/in
 SNAPSHOTS_OUT=tests/out
@@ -56,4 +56,10 @@ validate-dot: $(SNAPSHOTS_OUT)/*.dot
 	@set -e && for file in $^ ; do \
 		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/"};	\
 		cat $${file} | dot -o /dev/null; \
+	done
+
+validate-wgsl: $(SNAPSHOTS_OUT)/*.wgsl
+	@set -e && for file in $^ ; do \
+		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/"};	\
+		cargo run --bin convert --features wgsl-in $${file} >/dev/null; \
 	done

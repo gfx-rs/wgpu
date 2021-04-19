@@ -61,4 +61,5 @@ make validate-spv # for Vulkan shaders, requires SPIRV-Tools installed
 make validate-msl # for Metal shaders, requires XCode command-line tools installed
 make validate-glsl # for OpenGL shaders, requires GLSLang installed
 make validate-dot # for dot files, requires GraphViz installed
+make validate-wgsl # for WGSL shaders
 ```

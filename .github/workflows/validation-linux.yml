@@ -2,9 +2,10 @@ name: validation-linux
 on:
   pull_request:
     paths:
-    - 'tests/out/*.spvasm.snap'
-    - 'tests/out/*.glsl.snap'
-    - 'tests/out/*.dot.snap'
+    - 'tests/out/*.spvasm'
+    - 'tests/out/*.glsl'
+    - 'tests/out/*.dot'
+    - 'tests/out/*.wgsl'
 
 jobs:
   validate-linux:
@@ -17,3 +18,4 @@ jobs:
       - run: make validate-spv
       - run: make validate-glsl
       - run: make validate-dot
+      - run: make validate-wgsl
