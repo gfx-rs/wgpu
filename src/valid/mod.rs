@@ -1,4 +1,5 @@
 mod analyzer;
+mod compose;
 mod expression;
 mod function;
 mod interface;
@@ -15,6 +16,7 @@ use std::ops;
 // merge the corresponding matches over expressions and statements.
 
 pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, UniformityRequirements};
+pub use compose::ComposeError;
 pub use expression::ExpressionError;
 pub use function::{CallError, FunctionError, LocalVariableError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
@@ -33,6 +35,8 @@ bitflags::bitflags! {
         const CONTROL_FLOW_UNIFORMITY = 0x4;
         /// Host-shareable structure layouts.
         const STRUCT_LAYOUTS = 0x8;
+        /// Constants.
+        const CONSTANTS = 0x10;
     }
 }
 
@@ -81,6 +85,8 @@ pub enum ConstantError {
     UnresolvedComponent(Handle<crate::Constant>),
     #[error("The array size handle {0:?} can not be resolved")]
     UnresolvedSize(Handle<crate::Constant>),
+    #[error(transparent)]
+    Compose(#[from] ComposeError),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -192,24 +198,24 @@ impl Validator {
             crate::ConstantInner::Composite { ty, ref components } => {
                 match types[ty].inner {
                     crate::TypeInner::Array {
-                        size: crate::ArraySize::Dynamic,
-                        ..
-                    } => {
-                        return Err(ConstantError::InvalidType);
-                    }
-                    crate::TypeInner::Array {
                         size: crate::ArraySize::Constant(size_handle),
                         ..
-                    } => {
-                        if handle <= size_handle {
-                            return Err(ConstantError::UnresolvedSize(size_handle));
-                        }
+                    } if handle <= size_handle => {
+                        return Err(ConstantError::UnresolvedSize(size_handle));
                     }
-                    _ => {} //TODO
+                    _ => {}
                 }
                 if let Some(&comp) = components.iter().find(|&&comp| handle <= comp) {
                     return Err(ConstantError::UnresolvedComponent(comp));
                 }
+                compose::validate_compose(
+                    ty,
+                    constants,
+                    types,
+                    components
+                        .iter()
+                        .map(|&component| constants[component].inner.resolve_type()),
+                )?;
             }
         }
         Ok(())
@@ -219,13 +225,15 @@ impl Validator {
     pub fn validate(&mut self, module: &crate::Module) -> Result<ModuleInfo, ValidationError> {
         self.reset_types(module.types.len());
 
-        for (handle, constant) in module.constants.iter() {
-            self.validate_constant(handle, &module.constants, &module.types)
-                .map_err(|error| ValidationError::Constant {
-                    handle,
-                    name: constant.name.clone().unwrap_or_default(),
-                    error,
-                })?;
+        if self.flags.contains(ValidationFlags::CONSTANTS) {
+            for (handle, constant) in module.constants.iter() {
+                self.validate_constant(handle, &module.constants, &module.types)
+                    .map_err(|error| ValidationError::Constant {
+                        handle,
+                        name: constant.name.clone().unwrap_or_default(),
+                        error,
+                    })?;
+            }
         }
 
         // doing after the globals, so that `type_flags` is ready

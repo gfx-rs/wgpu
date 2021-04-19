@@ -850,21 +850,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let index_expr_data = &expressions[index_expr.handle];
                         let index_maybe = match *index_expr_data {
                             crate::Expression::Constant(const_handle) => {
-                                match const_arena[const_handle].inner {
-                                    crate::ConstantInner::Scalar {
-                                        width: _,
-                                        value: crate::ScalarValue::Uint(v),
-                                    } => Some(v as u32),
-                                    crate::ConstantInner::Scalar {
-                                        width: _,
-                                        value: crate::ScalarValue::Sint(v),
-                                    } => Some(v as u32),
-                                    _ => {
-                                        return Err(Error::InvalidAccess(
-                                            crate::Expression::Constant(const_handle),
-                                        ))
-                                    }
-                                }
+                                Some(const_arena[const_handle].to_array_length().ok_or(
+                                    Error::InvalidAccess(crate::Expression::Constant(const_handle)),
+                                )?)
                             }
                             _ => None,
                         };

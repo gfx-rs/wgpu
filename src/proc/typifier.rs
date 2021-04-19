@@ -62,6 +62,18 @@ impl Clone for TypeResolution {
     }
 }
 
+impl crate::ConstantInner {
+    pub fn resolve_type(&self) -> TypeResolution {
+        match *self {
+            Self::Scalar { width, ref value } => TypeResolution::Value(crate::TypeInner::Scalar {
+                kind: value.scalar_kind(),
+                width,
+            }),
+            Self::Composite { ty, components: _ } => TypeResolution::Handle(ty),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum ResolveError {
     #[error("Index {index} is out of bounds for expression {expr:?}")]
