@@ -21,7 +21,7 @@ Rust            |                    |         |       |
 Back-end        |       Status       | Feature  | Notes |
 --------------- | ------------------ | -------- | ----- |
 SPIR-V          | :white_check_mark: | spv-out  |       |
-WGSL            |                    |          |       |
+WGSL            | :construction:     | wgsl-out |       |
 Metal           | :white_check_mark: | msl-out  |       |
 HLSL            | :construction:     | hlsl-out |       |
 GLSL            | :ok:               | glsl-out |       |

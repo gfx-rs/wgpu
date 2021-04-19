@@ -10,6 +10,8 @@ pub mod hlsl;
 pub mod msl;
 #[cfg(feature = "spv-out")]
 pub mod spv;
+#[cfg(feature = "wgsl-out")]
+pub mod wgsl;
 
 impl crate::Expression {
     /// Returns the ref count, upon reaching which this expression

@@ -268,6 +268,13 @@ fn main() {
             let hlsl = hlsl::write_string(&module).unwrap_pretty();
             fs::write(output_path, hlsl).unwrap();
         }
+        #[cfg(feature = "wgsl-out")]
+        "wgsl" => {
+            use naga::back::wgsl;
+
+            let wgsl = wgsl::write_string(&module).unwrap_pretty();
+            fs::write(output_path, wgsl).unwrap();
+        }
         other => {
             let _ = params;
             panic!(
