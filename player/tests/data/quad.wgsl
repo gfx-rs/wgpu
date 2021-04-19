@@ -1,9 +1,9 @@
 [[stage(vertex)]]
 fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> [[builtin(position)]] vec4<f32> {
     // hacky way to draw a large triangle
-    const tmp1 = i32(vertex_index) / 2;
-    const tmp2 = i32(vertex_index) & 1;
-    const pos = vec2<f32>(
+    let tmp1 = i32(vertex_index) / 2;
+    let tmp2 = i32(vertex_index) & 1;
+    let pos = vec2<f32>(
         f32(tmp1) * 4.0 - 1.0,
         f32(tmp2) * 4.0 - 1.0
     );

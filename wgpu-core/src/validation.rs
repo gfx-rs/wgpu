@@ -65,8 +65,7 @@ impl fmt::Display for NumericType {
 pub struct InterfaceVar {
     pub ty: NumericType,
     interpolation: Option<naga::Interpolation>,
-    //TODO: https://github.com/gfx-rs/naga/pull/689
-    //sampling: Option<naga::Sampling>,
+    sampling: Option<naga::Sampling>,
 }
 
 impl InterfaceVar {
@@ -74,13 +73,18 @@ impl InterfaceVar {
         InterfaceVar {
             ty: NumericType::from_vertex_format(format),
             interpolation: None,
+            sampling: None,
         }
     }
 }
 
 impl fmt::Display for InterfaceVar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} interpolated as {:?}", self.ty, self.interpolation)
+        write!(
+            f,
+            "{} interpolated as {:?} with sampling {:?}",
+            self.ty, self.interpolation, self.sampling
+        )
     }
 }
 
@@ -201,6 +205,8 @@ pub enum InputError {
     WrongType(NumericType),
     #[error("input interpolation doesn't match provided {0:?}")]
     InterpolationMismatch(Option<naga::Interpolation>),
+    #[error("input sampling doesn't match provided {0:?}")]
+    SamplingMismatch(Option<naga::Sampling>),
 }
 
 /// Errors produced when validating a programmable stage of a pipeline.
@@ -742,11 +748,16 @@ impl Interface {
         };
 
         let varying = match binding {
-            Some(&naga::Binding::Location(location, interpolation)) => Varying::Local {
+            Some(&naga::Binding::Location {
+                location,
+                interpolation,
+                sampling,
+            }) => Varying::Local {
                 location,
                 iv: InterfaceVar {
                     ty: numeric_ty,
                     interpolation,
+                    sampling,
                 },
             },
             Some(&naga::Binding::BuiltIn(built_in)) => Varying::BuiltIn(built_in),
@@ -961,6 +972,11 @@ impl Interface {
                                         if iv.interpolation != provided.interpolation {
                                             return Err(InputError::InterpolationMismatch(
                                                 provided.interpolation,
+                                            ));
+                                        }
+                                        if iv.sampling != provided.sampling {
+                                            return Err(InputError::SamplingMismatch(
+                                                provided.sampling,
                                             ));
                                         }
                                         iv.ty.is_subtype_of(&provided.ty)
