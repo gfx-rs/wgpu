@@ -2145,7 +2145,7 @@ impl<B: GfxBackend> Device<B> {
         let baked_states = hal::pso::BakedStates {
             viewport: None,
             scissor: None,
-            blend_color: None,
+            blend_constants: None,
             depth_bounds: None,
         };
 
