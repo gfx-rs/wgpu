@@ -102,7 +102,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     #[cfg(feature = "wgsl-out")]
     {
         if targets.contains(Targets::WGSL) {
-            check_output_wgsl(module, &dest);
+            check_output_wgsl(module, &info, &dest);
         }
     }
 }
@@ -207,10 +207,10 @@ fn check_output_hlsl(module: &naga::Module, destination: &PathBuf) {
 }
 
 #[cfg(feature = "wgsl-out")]
-fn check_output_wgsl(module: &naga::Module, destination: &PathBuf) {
+fn check_output_wgsl(module: &naga::Module, info: &naga::valid::ModuleInfo, destination: &PathBuf) {
     use naga::back::wgsl;
 
-    let string = wgsl::write_string(module).unwrap();
+    let string = wgsl::write_string(module, info).unwrap();
 
     fs::write(destination.with_extension("wgsl"), string).unwrap();
 }

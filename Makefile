@@ -61,5 +61,5 @@ validate-dot: $(SNAPSHOTS_OUT)/*.dot
 validate-wgsl: $(SNAPSHOTS_OUT)/*.wgsl
 	@set -e && for file in $^ ; do \
 		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/"};	\
-		cargo run --bin convert --features wgsl-in $${file} >/dev/null; \
+		cargo run --bin convert --features wgsl-in $${file}; \
 	done

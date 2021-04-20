@@ -269,7 +269,7 @@ fn main() {
         "wgsl" => {
             use naga::back::wgsl;
 
-            let wgsl = wgsl::write_string(&module).unwrap_pretty();
+            let wgsl = wgsl::write_string(&module, info.as_ref().unwrap()).unwrap_pretty();
             fs::write(output_path, wgsl).unwrap();
         }
         other => {

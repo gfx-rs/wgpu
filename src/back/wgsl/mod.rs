@@ -1,8 +1,6 @@
 mod keywords;
 mod writer;
 
-use std::io::Error as IoError;
-use std::string::FromUtf8Error;
 use thiserror::Error;
 
 pub use writer::Writer;
@@ -10,14 +8,17 @@ pub use writer::Writer;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    IoError(#[from] IoError),
-    #[error(transparent)]
-    Utf8(#[from] FromUtf8Error),
+    FmtError(#[from] std::fmt::Error),
+    #[error("{0}")]
+    Custom(String),
 }
 
-pub fn write_string(module: &crate::Module) -> Result<String, Error> {
-    let mut w = Writer::new(Vec::new());
-    w.write(module)?;
-    let output = String::from_utf8(w.finish())?;
+pub fn write_string(
+    module: &crate::Module,
+    info: &crate::valid::ModuleInfo,
+) -> Result<String, Error> {
+    let mut w = Writer::new(String::new());
+    w.write(module, info)?;
+    let output = w.finish();
     Ok(output)
 }
