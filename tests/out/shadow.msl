@@ -38,10 +38,10 @@ struct fs_mainOutput {
 };
 fragment fs_mainOutput fs_main(
   fs_mainInput varyings [[stage_in]]
-, constant Globals& u_globals [[user(fake0), center_perspective]]
-, constant Lights& s_lights [[user(fake0), center_perspective]]
-, metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0), center_perspective]]
-, metal::sampler sampler_shadow [[user(fake0), center_perspective]]
+, constant Globals& u_globals [[user(fake0)]]
+, constant Lights& s_lights [[user(fake0)]]
+, metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
+, metal::sampler sampler_shadow [[user(fake0)]]
 ) {
     const auto raw_normal = varyings.raw_normal;
     const auto position = varyings.position;

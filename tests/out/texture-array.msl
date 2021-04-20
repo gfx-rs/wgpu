@@ -13,10 +13,10 @@ struct main1Output {
 };
 fragment main1Output main1(
   main1Input varyings [[stage_in]]
-, metal::texture2d<float, metal::access::sample> texture0_ [[user(fake0), center_perspective]]
-, metal::texture2d<float, metal::access::sample> texture1_ [[user(fake0), center_perspective]]
-, metal::sampler sampler [[user(fake0), center_perspective]]
-, constant PushConstants& pc [[user(fake0), center_perspective]]
+, metal::texture2d<float, metal::access::sample> texture0_ [[user(fake0)]]
+, metal::texture2d<float, metal::access::sample> texture1_ [[user(fake0)]]
+, metal::sampler sampler [[user(fake0)]]
+, constant PushConstants& pc [[user(fake0)]]
 ) {
     const auto tex_coord = varyings.tex_coord;
     if (pc.index == 0u) {

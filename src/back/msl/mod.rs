@@ -87,7 +87,7 @@ enum ResolvedBinding {
     User {
         prefix: &'static str,
         index: u32,
-        interpolation: ResolvedInterpolation
+        interpolation: Option<ResolvedInterpolation>,
     },
     Resource(BindTarget),
 }
@@ -214,8 +214,8 @@ impl Options {
                         // sampling is `None` only for Flat interpolation.
                         let interpolation = interpolation.unwrap();
                         let sampling = sampling.unwrap_or(crate::Sampling::Center);
-                        ResolvedInterpolation::from_binding(interpolation, sampling)
-                    }
+                        Some(ResolvedInterpolation::from_binding(interpolation, sampling))
+                    },
                 }),
                 LocationMode::Uniform => {
                     log::error!(
@@ -243,7 +243,7 @@ impl Options {
             None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
                 index: 0,
-                interpolation: ResolvedInterpolation::CenterPerspective,
+                interpolation: None,
             }),
             None => Err(EntryPointError::MissingBinding(source)),
         }
@@ -268,7 +268,7 @@ impl Options {
             None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
                 index: 0,
-                interpolation: ResolvedInterpolation::CenterPerspective,
+                interpolation: None,
             }),
             None => Err(EntryPointError::MissingPushConstants(stage)),
         }
@@ -315,9 +315,16 @@ impl ResolvedBinding {
             }
             Self::Attribute(index) => write!(out, "attribute({})", index)?,
             Self::Color(index) => write!(out, "color({})", index)?,
-            Self::User { prefix, index, interpolation } => {
-                write!(out, "user({}{}), ", prefix, index)?;
-                interpolation.try_fmt(out)?;
+            Self::User {
+                prefix,
+                index,
+                interpolation,
+            } => {
+                write!(out, "user({}{})", prefix, index)?;
+                if let Some(interpolation) = interpolation {
+                    write!(out, ", ")?;
+                    interpolation.try_fmt(out)?;
+                }
             }
             Self::Resource(ref target) => {
                 if let Some(id) = target.buffer {
