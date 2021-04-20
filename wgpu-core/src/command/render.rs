@@ -1109,7 +1109,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .trackers
                             .bind_groups
                             .use_extend(&*bind_group_guard, bind_group_id, (), ())
-                            .unwrap();
+                            .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))
+                            .map_pass_err(scope)?;
                         bind_group
                             .validate_dynamic_bindings(&temp_offsets)
                             .map_pass_err(scope)?;

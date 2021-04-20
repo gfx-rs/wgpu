@@ -160,19 +160,10 @@ impl<T, I: TypedId> Storage<T, I> {
         }
     }
 
-    fn make_room_impl(&mut self, index: usize) {
+    fn insert_impl(&mut self, index: usize, element: Element<T>) {
         if index >= self.map.len() {
             self.map.resize_with(index + 1, || Element::Vacant);
         }
-    }
-
-    pub(crate) fn make_room(&mut self, id: I) {
-        let (index, _, _) = id.unzip();
-        self.make_room_impl(index as usize)
-    }
-
-    fn insert_impl(&mut self, index: usize, element: Element<T>) {
-        self.make_room_impl(index);
         match std::mem::replace(&mut self.map[index], element) {
             Element::Vacant => {}
             _ => panic!("Index {:?} is already occupied", index),
@@ -187,6 +178,11 @@ impl<T, I: TypedId> Storage<T, I> {
     pub(crate) fn insert_error(&mut self, id: I, label: &str) {
         let (index, epoch, _) = id.unzip();
         self.insert_impl(index as usize, Element::Error(epoch, label.to_string()))
+    }
+
+    pub(crate) fn force_replace(&mut self, id: I, value: T) {
+        let (index, epoch, _) = id.unzip();
+        self.map[index as usize] = Element::Occupied(value, epoch);
     }
 
     pub(crate) fn remove(&mut self, id: I) -> Option<T> {
