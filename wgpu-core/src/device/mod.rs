@@ -56,6 +56,8 @@ pub const MAX_VERTEX_BUFFERS: usize = 16;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const SHADER_STAGE_COUNT: usize = 3;
 
+const IMPLICIT_FAILURE: &str = "failed implicit";
+
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
@@ -1844,7 +1846,7 @@ impl<B: GfxBackend> Device<B> {
                 }
                 None => {
                     let bgl = self.create_bind_group_layout(self_id, None, map)?;
-                    bgl_guard.insert(*bgl_id, bgl);
+                    bgl_guard.force_replace(*bgl_id, bgl);
                 }
             };
         }
@@ -1855,7 +1857,7 @@ impl<B: GfxBackend> Device<B> {
             push_constant_ranges: Cow::Borrowed(&[]), //TODO?
         };
         let layout = self.create_pipeline_layout(self_id, &layout_desc, bgl_guard)?;
-        pipeline_layout_guard.insert(ids.root_id, layout);
+        pipeline_layout_guard.force_replace(ids.root_id, layout);
         Ok(ids.root_id)
     }
 
@@ -1874,9 +1876,9 @@ impl<B: GfxBackend> Device<B> {
         // This has to be done first, or otherwise the IDs may be pointing to entries
         // that are not even in the storage.
         if let Some(ref ids) = implicit_context {
-            pipeline_layout_guard.make_room(ids.root_id);
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
             for &bgl_id in ids.group_ids.iter() {
-                bgl_guard.make_room(bgl_id);
+                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
             }
         }
 
@@ -2005,9 +2007,9 @@ impl<B: GfxBackend> Device<B> {
         // This has to be done first, or otherwise the IDs may be pointing to entries
         // that are not even in the storage.
         if let Some(ref ids) = implicit_context {
-            pipeline_layout_guard.make_room(ids.root_id);
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
             for &bgl_id in ids.group_ids.iter() {
-                bgl_guard.make_room(bgl_id);
+                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
             }
         }
 
