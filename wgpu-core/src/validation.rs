@@ -702,8 +702,16 @@ impl NumericType {
 }
 
 /// Return true if the fragment `format` is covered by the provided `output`.
-pub fn check_texture_format(format: wgt::TextureFormat, output: &NumericType) -> bool {
-    NumericType::from_texture_format(format).is_subtype_of(output)
+pub fn check_texture_format(
+    format: wgt::TextureFormat,
+    output: &NumericType,
+) -> Result<(), NumericType> {
+    let nt = NumericType::from_texture_format(format);
+    if nt.is_subtype_of(output) {
+        Ok(())
+    } else {
+        Err(nt)
+    }
 }
 
 pub type StageIo = FastHashMap<wgt::ShaderLocation, InterfaceVar>;

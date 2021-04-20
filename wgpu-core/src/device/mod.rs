@@ -2124,27 +2124,6 @@ impl<B: GfxBackend> Device<B> {
             );
         }
 
-        let input_assembler = conv::map_primitive_state_to_input_assembler(&desc.primitive);
-
-        let blender = hal::pso::BlendDesc {
-            logic_op: None, // TODO
-            targets: color_states
-                .iter()
-                .map(conv::map_color_target_state)
-                .collect(),
-        };
-        let depth_stencil = depth_stencil_state
-            .map(conv::map_depth_stencil_state)
-            .unwrap_or_default();
-
-        // TODO
-        let baked_states = hal::pso::BakedStates {
-            viewport: None,
-            scissor: None,
-            blend_constants: None,
-            depth_bounds: None,
-        };
-
         if desc.primitive.clamp_depth && !self.features.contains(wgt::Features::DEPTH_CLAMPING) {
             return Err(pipeline::CreateRenderPipelineError::MissingFeature(
                 wgt::Features::DEPTH_CLAMPING,
@@ -2173,6 +2152,29 @@ impl<B: GfxBackend> Device<B> {
                 pipeline::CreateRenderPipelineError::ConservativeRasterizationNonFillPolygonMode,
             );
         }
+
+        let input_assembler = conv::map_primitive_state_to_input_assembler(&desc.primitive);
+
+        let mut blender = hal::pso::BlendDesc {
+            logic_op: None,
+            targets: Vec::with_capacity(color_states.len()),
+        };
+        for (i, cs) in color_states.iter().enumerate() {
+            let bt = conv::map_color_target_state(cs)
+                .map_err(|error| pipeline::CreateRenderPipelineError::ColorState(i as u8, error))?;
+            blender.targets.push(bt);
+        }
+
+        let depth_stencil = depth_stencil_state
+            .map(conv::map_depth_stencil_state)
+            .unwrap_or_default();
+
+        let baked_states = hal::pso::BakedStates {
+            viewport: None,
+            scissor: None,
+            blend_constants: None,
+            depth_bounds: None,
+        };
 
         if desc.layout.is_none() {
             for _ in 0..self.limits.max_bind_groups {
@@ -2329,27 +2331,26 @@ impl<B: GfxBackend> Device<B> {
         if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
             for (i, state) in color_states.iter().enumerate() {
                 match io.get(&(i as wgt::ShaderLocation)) {
-                    Some(ref output)
-                        if validation::check_texture_format(state.format, &output.ty) => {}
-                    Some(output) => {
-                        log::warn!(
-                            "Incompatible fragment output[{}] from shader: {:?}, expected {:?}",
-                            i,
-                            output,
-                            state.format,
-                        );
-                        return Err(
-                            pipeline::CreateRenderPipelineError::IncompatibleOutputFormat {
-                                index: i as u8,
+                    Some(ref output) => {
+                        validation::check_texture_format(state.format, &output.ty).map_err(
+                            |pipeline| {
+                                pipeline::CreateRenderPipelineError::ColorState(
+                                    i as u8,
+                                    pipeline::ColorStateError::IncompatibleFormat {
+                                        pipeline,
+                                        shader: output.ty,
+                                    },
+                                )
                             },
-                        );
+                        )?;
                     }
                     None if state.write_mask.is_empty() => {}
                     None => {
                         log::warn!("Missing fragment output[{}], expected {:?}", i, state,);
-                        return Err(pipeline::CreateRenderPipelineError::MissingOutput {
-                            index: i as u8,
-                        });
+                        return Err(pipeline::CreateRenderPipelineError::ColorState(
+                            i as u8,
+                            pipeline::ColorStateError::Missing,
+                        ));
                     }
                 }
             }
