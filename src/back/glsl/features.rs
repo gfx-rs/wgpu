@@ -3,7 +3,7 @@ use crate::{
     Binding, Bytes, Handle, ImageClass, ImageDimension, Interpolation, Sampling, ScalarKind,
     ShaderStage, StorageClass, StorageFormat, Type, TypeInner,
 };
-use std::io::Write;
+use std::fmt::Write;
 
 bitflags::bitflags! {
     /// Structure used to encode a set of additions to glsl that aren't supported by all versions

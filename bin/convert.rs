@@ -237,23 +237,12 @@ fn main() {
                 _ => unreachable!(),
             };
 
-            let file = fs::OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .create(true)
-                .open(output_path)
-                .unwrap();
-
-            let mut writer = glsl::Writer::new(file, &module, info.as_ref().unwrap(), &params.glsl)
-                .unwrap_pretty();
-
-            writer
-                .write()
-                .map_err(|e| {
-                    fs::remove_file(output_path).unwrap();
-                    e
-                })
-                .unwrap();
+            let mut buffer = String::new();
+            let mut writer =
+                glsl::Writer::new(&mut buffer, &module, info.as_ref().unwrap(), &params.glsl)
+                    .unwrap_pretty();
+            writer.write().unwrap();
+            fs::write(output_path, buffer).unwrap();
         }
         #[cfg(feature = "dot-out")]
         "dot" => {

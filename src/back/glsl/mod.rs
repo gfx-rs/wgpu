@@ -57,7 +57,7 @@ use features::FeaturesManager;
 use std::{
     cmp::Ordering,
     fmt,
-    io::{Error as IoError, Write},
+    fmt::{Error as FmtError, Write},
 };
 use thiserror::Error;
 
@@ -271,8 +271,8 @@ type BackendResult = Result<(), Error>;
 #[derive(Debug, Error)]
 pub enum Error {
     /// A error occurred while writing to the output
-    #[error("I/O error")]
-    IoError(#[from] IoError),
+    #[error("Format error")]
+    FmtError(#[from] FmtError),
     /// The specified [`Version`](Version) doesn't have all required [`Features`](super)
     ///
     /// Contains the missing [`Features`](Features)

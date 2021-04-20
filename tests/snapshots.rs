@@ -189,14 +189,12 @@ fn check_output_glsl(
         entry_point: ep_name.to_string(),
     };
 
-    let mut buffer = Vec::new();
+    let mut buffer = String::new();
     let mut writer = glsl::Writer::new(&mut buffer, module, info, &options).unwrap();
     writer.write().unwrap();
 
-    let string = String::from_utf8(buffer).unwrap();
-
     let ext = format!("{:?}.glsl", stage);
-    fs::write(destination.with_extension(&ext), string).unwrap();
+    fs::write(destination.with_extension(&ext), buffer).unwrap();
 }
 
 #[cfg(feature = "hlsl-out")]
