@@ -265,7 +265,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                             root_id: ic.root_id,
                             group_ids: &ic.group_ids,
                         });
-                let (_, _, error) =
+                let (_, error) =
                     self.device_create_compute_pipeline::<B>(device, &desc, id, implicit_ids);
                 if let Some(e) = error {
                     panic!("{:?}", e);
@@ -287,7 +287,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                             root_id: ic.root_id,
                             group_ids: &ic.group_ids,
                         });
-                let (_, _, error) =
+                let (_, error) =
                     self.device_create_render_pipeline::<B>(device, &desc, id, implicit_ids);
                 if let Some(e) = error {
                     panic!("{:?}", e);

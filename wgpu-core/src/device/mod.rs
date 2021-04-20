@@ -1816,13 +1816,7 @@ impl<B: GfxBackend> Device<B> {
         mut derived_group_layouts: ArrayVec<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>,
         bgl_guard: &mut Storage<binding_model::BindGroupLayout<B>, id::BindGroupLayoutId>,
         pipeline_layout_guard: &mut Storage<binding_model::PipelineLayout<B>, id::PipelineLayoutId>,
-    ) -> Result<
-        (id::PipelineLayoutId, pipeline::ImplicitBindGroupCount),
-        pipeline::ImplicitLayoutError,
-    > {
-        let derived_bind_group_count =
-            derived_group_layouts.len() as pipeline::ImplicitBindGroupCount;
-
+    ) -> Result<id::PipelineLayoutId, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
             .map_or(false, |map| map.is_empty())
@@ -1837,9 +1831,7 @@ impl<B: GfxBackend> Device<B> {
                 ids.group_ids.len(),
                 derived_group_layouts.len()
             );
-            return Err(pipeline::ImplicitLayoutError::MissingIds(
-                derived_bind_group_count,
-            ));
+            return Err(pipeline::ImplicitLayoutError::MissingIds(group_count as _));
         }
 
         for (bgl_id, map) in ids.group_ids.iter_mut().zip(derived_group_layouts) {
@@ -1861,7 +1853,7 @@ impl<B: GfxBackend> Device<B> {
         };
         let layout = self.create_pipeline_layout(self_id, &layout_desc, bgl_guard)?;
         pipeline_layout_guard.insert(ids.root_id, layout);
-        Ok((ids.root_id, derived_bind_group_count))
+        Ok(ids.root_id)
     }
 
     fn create_compute_pipeline<G: GlobalIdentityHandlerFactory>(
@@ -1871,14 +1863,20 @@ impl<B: GfxBackend> Device<B> {
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<B, G>,
         token: &mut Token<Self>,
-    ) -> Result<
-        (
-            pipeline::ComputePipeline<B>,
-            pipeline::ImplicitBindGroupCount,
-            id::PipelineLayoutId,
-        ),
-        pipeline::CreateComputePipelineError,
-    > {
+    ) -> Result<pipeline::ComputePipeline<B>, pipeline::CreateComputePipelineError> {
+        //TODO: only lock mutable if the layout is derived
+        let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
+        let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
+
+        // This has to be done first, or otherwise the IDs may be pointing to entries
+        // that are not even in the storage.
+        if let Some(ref ids) = implicit_context {
+            pipeline_layout_guard.make_room(ids.root_id);
+            for &bgl_id in ids.group_ids.iter() {
+                bgl_guard.make_room(bgl_id);
+            }
+        }
+
         if !self
             .downlevel
             .flags
@@ -1886,10 +1884,6 @@ impl<B: GfxBackend> Device<B> {
         {
             return Err(pipeline::CreateComputePipelineError::ComputeShadersUnsupported);
         }
-
-        //TODO: only lock mutable if the layout is derived
-        let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
-        let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
 
         let mut derived_group_layouts =
             ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
@@ -1942,8 +1936,8 @@ impl<B: GfxBackend> Device<B> {
         // TODO
         let parent = hal::pso::BasePipeline::None;
 
-        let (pipeline_layout_id, derived_bind_group_count) = match desc.layout {
-            Some(id) => (id, 0),
+        let pipeline_layout_id = match desc.layout {
+            Some(id) => id,
             None => self.derive_pipeline_layout(
                 self_id,
                 implicit_context,
@@ -1992,7 +1986,7 @@ impl<B: GfxBackend> Device<B> {
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         };
-        Ok((pipeline, derived_bind_group_count, pipeline_layout_id))
+        Ok(pipeline)
     }
 
     fn create_render_pipeline<G: GlobalIdentityHandlerFactory>(
@@ -2002,17 +1996,19 @@ impl<B: GfxBackend> Device<B> {
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<B, G>,
         token: &mut Token<Self>,
-    ) -> Result<
-        (
-            pipeline::RenderPipeline<B>,
-            pipeline::ImplicitBindGroupCount,
-            id::PipelineLayoutId,
-        ),
-        pipeline::CreateRenderPipelineError,
-    > {
+    ) -> Result<pipeline::RenderPipeline<B>, pipeline::CreateRenderPipelineError> {
         //TODO: only lock mutable if the layout is derived
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
         let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
+
+        // This has to be done first, or otherwise the IDs may be pointing to entries
+        // that are not even in the storage.
+        if let Some(ref ids) = implicit_context {
+            pipeline_layout_guard.make_room(ids.root_id);
+            for &bgl_id in ids.group_ids.iter() {
+                bgl_guard.make_room(bgl_id);
+            }
+        }
 
         let mut derived_group_layouts =
             ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
@@ -2380,8 +2376,8 @@ impl<B: GfxBackend> Device<B> {
         // TODO
         let parent = hal::pso::BasePipeline::None;
 
-        let (pipeline_layout_id, derived_bind_group_count) = match desc.layout {
-            Some(id) => (id, 0),
+        let pipeline_layout_id = match desc.layout {
+            Some(id) => id,
             None => self.derive_pipeline_layout(
                 self_id,
                 implicit_context,
@@ -2482,7 +2478,7 @@ impl<B: GfxBackend> Device<B> {
             vertex_strides,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         };
-        Ok((pipeline, derived_bind_group_count, pipeline_layout_id))
+        Ok(pipeline)
     }
 
     fn wait_for_submit(
@@ -4029,7 +4025,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
     ) -> (
         id::RenderPipelineId,
-        pipeline::ImplicitBindGroupCount,
         Option<pipeline::CreateRenderPipelineError>,
     ) {
         profiling::scope!("Device::create_render_pipeline");
@@ -4055,19 +4050,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let (pipeline, derived_bind_group_count, _layout_id) = match device
-                .create_render_pipeline(device_id, desc, implicit_context, &hub, &mut token)
-            {
+            let pipeline = match device.create_render_pipeline(
+                device_id,
+                desc,
+                implicit_context,
+                &hub,
+                &mut token,
+            ) {
                 Ok(pair) => pair,
                 Err(e) => break e,
             };
 
             let id = fid.assign(pipeline, &mut token);
-            return (id.0, derived_bind_group_count, None);
+            return (id.0, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, 0, Some(error))
+        (id, Some(error))
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
@@ -4157,7 +4156,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
     ) -> (
         id::ComputePipelineId,
-        pipeline::ImplicitBindGroupCount,
         Option<pipeline::CreateComputePipelineError>,
     ) {
         profiling::scope!("Device::create_compute_pipeline");
@@ -4183,19 +4181,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let (pipeline, derived_bind_group_count, _layout_id) = match device
-                .create_compute_pipeline(device_id, desc, implicit_context, &hub, &mut token)
-            {
+            let pipeline = match device.create_compute_pipeline(
+                device_id,
+                desc,
+                implicit_context,
+                &hub,
+                &mut token,
+            ) {
                 Ok(pair) => pair,
                 Err(e) => break e,
             };
 
             let id = fid.assign(pipeline, &mut token);
-            return (id.0, derived_bind_group_count, None);
+            return (id.0, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, 0, Some(error))
+        (id, Some(error))
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
