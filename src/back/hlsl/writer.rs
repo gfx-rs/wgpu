@@ -2,7 +2,7 @@ use super::Error;
 use crate::back::hlsl::keywords::RESERVED;
 use crate::proc::{NameKey, Namer};
 use crate::FastHashMap;
-use std::io::Write;
+use std::fmt::Write;
 
 const INDENT: &str = "    ";
 
