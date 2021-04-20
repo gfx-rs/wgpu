@@ -864,6 +864,8 @@ impl<B: GfxBackend> Device<B> {
                     conv::map_texture_view_dimension(view_dim),
                     conv::map_texture_format(format, self.private_features),
                     hal::format::Swizzle::NO,
+                    // conservatively assume the same usage
+                    conv::map_texture_usage(texture.usage, aspects),
                     range,
                 )
                 .or(Err(resource::CreateTextureViewError::OutOfMemory))?
@@ -947,6 +949,7 @@ impl<B: GfxBackend> Device<B> {
             min_filter: conv::map_filter(desc.min_filter),
             mag_filter: conv::map_filter(desc.mag_filter),
             mip_filter: conv::map_filter(desc.mipmap_filter),
+            reduction_mode: hal::image::ReductionMode::WeightedAverage,
             wrap_mode: (
                 conv::map_wrap(desc.address_modes[0]),
                 conv::map_wrap(desc.address_modes[1]),
@@ -1892,9 +1895,9 @@ impl<B: GfxBackend> Device<B> {
         let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
         let entry_point_name = &desc.stage.entry_point;
-        let shader_module = shader_module_guard.get(desc.stage.module).map_err(|_| {
-            pipeline::CreateComputePipelineError::Stage(validation::StageError::InvalidModule)
-        })?;
+        let shader_module = shader_module_guard
+            .get(desc.stage.module)
+            .map_err(|_| validation::StageError::InvalidModule)?;
 
         let flag = wgt::ShaderStage::COMPUTE;
         if let Some(ref interface) = shader_module.interface {
@@ -1912,15 +1915,13 @@ impl<B: GfxBackend> Device<B> {
                     None
                 }
             };
-            let _ = interface
-                .check_stage(
-                    provided_layouts.as_ref().map(|p| p.as_slice()),
-                    &mut derived_group_layouts,
-                    &entry_point_name,
-                    flag,
-                    io,
-                )
-                .map_err(pipeline::CreateComputePipelineError::Stage)?;
+            let _ = interface.check_stage(
+                provided_layouts.as_ref().map(|p| p.as_slice()),
+                &mut derived_group_layouts,
+                &entry_point_name,
+                flag,
+                io,
+            )?;
         } else if desc.layout.is_none() {
             return Err(pipeline::ImplicitLayoutError::ReflectionError(flag).into());
         }
@@ -2240,7 +2241,7 @@ impl<B: GfxBackend> Device<B> {
 
             let shader_module = shader_module_guard.get(stage.module).map_err(|_| {
                 pipeline::CreateRenderPipelineError::Stage {
-                    flag,
+                    stage: flag,
                     error: validation::StageError::InvalidModule,
                 }
             })?;
@@ -2267,7 +2268,10 @@ impl<B: GfxBackend> Device<B> {
                         flag,
                         io,
                     )
-                    .map_err(|error| pipeline::CreateRenderPipelineError::Stage { flag, error })?;
+                    .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
+                        stage: flag,
+                        error,
+                    })?;
                 validated_stages |= flag;
             }
 
@@ -2287,7 +2291,7 @@ impl<B: GfxBackend> Device<B> {
                     shader_module_guard
                         .get(fragment.stage.module)
                         .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
-                            flag,
+                            stage: flag,
                             error: validation::StageError::InvalidModule,
                         })?;
 
@@ -2312,7 +2316,7 @@ impl<B: GfxBackend> Device<B> {
                                 io,
                             )
                             .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
-                                flag,
+                                stage: flag,
                                 error,
                             })?;
                         validated_stages |= flag;

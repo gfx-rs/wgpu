@@ -111,8 +111,8 @@ pub enum CreateComputePipelineError {
     InvalidLayout,
     #[error("unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
-    #[error(transparent)]
-    Stage(validation::StageError),
+    #[error("error matching shader requirements against the pipeline")]
+    Stage(#[from] validation::StageError),
     #[error("Internal error: {0}")]
     Internal(String),
     #[error(
@@ -246,13 +246,13 @@ pub enum CreateRenderPipelineError {
     ConservativeRasterizationNonFillPolygonMode,
     #[error("missing required device features {0:?}")]
     MissingFeature(wgt::Features),
-    #[error("error in stage {flag:?}")]
+    #[error("error matching {stage:?} shader requirements against the pipeline")]
     Stage {
-        flag: wgt::ShaderStage,
+        stage: wgt::ShaderStage,
         #[source]
         error: validation::StageError,
     },
-    #[error("Internal error in stage {stage:?}: {error}")]
+    #[error("Internal error in {stage:?} shader: {error}")]
     Internal {
         stage: wgt::ShaderStage,
         error: String,
