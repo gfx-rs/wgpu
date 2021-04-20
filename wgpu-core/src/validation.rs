@@ -216,7 +216,7 @@ pub enum StageError {
     InvalidModule,
     #[error("unable to find entry point '{0:?}'")]
     MissingEntryPoint(String),
-    #[error("error matching global {0:?} against the pipeline layout")]
+    #[error("shader global {0:?} is not available in the layout pipeline layout")]
     Binding(naga::ResourceBinding, #[source] BindingError),
     #[error("unable to filter the texture ({texture:?}) by the sampler ({sampler:?})")]
     Filtering {
@@ -225,9 +225,7 @@ pub enum StageError {
         #[source]
         error: FilteringError,
     },
-    #[error(
-        "error matching the stage input at {location} ({var}) against the previous stage outputs"
-    )]
+    #[error("location[{location}] {var} is not provided by the previous stage outputs")]
     Input {
         location: wgt::ShaderLocation,
         var: InterfaceVar,
