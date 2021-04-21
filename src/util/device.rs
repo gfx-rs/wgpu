@@ -52,10 +52,6 @@ impl DeviceExt for crate::Device {
             mapped_at_creation: true,
         };
 
-        let mut map_context = crate::MapContext::new(padded_size);
-
-        map_context.initial_range = 0..padded_size;
-
         let buffer = self.create_buffer(&wgt_descriptor);
         {
             let mut slice = buffer.slice(..).get_mapped_range_mut();
