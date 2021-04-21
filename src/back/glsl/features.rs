@@ -292,7 +292,8 @@ impl<'a, W> Writer<'a, W> {
                     interpolation,
                     sampling,
                     ..
-                }) = binding {
+                }) = binding
+                {
                     if interpolation == Some(Interpolation::Linear) {
                         self.features.request(Features::NOPERSPECTIVE_QUALIFIER);
                     }

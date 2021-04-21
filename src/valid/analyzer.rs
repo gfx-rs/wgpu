@@ -322,6 +322,10 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(value),
                 requirements: UniformityRequirements::empty(),
             },
+            E::Swizzle { vector, .. } => Uniformity {
+                non_uniform_result: self.add_ref(vector),
+                requirements: UniformityRequirements::empty(),
+            },
             E::Compose { ref components, .. } => {
                 let non_uniform_result = components
                     .iter()

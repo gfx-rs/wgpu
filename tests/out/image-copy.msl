@@ -9,8 +9,8 @@ kernel void main1(
 , metal::texture2d<uint, metal::access::read> image_src [[user(fake0)]]
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
-    metal::int2 _e12 = (int2(image_src.get_width(), image_src.get_height()) * static_cast<int2>(metal::uint2(local_id.x, local_id.y))) % metal::int2(10, 20);
-    metal::uint4 _e13 = image_src.read(metal::uint2(_e12));
-    image_dst.write(_e13, metal::uint(_e12.x));
+    metal::int2 _e10 = (int2(image_src.get_width(), image_src.get_height()) * static_cast<int2>(local_id.xy)) % metal::int2(10, 20);
+    metal::uint4 _e11 = image_src.read(metal::uint2(_e10));
+    image_dst.write(_e11, metal::uint(_e10.x));
     return;
 }

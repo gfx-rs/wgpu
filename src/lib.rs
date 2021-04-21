@@ -480,7 +480,7 @@ pub enum Binding {
     Location {
         location: u32,
         interpolation: Option<Interpolation>,
-        sampling: Option<Sampling>
+        sampling: Option<Sampling>,
     },
 }
 
@@ -679,6 +679,21 @@ pub enum ImageQuery {
     NumSamples,
 }
 
+/// Component selection for a vector swizzle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum SwizzleComponent {
+    ///
+    X,
+    ///
+    Y,
+    ///
+    Z,
+    ///
+    W,
+}
+
 /// An expression that can be evaluated to obtain a value.
 ///
 /// This is a Single Static Assignment (SSA) scheme similar to SPIR-V.
@@ -703,6 +718,12 @@ pub enum Expression {
     Splat {
         size: VectorSize,
         value: Handle<Expression>,
+    },
+    /// Vector swizzle.
+    Swizzle {
+        size: VectorSize,
+        vector: Handle<Expression>,
+        pattern: [SwizzleComponent; 4],
     },
     /// Composite expression.
     Compose {

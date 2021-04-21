@@ -198,7 +198,11 @@ impl Options {
     ) -> Result<ResolvedBinding, Error> {
         match *binding {
             crate::Binding::BuiltIn(built_in) => Ok(ResolvedBinding::BuiltIn(built_in)),
-            crate::Binding::Location { location, interpolation, sampling } => match mode {
+            crate::Binding::Location {
+                location,
+                interpolation,
+                sampling,
+            } => match mode {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
                 LocationMode::FragmentOutput => Ok(ResolvedBinding::Color(location)),
                 LocationMode::Intermediate => Ok(ResolvedBinding::User {
@@ -351,21 +355,18 @@ impl ResolvedBinding {
 }
 
 impl ResolvedInterpolation {
-    fn from_binding(interpolation: crate::Interpolation,
-                    sampling: crate::Sampling)
-                    -> Self
-{
+    fn from_binding(interpolation: crate::Interpolation, sampling: crate::Sampling) -> Self {
         use crate::Interpolation as I;
         use crate::Sampling as S;
 
         match (interpolation, sampling) {
-            (I::Perspective, S::Center)   => Self::CenterPerspective,
+            (I::Perspective, S::Center) => Self::CenterPerspective,
             (I::Perspective, S::Centroid) => Self::CentroidPerspective,
-            (I::Perspective, S::Sample)   => Self::SamplePerspective,
-            (I::Linear,      S::Center)   => Self::CenterNoPerspective,
-            (I::Linear,      S::Centroid) => Self::CentroidNoPerspective,
-            (I::Linear,      S::Sample)   => Self::SampleNoPerspective,
-            (I::Flat, _)                        => Self::Flat,
+            (I::Perspective, S::Sample) => Self::SamplePerspective,
+            (I::Linear, S::Center) => Self::CenterNoPerspective,
+            (I::Linear, S::Centroid) => Self::CentroidNoPerspective,
+            (I::Linear, S::Sample) => Self::SampleNoPerspective,
+            (I::Flat, _) => Self::Flat,
         }
     }
 

@@ -93,6 +93,8 @@ pub enum ResolveError {
     },
     #[error("Invalid scalar {0:?}")]
     InvalidScalar(Handle<crate::Expression>),
+    #[error("Invalid vector {0:?}")]
+    InvalidVector(Handle<crate::Expression>),
     #[error("Invalid pointer {0:?}")]
     InvalidPointer(Handle<crate::Expression>),
     #[error("Invalid image {0:?}")]
@@ -286,6 +288,21 @@ impl<'a> ResolveContext<'a> {
                 ref other => {
                     log::error!("Scalar type {:?}", other);
                     return Err(ResolveError::InvalidScalar(value));
+                }
+            },
+            crate::Expression::Swizzle {
+                size,
+                vector,
+                pattern: _,
+            } => match *past(vector).inner_with(types) {
+                Ti::Vector {
+                    size: _,
+                    kind,
+                    width,
+                } => TypeResolution::Value(Ti::Vector { size, kind, width }),
+                ref other => {
+                    log::error!("Vector type {:?}", other);
+                    return Err(ResolveError::InvalidVector(vector));
                 }
             },
             crate::Expression::Compose { ty, .. } => TypeResolution::Handle(ty),

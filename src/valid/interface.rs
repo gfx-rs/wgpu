@@ -208,7 +208,11 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::InvalidBuiltInType(built_in));
                 }
             }
-            crate::Binding::Location { location, interpolation, sampling } => {
+            crate::Binding::Location {
+                location,
+                interpolation,
+                sampling,
+            } => {
                 if !self.location_mask.insert(location as usize) {
                     return Err(VaryingError::BindingCollision { location });
                 }
@@ -235,7 +239,8 @@ impl VaryingContext<'_> {
                         }
                     }
                     Some(_) => {
-                        if needs_interpolation && interpolation != Some(crate::Interpolation::Flat) {
+                        if needs_interpolation && interpolation != Some(crate::Interpolation::Flat)
+                        {
                             return Err(VaryingError::InvalidInterpolation);
                         }
                     }

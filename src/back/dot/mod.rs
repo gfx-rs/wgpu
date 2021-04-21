@@ -187,6 +187,17 @@ fn write_fun(
                 edges.insert("value", value);
                 (Cow::Owned(format!("Splat{:?}", size)), 3)
             }
+            E::Swizzle {
+                size,
+                vector,
+                pattern,
+            } => {
+                edges.insert("vector", vector);
+                (
+                    Cow::Owned(format!("Swizzle{:?}", &pattern[..size as usize])),
+                    3,
+                )
+            }
             E::Compose { ref components, .. } => {
                 payload = Some(Payload::Arguments(components));
                 (Cow::Borrowed("Compose"), 3)

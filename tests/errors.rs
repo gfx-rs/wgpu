@@ -76,24 +76,3 @@ fn invalid_scalar_width() {
 "###,
     );
 }
-
-#[cfg(feature = "wgsl-in")]
-#[test]
-fn invalid_accessor() {
-    check(
-        r###"
-[[stage(vertex)]]
-fn vs_main() {
-    var color: vec3<f32> = vec3<f32>(1.0, 2.0, 3.0);
-    var i: f32 = color.a;
-}
-"###,
-        r###"error: invalid field accessor `a`
-  ┌─ wgsl:5:24
-  │
-5 │     var i: f32 = color.a;
-  │                        ^ invalid accessor
-
-"###,
-    );
-}

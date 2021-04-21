@@ -418,7 +418,8 @@ impl Writer {
     }
 
     fn decorate(&mut self, id: Word, decoration: spirv::Decoration, operands: &[Word]) {
-        self.annotations.push(Instruction::decorate(id, decoration, operands));
+        self.annotations
+            .push(Instruction::decorate(id, decoration, operands));
     }
 
     fn write_function(
@@ -1090,7 +1091,11 @@ impl Writer {
         use spirv::{BuiltIn, Decoration};
 
         match *binding {
-            crate::Binding::Location { location, interpolation, sampling } => {
+            crate::Binding::Location {
+                location,
+                interpolation,
+                sampling,
+            } => {
                 self.decorate(id, Decoration::Location, &[location]);
 
                 match interpolation {
@@ -1455,6 +1460,26 @@ impl Writer {
                 block.body.push(Instruction::composite_construct(
                     result_type_id,
                     id,
+                    &self.temp_list,
+                ));
+                id
+            }
+            crate::Expression::Swizzle {
+                size,
+                vector,
+                pattern,
+            } => {
+                let vector_id = self.cached[vector];
+                self.temp_list.clear();
+                for &sc in pattern[..size as usize].iter() {
+                    self.temp_list.push(sc as Word);
+                }
+                let id = self.id_gen.next();
+                block.body.push(Instruction::vector_shuffle(
+                    result_type_id,
+                    id,
+                    vector_id,
+                    vector_id,
                     &self.temp_list,
                 ));
                 id

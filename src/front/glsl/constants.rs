@@ -49,8 +49,8 @@ pub enum ConstantSolvingError {
     InvalidUnaryOpArg,
     #[error("Cannot apply the binary op to the arguments")]
     InvalidBinaryOpArgs,
-    #[error("Splat type is not registered")]
-    SplatType,
+    #[error("Splat/swizzle type is not registered")]
+    DestinationTypeNotFound,
 }
 
 impl<'a> ConstantSolver<'a> {
@@ -83,8 +83,49 @@ impl<'a> ConstantSolver<'a> {
                     name: None,
                     specialization: None,
                     inner: ConstantInner::Composite {
-                        ty: ty.ok_or(ConstantSolvingError::SplatType)?,
+                        //TODO: register the new type if needed
+                        ty: ty.ok_or(ConstantSolvingError::DestinationTypeNotFound)?,
                         components: vec![tgt; size as usize],
+                    },
+                }))
+            }
+            Expression::Swizzle {
+                size,
+                vector: src_vector,
+                pattern,
+            } => {
+                let tgt = self.solve(src_vector)?;
+                let (ty, src_components) = match self.constants[tgt].inner {
+                    ConstantInner::Scalar { .. } => (None, &[][..]),
+                    ConstantInner::Composite {
+                        ty,
+                        components: ref src_components,
+                    } => match self.types[ty].inner {
+                        crate::TypeInner::Vector {
+                            size: _,
+                            kind,
+                            width,
+                        } => {
+                            let dst_ty = self.types.fetch_if(|t| {
+                                t.inner == crate::TypeInner::Vector { size, kind, width }
+                            });
+                            (dst_ty, &src_components[..])
+                        }
+                        _ => (None, &[][..]),
+                    },
+                };
+                let components = pattern
+                    .iter()
+                    .map(|&sc| src_components[sc as usize])
+                    .collect();
+
+                Ok(self.constants.fetch_or_append(Constant {
+                    name: None,
+                    specialization: None,
+                    inner: ConstantInner::Composite {
+                        //TODO: register the new type if needed
+                        ty: ty.ok_or(ConstantSolvingError::DestinationTypeNotFound)?,
+                        components,
                     },
                 }))
             }

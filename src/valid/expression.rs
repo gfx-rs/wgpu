@@ -33,6 +33,10 @@ pub enum ExpressionError {
     InvalidArrayType(Handle<crate::Expression>),
     #[error("Splatting {0:?} can't be done")]
     InvalidSplatType(Handle<crate::Expression>),
+    #[error("Swizzling {0:?} can't be done")]
+    InvalidVectorType(Handle<crate::Expression>),
+    #[error("Swizzle component {0:?} is outside of vector size {1:?}")]
+    InvalidSwizzleComponent(crate::SwizzleComponent, crate::VectorSize),
     #[error(transparent)]
     Compose(#[from] ComposeError),
     #[error("Operation {0:?} can't work with {1:?}")]
@@ -200,6 +204,25 @@ impl super::Validator {
                     return Err(ExpressionError::InvalidSplatType(value));
                 }
             },
+            E::Swizzle {
+                size,
+                vector,
+                pattern,
+            } => {
+                let vec_size = match *resolver.resolve(vector)? {
+                    Ti::Vector { size: vec_size, .. } => vec_size,
+                    ref other => {
+                        log::error!("Swizzle vector type {:?}", other);
+                        return Err(ExpressionError::InvalidVectorType(vector));
+                    }
+                };
+                for &sc in pattern[..size as usize].iter() {
+                    if sc as u8 >= vec_size as u8 {
+                        return Err(ExpressionError::InvalidSwizzleComponent(sc, vec_size));
+                    }
+                }
+                ShaderStages::all()
+            }
             E::Compose { ref components, ty } => {
                 for &handle in components {
                     if handle >= root {

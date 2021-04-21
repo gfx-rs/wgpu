@@ -256,7 +256,11 @@ impl Decoration {
                 interpolation,
                 sampling,
                 ..
-            } => Ok(crate::Binding::Location { location, interpolation, sampling }),
+            } => Ok(crate::Binding::Location {
+                location,
+                interpolation,
+                sampling,
+            }),
             _ => Err(Error::MissingDecoration(spirv::Decoration::Location)),
         }
     }
@@ -1438,41 +1442,78 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     let v1_lexp = self.lookup_expression.lookup(v1_id)?;
                     let v1_lty = self.lookup_type.lookup(v1_lexp.type_id)?;
+                    let v1_handle = v1_lexp.handle;
                     let n1 = match type_arena[v1_lty.handle].inner {
-                        crate::TypeInner::Vector { size, .. } => size as u8,
+                        crate::TypeInner::Vector { size, .. } => size as u32,
                         _ => return Err(Error::InvalidInnerType(v1_lexp.type_id)),
                     };
-                    let v1_handle = v1_lexp.handle;
                     let v2_lexp = self.lookup_expression.lookup(v2_id)?;
                     let v2_lty = self.lookup_type.lookup(v2_lexp.type_id)?;
+                    let v2_handle = v2_lexp.handle;
                     let n2 = match type_arena[v2_lty.handle].inner {
-                        crate::TypeInner::Vector { size, .. } => size as u8,
+                        crate::TypeInner::Vector { size, .. } => size as u32,
                         _ => return Err(Error::InvalidInnerType(v2_lexp.type_id)),
                     };
-                    let v2_handle = v2_lexp.handle;
 
-                    let mut components = Vec::with_capacity(inst.wc as usize - 5);
-                    for _ in 0..components.capacity() {
-                        let index = self.next()?;
-                        let expr = if index < n1 as u32 {
-                            crate::Expression::AccessIndex {
-                                base: v1_handle,
-                                index,
-                            }
-                        } else if index < n1 as u32 + n2 as u32 {
-                            crate::Expression::AccessIndex {
-                                base: v2_handle,
-                                index: index - n1 as u32,
-                            }
-                        } else {
-                            return Err(Error::InvalidAccessIndex(index));
-                        };
-                        components.push(expressions.append(expr));
+                    self.temp_bytes.clear();
+                    let mut max_component = 0;
+                    for _ in 5..inst.wc as usize {
+                        let mut index = self.next()?;
+                        if index == !0 {
+                            // treat Undefined as X
+                            index = 0;
+                        }
+                        max_component = max_component.max(index);
+                        self.temp_bytes.push(index as u8);
                     }
-                    let expr = crate::Expression::Compose {
-                        ty: self.lookup_type.lookup(result_type_id)?.handle,
-                        components,
+
+                    // Check for swizzle first.
+                    let expr = if max_component < n1 {
+                        use crate::SwizzleComponent as Sc;
+                        let size = match self.temp_bytes.len() {
+                            2 => crate::VectorSize::Bi,
+                            3 => crate::VectorSize::Tri,
+                            _ => crate::VectorSize::Quad,
+                        };
+                        let mut pattern = [Sc::X; 4];
+                        for (pat, index) in pattern.iter_mut().zip(self.temp_bytes.drain(..)) {
+                            *pat = match index {
+                                0 => Sc::X,
+                                1 => Sc::Y,
+                                2 => Sc::Z,
+                                _ => Sc::W,
+                            };
+                        }
+                        crate::Expression::Swizzle {
+                            size,
+                            vector: v1_handle,
+                            pattern,
+                        }
+                    } else {
+                        // Fall back to access + compose
+                        let mut components = Vec::with_capacity(self.temp_bytes.len());
+                        for index in self.temp_bytes.drain(..).map(|i| i as u32) {
+                            let expr = if index < n1 {
+                                crate::Expression::AccessIndex {
+                                    base: v1_handle,
+                                    index,
+                                }
+                            } else if index < n1 + n2 {
+                                crate::Expression::AccessIndex {
+                                    base: v2_handle,
+                                    index: index - n1,
+                                }
+                            } else {
+                                return Err(Error::InvalidAccessIndex(index));
+                            };
+                            components.push(expressions.append(expr));
+                        }
+                        crate::Expression::Compose {
+                            ty: self.lookup_type.lookup(result_type_id)?.handle,
+                            components,
+                        }
                     };
+
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {

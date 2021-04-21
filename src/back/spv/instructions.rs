@@ -659,6 +659,26 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn vector_shuffle(
+        result_type_id: Word,
+        id: Word,
+        v1_id: Word,
+        v2_id: Word,
+        components: &[Word],
+    ) -> Self {
+        let mut instruction = Self::new(Op::VectorShuffle);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(v1_id);
+        instruction.add_operand(v2_id);
+
+        for &component in components {
+            instruction.add_operand(component);
+        }
+
+        instruction
+    }
+
     //
     // Arithmetic Instructions
     //

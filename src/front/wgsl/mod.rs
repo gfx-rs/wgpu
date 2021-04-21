@@ -379,55 +379,49 @@ impl<'a> ExpressionContext<'a, '_, '_> {
 }
 
 enum Composition {
-    Single(crate::Expression),
-    Multi(crate::VectorSize, Vec<Handle<crate::Expression>>),
+    Single(u32),
+    Multi(crate::VectorSize, [crate::SwizzleComponent; 4]),
 }
 
 impl Composition {
     //TODO: could be `const fn` once MSRV allows
-    fn letter_pos(letter: char) -> u32 {
+    fn letter_component(letter: char) -> Option<crate::SwizzleComponent> {
+        use crate::SwizzleComponent as Sc;
         match letter {
-            'x' | 'r' => 0,
-            'y' | 'g' => 1,
-            'z' | 'b' => 2,
-            'w' | 'a' => 3,
-            _ => !0,
+            'x' | 'r' => Some(Sc::X),
+            'y' | 'g' => Some(Sc::Y),
+            'z' | 'b' => Some(Sc::Z),
+            'w' | 'a' => Some(Sc::W),
+            _ => None,
+        }
+    }
+
+    fn extract_impl(name: &str, name_span: Range<usize>) -> Result<u32, Error> {
+        let ch = name
+            .chars()
+            .next()
+            .ok_or_else(|| Error::BadAccessor(name_span.clone()))?;
+        match Self::letter_component(ch) {
+            Some(sc) => Ok(sc as u32),
+            None => Err(Error::BadAccessor(name_span)),
         }
     }
 
     fn extract(
         base: Handle<crate::Expression>,
-        base_size: crate::VectorSize,
         name: &str,
         name_span: Range<usize>,
     ) -> Result<crate::Expression, Error> {
-        let ch = name
-            .chars()
-            .next()
-            .ok_or_else(|| Error::BadAccessor(name_span.clone()))?;
-        let index = Self::letter_pos(ch);
-        if index >= base_size as u32 {
-            return Err(Error::BadAccessor(name_span));
-        }
-        Ok(crate::Expression::AccessIndex { base, index })
+        Self::extract_impl(name, name_span)
+            .map(|index| crate::Expression::AccessIndex { base, index })
     }
 
-    fn make<'a>(
-        base: Handle<crate::Expression>,
-        base_size: crate::VectorSize,
-        name: &'a str,
-        name_span: Range<usize>,
-        expressions: &mut Arena<crate::Expression>,
-    ) -> Result<Self, Error<'a>> {
+    fn make(name: &str, name_span: Range<usize>) -> Result<Self, Error> {
         if name.len() > 1 {
-            let mut components = Vec::with_capacity(name.len());
-            for ch in name.chars() {
-                let index = Self::letter_pos(ch);
-                if index >= base_size as u32 {
-                    return Err(Error::BadAccessor(name_span));
-                }
-                let expr = crate::Expression::AccessIndex { base, index };
-                components.push(expressions.append(expr));
+            let mut components = [crate::SwizzleComponent::X; 4];
+            for (comp, ch) in components.iter_mut().zip(name.chars()) {
+                *comp = Self::letter_component(ch)
+                    .ok_or_else(|| Error::BadAccessor(name_span.clone()))?;
             }
 
             let size = match name.len() {
@@ -438,7 +432,7 @@ impl Composition {
             };
             Ok(Composition::Multi(size, components))
         } else {
-            Self::extract(base, base_size, name, name_span).map(Composition::Single)
+            Self::extract_impl(name, name_span).map(Composition::Single)
         }
     }
 }
@@ -504,14 +498,23 @@ impl BindingParser {
     }
 
     fn finish<'a>(self) -> Result<Option<crate::Binding>, Error<'a>> {
-        match (self.location, self.built_in, self.interpolation, self.sampling) {
+        match (
+            self.location,
+            self.built_in,
+            self.interpolation,
+            self.sampling,
+        ) {
             (None, None, None, None) => Ok(None),
             (Some(location), None, interpolation, sampling) => {
                 // Before handing over the completed `Module`, we call
                 // `apply_common_default_interpolation` to ensure that the interpolation and
                 // sampling have been explicitly specified on all vertex shader output and fragment
                 // shader input user bindings, so leaving them potentially `None` here is fine.
-                Ok(Some(crate::Binding::Location { location, interpolation, sampling }))
+                Ok(Some(crate::Binding::Location {
+                    location,
+                    interpolation,
+                    sampling,
+                }))
             }
             (None, Some(bi), None, None) => Ok(Some(crate::Binding::BuiltIn(bi))),
             (location, built_in, interpolation, sampling) => Err(Error::InconsistentBinding(
@@ -1251,52 +1254,24 @@ impl Parser {
                                 index,
                             }
                         }
-                        crate::TypeInner::Vector { size, kind, width } => {
-                            match Composition::make(handle, size, name, name_span, ctx.expressions)?
-                            {
-                                //TODO: Swizzling in IR
-                                Composition::Multi(size, components) => {
-                                    let inner = crate::TypeInner::Vector { size, kind, width };
-                                    crate::Expression::Compose {
-                                        ty: ctx
-                                            .types
-                                            .fetch_or_append(crate::Type { name: None, inner }),
-                                        components,
+                        crate::TypeInner::Vector { .. } | crate::TypeInner::Matrix { .. } => {
+                            match Composition::make(name, name_span)? {
+                                Composition::Multi(dst_size, pattern) => {
+                                    crate::Expression::Swizzle {
+                                        size: dst_size,
+                                        vector: handle,
+                                        pattern,
                                     }
                                 }
-                                Composition::Single(expr) => expr,
+                                Composition::Single(index) => crate::Expression::AccessIndex {
+                                    base: handle,
+                                    index,
+                                },
                             }
                         }
-                        crate::TypeInner::Matrix {
-                            columns,
-                            rows,
-                            width,
-                        } => match Composition::make(
-                            handle,
-                            columns,
-                            name,
-                            name_span,
-                            ctx.expressions,
-                        )? {
-                            //TODO: is this really supported?
-                            Composition::Multi(columns, components) => {
-                                let inner = crate::TypeInner::Matrix {
-                                    columns,
-                                    rows,
-                                    width,
-                                };
-                                crate::Expression::Compose {
-                                    ty: ctx
-                                        .types
-                                        .fetch_or_append(crate::Type { name: None, inner }),
-                                    components,
-                                }
-                            }
-                            Composition::Single(expr) => expr,
-                        },
-                        crate::TypeInner::ValuePointer {
-                            size: Some(size), ..
-                        } => Composition::extract(handle, size, name, name_span)?,
+                        crate::TypeInner::ValuePointer { .. } => {
+                            Composition::extract(handle, name, name_span)?
+                        }
                         crate::TypeInner::Pointer { base, class: _ } => match ctx.types[base].inner
                         {
                             crate::TypeInner::Struct { ref members, .. } => {
@@ -1310,13 +1285,7 @@ impl Parser {
                                     index,
                                 }
                             }
-                            crate::TypeInner::Vector { size, .. } => {
-                                Composition::extract(handle, size, name, name_span)?
-                            }
-                            crate::TypeInner::Matrix { columns, .. } => {
-                                Composition::extract(handle, columns, name, name_span)?
-                            }
-                            _ => return Err(Error::BadAccessor(name_span)),
+                            _ => Composition::extract(handle, name, name_span)?,
                         },
                         _ => return Err(Error::BadAccessor(name_span)),
                     }

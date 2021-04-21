@@ -216,7 +216,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         if let Some(crate::Binding::Location {
                             interpolation: ref mut interpolation @ None,
                             ..
-                        }) = arg.binding {
+                        }) = arg.binding
+                        {
                             *interpolation = Some(crate::Interpolation::Perspective);
                             // default
                         }

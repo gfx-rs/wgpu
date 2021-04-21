@@ -51,7 +51,6 @@ use crate::{
     ImageClass, Interpolation, LocalVariable, Module, RelationalFunction, Sampling, ScalarKind,
     ScalarValue, ShaderStage, Statement, StorageAccess, StorageClass, StorageFormat, StructMember,
     Type, TypeInner, UnaryOperator,
-
 };
 use features::FeaturesManager;
 use std::{
@@ -71,6 +70,8 @@ pub const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450]
 /// List of supported es glsl versions
 pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
 const INDENT: &str = "    ";
+
+const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 
 /// glsl version
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -797,7 +798,11 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             _ => {
                 let (location, interpolation, sampling) = match binding {
-                    Some(&Binding::Location { location, interpolation, sampling }) => (location, interpolation, sampling),
+                    Some(&Binding::Location {
+                        location,
+                        interpolation,
+                        sampling,
+                    }) => (location, interpolation, sampling),
                     _ => return Ok(()),
                 };
 
@@ -818,10 +823,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // Write the storage class
                 if self.options.version.supports_explicit_locations() {
-                    write!(
-                        self.out,
-                        "layout(location = {}) ",
-                        location)?;
+                    write!(self.out, "layout(location = {}) ", location)?;
                 }
 
                 // Write the sampling auxiliary qualifier.
@@ -847,7 +849,11 @@ impl<'a, W: Write> Writer<'a, W> {
                 // Finally write the global name and end the global with a `;` and a newline
                 // Leading space is important
                 let vname = VaryingName {
-                    binding: &Binding::Location { location, interpolation: None, sampling: None },
+                    binding: &Binding::Location {
+                        location,
+                        interpolation: None,
+                        sampling: None,
+                    },
                     stage: self.entry_point.stage,
                     output,
                 };
@@ -1507,6 +1513,18 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(value, ctx)?;
                 write!(self.out, ")")?
             }
+            // `Swizzle` adds a few letters behind the dot.
+            Expression::Swizzle {
+                size,
+                vector,
+                pattern,
+            } => {
+                self.write_expr(vector, ctx)?;
+                write!(self.out, ".")?;
+                for &sc in pattern[..size as usize].iter() {
+                    write!(self.out, "{}", COMPONENTS[sc as usize])?;
+                }
+            }
             // `Compose` is pretty simple we just write `type(components)` where `components` is a
             // comma separated list of expressions
             Expression::Compose { ty, ref components } => {
@@ -1728,14 +1746,13 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, ")",)?;
                     }
                     crate::ImageQuery::NumLayers => {
-                        let selector = ['x', 'y', 'z', 'w'];
                         let fun_name = match class {
                             ImageClass::Sampled { .. } | ImageClass::Depth => "textureSize",
                             ImageClass::Storage(_) => "imageSize",
                         };
                         write!(self.out, "{}(", fun_name)?;
                         self.write_expr(image, ctx)?;
-                        write!(self.out, ",0).{}", selector[components])?;
+                        write!(self.out, ",0).{}", COMPONENTS[components])?;
                     }
                     crate::ImageQuery::NumSamples => {
                         // assumes ARB_shader_texture_image_samples

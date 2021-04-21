@@ -25,8 +25,7 @@ vertex vs_mainOutput vs_main(
     tmp1_ = static_cast<int>(vertex_index) / 2;
     tmp2_ = static_cast<int>(vertex_index) & 1;
     metal::float4 _e24 = metal::float4((static_cast<float>(tmp1_) * 4.0) - 1.0, (static_cast<float>(tmp2_) * 4.0) - 1.0, 0.0, 1.0);
-    metal::float4 _e50 = r_data.proj_inv * _e24;
-    const auto _tmp = VertexOutput {_e24, metal::transpose(metal::float3x3(metal::float3(r_data.view[0].x, r_data.view[0].y, r_data.view[0].z), metal::float3(r_data.view[1].x, r_data.view[1].y, r_data.view[1].z), metal::float3(r_data.view[2].x, r_data.view[2].y, r_data.view[2].z))) * metal::float3(_e50.x, _e50.y, _e50.z)};
+    const auto _tmp = VertexOutput {_e24, metal::transpose(metal::float3x3(r_data.view[0].xyz, r_data.view[1].xyz, r_data.view[2].xyz)) * (r_data.proj_inv * _e24).xyz};
     return vs_mainOutput { _tmp.position, _tmp.uv };
 }
 
