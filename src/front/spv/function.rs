@@ -201,16 +201,30 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             for &v_id in ep.variable_ids.iter() {
                 let lvar = self.lookup_variable.lookup(v_id)?;
                 if let super::Variable::Input(ref arg) = lvar.inner {
+                    let arg_expr =
+                        function
+                            .expressions
+                            .append(crate::Expression::FunctionArgument(
+                                function.arguments.len() as u32,
+                            ));
+                    let load_expr = if arg.ty == module.global_variables[lvar.handle].ty {
+                        arg_expr
+                    } else {
+                        // The only case where the type is different is if we need to treat
+                        // unsigned integer as signed.
+                        function.expressions.append(crate::Expression::As {
+                            expr: arg_expr,
+                            kind: crate::ScalarKind::Sint,
+                            convert: true,
+                        })
+                    };
                     function.body.push(crate::Statement::Store {
                         pointer: function
                             .expressions
                             .append(crate::Expression::GlobalVariable(lvar.handle)),
-                        value: function
-                            .expressions
-                            .append(crate::Expression::FunctionArgument(
-                                function.arguments.len() as u32,
-                            )),
+                        value: load_expr,
                     });
+
                     let mut arg = arg.clone();
                     if ep.stage == crate::ShaderStage::Fragment {
                         if let Some(crate::Binding::Location {

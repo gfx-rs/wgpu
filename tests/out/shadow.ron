@@ -1543,10 +1543,10 @@
                 )),
                 local_variables: [],
                 expressions: [
-                    GlobalVariable(6),
                     FunctionArgument(0),
-                    GlobalVariable(5),
+                    GlobalVariable(6),
                     FunctionArgument(1),
+                    GlobalVariable(5),
                     GlobalVariable(7),
                     Load(
                         pointer: 5,
@@ -1554,12 +1554,12 @@
                 ],
                 body: [
                     Store(
-                        pointer: 1,
-                        value: 2,
+                        pointer: 2,
+                        value: 1,
                     ),
                     Store(
-                        pointer: 3,
-                        value: 4,
+                        pointer: 4,
+                        value: 3,
                     ),
                     Call(
                         function: 2,

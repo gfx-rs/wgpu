@@ -2803,11 +2803,8 @@
                         ),
                     ),
                     ref_count: 1,
-                    assignable_global: Some(6),
-                    ty: Value(Pointer(
-                        base: 2,
-                        class: Private,
-                    )),
+                    assignable_global: None,
+                    ty: Handle(2),
                 ),
                 (
                     uniformity: (
@@ -2817,12 +2814,26 @@
                         ),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(2),
+                    assignable_global: Some(6),
+                    ty: Value(Pointer(
+                        base: 2,
+                        class: Private,
+                    )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(4),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(4),
                         requirements: (
                             bits: 0,
                         ),
@@ -2833,17 +2844,6 @@
                         base: 4,
                         class: Private,
                     )),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(4),
-                        requirements: (
-                            bits: 0,
-                        ),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(4),
                 ),
                 (
                     uniformity: (

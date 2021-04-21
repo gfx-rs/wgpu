@@ -3039,17 +3039,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         };
         let dec = self.future_decor.remove(&id).unwrap_or_default();
 
-        let mut effective_ty = self.lookup_type.lookup(type_id)?.handle;
-        let is_storage = match module.types[effective_ty].inner {
+        let original_ty = self.lookup_type.lookup(type_id)?.handle;
+        let (effective_ty, is_storage) = match module.types[original_ty].inner {
             crate::TypeInner::Pointer { base, class } => {
-                effective_ty = base;
-                class == crate::StorageClass::Storage
+                (base, class == crate::StorageClass::Storage)
             }
             crate::TypeInner::Image {
                 class: crate::ImageClass::Storage(_),
                 ..
-            } => true,
-            _ => false,
+            } => (original_ty, true),
+            _ => (original_ty, false),
         };
         let ext_class = if self.lookup_storage_buffer_types.contains(&effective_ty) {
             ExtendedClass::Global(crate::StorageClass::Storage)
@@ -3084,6 +3083,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
             ExtendedClass::Input => {
                 let binding = dec.io_binding()?;
+                let mut unsigned_ty = effective_ty;
                 if let crate::Binding::BuiltIn(built_in) = binding {
                     let needs_inner_uint = match built_in {
                         crate::BuiltIn::BaseInstance
@@ -3109,8 +3109,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         needs_inner_uint,
                         module.types[effective_ty].inner.scalar_kind(),
                     ) {
-                        log::warn!("Treating {:?} as unsigned", built_in);
-                        effective_ty = module
+                        unsigned_ty = module
                             .types
                             .fetch_or_append(crate::Type { name: None, inner });
                     }
@@ -3126,7 +3125,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 };
                 let inner = Variable::Input(crate::FunctionArgument {
                     name: dec.name,
-                    ty: effective_ty,
+                    ty: unsigned_ty,
                     binding: Some(binding),
                 });
                 (inner, var)
