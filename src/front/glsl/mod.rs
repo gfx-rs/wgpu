@@ -1,3 +1,7 @@
+pub use error::ErrorKind;
+pub use parser::Token;
+pub use token::TokenMetadata;
+
 use crate::{FastHashMap, Module, ShaderStage};
 
 mod lex;
