@@ -120,6 +120,7 @@ fn main() {
 
         let mut resize_desc = None;
         let mut frame_count = 0;
+        let mut done = false;
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
             match event {
@@ -156,7 +157,13 @@ fn main() {
                         Some(action) => {
                             gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
                         }
-                        None => break,
+                        None => {
+                            if !done {
+                                println!("Finished the end at frame {}", frame_count);
+                                done = true;
+                            }
+                            break;
+                        }
                     }
                 },
                 Event::WindowEvent { event, .. } => match event {

@@ -56,6 +56,8 @@ impl<B: hal::Backend> Resource for ShaderModule<B> {
 pub enum CreateShaderModuleError {
     #[error("Failed to parse WGSL")]
     Parsing,
+    #[error("Failed to generate the backend-specific code")]
+    Generation,
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
