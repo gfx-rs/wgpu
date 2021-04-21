@@ -1097,7 +1097,7 @@ impl<B: GfxBackend> Device<B> {
                 }
                 Err(error) => {
                     log::error!("Shader error: {}", error);
-                    return Err(pipeline::CreateShaderModuleError::Parsing);
+                    return Err(pipeline::CreateShaderModuleError::Generation);
                 }
             },
             device_id: Stored {
