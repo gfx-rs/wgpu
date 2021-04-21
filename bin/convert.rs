@@ -23,10 +23,10 @@ trait PrettyResult {
 }
 
 fn print_err(error: impl Error) {
-    println!("{}:", error);
+    eprintln!("{}:", error);
     let mut e = error.source();
     while let Some(source) = e {
-        println!("\t{}", source);
+        eprintln!("\t{}", source);
         e = source.source();
     }
 }
@@ -174,7 +174,6 @@ fn main() {
     };
 
     // validate the IR
-    #[allow(unused_variables)]
     let info =
         match naga::valid::Validator::new(naga::valid::ValidationFlags::all()).validate(&module) {
             Ok(info) => Some(info),
@@ -187,11 +186,20 @@ fn main() {
     let output_path = match output_path {
         Some(ref string) => string,
         None => {
-            println!("{:#?}", module);
-            println!("{:#?}", info);
+            if info.is_some() {
+                println!("Validation successful");
+            }
             return;
         }
     };
+    if output_path == "-" {
+        println!("{:#?}", module);
+        if let Some(info) = info {
+            println!();
+            println!("{:#?}", info);
+        }
+        return;
+    }
 
     match Path::new(output_path)
         .extension()

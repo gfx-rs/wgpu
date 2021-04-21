@@ -15,7 +15,7 @@ Front-end       |       Status       | Feature | Notes |
 --------------- | ------------------ | ------- | ----- |
 SPIR-V (binary) | :white_check_mark: | spv-in  |       |
 WGSL            | :white_check_mark: | wgsl-in |       |
-GLSL            | :ok:               | glsl-in | Vulkan flavor is expected |
+GLSL            | :construction:     | glsl-in | Vulkan flavor is expected |
 Rust            |                    |         |       |
 
 Back-end        |       Status       | Feature  | Notes |
@@ -36,7 +36,8 @@ DOT (GraphViz)  | :ok:               | dot-out  | Not a shading language |
 
 Naga includes a default binary target "convert", which allows to test the conversion of different code paths.
 ```bash
-cargo run --features spv-in -- my_shader.spv # dump the IR module to debug output
+cargo run --features wgsl-in -- my_shader.wgsl # validate only
+cargo run --features spv-in -- my_shader.spv - # dump the IR module to debug output
 cargo run --features spv-in,msl-out -- my_shader.spv my_shader.metal --flow-dir flow-dir # convert the SPV to Metal, also dump the SPIR-V flow graph to `flow-dir`
 cargo run --features wgsl-in,glsl-out -- my_shader.wgsl my_shader.vert --profile es310 # convert the WGSL to GLSL vertex stage under ES 3.20 profile
 ```
