@@ -101,7 +101,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     // It is to WebGPU what a descriptor set is to Vulkan.
     // `binding` here refers to the `binding` of a buffer in the shader (`layout(set = 0, binding = 0) buffer`).
 
-    // A pipeline specifices the operation of a shader
+    // A pipeline specifies the operation of a shader
 
     // Instantiates the pipeline.
     let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
