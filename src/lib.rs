@@ -680,18 +680,19 @@ pub enum ImageQuery {
 }
 
 /// Component selection for a vector swizzle.
+#[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum SwizzleComponent {
     ///
-    X,
+    X = 0,
     ///
-    Y,
+    Y = 1,
     ///
-    Z,
+    Z = 2,
     ///
-    W,
+    W = 3,
 }
 
 /// An expression that can be evaluated to obtain a value.

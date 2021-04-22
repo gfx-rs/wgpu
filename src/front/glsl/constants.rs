@@ -70,8 +70,8 @@ impl<'a> ConstantSolver<'a> {
                 size,
                 value: splat_value,
             } => {
-                let tgt = self.solve(splat_value)?;
-                let ty = match self.constants[tgt].inner {
+                let value_constant = self.solve(splat_value)?;
+                let ty = match self.constants[value_constant].inner {
                     ConstantInner::Scalar { ref value, width } => {
                         let kind = value.scalar_kind();
                         self.types
@@ -79,13 +79,15 @@ impl<'a> ConstantSolver<'a> {
                     }
                     ConstantInner::Composite { .. } => None,
                 };
+
+                //TODO: register the new type if needed
+                let ty = ty.ok_or(ConstantSolvingError::DestinationTypeNotFound)?;
                 Ok(self.constants.fetch_or_append(Constant {
                     name: None,
                     specialization: None,
                     inner: ConstantInner::Composite {
-                        //TODO: register the new type if needed
-                        ty: ty.ok_or(ConstantSolvingError::DestinationTypeNotFound)?,
-                        components: vec![tgt; size as usize],
+                        ty,
+                        components: vec![value_constant; size as usize],
                     },
                 }))
             }
@@ -94,8 +96,8 @@ impl<'a> ConstantSolver<'a> {
                 vector: src_vector,
                 pattern,
             } => {
-                let tgt = self.solve(src_vector)?;
-                let (ty, src_components) = match self.constants[tgt].inner {
+                let src_constant = self.solve(src_vector)?;
+                let (ty, src_components) = match self.constants[src_constant].inner {
                     ConstantInner::Scalar { .. } => (None, &[][..]),
                     ConstantInner::Composite {
                         ty,
@@ -114,6 +116,8 @@ impl<'a> ConstantSolver<'a> {
                         _ => (None, &[][..]),
                     },
                 };
+                //TODO: register the new type if needed
+                let ty = ty.ok_or(ConstantSolvingError::DestinationTypeNotFound)?;
                 let components = pattern
                     .iter()
                     .map(|&sc| src_components[sc as usize])
@@ -122,11 +126,7 @@ impl<'a> ConstantSolver<'a> {
                 Ok(self.constants.fetch_or_append(Constant {
                     name: None,
                     specialization: None,
-                    inner: ConstantInner::Composite {
-                        //TODO: register the new type if needed
-                        ty: ty.ok_or(ConstantSolvingError::DestinationTypeNotFound)?,
-                        components,
-                    },
+                    inner: ConstantInner::Composite { ty, components },
                 }))
             }
             Expression::Compose { ty, ref components } => {
@@ -142,15 +142,15 @@ impl<'a> ConstantSolver<'a> {
                 }))
             }
             Expression::Unary { expr, op } => {
-                let tgt = self.solve(expr)?;
+                let expr_constant = self.solve(expr)?;
 
-                self.unary_op(op, tgt)
+                self.unary_op(op, expr_constant)
             }
             Expression::Binary { left, right, op } => {
-                let left = self.solve(left)?;
-                let right = self.solve(right)?;
+                let left_constant = self.solve(left)?;
+                let right_constant = self.solve(right)?;
 
-                self.binary_op(op, left, right)
+                self.binary_op(op, left_constant, right_constant)
             }
             Expression::Math { .. } => todo!(),
             Expression::As {
@@ -158,10 +158,10 @@ impl<'a> ConstantSolver<'a> {
                 expr,
                 kind,
             } => {
-                let tgt = self.solve(expr)?;
+                let expr_constant = self.solve(expr)?;
 
                 if convert {
-                    self.cast(tgt, kind)
+                    self.cast(expr_constant, kind)
                 } else {
                     Err(ConstantSolvingError::Bitcast)
                 }

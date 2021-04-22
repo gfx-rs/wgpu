@@ -1522,7 +1522,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(vector, ctx)?;
                 write!(self.out, ".")?;
                 for &sc in pattern[..size as usize].iter() {
-                    write!(self.out, "{}", COMPONENTS[sc as usize])?;
+                    self.out.write_char(COMPONENTS[sc as usize])?;
                 }
             }
             // `Compose` is pretty simple we just write `type(components)` where `components` is a
