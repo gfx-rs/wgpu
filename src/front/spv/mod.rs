@@ -2034,6 +2034,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::SourceExtension => self.parse_source_extension(inst),
                 Op::Name => self.parse_name(inst),
                 Op::MemberName => self.parse_member_name(inst),
+                Op::ModuleProcessed => self.parse_module_processed(inst),
                 Op::Decorate => self.parse_decorate(inst),
                 Op::MemberDecorate => self.parse_member_decorate(inst),
                 Op::TypeVoid => self.parse_type_void(inst),
@@ -2292,6 +2293,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             .entry((id, member))
             .or_default()
             .name = Some(name);
+        Ok(())
+    }
+
+    fn parse_module_processed(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Name, inst.op)?;
+        inst.expect_at_least(2)?;
+        let (_info, left) = self.next_string(inst.wc - 1)?;
+        //Note: string is ignored
+        if left != 0 {
+            return Err(Error::InvalidOperand);
+        }
         Ok(())
     }
 
