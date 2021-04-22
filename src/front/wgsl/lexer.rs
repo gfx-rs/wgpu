@@ -1,5 +1,4 @@
-use super::{conv, Error, Token, TokenSpan};
-use std::ops::Range;
+use super::{conv, Error, Span, Token, TokenSpan};
 
 fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
     if input.starts_with(what) {
@@ -168,6 +167,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    pub(super) fn _leftover_span(&self) -> Span {
+        self.source.len() - self.input.len()..self.source.len()
+    }
+
     fn peek_token_and_rest(&mut self) -> (TokenSpan<'a>, &'a str) {
         let mut cloned = self.clone();
         let token = cloned.next();
@@ -256,7 +259,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(super) fn next_ident_with_span(&mut self) -> Result<(&'a str, Range<usize>), Error<'a>> {
+    pub(super) fn next_ident_with_span(&mut self) -> Result<(&'a str, Span), Error<'a>> {
         match self.next() {
             (Token::Word(word), span) => Ok((word, span)),
             other => Err(Error::Unexpected(other, "identifier")),
@@ -310,6 +313,24 @@ impl<'a> Lexer<'a> {
         let format = conv::map_storage_format(self.next_ident()?)?;
         self.expect(Token::Paren('>'))?;
         Ok(format)
+    }
+
+    pub(super) fn open_arguments(&mut self) -> Result<(), Error<'a>> {
+        self.expect(Token::Paren('('))
+    }
+
+    pub(super) fn close_arguments(&mut self) -> Result<(), Error<'a>> {
+        let _ = self.skip(Token::Separator(','));
+        self.expect(Token::Paren(')'))
+    }
+
+    pub(super) fn next_argument(&mut self) -> Result<bool, Error<'a>> {
+        let paren = Token::Paren(')');
+        if self.skip(Token::Separator(',')) {
+            Ok(!self.skip(paren))
+        } else {
+            self.expect(paren).map(|()| false)
+        }
     }
 }
 

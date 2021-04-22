@@ -20,7 +20,7 @@ fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
         f32(tmp1) * 4.0 - 1.0,
         f32(tmp2) * 4.0 - 1.0,
         0.0,
-        1.0
+        1.0,
     );
 
     let inv_model_view = transpose(mat3x3<f32>(r_data.view.x.xyz, r_data.view.y.xyz, r_data.view.z.xyz));

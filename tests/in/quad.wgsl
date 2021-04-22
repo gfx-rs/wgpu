@@ -7,7 +7,10 @@ struct VertexOutput {
 };
 
 [[stage(vertex)]]
-fn main([[location(0)]] pos : vec2<f32>, [[location(1)]] uv : vec2<f32>) -> VertexOutput {
+fn main(
+  [[location(0)]] pos : vec2<f32>,
+  [[location(1)]] uv : vec2<f32>,
+) -> VertexOutput {
   return VertexOutput(uv, vec4<f32>(c_scale * pos, 0.0, 1.0));
 }
 
