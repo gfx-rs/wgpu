@@ -1005,10 +1005,11 @@ impl<B: GfxBackend> Device<B> {
                 let module = match parser.parse() {
                     Ok(module) => Some(module),
                     Err(err) => {
-                        // TODO: eventually, when Naga gets support for all features,
-                        // we want to convert these to a hard error,
                         log::warn!("Failed to parse shader SPIR-V code: {:?}", err);
-                        log::warn!("Shader module will not be validated or reflected");
+                        if desc.flags.contains(wgt::ShaderFlags::VALIDATION) {
+                            return Err(pipeline::CreateShaderModuleError::Parsing);
+                        }
+                        log::warn!("\tProceeding unsafely without validation");
                         None
                     }
                 };
