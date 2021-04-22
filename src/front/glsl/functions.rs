@@ -1,7 +1,7 @@
 use super::super::Typifier;
 use crate::{
     proc::ensure_block_returns, BinaryOperator, Block, EntryPoint, Expression, Function,
-    MathFunction, RelationalFunction, SampleLevel, TypeInner,
+    MathFunction, RelationalFunction, SampleLevel, Type, TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind};
@@ -11,20 +11,69 @@ impl Program<'_> {
         match fc.kind {
             FunctionCallKind::TypeConstructor(ty) => {
                 let h = if fc.args.len() == 1 {
-                    let kind = self.module.types[ty].inner.scalar_kind().ok_or_else(|| {
+                    let is_vec = match *self.resolve_type(fc.args[0].expression)? {
+                        TypeInner::Vector { .. } => true,
+                        _ => false,
+                    };
+                    let inner = &self.module.types[ty].inner;
+                    let kind = inner.scalar_kind().ok_or_else(|| {
                         ErrorKind::SemanticError("Can only cast to scalar or vector".into())
                     })?;
-                    self.context.expressions.append(Expression::As {
+                    let val = self.context.expressions.append(Expression::As {
                         kind,
                         expr: fc.args[0].expression,
                         convert: true,
-                    })
+                    });
+
+                    match *inner {
+                        TypeInner::Vector { size, .. } if !is_vec => {
+                            let components = std::iter::repeat(val).take(size as usize).collect();
+
+                            self.context
+                                .expressions
+                                .append(Expression::Compose { ty, components })
+                        }
+                        TypeInner::Matrix {
+                            columns,
+                            rows,
+                            width,
+                        } => {
+                            let column = if is_vec {
+                                val
+                            } else {
+                                let vec_ty = self.module.types.fetch_or_append(Type {
+                                    name: None,
+                                    inner: TypeInner::Vector {
+                                        size: rows,
+                                        kind,
+                                        width,
+                                    },
+                                });
+                                let rows = std::iter::repeat(val).take(rows as usize).collect();
+
+                                self.context.expressions.append(Expression::Compose {
+                                    ty: vec_ty,
+                                    components: rows,
+                                })
+                            };
+
+                            let columns =
+                                std::iter::repeat(column).take(columns as usize).collect();
+
+                            self.context.expressions.append(Expression::Compose {
+                                ty,
+                                components: columns,
+                            })
+                        }
+                        _ => val,
+                    }
                 } else {
                     self.context.expressions.append(Expression::Compose {
                         ty,
                         components: fc.args.iter().map(|a| a.expression).collect(),
                     })
                 };
+
                 Ok(ExpressionRule {
                     expression: h,
                     statements: fc
