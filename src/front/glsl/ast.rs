@@ -235,7 +235,17 @@ impl Context {
     /// Add variable to current scope
     pub fn add_local_var(&mut self, name: String, handle: Handle<Expression>) {
         if let Some(current) = self.scopes.last_mut() {
-            (*current).insert(name, handle);
+            let expr = self
+                .expressions
+                .append(Expression::Load { pointer: handle });
+            (*current).insert(name, expr);
+        }
+    }
+
+    /// Add function argument to current scope
+    pub fn add_function_arg(&mut self, name: String, expr: Handle<Expression>) {
+        if let Some(current) = self.scopes.last_mut() {
+            (*current).insert(name, expr);
         }
     }
 

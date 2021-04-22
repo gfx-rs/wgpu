@@ -1052,7 +1052,7 @@ pomelo! {
         for (pos, arg) in args.into_iter().enumerate() {
             if let Some(name) = arg.name.clone() {
                 let exp = extra.context.expressions.append(Expression::FunctionArgument(pos as u32));
-                extra.context.add_local_var(name, exp);
+                extra.context.add_function_arg(name, exp);
             }
             extra.context.arguments.push(arg);
         }
