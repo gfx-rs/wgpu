@@ -131,6 +131,35 @@ impl Program<'_> {
                             Err(ErrorKind::SemanticError("Bad call to texture".into()))
                         }
                     }
+                    "textureLod" => {
+                        if fc.args.len() != 3 {
+                            return Err(ErrorKind::WrongNumberArgs(name, 3, fc.args.len()));
+                        }
+                        if let Some(sampler) = fc.args[0].sampler {
+                            Ok(ExpressionRule {
+                                expression: self.context.expressions.append(
+                                    Expression::ImageSample {
+                                        image: fc.args[0].expression,
+                                        sampler,
+                                        coordinate: fc.args[1].expression,
+                                        array_index: None, //TODO
+                                        offset: None,      //TODO
+                                        level: SampleLevel::Exact(fc.args[2].expression),
+                                        depth_ref: None,
+                                    },
+                                ),
+                                sampler: None,
+                                statements: fc
+                                    .args
+                                    .into_iter()
+                                    .map(|a| a.statements)
+                                    .flatten()
+                                    .collect(),
+                            })
+                        } else {
+                            Err(ErrorKind::SemanticError("Bad call to textureLod".into()))
+                        }
+                    }
                     "ceil" | "round" | "floor" | "fract" | "trunc" | "sin" | "abs" | "sqrt"
                     | "inversesqrt" | "exp" | "exp2" | "sign" | "transpose" | "inverse"
                     | "normalize" => {
