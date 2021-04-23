@@ -1079,8 +1079,8 @@ pomelo! {
         FunctionArgument { name: Some(n.1), ty, binding: None }
     }
     // parameter_declarator ::= type_specifier(ty) Identifier(ident) array_specifier;
-    parameter_declaration ::= parameter_declarator;
-    parameter_declaration ::= parameter_type_specifier(ty) {
+    parameter_declaration ::= In? parameter_declarator(arg) { arg };
+    parameter_declaration ::= In? parameter_type_specifier(ty) {
         FunctionArgument { name: None, ty, binding: None }
     }
 
