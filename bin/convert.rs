@@ -188,8 +188,10 @@ fn main() {
         None => {
             if info.is_some() {
                 println!("Validation successful");
+                return;
+            } else {
+                std::process::exit(!0);
             }
-            return;
         }
     };
     if output_path == "-" {
