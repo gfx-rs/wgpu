@@ -142,7 +142,9 @@ pub enum BufferAccessError {
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("buffer is not mapped")]
     NotMapped,
-    #[error("buffer map range does not respect `COPY_BUFFER_ALIGNMENT`")]
+    #[error(
+        "buffer map range must start aligned to `MAP_ALIGNMENT` and end to `COPY_BUFFER_ALIGNMENT`"
+    )]
     UnalignedRange,
     #[error("buffer offset invalid: offset {offset} must be multiple of 8")]
     UnalignedOffset { offset: wgt::BufferAddress },
@@ -444,6 +446,8 @@ pub struct Sampler<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
     /// `true` if this is a comparison sampler
     pub(crate) comparison: bool,
+    /// `true` if this is a filtering sampler
+    pub(crate) filtering: bool,
 }
 
 #[derive(Clone, Debug, Error)]

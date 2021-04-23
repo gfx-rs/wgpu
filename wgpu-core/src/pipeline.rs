@@ -111,8 +111,8 @@ pub enum CreateComputePipelineError {
     InvalidLayout,
     #[error("unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
-    #[error(transparent)]
-    Stage(validation::StageError),
+    #[error("error matching shader requirements against the pipeline")]
+    Stage(#[from] validation::StageError),
     #[error("Internal error: {0}")]
     Internal(String),
     #[error(
@@ -197,6 +197,19 @@ pub struct RenderPipelineDescriptor<'a> {
 }
 
 #[derive(Clone, Debug, Error)]
+pub enum ColorStateError {
+    #[error("output is missing")]
+    Missing,
+    #[error("output format {pipeline} is incompatible with the shader {shader}")]
+    IncompatibleFormat {
+        pipeline: validation::NumericType,
+        shader: validation::NumericType,
+    },
+    #[error("blend factors for {0:?} must be `One`")]
+    InvalidMinMaxBlendFactors(wgt::BlendComponent),
+}
+
+#[derive(Clone, Debug, Error)]
 pub enum CreateRenderPipelineError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -204,10 +217,8 @@ pub enum CreateRenderPipelineError {
     InvalidLayout,
     #[error("unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
-    #[error("missing output at index {index}")]
-    MissingOutput { index: u8 },
-    #[error("incompatible output format at index {index}")]
-    IncompatibleOutputFormat { index: u8 },
+    #[error("color state [{0}] is invalid")]
+    ColorState(u8, #[source] ColorStateError),
     #[error("invalid sample count {0}")]
     InvalidSampleCount(u32),
     #[error("the number of vertex buffers {given} exceeds the limit {limit}")]
@@ -235,13 +246,13 @@ pub enum CreateRenderPipelineError {
     ConservativeRasterizationNonFillPolygonMode,
     #[error("missing required device features {0:?}")]
     MissingFeature(wgt::Features),
-    #[error("error in stage {flag:?}")]
+    #[error("error matching {stage:?} shader requirements against the pipeline")]
     Stage {
-        flag: wgt::ShaderStage,
+        stage: wgt::ShaderStage,
         #[source]
         error: validation::StageError,
     },
-    #[error("Internal error in stage {stage:?}: {error}")]
+    #[error("Internal error in {stage:?} shader: {error}")]
     Internal {
         stage: wgt::ShaderStage,
         error: String,
@@ -251,7 +262,7 @@ pub enum CreateRenderPipelineError {
 bitflags::bitflags! {
     #[repr(transparent)]
     pub struct PipelineFlags: u32 {
-        const BLEND_COLOR = 1;
+        const BLEND_CONSTANT = 1;
         const STENCIL_REFERENCE = 2;
         const WRITES_DEPTH_STENCIL = 4;
     }

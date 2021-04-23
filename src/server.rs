@@ -234,7 +234,7 @@ trait GlobalExt {
         self_id: id::DeviceId,
         action: DeviceAction,
         error_buf: ErrorBuffer,
-    ) -> Vec<u8>;
+    );
     fn texture_action<B: wgc::hub::GfxBackend>(
         &self,
         self_id: id::TextureId,
@@ -255,8 +255,7 @@ impl GlobalExt for Global {
         self_id: id::DeviceId,
         action: DeviceAction,
         mut error_buf: ErrorBuffer,
-    ) -> Vec<u8> {
-        let mut drop_actions = Vec::new();
+    ) {
         match action {
             DeviceAction::CreateBuffer(id, desc) => {
                 let (_, error) = self.device_create_buffer::<B>(self_id, &desc, id);
@@ -313,19 +312,10 @@ impl GlobalExt for Global {
                         root_id: imp.pipeline,
                         group_ids: &imp.bind_groups,
                     });
-                let (_, group_count, error) =
+                let (_, error) =
                     self.device_create_compute_pipeline::<B>(self_id, &desc, id, implicit_ids);
                 if let Some(err) = error {
                     error_buf.init(err);
-                }
-                if let Some(ref imp) = implicit {
-                    for &bgl_id in imp.bind_groups[group_count as usize..].iter() {
-                        bincode::serialize_into(
-                            &mut drop_actions,
-                            &DropAction::BindGroupLayout(bgl_id),
-                        )
-                        .unwrap();
-                    }
                 }
             }
             DeviceAction::CreateRenderPipeline(id, desc, implicit) => {
@@ -335,19 +325,10 @@ impl GlobalExt for Global {
                         root_id: imp.pipeline,
                         group_ids: &imp.bind_groups,
                     });
-                let (_, group_count, error) =
+                let (_, error) =
                     self.device_create_render_pipeline::<B>(self_id, &desc, id, implicit_ids);
                 if let Some(err) = error {
                     error_buf.init(err);
-                }
-                if let Some(ref imp) = implicit {
-                    for &bgl_id in imp.bind_groups[group_count as usize..].iter() {
-                        bincode::serialize_into(
-                            &mut drop_actions,
-                            &DropAction::BindGroupLayout(bgl_id),
-                        )
-                        .unwrap();
-                    }
                 }
             }
             DeviceAction::CreateRenderBundle(_id, desc, _base) => {
@@ -360,7 +341,6 @@ impl GlobalExt for Global {
                 }
             }
         }
-        drop_actions
     }
 
     fn texture_action<B: wgc::hub::GfxBackend>(
@@ -478,12 +458,10 @@ pub unsafe extern "C" fn wgpu_server_device_action(
     global: &Global,
     self_id: id::DeviceId,
     byte_buf: &ByteBuf,
-    drop_byte_buf: &mut ByteBuf,
     error_buf: ErrorBuffer,
 ) {
     let action = bincode::deserialize(byte_buf.as_slice()).unwrap();
-    let drop_actions = gfx_select!(self_id => global.device_action(self_id, action, error_buf));
-    *drop_byte_buf = ByteBuf::from_vec(drop_actions);
+    gfx_select!(self_id => global.device_action(self_id, action, error_buf));
 }
 
 #[no_mangle]

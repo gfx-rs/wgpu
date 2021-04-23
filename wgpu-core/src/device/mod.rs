@@ -11,7 +11,7 @@ use crate::{
     id, instance,
     memory_init_tracker::{MemoryInitKind, MemoryInitTracker, MemoryInitTrackerAction},
     pipeline, resource, swap_chain,
-    track::{BufferState, TextureSelector, TextureState, TrackerSet},
+    track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers, LifeGuard, MultiRefCount, PrivateFeatures, Stored,
     SubmissionIndex, MAX_BIND_GROUPS,
@@ -55,6 +55,8 @@ pub const MAX_MIP_LEVELS: u32 = 16;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const SHADER_STAGE_COUNT: usize = 3;
+
+const IMPLICIT_FAILURE: &str = "failed implicit";
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 
@@ -864,6 +866,8 @@ impl<B: GfxBackend> Device<B> {
                     conv::map_texture_view_dimension(view_dim),
                     conv::map_texture_format(format, self.private_features),
                     hal::format::Swizzle::NO,
+                    // conservatively assume the same usage
+                    conv::map_texture_usage(texture.usage, aspects),
                     range,
                 )
                 .or(Err(resource::CreateTextureViewError::OutOfMemory))?
@@ -940,10 +944,14 @@ impl<B: GfxBackend> Device<B> {
             Some(wgt::SamplerBorderColor::OpaqueWhite) => hal::image::BorderColor::OpaqueWhite,
         };
 
+        let filtering = [desc.min_filter, desc.mag_filter, desc.mipmap_filter]
+            .contains(&wgt::FilterMode::Linear);
+
         let info = hal::image::SamplerDesc {
             min_filter: conv::map_filter(desc.min_filter),
             mag_filter: conv::map_filter(desc.mag_filter),
             mip_filter: conv::map_filter(desc.mipmap_filter),
+            reduction_mode: hal::image::ReductionMode::WeightedAverage,
             wrap_mode: (
                 conv::map_wrap(desc.address_modes[0]),
                 conv::map_wrap(desc.address_modes[1]),
@@ -975,6 +983,7 @@ impl<B: GfxBackend> Device<B> {
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
             comparison: info.comparison.is_some(),
+            filtering,
         })
     }
 
@@ -1412,7 +1421,7 @@ impl<B: GfxBackend> Device<B> {
                 Br::Sampler(id) => {
                     match decl.ty {
                         wgt::BindingType::Sampler {
-                            filtering: _,
+                            filtering,
                             comparison,
                         } => {
                             let sampler = used
@@ -1422,7 +1431,19 @@ impl<B: GfxBackend> Device<B> {
 
                             // Check the actual sampler to also (not) be a comparison sampler
                             if sampler.comparison != comparison {
-                                return Err(Error::WrongSamplerComparison);
+                                return Err(Error::WrongSamplerComparison {
+                                    binding,
+                                    layout_cmp: comparison,
+                                    sampler_cmp: sampler.comparison,
+                                });
+                            }
+                            // Check the actual sampler to be non-filtering, if required
+                            if sampler.filtering && !filtering {
+                                return Err(Error::WrongSamplerFiltering {
+                                    binding,
+                                    layout_flt: filtering,
+                                    sampler_flt: sampler.filtering,
+                                });
                             }
 
                             SmallVec::from([hal::pso::Descriptor::Sampler(&sampler.raw)])
@@ -1559,7 +1580,7 @@ impl<B: GfxBackend> Device<B> {
                                     view.selector.clone(),
                                     internal_use,
                                 )
-                                .unwrap();
+                                .map_err(UsageConflict::from)?;
                             check_texture_usage(texture.usage, pub_usage)?;
                             let image_layout =
                                 conv::map_texture_state(internal_use, view.aspects).1;
@@ -1623,7 +1644,7 @@ impl<B: GfxBackend> Device<B> {
                                             view.selector.clone(),
                                             internal_use,
                                         )
-                                        .unwrap();
+                                        .map_err(UsageConflict::from)?;
                                     check_texture_usage(texture.usage, pub_usage)?;
                                     let image_layout =
                                         conv::map_texture_state(internal_use, view.aspects).1;
@@ -1800,13 +1821,7 @@ impl<B: GfxBackend> Device<B> {
         mut derived_group_layouts: ArrayVec<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>,
         bgl_guard: &mut Storage<binding_model::BindGroupLayout<B>, id::BindGroupLayoutId>,
         pipeline_layout_guard: &mut Storage<binding_model::PipelineLayout<B>, id::PipelineLayoutId>,
-    ) -> Result<
-        (id::PipelineLayoutId, pipeline::ImplicitBindGroupCount),
-        pipeline::ImplicitLayoutError,
-    > {
-        let derived_bind_group_count =
-            derived_group_layouts.len() as pipeline::ImplicitBindGroupCount;
-
+    ) -> Result<id::PipelineLayoutId, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
             .map_or(false, |map| map.is_empty())
@@ -1821,9 +1836,7 @@ impl<B: GfxBackend> Device<B> {
                 ids.group_ids.len(),
                 derived_group_layouts.len()
             );
-            return Err(pipeline::ImplicitLayoutError::MissingIds(
-                derived_bind_group_count,
-            ));
+            return Err(pipeline::ImplicitLayoutError::MissingIds(group_count as _));
         }
 
         for (bgl_id, map) in ids.group_ids.iter_mut().zip(derived_group_layouts) {
@@ -1833,7 +1846,7 @@ impl<B: GfxBackend> Device<B> {
                 }
                 None => {
                     let bgl = self.create_bind_group_layout(self_id, None, map)?;
-                    bgl_guard.insert(*bgl_id, bgl);
+                    bgl_guard.force_replace(*bgl_id, bgl);
                 }
             };
         }
@@ -1844,8 +1857,8 @@ impl<B: GfxBackend> Device<B> {
             push_constant_ranges: Cow::Borrowed(&[]), //TODO?
         };
         let layout = self.create_pipeline_layout(self_id, &layout_desc, bgl_guard)?;
-        pipeline_layout_guard.insert(ids.root_id, layout);
-        Ok((ids.root_id, derived_bind_group_count))
+        pipeline_layout_guard.force_replace(ids.root_id, layout);
+        Ok(ids.root_id)
     }
 
     fn create_compute_pipeline<G: GlobalIdentityHandlerFactory>(
@@ -1855,14 +1868,20 @@ impl<B: GfxBackend> Device<B> {
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<B, G>,
         token: &mut Token<Self>,
-    ) -> Result<
-        (
-            pipeline::ComputePipeline<B>,
-            pipeline::ImplicitBindGroupCount,
-            id::PipelineLayoutId,
-        ),
-        pipeline::CreateComputePipelineError,
-    > {
+    ) -> Result<pipeline::ComputePipeline<B>, pipeline::CreateComputePipelineError> {
+        //TODO: only lock mutable if the layout is derived
+        let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
+        let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
+
+        // This has to be done first, or otherwise the IDs may be pointing to entries
+        // that are not even in the storage.
+        if let Some(ref ids) = implicit_context {
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            for &bgl_id in ids.group_ids.iter() {
+                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+            }
+        }
+
         if !self
             .downlevel
             .flags
@@ -1871,10 +1890,6 @@ impl<B: GfxBackend> Device<B> {
             return Err(pipeline::CreateComputePipelineError::ComputeShadersUnsupported);
         }
 
-        //TODO: only lock mutable if the layout is derived
-        let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
-        let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
-
         let mut derived_group_layouts =
             ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
 
@@ -1882,9 +1897,9 @@ impl<B: GfxBackend> Device<B> {
         let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
         let entry_point_name = &desc.stage.entry_point;
-        let shader_module = shader_module_guard.get(desc.stage.module).map_err(|_| {
-            pipeline::CreateComputePipelineError::Stage(validation::StageError::InvalidModule)
-        })?;
+        let shader_module = shader_module_guard
+            .get(desc.stage.module)
+            .map_err(|_| validation::StageError::InvalidModule)?;
 
         let flag = wgt::ShaderStage::COMPUTE;
         if let Some(ref interface) = shader_module.interface {
@@ -1902,15 +1917,13 @@ impl<B: GfxBackend> Device<B> {
                     None
                 }
             };
-            let _ = interface
-                .check_stage(
-                    provided_layouts.as_ref().map(|p| p.as_slice()),
-                    &mut derived_group_layouts,
-                    &entry_point_name,
-                    flag,
-                    io,
-                )
-                .map_err(pipeline::CreateComputePipelineError::Stage)?;
+            let _ = interface.check_stage(
+                provided_layouts.as_ref().map(|p| p.as_slice()),
+                &mut derived_group_layouts,
+                &entry_point_name,
+                flag,
+                io,
+            )?;
         } else if desc.layout.is_none() {
             return Err(pipeline::ImplicitLayoutError::ReflectionError(flag).into());
         }
@@ -1926,8 +1939,8 @@ impl<B: GfxBackend> Device<B> {
         // TODO
         let parent = hal::pso::BasePipeline::None;
 
-        let (pipeline_layout_id, derived_bind_group_count) = match desc.layout {
-            Some(id) => (id, 0),
+        let pipeline_layout_id = match desc.layout {
+            Some(id) => id,
             None => self.derive_pipeline_layout(
                 self_id,
                 implicit_context,
@@ -1976,7 +1989,7 @@ impl<B: GfxBackend> Device<B> {
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         };
-        Ok((pipeline, derived_bind_group_count, pipeline_layout_id))
+        Ok(pipeline)
     }
 
     fn create_render_pipeline<G: GlobalIdentityHandlerFactory>(
@@ -1986,17 +1999,19 @@ impl<B: GfxBackend> Device<B> {
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<B, G>,
         token: &mut Token<Self>,
-    ) -> Result<
-        (
-            pipeline::RenderPipeline<B>,
-            pipeline::ImplicitBindGroupCount,
-            id::PipelineLayoutId,
-        ),
-        pipeline::CreateRenderPipelineError,
-    > {
+    ) -> Result<pipeline::RenderPipeline<B>, pipeline::CreateRenderPipelineError> {
         //TODO: only lock mutable if the layout is derived
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
         let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
+
+        // This has to be done first, or otherwise the IDs may be pointing to entries
+        // that are not even in the storage.
+        if let Some(ref ids) = implicit_context {
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            for &bgl_id in ids.group_ids.iter() {
+                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+            }
+        }
 
         let mut derived_group_layouts =
             ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
@@ -2080,7 +2095,7 @@ impl<B: GfxBackend> Device<B> {
                 });
                 io.insert(
                     attribute.shader_location,
-                    validation::NumericType::from_vertex_format(attribute.format),
+                    validation::InterfaceVar::vertex_attribute(attribute.format),
                 );
             }
         }
@@ -2112,27 +2127,6 @@ impl<B: GfxBackend> Device<B> {
             );
         }
 
-        let input_assembler = conv::map_primitive_state_to_input_assembler(&desc.primitive);
-
-        let blender = hal::pso::BlendDesc {
-            logic_op: None, // TODO
-            targets: color_states
-                .iter()
-                .map(conv::map_color_target_state)
-                .collect(),
-        };
-        let depth_stencil = depth_stencil_state
-            .map(conv::map_depth_stencil_state)
-            .unwrap_or_default();
-
-        // TODO
-        let baked_states = hal::pso::BakedStates {
-            viewport: None,
-            scissor: None,
-            blend_color: None,
-            depth_bounds: None,
-        };
-
         if desc.primitive.clamp_depth && !self.features.contains(wgt::Features::DEPTH_CLAMPING) {
             return Err(pipeline::CreateRenderPipelineError::MissingFeature(
                 wgt::Features::DEPTH_CLAMPING,
@@ -2161,6 +2155,29 @@ impl<B: GfxBackend> Device<B> {
                 pipeline::CreateRenderPipelineError::ConservativeRasterizationNonFillPolygonMode,
             );
         }
+
+        let input_assembler = conv::map_primitive_state_to_input_assembler(&desc.primitive);
+
+        let mut blender = hal::pso::BlendDesc {
+            logic_op: None,
+            targets: Vec::with_capacity(color_states.len()),
+        };
+        for (i, cs) in color_states.iter().enumerate() {
+            let bt = conv::map_color_target_state(cs)
+                .map_err(|error| pipeline::CreateRenderPipelineError::ColorState(i as u8, error))?;
+            blender.targets.push(bt);
+        }
+
+        let depth_stencil = depth_stencil_state
+            .map(conv::map_depth_stencil_state)
+            .unwrap_or_default();
+
+        let baked_states = hal::pso::BakedStates {
+            viewport: None,
+            scissor: None,
+            blend_constants: None,
+            depth_bounds: None,
+        };
 
         if desc.layout.is_none() {
             for _ in 0..self.limits.max_bind_groups {
@@ -2226,19 +2243,22 @@ impl<B: GfxBackend> Device<B> {
 
             let shader_module = shader_module_guard.get(stage.module).map_err(|_| {
                 pipeline::CreateRenderPipelineError::Stage {
-                    flag,
+                    stage: flag,
                     error: validation::StageError::InvalidModule,
                 }
             })?;
 
             if let Some(ref interface) = shader_module.interface {
                 let provided_layouts = match desc.layout {
-                    Some(pipeline_layout_id) => Some(Device::get_introspection_bind_group_layouts(
-                        pipeline_layout_guard
+                    Some(pipeline_layout_id) => {
+                        let pipeline_layout = pipeline_layout_guard
                             .get(pipeline_layout_id)
-                            .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?,
-                        &*bgl_guard,
-                    )),
+                            .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
+                        Some(Device::get_introspection_bind_group_layouts(
+                            pipeline_layout,
+                            &*bgl_guard,
+                        ))
+                    }
                     None => None,
                 };
 
@@ -2250,7 +2270,10 @@ impl<B: GfxBackend> Device<B> {
                         flag,
                         io,
                     )
-                    .map_err(|error| pipeline::CreateRenderPipelineError::Stage { flag, error })?;
+                    .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
+                        stage: flag,
+                        error,
+                    })?;
                 validated_stages |= flag;
             }
 
@@ -2270,7 +2293,7 @@ impl<B: GfxBackend> Device<B> {
                     shader_module_guard
                         .get(fragment.stage.module)
                         .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
-                            flag,
+                            stage: flag,
                             error: validation::StageError::InvalidModule,
                         })?;
 
@@ -2295,7 +2318,7 @@ impl<B: GfxBackend> Device<B> {
                                 io,
                             )
                             .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
-                                flag,
+                                stage: flag,
                                 error,
                             })?;
                         validated_stages |= flag;
@@ -2314,26 +2337,26 @@ impl<B: GfxBackend> Device<B> {
         if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
             for (i, state) in color_states.iter().enumerate() {
                 match io.get(&(i as wgt::ShaderLocation)) {
-                    Some(output) if validation::check_texture_format(state.format, output) => {}
-                    Some(output) => {
-                        log::warn!(
-                            "Incompatible fragment output[{}] from shader: {:?}, expected {:?}",
-                            i,
-                            output,
-                            state.format,
-                        );
-                        return Err(
-                            pipeline::CreateRenderPipelineError::IncompatibleOutputFormat {
-                                index: i as u8,
+                    Some(ref output) => {
+                        validation::check_texture_format(state.format, &output.ty).map_err(
+                            |pipeline| {
+                                pipeline::CreateRenderPipelineError::ColorState(
+                                    i as u8,
+                                    pipeline::ColorStateError::IncompatibleFormat {
+                                        pipeline,
+                                        shader: output.ty,
+                                    },
+                                )
                             },
-                        );
+                        )?;
                     }
                     None if state.write_mask.is_empty() => {}
                     None => {
                         log::warn!("Missing fragment output[{}], expected {:?}", i, state,);
-                        return Err(pipeline::CreateRenderPipelineError::MissingOutput {
-                            index: i as u8,
-                        });
+                        return Err(pipeline::CreateRenderPipelineError::ColorState(
+                            i as u8,
+                            pipeline::ColorStateError::Missing,
+                        ));
                     }
                 }
             }
@@ -2360,8 +2383,8 @@ impl<B: GfxBackend> Device<B> {
         // TODO
         let parent = hal::pso::BasePipeline::None;
 
-        let (pipeline_layout_id, derived_bind_group_count) = match desc.layout {
-            Some(id) => (id, 0),
+        let pipeline_layout_id = match desc.layout {
+            Some(id) => id,
             None => self.derive_pipeline_layout(
                 self_id,
                 implicit_context,
@@ -2432,8 +2455,8 @@ impl<B: GfxBackend> Device<B> {
         let mut flags = pipeline::PipelineFlags::empty();
         for state in color_states.iter() {
             if let Some(ref bs) = state.blend {
-                if bs.color.uses_color() | bs.alpha.uses_color() {
-                    flags |= pipeline::PipelineFlags::BLEND_COLOR;
+                if bs.color.uses_constant() | bs.alpha.uses_constant() {
+                    flags |= pipeline::PipelineFlags::BLEND_CONSTANT;
                 }
             }
         }
@@ -2462,7 +2485,7 @@ impl<B: GfxBackend> Device<B> {
             vertex_strides,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         };
-        Ok((pipeline, derived_bind_group_count, pipeline_layout_id))
+        Ok(pipeline)
     }
 
     fn wait_for_submit(
@@ -3376,7 +3399,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut entry_map = FastHashMap::default();
             for entry in desc.entries.iter() {
-                if entry_map.insert(entry.binding, entry.clone()).is_some() {
+                if entry_map.insert(entry.binding, *entry).is_some() {
                     break 'outer binding_model::CreateBindGroupLayoutError::ConflictBinding(
                         entry.binding,
                     );
@@ -4009,7 +4032,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
     ) -> (
         id::RenderPipelineId,
-        pipeline::ImplicitBindGroupCount,
         Option<pipeline::CreateRenderPipelineError>,
     ) {
         profiling::scope!("Device::create_render_pipeline");
@@ -4035,19 +4057,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let (pipeline, derived_bind_group_count, _layout_id) = match device
-                .create_render_pipeline(device_id, desc, implicit_context, &hub, &mut token)
-            {
+            let pipeline = match device.create_render_pipeline(
+                device_id,
+                desc,
+                implicit_context,
+                &hub,
+                &mut token,
+            ) {
                 Ok(pair) => pair,
                 Err(e) => break e,
             };
 
             let id = fid.assign(pipeline, &mut token);
-            return (id.0, derived_bind_group_count, None);
+            return (id.0, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, 0, Some(error))
+        (id, Some(error))
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
@@ -4137,7 +4163,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
     ) -> (
         id::ComputePipelineId,
-        pipeline::ImplicitBindGroupCount,
         Option<pipeline::CreateComputePipelineError>,
     ) {
         profiling::scope!("Device::create_compute_pipeline");
@@ -4163,19 +4188,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let (pipeline, derived_bind_group_count, _layout_id) = match device
-                .create_compute_pipeline(device_id, desc, implicit_context, &hub, &mut token)
-            {
+            let pipeline = match device.create_compute_pipeline(
+                device_id,
+                desc,
+                implicit_context,
+                &hub,
+                &mut token,
+            ) {
                 Ok(pair) => pair,
                 Err(e) => break e,
             };
 
             let id = fid.assign(pipeline, &mut token);
-            return (id.0, derived_bind_group_count, None);
+            return (id.0, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, 0, Some(error))
+        (id, Some(error))
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
@@ -4525,9 +4554,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             HostMap::Write => (wgt::BufferUsage::MAP_WRITE, resource::BufferUse::MAP_WRITE),
         };
 
-        if range.start % wgt::COPY_BUFFER_ALIGNMENT != 0
-            || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
-        {
+        if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(resource::BufferAccessError::UnalignedRange);
         }
 
@@ -4597,10 +4624,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             buffer.size - offset
         };
 
-        if offset % 8 != 0 {
+        if offset % wgt::MAP_ALIGNMENT != 0 {
             return Err(resource::BufferAccessError::UnalignedOffset { offset });
         }
-        if range_size % 4 != 0 {
+        if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(resource::BufferAccessError::UnalignedRangeSize { range_size });
         }
 

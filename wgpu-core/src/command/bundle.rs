@@ -478,7 +478,7 @@ impl RenderBundleEncoder {
                 | RenderCommand::BeginPipelineStatisticsQuery { .. }
                 | RenderCommand::EndPipelineStatisticsQuery => unimplemented!(),
                 RenderCommand::ExecuteBundle(_)
-                | RenderCommand::SetBlendColor(_)
+                | RenderCommand::SetBlendConstant(_)
                 | RenderCommand::SetStencilReference(_)
                 | RenderCommand::SetViewport { .. }
                 | RenderCommand::SetScissor(_) => unreachable!("not supported by a render bundle"),
@@ -533,6 +533,8 @@ pub enum CreateRenderBundleError {
 pub enum ExecutionError {
     #[error("buffer {0:?} is destroyed")]
     DestroyedBuffer(id::BufferId),
+    #[error("using {0} in a render bundle is not implemented")]
+    Unimplemented(&'static str),
 }
 
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
@@ -733,15 +735,21 @@ impl RenderBundle {
                     cmd_buf.draw_indexed_indirect(buffer, offset, 1, 0);
                 }
                 RenderCommand::MultiDrawIndirect { .. }
-                | RenderCommand::MultiDrawIndirectCount { .. } => unimplemented!(),
-                RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
-                RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
-                RenderCommand::PopDebugGroup => unimplemented!(),
+                | RenderCommand::MultiDrawIndirectCount { .. } => {
+                    return Err(ExecutionError::Unimplemented("multi-draw-indirect"))
+                }
+                RenderCommand::PushDebugGroup { .. }
+                | RenderCommand::InsertDebugMarker { .. }
+                | RenderCommand::PopDebugGroup => {
+                    return Err(ExecutionError::Unimplemented("debug-markers"))
+                }
                 RenderCommand::WriteTimestamp { .. }
                 | RenderCommand::BeginPipelineStatisticsQuery { .. }
-                | RenderCommand::EndPipelineStatisticsQuery => unimplemented!(),
+                | RenderCommand::EndPipelineStatisticsQuery => {
+                    return Err(ExecutionError::Unimplemented("queries"))
+                }
                 RenderCommand::ExecuteBundle(_)
-                | RenderCommand::SetBlendColor(_)
+                | RenderCommand::SetBlendConstant(_)
                 | RenderCommand::SetStencilReference(_)
                 | RenderCommand::SetViewport { .. }
                 | RenderCommand::SetScissor(_) => unreachable!(),

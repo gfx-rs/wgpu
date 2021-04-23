@@ -2,9 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{binding_model::BindEntryMap, FastHashMap};
+use crate::{binding_model::BindEntryMap, FastHashMap, FastHashSet};
 use naga::valid::GlobalUse;
-use std::collections::hash_map::Entry;
+use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
@@ -25,8 +25,8 @@ enum ResourceType {
 
 #[derive(Debug)]
 struct Resource {
-    group: u32,
-    binding: u32,
+    name: Option<String>,
+    bind: naga::ResourceBinding,
     ty: ResourceType,
     class: naga::StorageClass,
 }
@@ -38,6 +38,16 @@ enum NumericDimension {
     Matrix(naga::VectorSize, naga::VectorSize),
 }
 
+impl fmt::Display for NumericDimension {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Self::Scalar => write!(f, ""),
+            Self::Vector(size) => write!(f, "x{}", size as u8),
+            Self::Matrix(columns, rows) => write!(f, "x{}{}", columns as u8, rows as u8),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct NumericType {
     dim: NumericDimension,
@@ -45,9 +55,42 @@ pub struct NumericType {
     width: naga::Bytes,
 }
 
+impl fmt::Display for NumericType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}{}{}", self.kind, self.width * 8, self.dim)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct InterfaceVar {
+    pub ty: NumericType,
+    interpolation: Option<naga::Interpolation>,
+    sampling: Option<naga::Sampling>,
+}
+
+impl InterfaceVar {
+    pub fn vertex_attribute(format: wgt::VertexFormat) -> Self {
+        InterfaceVar {
+            ty: NumericType::from_vertex_format(format),
+            interpolation: None,
+            sampling: None,
+        }
+    }
+}
+
+impl fmt::Display for InterfaceVar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{} interpolated as {:?} with sampling {:?}",
+            self.ty, self.interpolation, self.sampling
+        )
+    }
+}
+
 #[derive(Debug)]
 enum Varying {
-    Local { location: u32, ty: NumericType },
+    Local { location: u32, iv: InterfaceVar },
     BuiltIn(naga::BuiltIn),
 }
 
@@ -63,6 +106,7 @@ struct EntryPoint {
     outputs: Vec<Varying>,
     resources: Vec<(naga::Handle<Resource>, GlobalUse)>,
     spec_constants: Vec<SpecializationConstant>,
+    sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
 }
 
 #[derive(Debug)]
@@ -117,8 +161,11 @@ pub enum BindingError {
     Missing,
     #[error("visibility flags don't include the shader stage")]
     Invisible,
-    #[error("load/store access flags {0:?} don't match the shader")]
-    WrongUsage(GlobalUse),
+    #[error("The shader requires the load/store access flags {required:?} but only {allowed:?} is allowed")]
+    WrongUsage {
+        required: GlobalUse,
+        allowed: GlobalUse,
+    },
     #[error("type on the shader side does not match the pipeline binding")]
     WrongType,
     #[error("buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
@@ -143,11 +190,23 @@ pub enum BindingError {
 }
 
 #[derive(Clone, Debug, Error)]
+pub enum FilteringError {
+    #[error("integer textures can't be sampled")]
+    Integer,
+    #[error("non-filterable float texture")]
+    NonFilterable,
+}
+
+#[derive(Clone, Debug, Error)]
 pub enum InputError {
     #[error("input is not provided by the earlier stage in the pipeline")]
     Missing,
-    #[error("input type is not compatible with the provided")]
-    WrongType,
+    #[error("input type is not compatible with the provided {0}")]
+    WrongType(NumericType),
+    #[error("input interpolation doesn't match provided {0:?}")]
+    InterpolationMismatch(Option<naga::Interpolation>),
+    #[error("input sampling doesn't match provided {0:?}")]
+    SamplingMismatch(Option<naga::Sampling>),
 }
 
 /// Errors produced when validating a programmable stage of a pipeline.
@@ -155,19 +214,22 @@ pub enum InputError {
 pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,
-    #[error("unable to find an entry point at {0:?} stage")]
+    #[error("unable to find entry point '{0:?}'")]
     MissingEntryPoint(String),
-    #[error("error matching global binding at index {binding} in group {group} against the pipeline layout: {error}")]
-    Binding {
-        group: u32,
-        binding: u32,
-        error: BindingError,
+    #[error("shader global {0:?} is not available in the layout pipeline layout")]
+    Binding(naga::ResourceBinding, #[source] BindingError),
+    #[error("unable to filter the texture ({texture:?}) by the sampler ({sampler:?})")]
+    Filtering {
+        texture: naga::ResourceBinding,
+        sampler: naga::ResourceBinding,
+        #[source]
+        error: FilteringError,
     },
-    #[error(
-        "error matching the stage input at {location} against the previous stage outputs: {error}"
-    )]
+    #[error("location[{location}] {var} is not provided by the previous stage outputs")]
     Input {
         location: wgt::ShaderLocation,
+        var: InterfaceVar,
+        #[source]
         error: InputError,
     },
 }
@@ -253,7 +315,7 @@ impl Resource {
                         let global_use = match ty {
                             wgt::BufferBindingType::Uniform
                             | wgt::BufferBindingType::Storage { read_only: true } => {
-                                GlobalUse::READ
+                                GlobalUse::READ | GlobalUse::QUERY
                             }
                             wgt::BufferBindingType::Storage { read_only: _ } => GlobalUse::all(),
                         };
@@ -346,7 +408,7 @@ impl Resource {
                             },
                             wgt::TextureSampleType::Depth => naga::ImageClass::Depth,
                         };
-                        (class, GlobalUse::READ)
+                        (class, GlobalUse::READ | GlobalUse::QUERY)
                     }
                     BindingType::StorageTexture {
                         access,
@@ -356,8 +418,12 @@ impl Resource {
                         let naga_format = map_storage_format_to_naga(format)
                             .ok_or(BindingError::BadStorageFormat(format))?;
                         let usage = match access {
-                            wgt::StorageTextureAccess::ReadOnly => GlobalUse::READ,
-                            wgt::StorageTextureAccess::WriteOnly => GlobalUse::WRITE,
+                            wgt::StorageTextureAccess::ReadOnly => {
+                                GlobalUse::READ | GlobalUse::QUERY
+                            }
+                            wgt::StorageTextureAccess::WriteOnly => {
+                                GlobalUse::WRITE | GlobalUse::QUERY
+                            }
                             wgt::StorageTextureAccess::ReadWrite => GlobalUse::all(),
                         };
                         (naga::ImageClass::Storage(naga_format), usage)
@@ -377,7 +443,10 @@ impl Resource {
         if allowed_usage.contains(shader_usage) {
             Ok(())
         } else {
-            Err(BindingError::WrongUsage(shader_usage))
+            Err(BindingError::WrongUsage {
+                required: shader_usage,
+                allowed: allowed_usage,
+            })
         }
     }
 
@@ -451,7 +520,7 @@ impl Resource {
 }
 
 impl NumericType {
-    pub fn from_vertex_format(format: wgt::VertexFormat) -> Self {
+    fn from_vertex_format(format: wgt::VertexFormat) -> Self {
         use naga::{ScalarKind as Sk, VectorSize as Vs};
         use wgt::VertexFormat as Vf;
 
@@ -615,14 +684,35 @@ impl NumericType {
             _ => false,
         }
     }
+
+    fn is_compatible_with(&self, other: &NumericType) -> bool {
+        if self.kind != other.kind {
+            return false;
+        }
+        match (self.dim, other.dim) {
+            (NumericDimension::Scalar, NumericDimension::Scalar) => true,
+            (NumericDimension::Scalar, NumericDimension::Vector(_)) => true,
+            (NumericDimension::Vector(_), NumericDimension::Vector(_)) => true,
+            (NumericDimension::Matrix(..), NumericDimension::Matrix(..)) => true,
+            _ => false,
+        }
+    }
 }
 
 /// Return true if the fragment `format` is covered by the provided `output`.
-pub fn check_texture_format(format: wgt::TextureFormat, output: &NumericType) -> bool {
-    NumericType::from_texture_format(format).is_subtype_of(output)
+pub fn check_texture_format(
+    format: wgt::TextureFormat,
+    output: &NumericType,
+) -> Result<(), NumericType> {
+    let nt = NumericType::from_texture_format(format);
+    if nt.is_subtype_of(output) {
+        Ok(())
+    } else {
+        Err(nt)
+    }
 }
 
-pub type StageIo = FastHashMap<wgt::ShaderLocation, NumericType>;
+pub type StageIo = FastHashMap<wgt::ShaderLocation, InterfaceVar>;
 
 impl Interface {
     fn populate(
@@ -651,10 +741,7 @@ impl Interface {
                 kind: naga::ScalarKind::Float,
                 width,
             },
-            naga::TypeInner::Struct {
-                block: _,
-                ref members,
-            } => {
+            naga::TypeInner::Struct { ref members, .. } => {
                 for member in members {
                     Self::populate(list, member.binding.as_ref(), member.ty, arena);
                 }
@@ -667,9 +754,17 @@ impl Interface {
         };
 
         let varying = match binding {
-            Some(&naga::Binding::Location(location, _)) => Varying::Local {
+            Some(&naga::Binding::Location {
                 location,
-                ty: numeric_ty,
+                interpolation,
+                sampling,
+            }) => Varying::Local {
+                location,
+                iv: InterfaceVar {
+                    ty: numeric_ty,
+                    interpolation,
+                    sampling,
+                },
             },
             Some(&naga::Binding::BuiltIn(built_in)) => Varying::BuiltIn(built_in),
             None => {
@@ -684,20 +779,18 @@ impl Interface {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
-            let (group, binding) = match var.binding {
-                Some(ref br) => (br.group, br.binding),
+            let bind = match var.binding {
+                Some(ref br) => br.clone(),
                 _ => continue,
             };
             let ty = match module.types[var.ty].inner {
                 naga::TypeInner::Struct {
-                    block: true,
+                    level: naga::StructLevel::Root,
                     members: _,
-                } => {
-                    let actual_size = info.layouter[var.ty].size;
-                    ResourceType::Buffer {
-                        size: wgt::BufferSize::new(actual_size as u64).unwrap(),
-                    }
-                }
+                    span,
+                } => ResourceType::Buffer {
+                    size: wgt::BufferSize::new(span as u64).unwrap(),
+                },
                 naga::TypeInner::Image {
                     dim,
                     arrayed,
@@ -714,8 +807,8 @@ impl Interface {
                 }
             };
             let handle = resources.append(Resource {
-                group,
-                binding,
+                name: var.name.clone(),
+                bind,
                 ty,
                 class: var.class,
             });
@@ -780,12 +873,13 @@ impl Interface {
             .get(&pair)
             .ok_or(StageError::MissingEntryPoint(pair.1))?;
 
+        // check resources visibility
         for &(handle, usage) in entry_point.resources.iter() {
             let res = &self.resources[handle];
             let result = match given_layouts {
                 Some(layouts) => layouts
-                    .get(res.group as usize)
-                    .and_then(|map| map.get(&res.binding))
+                    .get(res.bind.group as usize)
+                    .and_then(|map| map.get(&res.bind.binding))
                     .ok_or(BindingError::Missing)
                     .and_then(|entry| {
                         if entry.visibility.contains(stage_bit) {
@@ -796,11 +890,11 @@ impl Interface {
                     })
                     .and_then(|entry| res.check_binding_use(entry, usage)),
                 None => derived_layouts
-                    .get_mut(res.group as usize)
+                    .get_mut(res.bind.group as usize)
                     .ok_or(BindingError::Missing)
                     .and_then(|set| {
                         let ty = res.derive_binding_type(usage)?;
-                        match set.entry(res.binding) {
+                        match set.entry(res.bind.binding) {
                             Entry::Occupied(e) if e.get().ty != ty => {
                                 return Err(BindingError::InconsistentlyDerivedType)
                             }
@@ -809,7 +903,7 @@ impl Interface {
                             }
                             Entry::Vacant(e) => {
                                 e.insert(BindGroupLayoutEntry {
-                                    binding: res.binding,
+                                    binding: res.bind.binding,
                                     ty,
                                     visibility: stage_bit,
                                     count: None,
@@ -820,30 +914,93 @@ impl Interface {
                     }),
             };
             if let Err(error) = result {
-                return Err(StageError::Binding {
-                    group: res.group,
-                    binding: res.binding,
-                    error,
-                });
+                return Err(StageError::Binding(res.bind.clone(), error));
             }
         }
 
+        // check the compatibility between textures and samplers
+        if let Some(layouts) = given_layouts {
+            for &(texture_handle, sampler_handle) in entry_point.sampling_pairs.iter() {
+                let texture_bind = &self.resources[texture_handle].bind;
+                let sampler_bind = &self.resources[sampler_handle].bind;
+                let texture_layout = &layouts[texture_bind.group as usize][&texture_bind.binding];
+                let sampler_layout = &layouts[sampler_bind.group as usize][&sampler_bind.binding];
+                assert!(texture_layout.visibility.contains(stage_bit));
+                assert!(sampler_layout.visibility.contains(stage_bit));
+
+                let error = match texture_layout.ty {
+                    wgt::BindingType::Texture {
+                        sample_type: wgt::TextureSampleType::Float { filterable },
+                        ..
+                    } => match sampler_layout.ty {
+                        wgt::BindingType::Sampler {
+                            filtering: true, ..
+                        } if !filterable => Some(FilteringError::NonFilterable),
+                        _ => None,
+                    },
+                    wgt::BindingType::Texture {
+                        sample_type: wgt::TextureSampleType::Sint,
+                        ..
+                    }
+                    | wgt::BindingType::Texture {
+                        sample_type: wgt::TextureSampleType::Uint,
+                        ..
+                    } => Some(FilteringError::Integer),
+                    _ => None, // unreachable, really
+                };
+
+                if let Some(error) = error {
+                    return Err(StageError::Filtering {
+                        texture: texture_bind.clone(),
+                        sampler: sampler_bind.clone(),
+                        error,
+                    });
+                }
+            }
+        }
+
+        // check inputs compatibility
         for input in entry_point.inputs.iter() {
             match *input {
-                Varying::Local { location, ty } => {
+                Varying::Local { location, ref iv } => {
                     let result =
                         inputs
                             .get(&location)
                             .ok_or(InputError::Missing)
                             .and_then(|provided| {
-                                if ty.is_subtype_of(provided) {
+                                let compatible = match shader_stage {
+                                    // For vertex attributes, there are defaults filled out
+                                    // by the driver if data is not provided.
+                                    naga::ShaderStage::Vertex => {
+                                        iv.ty.is_compatible_with(&provided.ty)
+                                    }
+                                    naga::ShaderStage::Fragment => {
+                                        if iv.interpolation != provided.interpolation {
+                                            return Err(InputError::InterpolationMismatch(
+                                                provided.interpolation,
+                                            ));
+                                        }
+                                        if iv.sampling != provided.sampling {
+                                            return Err(InputError::SamplingMismatch(
+                                                provided.sampling,
+                                            ));
+                                        }
+                                        iv.ty.is_subtype_of(&provided.ty)
+                                    }
+                                    naga::ShaderStage::Compute => false,
+                                };
+                                if compatible {
                                     Ok(())
                                 } else {
-                                    Err(InputError::WrongType)
+                                    Err(InputError::WrongType(provided.ty))
                                 }
                             });
                     if let Err(error) = result {
-                        return Err(StageError::Input { location, error });
+                        return Err(StageError::Input {
+                            location,
+                            var: iv.clone(),
+                            error,
+                        });
                     }
                 }
                 Varying::BuiltIn(_) => {}
@@ -854,7 +1011,7 @@ impl Interface {
             .outputs
             .iter()
             .filter_map(|output| match *output {
-                Varying::Local { location, ty } => Some((location, ty)),
+                Varying::Local { location, ref iv } => Some((location, iv.clone())),
                 Varying::BuiltIn(_) => None,
             })
             .collect();

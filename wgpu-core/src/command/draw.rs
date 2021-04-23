@@ -22,8 +22,8 @@ pub type BufferError = UseExtendError<BufferUse>;
 /// Error validating a draw call.
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum DrawError {
-    #[error("blend color needs to be set")]
-    MissingBlendColor,
+    #[error("blend constant needs to be set")]
+    MissingBlendConstant,
     #[error("render pipeline must be set")]
     MissingPipeline,
     #[error("vertex buffer {index} must be set")]
@@ -95,6 +95,8 @@ pub enum RenderCommandError {
     InvalidViewport,
     #[error("Invalid ScissorRect parameters")]
     InvalidScissorRect,
+    #[error("Support for {0} is not implemented yet")]
+    Unimplemented(&'static str),
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -142,7 +144,7 @@ pub enum RenderCommand {
         offset: BufferAddress,
         size: Option<BufferSize>,
     },
-    SetBlendColor(Color),
+    SetBlendConstant(Color),
     SetStencilReference(u32),
     SetViewport {
         rect: Rect<f32>,

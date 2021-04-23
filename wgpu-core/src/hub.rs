@@ -180,6 +180,11 @@ impl<T, I: TypedId> Storage<T, I> {
         self.insert_impl(index as usize, Element::Error(epoch, label.to_string()))
     }
 
+    pub(crate) fn force_replace(&mut self, id: I, value: T) {
+        let (index, epoch, _) = id.unzip();
+        self.map[index as usize] = Element::Occupied(value, epoch);
+    }
+
     pub(crate) fn remove(&mut self, id: I) -> Option<T> {
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
