@@ -146,7 +146,8 @@ impl super::Validator {
                     Ti::Vector { .. }
                     | Ti::Matrix { .. }
                     | Ti::Array { .. }
-                    | Ti::Pointer { .. } => {}
+                    | Ti::Pointer { .. }
+                    | Ti::ValuePointer { size: Some(_), .. } => {}
                     ref other => {
                         log::error!("Indexing of {:?}", other);
                         return Err(ExpressionError::InvalidBaseType(base));
@@ -171,7 +172,10 @@ impl super::Validator {
             }
             E::AccessIndex { base, index } => {
                 let limit = match *resolver.resolve(base)? {
-                    Ti::Vector { size, .. } => size as u32,
+                    Ti::Vector { size, .. }
+                    | Ti::ValuePointer {
+                        size: Some(size), ..
+                    } => size as u32,
                     Ti::Matrix { columns, .. } => columns as u32,
                     Ti::Array {
                         size: crate::ArraySize::Constant(handle),
