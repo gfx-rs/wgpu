@@ -795,10 +795,21 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ", ")?;
                     self.put_expression(dref, context, true)?;
                 }
+
+                let has_levels = match *context.resolve_type(image) {
+                    crate::TypeInner::Image {
+                        dim: crate::ImageDimension::D1,
+                        ..
+                    } => false,
+                    _ => true,
+                };
                 match level {
                     crate::SampleLevel::Auto => {}
                     crate::SampleLevel::Zero => {
                         //TODO: do we support Zero on `Sampled` image classes?
+                    }
+                    _ if !has_levels => {
+                        log::warn!("1D image can't be sampled with level {:?}", level);
                     }
                     crate::SampleLevel::Exact(h) => {
                         write!(self.out, ", {}::level(", NAMESPACE)?;
@@ -818,6 +829,7 @@ impl<W: Write> Writer<W> {
                         write!(self.out, ")")?;
                     }
                 }
+
                 if let Some(constant) = offset {
                     let coco = ConstantContext {
                         handle: constant,
