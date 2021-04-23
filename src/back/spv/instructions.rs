@@ -594,6 +594,14 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn image_query(op: Op, result_type_id: Word, id: Word, image: Word) -> Self {
+        let mut instruction = Self::new(op);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(image);
+        instruction
+    }
+
     //
     //  Conversion Instructions
     //

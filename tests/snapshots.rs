@@ -235,8 +235,7 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::IR | Targets::ANALYSIS,
         ),
         ("shadow", Targets::SPIRV | Targets::METAL | Targets::GLSL),
-        //SPIR-V is blocked by https://github.com/gfx-rs/naga/issues/646
-        ("image-copy", Targets::METAL),
+        ("image", Targets::SPIRV | Targets::METAL),
         ("texture-array", Targets::SPIRV | Targets::METAL),
         ("operators", Targets::SPIRV | Targets::METAL | Targets::GLSL),
         (

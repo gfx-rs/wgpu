@@ -138,7 +138,12 @@ impl<'a> Display for TypeContext<'a> {
                 };
                 let (texture_str, msaa_str, kind, access) = match class {
                     crate::ImageClass::Sampled { kind, multi } => {
-                        ("texture", if multi { "_ms" } else { "" }, kind, "sample")
+                        let (msaa_str, access) = if multi {
+                            ("_ms", "read")
+                        } else {
+                            ("", "sample")
+                        };
+                        ("texture", msaa_str, kind, access)
                     }
                     crate::ImageClass::Depth => ("depth", "", crate::ScalarKind::Float, "sample"),
                     crate::ImageClass::Storage(format) => {
@@ -510,9 +515,9 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
             crate::ImageDimension::Cube => {
-                write!(self.out, "int(")?;
+                write!(self.out, "int3(")?;
                 self.put_image_query(image, "width", level, context)?;
-                write!(self.out, ").xxx")?;
+                write!(self.out, ")")?;
             }
         }
         Ok(())

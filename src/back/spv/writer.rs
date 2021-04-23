@@ -21,6 +21,8 @@ pub enum Error {
     MissingCapabilities(Vec<spirv::Capability>),
     #[error("unimplemented {0}")]
     FeatureNotImplemented(&'static str),
+    #[error("module is not validated properly: {0}")]
+    Validation(&'static str),
 }
 
 #[derive(Default)]
@@ -186,7 +188,7 @@ fn map_dim(dim: crate::ImageDimension) -> spirv::Dim {
     match dim {
         crate::ImageDimension::D1 => spirv::Dim::Dim1D,
         crate::ImageDimension::D2 => spirv::Dim::Dim2D,
-        crate::ImageDimension::D3 => spirv::Dim::Dim2D,
+        crate::ImageDimension::D3 => spirv::Dim::Dim3D,
         crate::ImageDimension::Cube => spirv::Dim::DimCube,
     }
 }
@@ -1261,11 +1263,14 @@ impl Writer {
                         crate::VectorSize::Bi => crate::VectorSize::Tri,
                         crate::VectorSize::Tri => crate::VectorSize::Quad,
                         crate::VectorSize::Quad => {
-                            unimplemented!("Unable to extend the vec4 coordinate")
+                            return Err(Error::Validation("extending vec4 coordinate"));
                         }
                     }
                 }
-                ref other => unimplemented!("wrong coordinate type {:?}", other),
+                ref other => {
+                    log::error!("wrong coordinate type {:?}", other);
+                    return Err(Error::Validation("coordinate type"));
+                }
             };
 
             let array_index_f32_id = self.id_gen.next();
@@ -1894,12 +1899,16 @@ impl Writer {
                     instruction.add_operand(index_id);
                 }
 
-                if instruction.type_id != Some(result_type_id) {
+                let inst_type_id = instruction.type_id;
+                block.body.push(instruction);
+                if inst_type_id != Some(result_type_id) {
                     let sub_id = self.id_gen.next();
-                    let index_id = self.get_index_constant(0, &ir_module.types)?;
-                    let sub_instruction =
-                        Instruction::vector_extract_dynamic(result_type_id, sub_id, id, index_id);
-                    block.body.push(sub_instruction);
+                    block.body.push(Instruction::composite_extract(
+                        result_type_id,
+                        sub_id,
+                        id,
+                        &[0],
+                    ));
                     sub_id
                 } else {
                     id
@@ -2062,10 +2071,12 @@ impl Writer {
 
                 if needs_sub_access {
                     let sub_id = self.id_gen.next();
-                    let index_id = self.get_index_constant(0, &ir_module.types)?;
-                    let sub_instruction =
-                        Instruction::vector_extract_dynamic(result_type_id, sub_id, id, index_id);
-                    block.body.push(sub_instruction);
+                    block.body.push(Instruction::composite_extract(
+                        result_type_id,
+                        sub_id,
+                        id,
+                        &[0],
+                    ));
                     sub_id
                 } else {
                     id
@@ -2098,9 +2109,147 @@ impl Writer {
                 });
                 id
             }
-            crate::Expression::ImageQuery { .. }
-            | crate::Expression::Relational { .. }
-            | crate::Expression::ArrayLength(_) => {
+            crate::Expression::ImageQuery { image, query } => {
+                use crate::{ImageClass as Ic, ImageDimension as Id, ImageQuery as Iq};
+
+                let image_id = self.get_expression_global(ir_function, image);
+                let image_type = fun_info[image].ty.handle().unwrap();
+                let (dim, arrayed, class) = match ir_module.types[image_type].inner {
+                    crate::TypeInner::Image {
+                        dim,
+                        arrayed,
+                        class,
+                    } => (dim, arrayed, class),
+                    _ => {
+                        return Err(Error::Validation("image type"));
+                    }
+                };
+
+                match query {
+                    Iq::Size { level } => {
+                        let dim_coords = match dim {
+                            Id::D1 => 1,
+                            Id::D2 | Id::Cube => 2,
+                            Id::D3 => 3,
+                        };
+                        let extended_size_type_id = {
+                            let array_coords = if arrayed { 1 } else { 0 };
+                            let vector_size = match dim_coords + array_coords {
+                                2 => Some(crate::VectorSize::Bi),
+                                3 => Some(crate::VectorSize::Tri),
+                                4 => Some(crate::VectorSize::Quad),
+                                _ => None,
+                            };
+                            self.get_type_id(
+                                &ir_module.types,
+                                LookupType::Local(LocalType::Value {
+                                    vector_size,
+                                    kind: crate::ScalarKind::Sint,
+                                    width: 4,
+                                    pointer_class: None,
+                                }),
+                            )?
+                        };
+
+                        let (query_op, level_id) = match class {
+                            Ic::Storage(_) => (spirv::Op::ImageQuerySize, None),
+                            _ => {
+                                let level_id = match level {
+                                    Some(expr) => self.cached[expr],
+                                    None => self.get_index_constant(0, &ir_module.types)?,
+                                };
+                                (spirv::Op::ImageQuerySizeLod, Some(level_id))
+                            }
+                        };
+                        // The ID of the vector returned by SPIR-V, which contains the dimensions
+                        // as well as the layer count.
+                        let id_extended = self.id_gen.next();
+                        let mut inst = Instruction::image_query(
+                            query_op,
+                            extended_size_type_id,
+                            id_extended,
+                            image_id,
+                        );
+                        if let Some(expr_id) = level_id {
+                            inst.add_operand(expr_id);
+                        }
+                        block.body.push(inst);
+
+                        if result_type_id != extended_size_type_id {
+                            let id = self.id_gen.next();
+                            let components = match dim {
+                                // always pick the first component, and duplicate it for all 3 dimensions
+                                Id::Cube => &[0u32, 0, 0][..],
+                                _ => &[0u32, 1, 2, 3][..dim_coords],
+                            };
+                            block.body.push(Instruction::vector_shuffle(
+                                result_type_id,
+                                id,
+                                id_extended,
+                                id_extended,
+                                components,
+                            ));
+                            id
+                        } else {
+                            id_extended
+                        }
+                    }
+                    Iq::NumLevels => {
+                        let id = self.id_gen.next();
+                        block.body.push(Instruction::image_query(
+                            spirv::Op::ImageQueryLevels,
+                            result_type_id,
+                            id,
+                            image_id,
+                        ));
+                        id
+                    }
+                    Iq::NumLayers => {
+                        let vec_size = match dim {
+                            Id::D1 => crate::VectorSize::Bi,
+                            Id::D2 | Id::Cube => crate::VectorSize::Tri,
+                            Id::D3 => crate::VectorSize::Quad,
+                        };
+                        let extended_size_type_id = self.get_type_id(
+                            &ir_module.types,
+                            LookupType::Local(LocalType::Value {
+                                vector_size: Some(vec_size),
+                                kind: crate::ScalarKind::Sint,
+                                width: 4,
+                                pointer_class: None,
+                            }),
+                        )?;
+                        let id_extended = self.id_gen.next();
+                        let mut inst = Instruction::image_query(
+                            spirv::Op::ImageQuerySizeLod,
+                            extended_size_type_id,
+                            id_extended,
+                            image_id,
+                        );
+                        inst.add_operand(self.get_index_constant(0, &ir_module.types)?);
+                        block.body.push(inst);
+                        let id = self.id_gen.next();
+                        block.body.push(Instruction::composite_extract(
+                            result_type_id,
+                            id,
+                            id_extended,
+                            &[vec_size as u32 - 1],
+                        ));
+                        id
+                    }
+                    Iq::NumSamples => {
+                        let id = self.id_gen.next();
+                        block.body.push(Instruction::image_query(
+                            spirv::Op::ImageQuerySamples,
+                            result_type_id,
+                            id,
+                            image_id,
+                        ));
+                        id
+                    }
+                }
+            }
+            crate::Expression::Relational { .. } | crate::Expression::ArrayLength(_) => {
                 log::error!("unimplemented {:?}", ir_function.expressions[expr_handle]);
                 return Err(Error::FeatureNotImplemented("expression"));
             }

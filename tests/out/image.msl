@@ -1,0 +1,32 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+
+struct main1Input {
+};
+kernel void main1(
+  metal::uint3 local_id [[thread_position_in_threadgroup]]
+, metal::texture2d<uint, metal::access::read> image_src [[user(fake0)]]
+, metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
+) {
+    metal::int2 _e10 = (int2(image_src.get_width(), image_src.get_height()) * static_cast<int2>(local_id.xy)) % metal::int2(10, 20);
+    metal::uint4 _e11 = image_src.read(metal::uint2(_e10));
+    image_dst.write(_e11, metal::uint(_e10.x));
+    return;
+}
+
+
+struct queriesOutput {
+    metal::float4 member1 [[position]];
+};
+vertex queriesOutput queries(
+  metal::texture1d<float, metal::access::sample> image_1d [[user(fake0)]]
+, metal::texture2d<float, metal::access::sample> image_2d [[user(fake0)]]
+, metal::texture2d_array<float, metal::access::sample> image_2d_array [[user(fake0)]]
+, metal::texturecube<float, metal::access::sample> image_cube [[user(fake0)]]
+, metal::texturecube_array<float, metal::access::sample> image_cube_array [[user(fake0)]]
+, metal::texture3d<float, metal::access::sample> image_3d [[user(fake0)]]
+, metal::texture2d_ms<float, metal::access::read> image_aa [[user(fake0)]]
+) {
+    return queriesOutput { float4(static_cast<float>((((((((((((((((((int(image_1d.get_width()) + int2(image_2d.get_width(), image_2d.get_height()).y) + int2(image_2d.get_width(1), image_2d.get_height(1)).y) + int2(image_2d_array.get_width(), image_2d_array.get_height()).y) + int2(image_2d_array.get_width(1), image_2d_array.get_height(1)).y) + int(image_2d_array.get_array_size())) + int3(image_cube.get_width()).y) + int3(image_cube.get_width(1)).y) + int3(image_cube_array.get_width()).y) + int3(image_cube_array.get_width(1)).y) + int(image_cube_array.get_array_size())) + int3(image_3d.get_width(), image_3d.get_height(), image_3d.get_depth()).z) + int3(image_3d.get_width(1), image_3d.get_height(1), image_3d.get_depth(1)).z) + int(image_aa.get_num_samples())) + int(image_2d.get_num_mip_levels())) + int(image_2d_array.get_num_mip_levels())) + int(image_3d.get_num_mip_levels())) + int(image_cube.get_num_mip_levels())) + int(image_cube_array.get_num_mip_levels()))) };
+}
