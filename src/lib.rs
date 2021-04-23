@@ -1086,7 +1086,7 @@ pub struct TextureViewDescriptor<'a> {
 /// Describes a pipeline layout.
 ///
 /// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PipelineLayoutDescriptor<'a> {
     /// Debug label of the pipeline layout. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
