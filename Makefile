@@ -20,7 +20,7 @@ clean:
 %.metallib: %.air
 	xcrun -sdk macosx metallib $< -o $@
 
-%.dot: $(SNAPSHOTS_IN)/%.wgsl $(wildcard src/*.rs src/front/wgsl/*.rs src/back/dot/*.rs bin/convert.rs)
+%.dot: $(SNAPSHOTS_IN)/%.wgsl $(wildcard src/*.rs src/front/wgsl/*.rs src/back/dot/*.rs bin/naga.rs)
 	cargo run --features wgsl-in,dot-out -- $< $@
 
 %.png: %.dot
@@ -61,5 +61,5 @@ validate-dot: $(SNAPSHOTS_OUT)/*.dot
 validate-wgsl: $(SNAPSHOTS_OUT)/*.wgsl
 	@set -e && for file in $^ ; do \
 		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/"};	\
-		cargo run --bin convert --features wgsl-in $${file}; \
+		cargo run --features wgsl-in $${file}; \
 	done

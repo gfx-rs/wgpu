@@ -34,7 +34,7 @@ DOT (GraphViz)  | :ok:               | dot-out  | Not a shading language |
 
 ## Conversion tool
 
-Naga includes a default binary target "convert", which allows to test the conversion of different code paths.
+Naga includes a default binary target, which allows to test the conversion of different code paths.
 ```bash
 cargo run --features wgsl-in -- my_shader.wgsl # validate only
 cargo run --features spv-in -- my_shader.spv - # dump the IR module to debug output
