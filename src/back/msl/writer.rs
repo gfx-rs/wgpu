@@ -651,7 +651,7 @@ impl<W: Write> Writer<W> {
                 vector,
                 pattern,
             } => {
-                self.put_expression(vector, context, is_scoped)?;
+                self.put_expression(vector, context, false)?;
                 write!(self.out, ".")?;
                 for &sc in pattern[..size as usize].iter() {
                     write!(self.out, "{}", COMPONENTS[sc as usize])?;
