@@ -2873,7 +2873,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 crate::ConstantInner::Scalar {
                     width,
                     value: crate::ScalarValue::Sint(
-                        ((u64::from(high) << 32) | u64::from(low)) as i64,
+                        (i64::from(high as i32) << 32) | ((i64::from(low as i32) << 32) >> 32),
                     ),
                 }
             }
