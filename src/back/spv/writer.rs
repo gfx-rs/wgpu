@@ -2298,6 +2298,10 @@ impl Writer {
                     let local_var = &function.variables[&variable];
                     break (local_var.id, spirv::StorageClass::Function);
                 }
+                crate::Expression::FunctionArgument(index) => {
+                    let id = function.parameters[index as usize].result_id.unwrap();
+                    break (id, spirv::StorageClass::Function);
+                }
                 ref other => unimplemented!("Unexpected pointer expression {:?}", other),
             }
         };
