@@ -33,3 +33,43 @@ impl crate::Expression {
         }
     }
 }
+
+/// Helper function that returns the string corresponding to the [`BinaryOperator`](crate::BinaryOperator)
+/// # Notes
+/// Used by `glsl-out`, `msl-out`, `wgsl-out`.
+#[allow(dead_code)]
+fn binary_operation_str(op: crate::BinaryOperator) -> &'static str {
+    use crate::BinaryOperator as Bo;
+    match op {
+        Bo::Add => "+",
+        Bo::Subtract => "-",
+        Bo::Multiply => "*",
+        Bo::Divide => "/",
+        Bo::Modulo => "%",
+        Bo::Equal => "==",
+        Bo::NotEqual => "!=",
+        Bo::Less => "<",
+        Bo::LessEqual => "<=",
+        Bo::Greater => ">",
+        Bo::GreaterEqual => ">=",
+        Bo::And => "&",
+        Bo::ExclusiveOr => "^",
+        Bo::InclusiveOr => "|",
+        Bo::LogicalAnd => "&&",
+        Bo::LogicalOr => "||",
+        Bo::ShiftLeft => "<<",
+        Bo::ShiftRight => ">>",
+    }
+}
+
+/// Helper function that returns the string corresponding to the [`VectorSize`](crate::VectorSize)
+/// # Notes
+/// Used by `msl-out`, `wgsl-out`.
+#[allow(dead_code)]
+fn vector_size_str(size: crate::VectorSize) -> &'static str {
+    match size {
+        crate::VectorSize::Bi => "2",
+        crate::VectorSize::Tri => "3",
+        crate::VectorSize::Quad => "4",
+    }
+}

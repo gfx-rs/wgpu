@@ -1,19 +1,19 @@
 // TODO: temp
 #![allow(dead_code)]
 use super::Error;
+use crate::FastHashMap;
 use crate::{
-    back::wgsl::keywords::RESERVED,
+    back::{binary_operation_str, vector_size_str, wgsl::keywords::RESERVED},
     proc::{EntryPointIndex, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
-    Arena, ArraySize, BinaryOperator, Binding, Constant, Expression, Function, GlobalVariable,
-    Handle, ImageClass, ImageDimension, Module, ScalarKind, ShaderStage, Statement, StorageFormat,
-    StructLevel, Type, TypeInner,
+    Arena, ArraySize, Binding, Constant, Expression, Function, GlobalVariable, Handle, ImageClass,
+    ImageDimension, Module, ScalarKind, ShaderStage, Statement, StorageFormat, StructLevel, Type,
+    TypeInner,
 };
 use crate::{
     proc::{NameKey, Namer},
     StructMember,
 };
-use crate::{FastHashMap, VectorSize};
 use std::fmt::Write;
 
 const INDENT: &str = "    ";
@@ -516,31 +516,7 @@ impl<W: Write> Writer<W> {
             Expression::Binary { op, left, right } => {
                 self.write_expr(module, left, func_ctx)?;
 
-                // TODO: glsl-out copy-paste
-                write!(
-                    self.out,
-                    " {} ",
-                    match op {
-                        BinaryOperator::Add => "+",
-                        BinaryOperator::Subtract => "-",
-                        BinaryOperator::Multiply => "*",
-                        BinaryOperator::Divide => "/",
-                        BinaryOperator::Modulo => "%",
-                        BinaryOperator::Equal => "==",
-                        BinaryOperator::NotEqual => "!=",
-                        BinaryOperator::Less => "<",
-                        BinaryOperator::LessEqual => "<=",
-                        BinaryOperator::Greater => ">",
-                        BinaryOperator::GreaterEqual => ">=",
-                        BinaryOperator::And => "&",
-                        BinaryOperator::ExclusiveOr => "^",
-                        BinaryOperator::InclusiveOr => "|",
-                        BinaryOperator::LogicalAnd => "&&",
-                        BinaryOperator::LogicalOr => "||",
-                        BinaryOperator::ShiftLeft => "<<",
-                        BinaryOperator::ShiftRight => ">>",
-                    }
-                )?;
+                write!(self.out, " {} ", binary_operation_str(op),)?;
 
                 self.write_expr(module, right, func_ctx)?;
             }
@@ -766,16 +742,6 @@ fn builtin_str(built_in: crate::BuiltIn) -> Option<&'static str> {
     }
 }
 
-//TODO: copy-paste from msl-out
-fn vector_size_str(size: VectorSize) -> &'static str {
-    match size {
-        VectorSize::Bi => "2",
-        VectorSize::Tri => "3",
-        VectorSize::Quad => "4",
-    }
-}
-
-//TODO: copy-paste from msl-out
 fn image_dimension_str(dim: ImageDimension) -> &'static str {
     match dim {
         ImageDimension::D1 => "1d",

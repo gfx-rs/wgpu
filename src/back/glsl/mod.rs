@@ -1836,30 +1836,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 if function.is_some() {
                     write!(self.out, ",")?
                 } else {
-                    write!(
-                        self.out,
-                        " {} ",
-                        match op {
-                            BinaryOperator::Add => "+",
-                            BinaryOperator::Subtract => "-",
-                            BinaryOperator::Multiply => "*",
-                            BinaryOperator::Divide => "/",
-                            BinaryOperator::Modulo => "%",
-                            BinaryOperator::Equal => "==",
-                            BinaryOperator::NotEqual => "!=",
-                            BinaryOperator::Less => "<",
-                            BinaryOperator::LessEqual => "<=",
-                            BinaryOperator::Greater => ">",
-                            BinaryOperator::GreaterEqual => ">=",
-                            BinaryOperator::And => "&",
-                            BinaryOperator::ExclusiveOr => "^",
-                            BinaryOperator::InclusiveOr => "|",
-                            BinaryOperator::LogicalAnd => "&&",
-                            BinaryOperator::LogicalOr => "||",
-                            BinaryOperator::ShiftLeft => "<<",
-                            BinaryOperator::ShiftRight => ">>",
-                        }
-                    )?;
+                    write!(self.out, " {} ", super::binary_operation_str(op))?;
                 }
 
                 self.write_expr(right, ctx)?;
