@@ -30,6 +30,22 @@ impl Arena<crate::Expression> {
     }
 }
 
+/// Options of a sampling operation.
+#[derive(Debug)]
+pub struct SamplingOptions {
+    /// Projection sampling: the division by W is expected to happen
+    /// in the texture unit.
+    pub project: bool,
+    /// Depth comparison sampling with a reference value.
+    pub compare: bool,
+}
+
+enum ExtraCoordinate {
+    ArrayLayer,
+    Projection,
+    Garbage,
+}
+
 /// Return the texture coordinates separated from the array layer,
 /// and/or divided by the projection term.
 ///
@@ -37,7 +53,7 @@ impl Arena<crate::Expression> {
 /// The arrayed (can't be Proj!) images expect an extra coordinate for the layer.
 fn extract_image_coordinates(
     image_dim: crate::ImageDimension,
-    image_arrayed: bool,
+    extra_coordinate: ExtraCoordinate,
     base: Handle<crate::Expression>,
     coordinate_ty: Handle<crate::Type>,
     type_arena: &Arena<crate::Type>,
@@ -67,62 +83,76 @@ fn extract_image_coordinates(
         index: required_size.map_or(1, |size| size as u32),
     };
 
-    if given_size == required_size {
-        // fast path, no complications
-        (base, None)
-    } else if image_arrayed {
-        // extra coordinate for the array index
-        let extracted = match required_size {
-            None => expressions.append(crate::Expression::AccessIndex { base, index: 0 }),
-            Some(size) => {
-                let mut components = Vec::with_capacity(size as usize);
-                for index in 0..size as u32 {
-                    let comp = expressions.append(crate::Expression::AccessIndex { base, index });
-                    components.push(comp);
+    match extra_coordinate {
+        ExtraCoordinate::ArrayLayer => {
+            let extracted = match required_size {
+                None => expressions.append(crate::Expression::AccessIndex { base, index: 0 }),
+                Some(size) => {
+                    let mut components = Vec::with_capacity(size as usize);
+                    for index in 0..size as u32 {
+                        let comp =
+                            expressions.append(crate::Expression::AccessIndex { base, index });
+                        components.push(comp);
+                    }
+                    expressions.append(crate::Expression::Compose {
+                        ty: required_ty.unwrap(),
+                        components,
+                    })
                 }
-                expressions.append(crate::Expression::Compose {
-                    ty: required_ty.unwrap(),
-                    components,
-                })
-            }
-        };
-        let array_index_f32 = expressions.append(extra_expr);
-        let array_index = expressions.append(crate::Expression::As {
-            kind: crate::ScalarKind::Sint,
-            expr: array_index_f32,
-            convert: true,
-        });
-        (extracted, Some(array_index))
-    } else {
-        // extra coordinate for the projection W
-        let projection = expressions.append(extra_expr);
-        let divided = match required_size {
-            None => {
-                let temp = expressions.append(crate::Expression::AccessIndex { base, index: 0 });
-                expressions.append(crate::Expression::Binary {
-                    op: crate::BinaryOperator::Divide,
-                    left: temp,
-                    right: projection,
-                })
-            }
-            Some(size) => {
-                let mut components = Vec::with_capacity(size as usize);
-                for index in 0..size as u32 {
-                    let temp = expressions.append(crate::Expression::AccessIndex { base, index });
-                    let comp = expressions.append(crate::Expression::Binary {
+            };
+            let array_index_f32 = expressions.append(extra_expr);
+            let array_index = expressions.append(crate::Expression::As {
+                kind: crate::ScalarKind::Sint,
+                expr: array_index_f32,
+                convert: true,
+            });
+            (extracted, Some(array_index))
+        }
+        ExtraCoordinate::Projection => {
+            let projection = expressions.append(extra_expr);
+            let divided = match required_size {
+                None => {
+                    let temp =
+                        expressions.append(crate::Expression::AccessIndex { base, index: 0 });
+                    expressions.append(crate::Expression::Binary {
                         op: crate::BinaryOperator::Divide,
                         left: temp,
                         right: projection,
-                    });
-                    components.push(comp);
+                    })
                 }
-                expressions.append(crate::Expression::Compose {
-                    ty: required_ty.unwrap(),
-                    components,
-                })
-            }
-        };
-        (divided, None)
+                Some(size) => {
+                    let mut components = Vec::with_capacity(size as usize);
+                    for index in 0..size as u32 {
+                        let temp =
+                            expressions.append(crate::Expression::AccessIndex { base, index });
+                        let comp = expressions.append(crate::Expression::Binary {
+                            op: crate::BinaryOperator::Divide,
+                            left: temp,
+                            right: projection,
+                        });
+                        components.push(comp);
+                    }
+                    expressions.append(crate::Expression::Compose {
+                        ty: required_ty.unwrap(),
+                        components,
+                    })
+                }
+            };
+            (divided, None)
+        }
+        ExtraCoordinate::Garbage if given_size == required_size => (base, None),
+        ExtraCoordinate::Garbage => {
+            use crate::SwizzleComponent as Sc;
+            let cut_expr = match required_size {
+                None => crate::Expression::AccessIndex { base, index: 0 },
+                Some(size) => crate::Expression::Swizzle {
+                    size,
+                    vector: base,
+                    pattern: [Sc::X, Sc::Y, Sc::Z, Sc::W],
+                },
+            };
+            (expressions.append(cut_expr), None)
+        }
     }
 }
 
@@ -228,7 +258,11 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 class: _,
             } => extract_image_coordinates(
                 dim,
-                arrayed,
+                if arrayed {
+                    ExtraCoordinate::ArrayLayer
+                } else {
+                    ExtraCoordinate::Garbage
+                },
                 coord_lexp.handle,
                 coord_type_handle,
                 type_arena,
@@ -306,7 +340,11 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 class: _,
             } => extract_image_coordinates(
                 dim,
-                arrayed,
+                if arrayed {
+                    ExtraCoordinate::ArrayLayer
+                } else {
+                    ExtraCoordinate::Garbage
+                },
                 coord_lexp.handle,
                 coord_type_handle,
                 type_arena,
@@ -334,6 +372,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
     pub(super) fn parse_image_sample(
         &mut self,
         mut words_left: u16,
+        options: SamplingOptions,
         type_arena: &Arena<crate::Type>,
         global_arena: &Arena<crate::GlobalVariable>,
         expressions: &mut Arena<crate::Expression>,
@@ -342,6 +381,11 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let result_id = self.next()?;
         let sampled_image_id = self.next()?;
         let coordinate_id = self.next()?;
+        let dref_id = if options.compare {
+            Some(self.next()?)
+        } else {
+            None
+        };
 
         let mut image_ops = if words_left != 0 {
             words_left -= 1;
@@ -374,7 +418,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     words_left -= 1;
                 }
                 other => {
-                    log::warn!("Unknown image sample op {:?}", other);
+                    log::warn!("Unknown image sample operand {:?}", other);
                     for _ in 0..words_left {
                         self.next()?;
                     }
@@ -391,14 +435,20 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let image_var_handle = expressions.get_global_var(si_lexp.image)?;
         let sampler_var_handle = expressions.get_global_var(si_lexp.sampler)?;
         log::debug!(
-            "\t\t\tImage {:?} sampled with {:?}",
+            "\t\t\tImage {:?} sampled with {:?} under {:?}",
             image_var_handle,
-            sampler_var_handle
+            sampler_var_handle,
+            options,
         );
+        let sampling_bit = if options.compare {
+            SamplingFlags::COMPARISON
+        } else {
+            SamplingFlags::REGULAR
+        };
         if let Some(flags) = self.handle_sampling.get_mut(&image_var_handle) {
-            *flags |= SamplingFlags::REGULAR;
+            *flags |= sampling_bit;
         }
-        *self.handle_sampling.get_mut(&sampler_var_handle).unwrap() |= SamplingFlags::REGULAR;
+        *self.handle_sampling.get_mut(&sampler_var_handle).unwrap() |= sampling_bit;
 
         let image_var = &global_arena[image_var_handle];
         let (coordinate, array_index) = match type_arena[image_var.ty].inner {
@@ -408,7 +458,13 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 class: _,
             } => extract_image_coordinates(
                 dim,
-                arrayed,
+                if options.project {
+                    ExtraCoordinate::Projection
+                } else if arrayed {
+                    ExtraCoordinate::ArrayLayer
+                } else {
+                    ExtraCoordinate::Garbage
+                },
                 coord_lexp.handle,
                 coord_type_handle,
                 type_arena,
@@ -424,122 +480,10 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             array_index,
             offset,
             level,
-            depth_ref: None,
-        };
-        self.lookup_expression.insert(
-            result_id,
-            LookupExpression {
-                handle: expressions.append(expr),
-                type_id: result_type_id,
+            depth_ref: match dref_id {
+                Some(id) => Some(self.lookup_expression.lookup(id)?.handle),
+                None => None,
             },
-        );
-        Ok(())
-    }
-
-    pub(super) fn parse_image_sample_dref(
-        &mut self,
-        mut words_left: u16,
-        type_arena: &Arena<crate::Type>,
-        global_arena: &Arena<crate::GlobalVariable>,
-        expressions: &mut Arena<crate::Expression>,
-    ) -> Result<(), Error> {
-        let result_type_id = self.next()?;
-        let result_id = self.next()?;
-        let sampled_image_id = self.next()?;
-        let coordinate_id = self.next()?;
-        let dref_id = self.next()?;
-
-        let mut image_ops = if words_left != 0 {
-            words_left -= 1;
-            self.next()?
-        } else {
-            0
-        };
-
-        let mut level = crate::SampleLevel::Auto;
-        let mut offset = None;
-        while image_ops != 0 {
-            let bit = 1 << image_ops.trailing_zeros();
-            match spirv::ImageOperands::from_bits_truncate(bit) {
-                spirv::ImageOperands::BIAS => {
-                    let bias_expr = self.next()?;
-                    let bias_handle = self.lookup_expression.lookup(bias_expr)?.handle;
-                    level = crate::SampleLevel::Bias(bias_handle);
-                    words_left -= 1;
-                }
-                spirv::ImageOperands::LOD => {
-                    let lod_expr = self.next()?;
-                    let lod_handle = self.lookup_expression.lookup(lod_expr)?.handle;
-                    level = crate::SampleLevel::Exact(lod_handle);
-                    words_left -= 1;
-                }
-                spirv::ImageOperands::CONST_OFFSET => {
-                    let offset_constant = self.next()?;
-                    let offset_handle = self.lookup_constant.lookup(offset_constant)?.handle;
-                    offset = Some(offset_handle);
-                    words_left -= 1;
-                }
-                other => {
-                    log::warn!("Unknown image sample dref op {:?}", other);
-                    for _ in 0..words_left {
-                        self.next()?;
-                    }
-                    break;
-                }
-            }
-            image_ops ^= bit;
-        }
-
-        let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
-        let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
-        let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-        let image_var_handle = expressions.get_global_var(si_lexp.image)?;
-        let sampler_var_handle = expressions.get_global_var(si_lexp.sampler)?;
-        log::debug!(
-            "\t\t\tImage {:?} sampled with comparison {:?}",
-            image_var_handle,
-            sampler_var_handle
-        );
-        if let Some(flags) = self.handle_sampling.get_mut(&image_var_handle) {
-            *flags |= SamplingFlags::COMPARISON;
-        }
-        *self.handle_sampling.get_mut(&sampler_var_handle).unwrap() |= SamplingFlags::COMPARISON;
-
-        let dref_lexp = self.lookup_expression.lookup(dref_id)?;
-        let dref_type_handle = self.lookup_type.lookup(dref_lexp.type_id)?.handle;
-        match type_arena[dref_type_handle].inner {
-            crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Float,
-                width: _,
-            } => (),
-            _ => return Err(Error::InvalidDepthReference(dref_type_handle)),
-        }
-
-        let image_var = &global_arena[image_var_handle];
-        let (coordinate, array_index) = match type_arena[image_var.ty].inner {
-            crate::TypeInner::Image {
-                dim,
-                arrayed,
-                class: _,
-            } => extract_image_coordinates(
-                dim,
-                arrayed,
-                coord_lexp.handle,
-                coord_type_handle,
-                type_arena,
-                expressions,
-            ),
-            _ => return Err(Error::InvalidImage(image_var.ty)),
-        };
-
-        let expr = crate::Expression::ImageSample {
-            image: si_lexp.image,
-            sampler: si_lexp.sampler,
-            coordinate,
-            array_index,
-            offset,
-            level,
-            depth_ref: Some(dref_lexp.handle),
         };
         self.lookup_expression.insert(
             result_id,

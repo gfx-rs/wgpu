@@ -41,7 +41,6 @@ pub enum Error {
     InvalidGlobalVar(crate::Expression),
     InvalidImageBaseType(Handle<crate::Type>),
     InvalidImage(Handle<crate::Type>),
-    InvalidDepthReference(Handle<crate::Type>),
     InvalidAsType(Handle<crate::Type>),
     InvalidVectorType(Handle<crate::Type>),
     InconsistentComparisonSampling(Handle<crate::GlobalVariable>),

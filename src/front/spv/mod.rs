@@ -1377,19 +1377,37 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let extra = inst.expect_at_least(5)?;
                     self.parse_image_load(extra, type_arena, global_arena, expressions)?;
                 }
-                Op::ImageSampleImplicitLod
-                | Op::ImageSampleExplicitLod
-                | Op::ImageSampleProjImplicitLod
-                | Op::ImageSampleProjExplicitLod => {
+                Op::ImageSampleImplicitLod | Op::ImageSampleExplicitLod => {
                     let extra = inst.expect_at_least(5)?;
-                    self.parse_image_sample(extra, type_arena, global_arena, expressions)?;
+                    let options = image::SamplingOptions {
+                        compare: false,
+                        project: false,
+                    };
+                    self.parse_image_sample(extra, options, type_arena, global_arena, expressions)?;
                 }
-                Op::ImageSampleDrefImplicitLod
-                | Op::ImageSampleDrefExplicitLod
-                | Op::ImageSampleProjDrefImplicitLod
-                | Op::ImageSampleProjDrefExplicitLod => {
+                Op::ImageSampleProjImplicitLod | Op::ImageSampleProjExplicitLod => {
+                    let extra = inst.expect_at_least(5)?;
+                    let options = image::SamplingOptions {
+                        compare: false,
+                        project: true,
+                    };
+                    self.parse_image_sample(extra, options, type_arena, global_arena, expressions)?;
+                }
+                Op::ImageSampleDrefImplicitLod | Op::ImageSampleDrefExplicitLod => {
                     let extra = inst.expect_at_least(6)?;
-                    self.parse_image_sample_dref(extra, type_arena, global_arena, expressions)?;
+                    let options = image::SamplingOptions {
+                        compare: true,
+                        project: false,
+                    };
+                    self.parse_image_sample(extra, options, type_arena, global_arena, expressions)?;
+                }
+                Op::ImageSampleProjDrefImplicitLod | Op::ImageSampleProjDrefExplicitLod => {
+                    let extra = inst.expect_at_least(6)?;
+                    let options = image::SamplingOptions {
+                        compare: true,
+                        project: true,
+                    };
+                    self.parse_image_sample(extra, options, type_arena, global_arena, expressions)?;
                 }
                 Op::ImageQuerySize => {
                     inst.expect(4)?;
