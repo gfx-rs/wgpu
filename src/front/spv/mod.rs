@@ -593,6 +593,57 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    /// A more complicated version of the binary op,
+    /// where we force the operand to have the same type as the result.
+    /// This is mostly needed for "i++" and "i--" coming from GLSL.
+    fn parse_expr_binary_op_sign_adjusted(
+        &mut self,
+        expressions: &mut Arena<crate::Expression>,
+        op: crate::BinaryOperator,
+        types: &Arena<crate::Type>,
+    ) -> Result<(), Error> {
+        let result_type_id = self.next()?;
+        let result_id = self.next()?;
+        let p1_id = self.next()?;
+        let p2_id = self.next()?;
+
+        let p1_lexp = self.lookup_expression.lookup(p1_id)?;
+        let p2_lexp = self.lookup_expression.lookup(p2_id)?;
+        let result_lookup_ty = self.lookup_type.lookup(result_type_id)?;
+        let kind = types[result_lookup_ty.handle].inner.scalar_kind().unwrap();
+
+        let expr = crate::Expression::Binary {
+            op,
+            left: if p1_lexp.type_id == result_type_id {
+                p1_lexp.handle
+            } else {
+                expressions.append(crate::Expression::As {
+                    expr: p1_lexp.handle,
+                    kind,
+                    convert: true,
+                })
+            },
+            right: if p2_lexp.type_id == result_type_id {
+                p2_lexp.handle
+            } else {
+                expressions.append(crate::Expression::As {
+                    expr: p2_lexp.handle,
+                    kind,
+                    convert: true,
+                })
+            },
+        };
+
+        self.lookup_expression.insert(
+            result_id,
+            LookupExpression {
+                handle: expressions.append(expr),
+                type_id: result_type_id,
+            },
+        );
+        Ok(())
+    }
+
     fn parse_expr_shift_op(
         &mut self,
         expressions: &mut Arena<crate::Expression>,
@@ -1255,11 +1306,27 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(4)?;
                     self.parse_expr_unary_op(expressions, crate::UnaryOperator::Negate)?;
                 }
-                Op::IAdd | Op::FAdd => {
+                Op::IAdd => {
+                    inst.expect(5)?;
+                    self.parse_expr_binary_op_sign_adjusted(
+                        expressions,
+                        crate::BinaryOperator::Add,
+                        type_arena,
+                    )?;
+                }
+                Op::FAdd => {
                     inst.expect(5)?;
                     self.parse_expr_binary_op(expressions, crate::BinaryOperator::Add)?;
                 }
-                Op::ISub | Op::FSub => {
+                Op::ISub => {
+                    inst.expect(5)?;
+                    self.parse_expr_binary_op_sign_adjusted(
+                        expressions,
+                        crate::BinaryOperator::Subtract,
+                        type_arena,
+                    )?;
+                }
+                Op::FSub => {
                     inst.expect(5)?;
                     self.parse_expr_binary_op(expressions, crate::BinaryOperator::Subtract)?;
                 }
