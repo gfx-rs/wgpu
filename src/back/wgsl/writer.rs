@@ -341,7 +341,12 @@ impl<W: Write> Writer<W> {
                 );
                 write!(self.out, "{}", ty_str)?;
             }
-            _ => todo!("write_value_type {:?}", inner),
+            _ => {
+                return Err(Error::Unimplemented(format!(
+                    "write_value_type {:?}",
+                    inner
+                )));
+            }
         }
 
         Ok(())
@@ -420,7 +425,9 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
                 writeln!(self.out, "discard;")?
             }
-            _ => todo!("write_stmt {:?}", stmt),
+            _ => {
+                return Err(Error::Unimplemented(format!("write_stmt {:?}", stmt)));
+            }
         }
 
         Ok(())
@@ -543,7 +550,12 @@ impl<W: Write> Writer<W> {
                 // TODO: comments
                 let fun_name = match level {
                     crate::SampleLevel::Auto => "textureSample",
-                    _ => todo!("expression_imagesample_level {:?}", level),
+                    _ => {
+                        return Err(Error::Unimplemented(format!(
+                            "expression_imagesample_level {:?}",
+                            level
+                        )));
+                    }
                 };
                 write!(self.out, "{}(", fun_name)?;
                 self.write_expr(module, image, func_ctx)?;
@@ -558,7 +570,9 @@ impl<W: Write> Writer<W> {
                 let name = &self.names[&NameKey::GlobalVariable(handle)];
                 write!(self.out, "{}", name)?;
             }
-            _ => todo!("write_expr {:?}", expression),
+            _ => {
+                return Err(Error::Unimplemented(format!("write_expr {:?}", expression)));
+            }
         }
 
         Ok(())
@@ -670,7 +684,12 @@ impl<W: Write> Writer<W> {
                     };
                 }
             }
-            _ => todo!("write_constant {:?}", constant.inner),
+            _ => {
+                return Err(Error::Unimplemented(format!(
+                    "write_constant {:?}",
+                    constant.inner
+                )));
+            }
         }
 
         Ok(())

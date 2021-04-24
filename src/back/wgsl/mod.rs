@@ -11,6 +11,8 @@ pub enum Error {
     FmtError(#[from] std::fmt::Error),
     #[error("{0}")]
     Custom(String),
+    #[error("{0}")]
+    Unimplemented(String), // TODO: Error used only during development
 }
 
 pub fn write_string(
