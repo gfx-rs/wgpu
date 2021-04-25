@@ -1380,6 +1380,27 @@ impl Writer {
         Ok((id, variable))
     }
 
+    fn is_intermediate(
+        &self,
+        expr_handle: Handle<crate::Expression>,
+        ir_function: &crate::Function,
+        ir_types: &Arena<crate::Type>,
+    ) -> bool {
+        match ir_function.expressions[expr_handle] {
+            crate::Expression::GlobalVariable(_) | crate::Expression::LocalVariable(_) => true,
+            crate::Expression::FunctionArgument(index) => {
+                let arg = &ir_function.arguments[index as usize];
+                match ir_types[arg.ty].inner {
+                    crate::TypeInner::Pointer { .. } | crate::TypeInner::ValuePointer { .. } => {
+                        true
+                    }
+                    _ => false,
+                }
+            }
+            _ => self.cached.ids[expr_handle.index()] == 0,
+        }
+    }
+
     /// Cache an expression for a value.
     fn cache_expression_value(
         &mut self,
@@ -1394,80 +1415,74 @@ impl Writer {
             self.get_expression_type_id(&ir_module.types, &fun_info[expr_handle].ty)?;
 
         let id = match ir_function.expressions[expr_handle] {
+            crate::Expression::Access { base, index: _ }
+                if self.is_intermediate(base, ir_function, &ir_module.types) =>
+            {
+                0
+            }
             crate::Expression::Access { base, index } => {
-                let base_is_var = match ir_function.expressions[base] {
-                    crate::Expression::GlobalVariable(_) | crate::Expression::LocalVariable(_) => {
-                        true
+                let index_id = self.cached[index];
+                let base_id = self.cached[base];
+                match *fun_info[base].ty.inner_with(&ir_module.types) {
+                    crate::TypeInner::Vector { .. } => {
+                        let id = self.id_gen.next();
+                        block.body.push(Instruction::vector_extract_dynamic(
+                            result_type_id,
+                            id,
+                            base_id,
+                            index_id,
+                        ));
+                        id
                     }
-                    _ => self.cached.ids[base.index()] == 0,
-                };
-                if base_is_var {
-                    0
-                } else {
-                    let index_id = self.cached[index];
-                    let base_id = self.cached[base];
-                    match *fun_info[base].ty.inner_with(&ir_module.types) {
-                        crate::TypeInner::Vector { .. } => {
-                            let id = self.id_gen.next();
-                            block.body.push(Instruction::vector_extract_dynamic(
-                                result_type_id,
-                                id,
-                                base_id,
-                                index_id,
-                            ));
-                            id
-                        }
-                        crate::TypeInner::Array {
-                            base: ty_element, ..
-                        } => {
-                            let (id, variable) = self.promote_access_expression_to_variable(
-                                &ir_module.types,
-                                result_type_id,
-                                base_id,
-                                &fun_info[base].ty,
-                                index_id,
-                                ty_element,
-                                block,
-                            )?;
-                            function.internal_variables.push(variable);
-                            id
-                        }
-                        ref other => {
-                            log::error!("Unable to access {:?}", other);
-                            return Err(Error::FeatureNotImplemented("access for type"));
-                        }
+                    crate::TypeInner::Array {
+                        base: ty_element, ..
+                    } => {
+                        let (id, variable) = self.promote_access_expression_to_variable(
+                            &ir_module.types,
+                            result_type_id,
+                            base_id,
+                            &fun_info[base].ty,
+                            index_id,
+                            ty_element,
+                            block,
+                        )?;
+                        function.internal_variables.push(variable);
+                        id
+                    }
+                    ref other => {
+                        log::error!(
+                            "Unable to access base {:?} of type {:?}",
+                            ir_function.expressions[base],
+                            other
+                        );
+                        return Err(Error::FeatureNotImplemented("access for type"));
                     }
                 }
             }
+            crate::Expression::AccessIndex { base, index: _ }
+                if self.is_intermediate(base, ir_function, &ir_module.types) =>
+            {
+                0
+            }
             crate::Expression::AccessIndex { base, index } => {
-                let base_is_var = match ir_function.expressions[base] {
-                    crate::Expression::GlobalVariable(_) | crate::Expression::LocalVariable(_) => {
-                        true
+                match *fun_info[base].ty.inner_with(&ir_module.types) {
+                    crate::TypeInner::Vector { .. }
+                    | crate::TypeInner::Matrix { .. }
+                    | crate::TypeInner::Array { .. }
+                    | crate::TypeInner::Struct { .. } => {
+                        let id = self.id_gen.next();
+                        let base_id = self.cached[base];
+                        block.body.push(Instruction::composite_extract(
+                            result_type_id,
+                            id,
+                            base_id,
+                            &[index],
+                        ));
+                        id
                     }
-                    _ => self.cached.ids[base.index()] == 0,
-                };
-                if base_is_var {
-                    0
-                } else {
-                    match *fun_info[base].ty.inner_with(&ir_module.types) {
-                        crate::TypeInner::Vector { .. }
-                        | crate::TypeInner::Matrix { .. }
-                        | crate::TypeInner::Array { .. }
-                        | crate::TypeInner::Struct { .. } => {
-                            let id = self.id_gen.next();
-                            let base_id = self.cached[base];
-                            block.body.push(Instruction::composite_extract(
-                                result_type_id,
-                                id,
-                                base_id,
-                                &[index],
-                            ));
-                            id
-                        }
-                        ref other => {
-                            log::error!("Unable to access index of {:?}", other);
-                            return Err(Error::FeatureNotImplemented("access index for type"));
-                        }
+                    ref other => {
+                        log::error!("Unable to access index of {:?}", other);
+                        return Err(Error::FeatureNotImplemented("access index for type"));
                     }
                 }
             }
