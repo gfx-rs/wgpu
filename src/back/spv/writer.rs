@@ -284,6 +284,7 @@ pub struct Writer {
     logical_layout: LogicalLayout,
     id_gen: IdGenerator,
     capabilities: crate::FastHashSet<spirv::Capability>,
+    strict_capabilities: bool,
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     flags: WriterFlags,
@@ -317,7 +318,15 @@ impl Writer {
             physical_layout: PhysicalLayout::new(raw_version),
             logical_layout: LogicalLayout::default(),
             id_gen,
-            capabilities: options.capabilities.clone(),
+            capabilities: match options.capabilities {
+                Some(ref caps) => caps.clone(),
+                None => {
+                    let mut caps = crate::FastHashSet::default();
+                    caps.insert(spirv::Capability::Shader);
+                    caps
+                }
+            },
+            strict_capabilities: options.capabilities.is_some(),
             debugs: vec![],
             annotations: vec![],
             flags: options.flags,
@@ -336,14 +345,19 @@ impl Writer {
     }
 
     fn check(&mut self, capabilities: &[spirv::Capability]) -> Result<(), Error> {
-        if capabilities.is_empty()
-            || capabilities
-                .iter()
-                .any(|cap| self.capabilities.contains(cap))
-        {
-            Ok(())
+        if self.strict_capabilities {
+            if capabilities.is_empty()
+                || capabilities
+                    .iter()
+                    .any(|cap| self.capabilities.contains(cap))
+            {
+                Ok(())
+            } else {
+                Err(Error::MissingCapabilities(capabilities.to_vec()))
+            }
         } else {
-            Err(Error::MissingCapabilities(capabilities.to_vec()))
+            self.capabilities.extend(capabilities);
+            Ok(())
         }
     }
 

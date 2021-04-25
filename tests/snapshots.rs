@@ -127,7 +127,7 @@ fn check_output_spv(
     let options = spv::Options {
         lang_version: params.spv_version,
         flags,
-        capabilities: params.spv_capabilities.clone(),
+        capabilities: Some(params.spv_capabilities.clone()),
     };
 
     let spv = spv::write_vec(module, info, &options).unwrap();
