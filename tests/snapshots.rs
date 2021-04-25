@@ -226,7 +226,7 @@ fn convert_wgsl() {
         ),
         (
             "quad",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::DOT,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::DOT | Targets::WGSL,
         ),
         ("boids", Targets::SPIRV | Targets::METAL),
         ("skybox", Targets::SPIRV | Targets::METAL | Targets::GLSL),
@@ -242,7 +242,7 @@ fn convert_wgsl() {
             "interpolate",
             Targets::SPIRV | Targets::METAL | Targets::GLSL,
         ),
-        ("access", Targets::SPIRV | Targets::METAL),
+        ("access", Targets::SPIRV | Targets::METAL | Targets::WGSL),
     ];
 
     for &(name, targets) in inputs.iter() {
