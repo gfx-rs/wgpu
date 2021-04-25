@@ -2132,15 +2132,18 @@ impl Writer {
                 id
             }
             crate::Expression::Derivative { axis, expr } => {
-                use crate::DerivativeAxis;
+                use crate::DerivativeAxis as Da;
 
                 let id = self.id_gen.next();
                 let expr_id = self.cached[expr];
-                block.body.push(match axis {
-                    DerivativeAxis::X => Instruction::derive_x(result_type_id, id, expr_id),
-                    DerivativeAxis::Y => Instruction::derive_y(result_type_id, id, expr_id),
-                    DerivativeAxis::Width => Instruction::derive_width(result_type_id, id, expr_id),
-                });
+                let op = match axis {
+                    Da::X => spirv::Op::DPdx,
+                    Da::Y => spirv::Op::DPdy,
+                    Da::Width => spirv::Op::Fwidth,
+                };
+                block
+                    .body
+                    .push(Instruction::derivative(op, result_type_id, id, expr_id));
                 id
             }
             crate::Expression::ImageQuery { image, query } => {
@@ -2283,7 +2286,26 @@ impl Writer {
                     }
                 }
             }
-            crate::Expression::Relational { .. } | crate::Expression::ArrayLength(_) => {
+            crate::Expression::Relational { fun, argument } => {
+                use crate::RelationalFunction as Rf;
+                let arg_id = self.cached[argument];
+                let op = match fun {
+                    Rf::All => spirv::Op::All,
+                    Rf::Any => spirv::Op::Any,
+                    Rf::IsNan => spirv::Op::IsNan,
+                    Rf::IsInf => spirv::Op::IsInf,
+                    //TODO: these require Kernel capability
+                    Rf::IsFinite | Rf::IsNormal => {
+                        return Err(Error::FeatureNotImplemented("is finite/normal"))
+                    }
+                };
+                let id = self.id_gen.next();
+                block
+                    .body
+                    .push(Instruction::relational(op, result_type_id, id, arg_id));
+                id
+            }
+            crate::Expression::ArrayLength(_) => {
                 log::error!("unimplemented {:?}", ir_function.expressions[expr_handle]);
                 return Err(Error::FeatureNotImplemented("expression"));
             }
