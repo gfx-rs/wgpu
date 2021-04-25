@@ -720,7 +720,7 @@ impl Writer {
         ))
     }
 
-    fn write_scalar(&self, id: Word, kind: crate::ScalarKind, width: crate::Bytes) -> Instruction {
+    fn make_scalar(&self, id: Word, kind: crate::ScalarKind, width: crate::Bytes) -> Instruction {
         let bits = (width * BITS_PER_BYTE) as u32;
         match kind {
             crate::ScalarKind::Sint => {
@@ -746,7 +746,7 @@ impl Writer {
                 kind,
                 width,
                 pointer_class: None,
-            } => self.write_scalar(id, kind, width),
+            } => self.make_scalar(id, kind, width),
             LocalType::Value {
                 vector_size: Some(size),
                 kind,
@@ -849,7 +849,7 @@ impl Writer {
         use spirv::Decoration;
 
         let instruction = match ty.inner {
-            crate::TypeInner::Scalar { kind, width } => self.write_scalar(id, kind, width),
+            crate::TypeInner::Scalar { kind, width } => self.make_scalar(id, kind, width),
             crate::TypeInner::Vector { size, kind, width } => {
                 let scalar_id = self.get_type_id(
                     arena,

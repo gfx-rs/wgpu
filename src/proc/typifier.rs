@@ -461,7 +461,7 @@ impl<'a> ResolveContext<'a> {
                 | crate::BinaryOperator::LogicalAnd
                 | crate::BinaryOperator::LogicalOr => {
                     let kind = crate::ScalarKind::Bool;
-                    let width = 1;
+                    let width = crate::BOOL_WIDTH;
                     let inner = match *past(left).inner_with(types) {
                         Ti::Scalar { .. } => Ti::Scalar { kind, width },
                         Ti::Vector { size, .. } => Ti::Vector { size, kind, width },
@@ -484,7 +484,7 @@ impl<'a> ResolveContext<'a> {
             crate::Expression::Derivative { axis: _, expr } => past(expr).clone(),
             crate::Expression::Relational { .. } => TypeResolution::Value(Ti::Scalar {
                 kind: crate::ScalarKind::Bool,
-                width: 4,
+                width: crate::BOOL_WIDTH,
             }),
             crate::Expression::Math {
                 fun,
