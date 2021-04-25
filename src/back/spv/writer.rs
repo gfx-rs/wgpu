@@ -2031,6 +2031,8 @@ impl Writer {
                 let id = self.id_gen.next();
 
                 let depth_id = depth_ref.map(|handle| self.cached[handle]);
+                let mut mask = spirv::ImageOperands::empty();
+                mask.set(spirv::ImageOperands::CONST_OFFSET, offset.is_some());
 
                 let mut main_instruction = match level {
                     crate::SampleLevel::Zero => {
@@ -2052,7 +2054,9 @@ impl Writer {
                             None,
                             &ir_module.types,
                         )?;
-                        inst.add_operand(spirv::ImageOperands::LOD.bits());
+
+                        mask |= spirv::ImageOperands::LOD;
+                        inst.add_operand(mask.bits());
                         inst.add_operand(zero_id);
 
                         inst
@@ -2076,7 +2080,8 @@ impl Writer {
                         );
 
                         let lod_id = self.cached[lod_handle];
-                        inst.add_operand(spirv::ImageOperands::LOD.bits());
+                        mask |= spirv::ImageOperands::LOD;
+                        inst.add_operand(mask.bits());
                         inst.add_operand(lod_id);
 
                         inst
@@ -2092,7 +2097,7 @@ impl Writer {
                         );
 
                         let bias_id = self.cached[bias_handle];
-                        inst.add_operand(spirv::ImageOperands::BIAS.bits());
+                        mask |= spirv::ImageOperands::BIAS;
                         inst.add_operand(bias_id);
 
                         inst
@@ -2109,7 +2114,7 @@ impl Writer {
 
                         let x_id = self.cached[x];
                         let y_id = self.cached[y];
-                        inst.add_operand(spirv::ImageOperands::GRAD.bits());
+                        mask |= spirv::ImageOperands::GRAD;
                         inst.add_operand(x_id);
                         inst.add_operand(y_id);
 
@@ -2119,7 +2124,6 @@ impl Writer {
 
                 if let Some(offset_const) = offset {
                     let offset_id = self.constant_ids[offset_const.index()];
-                    main_instruction.add_operand(spirv::ImageOperands::CONST_OFFSET.bits());
                     main_instruction.add_operand(offset_id);
                 }
 
