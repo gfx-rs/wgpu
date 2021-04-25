@@ -1,5 +1,4 @@
-use super::parser::Token;
-use super::token::TokenMetadata;
+use super::token::{Token, TokenMetadata};
 use std::{borrow::Cow, fmt, io};
 
 //TODO: use `thiserror`
