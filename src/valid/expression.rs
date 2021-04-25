@@ -284,6 +284,7 @@ impl super::Validator {
                 level,
                 depth_ref,
             } => {
+                // check the validity of expressions
                 let image_var = match function.expressions[image] {
                     crate::Expression::GlobalVariable(var_handle) => {
                         &module.global_variables[var_handle]
@@ -303,26 +304,11 @@ impl super::Validator {
 
                 let (class, dim) = match module.types[image_var.ty].inner {
                     Ti::Image {
-                        //TODO: should we check that this is Float-only?
                         class,
                         arrayed,
                         dim,
                     } => {
-                        let image_depth = match class {
-                            crate::ImageClass::Sampled {
-                                kind: _,
-                                multi: false,
-                            } => false,
-                            crate::ImageClass::Depth => true,
-                            _ => return Err(ExpressionError::InvalidImageClass(class)),
-                        };
-                        if comparison != depth_ref.is_some() || (comparison && !image_depth) {
-                            return Err(ExpressionError::ComparisonSamplingMismatch {
-                                image: class,
-                                sampler: comparison,
-                                has_ref: depth_ref.is_some(),
-                            });
-                        }
+                        // check the array property
                         if arrayed != array_index.is_some() {
                             return Err(ExpressionError::InvalidImageArrayIndex);
                         }
@@ -340,6 +326,24 @@ impl super::Validator {
                     _ => return Err(ExpressionError::ExpectedImageType(image_var.ty)),
                 };
 
+                // check sampling and comparison properties
+                let image_depth = match class {
+                    crate::ImageClass::Sampled {
+                        kind: crate::ScalarKind::Float,
+                        multi: false,
+                    } => false,
+                    crate::ImageClass::Depth => true,
+                    _ => return Err(ExpressionError::InvalidImageClass(class)),
+                };
+                if comparison != depth_ref.is_some() || (comparison && !image_depth) {
+                    return Err(ExpressionError::ComparisonSamplingMismatch {
+                        image: class,
+                        sampler: comparison,
+                        has_ref: depth_ref.is_some(),
+                    });
+                }
+
+                // check texture coordinates type
                 let num_components = match dim {
                     crate::ImageDimension::D1 => 1,
                     crate::ImageDimension::D2 => 2,
@@ -356,6 +360,8 @@ impl super::Validator {
                     } if size as u32 == num_components => {}
                     _ => return Err(ExpressionError::InvalidImageCoordinateType(dim, coordinate)),
                 }
+
+                // check constant offset
                 if let Some(const_handle) = offset {
                     let good = match module.constants[const_handle].inner {
                         crate::ConstantInner::Scalar {
@@ -379,6 +385,7 @@ impl super::Validator {
                     }
                 }
 
+                // check depth reference type
                 if let Some(expr) = depth_ref {
                     match *resolver.resolve(expr)? {
                         Ti::Scalar {
@@ -387,12 +394,13 @@ impl super::Validator {
                         _ => return Err(ExpressionError::InvalidDepthReference(expr)),
                     }
                 }
+
+                // check level properties
                 let can_level = match class {
                     crate::ImageClass::Sampled { multi, .. } => !multi,
-                    crate::ImageClass::Storage { .. } => false,
+                    crate::ImageClass::Storage { .. } => unreachable!(),
                     crate::ImageClass::Depth { .. } => true,
                 };
-
                 match level {
                     // require `can_level` here?
                     crate::SampleLevel::Auto => ShaderStages::FRAGMENT,
