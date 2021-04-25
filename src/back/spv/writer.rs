@@ -1575,7 +1575,10 @@ impl Writer {
                             return Err(Error::FeatureNotImplemented("negation"));
                         }
                     },
-                    crate::UnaryOperator::Not => spirv::Op::Not,
+                    crate::UnaryOperator::Not => match expr_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Bool) => spirv::Op::LogicalNot,
+                        _ => spirv::Op::Not,
+                    },
                 };
 
                 block
