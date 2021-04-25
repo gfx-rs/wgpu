@@ -68,7 +68,10 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::UniformBufferArrayDynamicIndexing,
     spirv::Capability::StorageBufferArrayDynamicIndexing,
 ];
-pub const SUPPORTED_EXTENSIONS: &[&str] = &["SPV_KHR_vulkan_memory_model"];
+pub const SUPPORTED_EXTENSIONS: &[&str] = &[
+    "SPV_KHR_storage_buffer_storage_class",
+    "SPV_KHR_vulkan_memory_model",
+];
 pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
 
 #[derive(Copy, Clone)]
@@ -347,6 +350,8 @@ pub struct Options {
     /// so by default we flip the Y coordinate of the `BuiltIn::Position`.
     /// This flag can be used to avoid this.
     pub adjust_coordinate_space: bool,
+    /// Only allow shaders with the known set of capabilities.
+    pub strict_capabilities: bool,
     pub flow_graph_dump_prefix: Option<PathBuf>,
 }
 
@@ -354,6 +359,7 @@ impl Default for Options {
     fn default() -> Self {
         Options {
             adjust_coordinate_space: true,
+            strict_capabilities: false,
             flow_graph_dump_prefix: None,
         }
     }
@@ -2208,7 +2214,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let cap =
             spirv::Capability::from_u32(capability).ok_or(Error::UnknownCapability(capability))?;
         if !SUPPORTED_CAPABILITIES.contains(&cap) {
-            return Err(Error::UnsupportedCapability(cap));
+            if self.options.strict_capabilities {
+                return Err(Error::UnsupportedCapability(cap));
+            } else {
+                log::warn!("Unknown capability {:?}", cap);
+            }
         }
         Ok(())
     }

@@ -105,6 +105,7 @@ fn main() {
         "spv" => {
             let options = naga::front::spv::Options {
                 adjust_coordinate_space: params.spv_adjust_coordinate_space,
+                strict_capabilities: false,
                 flow_graph_dump_prefix: params.spv_flow_dump_prefix.map(std::path::PathBuf::from),
             };
             let input = fs::read(input_path).unwrap();

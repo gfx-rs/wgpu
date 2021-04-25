@@ -263,6 +263,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
         &fs::read(format!("{}/{}/{}.spv", root, DIR_IN, name)).expect("Couldn't find spv file"),
         &naga::front::spv::Options {
             adjust_coordinate_space,
+            strict_capabilities: false,
             flow_graph_dump_prefix: None,
         },
     )
