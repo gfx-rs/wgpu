@@ -350,6 +350,13 @@ impl super::Instruction {
     //  Constant-Creation Instructions
     //
 
+    pub(super) fn constant_null(result_type_id: Word, id: Word) -> Self {
+        let mut instruction = Self::new(Op::ConstantNull);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction
+    }
+
     pub(super) fn constant_true(result_type_id: Word, id: Word) -> Self {
         let mut instruction = Self::new(Op::ConstantTrue);
         instruction.set_type(result_type_id);

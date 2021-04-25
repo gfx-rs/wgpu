@@ -2741,8 +2741,19 @@ impl Writer {
                 Some(id) => Instruction::branch(id),
                 // This can happen if the last branch had all the paths
                 // leading out of the graph (i.e. returning).
-                // So it doesn't matter what we do here, but it has to be valid.
-                None => Instruction::branch(label_id),
+                // Or it may be the end of the function.
+                None => match ir_function.result {
+                    Some(ref result) if function.entry_point_context.is_none() => {
+                        // create a Null and return it
+                        let null_id = self.id_gen.next();
+                        let type_id =
+                            self.get_type_id(&ir_module.types, LookupType::Handle(result.ty))?;
+                        Instruction::constant_null(type_id, null_id)
+                            .to_words(&mut self.logical_layout.declarations);
+                        Instruction::return_value(null_id)
+                    }
+                    _ => Instruction::return_void(),
+                },
             });
         }
 

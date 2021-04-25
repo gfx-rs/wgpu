@@ -76,5 +76,5 @@ OpReturn
 OpStore %22 %44
 OpReturn
 %37 = OpLabel
-OpBranch %29
+OpReturn
 OpFunctionEnd
