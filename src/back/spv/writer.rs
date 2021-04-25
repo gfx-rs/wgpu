@@ -123,8 +123,13 @@ enum LocalType {
         base: Handle<crate::Type>,
         class: spirv::StorageClass,
     },
+    Image {
+        dim: crate::ImageDimension,
+        arrayed: bool,
+        class: crate::ImageClass,
+    },
     SampledImage {
-        image_type: Handle<crate::Type>,
+        image_type_id: Word,
     },
 }
 
@@ -166,6 +171,15 @@ impl PhysicalLayout {
                 kind,
                 width,
                 pointer_class: Some(map_storage_class(class)),
+            },
+            crate::TypeInner::Image {
+                dim,
+                arrayed,
+                class,
+            } => LocalType::Image {
+                dim,
+                arrayed,
+                class,
             },
             _ => return None,
         })
@@ -763,8 +777,9 @@ impl Writer {
                 )?;
                 Instruction::type_pointer(id, class, type_id)
             }
-            LocalType::SampledImage { image_type } => {
-                let image_type_id = self.get_type_id(arena, LookupType::Handle(image_type))?;
+            // all the image types go through `write_type_declaration_arena`
+            LocalType::Image { .. } => unreachable!(),
+            LocalType::SampledImage { image_type_id } => {
                 Instruction::type_sampled_image(id, image_type_id)
             }
         };
@@ -1951,9 +1966,11 @@ impl Writer {
                 };
 
                 // OpTypeSampledImage
+                let image_type_id =
+                    self.get_type_id(&ir_module.types, LookupType::Handle(image_type))?;
                 let sampled_image_type_id = self.get_type_id(
                     &ir_module.types,
-                    LookupType::Local(LocalType::SampledImage { image_type }),
+                    LookupType::Local(LocalType::SampledImage { image_type_id }),
                 )?;
 
                 let sampler_id = self.get_expression_global(ir_function, sampler);
