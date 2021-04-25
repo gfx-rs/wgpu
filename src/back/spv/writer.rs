@@ -1,5 +1,6 @@
 use super::{
-    helpers::map_storage_class, Instruction, LogicalLayout, Options, PhysicalLayout, WriterFlags,
+    helpers::{contains_builtin, map_storage_class},
+    Instruction, LogicalLayout, Options, PhysicalLayout, WriterFlags,
 };
 use crate::{
     arena::{Arena, Handle},
@@ -652,6 +653,17 @@ impl Writer {
         Ok(function_id)
     }
 
+    fn write_execution_mode(
+        &mut self,
+        function_id: Word,
+        mode: spirv::ExecutionMode,
+    ) -> Result<(), Error> {
+        self.check(mode.required_capabilities())?;
+        Instruction::execution_mode(function_id, mode, &[])
+            .to_words(&mut self.logical_layout.execution_modes);
+        Ok(())
+    }
+
     // TODO Move to instructions module
     fn write_entry_point(
         &mut self,
@@ -670,10 +682,20 @@ impl Writer {
         let exec_model = match entry_point.stage {
             crate::ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
             crate::ShaderStage::Fragment => {
-                let execution_mode = spirv::ExecutionMode::OriginUpperLeft;
-                self.check(execution_mode.required_capabilities())?;
-                Instruction::execution_mode(function_id, execution_mode, &[])
-                    .to_words(&mut self.logical_layout.execution_modes);
+                self.write_execution_mode(function_id, spirv::ExecutionMode::OriginUpperLeft)?;
+                if let Some(ref result) = entry_point.function.result {
+                    if contains_builtin(
+                        result.binding.as_ref(),
+                        result.ty,
+                        &ir_module.types,
+                        crate::BuiltIn::FragDepth,
+                    ) {
+                        self.write_execution_mode(
+                            function_id,
+                            spirv::ExecutionMode::DepthReplacing,
+                        )?;
+                    }
+                }
                 spirv::ExecutionModel::Fragment
             }
             crate::ShaderStage::Compute => {
