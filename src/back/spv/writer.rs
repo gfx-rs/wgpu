@@ -131,6 +131,7 @@ enum LocalType {
     SampledImage {
         image_type_id: Word,
     },
+    Sampler,
 }
 
 impl PhysicalLayout {
@@ -181,6 +182,7 @@ impl PhysicalLayout {
                 arrayed,
                 class,
             },
+            crate::TypeInner::Sampler { comparison: _ } => LocalType::Sampler,
             _ => return None,
         })
     }
@@ -777,8 +779,8 @@ impl Writer {
                 )?;
                 Instruction::type_pointer(id, class, type_id)
             }
-            // all the image types go through `write_type_declaration_arena`
-            LocalType::Image { .. } => unreachable!(),
+            // all the samplers and image types go through `write_type_declaration_arena`
+            LocalType::Image { .. } | LocalType::Sampler => unreachable!(),
             LocalType::SampledImage { image_type_id } => {
                 Instruction::type_sampled_image(id, image_type_id)
             }
