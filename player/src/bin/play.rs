@@ -120,6 +120,7 @@ fn main() {
 
         let mut resize_desc = None;
         let mut frame_count = 0;
+        let mut has_swap_chain = false;
         let mut done = false;
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
@@ -132,6 +133,7 @@ fn main() {
                         Some(trace::Action::CreateSwapChain(id, desc)) => {
                             log::info!("Initializing the swapchain");
                             assert_eq!(id.to_surface_id(), surface);
+                            has_swap_chain = true;
                             let current_size: (u32, u32) = window.inner_size().into();
                             let size = (desc.width, desc.height);
                             if current_size != size {
@@ -158,7 +160,22 @@ fn main() {
                             gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
                         }
                         None => {
-                            if !done {
+                            if !has_swap_chain {
+                                println!("Adding a fake present after frame {}", frame_count);
+                                let desc = wgt::SwapChainDescriptor {
+                                    usage: wgt::TextureUsage::RENDER_ATTACHMENT,
+                                    format: wgt::TextureFormat::Bgra8Unorm,
+                                    width: 1,
+                                    height: 1,
+                                    present_mode: wgt::PresentMode::Immediate,
+                                };
+                                let (sc_id, _) = gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
+                                let view_id = wgc::id::TypedId::zip(0, 1, device.backend());
+                                let _ = gfx_select!(device => global.swap_chain_get_current_texture_view(sc_id, view_id)).unwrap();
+                                gfx_select!(device => global.swap_chain_present(sc_id)).unwrap();
+                                has_swap_chain = true;
+                                done = true;
+                            } else if !done {
                                 println!("Finished the end at frame {}", frame_count);
                                 done = true;
                             }
