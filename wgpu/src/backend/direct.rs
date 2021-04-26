@@ -1021,7 +1021,7 @@ impl crate::Context for Context {
         };
 
         let global = &self.0;
-        let (id, _, error) = wgc::gfx_select!(device.id => global.device_create_render_pipeline(
+        let (id, error) = wgc::gfx_select!(device.id => global.device_create_render_pipeline(
             device.id,
             &descriptor,
             PhantomData,
@@ -1068,7 +1068,7 @@ impl crate::Context for Context {
         };
 
         let global = &self.0;
-        let (id, _, error) = wgc::gfx_select!(device.id => global.device_create_compute_pipeline(
+        let (id, error) = wgc::gfx_select!(device.id => global.device_create_compute_pipeline(
             device.id,
             &descriptor,
             PhantomData,

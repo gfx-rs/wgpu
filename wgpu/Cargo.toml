@@ -28,26 +28,26 @@ cross = ["wgc/cross"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "523ef2dfec0bf18c696bc53fea252fd6fa7350c6"
+rev = "13015c8621daade1decb7e1083b7e0f73eeab6c7"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "523ef2dfec0bf18c696bc53fea252fd6fa7350c6"
+rev = "13015c8621daade1decb7e1083b7e0f73eeab6c7"
 features = ["raw-window-handle"]
 optional = true
 
 [dependencies.wgt]
 package = "wgpu-types"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "523ef2dfec0bf18c696bc53fea252fd6fa7350c6"
+rev = "13015c8621daade1decb7e1083b7e0f73eeab6c7"
 
 [dependencies]
 arrayvec = "0.5"
 log = "0.4"
 parking_lot = "0.11"
-profiling = { version = "0.1.10", default-features = false } # Need 0.1.10+ to avoid compliation error with proc macros off.
+profiling = { version = "1", default-features = false }
 raw-window-handle = "0.3"
 serde = { version = "1", features = ["derive"], optional = true }
 smallvec = "1"
@@ -71,13 +71,13 @@ env_logger = "0.8"
 # used to test all the example shaders
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-22"
+tag = "gfx-23"
 features = ["wgsl-in"]
 
 # used to generate SPIR-V for the Web target
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-22"
+tag = "gfx-23"
 features = ["wgsl-in", "spv-out"]
 
 [[example]]
