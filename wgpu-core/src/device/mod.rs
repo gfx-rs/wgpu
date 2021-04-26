@@ -332,15 +332,8 @@ impl<B: GfxBackend> Device<B> {
             //Note: we don't adjust the coordinate space, because `NDC_Y_UP` is required.
             spv::Options {
                 lang_version: (1, 0),
-                capabilities: [
-                    spv::Capability::Shader,
-                    spv::Capability::Matrix,
-                    spv::Capability::Sampled1D,
-                    spv::Capability::Image1D,
-                ]
-                .iter()
-                .cloned()
-                .collect(),
+                // doesn't matter, the preferred path is via a naga::Module
+                capabilities: None,
                 flags,
             }
         };
@@ -999,6 +992,7 @@ impl<B: GfxBackend> Device<B> {
                 // Parse the given shader code and store its representation.
                 let options = naga::front::spv::Options {
                     adjust_coordinate_space: false, // we require NDC_Y_UP feature
+                    strict_capabilities: true,
                     flow_graph_dump_prefix: None,
                 };
                 let parser = naga::front::spv::Parser::new(spv.iter().cloned(), &options);
