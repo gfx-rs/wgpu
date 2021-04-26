@@ -1023,6 +1023,7 @@ impl<W: Write> Writer<W> {
                     Mf::Normalize => "normalize",
                     Mf::FaceForward => "faceforward",
                     Mf::Reflect => "reflect",
+                    Mf::Refract => "refract",
                     // computational
                     Mf::Sign => "sign",
                     Mf::Fma => "fma",

@@ -1821,6 +1821,7 @@ impl Writer {
                     Mf::Normalize => MathOp::Ext(spirv::GLOp::Normalize),
                     Mf::FaceForward => MathOp::Ext(spirv::GLOp::FaceForward),
                     Mf::Reflect => MathOp::Ext(spirv::GLOp::Reflect),
+                    Mf::Refract => MathOp::Ext(spirv::GLOp::Refract),
                     // exponent
                     Mf::Exp => MathOp::Ext(spirv::GLOp::Exp),
                     Mf::Exp2 => MathOp::Ext(spirv::GLOp::Exp2),

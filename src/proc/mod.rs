@@ -150,6 +150,7 @@ impl super::MathFunction {
             Self::Normalize => 1,
             Self::FaceForward => 3,
             Self::Reflect => 2,
+            Self::Refract => 3,
             // computational
             Self::Sign => 1,
             Self::Fma => 3,

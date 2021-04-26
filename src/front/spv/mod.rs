@@ -1737,6 +1737,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         Glo::Normalize => Mf::Normalize,
                         Glo::FaceForward => Mf::FaceForward,
                         Glo::Reflect => Mf::Reflect,
+                        Glo::Refract => Mf::Refract,
                         _ => return Err(Error::UnsupportedExtInst(inst_id)),
                     };
 

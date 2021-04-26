@@ -630,6 +630,7 @@ pub enum MathFunction {
     Normalize,
     FaceForward,
     Reflect,
+    Refract,
     // computational
     Sign,
     Fma,

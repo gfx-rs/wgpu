@@ -561,7 +561,8 @@ impl<'a> ResolveContext<'a> {
                     },
                     Mf::Normalize |
                     Mf::FaceForward |
-                    Mf::Reflect => res_arg.clone(),
+                    Mf::Reflect |
+                    Mf::Refract => res_arg.clone(),
                     // computational
                     Mf::Sign |
                     Mf::Fma |

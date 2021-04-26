@@ -964,6 +964,47 @@ impl super::Validator {
                             ));
                         }
                     }
+                    Mf::Refract => {
+                        let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty) {
+                            (Some(ty1), Some(ty2)) => (ty1, ty2),
+                            _ => return Err(ExpressionError::WrongArgumentCount(fun)),
+                        };
+
+                        match *arg_ty {
+                            Ti::Vector {
+                                kind: Sk::Float, ..
+                            } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+
+                        if arg1_ty != arg_ty {
+                            return Err(ExpressionError::InvalidArgumentType(
+                                fun,
+                                1,
+                                arg1.unwrap(),
+                            ));
+                        }
+
+                        match (arg_ty, arg2_ty) {
+                            (
+                                &Ti::Vector {
+                                    width: vector_width,
+                                    ..
+                                },
+                                &Ti::Scalar {
+                                    width: scalar_width,
+                                    kind: Sk::Float,
+                                },
+                            ) if vector_width == scalar_width => {}
+                            _ => {
+                                return Err(ExpressionError::InvalidArgumentType(
+                                    fun,
+                                    2,
+                                    arg2.unwrap(),
+                                ))
+                            }
+                        }
+                    }
                     Mf::Normalize => {
                         if arg1_ty.is_some() | arg2_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
