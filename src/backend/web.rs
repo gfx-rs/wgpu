@@ -1144,12 +1144,10 @@ impl crate::Context for Context {
             crate::ShaderSource::Wgsl(ref code) => {
                 use naga::{back::spv, front::wgsl, valid::Validator};
                 let module = wgsl::parse_str(code).unwrap();
-                let mut capabilities = HashSet::default();
-                capabilities.insert(spv::Capability::Shader);
                 let options = spv::Options {
                     lang_version: (1, 0),
                     flags: spv::WriterFlags::empty(),
-                    capabilities,
+                    capabilities: None,
                 };
                 let analysis = Validator::new(naga::valid::ValidationFlags::all())
                     .validate(&module)
