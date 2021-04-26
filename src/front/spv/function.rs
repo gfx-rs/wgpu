@@ -212,11 +212,16 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     } else {
                         // The only case where the type is different is if we need to treat
                         // unsigned integer as signed.
-                        function.expressions.append(crate::Expression::As {
+                        let old_len = function.expressions.len();
+                        let handle = function.expressions.append(crate::Expression::As {
                             expr: arg_expr,
                             kind: crate::ScalarKind::Sint,
                             convert: true,
-                        })
+                        });
+                        function.body.push(crate::Statement::Emit(
+                            function.expressions.range_from(old_len),
+                        ));
+                        handle
                     };
                     function.body.push(crate::Statement::Store {
                         pointer: function
