@@ -303,7 +303,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
 #[cfg(feature = "spv-in")]
 #[test]
 fn convert_spv_quad_vert() {
-    convert_spv("quad-vert", false, Targets::METAL | Targets::GLSL);
+    convert_spv("quad-vert", false, Targets::METAL | Targets::GLSL | Targets::WGSL);
 }
 
 #[cfg(feature = "spv-in")]
