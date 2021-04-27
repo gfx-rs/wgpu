@@ -989,6 +989,7 @@ impl<B: GfxBackend> Device<B> {
         // First, try to produce a Naga module.
         let (spv, module) = match source {
             pipeline::ShaderModuleSource::SpirV(spv) => {
+                profiling::scope!("naga::spv::parse");
                 // Parse the given shader code and store its representation.
                 let options = naga::front::spv::Options {
                     adjust_coordinate_space: false, // we require NDC_Y_UP feature
@@ -1010,6 +1011,7 @@ impl<B: GfxBackend> Device<B> {
                 (Some(spv), module)
             }
             pipeline::ShaderModuleSource::Wgsl(code) => {
+                profiling::scope!("naga::wgsl::parse_str");
                 // TODO: refactor the corresponding Naga error to be owned, and then
                 // display it instead of unwrapping
                 match naga::front::wgsl::parse_str(&code) {
@@ -1026,6 +1028,7 @@ impl<B: GfxBackend> Device<B> {
         let (naga_result, interface) = match module {
             // If succeeded, then validate it and attempt to give it to gfx-hal directly.
             Some(module) if desc.flags.contains(wgt::ShaderFlags::VALIDATION) || spv.is_none() => {
+                profiling::scope!("naga::validate");
                 let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all())
                     .validate(&module)?;
                 if !self.features.contains(wgt::Features::PUSH_CONSTANTS)
@@ -1069,6 +1072,7 @@ impl<B: GfxBackend> Device<B> {
                     Some(data) => Ok(data),
                     None => {
                         // Produce a SPIR-V from the Naga module
+                        profiling::scope!("naga::wpv::write_vec");
                         let shader = maybe_shader.unwrap();
                         naga::back::spv::write_vec(&shader.module, &shader.info, &self.spv_options)
                             .map(Cow::Owned)
