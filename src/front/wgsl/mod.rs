@@ -1328,7 +1328,7 @@ impl Parser {
                 };
                 (true, ctx.expressions.append(expr))
             }
-            Token::Operation('!') => {
+            Token::Operation('!') | Token::Operation('~') => {
                 let expr = crate::Expression::Unary {
                     op: crate::UnaryOperator::Not,
                     expr: self.parse_singular_expression(lexer, ctx.reborrow())?,

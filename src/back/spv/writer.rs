@@ -2960,6 +2960,11 @@ impl Writer {
         for capability in self.capabilities.iter() {
             Instruction::capability(*capability).to_words(&mut self.logical_layout.capabilities);
         }
+        if ir_module.entry_points.is_empty() {
+            // SPIR-V doesn't like modules without entry points
+            Instruction::capability(spirv::Capability::Linkage)
+                .to_words(&mut self.logical_layout.capabilities);
+        }
 
         let addressing_model = spirv::AddressingModel::Logical;
         let memory_model = spirv::MemoryModel::GLSL450;

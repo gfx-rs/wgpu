@@ -549,6 +549,7 @@ impl super::Validator {
                 match (op, inner.scalar_kind()) {
                     (_, Some(Sk::Sint))
                     | (_, Some(Sk::Bool))
+                    //TODO: restrict Negate for bools?
                     | (Uo::Negate, Some(Sk::Float))
                     | (Uo::Not, Some(Sk::Uint)) => {}
                     other => {
