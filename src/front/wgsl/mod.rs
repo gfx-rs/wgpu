@@ -1146,7 +1146,9 @@ impl Parser {
                         last_component = self.parse_general_expression(lexer, ctx.reborrow())?;
                     }
 
-                    let expr = if components.is_empty() {
+                    let expr = if components.is_empty()
+                        && ty_resolution.inner_with(ctx.types).scalar_kind().is_some()
+                    {
                         // We can't use the `TypeInner` returned by this because
                         // `resolve_type` borrows context mutably.
                         // Use it to insert into the right maps,
