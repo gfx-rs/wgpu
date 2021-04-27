@@ -642,6 +642,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
 
                 if !command_buffer_ids.is_empty() {
+                    profiling::scope!("submit preparation");
+
                     let (render_bundle_guard, mut token) = hub.render_bundles.read(&mut token);
                     let (_, mut token) = hub.pipeline_layouts.read(&mut token);
                     let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
