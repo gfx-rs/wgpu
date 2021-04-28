@@ -1,7 +1,9 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-typedef float type6[1u];
+struct type6 {
+    float inner[1u];
+};
 struct gl_PerVertex {
     metal::float4 gl_Position;
     float gl_PointSize;
@@ -35,7 +37,7 @@ struct main2Output {
     metal::float2 member [[user(loc0), center_perspective]];
     metal::float4 gl_Position1 [[position]];
     float gl_PointSize1 [[point_size]];
-    type6 gl_ClipDistance1 [[clip_distance]];
+    float gl_ClipDistance1 [[clip_distance]] [1];
 };
 vertex main2Output main2(
   main2Input varyings [[stage_in]]
@@ -49,6 +51,6 @@ vertex main2Output main2(
     a_uv = a_uv1;
     a_pos = a_pos1;
     main1(v_uv, a_uv, _, a_pos);
-    const auto _tmp = type10 {v_uv, _.gl_Position, _.gl_PointSize, {_.gl_ClipDistance[0]}};
-    return main2Output { _tmp.member, _tmp.gl_Position1, _tmp.gl_PointSize1, {_tmp.gl_ClipDistance1[0]} };
+    const auto _tmp = type10 {v_uv, _.gl_Position, _.gl_PointSize, _.gl_ClipDistance};
+    return main2Output { _tmp.member, _tmp.gl_Position1, _tmp.gl_PointSize1, {_tmp.gl_ClipDistance1.inner[0]} };
 }

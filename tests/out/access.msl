@@ -1,7 +1,9 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-typedef int type3[5];
+struct type3 {
+    int inner[5];
+};
 
 struct fooInput {
 };
@@ -11,5 +13,5 @@ struct fooOutput {
 vertex fooOutput foo(
   metal::uint vi [[vertex_id]]
 ) {
-    return fooOutput { static_cast<float4>(int4(type3 {1, 2, 3, 4, 5}[vi])) };
+    return fooOutput { static_cast<float4>(int4(type3 {1, 2, 3, 4, 5}.inner[vi])) };
 }

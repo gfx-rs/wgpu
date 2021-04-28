@@ -18,6 +18,7 @@ use std::{
 const NAMESPACE: &str = "metal";
 const INDENT: &str = "    ";
 const BAKE_PREFIX: &str = "_e";
+const WRAPPED_ARRAY_FIELD: &str = "inner";
 
 #[derive(Clone)]
 struct Level(usize);
@@ -81,12 +82,9 @@ impl<'a> Display for TypeContext<'a> {
             }
             crate::TypeInner::Pointer { base, class } => {
                 let sub = Self {
-                    arena: self.arena,
-                    names: self.names,
                     handle: base,
-                    usage: self.usage,
-                    access: self.access,
                     first_time: false,
+                    ..*self
                 };
                 let class_name = match class.get_name(self.usage) {
                     Some(name) => name,
@@ -125,7 +123,17 @@ impl<'a> Display for TypeContext<'a> {
                     vector_size_str(size),
                 )
             }
-            crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => unreachable!(),
+            crate::TypeInner::Array { base, .. } => {
+                let sub = Self {
+                    handle: base,
+                    first_time: false,
+                    ..*self
+                };
+                // Array lengths go at the end of the type definition,
+                // so just print the element type here.
+                write!(out, "{}", sub)
+            }
+            crate::TypeInner::Struct { .. } => unreachable!(),
             crate::TypeInner::Image {
                 dim,
                 arrayed,
@@ -533,39 +541,6 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn put_initialization_component(
-        &mut self,
-        component: Handle<crate::Expression>,
-        context: &ExpressionContext,
-    ) -> Result<(), Error> {
-        // we can't initialize the array members just like other members,
-        // we have to unwrap them one level deeper...
-        let component_res = &context.info[component].ty;
-        if let crate::TypeInner::Array {
-            size: crate::ArraySize::Constant(const_handle),
-            ..
-        } = *component_res.inner_with(&context.module.types)
-        {
-            //HACK: we are forcefully duplicating the expression here,
-            // it would be nice to find a more C++ idiomatic solution for initializing array members
-            let size = context.module.constants[const_handle]
-                .to_array_length()
-                .unwrap();
-            write!(self.out, "{{")?;
-            for j in 0..size {
-                if j != 0 {
-                    write!(self.out, ",")?;
-                }
-                self.put_expression(component, context, false)?;
-                write!(self.out, "[{}]", j)?;
-            }
-            write!(self.out, "}}")?;
-        } else {
-            self.put_expression(component, context, true)?;
-        }
-        Ok(())
-    }
-
     fn put_expression(
         &mut self,
         expr_handle: Handle<crate::Expression>,
@@ -587,7 +562,25 @@ impl<W: Write> Writer<W> {
         log::trace!("expression {:?} = {:?}", expr_handle, expression);
         match *expression {
             crate::Expression::Access { base, index } => {
+                let accessing_wrapped_array =
+                    match *context.info[base].ty.inner_with(&context.module.types) {
+                        crate::TypeInner::Array { .. } => true,
+                        crate::TypeInner::Pointer {
+                            base: pointer_base, ..
+                        } => match context.module.types[pointer_base].inner {
+                            crate::TypeInner::Array {
+                                size: crate::ArraySize::Constant(_),
+                                ..
+                            } => true,
+                            _ => false,
+                        },
+                        _ => false,
+                    };
+
                 self.put_expression(base, context, false)?;
+                if accessing_wrapped_array {
+                    write!(self.out, ".{}", WRAPPED_ARRAY_FIELD)?;
+                }
                 write!(self.out, "[")?;
                 self.put_expression(index, context, true)?;
                 write!(self.out, "]")?;
@@ -690,7 +683,7 @@ impl<W: Write> Writer<W> {
                             if i != 0 {
                                 write!(self.out, ", ")?;
                             }
-                            self.put_initialization_component(component, context)?;
+                            self.put_expression(component, context, true)?;
                         }
                         write!(self.out, "}}")?;
                     }
@@ -1121,7 +1114,9 @@ impl<W: Write> Writer<W> {
                             let comma = if is_first { "" } else { "," };
                             is_first = false;
                             let name = &self.names[&NameKey::StructMember(result_ty, index as u32)];
-                            // logic similar to `put_initialization_component`
+                            // HACK: we are forcefully deduplicating the expression here
+                            // to convert from a wrapped struct to a raw array, e.g.
+                            // `float gl_ClipDistance1 [[clip_distance]] [1];`.
                             if let crate::TypeInner::Array {
                                 size: crate::ArraySize::Constant(const_handle),
                                 ..
@@ -1135,7 +1130,11 @@ impl<W: Write> Writer<W> {
                                     if j != 0 {
                                         write!(self.out, ",")?;
                                     }
-                                    write!(self.out, "{}.{}[{}]", tmp, name, j)?;
+                                    write!(
+                                        self.out,
+                                        "{}.{}.{}[{}]",
+                                        tmp, name, WRAPPED_ARRAY_FIELD, j
+                                    )?;
                                 }
                                 write!(self.out, "}}")?;
                             } else {
@@ -1345,9 +1344,9 @@ impl<W: Write> Writer<W> {
                                 .unwrap();
                             write!(self.out, "{}for(int _i=0; _i<{}; ++_i) ", level, size)?;
                             self.put_expression(pointer, &context.expression, true)?;
-                            write!(self.out, "[_i] = ")?;
+                            write!(self.out, ".{}[_i] = ", WRAPPED_ARRAY_FIELD)?;
                             self.put_expression(value, &context.expression, true)?;
-                            writeln!(self.out, "[_i];")?;
+                            writeln!(self.out, ".{}[_i];", WRAPPED_ARRAY_FIELD)?;
                         }
                         None => {
                             write!(self.out, "{}", level)?;
@@ -1468,7 +1467,7 @@ impl<W: Write> Writer<W> {
                         access: crate::StorageAccess::empty(),
                         first_time: false,
                     };
-                    write!(self.out, "typedef {} {}", base_name, name)?;
+
                     match size {
                         crate::ArraySize::Constant(const_handle) => {
                             let coco = ConstantContext {
@@ -1477,10 +1476,17 @@ impl<W: Write> Writer<W> {
                                 names: &self.names,
                                 first_time: false,
                             };
-                            writeln!(self.out, "[{}];", coco)?;
+
+                            writeln!(self.out, "struct {} {{", name)?;
+                            writeln!(
+                                self.out,
+                                "{}{} {}[{}];",
+                                INDENT, base_name, WRAPPED_ARRAY_FIELD, coco
+                            )?;
+                            writeln!(self.out, "}};")?;
                         }
                         crate::ArraySize::Dynamic => {
-                            writeln!(self.out, "[1];")?;
+                            writeln!(self.out, "typedef {} {}[1];", base_name, name)?;
                         }
                     }
                 }
@@ -1942,7 +1948,7 @@ impl<W: Write> Writer<W> {
                             names: &self.names,
                             usage: GlobalUse::empty(),
                             access: crate::StorageAccess::empty(),
-                            first_time: false,
+                            first_time: true,
                         };
                         let binding = binding.ok_or(Error::Validation)?;
                         if !pipeline_options.allow_point_size
@@ -1950,9 +1956,19 @@ impl<W: Write> Writer<W> {
                         {
                             continue;
                         }
+                        let array_len = match module.types[ty].inner {
+                            crate::TypeInner::Array {
+                                size: crate::ArraySize::Constant(handle),
+                                ..
+                            } => module.constants[handle].to_array_length(),
+                            _ => None,
+                        };
                         let resolved = options.resolve_local_binding(binding, out_mode)?;
                         write!(self.out, "{}{} {}", INDENT, ty_name, name)?;
                         resolved.try_fmt_decorated(&mut self.out, "")?;
+                        if let Some(array_len) = array_len {
+                            write!(self.out, " [{}]", array_len)?;
+                        }
                         writeln!(self.out, ";")?;
                     }
                     writeln!(self.out, "}};")?;
