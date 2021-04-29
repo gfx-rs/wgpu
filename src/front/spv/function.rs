@@ -149,8 +149,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         fun_id,
                         &mut fun.expressions,
                         &mut fun.local_variables,
+                        &mut module.constants,
                         &module.types,
-                        &module.constants,
                         &module.global_variables,
                     )?;
 
