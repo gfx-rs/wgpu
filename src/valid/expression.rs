@@ -171,24 +171,36 @@ impl super::Validator {
                 ShaderStages::all()
             }
             E::AccessIndex { base, index } => {
-                let limit = match *resolver.resolve(base)? {
-                    Ti::Vector { size, .. }
-                    | Ti::ValuePointer {
-                        size: Some(size), ..
-                    } => size as u32,
-                    Ti::Matrix { columns, .. } => columns as u32,
-                    Ti::Array {
-                        size: crate::ArraySize::Constant(handle),
-                        ..
-                    } => module.constants[handle].to_array_length().unwrap(),
-                    Ti::Array { .. } => !0, // can't statically know, but need run-time checks
-                    Ti::Pointer { .. } => !0, //TODO
-                    Ti::Struct { ref members, .. } => members.len() as u32,
-                    ref other => {
-                        log::error!("Indexing of {:?}", other);
-                        return Err(ExpressionError::InvalidBaseType(base));
-                    }
-                };
+                fn resolve_index_limit(
+                    module: &crate::Module,
+                    top: Handle<crate::Expression>,
+                    ty: &crate::TypeInner,
+                    top_level: bool,
+                ) -> Result<u32, ExpressionError> {
+                    let limit = match *ty {
+                        Ti::Vector { size, .. }
+                        | Ti::ValuePointer {
+                            size: Some(size), ..
+                        } => size as u32,
+                        Ti::Matrix { columns, .. } => columns as u32,
+                        Ti::Array {
+                            size: crate::ArraySize::Constant(handle),
+                            ..
+                        } => module.constants[handle].to_array_length().unwrap(),
+                        Ti::Array { .. } => !0, // can't statically know, but need run-time checks
+                        Ti::Pointer { base, .. } if top_level => {
+                            resolve_index_limit(module, top, &module.types[base].inner, false)?
+                        }
+                        Ti::Struct { ref members, .. } => members.len() as u32,
+                        ref other => {
+                            log::error!("Indexing of {:?}", other);
+                            return Err(ExpressionError::InvalidBaseType(top));
+                        }
+                    };
+                    Ok(limit)
+                }
+
+                let limit = resolve_index_limit(module, base, resolver.resolve(base)?, true)?;
                 if index >= limit {
                     return Err(ExpressionError::IndexOutOfBounds(base, index));
                 }
