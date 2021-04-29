@@ -1,6 +1,6 @@
 # Change Log
 
-## v0.4 (TBD)
+## v0.4 (2021-04-29)
   - development release for wgpu-0.8
   - API:
     - expressions are explicitly emitted with `Statement::Emit`
@@ -13,18 +13,22 @@
     - new `Statement::ImageStore`
     - all function calls are `Statement::Call`
     - `GlobalUse` is moved out into processing
-    - field layout is controlled by `size` and `alignment` overrides, based on a default layout
     - `Header` is removed
     - entry points are an array instead of a map
+    - new `Swizzle` and `Splat` expressions
+    - interpolation qualifiers are extended and required
+    - struct member layout is based on the byte offsets
   - Infrastructure:
     - control flow uniformity analysis
     - texture-sampler combination gathering
     - `CallGraph` processor is moved out into `glsl` backend
-    - `Interface` is removed
-    - statement tree and constants are validated
+    - `Interface` is removed, instead the analysis produces `ModuleInfo` with all the derived info
+    - validation of statement tree, expressions, and constants
     - code linting is more strict for matches
   - new GraphViz `dot` backend for pretty visualization of the IR
-  - `convert` is default a binary target, published with the crate
+  - Metal support for inlined samplers
+  - `convert` example is transformed into the default binary target named `naga`
+  - lots of frontend and backend fixes
 
 ### v0.3.2 (2021-02-15)
   - fix logical expression types
