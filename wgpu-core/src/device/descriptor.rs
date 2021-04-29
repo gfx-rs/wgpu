@@ -61,7 +61,9 @@ impl<B: hal::Backend>
         max_sets: u32,
         flags: gpu_descriptor::DescriptorPoolCreateFlags,
     ) -> Result<B::DescriptorPool, gpu_descriptor::CreatePoolError> {
+        profiling::scope!("create_descriptor_pool");
         let mut ranges = ArrayVec::<[_; 7]>::new();
+
         ranges.push(hal::pso::DescriptorRangeDesc {
             ty: hal::pso::DescriptorType::Sampler,
             count: descriptor_count.sampler as _,
@@ -135,6 +137,7 @@ impl<B: hal::Backend>
     }
 
     unsafe fn destroy_descriptor_pool(&self, pool: B::DescriptorPool) {
+        profiling::scope!("destroy_descriptor_pool");
         hal::device::Device::destroy_descriptor_pool(self.0, pool);
     }
 
@@ -145,6 +148,8 @@ impl<B: hal::Backend>
         sets: &mut impl Extend<B::DescriptorSet>,
     ) -> Result<(), gpu_descriptor::DeviceAllocationError> {
         use gpu_descriptor::DeviceAllocationError as Dae;
+        profiling::scope!("alloc_descriptor_sets");
+
         match hal::pso::DescriptorPool::allocate(pool, layouts, sets) {
             Ok(()) => Ok(()),
             Err(hal::pso::AllocationError::OutOfMemory(oom)) => Err(match oom {
@@ -164,6 +169,7 @@ impl<B: hal::Backend>
         pool: &mut B::DescriptorPool,
         sets: impl Iterator<Item = B::DescriptorSet>,
     ) {
+        profiling::scope!("dealloc_descriptor_sets");
         hal::pso::DescriptorPool::free(pool, sets)
     }
 }

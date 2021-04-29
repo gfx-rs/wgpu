@@ -765,7 +765,7 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn new(name: &str, factory: G, backends: wgt::BackendBit) -> Self {
-        profiling::scope!("Global::new");
+        profiling::scope!("new", "Global");
         Self {
             instance: Instance::new(name, 1, backends),
             surfaces: Registry::without_backend(&factory, "Surface"),
@@ -784,6 +784,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
         if !thread::panicking() {
+            profiling::scope!("drop", "Global");
             log::info!("Dropping Global");
             let mut surface_guard = self.surfaces.data.write();
 

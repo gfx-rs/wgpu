@@ -403,6 +403,7 @@ impl<B: GfxBackend> Device<B> {
         force_wait: bool,
         token: &mut Token<'token, Self>,
     ) -> Result<Vec<BufferMapPendingCallback>, WaitIdleError> {
+        profiling::scope!("maintain", "Device");
         let mut life_tracker = self.lock_life(token);
 
         life_tracker.triage_suspected(
@@ -2713,8 +2714,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: id::AdapterId,
         surface_id: id::SurfaceId,
     ) -> Result<TextureFormat, instance::GetSwapChainPreferredFormatError> {
-        profiling::scope!("Adapter::get_swap_chain_preferred_format");
-
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -2734,8 +2733,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
     ) -> Result<wgt::Features, InvalidDevice> {
-        profiling::scope!("Device::features");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
@@ -2748,8 +2745,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
     ) -> Result<wgt::Limits, InvalidDevice> {
-        profiling::scope!("Device::limits");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
@@ -2762,8 +2757,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
     ) -> Result<wgt::DownlevelProperties, InvalidDevice> {
-        profiling::scope!("Device::downlevel_properties");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
@@ -2778,7 +2771,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::BufferDescriptor,
         id_in: Input<G, id::BufferId>,
     ) -> (id::BufferId, Option<resource::CreateBufferError>) {
-        profiling::scope!("Device::create_buffer");
+        profiling::scope!("create_buffer", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2932,7 +2925,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         data: &[u8],
     ) -> Result<(), resource::BufferAccessError> {
-        profiling::scope!("Device::set_buffer_sub_data");
+        profiling::scope!("set_buffer_sub_data", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2977,7 +2970,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         data: &mut [u8],
     ) -> Result<(), resource::BufferAccessError> {
-        profiling::scope!("Device::get_buffer_sub_data");
+        profiling::scope!("get_buffer_sub_data", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3011,7 +3004,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
     ) -> Result<(), resource::DestroyError> {
-        profiling::scope!("Buffer::destroy");
+        profiling::scope!("destroy", "Buffer");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3054,7 +3047,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn buffer_drop<B: GfxBackend>(&self, buffer_id: id::BufferId, wait: bool) {
-        profiling::scope!("Buffer::drop");
+        profiling::scope!("drop", "Buffer");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3108,7 +3101,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
-        profiling::scope!("Device::create_texture");
+        profiling::scope!("create_texture", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3161,7 +3154,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         texture_id: id::TextureId,
     ) -> Result<(), resource::DestroyError> {
-        profiling::scope!("Texture::destroy");
+        profiling::scope!("destroy", "Texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3204,7 +3197,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn texture_drop<B: GfxBackend>(&self, texture_id: id::TextureId, wait: bool) {
-        profiling::scope!("Texture::drop");
+        profiling::scope!("drop", "Texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3258,7 +3251,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureViewDescriptor,
         id_in: Input<G, id::TextureViewId>,
     ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
-        profiling::scope!("Texture::create_view");
+        profiling::scope!("create_view", "Texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3310,7 +3303,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         texture_view_id: id::TextureViewId,
         wait: bool,
     ) -> Result<(), resource::TextureViewDestroyError> {
-        profiling::scope!("TextureView::drop");
+        profiling::scope!("drop", "TextureView");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3369,7 +3362,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::SamplerDescriptor,
         id_in: Input<G, id::SamplerId>,
     ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
-        profiling::scope!("Device::create_sampler");
+        profiling::scope!("create_sampler", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3413,7 +3406,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn sampler_drop<B: GfxBackend>(&self, sampler_id: id::SamplerId) {
-        profiling::scope!("Sampler::drop");
+        profiling::scope!("drop", "Sampler");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3450,7 +3443,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::BindGroupLayoutId,
         Option<binding_model::CreateBindGroupLayoutError>,
     ) {
-        profiling::scope!("Device::create_bind_group_layout");
+        profiling::scope!("create_bind_group_layout", "Device");
 
         let mut token = Token::root();
         let hub = B::hub(self);
@@ -3515,7 +3508,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         bind_group_layout_id: id::BindGroupLayoutId,
     ) {
-        profiling::scope!("BindGroupLayout::drop");
+        profiling::scope!("drop", "BindGroupLayout");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3548,7 +3541,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::PipelineLayoutId,
         Option<binding_model::CreatePipelineLayoutError>,
     ) {
-        profiling::scope!("Device::create_pipeline_layout");
+        profiling::scope!("create_pipeline_layout", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3588,7 +3581,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn pipeline_layout_drop<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {
-        profiling::scope!("PipelineLayout::drop");
+        profiling::scope!("drop", "PipelineLayout");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3624,7 +3617,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &binding_model::BindGroupDescriptor,
         id_in: Input<G, id::BindGroupId>,
     ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
-        profiling::scope!("Device::create_bind_group");
+        profiling::scope!("create_bind_group", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3686,7 +3679,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn bind_group_drop<B: GfxBackend>(&self, bind_group_id: id::BindGroupId) {
-        profiling::scope!("BindGroup::drop");
+        profiling::scope!("drop", "BindGroup");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3724,7 +3717,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
     ) {
-        profiling::scope!("Device::create_shader_module");
+        profiling::scope!("create_shader_module", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3777,7 +3770,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn shader_module_drop<B: GfxBackend>(&self, shader_module_id: id::ShaderModuleId) {
-        profiling::scope!("ShaderModule::drop");
+        profiling::scope!("drop", "ShaderModule");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3803,7 +3796,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Input<G, id::CommandEncoderId>,
     ) -> (id::CommandEncoderId, Option<command::CommandAllocatorError>) {
-        profiling::scope!("Device::create_command_encoder");
+        profiling::scope!("create_command_encoder", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3856,7 +3849,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn command_encoder_drop<B: GfxBackend>(&self, command_encoder_id: id::CommandEncoderId) {
-        profiling::scope!("CommandEncoder::drop");
+        profiling::scope!("drop", "CommandEncoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3873,7 +3866,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn command_buffer_drop<B: GfxBackend>(&self, command_buffer_id: id::CommandBufferId) {
-        profiling::scope!("CommandBuffer::drop");
+        profiling::scope!("drop", "CommandBuffer");
         self.command_encoder_drop::<B>(command_buffer_id)
     }
 
@@ -3885,7 +3878,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::RenderBundleEncoderId,
         Option<command::CreateRenderBundleError>,
     ) {
-        profiling::scope!("Device::create_render_bundle_encoder");
+        profiling::scope!("create_render_bundle_encoder", "Device");
         let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id, None) {
             Ok(encoder) => (encoder, None),
             Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
@@ -3899,7 +3892,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &command::RenderBundleDescriptor,
         id_in: Input<G, id::RenderBundleId>,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
-        profiling::scope!("RenderBundleEncoder::finish");
+        profiling::scope!("finish", "RenderBundleEncoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -3950,7 +3943,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn render_bundle_drop<B: GfxBackend>(&self, render_bundle_id: id::RenderBundleId) {
-        profiling::scope!("RenderBundle::drop");
+        profiling::scope!("drop", "RenderBundle");
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -3983,7 +3976,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &wgt::QuerySetDescriptor,
         id_in: Input<G, id::QuerySetId>,
     ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
-        profiling::scope!("Device::create_query_set");
+        profiling::scope!("create_query_set", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4067,7 +4060,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn query_set_drop<B: GfxBackend>(&self, query_set_id: id::QuerySetId) {
-        profiling::scope!("QuerySet::drop");
+        profiling::scope!("drop", "QuerySet");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4106,7 +4099,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::RenderPipelineId,
         Option<pipeline::CreateRenderPipelineError>,
     ) {
-        profiling::scope!("Device::create_render_pipeline");
+        profiling::scope!("create_render_pipeline", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4196,7 +4189,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn render_pipeline_drop<B: GfxBackend>(&self, render_pipeline_id: id::RenderPipelineId) {
-        profiling::scope!("RenderPipeline::drop");
+        profiling::scope!("drop", "RenderPipeline");
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -4237,7 +4230,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::ComputePipelineId,
         Option<pipeline::CreateComputePipelineError>,
     ) {
-        profiling::scope!("Device::create_compute_pipeline");
+        profiling::scope!("create_compute_pipeline", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4327,7 +4320,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn compute_pipeline_drop<B: GfxBackend>(&self, compute_pipeline_id: id::ComputePipelineId) {
-        profiling::scope!("ComputePipeline::drop");
+        profiling::scope!("drop", "ComputePipeline");
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -4364,7 +4357,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         surface_id: id::SurfaceId,
         desc: &wgt::SwapChainDescriptor,
     ) -> (id::SwapChainId, Option<swap_chain::CreateSwapChainError>) {
-        profiling::scope!("Device::create_swap_chain");
+        profiling::scope!("create_swap_chain", "Device");
 
         fn validate_swap_chain_descriptor(
             config: &mut hal::window::SwapchainConfig,
@@ -4527,8 +4520,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         force_wait: bool,
     ) -> Result<(), WaitIdleError> {
-        profiling::scope!("Device::poll");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let callbacks = {
@@ -4547,7 +4538,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         force_wait: bool,
         callbacks: &mut Vec<BufferMapPendingCallback>,
     ) -> Result<(), WaitIdleError> {
-        profiling::scope!("Device::poll_devices");
+        profiling::scope!("poll_devices");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4590,7 +4581,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_drop<B: GfxBackend>(&self, device_id: id::DeviceId) {
-        profiling::scope!("Device::drop");
+        profiling::scope!("drop", "Device");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4616,7 +4607,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         range: Range<BufferAddress>,
         op: resource::BufferMapOperation,
     ) -> Result<(), resource::BufferAccessError> {
-        profiling::scope!("Device::buffer_map_async");
+        profiling::scope!("map_async", "Buffer");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4679,7 +4670,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(*mut u8, u64), resource::BufferAccessError> {
-        profiling::scope!("Device::buffer_get_mapped_range");
+        profiling::scope!("get_mapped_range", "Buffer");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -4745,7 +4736,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
     ) -> Result<Option<BufferMapPendingCallback>, resource::BufferAccessError> {
-        profiling::scope!("Device::buffer_unmap");
+        profiling::scope!("unmap", "Buffer");
 
         let hub = B::hub(self);
         let mut token = Token::root();

@@ -257,7 +257,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<ComputeCommand>,
     ) -> Result<(), ComputePassError> {
-        profiling::scope!("CommandEncoder::run_compute_pass");
+        profiling::scope!("run_compute_pass", "CommandEncoder");
         let scope = PassErrorScope::Pass(encoder_id);
 
         let hub = B::hub(self);

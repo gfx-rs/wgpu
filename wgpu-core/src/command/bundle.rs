@@ -91,7 +91,6 @@ impl RenderBundleEncoder {
         parent_id: id::DeviceId,
         base: Option<BasePass<RenderCommand>>,
     ) -> Result<Self, CreateRenderBundleError> {
-        profiling::scope!("RenderBundleEncoder::new");
         Ok(Self {
             base: base.unwrap_or_else(|| BasePass::new(&desc.label)),
             parent_id,
@@ -511,7 +510,6 @@ impl RenderBundleEncoder {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        profiling::scope!("RenderBundle::set_index_buffer");
         self.base.commands.push(RenderCommand::SetIndexBuffer {
             buffer_id,
             index_format,
