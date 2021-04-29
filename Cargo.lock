@@ -618,8 +618,9 @@ dependencies = [
 
 [[package]]
 name = "gpu-alloc"
-version = "0.4.2"
-source = "git+https://github.com/zakarumych/gpu-alloc.git?rev=2cd1ad650cdd24d1647b6041f77ced0cbf1ff2a6#2cd1ad650cdd24d1647b6041f77ced0cbf1ff2a6"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8159cab119e2c6947476a8b941d478c8de4a1ce050d92c55903f8d0192ccacda"
 dependencies = [
  "bitflags",
  "gpu-alloc-types",
@@ -627,8 +628,9 @@ dependencies = [
 
 [[package]]
 name = "gpu-alloc-types"
-version = "0.2.1"
-source = "git+https://github.com/zakarumych/gpu-alloc.git?rev=2cd1ad650cdd24d1647b6041f77ced0cbf1ff2a6#2cd1ad650cdd24d1647b6041f77ced0cbf1ff2a6"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54804d0d6bc9d7f26db4eaec1ad10def69b599315f487d32c334a80d1efe67a5"
 dependencies = [
  "bitflags",
 ]
@@ -1625,7 +1627,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -1656,7 +1658,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-types"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "bitflags",
  "serde",

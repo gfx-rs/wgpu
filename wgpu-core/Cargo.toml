@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "WebGPU core logic on gfx-hal"
@@ -66,7 +66,7 @@ features = ["spv-in", "spv-out", "wgsl-in"]
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.7"
+version = "0.8"
 
 [dev-dependencies]
 loom = "0.3"
