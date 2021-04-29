@@ -349,11 +349,11 @@ impl framework::Example for Example {
             layout: &local_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Buffer {
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: &entity_uniform_buf,
                     offset: 0,
                     size: wgpu::BufferSize::new(entity_uniform_size),
-                },
+                }),
             }],
             label: None,
         });

@@ -949,17 +949,14 @@ pub enum BindingResource<'a> {
     ///
     /// Corresponds to [`wgt::BufferBindingType::Uniform`] and [`wgt::BufferBindingType::Storage`]
     /// with [`BindGroupLayoutEntry::count`] set to None.
-    Buffer {
-        /// The buffer to bind.
-        buffer: &'a Buffer,
-        /// Base offset of the buffer. For bindings with `dynamic == true`, this offset
-        /// will be added to the dynamic offset provided in [`RenderPass::set_bind_group`].
-        ///
-        /// The offset has to be aligned to [`BIND_BUFFER_ALIGNMENT`].
-        offset: BufferAddress,
-        /// Size of the binding, or `None` for using the rest of the buffer.
-        size: Option<BufferSize>,
-    },
+    Buffer(BufferBinding<'a>),
+    /// Binding is backed by an array of buffers.
+    ///
+    /// [`Features::BUFFER_BINDING_ARRAY`] must be supported to use this feature.
+    ///
+    /// Corresponds to [`wgt::BufferBindingType::Uniform`] and [`wgt::BufferBindingType::Storage`]
+    /// with [`BindGroupLayoutEntry::count`] set to Some.
+    BufferArray(&'a [BufferBinding<'a>]),
     /// Binding is a sampler.
     ///
     /// Corresponds to [`wgt::BindingType::Sampler`] with [`BindGroupLayoutEntry::count`] set to None.
@@ -976,6 +973,20 @@ pub enum BindingResource<'a> {
     /// Corresponds to [`wgt::BindingType::Texture`] and [`wgt::BindingType::StorageTexture`] with
     /// [`BindGroupLayoutEntry::count`] set to Some.
     TextureViewArray(&'a [&'a TextureView]),
+}
+
+/// Describes the segment of a buffer to bind.
+#[derive(Clone, Debug)]
+pub struct BufferBinding<'a> {
+    /// The buffer to bind.
+    pub buffer: &'a Buffer,
+    /// Base offset of the buffer. For bindings with `dynamic == true`, this offset
+    /// will be added to the dynamic offset provided in [`RenderPass::set_bind_group`].
+    ///
+    /// The offset has to be aligned to [`BIND_BUFFER_ALIGNMENT`].
+    pub offset: BufferAddress,
+    /// Size of the binding, or `None` for using the rest of the buffer.
+    pub size: Option<BufferSize>,
 }
 
 /// Operation to perform to the output attachment at the start of a renderpass.
@@ -1833,7 +1844,12 @@ impl Drop for BufferViewMut<'_> {
 impl Buffer {
     /// Return the binding view of the entire buffer.
     pub fn as_entire_binding(&self) -> BindingResource {
-        BindingResource::Buffer {
+        BindingResource::Buffer(self.as_entire_buffer_binding())
+    }
+
+    /// Return the binding view of the entire buffer.
+    pub fn as_entire_buffer_binding(&self) -> BufferBinding {
+        BufferBinding {
             buffer: self,
             offset: 0,
             size: None,

@@ -1,6 +1,6 @@
 use crate::{
     backend::{error::ContextError, native_gpu_future},
-    AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
+    AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelProperties, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
@@ -875,21 +875,42 @@ impl crate::Context for Context {
         }
         let mut remaining_arrayed_texture_views = &arrayed_texture_views[..];
 
+        let mut arrayed_buffer_bindings = Vec::new();
+        if device.features.contains(Features::BUFFER_BINDING_ARRAY) {
+            // gather all the buffers first
+            for entry in desc.entries.iter() {
+                if let BindingResource::BufferArray(array) = entry.resource {
+                    arrayed_buffer_bindings.extend(array.iter().map(|binding| bm::BufferBinding {
+                        buffer_id: binding.buffer.id.id,
+                        offset: binding.offset,
+                        size: binding.size,
+                    }));
+                }
+            }
+        }
+        let mut remaining_arrayed_buffer_bindings = &arrayed_buffer_bindings[..];
+
         let entries = desc
             .entries
             .iter()
             .map(|entry| bm::BindGroupEntry {
                 binding: entry.binding,
                 resource: match entry.resource {
-                    BindingResource::Buffer {
+                    BindingResource::Buffer(BufferBinding {
                         buffer,
                         offset,
                         size,
-                    } => bm::BindingResource::Buffer(bm::BufferBinding {
+                    }) => bm::BindingResource::Buffer(bm::BufferBinding {
                         buffer_id: buffer.id.id,
                         offset,
                         size,
                     }),
+                    BindingResource::BufferArray(array) => {
+                        let slice = &remaining_arrayed_buffer_bindings[..array.len()];
+                        remaining_arrayed_buffer_bindings =
+                            &remaining_arrayed_buffer_bindings[array.len()..];
+                        bm::BindingResource::BufferArray(Borrowed(slice))
+                    }
                     BindingResource::Sampler(sampler) => bm::BindingResource::Sampler(sampler.id),
                     BindingResource::TextureView(texture_view) => {
                         bm::BindingResource::TextureView(texture_view.id)
