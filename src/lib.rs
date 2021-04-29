@@ -813,6 +813,10 @@ pub enum Expression {
     /// Result of calling another function.
     Call(Handle<Function>),
     /// Get the length of an array.
+    /// The expression must resolve to a pointer to an array with a dynamic size.
+    ///
+    /// This doesn't match the semantics of spirv's `OpArrayLength`, which must be passed
+    /// a pointer to a structure containing a runtime array in its' last field.
     ArrayLength(Handle<Expression>),
 }
 

@@ -64,6 +64,9 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::StorageImageExtendedFormats,
     spirv::Capability::Sampled1D,
     spirv::Capability::SampledCubeArray,
+    spirv::Capability::Int8,
+    spirv::Capability::Int16,
+    spirv::Capability::Int64,
     // tricky ones
     spirv::Capability::UniformBufferArrayDynamicIndexing,
     spirv::Capability::StorageBufferArrayDynamicIndexing,
@@ -882,7 +885,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
-                Op::AccessChain => {
+                Op::AccessChain | Op::InBoundsAccessChain => {
                     struct AccessExpression {
                         base_handle: Handle<crate::Expression>,
                         type_id: spirv::Word,
@@ -1617,7 +1620,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 | Op::ConvertSToF
                 | Op::ConvertUToF
                 | Op::ConvertFToU
-                | Op::ConvertFToS => {
+                | Op::ConvertFToS
+                | Op::UConvert
+                | Op::SConvert => {
                     inst.expect_at_least(4)?;
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
@@ -1845,7 +1850,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 | Op::FOrdLessThanEqual
                 | Op::FUnordLessThanEqual
                 | Op::FOrdGreaterThanEqual
-                | Op::FUnordGreaterThanEqual => {
+                | Op::FUnordGreaterThanEqual
+                | Op::LogicalNotEqual => {
                     inst.expect(5)?;
                     let operator = map_binary_operator(inst.op)?;
                     self.parse_expr_binary_op(expressions, operator)?;
@@ -1983,6 +1989,62 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::Fwidth | Op::FwidthFine | Op::FwidthCoarse => {
                     self.parse_expr_derivative(expressions, crate::DerivativeAxis::Width)?;
+                }
+                Op::ArrayLength => {
+                    inst.expect(5)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let structure_id = self.next()?;
+                    let member_index = self.next()?;
+
+                    // We're assuming that the validation pass, if it's run, will catch if the
+                    // wrong types or parameters are supplied here.
+
+                    let structure_ptr = self.lookup_expression.lookup(structure_id)?;
+
+                    let member_ptr = expressions.append(crate::Expression::AccessIndex {
+                        base: structure_ptr.handle,
+                        index: member_index,
+                    });
+
+                    let length = expressions.append(crate::Expression::ArrayLength(member_ptr));
+
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: length,
+                            type_id: result_type_id,
+                        },
+                    );
+                }
+                Op::CopyMemory => {
+                    inst.expect_at_least(3)?;
+                    let target_id = self.next()?;
+                    let source_id = self.next()?;
+                    let _memory_access = if inst.wc != 3 {
+                        inst.expect(4)?;
+                        spirv::MemoryAccess::from_bits(self.next()?)
+                            .ok_or(Error::InvalidParameter(Op::CopyMemory))?
+                    } else {
+                        spirv::MemoryAccess::NONE
+                    };
+
+                    // TODO: check if the source and target types are the same?
+                    let target = self.lookup_expression.lookup(target_id)?;
+                    let source = self.lookup_expression.lookup(source_id)?;
+
+                    // This operation is practically the same as loading and then storing, I think.
+                    let value_expr = expressions.append(crate::Expression::Load {
+                        pointer: source.handle,
+                    });
+
+                    block.extend(emitter.finish(expressions));
+                    block.push(crate::Statement::Store {
+                        pointer: target.handle,
+                        value: value_expr,
+                    });
+
+                    emitter.start(expressions);
                 }
                 _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
             }
@@ -2993,15 +3055,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 kind: crate::ScalarKind::Sint,
                 width,
             } => {
-                use std::cmp::Ordering;
                 let low = self.next()?;
-                let high = match width.cmp(&4) {
-                    Ordering::Less => return Err(Error::InvalidTypeWidth(u32::from(width))),
-                    Ordering::Greater => {
-                        inst.expect(4)?;
-                        self.next()?
-                    }
-                    Ordering::Equal => 0,
+                let high = if width > 4 {
+                    inst.expect(4)?;
+                    self.next()?
+                } else {
+                    0
                 };
                 crate::ConstantInner::Scalar {
                     width,
@@ -3081,18 +3140,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
-    fn parse_null_constant(
+    fn generate_null_constant(
         &mut self,
-        inst: Instruction,
-        module: &mut crate::Module,
-    ) -> Result<(), Error> {
-        self.switch(ModuleState::Type, inst.op)?;
-        inst.expect(3)?;
-        let type_id = self.next()?;
-        let id = self.next()?;
-        let type_lookup = self.lookup_type.lookup(type_id)?;
-        let ty = type_lookup.handle;
-
+        constants: &mut Arena<crate::Constant>,
+        types: &Arena<crate::Type>,
+        ty: Handle<crate::Type>,
+        inner: &crate::TypeInner,
+    ) -> Result<crate::ConstantInner, Error> {
         fn make_scalar_inner(kind: crate::ScalarKind, width: crate::Bytes) -> crate::ConstantInner {
             crate::ConstantInner::Scalar {
                 width,
@@ -3105,12 +3159,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         }
 
-        let inner = match module.types[ty].inner {
+        let inner = match *inner {
             crate::TypeInner::Scalar { kind, width } => make_scalar_inner(kind, width),
             crate::TypeInner::Vector { size, kind, width } => {
                 let mut components = Vec::with_capacity(size as usize);
                 for _ in 0..size as usize {
-                    components.push(module.constants.fetch_or_append(crate::Constant {
+                    components.push(constants.fetch_or_append(crate::Constant {
                         name: None,
                         specialization: None,
                         inner: make_scalar_inner(kind, width),
@@ -3118,12 +3172,48 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 crate::ConstantInner::Composite { ty, components }
             }
-            //TODO: handle matrices, arrays, and structures
+            crate::TypeInner::Struct { ref members, .. } => {
+                let mut components = Vec::with_capacity(members.len());
+                for field in members {
+                    let ty_inner = &types[field.ty].inner;
+                    let inner =
+                        self.generate_null_constant(constants, types, field.ty, ty_inner)?;
+                    components.push(constants.fetch_or_append(crate::Constant {
+                        name: None,
+                        specialization: None,
+                        inner,
+                    }));
+                }
+
+                crate::ConstantInner::Composite { ty, components }
+            }
+            //TODO: handle matrices, arrays
             ref other => {
                 log::warn!("null constant type {:?}", other);
-                return Err(Error::UnsupportedType(type_lookup.handle));
+                return Err(Error::UnsupportedType(ty));
             }
         };
+        Ok(inner)
+    }
+
+    fn parse_null_constant(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(3)?;
+        let type_id = self.next()?;
+        let id = self.next()?;
+        let type_lookup = self.lookup_type.lookup(type_id)?;
+        let ty = type_lookup.handle;
+
+        let inner = self.generate_null_constant(
+            &mut module.constants,
+            &module.types,
+            ty,
+            &module.types[ty].inner,
+        )?;
 
         self.lookup_constant.insert(
             id,
