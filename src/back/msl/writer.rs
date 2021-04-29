@@ -37,7 +37,6 @@ struct TypeContext<'a> {
     handle: Handle<crate::Type>,
     arena: &'a Arena<crate::Type>,
     names: &'a FastHashMap<NameKey, String>,
-    usage: GlobalUse,
     access: crate::StorageAccess,
     first_time: bool,
 }
@@ -86,7 +85,7 @@ impl<'a> Display for TypeContext<'a> {
                     first_time: false,
                     ..*self
                 };
-                let class_name = match class.get_name(self.usage) {
+                let class_name = match class.get_name(self.access) {
                     Some(name) => name,
                     None => return Ok(()),
                 };
@@ -98,7 +97,7 @@ impl<'a> Display for TypeContext<'a> {
                 width: _,
                 class,
             } => {
-                let class_name = match class.get_name(self.usage) {
+                let class_name = match class.get_name(self.access) {
                     Some(name) => name,
                     None => return Ok(()),
                 };
@@ -110,7 +109,7 @@ impl<'a> Display for TypeContext<'a> {
                 width: _,
                 class,
             } => {
-                let class_name = match class.get_name(self.usage) {
+                let class_name = match class.get_name(self.access) {
                     Some(name) => name,
                     None => return Ok(()),
                 };
@@ -209,12 +208,11 @@ impl<'a> TypedGlobalVariable<'a> {
             handle: var.ty,
             arena: &self.module.types,
             names: self.names,
-            usage: self.usage,
             access: var.storage_access,
             first_time: false,
         };
 
-        let (space, access, reference) = match var.class.get_name(self.usage) {
+        let (space, access, reference) = match var.class.get_name(var.storage_access) {
             Some(space) if self.reference => {
                 let access = match var.class {
                     crate::StorageClass::Private | crate::StorageClass::WorkGroup
@@ -359,12 +357,12 @@ impl crate::StorageClass {
         }
     }
 
-    fn get_name(&self, global_use: GlobalUse) -> Option<&'static str> {
+    fn get_name(&self, access: crate::StorageAccess) -> Option<&'static str> {
         match *self {
             Self::Handle => None,
             Self::Uniform | Self::PushConstant => Some("constant"),
             //TODO: should still be "constant" for read-only buffers
-            Self::Storage => Some(if global_use.contains(GlobalUse::WRITE) {
+            Self::Storage => Some(if access.contains(crate::StorageAccess::STORE) {
                 "device"
             } else {
                 "constant"
@@ -1169,7 +1167,6 @@ impl<W: Write> Writer<W> {
                     handle: ty_handle,
                     arena: &context.module.types,
                     names: &self.names,
-                    usage: GlobalUse::all(),
                     access: crate::StorageAccess::empty(),
                     first_time: false,
                 };
@@ -1452,7 +1449,6 @@ impl<W: Write> Writer<W> {
                 continue;
             }
             let name = &self.names[&NameKey::Type(handle)];
-            let global_use = GlobalUse::all(); //TODO
             match ty.inner {
                 crate::TypeInner::Array {
                     base,
@@ -1463,7 +1459,6 @@ impl<W: Write> Writer<W> {
                         handle: base,
                         arena: &module.types,
                         names: &self.names,
-                        usage: global_use,
                         access: crate::StorageAccess::empty(),
                         first_time: false,
                     };
@@ -1523,7 +1518,6 @@ impl<W: Write> Writer<W> {
                                     handle: member.ty,
                                     arena: &module.types,
                                     names: &self.names,
-                                    usage: global_use,
                                     access: crate::StorageAccess::empty(),
                                     first_time: false,
                                 };
@@ -1548,7 +1542,6 @@ impl<W: Write> Writer<W> {
                         handle,
                         arena: &module.types,
                         names: &self.names,
-                        usage: global_use,
                         access: crate::StorageAccess::empty(),
                         first_time: true,
                     };
@@ -1608,7 +1601,6 @@ impl<W: Write> Writer<W> {
                         handle: ty,
                         arena: &module.types,
                         names: &self.names,
-                        usage: GlobalUse::empty(),
                         access: crate::StorageAccess::empty(),
                         first_time: false,
                     };
@@ -1734,7 +1726,6 @@ impl<W: Write> Writer<W> {
                         handle: result.ty,
                         arena: &module.types,
                         names: &self.names,
-                        usage: GlobalUse::empty(),
                         access: crate::StorageAccess::empty(),
                         first_time: false,
                     };
@@ -1752,7 +1743,6 @@ impl<W: Write> Writer<W> {
                     handle: arg.ty,
                     arena: &module.types,
                     names: &self.names,
-                    usage: GlobalUse::empty(),
                     access: crate::StorageAccess::empty(),
                     first_time: false,
                 };
@@ -1784,7 +1774,6 @@ impl<W: Write> Writer<W> {
                     handle: local.ty,
                     arena: &module.types,
                     names: &self.names,
-                    usage: GlobalUse::empty(),
                     access: crate::StorageAccess::empty(),
                     first_time: false,
                 };
@@ -1907,7 +1896,6 @@ impl<W: Write> Writer<W> {
                         handle: ty,
                         arena: &module.types,
                         names: &self.names,
-                        usage: GlobalUse::empty(),
                         access: crate::StorageAccess::empty(),
                         first_time: false,
                     };
@@ -1946,7 +1934,6 @@ impl<W: Write> Writer<W> {
                             handle: ty,
                             arena: &module.types,
                             names: &self.names,
-                            usage: GlobalUse::empty(),
                             access: crate::StorageAccess::empty(),
                             first_time: true,
                         };
@@ -1997,7 +1984,6 @@ impl<W: Write> Writer<W> {
                     handle: ty,
                     arena: &module.types,
                     names: &self.names,
-                    usage: GlobalUse::empty(),
                     access: crate::StorageAccess::empty(),
                     first_time: false,
                 };
@@ -2158,7 +2144,6 @@ impl<W: Write> Writer<W> {
                     handle: local.ty,
                     arena: &module.types,
                     names: &self.names,
-                    usage: GlobalUse::empty(),
                     access: crate::StorageAccess::empty(),
                     first_time: false,
                 };
