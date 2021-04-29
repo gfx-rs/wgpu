@@ -139,7 +139,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         swap_chain_id: SwapChainId,
         view_id_in: Input<G, TextureViewId>,
     ) -> Result<SwapChainOutput, SwapChainError> {
-        profiling::scope!("SwapChain::get_next_texture");
+        profiling::scope!("get_next_texture", "SwapChain");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -242,7 +242,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         swap_chain_id: SwapChainId,
     ) -> Result<SwapChainStatus, SwapChainError> {
-        profiling::scope!("SwapChain::present");
+        profiling::scope!("present", "SwapChain");
 
         let hub = B::hub(self);
         let mut token = Token::root();

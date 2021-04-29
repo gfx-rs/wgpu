@@ -128,7 +128,7 @@ pub struct Adapter<B: hal::Backend> {
 
 impl<B: GfxBackend> Adapter<B> {
     fn new(raw: hal::adapter::Adapter<B>) -> Self {
-        profiling::scope!("Adapter::new");
+        profiling::scope!("new", "Adapter");
 
         let adapter_features = raw.physical_device.features();
         let properties = raw.physical_device.properties();
@@ -344,8 +344,6 @@ impl<B: GfxBackend> Adapter<B> {
         &self,
         surface: &mut Surface,
     ) -> Result<wgt::TextureFormat, GetSwapChainPreferredFormatError> {
-        profiling::scope!("Adapter::get_swap_chain_preferred_format");
-
         let formats = {
             let surface = B::get_surface_mut(surface);
             let queue_family = &self.raw.queue_families[0];
@@ -694,7 +692,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         handle: &impl raw_window_handle::HasRawWindowHandle,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        profiling::scope!("Instance::create_surface");
+        profiling::scope!("create_surface", "Instance");
 
         let surface = unsafe {
             backends_map! {
@@ -732,7 +730,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         layer: *mut std::ffi::c_void,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        profiling::scope!("Instance::instance_create_surface_metal");
+        profiling::scope!("create_surface_metal", "Instance");
 
         let surface = Surface {
             #[cfg(feature = "gfx-backend-vulkan")]
@@ -750,14 +748,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn surface_drop(&self, id: SurfaceId) {
-        profiling::scope!("Surface::drop");
+        profiling::scope!("drop", "Surface");
         let mut token = Token::root();
         let (surface, _) = self.surfaces.unregister(id, &mut token);
         self.instance.destroy_surface(surface.unwrap());
     }
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
-        profiling::scope!("Instance::enumerate_adapters");
+        profiling::scope!("enumerate_adapters", "Instance");
 
         let instance = &self.instance;
         let mut token = Token::root();
@@ -800,7 +798,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &RequestAdapterOptions,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Result<AdapterId, RequestAdapterError> {
-        profiling::scope!("Instance::pick_adapter");
+        profiling::scope!("pick_adapter", "Instance");
 
         let instance = &self.instance;
         let mut token = Token::root();
@@ -955,8 +953,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::AdapterInfo, InvalidAdapter> {
-        profiling::scope!("Adapter::get_info");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
@@ -971,8 +967,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: AdapterId,
         format: wgt::TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
-        profiling::scope!("Adapter::get_texture_format_features");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
@@ -986,8 +980,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::Features, InvalidAdapter> {
-        profiling::scope!("Adapter::features");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
@@ -1001,8 +993,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::Limits, InvalidAdapter> {
-        profiling::scope!("Adapter::limits");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
@@ -1016,8 +1006,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::DownlevelProperties, InvalidAdapter> {
-        profiling::scope!("Adapter::downlevel_properties");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
@@ -1028,7 +1016,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn adapter_drop<B: GfxBackend>(&self, adapter_id: AdapterId) {
-        profiling::scope!("Adapter::drop");
+        profiling::scope!("drop", "Adapter");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1053,7 +1041,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
     ) -> (DeviceId, Option<RequestDeviceError>) {
-        profiling::scope!("Adapter::request_device");
+        profiling::scope!("request_device", "Adapter");
 
         let hub = B::hub(self);
         let mut token = Token::root();

@@ -140,6 +140,7 @@ impl<B: hal::Backend> MemoryBlock<B> {
         inner_offset: wgt::BufferAddress,
         data: &[u8],
     ) -> Result<(), DeviceError> {
+        profiling::scope!("write_bytes");
         let offset = inner_offset;
         unsafe {
             self.0
@@ -154,6 +155,7 @@ impl<B: hal::Backend> MemoryBlock<B> {
         inner_offset: wgt::BufferAddress,
         data: &mut [u8],
     ) -> Result<(), DeviceError> {
+        profiling::scope!("read_bytes");
         let offset = inner_offset;
         unsafe {
             self.0
@@ -211,7 +213,7 @@ impl<B: hal::Backend> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B>
         memory_type: u32,
         flags: gpu_alloc::AllocationFlags,
     ) -> Result<B::Memory, gpu_alloc::OutOfMemory> {
-        profiling::scope!("Allocate Memory");
+        profiling::scope!("allocate_memory");
 
         assert!(flags.is_empty());
 
@@ -221,7 +223,7 @@ impl<B: hal::Backend> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B>
     }
 
     unsafe fn deallocate_memory(&self, memory: B::Memory) {
-        profiling::scope!("Deallocate Memory");
+        profiling::scope!("deallocate_memory");
         self.0.free_memory(memory);
     }
 
@@ -231,7 +233,7 @@ impl<B: hal::Backend> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B>
         offset: u64,
         size: u64,
     ) -> Result<NonNull<u8>, gpu_alloc::DeviceMapError> {
-        profiling::scope!("Map memory");
+        profiling::scope!("map_memory");
         match self.0.map_memory(
             memory,
             hal::memory::Segment {
@@ -249,7 +251,7 @@ impl<B: hal::Backend> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B>
     }
 
     unsafe fn unmap_memory(&self, memory: &mut B::Memory) {
-        profiling::scope!("Unmap memory");
+        profiling::scope!("unmap_memory");
         self.0.unmap_memory(memory);
     }
 
@@ -257,7 +259,7 @@ impl<B: hal::Backend> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B>
         &self,
         ranges: &[gpu_alloc::MappedMemoryRange<'_, B::Memory>],
     ) -> Result<(), gpu_alloc::OutOfMemory> {
-        profiling::scope!("Invalidate memory ranges");
+        profiling::scope!("invalidate_memory_ranges");
         self.0
             .invalidate_mapped_memory_ranges(ranges.iter().map(|r| {
                 (
@@ -275,7 +277,7 @@ impl<B: hal::Backend> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B>
         &self,
         ranges: &[gpu_alloc::MappedMemoryRange<'_, B::Memory>],
     ) -> Result<(), gpu_alloc::OutOfMemory> {
-        profiling::scope!("Flush memory ranges");
+        profiling::scope!("flush_memory_ranges");
         self.0
             .flush_mapped_memory_ranges(ranges.iter().map(|r| {
                 (

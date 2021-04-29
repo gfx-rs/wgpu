@@ -243,6 +243,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
     }
 
     pub fn maintain(&self, device: &B::Device, last_done_index: SubmissionIndex) {
+        profiling::scope!("maintain", "CommandAllocator");
         let mut inner = self.inner.lock();
         let mut remove_threads = Vec::new();
         for (&thread_id, pool) in inner.pools.iter_mut() {

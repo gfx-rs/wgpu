@@ -78,6 +78,7 @@ impl<B: GfxBackend> CommandBuffer<B> {
     ) {
         use hal::command::CommandBuffer as _;
 
+        profiling::scope!("insert_barriers");
         debug_assert_eq!(B::VARIANT, base.backend());
         debug_assert_eq!(B::VARIANT, head.backend());
 
@@ -198,7 +199,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor<Label>,
     ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
-        profiling::scope!("CommandEncoder::finish");
+        profiling::scope!("finish", "CommandEncoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -231,7 +232,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) -> Result<(), CommandEncoderError> {
-        profiling::scope!("CommandEncoder::push_debug_group");
+        profiling::scope!("push_debug_group", "CommandEncoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -251,7 +252,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) -> Result<(), CommandEncoderError> {
-        profiling::scope!("CommandEncoder::insert_debug_marker");
+        profiling::scope!("insert_debug_marker", "CommandEncoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -270,7 +271,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
     ) -> Result<(), CommandEncoderError> {
-        profiling::scope!("CommandEncoder::pop_debug_marker");
+        profiling::scope!("pop_debug_marker", "CommandEncoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();

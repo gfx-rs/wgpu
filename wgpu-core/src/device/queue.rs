@@ -109,6 +109,7 @@ impl<B: hal::Backend> super::Device<B> {
     }
 
     fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<B>, DeviceError> {
+        profiling::scope!("prepare_stage");
         let mut buffer = unsafe {
             self.raw
                 .create_buffer(
@@ -192,7 +193,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_offset: wgt::BufferAddress,
         data: &[u8],
     ) -> Result<(), QueueWriteError> {
-        profiling::scope!("Queue::write_buffer");
+        profiling::scope!("write_buffer", "Queue");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -299,7 +300,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         data_layout: &wgt::ImageDataLayout,
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
-        profiling::scope!("Queue::write_texture");
+        profiling::scope!("write_texture", "Queue");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -409,6 +410,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let ptr = stage.memory.map(&device.raw, 0, stage_size)?;
         unsafe {
+            profiling::scope!("copy");
             //TODO: https://github.com/zakarumych/gpu-alloc/issues/13
             if stage_bytes_per_row == bytes_per_row {
                 // Fast path if the data isalready being aligned optimally.
@@ -619,7 +621,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id: id::QueueId,
         command_buffer_ids: &[id::CommandBufferId],
     ) -> Result<(), QueueSubmitError> {
-        profiling::scope!("Queue::submit");
+        profiling::scope!("submit", "Queue");
 
         self.initialize_used_uninitialized_memory::<B>(queue_id, command_buffer_ids)?;
 
@@ -642,7 +644,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
 
                 if !command_buffer_ids.is_empty() {
-                    profiling::scope!("submit preparation");
+                    profiling::scope!("prepare");
 
                     let (render_bundle_guard, mut token) = hub.render_bundles.read(&mut token);
                     let (_, mut token) = hub.pipeline_layouts.read(&mut token);
@@ -810,6 +812,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
             };
+
+            profiling::scope!("cleanup");
             super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
                 submit_index,
                 fence,
@@ -840,8 +844,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         queue_id: id::QueueId,
     ) -> Result<f32, InvalidQueue> {
-        profiling::scope!("Queue::get_timestamp_period");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);

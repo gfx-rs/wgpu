@@ -186,7 +186,6 @@ impl RenderPass {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        profiling::scope!("RenderPass::set_index_buffer");
         self.base.commands.push(RenderCommand::SetIndexBuffer {
             buffer_id,
             index_format,
@@ -518,6 +517,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         device: &Device<B>,
         view_guard: &'a Storage<TextureView<B>, id::TextureViewId>,
     ) -> Result<Self, RenderPassErrorInner> {
+        profiling::scope!("start", "RenderPassInfo");
         let sample_count_limit = device.hal_limits.framebuffer_color_sample_counts;
 
         // We default to false intentionally, even if depth-stencil isn't used at all.
@@ -959,6 +959,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         mut self,
         texture_guard: &Storage<Texture<B>, id::TextureId>,
     ) -> Result<(TrackerSet, Option<Stored<id::SwapChainId>>), RenderPassErrorInner> {
+        profiling::scope!("finish", "RenderPassInfo");
+
         for ra in self.render_attachments {
             let texture = &texture_guard[ra.texture_id.value];
             check_texture_usage(texture.usage, TextureUsage::RENDER_ATTACHMENT)?;
@@ -1017,7 +1019,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         color_attachments: &[RenderPassColorAttachment],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
     ) -> Result<(), RenderPassError> {
-        profiling::scope!("CommandEncoder::run_render_pass");
+        profiling::scope!("run_render_pass", "CommandEncoder");
         let scope = PassErrorScope::Pass(encoder_id);
 
         let hub = B::hub(self);

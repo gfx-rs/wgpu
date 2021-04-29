@@ -316,6 +316,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         device: &B::Device,
         force_wait: bool,
     ) -> Result<SubmissionIndex, WaitIdleError> {
+        profiling::scope!("triage_submissions");
         if force_wait {
             self.wait_idle(device)?;
         }
@@ -349,6 +350,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         memory_allocator_mutex: &Mutex<alloc::MemoryAllocator<B>>,
         descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
     ) {
+        profiling::scope!("cleanup");
         unsafe {
             self.free_resources
                 .clean(device, memory_allocator_mutex, descriptor_allocator_mutex);
@@ -382,6 +384,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         #[cfg(feature = "trace")] trace: Option<&Mutex<trace::Trace>>,
         token: &mut Token<super::Device<B>>,
     ) {
+        profiling::scope!("triage_suspected");
+
         if !self.suspected_resources.render_bundles.is_empty() {
             let (mut guard, _) = hub.render_bundles.write(token);
             let mut trackers = trackers.lock();
