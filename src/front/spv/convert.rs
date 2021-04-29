@@ -14,8 +14,12 @@ pub(super) fn map_binary_operator(word: spirv::Op) -> Result<crate::BinaryOperat
         Op::UDiv | Op::SDiv | Op::FDiv => Ok(BinaryOperator::Divide),
         Op::UMod | Op::SMod | Op::FMod => Ok(BinaryOperator::Modulo),
         // Relational and Logical Instructions
-        Op::IEqual | Op::FOrdEqual | Op::FUnordEqual => Ok(BinaryOperator::Equal),
-        Op::INotEqual | Op::FOrdNotEqual | Op::FUnordNotEqual => Ok(BinaryOperator::NotEqual),
+        Op::IEqual | Op::FOrdEqual | Op::FUnordEqual | Op::LogicalEqual => {
+            Ok(BinaryOperator::Equal)
+        }
+        Op::INotEqual | Op::FOrdNotEqual | Op::FUnordNotEqual | Op::LogicalNotEqual => {
+            Ok(BinaryOperator::NotEqual)
+        }
         Op::ULessThan | Op::SLessThan | Op::FOrdLessThan | Op::FUnordLessThan => {
             Ok(BinaryOperator::Less)
         }
