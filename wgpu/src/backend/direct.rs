@@ -395,7 +395,6 @@ mod pass_impl {
             &mut self,
             render_bundles: I,
         ) {
-            profiling::scope!("RenderPass::execute_bundles wrapper");
             let temp_render_bundles = render_bundles.cloned().collect::<SmallVec<[_; 4]>>();
             unsafe {
                 wgpu_render_pass_execute_bundles(
@@ -858,7 +857,6 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &BindGroupDescriptor,
     ) -> Self::BindGroupId {
-        profiling::scope!("Device::create_bind_group wrapper");
         use wgc::binding_model as bm;
 
         let mut arrayed_texture_views = Vec::new();
@@ -953,8 +951,6 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &PipelineLayoutDescriptor,
     ) -> Self::PipelineLayoutId {
-        profiling::scope!("Device::create_pipeline_layout wrapper");
-
         // Limit is always less or equal to wgc::MAX_BIND_GROUPS, so this is always right
         // Guards following ArrayVec
         assert!(
@@ -998,7 +994,6 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &RenderPipelineDescriptor,
     ) -> Self::RenderPipelineId {
-        profiling::scope!("Device::create_render_pipeline wrapper");
         use wgc::pipeline as pipe;
 
         let vertex_buffers: ArrayVec<[_; wgc::device::MAX_VERTEX_BUFFERS]> = desc
@@ -1316,8 +1311,6 @@ impl crate::Context for Context {
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
     ) -> Self::MapAsyncFuture {
-        profiling::scope!("Buffer::buffer_map_async wrapper");
-
         let (future, completion) = native_gpu_future::new_gpu_future();
 
         extern "C" fn buffer_map_future_wrapper(
@@ -1728,7 +1721,6 @@ impl crate::Context for Context {
         encoder: &Self::CommandEncoderId,
         desc: &crate::RenderPassDescriptor<'a, '_>,
     ) -> Self::RenderPassId {
-        profiling::scope!("CommandEncoder::begin_render_pass wrapper");
         let colors = desc
             .color_attachments
             .iter()

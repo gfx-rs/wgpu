@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "Rusty WebGPU API wrapper"
@@ -45,7 +45,6 @@ rev = "e5ddb94be0221b0f53a8f43adfb15458daebfd7c"
 arrayvec = "0.5"
 log = "0.4"
 parking_lot = "0.11"
-profiling = { version = "1", default-features = false }
 raw-window-handle = "0.3"
 serde = { version = "1", features = ["derive"], optional = true }
 smallvec = "1"
