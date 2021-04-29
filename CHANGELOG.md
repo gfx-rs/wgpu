@@ -1,5 +1,8 @@
 # Change Log
 
+## v0.4.0 (2021-04-29)
+  - update `libloading` to 0.7
+
 ## v0.3.1 (2020-07-07)
   - create shader from IL
   - fix default doc target
