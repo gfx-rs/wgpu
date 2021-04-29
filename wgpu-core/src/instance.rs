@@ -733,8 +733,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("create_surface_metal", "Instance");
 
         let surface = Surface {
-            #[cfg(feature = "gfx-backend-vulkan")]
-            vulkan: None, //TODO: create_surface_from_layer ?
             metal: self.instance.metal.as_ref().map(|inst| {
                 // we don't want to link to metal-rs for this
                 #[allow(clippy::transmute_ptr_to_ref)]
