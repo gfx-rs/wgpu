@@ -59,11 +59,7 @@ macro_rules! backends_map {
 #[test]
 fn test_backend_macro() {
     struct Foo {
-        #[cfg(any(
-            windows,
-            all(unix, not(any(target_os = "ios", target_os = "macos"))),
-            feature = "gfx-backend-vulkan",
-        ))]
+        #[cfg(any(windows, all(unix, not(target_os = "ios"), not(target_os = "macos")),))]
         vulkan: u32,
 
         #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -108,11 +104,7 @@ fn test_backend_macro() {
         map((test_foo.dx11, 'd')),
     }
 
-    #[cfg(any(
-        windows,
-        all(unix, not(any(target_os = "ios", target_os = "macos"))),
-        feature = "gfx-backend-vulkan",
-    ))]
+    #[cfg(any(windows, all(unix, not(target_os = "ios"), not(target_os = "macos")),))]
     assert!(vec.contains(&(1, 'a')));
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -208,11 +200,7 @@ fn test_backend_macro() {
         println!("backend int: {:?}", var_dx11);
     }
 
-    #[cfg(any(
-        windows,
-        all(unix, not(any(target_os = "ios", target_os = "macos"))),
-        feature = "gfx-backend-vulkan",
-    ))]
+    #[cfg(any(windows, all(unix, not(target_os = "ios"), not(target_os = "macos")),))]
     let _ = var_vulkan;
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]

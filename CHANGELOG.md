@@ -1,6 +1,6 @@
 # Change Log
 
-## v0.8 (TBD)
+## v0.8 (2021-04-29)
   - Naga is used by default to translate shaders, SPIRV-Cross is optional behind `cross` feature
   - Features:
     - buffers are zero-initialized
@@ -17,6 +17,7 @@
     - switch from `tracing` to `profiling`
     - more concrete and detailed errors
     - API traces include the command that crashed/panicked
+    - Vulkan Portability support is removed from Apple platforms
   - Validation:
     - texture bindings
     - filtering of textures by samplers

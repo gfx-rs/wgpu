@@ -36,9 +36,8 @@ serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
 thiserror = "1"
 
-# Update to 0.4 when it will be available
-gpu-alloc = { git = "https://github.com/zakarumych/gpu-alloc.git", rev = "2cd1ad650cdd24d1647b6041f77ced0cbf1ff2a6" }
-gpu-descriptor = { version = "0.1" }
+gpu-alloc = "0.4"
+gpu-descriptor = "0.1"
 
 hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx", rev = "32684a7da923cfd661fe4d3003f4275270e9c40d" }
 gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "32684a7da923cfd661fe4d3003f4275270e9c40d" }
@@ -49,7 +48,7 @@ gfx-backend-gl = { git = "https://github.com/gfx-rs/gfx", rev = "32684a7da923cfd
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
 gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", rev = "32684a7da923cfd661fe4d3003f4275270e9c40d" }
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "32684a7da923cfd661fe4d3003f4275270e9c40d", optional = true }
+#TODO: could also depend on gfx-backend-vulkan for Vulkan Portability
 
 [target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
 gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", rev = "32684a7da923cfd661fe4d3003f4275270e9c40d" }
