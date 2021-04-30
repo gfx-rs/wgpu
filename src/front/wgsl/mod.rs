@@ -741,6 +741,11 @@ impl Parser {
                 accept,
                 reject,
             }
+        } else if name == "arrayLength" {
+            lexer.open_arguments()?;
+            let array = self.parse_singular_expression(lexer, ctx.reborrow())?;
+            lexer.close_arguments()?;
+            crate::Expression::ArrayLength(array)
         } else {
             // texture sampling
             match name {

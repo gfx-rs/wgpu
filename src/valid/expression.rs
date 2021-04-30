@@ -1110,7 +1110,17 @@ impl super::Validator {
             }
             E::Call(function) => other_infos[function.index()].available_stages,
             E::ArrayLength(expr) => match *resolver.resolve(expr)? {
-                Ti::Array { .. } => ShaderStages::all(),
+                Ti::Pointer { base, .. } => {
+                    if let Some(&Ti::Array {
+                        size: crate::ArraySize::Dynamic,
+                        ..
+                    }) = resolver.types.try_get(base).map(|ty| &ty.inner)
+                    {
+                        ShaderStages::all()
+                    } else {
+                        return Err(ExpressionError::InvalidArrayType(expr));
+                    }
+                }
                 ref other => {
                     log::error!("Array length of {:?}", other);
                     return Err(ExpressionError::InvalidArrayType(expr));
