@@ -164,7 +164,13 @@ fn check_output_msl(
         allow_point_size: true,
     };
 
-    let (string, _) = msl::write_string(module, info, options, &pipeline_options).unwrap();
+    let (string, tr_info) = msl::write_string(module, info, options, &pipeline_options).unwrap();
+
+    for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
+        if let Err(error) = result {
+            panic!("Failed to translate '{}': {}", ep.name, error);
+        }
+    }
 
     fs::write(destination.with_extension("msl"), string).unwrap();
 }
