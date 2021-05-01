@@ -1,12 +1,16 @@
 use super::{
-    ast::{FunctionContext, Profile, StorageQualifier, TypeQualifier},
+    ast::{FunctionContext, Profile, StorageQualifier, StructLayout, TypeQualifier},
     error::ErrorKind,
     lex::Lexer,
     token::{Token, TokenMetadata, TokenValue},
     Program,
 };
-use crate::{arena::Handle, ArraySize, Function, FunctionResult, StorageClass, Type, TypeInner};
-use std::iter::Peekable;
+use crate::{
+    arena::Handle, ArraySize, Binding, Function, FunctionResult, ResourceBinding, StorageClass,
+    Type, TypeInner,
+};
+use core::convert::TryFrom;
+use core::iter::Peekable;
 
 type Result<T> = std::result::Result<T, ErrorKind>;
 
@@ -44,6 +48,15 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
     fn bump(&mut self) -> Result<Token> {
         self.lexer.next().ok_or(ErrorKind::EndOfFile)
+    }
+
+    /// Returns None on the end of the file rather than an error like other methods
+    fn bump_if(&mut self, value: TokenValue) -> Option<Token> {
+        if self.lexer.peek().filter(|t| t.value == value).is_some() {
+            self.bump().ok()
+        } else {
+            None
+        }
     }
 
     fn expect_peek(&mut self) -> Result<&Token> {
@@ -146,7 +159,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             | TokenValue::In
             | TokenValue::Out
             | TokenValue::InOut
-            | TokenValue::Uniform => true,
+            | TokenValue::Uniform
+            | TokenValue::Layout => true,
             _ => false,
         })
     }
@@ -154,8 +168,15 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     fn parse_type_qualifiers(&mut self) -> Result<Vec<TypeQualifier>> {
         let mut qualifiers = Vec::new();
 
-        if self.peek_type_qualifier() {
+        while self.peek_type_qualifier() {
             let token = self.bump()?;
+
+            // Handle layout qualifiers outside the match since this can push multiple values
+            if token.value == TokenValue::Layout {
+                self.parse_layout_qualifier_id_list(&mut qualifiers)?;
+                continue;
+            }
+
             qualifiers.push(match token.value {
                 TokenValue::Interpolation(i) => TypeQualifier::Interpolation(i),
                 TokenValue::Const => TypeQualifier::StorageQualifier(StorageQualifier::Const),
@@ -165,11 +186,111 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 TokenValue::Uniform => TypeQualifier::StorageQualifier(
                     StorageQualifier::StorageClass(StorageClass::Uniform),
                 ),
+
                 _ => unreachable!(),
             })
         }
 
         Ok(qualifiers)
+    }
+
+    fn parse_layout_qualifier_id_list(
+        &mut self,
+        qualifiers: &mut Vec<TypeQualifier>,
+    ) -> Result<()> {
+        // We need both of these to produce a ResourceBinding
+        let mut group = None;
+        let mut binding = None;
+
+        self.expect(TokenValue::LeftParen)?;
+        loop {
+            self.parse_layout_qualifier_id(qualifiers, &mut group, &mut binding)?;
+
+            if self.bump_if(TokenValue::Comma).is_some() {
+                continue;
+            }
+
+            break;
+        }
+        self.expect(TokenValue::RightParen)?;
+
+        match (group, binding) {
+            (Some(group), Some(binding)) => {
+                qualifiers.push(TypeQualifier::ResourceBinding(ResourceBinding {
+                    group,
+                    binding,
+                }))
+            }
+            // Produce an error if we have one of group or binding but not the other
+            // TODO: include at least line info in errors?
+            (Some(_), None) => {
+                return Err(ErrorKind::SemanticError(
+                    "set specified with no binding".into(),
+                ))
+            }
+            (None, Some(_)) => {
+                return Err(ErrorKind::SemanticError(
+                    "binding specified with no set".into(),
+                ))
+            }
+            (None, None) => (),
+        }
+
+        Ok(())
+    }
+
+    fn parse_layout_qualifier_id(
+        &mut self,
+        qualifiers: &mut Vec<TypeQualifier>,
+        group: &mut Option<u32>,
+        binding: &mut Option<u32>,
+    ) -> Result<()> {
+        // layout_qualifier_id:
+        //     IDENTIFIER
+        //     IDENTIFIER EQUAL constant_expression
+        //     SHARED
+        let token = self.bump()?;
+        match token.value {
+            TokenValue::Identifier(name) => {
+                if self.bump_if(TokenValue::Assign).is_some() {
+                    let value = self.parse_constant_expression()?;
+
+                    match name.as_str() {
+                        "location" => qualifiers.push(TypeQualifier::Binding(Binding::Location {
+                            // TODO: use better error here
+                            location: u32::try_from(value).map_err(|_| ErrorKind::InvalidInput)?,
+                            interpolation: None,
+                            sampling: None,
+                        })),
+                        // TODO: produce error when try_from fails
+                        "set" => *group = u32::try_from(value).ok(),
+                        "binding" => *binding = u32::try_from(value).ok(),
+                        _ => return Err(ErrorKind::UnknownLayoutQualifier(token.meta, name)),
+                    }
+                } else {
+                    match name.as_str() {
+                        "std140" => qualifiers.push(TypeQualifier::Layout(StructLayout::Std140)),
+                        "early_fragment_tests" => {
+                            qualifiers.push(TypeQualifier::EarlyFragmentTests)
+                        }
+                        _ => return Err(ErrorKind::UnknownLayoutQualifier(token.meta, name)),
+                    }
+                };
+
+                Ok(())
+            }
+            // TODO: handle Shared?
+            _ => Err(ErrorKind::InvalidToken(token)),
+        }
+    }
+
+    // TODO: parse more than just integer literal
+    fn parse_constant_expression(&mut self) -> Result<i64> {
+        let token = self.bump()?;
+        match token.value {
+            TokenValue::IntConstant(value) => Ok(value),
+            _ => Err(ErrorKind::InvalidToken(token)),
+        }
     }
 
     fn parse_external_declaration(&mut self) -> Result<()> {
@@ -182,6 +303,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         } else {
             Ok(())
         }
+        // TODO
     }
 
     fn peek_type_name(&mut self) -> bool {
@@ -191,8 +313,17 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         })
     }
 
-    /// `external` wheter or not we are in a global or local context
+    /// `external` whether or not we are in a global or local context
     fn parse_declaration(&mut self, external: bool) -> Result<bool> {
+        //declaration:
+        //    function_prototype  SEMICOLON
+        //    init_declarator_list SEMICOLON
+        //    PRECISION precision_qualifier type_specifier SEMICOLON
+        //    type_qualifier IDENTIFIER LEFT_BRACE struct_declaration_list RIGHT_BRACE SEMICOLON
+        //    type_qualifier IDENTIFIER LEFT_BRACE struct_declaration_list RIGHT_BRACE IDENTIFIER SEMICOLON
+        //    type_qualifier IDENTIFIER LEFT_BRACE struct_declaration_list RIGHT_BRACE IDENTIFIER array_specifier SEMICOLON
+        //    type_qualifier SEMICOLON type_qualifier IDENTIFIER SEMICOLON
+        //    type_qualifier IDENTIFIER identifier_list SEMICOLON
         // TODO: Handle precision qualifiers
         if self.peek_type_qualifier() || self.peek_type_name() {
             // TODO: Use qualifiers
@@ -236,7 +367,12 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             }
                         }
                         // Variable Declaration
-                        TokenValue::Semicolon => todo!(),
+                        TokenValue::Semicolon => {
+                            // TODO: are we supposed to consume the semicolon here
+                            self.bump()?;
+                            // TODO: use parsed type & qualifiers
+                            Ok(true)
+                        }
                         TokenValue::Comma => todo!(),
                         _ => Err(ErrorKind::InvalidToken(self.bump()?)),
                     },
@@ -276,8 +412,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                         context.add_function_arg(Some(name), ty);
 
-                        if self.expect_peek()?.value == TokenValue::Comma {
-                            self.bump()?;
+                        if self.bump_if(TokenValue::Comma).is_some() {
                             continue;
                         }
 

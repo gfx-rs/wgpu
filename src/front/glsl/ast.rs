@@ -301,10 +301,12 @@ impl ExpressionRule {
 #[derive(Debug)]
 pub enum TypeQualifier {
     StorageQualifier(StorageQualifier),
+    Interpolation(Interpolation),
     ResourceBinding(ResourceBinding),
     Binding(Binding),
-    Interpolation(Interpolation),
     Sampling(Sampling),
+    Layout(StructLayout),
+    EarlyFragmentTests,
 }
 
 #[derive(Debug)]
@@ -337,7 +339,5 @@ pub enum StorageQualifier {
 
 #[derive(Debug, Clone)]
 pub enum StructLayout {
-    Binding(Binding),
-    Resource(ResourceBinding),
-    PushConstant,
+    Std140,
 }

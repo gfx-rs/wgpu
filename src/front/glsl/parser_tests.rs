@@ -169,6 +169,41 @@ fn control_flow() {
 }
 
 #[test]
+fn declarations() {
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Fragment);
+
+    let _program = parse_program(
+        r#"
+        #version 450
+        layout(location = 0) in vec2 v_uv;
+        layout(location = 0) out vec4 o_color;
+        layout(set = 1, binding = 1) uniform texture2D tex;
+        layout(set = 1, binding = 2) uniform sampler tex_sampler;
+
+        layout(early_fragment_tests) in;
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+
+    // TODO: Reenable tests later
+    // let _program = parse_program(
+    //     r#"
+    //     #version 450
+    //     layout(std140, set = 2, binding = 0)
+    //     uniform u_locals {
+    //         vec3 model_offs;
+    //         float load_time;
+    //         ivec4 atlas_offs;
+    //     };
+    //     "#,
+    //     &entry_points,
+    // )
+    // .unwrap();
+}
+
+#[test]
 fn textures() {
     // TODO: Reenable tests later
     // let mut entry_points = crate::FastHashMap::default();

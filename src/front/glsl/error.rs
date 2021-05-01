@@ -15,6 +15,7 @@ pub enum ErrorKind {
     NotImplemented(&'static str),
     UnknownVariable(TokenMetadata, String),
     UnknownField(TokenMetadata, String),
+    UnknownLayoutQualifier(TokenMetadata, String),
     #[cfg(feature = "glsl-validate")]
     VariableAlreadyDeclared(String),
     ExpectedConstant,
@@ -44,6 +45,9 @@ impl fmt::Display for ErrorKind {
             }
             ErrorKind::UnknownField(ref meta, ref val) => {
                 write!(f, "Unknown field {} at {:?}", val, meta)
+            }
+            ErrorKind::UnknownLayoutQualifier(ref meta, ref val) => {
+                write!(f, "Unknown layout qualifier name {} at {:?}", val, meta)
             }
             #[cfg(feature = "glsl-validate")]
             ErrorKind::VariableAlreadyDeclared(ref val) => {
