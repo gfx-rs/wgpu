@@ -473,6 +473,20 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn array_length(
+        result_type_id: Word,
+        id: Word,
+        structure_id: Word,
+        array_member: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::ArrayLength);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(structure_id);
+        instruction.add_operand(array_member);
+        instruction
+    }
+
     //
     //  Function Instructions
     //

@@ -1,6 +1,6 @@
 use super::{
-    keywords::RESERVED, sampler as sm, Error, LocationMode, Options, PipelineOptions,
-    TranslationInfo,
+    keywords::RESERVED, sampler as sm, BindTarget, Error, LocationMode, Options, PipelineOptions,
+    ResolvedBinding, TranslationInfo,
 };
 use crate::{
     arena::{Arena, Handle},
@@ -290,6 +290,7 @@ pub struct Writer<W> {
     names: FastHashMap<NameKey, String>,
     named_expressions: BitSet,
     namer: Namer,
+    runtime_sized_buffers: FastHashMap<Handle<crate::GlobalVariable>, usize>,
     #[cfg(test)]
     put_expression_stack_pointers: crate::FastHashSet<*const ()>,
     #[cfg(test)]
@@ -435,6 +436,7 @@ impl<W: Write> Writer<W> {
             names: FastHashMap::default(),
             named_expressions: BitSet::new(),
             namer: Namer::default(),
+            runtime_sized_buffers: FastHashMap::default(),
             #[cfg(test)]
             put_expression_stack_pointers: Default::default(),
             #[cfg(test)]
@@ -1060,26 +1062,53 @@ impl<W: Write> Writer<W> {
             }
             // has to be a named expression
             crate::Expression::Call(_) => unreachable!(),
-            crate::Expression::ArrayLength(expr) => match *context.resolve_type(expr) {
-                crate::TypeInner::Array {
-                    size: crate::ArraySize::Constant(const_handle),
-                    ..
-                } => {
-                    let coco = ConstantContext {
-                        handle: const_handle,
-                        arena: &context.module.constants,
-                        names: &self.names,
-                        first_time: false,
-                    };
-                    write!(self.out, "{}", coco)?;
+            crate::Expression::ArrayLength(expr) => {
+                let handle = match context.function.expressions[expr] {
+                    crate::Expression::AccessIndex { base, .. } => {
+                        match context.function.expressions[base] {
+                            crate::Expression::GlobalVariable(handle) => handle,
+                            _ => return Err(Error::Validation),
+                        }
+                    }
+                    _ => return Err(Error::Validation),
+                };
+
+                let global = &context.module.global_variables[handle];
+                if let crate::TypeInner::Struct { ref members, .. } =
+                    context.module.types[global.ty].inner
+                {
+                    if let Some(&crate::StructMember {
+                        offset,
+                        ty: array_ty,
+                        ..
+                    }) = members.last()
+                    {
+                        let (span, stride) = match context.module.types[array_ty].inner {
+                            crate::TypeInner::Array { base, stride, .. } => (
+                                context.module.types[base]
+                                    .inner
+                                    .span(&context.module.constants),
+                                stride,
+                            ),
+                            _ => return Err(Error::Validation),
+                        };
+
+                        let buffer_idx = self.runtime_sized_buffers[&handle];
+                        write!(
+                            self.out,
+                            "(1 + (_buffer_sizes.size{idx} - {offset} - {span}) / {stride})",
+                            idx = buffer_idx,
+                            offset = offset,
+                            span = span,
+                            stride = stride,
+                        )?;
+                    } else {
+                        return Err(Error::Validation);
+                    }
+                } else {
+                    return Err(Error::Validation);
                 }
-                crate::TypeInner::Array { .. } => {
-                    return Err(Error::FeatureNotImplemented(
-                        "dynamic array size".to_string(),
-                    ))
-                }
-                _ => return Err(Error::Validation),
-            },
+            }
         }
         Ok(())
     }
@@ -1405,6 +1434,14 @@ impl<W: Write> Writer<W> {
                             write!(self.out, "{}", name)?;
                         }
                     }
+                    if !self.runtime_sized_buffers.is_empty() {
+                        if separate {
+                            write!(self.out, ", ")?;
+                        }
+
+                        write!(self.out, "_buffer_sizes")?;
+                    }
+
                     // done
                     writeln!(self.out, ");")?;
                 }
@@ -1432,10 +1469,41 @@ impl<W: Write> Writer<W> {
     ) -> Result<TranslationInfo, Error> {
         self.names.clear();
         self.namer.reset(module, RESERVED, &mut self.names);
+        self.runtime_sized_buffers.clear();
 
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out)?;
+
+        {
+            let mut indices = vec![];
+            for (handle, gv) in module.global_variables.iter() {
+                if let crate::TypeInner::Struct { ref members, .. } = module.types[gv.ty].inner {
+                    if let Some(member) = members.last() {
+                        if let crate::TypeInner::Array {
+                            size: crate::ArraySize::Dynamic,
+                            ..
+                        } = module.types[member.ty].inner
+                        {
+                            let idx = handle.index();
+                            self.runtime_sized_buffers.insert(handle, idx);
+                            indices.push(idx);
+                        }
+                    }
+                }
+            }
+
+            if !indices.is_empty() {
+                writeln!(self.out, "struct _mslBufferSizes {{")?;
+
+                for idx in indices {
+                    writeln!(self.out, "{}{}::uint size{};", INDENT, NAMESPACE, idx)?;
+                }
+
+                writeln!(self.out, "}};")?;
+                writeln!(self.out)?;
+            }
+        };
 
         self.write_scalar_constants(module)?;
         self.write_type_defs(module)?;
@@ -1746,8 +1814,11 @@ impl<W: Write> Writer<W> {
                     access: crate::StorageAccess::empty(),
                     first_time: false,
                 };
-                let separator =
-                    separate(!pass_through_globals.is_empty() || index + 1 != fun.arguments.len());
+                let separator = separate(
+                    !pass_through_globals.is_empty()
+                        || index + 1 != fun.arguments.len()
+                        || !self.runtime_sized_buffers.is_empty(),
+                );
                 writeln!(
                     self.out,
                     "{}{} {}{}",
@@ -1762,11 +1833,23 @@ impl<W: Write> Writer<W> {
                     usage: fun_info[handle],
                     reference: true,
                 };
-                let separator = separate(index + 1 != pass_through_globals.len());
+                let separator = separate(
+                    index + 1 != pass_through_globals.len()
+                        || !self.runtime_sized_buffers.is_empty(),
+                );
                 write!(self.out, "{}", INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;
                 writeln!(self.out, "{}", separator)?;
             }
+
+            if !self.runtime_sized_buffers.is_empty() {
+                writeln!(
+                    self.out,
+                    "{}constant _mslBufferSizes& _buffer_sizes",
+                    INDENT
+                )?;
+            }
+
             writeln!(self.out, ") {{")?;
 
             for (local_handle, local) in fun.local_variables.iter() {
@@ -2049,6 +2132,34 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out)?;
             }
 
+            if !self.runtime_sized_buffers.is_empty() {
+                let resolved = if let Some(slot) = options.sizes_buffer_binding {
+                    ResolvedBinding::Resource(BindTarget {
+                        buffer: Some(slot),
+                        mutable: false,
+                        ..Default::default()
+                    })
+                } else {
+                    ResolvedBinding::User {
+                        prefix: "fake",
+                        index: 0,
+                        interpolation: None,
+                    }
+                };
+
+                let separator = if module.global_variables.is_empty() {
+                    ' '
+                } else {
+                    ','
+                };
+                write!(
+                    self.out,
+                    "{} constant _mslBufferSizes& _buffer_sizes",
+                    separator,
+                )?;
+                resolved.try_fmt_decorated(&mut self.out, "\n")?;
+            }
+
             // end of the entry point argument list
             writeln!(self.out, ") {{")?;
 
@@ -2231,8 +2342,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
-        // last observed macOS value: 21760
-        if stack_size < 21000 || stack_size > 23000 {
+        // last observed macOS value: 23040
+        if stack_size < 21000 || stack_size > 25000 {
             panic!("`put_expression` stack size {} has changed!", stack_size);
         }
     }
@@ -2246,8 +2357,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
-        // last observed macOS value: 12736
-        if stack_size < 12000 || stack_size > 13500 {
+        // last observed macOS value: 13600
+        if stack_size < 12000 || stack_size > 14500 {
             panic!("`put_block` stack size {} has changed!", stack_size);
         }
     }

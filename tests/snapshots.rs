@@ -154,7 +154,7 @@ fn check_output_msl(
     let options = &params.msl;
     #[cfg(not(feature = "deserialize"))]
     let options = if params.msl_custom {
-        println!("Skipping {}", destination);
+        println!("Skipping {}", destination.display());
         return;
     } else {
         &default_options
@@ -248,7 +248,7 @@ fn convert_wgsl() {
             "interpolate",
             Targets::SPIRV | Targets::METAL | Targets::GLSL,
         ),
-        ("access", Targets::SPIRV | Targets::METAL | Targets::WGSL),
+        ("access", Targets::SPIRV | Targets::METAL),
     ];
 
     for &(name, targets) in inputs.iter() {

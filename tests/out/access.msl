@@ -1,7 +1,15 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-struct type3 {
+struct _mslBufferSizes {
+    metal::uint size0;
+};
+
+typedef int type1[1];
+struct Bar {
+    type1 data;
+};
+struct type4 {
     int inner[5];
 };
 
@@ -12,6 +20,8 @@ struct fooOutput {
 };
 vertex fooOutput foo(
   metal::uint vi [[vertex_id]]
+, device Bar& bar [[buffer(0)]]
+, constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
-    return fooOutput { static_cast<float4>(int4(type3 {1, 2, 3, 4, 5}.inner[vi])) };
+    return fooOutput { static_cast<float4>(int4(type4 {bar.data[(1 + (_buffer_sizes.size0 - 0 - 4) / 4) - 1u], 2, 3, 4, 5}.inner[vi])) };
 }

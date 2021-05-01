@@ -2349,9 +2349,37 @@ impl Writer {
                     .push(Instruction::relational(op, result_type_id, id, arg_id));
                 id
             }
-            crate::Expression::ArrayLength(_) => {
-                log::error!("unimplemented {:?}", ir_function.expressions[expr_handle]);
-                return Err(Error::FeatureNotImplemented("expression"));
+            crate::Expression::ArrayLength(expr) => {
+                let (structure_id, member_idx) = match ir_function.expressions[expr] {
+                    crate::Expression::AccessIndex { base, .. } => {
+                        match ir_function.expressions[base] {
+                            crate::Expression::GlobalVariable(handle) => {
+                                let global = &ir_module.global_variables[handle];
+                                let last_idx = match ir_module.types[global.ty].inner {
+                                    crate::TypeInner::Struct { ref members, .. } => {
+                                        members.len() as u32 - 1
+                                    }
+                                    _ => return Err(Error::Validation("array length expression")),
+                                };
+
+                                (self.global_variables[handle.index()].id, last_idx)
+                            }
+                            _ => return Err(Error::Validation("array length expression")),
+                        }
+                    }
+                    _ => return Err(Error::Validation("array length expression")),
+                };
+
+                // let structure_id = self.get_expression_global(ir_function, global);
+                let id = self.id_gen.next();
+
+                block.body.push(Instruction::array_length(
+                    result_type_id,
+                    id,
+                    structure_id,
+                    member_idx,
+                ));
+                id
             }
         };
 
