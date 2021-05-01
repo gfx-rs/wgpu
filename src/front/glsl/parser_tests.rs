@@ -50,35 +50,34 @@ fn version() {
         "InvalidProfile(TokenMetadata { line: 1, chars: 13..14 }, \"smart\")" //TODO: location
     );
 
-    // TODO: Reenable tests later
-    // assert_eq!(
-    //     format!(
-    //         "{:?}",
-    //         parse_program("#version 450\nvoid f(){} #version 450", &entry_points)
-    //             .err()
-    //             .unwrap()
-    //     ),
-    //     "InvalidToken(Unknown((TokenMetadata { line: 2, chars: 11..12 }, UnexpectedHash)))"
-    // );
+    assert_eq!(
+        format!(
+            "{:?}",
+            parse_program("#version 450\nvoid f(){} #version 450", &entry_points)
+                .err()
+                .unwrap()
+        ),
+        "InvalidToken(Token { value: Unknown(UnexpectedHash), meta: TokenMetadata { line: 2, chars: 11..12 } })"
+    );
 
-    // // valid versions
-    // let program = parse_program("  #  version 450\nvoid main() {}", &entry_points).unwrap();
-    // assert_eq!(
-    //     format!("{:?}", (program.version, program.profile)),
-    //     "(450, Core)"
-    // );
+    // valid versions
+    let program = parse_program("  #  version 450\nvoid main() {}", &entry_points).unwrap();
+    assert_eq!(
+        format!("{:?}", (program.version, program.profile)),
+        "(450, Core)"
+    );
 
-    // let program = parse_program("#version 450\nvoid main() {}", &entry_points).unwrap();
-    // assert_eq!(
-    //     format!("{:?}", (program.version, program.profile)),
-    //     "(450, Core)"
-    // );
+    let program = parse_program("#version 450\nvoid main() {}", &entry_points).unwrap();
+    assert_eq!(
+        format!("{:?}", (program.version, program.profile)),
+        "(450, Core)"
+    );
 
-    // let program = parse_program("#version 450 core\nvoid main() {}", &entry_points).unwrap();
-    // assert_eq!(
-    //     format!("{:?}", (program.version, program.profile)),
-    //     "(450, Core)"
-    // );
+    let program = parse_program("#version 450 core\nvoid main() {}", &entry_points).unwrap();
+    assert_eq!(
+        format!("{:?}", (program.version, program.profile)),
+        "(450, Core)"
+    );
 }
 
 #[test]
@@ -193,9 +192,8 @@ fn textures() {
 
 #[test]
 fn functions() {
-    // TODO: Reenable tests later
-    // let mut entry_points = crate::FastHashMap::default();
-    // entry_points.insert("".to_string(), ShaderStage::Vertex);
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Vertex);
 
     // TODO: Add support for function prototypes
     // parse_program(
@@ -206,22 +204,22 @@ fn functions() {
 
     //     void main() {}
     //     "#,
-    //     ShaderStage::Vertex,
-    // )
-    // .unwrap();
-
-    // parse_program(
-    //     r#"
-    //     #  version 450
-    //     void test2(float a) {}
-    //     void test3(float a, float b) {}
-    //     void test4(float, float) {}
-
-    //     void main() {}
-    //     "#,
     //     &entry_points,
     // )
     // .unwrap();
+
+    parse_program(
+        r#"
+        #  version 450
+        void test2(float a) {}
+        void test3(float a, float b) {}
+        void test4(float, float) {}
+
+        void main() {}
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 
     // parse_program(
     //     r#"

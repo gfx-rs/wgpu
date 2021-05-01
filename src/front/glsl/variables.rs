@@ -5,14 +5,18 @@ use super::error::ErrorKind;
 use super::token::TokenMetadata;
 
 impl Program<'_> {
-    pub fn lookup_variable(&mut self, name: &str) -> Result<Option<Handle<Expression>>, ErrorKind> {
-        if let Some(local_var) = self.context.lookup_local_var(name) {
+    pub fn lookup_variable(
+        &mut self,
+        context: &mut FunctionContext,
+        name: &str,
+    ) -> Result<Option<Handle<Expression>>, ErrorKind> {
+        if let Some(local_var) = context.lookup_local_var(name) {
             return Ok(Some(local_var));
         }
-        if let Some(global_var) = self.context.lookup_global_var_exps.get(name) {
+        if let Some(global_var) = context.lookup_global_var_exps.get(name) {
             return Ok(Some(*global_var));
         }
-        if let Some(constant) = self.context.lookup_constant_exps.get(name) {
+        if let Some(constant) = context.lookup_constant_exps.get(name) {
             return Ok(Some(*constant));
         }
         match name {
@@ -38,11 +42,11 @@ impl Program<'_> {
                     .context
                     .expressions
                     .append(Expression::GlobalVariable(h));*/
-                let exp = self
-                    .context
+                let exp = context
+                    .function
                     .expressions
                     .append(Expression::FunctionArgument(0)); //TODO
-                self.context.lookup_global_var_exps.insert(name.into(), exp);
+                context.lookup_global_var_exps.insert(name.into(), exp);
 
                 Ok(Some(exp))
             }
@@ -74,13 +78,11 @@ impl Program<'_> {
                     convert: true,
                 });
                 */
-                let expr = self
-                    .context
+                let expr = context
+                    .function
                     .expressions
                     .append(Expression::FunctionArgument(0)); //TODO
-                self.context
-                    .lookup_global_var_exps
-                    .insert(name.into(), expr);
+                context.lookup_global_var_exps.insert(name.into(), expr);
 
                 Ok(Some(expr))
             }
@@ -112,13 +114,11 @@ impl Program<'_> {
                     convert: true,
                 });
                 */
-                let expr = self
-                    .context
+                let expr = context
+                    .function
                     .expressions
                     .append(Expression::FunctionArgument(0)); //TODO
-                self.context
-                    .lookup_global_var_exps
-                    .insert(name.into(), expr);
+                context.lookup_global_var_exps.insert(name.into(), expr);
 
                 Ok(Some(expr))
             }
@@ -128,20 +128,24 @@ impl Program<'_> {
 
     pub fn field_selection(
         &mut self,
+        context: &mut FunctionContext,
         expression: Handle<Expression>,
         name: &str,
         meta: TokenMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
-        match *self.resolve_type(expression)? {
+        match *self.resolve_type(context, expression)? {
             TypeInner::Struct { ref members, .. } => {
                 let index = members
                     .iter()
                     .position(|m| m.name == Some(name.into()))
                     .ok_or_else(|| ErrorKind::UnknownField(meta, name.into()))?;
-                Ok(self.context.expressions.append(Expression::AccessIndex {
-                    base: expression,
-                    index: index as u32,
-                }))
+                Ok(context
+                    .function
+                    .expressions
+                    .append(Expression::AccessIndex {
+                        base: expression,
+                        index: index as u32,
+                    }))
             }
             // swizzles (xyzw, rgba, stpq)
             TypeInner::Vector { size, kind, width } => {
@@ -170,17 +174,20 @@ impl Program<'_> {
                     let components: Vec<Handle<Expression>> = v
                         .iter()
                         .map(|idx| {
-                            self.context.expressions.append(Expression::AccessIndex {
-                                base: expression,
-                                index: *idx as u32,
-                            })
+                            context
+                                .function
+                                .expressions
+                                .append(Expression::AccessIndex {
+                                    base: expression,
+                                    index: *idx as u32,
+                                })
                         })
                         .collect();
                     if components.len() == 1 {
                         // only single element swizzle, like pos.y, just return that component
                         Ok(components[0])
                     } else {
-                        Ok(self.context.expressions.append(Expression::Compose {
+                        Ok(context.function.expressions.append(Expression::Compose {
                             ty: self.module.types.fetch_or_append(Type {
                                 name: None,
                                 inner: TypeInner::Vector {

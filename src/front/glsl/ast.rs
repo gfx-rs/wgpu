@@ -1,9 +1,9 @@
 use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind};
 use crate::{
     proc::ResolveContext, Arena, ArraySize, BinaryOperator, Binding, Constant, Expression,
-    FastHashMap, Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable,
-    Module, RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass,
-    Type, UnaryOperator,
+    FastHashMap, Function, FunctionArgument, GlobalVariable, Handle, Interpolation, Module,
+    RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass, Type,
+    UnaryOperator,
 };
 
 #[derive(Debug)]
@@ -15,7 +15,6 @@ pub struct Program<'a> {
     pub lookup_type: FastHashMap<String, Handle<Type>>,
     pub lookup_global_variables: FastHashMap<String, Handle<GlobalVariable>>,
     pub lookup_constants: FastHashMap<String, Handle<Constant>>,
-    pub context: Context,
     pub module: Module,
 }
 
@@ -29,34 +28,31 @@ impl<'a> Program<'a> {
             lookup_type: FastHashMap::default(),
             lookup_global_variables: FastHashMap::default(),
             lookup_constants: FastHashMap::default(),
-            context: Context {
-                expressions: Arena::<Expression>::new(),
-                local_variables: Arena::<LocalVariable>::new(),
-                arguments: Vec::new(),
-                scopes: vec![FastHashMap::default()],
-                lookup_global_var_exps: FastHashMap::default(),
-                lookup_constant_exps: FastHashMap::default(),
-                typifier: Typifier::new(),
-            },
             module: Module::default(),
         }
     }
 
     pub fn binary_expr(
         &mut self,
+        function: &mut Function,
         op: BinaryOperator,
         left: &ExpressionRule,
         right: &ExpressionRule,
     ) -> ExpressionRule {
-        ExpressionRule::from_expression(self.context.expressions.append(Expression::Binary {
+        ExpressionRule::from_expression(function.expressions.append(Expression::Binary {
             op,
             left: left.expression,
             right: right.expression,
         }))
     }
 
-    pub fn unary_expr(&mut self, op: UnaryOperator, tgt: &ExpressionRule) -> ExpressionRule {
-        ExpressionRule::from_expression(self.context.expressions.append(Expression::Unary {
+    pub fn unary_expr(
+        &mut self,
+        function: &mut Function,
+        op: UnaryOperator,
+        tgt: &ExpressionRule,
+    ) -> ExpressionRule {
+        ExpressionRule::from_expression(function.expressions.append(Expression::Unary {
             op,
             expr: tgt.expression,
         }))
@@ -67,16 +63,17 @@ impl<'a> Program<'a> {
     /// represented as `all(equal(vec1, vec2))` and `any(notEqual(vec1, vec2))`
     pub fn equality_expr(
         &mut self,
+        context: &mut FunctionContext,
         equals: bool,
         left: &ExpressionRule,
         right: &ExpressionRule,
     ) -> Result<ExpressionRule, ErrorKind> {
-        let left_is_vector = match *self.resolve_type(left.expression)? {
+        let left_is_vector = match *self.resolve_type(context, left.expression)? {
             crate::TypeInner::Vector { .. } => true,
             _ => false,
         };
 
-        let right_is_vector = match *self.resolve_type(right.expression)? {
+        let right_is_vector = match *self.resolve_type(context, right.expression)? {
             crate::TypeInner::Vector { .. } => true,
             _ => false,
         };
@@ -86,15 +83,16 @@ impl<'a> Program<'a> {
             false => (BinaryOperator::NotEqual, RelationalFunction::Any),
         };
 
-        let expr =
-            ExpressionRule::from_expression(self.context.expressions.append(Expression::Binary {
+        let expr = ExpressionRule::from_expression(context.function.expressions.append(
+            Expression::Binary {
                 op,
                 left: left.expression,
                 right: right.expression,
-            }));
+            },
+        ));
 
         Ok(if left_is_vector && right_is_vector {
-            ExpressionRule::from_expression(self.context.expressions.append(
+            ExpressionRule::from_expression(context.function.expressions.append(
                 Expression::Relational {
                     fun,
                     argument: expr.expression,
@@ -105,20 +103,21 @@ impl<'a> Program<'a> {
         })
     }
 
-    pub fn resolve_type(
-        &mut self,
+    pub fn resolve_type<'b>(
+        &'b mut self,
+        context: &'b mut FunctionContext,
         handle: Handle<Expression>,
-    ) -> Result<&crate::TypeInner, ErrorKind> {
+    ) -> Result<&'b crate::TypeInner, ErrorKind> {
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
             global_vars: &self.module.global_variables,
-            local_vars: &self.context.local_variables,
+            local_vars: &context.function.local_variables,
             functions: &self.module.functions,
-            arguments: &self.context.arguments,
+            arguments: &context.function.arguments,
         };
-        match self.context.typifier.grow(
+        match context.typifier.grow(
             handle,
-            &self.context.expressions,
+            &context.function.expressions,
             &mut self.module.types,
             &resolve_ctx,
         ) {
@@ -126,17 +125,18 @@ impl<'a> Program<'a> {
             Err(error) => Err(ErrorKind::SemanticError(
                 format!("Can't resolve type: {:?}", error).into(),
             )),
-            Ok(()) => Ok(self.context.typifier.get(handle, &self.module.types)),
+            Ok(()) => Ok(context.typifier.get(handle, &self.module.types)),
         }
     }
 
     pub fn solve_constant(
         &mut self,
+        expressions: &Arena<Expression>,
         root: Handle<Expression>,
     ) -> Result<Handle<Constant>, ErrorKind> {
         let mut solver = ConstantSolver {
             types: &self.module.types,
-            expressions: &self.context.expressions,
+            expressions,
             constants: &mut self.module.constants,
         };
 
@@ -197,10 +197,8 @@ pub enum Profile {
 }
 
 #[derive(Debug)]
-pub struct Context {
-    pub expressions: Arena<Expression>,
-    pub local_variables: Arena<LocalVariable>,
-    pub arguments: Vec<FunctionArgument>,
+pub struct FunctionContext<'function> {
+    pub function: &'function mut Function,
     //TODO: Find less allocation heavy representation
     pub scopes: Vec<FastHashMap<String, Handle<Expression>>>,
     pub lookup_global_var_exps: FastHashMap<String, Handle<Expression>>,
@@ -208,7 +206,17 @@ pub struct Context {
     pub typifier: Typifier,
 }
 
-impl Context {
+impl<'function> FunctionContext<'function> {
+    pub fn new(function: &'function mut Function) -> Self {
+        FunctionContext {
+            function,
+            scopes: vec![FastHashMap::default()],
+            lookup_global_var_exps: FastHashMap::default(),
+            lookup_constant_exps: FastHashMap::default(),
+            typifier: Typifier::new(),
+        }
+    }
+
     pub fn lookup_local_var(&self, name: &str) -> Option<Handle<Expression>> {
         for scope in self.scopes.iter().rev() {
             if let Some(var) = scope.get(name) {
@@ -236,6 +244,7 @@ impl Context {
     pub fn add_local_var(&mut self, name: String, handle: Handle<Expression>) {
         if let Some(current) = self.scopes.last_mut() {
             let expr = self
+                .function
                 .expressions
                 .append(Expression::Load { pointer: handle });
             (*current).insert(name, expr);
@@ -243,9 +252,22 @@ impl Context {
     }
 
     /// Add function argument to current scope
-    pub fn add_function_arg(&mut self, name: String, expr: Handle<Expression>) {
-        if let Some(current) = self.scopes.last_mut() {
-            (*current).insert(name, expr);
+    pub fn add_function_arg(&mut self, name: Option<String>, ty: Handle<Type>) {
+        let index = self.function.arguments.len();
+        self.function.arguments.push(FunctionArgument {
+            name: name.clone(),
+            ty,
+            binding: None,
+        });
+
+        if let Some(name) = name {
+            if let Some(current) = self.scopes.last_mut() {
+                let expr = self
+                    .function
+                    .expressions
+                    .append(Expression::FunctionArgument(index as u32));
+                (*current).insert(name, expr);
+            }
         }
     }
 
@@ -309,6 +331,7 @@ pub enum StorageQualifier {
     StorageClass(StorageClass),
     Input,
     Output,
+    InOut,
     Const,
 }
 

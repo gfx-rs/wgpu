@@ -1,31 +1,34 @@
-use super::super::Typifier;
 use crate::{
-    proc::ensure_block_returns, BinaryOperator, Block, EntryPoint, Expression, Function,
-    MathFunction, RelationalFunction, SampleLevel, ScalarKind, TypeInner,
+    BinaryOperator, Expression, MathFunction, RelationalFunction, SampleLevel, ScalarKind,
+    TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind};
 
 impl Program<'_> {
-    pub fn function_call(&mut self, fc: FunctionCall) -> Result<ExpressionRule, ErrorKind> {
+    pub fn function_call(
+        &mut self,
+        context: &mut FunctionContext,
+        fc: FunctionCall,
+    ) -> Result<ExpressionRule, ErrorKind> {
         match fc.kind {
             FunctionCallKind::TypeConstructor(ty) => {
                 let h = if fc.args.len() == 1 {
-                    let is_vec = match *self.resolve_type(fc.args[0].expression)? {
+                    let is_vec = match *self.resolve_type(context, fc.args[0].expression)? {
                         TypeInner::Vector { .. } => true,
                         _ => false,
                     };
 
                     match self.module.types[ty].inner {
                         TypeInner::Vector { size, .. } if !is_vec => {
-                            self.context.expressions.append(Expression::Splat {
+                            context.function.expressions.append(Expression::Splat {
                                 size,
                                 value: fc.args[0].expression,
                             })
                         }
                         TypeInner::Scalar { kind, width }
                         | TypeInner::Vector { kind, width, .. } => {
-                            self.context.expressions.append(Expression::As {
+                            context.function.expressions.append(Expression::As {
                                 kind,
                                 expr: fc.args[0].expression,
                                 convert: Some(width),
@@ -36,7 +39,7 @@ impl Program<'_> {
                             rows,
                             width,
                         } => {
-                            let value = self.context.expressions.append(Expression::As {
+                            let value = context.function.expressions.append(Expression::As {
                                 kind: ScalarKind::Float,
                                 expr: fc.args[0].expression,
                                 convert: Some(width),
@@ -45,7 +48,8 @@ impl Program<'_> {
                             let column = if is_vec {
                                 value
                             } else {
-                                self.context
+                                context
+                                    .function
                                     .expressions
                                     .append(Expression::Splat { size: rows, value })
                             };
@@ -53,7 +57,7 @@ impl Program<'_> {
                             let columns =
                                 std::iter::repeat(column).take(columns as usize).collect();
 
-                            self.context.expressions.append(Expression::Compose {
+                            context.function.expressions.append(Expression::Compose {
                                 ty,
                                 components: columns,
                             })
@@ -61,7 +65,7 @@ impl Program<'_> {
                         _ => return Err(ErrorKind::SemanticError("Bad cast".into())),
                     }
                 } else {
-                    self.context.expressions.append(Expression::Compose {
+                    context.function.expressions.append(Expression::Compose {
                         ty,
                         components: fc.args.iter().map(|a| a.expression).collect(),
                     })
@@ -101,7 +105,7 @@ impl Program<'_> {
                         }
                         if let Some(sampler) = fc.args[0].sampler {
                             Ok(ExpressionRule {
-                                expression: self.context.expressions.append(
+                                expression: context.function.expressions.append(
                                     Expression::ImageSample {
                                         image: fc.args[0].expression,
                                         sampler,
@@ -130,7 +134,7 @@ impl Program<'_> {
                         }
                         if let Some(sampler) = fc.args[0].sampler {
                             Ok(ExpressionRule {
-                                expression: self.context.expressions.append(
+                                expression: context.function.expressions.append(
                                     Expression::ImageSample {
                                         image: fc.args[0].expression,
                                         sampler,
@@ -160,7 +164,7 @@ impl Program<'_> {
                             return Err(ErrorKind::WrongNumberArgs(name, 1, fc.args.len()));
                         }
                         Ok(ExpressionRule {
-                            expression: self.context.expressions.append(Expression::Math {
+                            expression: context.function.expressions.append(Expression::Math {
                                 fun: match name.as_str() {
                                     "ceil" => MathFunction::Ceil,
                                     "round" => MathFunction::Round,
@@ -192,7 +196,7 @@ impl Program<'_> {
                             return Err(ErrorKind::WrongNumberArgs(name, 2, fc.args.len()));
                         }
                         Ok(ExpressionRule {
-                            expression: self.context.expressions.append(Expression::Math {
+                            expression: context.function.expressions.append(Expression::Math {
                                 fun: match name.as_str() {
                                     "pow" => MathFunction::Pow,
                                     "dot" => MathFunction::Dot,
@@ -212,7 +216,7 @@ impl Program<'_> {
                             return Err(ErrorKind::WrongNumberArgs(name, 3, fc.args.len()));
                         }
                         Ok(ExpressionRule {
-                            expression: self.context.expressions.append(Expression::Math {
+                            expression: context.function.expressions.append(Expression::Math {
                                 fun: match name.as_str() {
                                     "mix" => MathFunction::Mix,
                                     "clamp" => MathFunction::Clamp,
@@ -232,7 +236,7 @@ impl Program<'_> {
                             return Err(ErrorKind::WrongNumberArgs(name, 2, fc.args.len()));
                         }
                         Ok(ExpressionRule {
-                            expression: self.context.expressions.append(Expression::Binary {
+                            expression: context.function.expressions.append(Expression::Binary {
                                 op: match name.as_str() {
                                     "lessThan" => BinaryOperator::Less,
                                     "greaterThan" => BinaryOperator::Greater,
@@ -249,10 +253,18 @@ impl Program<'_> {
                             statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
                         })
                     }
-                    "isinf" => self.parse_relational_fun(name, fc.args, RelationalFunction::IsInf),
-                    "isnan" => self.parse_relational_fun(name, fc.args, RelationalFunction::IsNan),
-                    "all" => self.parse_relational_fun(name, fc.args, RelationalFunction::All),
-                    "any" => self.parse_relational_fun(name, fc.args, RelationalFunction::Any),
+                    "isinf" => {
+                        self.parse_relational_fun(context, name, fc.args, RelationalFunction::IsInf)
+                    }
+                    "isnan" => {
+                        self.parse_relational_fun(context, name, fc.args, RelationalFunction::IsNan)
+                    }
+                    "all" => {
+                        self.parse_relational_fun(context, name, fc.args, RelationalFunction::All)
+                    }
+                    "any" => {
+                        self.parse_relational_fun(context, name, fc.args, RelationalFunction::Any)
+                    }
                     func_name => {
                         let function = *self.lookup_function.get(func_name).ok_or_else(|| {
                             ErrorKind::SemanticError(
@@ -262,8 +274,10 @@ impl Program<'_> {
                         let arguments: Vec<_> = fc.args.iter().map(|a| a.expression).collect();
                         let mut statements: Vec<_> =
                             fc.args.into_iter().flat_map(|a| a.statements).collect();
-                        let expression =
-                            self.context.expressions.append(Expression::Call(function));
+                        let expression = context
+                            .function
+                            .expressions
+                            .append(Expression::Call(function));
                         statements.push(crate::Statement::Call {
                             function,
                             arguments,
@@ -282,6 +296,7 @@ impl Program<'_> {
 
     pub fn parse_relational_fun(
         &mut self,
+        context: &mut FunctionContext,
         name: String,
         args: Vec<ExpressionRule>,
         fun: RelationalFunction,
@@ -290,7 +305,7 @@ impl Program<'_> {
             return Err(ErrorKind::WrongNumberArgs(name, 1, args.len()));
         }
         Ok(ExpressionRule {
-            expression: self.context.expressions.append(Expression::Relational {
+            expression: context.function.expressions.append(Expression::Relational {
                 fun,
                 argument: args[0].expression,
             }),
@@ -299,33 +314,33 @@ impl Program<'_> {
         })
     }
 
-    pub fn add_function_prelude(&mut self) {
+    pub fn add_function_prelude(&mut self, context: &mut FunctionContext) {
         for (var_handle, var) in self.module.global_variables.iter() {
             if let Some(name) = var.name.as_ref() {
-                let expr = self
-                    .context
+                let expr = context
+                    .function
                     .expressions
                     .append(Expression::GlobalVariable(var_handle));
-                self.context
-                    .lookup_global_var_exps
-                    .insert(name.clone(), expr);
+                context.lookup_global_var_exps.insert(name.clone(), expr);
             } else {
                 let ty = &self.module.types[var.ty];
                 // anonymous structs
                 if let TypeInner::Struct { ref members, .. } = ty.inner {
-                    let base = self
-                        .context
+                    let base = context
+                        .function
                         .expressions
                         .append(Expression::GlobalVariable(var_handle));
                     for (idx, member) in members.iter().enumerate() {
                         if let Some(name) = member.name.as_ref() {
-                            let exp = self.context.expressions.append(Expression::AccessIndex {
-                                base,
-                                index: idx as u32,
-                            });
-                            self.context
-                                .lookup_global_var_exps
-                                .insert(name.clone(), exp);
+                            let exp =
+                                context
+                                    .function
+                                    .expressions
+                                    .append(Expression::AccessIndex {
+                                        base,
+                                        index: idx as u32,
+                                    });
+                            context.lookup_global_var_exps.insert(name.clone(), exp);
                         }
                     }
                 }
@@ -334,45 +349,12 @@ impl Program<'_> {
 
         for (handle, constant) in self.module.constants.iter() {
             if let Some(name) = constant.name.as_ref() {
-                let expr = self
-                    .context
+                let expr = context
+                    .function
                     .expressions
                     .append(Expression::Constant(handle));
-                self.context.lookup_constant_exps.insert(name.clone(), expr);
+                context.lookup_constant_exps.insert(name.clone(), expr);
             }
         }
-    }
-
-    pub fn function_definition(&mut self, mut f: Function, mut block: Block) -> Function {
-        std::mem::swap(&mut f.expressions, &mut self.context.expressions);
-        std::mem::swap(&mut f.local_variables, &mut self.context.local_variables);
-        std::mem::swap(&mut f.arguments, &mut self.context.arguments);
-        self.context.clear_scopes();
-        self.context.lookup_global_var_exps.clear();
-        self.context.typifier = Typifier::new();
-        ensure_block_returns(&mut block);
-        f.body = block;
-        f
-    }
-
-    pub fn declare_function(&mut self, f: Function) -> Result<(), ErrorKind> {
-        let name = f
-            .name
-            .clone()
-            .ok_or_else(|| ErrorKind::SemanticError("Unnamed function".into()))?;
-        let stage = self.entry_points.get(&name);
-        if let Some(&stage) = stage {
-            self.module.entry_points.push(EntryPoint {
-                name,
-                stage,
-                early_depth_test: None,
-                workgroup_size: [0; 3], //TODO
-                function: f,
-            });
-        } else {
-            let handle = self.module.functions.append(f);
-            self.lookup_function.insert(name, handle);
-        }
-        Ok(())
     }
 }

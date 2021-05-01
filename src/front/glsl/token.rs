@@ -53,6 +53,7 @@ pub enum TokenValue {
     For,
 
     Void,
+    Struct,
     TypeName(Type),
 
     Assign,
