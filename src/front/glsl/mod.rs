@@ -14,7 +14,7 @@ mod error;
 pub use error::ParseError;
 mod constants;
 // TODO: Remove later
-#[allow(dead_code)]
+#[allow(dead_code, unused_imports)]
 mod functions;
 mod parser;
 #[cfg(test)]

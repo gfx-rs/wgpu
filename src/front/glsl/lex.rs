@@ -62,7 +62,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
                 TokenValue::Extension
             }
-            PPTokenValue::Float(float) => TokenValue::FloatConstant(float.value),
+            PPTokenValue::Float(float) => TokenValue::FloatConstant(float),
             PPTokenValue::Ident(ident) => {
                 match ident.as_str() {
                     "layout" => TokenValue::Layout,
@@ -103,8 +103,7 @@ impl<'a> Iterator for Lexer<'a> {
                     },
                 }
             }
-            //TODO: unsigned etc
-            PPTokenValue::Integer(integer) => TokenValue::IntConstant(integer.value as i64),
+            PPTokenValue::Integer(integer) => TokenValue::IntConstant(integer),
             PPTokenValue::Punct(punct) => match punct {
                 // Compound assignments
                 Punct::AddAssign => TokenValue::AddAssign,
@@ -179,6 +178,8 @@ impl<'a> Iterator for Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
+    use pp_rs::token::Integer;
+
     use super::{
         super::token::{Token, TokenMetadata, TokenValue},
         Lexer,
@@ -203,7 +204,11 @@ mod tests {
         assert_eq!(
             lex.next().unwrap(),
             Token {
-                value: TokenValue::IntConstant(450),
+                value: TokenValue::IntConstant(Integer {
+                    signed: true,
+                    value: 450,
+                    width: 32
+                }),
                 meta: TokenMetadata {
                     line: 1,
                     chars: 9..10 //TODO

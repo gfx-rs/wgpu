@@ -256,27 +256,27 @@ fn functions() {
     )
     .unwrap();
 
-    // parse_program(
-    //     r#"
-    //     #  version 450
-    //     float test(float a) { return a; }
+    parse_program(
+        r#"
+        #  version 450
+        float test(float a) { return a; }
 
-    //     void main() {}
-    //     "#,
-    //     &entry_points,
-    // )
-    // .unwrap();
+        void main() {}
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 
-    // parse_program(
-    //     r#"
-    //     #  version 450
-    //     float test(vec4 p) {
-    //         return p.x;
-    //     }
-    //     "#,
-    //     &entry_points,
-    // )
-    // .unwrap();
+    parse_program(
+        r#"
+        #  version 450
+        float test(vec4 p) {
+            return p.x;
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 }
 
 #[test]

@@ -8,7 +8,7 @@ pub enum ErrorKind {
     InvalidInput,
     InvalidProfile(TokenMetadata, String),
     InvalidToken(Token),
-    InvalidVersion(TokenMetadata, i64),
+    InvalidVersion(TokenMetadata, u64),
     IoError(io::Error),
     ParserFail,
     ParserStackOverflow,

@@ -9,118 +9,25 @@ impl Program<'_> {
         &mut self,
         context: &mut FunctionContext,
         name: &str,
-    ) -> Result<Option<Handle<Expression>>, ErrorKind> {
+    ) -> Result<Option<VariableReference>, ErrorKind> {
         if let Some(local_var) = context.lookup_local_var(name) {
             return Ok(Some(local_var));
         }
         if let Some(global_var) = context.lookup_global_var_exps.get(name) {
-            return Ok(Some(*global_var));
+            return Ok(Some(global_var.clone()));
         }
         if let Some(constant) = context.lookup_constant_exps.get(name) {
-            return Ok(Some(*constant));
+            return Ok(Some(constant.clone()));
         }
         match name {
             "gl_Position" => {
-                /*let h = self.module.global_variables.append(GlobalVariable {
-                    name: Some(name.into()),
-                    class: StorageClass::Output,
-                    binding: Some(Binding::BuiltIn(BuiltIn::Position)),
-                    ty: self.module.types.fetch_or_append(Type {
-                        name: None,
-                        inner: TypeInner::Vector {
-                            size: VectorSize::Quad,
-                            kind: ScalarKind::Float,
-                            width: 4,
-                        },
-                    }),
-                    init: None,
-                    interpolation: None,
-                    storage_access: StorageAccess::empty(),
-                });
-                self.lookup_global_variables.insert(name.into(), h);
-                let exp = self
-                    .context
-                    .expressions
-                    .append(Expression::GlobalVariable(h));*/
-                let exp = context
-                    .function
-                    .expressions
-                    .append(Expression::FunctionArgument(0)); //TODO
-                context.lookup_global_var_exps.insert(name.into(), exp);
-
-                Ok(Some(exp))
+                todo!()
             }
             "gl_VertexIndex" => {
-                /* TODO
-                let h = self.module.global_variables.append(GlobalVariable {
-                    name: Some(name.into()),
-                    class: StorageClass::Input,
-                    binding: Some(Binding::BuiltIn(BuiltIn::VertexIndex)),
-                    ty: self.module.types.fetch_or_append(Type {
-                        name: None,
-                        inner: TypeInner::Scalar {
-                            kind: ScalarKind::Uint,
-                            width: 4,
-                        },
-                    }),
-                    init: None,
-                    interpolation: None,
-                    storage_access: StorageAccess::empty(),
-                });
-                self.lookup_global_variables.insert(name.into(), h);
-                let mut expr = self
-                    .context
-                    .expressions
-                    .append(Expression::GlobalVariable(h));
-                expr = self.context.expressions.append(Expression::As {
-                    expr,
-                    kind: ScalarKind::Sint,
-                    convert: true,
-                });
-                */
-                let expr = context
-                    .function
-                    .expressions
-                    .append(Expression::FunctionArgument(0)); //TODO
-                context.lookup_global_var_exps.insert(name.into(), expr);
-
-                Ok(Some(expr))
+                todo!()
             }
             "gl_InstanceIndex" => {
-                /* TODO
-                let h = self.module.global_variables.append(GlobalVariable {
-                    name: Some(name.into()),
-                    class: StorageClass::Input,
-                    binding: Some(Binding::BuiltIn(BuiltIn::InstanceIndex)),
-                    ty: self.module.types.fetch_or_append(Type {
-                        name: None,
-                        inner: TypeInner::Scalar {
-                            kind: ScalarKind::Uint,
-                            width: 4,
-                        },
-                    }),
-                    init: None,
-                    interpolation: None,
-                    storage_access: StorageAccess::empty(),
-                });
-                self.lookup_global_variables.insert(name.into(), h);
-                let mut expr = self
-                    .context
-                    .expressions
-                    .append(Expression::GlobalVariable(h));
-                expr = self.context.expressions.append(Expression::As {
-                    expr,
-                    kind: ScalarKind::Sint,
-                    convert: true,
-                });
-                */
-                let expr = context
-                    .function
-                    .expressions
-                    .append(Expression::FunctionArgument(0)); //TODO
-                context.lookup_global_var_exps.insert(name.into(), expr);
-
-                Ok(Some(expr))
+                todo!()
             }
             _ => Ok(None),
         }

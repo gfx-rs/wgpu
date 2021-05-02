@@ -1,5 +1,6 @@
+pub use pp_rs::token::{Float, Integer, PreprocessorError};
+
 use crate::{Interpolation, Sampling, Type};
-use pp_rs::token::PreprocessorError;
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
@@ -25,8 +26,8 @@ pub enum TokenValue {
     Version,
     Pragma,
 
-    FloatConstant(f32),
-    IntConstant(i64),
+    FloatConstant(Float),
+    IntConstant(Integer),
     BoolConstant(bool),
 
     Layout,

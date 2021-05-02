@@ -1,4 +1,4 @@
-use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind};
+use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind, TokenMetadata};
 use crate::{
     proc::ResolveContext, Arena, ArraySize, BinaryOperator, Binding, Constant, Expression,
     FastHashMap, Function, FunctionArgument, GlobalVariable, Handle, Interpolation, Module,
@@ -200,9 +200,9 @@ pub enum Profile {
 pub struct FunctionContext<'function> {
     pub function: &'function mut Function,
     //TODO: Find less allocation heavy representation
-    pub scopes: Vec<FastHashMap<String, Handle<Expression>>>,
-    pub lookup_global_var_exps: FastHashMap<String, Handle<Expression>>,
-    pub lookup_constant_exps: FastHashMap<String, Handle<Expression>>,
+    pub scopes: Vec<FastHashMap<String, VariableReference>>,
+    pub lookup_global_var_exps: FastHashMap<String, VariableReference>,
+    pub lookup_constant_exps: FastHashMap<String, VariableReference>,
     pub typifier: Typifier,
 }
 
@@ -217,17 +217,17 @@ impl<'function> FunctionContext<'function> {
         }
     }
 
-    pub fn lookup_local_var(&self, name: &str) -> Option<Handle<Expression>> {
+    pub fn lookup_local_var(&self, name: &str) -> Option<VariableReference> {
         for scope in self.scopes.iter().rev() {
             if let Some(var) = scope.get(name) {
-                return Some(*var);
+                return Some(var.clone());
             }
         }
         None
     }
 
     #[cfg(feature = "glsl-validate")]
-    pub fn lookup_local_var_current_scope(&self, name: &str) -> Option<Handle<Expression>> {
+    pub fn lookup_local_var_current_scope(&self, name: &str) -> Option<VariableReference> {
         if let Some(current) = self.scopes.last() {
             current.get(name).cloned()
         } else {
@@ -241,13 +241,20 @@ impl<'function> FunctionContext<'function> {
     }
 
     /// Add variable to current scope
-    pub fn add_local_var(&mut self, name: String, handle: Handle<Expression>) {
+    pub fn add_local_var(&mut self, name: String, expr: Handle<Expression>) {
         if let Some(current) = self.scopes.last_mut() {
-            let expr = self
+            let load = self
                 .function
                 .expressions
-                .append(Expression::Load { pointer: handle });
-            (*current).insert(name, expr);
+                .append(Expression::Load { pointer: expr });
+
+            (*current).insert(
+                name,
+                VariableReference {
+                    expr,
+                    load: Some(load),
+                },
+            );
         }
     }
 
@@ -266,7 +273,8 @@ impl<'function> FunctionContext<'function> {
                     .function
                     .expressions
                     .append(Expression::FunctionArgument(index as u32));
-                (*current).insert(name, expr);
+
+                (*current).insert(name, VariableReference { expr, load: None });
             }
         }
     }
@@ -278,6 +286,79 @@ impl<'function> FunctionContext<'function> {
 
     pub fn remove_current_scope(&mut self) {
         self.scopes.pop();
+    }
+
+    pub fn resolve(
+        &mut self,
+        program: &mut Program,
+        expr: Expr,
+        lhs: bool,
+    ) -> Result<Handle<Expression>, ErrorKind> {
+        Ok(match expr.kind {
+            ExprKind::Access { base, index } => {
+                let base = self.resolve(program, *base, lhs)?;
+                let index = self.resolve(program, *index, false)?;
+
+                self.function
+                    .expressions
+                    .append(Expression::Access { base, index })
+            }
+            ExprKind::Select { base, field } => {
+                let base = self.resolve(program, *base, lhs)?;
+
+                program.field_selection(self, base, &field, expr.meta)?
+            }
+            ExprKind::Constant(constant) => self
+                .function
+                .expressions
+                .append(Expression::Constant(constant)),
+            ExprKind::Binary { left, op, right } => {
+                let left = self.resolve(program, *left, false)?;
+                let right = self.resolve(program, *right, false)?;
+
+                self.function
+                    .expressions
+                    .append(Expression::Binary { left, op, right })
+            }
+            ExprKind::Unary { op, expr } => {
+                let expr = self.resolve(program, *expr, false)?;
+
+                self.function
+                    .expressions
+                    .append(Expression::Unary { op, expr })
+            }
+            ExprKind::Variable(var) => {
+                if lhs {
+                    var.expr
+                } else {
+                    var.load.unwrap_or(var.expr)
+                }
+            }
+            ExprKind::Call(_) => todo!(),
+            ExprKind::Conditional {
+                condition,
+                accept,
+                reject,
+            } => {
+                let condition = self.resolve(program, *condition, false)?;
+                let accept = self.resolve(program, *accept, false)?;
+                let reject = self.resolve(program, *reject, false)?;
+
+                self.function.expressions.append(Expression::Select {
+                    condition,
+                    accept,
+                    reject,
+                })
+            }
+            ExprKind::Assign { tgt, value } => {
+                let pointer = self.resolve(program, *tgt, false)?;
+                let value = self.resolve(program, *value, false)?;
+
+                self.function.body.push(Statement::Store { pointer, value });
+
+                value
+            }
+        })
     }
 }
 
@@ -296,6 +377,51 @@ impl ExpressionRule {
             sampler: None,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct VariableReference {
+    pub expr: Handle<Expression>,
+    pub load: Option<Handle<Expression>>,
+}
+
+#[derive(Debug)]
+pub struct Expr {
+    pub kind: ExprKind,
+    pub meta: TokenMetadata,
+}
+
+#[derive(Debug)]
+pub enum ExprKind {
+    Access {
+        base: Box<Expr>,
+        index: Box<Expr>,
+    },
+    Select {
+        base: Box<Expr>,
+        field: String,
+    },
+    Constant(Handle<Constant>),
+    Binary {
+        left: Box<Expr>,
+        op: BinaryOperator,
+        right: Box<Expr>,
+    },
+    Unary {
+        op: UnaryOperator,
+        expr: Box<Expr>,
+    },
+    Variable(VariableReference),
+    Call(FunctionCall),
+    Conditional {
+        condition: Box<Expr>,
+        accept: Box<Expr>,
+        reject: Box<Expr>,
+    },
+    Assign {
+        tgt: Box<Expr>,
+        value: Box<Expr>,
+    },
 }
 
 #[derive(Debug)]
@@ -325,7 +451,7 @@ pub enum FunctionCallKind {
 #[derive(Debug)]
 pub struct FunctionCall {
     pub kind: FunctionCallKind,
-    pub args: Vec<ExpressionRule>,
+    pub args: Vec<Expr>,
 }
 
 #[derive(Debug, Clone, Copy)]

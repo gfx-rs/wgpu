@@ -1,16 +1,19 @@
 use super::{
-    ast::{FunctionContext, Profile, StorageQualifier, StructLayout, TypeQualifier},
+    ast::{
+        Expr, ExprKind, FunctionContext, Profile, StorageQualifier, StructLayout, TypeQualifier,
+    },
     error::ErrorKind,
     lex::Lexer,
     token::{Token, TokenMetadata, TokenValue},
     Program,
 };
 use crate::{
-    arena::Handle, ArraySize, Binding, Function, FunctionResult, ResourceBinding, StorageClass,
-    Type, TypeInner,
+    arena::Handle, ArraySize, BinaryOperator, Binding, Constant, ConstantInner, Function,
+    FunctionResult, ResourceBinding, ScalarValue, Statement, StorageClass, Type, TypeInner,
+    UnaryOperator,
 };
 use core::convert::TryFrom;
-use core::iter::Peekable;
+use std::iter::Peekable;
 
 type Result<T> = std::result::Result<T, ErrorKind>;
 
@@ -78,9 +81,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
         let version = self.bump()?;
         match version.value {
-            TokenValue::IntConstant(i) => match i {
-                440 | 450 | 460 => self.program.version = i as u16,
-                _ => return Err(ErrorKind::InvalidVersion(version.meta, i)),
+            TokenValue::IntConstant(i) => match i.value {
+                440 | 450 | 460 => self.program.version = i.value as u16,
+                _ => return Err(ErrorKind::InvalidVersion(version.meta, i.value)),
             },
             _ => return Err(ErrorKind::InvalidToken(version)),
         }
@@ -288,7 +291,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     fn parse_constant_expression(&mut self) -> Result<i64> {
         let token = self.bump()?;
         match token.value {
-            TokenValue::IntConstant(value) => Ok(value),
+            TokenValue::IntConstant(int) => Ok(int.value as i64),
             _ => Err(ErrorKind::InvalidToken(token)),
         }
     }
@@ -355,11 +358,11 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                             let token = self.bump()?;
                             match token.value {
-                                // Function prototypes
+                                // TODO: Function prototypes
                                 TokenValue::Semicolon => todo!(),
                                 TokenValue::LeftBrace if external => {
-                                    // TODO: body
-                                    self.expect(TokenValue::RightBrace)?;
+                                    self.parse_compound_statement(&mut context)?;
+                                    self.program.add_function(function)?;
 
                                     Ok(true)
                                 }
@@ -390,6 +393,288 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         } else {
             Ok(false)
         }
+    }
+
+    fn parse_primary(&mut self, ctx: &mut FunctionContext) -> Result<Expr> {
+        let token = self.bump()?;
+
+        let (width, value) = match token.value {
+            TokenValue::IntConstant(int) => (
+                (int.width / 8) as u8,
+                if int.signed {
+                    ScalarValue::Sint(int.value as i64)
+                } else {
+                    ScalarValue::Uint(int.value)
+                },
+            ),
+            TokenValue::FloatConstant(float) => (
+                (float.width / 8) as u8,
+                ScalarValue::Float(float.value as f64),
+            ),
+            TokenValue::BoolConstant(value) => (1, ScalarValue::Bool(value)),
+            TokenValue::LeftParen => {
+                let expr = self.parse_expression(ctx)?;
+                self.expect(TokenValue::RightParen)?;
+
+                return Ok(expr);
+            }
+            _ => return Err(ErrorKind::InvalidToken(token)),
+        };
+
+        let handle = self.program.module.constants.append(Constant {
+            name: None,
+            specialization: None,
+            inner: ConstantInner::Scalar { width, value },
+        });
+
+        Ok(Expr {
+            kind: ExprKind::Constant(handle),
+            meta: token.meta,
+        })
+    }
+
+    fn parse_postfix(&mut self, ctx: &mut FunctionContext) -> Result<Expr> {
+        let mut expr = match self.expect_peek()?.value {
+            TokenValue::Identifier(_) => {
+                let (name, meta) = self.expect_ident()?;
+
+                // TODO: function calls
+                // let mut args = Vec::new();
+                // while TokenValue::RightBracket != self.bump()?.value {
+                //     args.push(self.parse_expression(ctx)?)
+                // }
+
+                let var = match self.program.lookup_variable(ctx, &name)? {
+                    Some(var) => var,
+                    None => return Err(ErrorKind::UnknownVariable(meta, name)),
+                };
+
+                Expr {
+                    kind: ExprKind::Variable(var),
+                    meta,
+                }
+            }
+            _ => self.parse_primary(ctx)?,
+        };
+
+        // TODO: postfix inc/dec
+        while let TokenValue::LeftBracket | TokenValue::Dot = self.expect_peek()?.value {
+            let Token { value, meta } = self.bump()?;
+
+            match value {
+                TokenValue::LeftBracket => {
+                    let index = Box::new(self.parse_expression(ctx)?);
+                    self.expect(TokenValue::RightBracket)?;
+
+                    // TODO: metadata unification
+                    expr = Expr {
+                        kind: ExprKind::Access {
+                            base: Box::new(expr),
+                            index,
+                        },
+                        meta,
+                    }
+                }
+                TokenValue::Dot => {
+                    let field = self.expect_ident()?.0;
+
+                    // TODO: metadata unification
+                    expr = Expr {
+                        kind: ExprKind::Select {
+                            base: Box::new(expr),
+                            field,
+                        },
+                        meta,
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn parse_unary(&mut self, ctx: &mut FunctionContext) -> Result<Expr> {
+        // TODO: prefix inc/dec
+        match self.expect_peek()?.value {
+            TokenValue::Plus | TokenValue::Dash | TokenValue::Bang | TokenValue::Tilde => {
+                let Token { value, meta } = self.bump()?;
+
+                let expr = self.parse_unary(ctx)?;
+
+                let kind = match value {
+                    TokenValue::Dash => ExprKind::Unary {
+                        op: UnaryOperator::Negate,
+                        expr: Box::new(expr),
+                    },
+                    TokenValue::Bang | TokenValue::Tilde => ExprKind::Unary {
+                        op: UnaryOperator::Not,
+                        expr: Box::new(expr),
+                    },
+                    _ => return Ok(expr),
+                };
+
+                // TODO: metadata unification
+                Ok(Expr { kind, meta })
+            }
+            _ => self.parse_postfix(ctx),
+        }
+    }
+
+    fn parse_binary(
+        &mut self,
+        ctx: &mut FunctionContext,
+        passtrough: Option<Expr>,
+        min_bp: u8,
+    ) -> Result<Expr> {
+        let mut expr = passtrough
+            .ok_or(ErrorKind::EndOfFile /* Dummy error */)
+            .or_else(|_| self.parse_unary(ctx))?;
+
+        while let Some((l_bp, r_bp)) = binding_power(&self.expect_peek()?.value) {
+            if l_bp < min_bp {
+                break;
+            }
+
+            let Token { value, meta } = self.bump()?;
+
+            let right = Box::new(self.parse_binary(ctx, None, r_bp)?);
+
+            expr = Expr {
+                kind: ExprKind::Binary {
+                    left: Box::new(expr),
+                    op: match value {
+                        TokenValue::LogicalOr => BinaryOperator::LogicalOr,
+                        TokenValue::LogicalXor => BinaryOperator::NotEqual,
+                        TokenValue::LogicalAnd => BinaryOperator::LogicalAnd,
+                        TokenValue::VerticalBar => BinaryOperator::InclusiveOr,
+                        TokenValue::Caret => BinaryOperator::ExclusiveOr,
+                        TokenValue::Ampersand => BinaryOperator::And,
+                        TokenValue::Equal => BinaryOperator::Equal,
+                        TokenValue::NotEqual => BinaryOperator::NotEqual,
+                        TokenValue::GreaterEqual => BinaryOperator::GreaterEqual,
+                        TokenValue::LessEqual => BinaryOperator::LessEqual,
+                        TokenValue::LeftAngle => BinaryOperator::Greater,
+                        TokenValue::RightAngle => BinaryOperator::Less,
+                        TokenValue::LeftShift => BinaryOperator::ShiftLeft,
+                        TokenValue::RightShift => BinaryOperator::ShiftRight,
+                        TokenValue::Plus => BinaryOperator::Add,
+                        TokenValue::Dash => BinaryOperator::Subtract,
+                        TokenValue::Star => BinaryOperator::Multiply,
+                        TokenValue::Slash => BinaryOperator::Divide,
+                        TokenValue::Percent => BinaryOperator::Modulo,
+                        _ => unreachable!(),
+                    },
+                    right,
+                },
+                meta,
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn parse_conditional(
+        &mut self,
+        ctx: &mut FunctionContext,
+        passtrough: Option<Expr>,
+    ) -> Result<Expr> {
+        let mut condition = self.parse_binary(ctx, passtrough, 0)?;
+
+        if let TokenValue::Question = self.expect_peek()?.value {
+            let meta = self.bump()?.meta;
+
+            let accept = Box::new(self.parse_expression(ctx)?);
+            self.expect(TokenValue::Colon)?;
+            let reject = Box::new(self.parse_assignment(ctx)?);
+
+            condition = Expr {
+                kind: ExprKind::Conditional {
+                    condition: Box::new(condition),
+                    accept,
+                    reject,
+                },
+                meta,
+            };
+        }
+
+        Ok(condition)
+    }
+
+    fn parse_assignment(&mut self, ctx: &mut FunctionContext) -> Result<Expr> {
+        let pointer = self.parse_unary(ctx)?;
+
+        if let TokenValue::Assign = self.expect_peek()?.value {
+            let meta = self.bump()?.meta;
+
+            let value = Box::new(self.parse_assignment(ctx)?);
+
+            Ok(Expr {
+                kind: ExprKind::Assign {
+                    tgt: Box::new(pointer),
+                    value,
+                },
+                meta,
+            })
+        } else {
+            self.parse_conditional(ctx, Some(pointer))
+        }
+    }
+
+    fn parse_expression(&mut self, ctx: &mut FunctionContext) -> Result<Expr> {
+        let mut expr = self.parse_assignment(ctx)?;
+
+        while let TokenValue::Comma = self.expect_peek()?.value {
+            self.bump()?;
+            expr = self.parse_assignment(ctx)?;
+        }
+
+        Ok(expr)
+    }
+
+    fn parse_compound_statement(&mut self, ctx: &mut FunctionContext) -> Result<()> {
+        loop {
+            let token = self.bump()?;
+
+            match token.value {
+                TokenValue::Continue => {
+                    ctx.function.body.push(Statement::Continue);
+                    self.expect(TokenValue::Semicolon)?;
+                }
+                TokenValue::Break => {
+                    ctx.function.body.push(Statement::Break);
+                    self.expect(TokenValue::Semicolon)?;
+                }
+                TokenValue::Return => {
+                    let value = match self.expect_peek()?.value {
+                        TokenValue::Semicolon => {
+                            self.bump()?;
+                            None
+                        }
+                        _ => {
+                            let expr = self.parse_expression(ctx)?;
+                            self.expect(TokenValue::Semicolon)?;
+                            Some(ctx.resolve(self.program, expr, false)?)
+                        }
+                    };
+
+                    ctx.function.body.push(Statement::Return { value })
+                }
+                TokenValue::Discard => {
+                    ctx.function.body.push(Statement::Kill);
+                    self.expect(TokenValue::Semicolon)?;
+                }
+                TokenValue::LeftBrace => {
+                    ctx.push_scope();
+                    self.parse_compound_statement(ctx)?;
+                    ctx.remove_current_scope();
+                }
+                TokenValue::RightBrace => break,
+                _ => {}
+            }
+        }
+
+        Ok(())
     }
 
     fn parse_function_args(&mut self, context: &mut FunctionContext) -> Result<()> {
@@ -427,4 +712,24 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
         Ok(())
     }
+}
+
+fn binding_power(value: &TokenValue) -> Option<(u8, u8)> {
+    Some(match *value {
+        TokenValue::LogicalOr => (1, 2),
+        TokenValue::LogicalXor => (3, 4),
+        TokenValue::LogicalAnd => (5, 6),
+        TokenValue::VerticalBar => (7, 8),
+        TokenValue::Caret => (9, 10),
+        TokenValue::Ampersand => (11, 12),
+        TokenValue::Equal | TokenValue::NotEqual => (13, 14),
+        TokenValue::GreaterEqual
+        | TokenValue::LessEqual
+        | TokenValue::LeftAngle
+        | TokenValue::RightAngle => (15, 16),
+        TokenValue::LeftShift | TokenValue::RightShift => (17, 18),
+        TokenValue::Plus | TokenValue::Dash => (19, 20),
+        TokenValue::Star | TokenValue::Slash | TokenValue::Percent => (21, 22),
+        _ => return None,
+    })
 }
