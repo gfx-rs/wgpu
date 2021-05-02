@@ -2,7 +2,7 @@
 fn check(input: &str, snapshot: &str) {
     let output = naga::front::wgsl::parse_str(input)
         .expect_err("expected parser error")
-        .emit_to_string();
+        .emit_to_string(input);
     if output != snapshot {
         for diff in diff::lines(&output, snapshot) {
             match diff {

@@ -131,7 +131,7 @@ pub enum Error<'a> {
 }
 
 impl<'a> Error<'a> {
-    fn as_parse_error(&self, source: &'a str) -> ParseError<'a> {
+    fn as_parse_error(&self, source: &'a str) -> ParseError {
         match *self {
             Error::Unexpected((_, ref unexpected_span), expected) => ParseError {
                 message: format!(
@@ -141,7 +141,6 @@ impl<'a> Error<'a> {
                 ),
                 labels: vec![(unexpected_span.clone(), format!("expected {}", expected))],
                 notes: vec![],
-                source,
             },
             Error::BadInteger(ref bad_span) => ParseError {
                 message: format!(
@@ -150,7 +149,6 @@ impl<'a> Error<'a> {
                 ),
                 labels: vec![(bad_span.clone(), "expected integer".to_string())],
                 notes: vec![],
-                source,
             },
             Error::BadFloat(ref bad_span) => ParseError {
                 message: format!(
@@ -162,13 +160,11 @@ impl<'a> Error<'a> {
                     "expected floating-point literal".to_string(),
                 )],
                 notes: vec![],
-                source,
             },
             Error::BadScalarWidth(ref bad_span, width) => ParseError {
                 message: format!("invalid width of `{}` for literal", width,),
                 labels: vec![(bad_span.clone(), "invalid width".to_string())],
                 notes: vec!["valid width is 32".to_string()],
-                source,
             },
             Error::BadAccessor(ref accessor_span) => ParseError {
                 message: format!(
@@ -177,13 +173,11 @@ impl<'a> Error<'a> {
                 ),
                 labels: vec![(accessor_span.clone(), "invalid accessor".to_string())],
                 notes: vec![],
-                source,
             },
             ref error => ParseError {
                 message: error.to_string(),
                 labels: vec![],
                 notes: vec![],
-                source,
             },
         }
     }
@@ -537,14 +531,13 @@ struct ParsedVariable<'a> {
 }
 
 #[derive(Clone, Debug)]
-pub struct ParseError<'a> {
+pub struct ParseError {
     message: String,
     labels: Vec<(Span, String)>,
     notes: Vec<String>,
-    source: &'a str,
 }
 
-impl<'a> ParseError<'a> {
+impl ParseError {
     fn diagnostic(&self) -> Diagnostic<()> {
         let diagnostic = Diagnostic::error()
             .with_message(self.message.to_string())
@@ -566,8 +559,8 @@ impl<'a> ParseError<'a> {
     }
 
     /// Emits a summary of the error to standard error stream.
-    pub fn emit_to_stderr(&self) {
-        let files = SimpleFile::new("wgsl", self.source);
+    pub fn emit_to_stderr(&self, source: &str) {
+        let files = SimpleFile::new("wgsl", source);
         let config = codespan_reporting::term::Config::default();
         let writer = StandardStream::stderr(ColorChoice::Always);
         term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
@@ -575,8 +568,8 @@ impl<'a> ParseError<'a> {
     }
 
     /// Emits a summary of the error to a string.
-    pub fn emit_to_string(&self) -> String {
-        let files = SimpleFile::new("wgsl", self.source);
+    pub fn emit_to_string(&self, source: &str) -> String {
+        let files = SimpleFile::new("wgsl", source);
         let config = codespan_reporting::term::Config::default();
         let mut writer = StringErrorBuffer::new();
         term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
@@ -585,8 +578,8 @@ impl<'a> ParseError<'a> {
 
     /// Returns the 1-based line number and column of the first label in the
     /// error message.
-    pub fn location(&self) -> (usize, usize) {
-        let files = SimpleFile::new("wgsl", self.source);
+    pub fn location(&self, source: &str) -> (usize, usize) {
+        let files = SimpleFile::new("wgsl", source);
         match self.labels.get(0) {
             Some(label) => {
                 let location = files
@@ -599,13 +592,13 @@ impl<'a> ParseError<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for ParseError<'a> {
+impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message)
     }
 }
 
-impl<'a> std::error::Error for ParseError<'a> {
+impl std::error::Error for ParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         None
     }
@@ -2730,7 +2723,7 @@ impl Parser {
         }
     }
 
-    pub fn parse<'a>(&mut self, source: &'a str) -> Result<crate::Module, ParseError<'a>> {
+    pub fn parse(&mut self, source: &str) -> Result<crate::Module, ParseError> {
         self.scopes.clear();
         self.lookup_type.clear();
         self.layouter.clear();

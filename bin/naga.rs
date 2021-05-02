@@ -118,7 +118,7 @@ fn main() {
             match result {
                 Ok(v) => v,
                 Err(ref e) => {
-                    e.emit_to_stderr();
+                    e.emit_to_stderr(&input);
                     panic!("unable to parse WGSL");
                 }
             }
