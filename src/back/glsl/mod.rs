@@ -1119,8 +1119,14 @@ impl<'a, W: Write> Writer<'a, W> {
             match self.module.types[member.ty].inner {
                 TypeInner::Array { base, .. } => {
                     // GLSL arrays are written as `type name[size]`
+                    let ty_name = match self.module.types[base].inner {
+                        // Write scalar type by backend so as not to depend on the front-end implementation
+                        // Name returned from frontend can be generated (type1, float1, etc.) 
+                        TypeInner::Scalar { kind, width } => glsl_scalar(kind, width)?.full,
+                        _ => &self.names[&NameKey::Type(base)],
+                    };
+
                     // Write `type` and `name`
-                    let ty_name = &self.names[&NameKey::Type(base)];
                     write!(self.out, "{}", ty_name)?;
                     write!(
                         self.out,
