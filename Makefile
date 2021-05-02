@@ -1,4 +1,4 @@
-.PHONY: all clean validate-spv validate-msl validate-glsl validate-dot validate-wgsl
+.PHONY: all clean validate-spv validate-msl validate-glsl validate-dot validate-wgsl validate-hlsl
 .SECONDARY: boids.metal quad.metal
 SNAPSHOTS_IN=tests/in
 SNAPSHOTS_OUT=tests/out
@@ -63,3 +63,10 @@ validate-wgsl: $(SNAPSHOTS_OUT)/*.wgsl
 		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/"};	\
 		cargo run --features wgsl-in $${file}; \
 	done
+
+validate-hlsl: $(SNAPSHOTS_OUT)/*.hlsl
+	@set -e && for file in $(SNAPSHOTS_OUT)/*.Compute.hlsl ; do \
+		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/"};\
+		dxc $${file} -T cs_6_0;\
+	done
+

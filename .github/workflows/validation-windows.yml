@@ -1,0 +1,16 @@
+name: validation-windows
+on:
+  pull_request:
+    paths:
+      - 'tests/out/*.hlsl'
+
+jobs:
+  validate-windows:
+    name: HLSL
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Add DirectXShaderCompiler
+        uses: napokue/setup-dxc@v1.0.0
+      - run: make validate-hlsl
+        shell: sh

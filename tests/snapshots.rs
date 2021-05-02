@@ -96,7 +96,9 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     #[cfg(feature = "hlsl-out")]
     {
         if targets.contains(Targets::HLSL) {
-            check_output_hlsl(module, &dest);
+            for ep in module.entry_points.iter() {
+                check_output_hlsl(module, &dest, ep.stage);
+            }
         }
     }
     #[cfg(feature = "wgsl-out")]
@@ -204,12 +206,13 @@ fn check_output_glsl(
 }
 
 #[cfg(feature = "hlsl-out")]
-fn check_output_hlsl(module: &naga::Module, destination: &PathBuf) {
+fn check_output_hlsl(module: &naga::Module, destination: &PathBuf, stage: naga::ShaderStage) {
     use naga::back::hlsl;
 
     let string = hlsl::write_string(module).unwrap();
 
-    fs::write(destination.with_extension("hlsl"), string).unwrap();
+    let ext = format!("{:?}.hlsl", stage);
+    fs::write(destination.with_extension(&ext), string).unwrap();
 }
 
 #[cfg(feature = "wgsl-out")]

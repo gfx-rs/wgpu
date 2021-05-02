@@ -63,4 +63,5 @@ make validate-msl # for Metal shaders, requires XCode command-line tools install
 make validate-glsl # for OpenGL shaders, requires GLSLang installed
 make validate-dot # for dot files, requires GraphViz installed
 make validate-wgsl # for WGSL shaders
+make validate-hlsl # for HLSL shaders. Note: this Make target makes use of the "sh" shell. This is not the default shell in Windows.
 ```

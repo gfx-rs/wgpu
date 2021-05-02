@@ -1,7 +1,7 @@
 use super::Error;
 use crate::back::hlsl::keywords::RESERVED;
 use crate::proc::{NameKey, Namer};
-use crate::FastHashMap;
+use crate::{FastHashMap, ShaderStage};
 use std::fmt::Write;
 
 const INDENT: &str = "    ";
@@ -34,6 +34,16 @@ impl<W: Write> Writer<W> {
                 None => "void",
                 _ => "",
             };
+
+            if ep.stage == ShaderStage::Compute {
+                // HLSL is calling workgroup size, num threads
+                let num_threads = ep.workgroup_size;
+                writeln!(
+                    self.out,
+                    "[numthreads({}, {}, {})]",
+                    num_threads[0], num_threads[1], num_threads[2]
+                )?;
+            }
 
             writeln!(
                 self.out,
