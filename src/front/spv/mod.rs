@@ -33,7 +33,7 @@ mod function;
 mod image;
 
 use convert::*;
-use error::Error;
+pub use error::Error;
 use flow::*;
 use function::*;
 
