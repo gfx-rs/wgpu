@@ -1603,7 +1603,10 @@ impl Parser {
 
             let name = match lexer.next() {
                 (Token::Word(word), _) => word,
-                (Token::Paren('}'), _) => return Ok((members, offset, alignment)),
+                (Token::Paren('}'), _) => {
+                    let span = layout::Layouter::round_up(alignment, offset);
+                    return Ok((members, span, alignment));
+                }
                 other => return Err(Error::Unexpected(other, "field name")),
             };
             lexer.expect(Token::Separator(':'))?;

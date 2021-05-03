@@ -191,6 +191,28 @@ impl crate::ImageDimension {
     }
 }
 
+//TODO: should this be shared with `crate::proc::wgsl::layout` logic?
+fn get_alignment(ty: Handle<crate::Type>, arena: &Arena<crate::Type>) -> crate::Alignment {
+    use crate::TypeInner as Ti;
+    match arena[ty].inner {
+        Ti::Scalar { width, .. } => crate::Alignment::new(width as u32).unwrap(),
+        Ti::Vector { size, width, .. }
+        | Ti::Matrix {
+            rows: size, width, ..
+        } => {
+            let count = if size >= crate::VectorSize::Tri { 4 } else { 2 };
+            crate::Alignment::new((count * width) as u32).unwrap()
+        }
+        Ti::Pointer { .. } | Ti::ValuePointer { .. } => crate::Alignment::new(1).unwrap(),
+        Ti::Array { stride, .. } => crate::Alignment::new(stride).unwrap(),
+        Ti::Struct { ref level, .. } => match *level {
+            crate::StructLevel::Root => crate::Alignment::new(1).unwrap(),
+            crate::StructLevel::Normal { alignment } => alignment,
+        },
+        Ti::Image { .. } | Ti::Sampler { .. } => crate::Alignment::new(1).unwrap(),
+    }
+}
+
 type MemberIndex = u32;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -2827,6 +2849,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let parent_decor = self.future_decor.remove(&id);
         let block_decor = parent_decor.as_ref().and_then(|decor| decor.block.clone());
 
+        let mut struct_alignment = crate::Alignment::new(1).unwrap();
         let mut members = Vec::<crate::StructMember>::with_capacity(inst.wc as usize - 2);
         let mut member_lookups = Vec::with_capacity(members.capacity());
         for i in 0..u32::from(inst.wc) - 2 {
@@ -2843,17 +2866,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             });
 
             let binding = decor.io_binding().ok();
-            let offset = match decor.offset {
-                Some(offset) => offset,
-                None => match members.last() {
-                    Some(member) => {
-                        //TODO: is this needed?
-                        // If offsets are required, we can just put 0 here
-                        member.offset + module.types[member.ty].inner.span(&module.constants)
-                    }
-                    None => 0,
-                },
-            };
+            // I/O structs don't have to have offsets, others do
+            let offset = decor.offset.unwrap_or(0);
 
             if let crate::TypeInner::Matrix {
                 columns: _,
@@ -2868,6 +2882,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
             }
 
+            let alignment = get_alignment(ty, &module.types);
+            struct_alignment = struct_alignment.max(alignment);
+
             members.push(crate::StructMember {
                 name: decor.name,
                 ty,
@@ -2876,22 +2893,19 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             });
         }
 
-        //TODO: we should be able to do better than this.
-        const STRUCT_ALIGNMENT: u32 = 16;
-
         let inner = crate::TypeInner::Struct {
             level: match block_decor {
                 Some(_) => crate::StructLevel::Root,
                 None => crate::StructLevel::Normal {
-                    alignment: crate::Alignment::new(STRUCT_ALIGNMENT).unwrap(),
+                    alignment: struct_alignment,
                 },
             },
             span: match members.last() {
                 Some(member) => {
                     let end = member.offset + module.types[member.ty].inner.span(&module.constants);
-                    ((end - 1) | (STRUCT_ALIGNMENT - 1)) + 1
+                    ((end - 1) | (struct_alignment.get() - 1)) + 1
                 }
-                None => STRUCT_ALIGNMENT,
+                None => 4, //do we support this?
             },
             members,
         };
