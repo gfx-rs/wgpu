@@ -3143,9 +3143,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     fn generate_null_constant(
         &mut self,
         constants: &mut Arena<crate::Constant>,
-        types: &Arena<crate::Type>,
+        types: &mut Arena<crate::Type>,
         ty: Handle<crate::Type>,
-        inner: &crate::TypeInner,
     ) -> Result<crate::ConstantInner, Error> {
         fn make_scalar_inner(kind: crate::ScalarKind, width: crate::Bytes) -> crate::ConstantInner {
             crate::ConstantInner::Scalar {
@@ -3159,7 +3158,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         }
 
-        let inner = match *inner {
+        let inner = match types[ty].inner {
             crate::TypeInner::Scalar { kind, width } => make_scalar_inner(kind, width),
             crate::TypeInner::Vector { size, kind, width } => {
                 let mut components = Vec::with_capacity(size as usize);
@@ -3172,22 +3171,45 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 crate::ConstantInner::Composite { ty, components }
             }
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => {
+                let vector_ty = types.fetch_or_append(crate::Type {
+                    name: None,
+                    inner: crate::TypeInner::Vector {
+                        kind: crate::ScalarKind::Float,
+                        size: rows,
+                        width,
+                    },
+                });
+                let vector_inner = self.generate_null_constant(constants, types, vector_ty)?;
+                let vector_handle = constants.fetch_or_append(crate::Constant {
+                    name: None,
+                    specialization: None,
+                    inner: vector_inner,
+                });
+                crate::ConstantInner::Composite {
+                    ty,
+                    components: vec![vector_handle; columns as usize],
+                }
+            }
             crate::TypeInner::Struct { ref members, .. } => {
                 let mut components = Vec::with_capacity(members.len());
-                for field in members {
-                    let ty_inner = &types[field.ty].inner;
-                    let inner =
-                        self.generate_null_constant(constants, types, field.ty, ty_inner)?;
+                // copy out the types to avoid borrowing `members`
+                let member_tys = members.iter().map(|member| member.ty).collect::<Vec<_>>();
+                for member_ty in member_tys {
+                    let inner = self.generate_null_constant(constants, types, member_ty)?;
                     components.push(constants.fetch_or_append(crate::Constant {
                         name: None,
                         specialization: None,
                         inner,
                     }));
                 }
-
                 crate::ConstantInner::Composite { ty, components }
             }
-            //TODO: handle matrices, arrays
+            //TODO: arrays
             ref other => {
                 log::warn!("null constant type {:?}", other);
                 return Err(Error::UnsupportedType(ty));
@@ -3208,12 +3230,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
 
-        let inner = self.generate_null_constant(
-            &mut module.constants,
-            &module.types,
-            ty,
-            &module.types[ty].inner,
-        )?;
+        let inner = self.generate_null_constant(&mut module.constants, &mut module.types, ty)?;
 
         self.lookup_constant.insert(
             id,
