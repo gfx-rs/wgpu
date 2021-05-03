@@ -363,7 +363,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Generate a map with names required to write the module
         let mut names = FastHashMap::default();
-        Namer::default().reset(module, keywords::RESERVED_KEYWORDS, &mut names);
+        Namer::default().reset(module, keywords::RESERVED_KEYWORDS, &["gl_"], &mut names);
 
         // Build the instance
         let mut this = Self {
@@ -495,15 +495,8 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, "layout({}) ", glsl_storage_format(format))?;
                     }
 
-                    // Write the storage access modifier
-                    //
-                    // glsl allows adding both `readonly` and `writeonly` but this means that
-                    // they can only be used to query information about the image which isn't what
-                    // we want here so when storage access is both `LOAD` and `STORE` add no modifiers
-                    if global.storage_access == StorageAccess::LOAD {
-                        write!(self.out, "readonly ")?;
-                    } else if global.storage_access == StorageAccess::STORE {
-                        write!(self.out, "writeonly ")?;
+                    if let Some(storage_access) = glsl_storage_access(global.storage_access) {
+                        write!(self.out, "{} ", storage_access)?;
                     }
 
                     // All images in glsl are `uniform`
@@ -741,20 +734,21 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<GlobalVariable>,
         global: &GlobalVariable,
     ) -> BackendResult {
-        // Write the storage access modifier
-        //
-        // glsl allows adding both `readonly` and `writeonly` but this means that
-        // they can only be used to query information about the resource which isn't what
-        // we want here so when storage access is both `LOAD` and `STORE` add no modifiers
-        if global.storage_access == StorageAccess::LOAD {
-            write!(self.out, "readonly ")?;
-        } else if global.storage_access == StorageAccess::STORE {
-            write!(self.out, "writeonly ")?;
+        if let Some(storage_access) = glsl_storage_access(global.storage_access) {
+            write!(self.out, "{} ", storage_access)?;
         }
 
         // Write the storage class
         // Trailing space is important
-        write!(self.out, "{} ", glsl_storage_class(global.class))?;
+        if let Some(storage_class) = glsl_storage_class(global.class) {
+            write!(self.out, "{} ", storage_class)?;
+        } else if let TypeInner::Struct {
+            level: crate::StructLevel::Root,
+            ..
+        } = self.module.types[global.ty].inner
+        {
+            write!(self.out, "struct ")?;
+        }
 
         // Write the type
         // `write_type` adds no leading or trailing spaces
@@ -2206,15 +2200,15 @@ fn glsl_built_in(built_in: BuiltIn, output: bool) -> &'static str {
 }
 
 /// Helper function that returns the string corresponding to the storage class
-fn glsl_storage_class(class: StorageClass) -> &'static str {
+fn glsl_storage_class(class: StorageClass) -> Option<&'static str> {
     match class {
-        StorageClass::Function => "",
-        StorageClass::Private => "",
-        StorageClass::Storage => "buffer",
-        StorageClass::Uniform => "uniform",
-        StorageClass::Handle => "uniform",
-        StorageClass::WorkGroup => "shared",
-        StorageClass::PushConstant => "",
+        StorageClass::Function => None,
+        StorageClass::Private => None,
+        StorageClass::Storage => Some("buffer"),
+        StorageClass::Uniform => Some("uniform"),
+        StorageClass::Handle => Some("uniform"),
+        StorageClass::WorkGroup => Some("shared"),
+        StorageClass::PushConstant => None,
     }
 }
 
@@ -2281,5 +2275,20 @@ fn glsl_storage_format(format: StorageFormat) -> &'static str {
         StorageFormat::Rgba32Uint => "rgba32ui",
         StorageFormat::Rgba32Sint => "rgba32i",
         StorageFormat::Rgba32Float => "rgba32f",
+    }
+}
+
+/// Helper function that return the glsl storage access string of [`StorageAccess`](crate::StorageAccess)
+///
+/// glsl allows adding both `readonly` and `writeonly` but this means that
+/// they can only be used to query information about the resource which isn't what
+/// we want here so when storage access is both `LOAD` and `STORE` add no modifiers
+fn glsl_storage_access(storage_access: StorageAccess) -> Option<&'static str> {
+    if storage_access == StorageAccess::LOAD {
+        Some("readonly")
+    } else if storage_access == StorageAccess::STORE {
+        Some("writeonly")
+    } else {
+        None
     }
 }

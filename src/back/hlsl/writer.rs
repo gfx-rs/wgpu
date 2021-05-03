@@ -23,7 +23,7 @@ impl<W: Write> Writer<W> {
 
     pub fn write(&mut self, module: &crate::Module) -> Result<(), Error> {
         self.names.clear();
-        self.namer.reset(module, RESERVED, &mut self.names);
+        self.namer.reset(module, RESERVED, &[], &mut self.names);
 
         for (ep_index, ep) in module.entry_points.iter().enumerate() {
             let fun = &ep.function;

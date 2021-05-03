@@ -1468,7 +1468,7 @@ impl<W: Write> Writer<W> {
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
         self.names.clear();
-        self.namer.reset(module, RESERVED, &mut self.names);
+        self.namer.reset(module, RESERVED, &[], &mut self.names);
         self.runtime_sized_buffers.clear();
 
         writeln!(self.out, "#include <metal_stdlib>")?;

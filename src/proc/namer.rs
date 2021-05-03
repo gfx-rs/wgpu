@@ -22,10 +22,11 @@ pub enum NameKey {
 #[derive(Default)]
 pub struct Namer {
     unique: FastHashMap<String, u32>,
+    reserved_prefixes: Vec<String>,
 }
 
 impl Namer {
-    fn sanitize(string: &str) -> String {
+    fn sanitize(&self, string: &str) -> String {
         let mut base = string
             .chars()
             .skip_while(|c| c.is_numeric())
@@ -37,11 +38,18 @@ impl Namer {
             Some(c) if !c.is_numeric() => {}
             _ => base.push('_'),
         };
+
+        for prefix in &self.reserved_prefixes {
+            if base.starts_with(prefix) {
+                return format!("gen_{}", base);
+            }
+        }
+
         base
     }
 
     pub fn call(&mut self, label_raw: &str) -> String {
-        let base = Self::sanitize(label_raw);
+        let base = self.sanitize(label_raw);
         match self.unique.entry(base) {
             Entry::Occupied(mut e) => {
                 *e.get_mut() += 1;
@@ -65,12 +73,20 @@ impl Namer {
     pub fn reset(
         &mut self,
         module: &crate::Module,
-        reserved: &[&str],
+        reserved_keywords: &[&str],
+        reserved_prefixes: &[&str],
         output: &mut FastHashMap<NameKey, String>,
     ) {
+        self.reserved_prefixes.clear();
+        self.reserved_prefixes
+            .extend(reserved_prefixes.iter().map(|string| string.to_string()));
+
         self.unique.clear();
-        self.unique
-            .extend(reserved.iter().map(|string| (string.to_string(), 0)));
+        self.unique.extend(
+            reserved_keywords
+                .iter()
+                .map(|string| (string.to_string(), 0)),
+        );
         let mut temp = String::new();
 
         for (ty_handle, ty) in module.types.iter() {

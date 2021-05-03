@@ -77,7 +77,7 @@ impl<W: Write> Writer<W> {
 
     pub fn write(&mut self, module: &Module, info: &ModuleInfo) -> BackendResult {
         self.names.clear();
-        self.namer.reset(module, RESERVED, &mut self.names);
+        self.namer.reset(module, RESERVED, &[], &mut self.names);
 
         // Write all constants
         for (_, constant) in module.constants.iter() {
