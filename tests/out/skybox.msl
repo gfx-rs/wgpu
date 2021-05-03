@@ -3,7 +3,7 @@
 
 struct VertexOutput {
     metal::float4 position;
-    packed_float3 uv;
+    metal::float3 uv;
 };
 struct Data {
     metal::float4x4 proj_inv;
