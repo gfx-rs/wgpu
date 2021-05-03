@@ -1512,7 +1512,7 @@
             early_depth_test: None,
             workgroup_size: (0, 0, 0),
             function: (
-                name: None,
+                name: Some("fs_main_wrap"),
                 arguments: [
                     (
                         name: Some("in_normal_fs"),
