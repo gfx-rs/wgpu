@@ -45,7 +45,7 @@ OpDecorate %21 BuiltIn Position
 %24 = OpTypeFunction %2
 %26 = OpTypePointer StorageBuffer %10
 %29 = OpTypePointer StorageBuffer %6
-%30 = OpConstant  %6  0
+%30 = OpConstant  %4  0
 %34 = OpTypePointer Function %14
 %37 = OpTypePointer Function %6
 %39 = OpTypeVector %6 4

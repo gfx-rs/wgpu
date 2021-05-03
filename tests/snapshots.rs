@@ -252,6 +252,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL,
         ),
         ("access", Targets::SPIRV | Targets::METAL),
+        (
+            "control-flow",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

@@ -42,6 +42,7 @@ impl StatementGraph {
                 S::Break => "Break",       //TODO: loop context
                 S::Continue => "Continue", //TODO: loop context
                 S::Kill => "Kill",         //TODO: link to the beginning
+                S::Barrier(_flags) => "Barrier",
                 S::Block(ref b) => {
                     let other = self.add(b);
                     self.flow.push((id, other, ""));

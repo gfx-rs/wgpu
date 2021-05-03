@@ -218,3 +218,27 @@ impl crate::Binding {
         }
     }
 }
+
+//TODO: should we use an existing crate for hashable floats?
+impl PartialEq for crate::ScalarValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (*self, *other) {
+            (Self::Uint(a), Self::Uint(b)) => a == b,
+            (Self::Sint(a), Self::Sint(b)) => a == b,
+            (Self::Float(a), Self::Float(b)) => a.to_bits() == b.to_bits(),
+            (Self::Bool(a), Self::Bool(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+impl Eq for crate::ScalarValue {}
+impl std::hash::Hash for crate::ScalarValue {
+    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        match *self {
+            Self::Sint(v) => v.hash(hasher),
+            Self::Uint(v) => v.hash(hasher),
+            Self::Float(v) => v.to_bits().hash(hasher),
+            Self::Bool(v) => v.hash(hasher),
+        }
+    }
+}

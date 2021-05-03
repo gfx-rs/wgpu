@@ -57,8 +57,8 @@ OpDecorate %43 Location 0
 %24 = OpVariable  %25  Output
 %27 = OpTypeFunction %2
 %35 = OpTypePointer Output %4
-%36 = OpTypeInt 32 1
-%37 = OpConstant  %36  1
+%37 = OpTypeInt 32 0
+%36 = OpConstant  %37  1
 %41 = OpVariable  %18  Input
 %43 = OpVariable  %25  Output
 %48 = OpTypeSampledImage %10
@@ -76,7 +76,7 @@ OpBranch %28
 OpStore %22 %32
 %33 = OpCompositeExtract  %8  %31 1
 OpStore %24 %33
-%34 = OpAccessChain  %35  %24 %37
+%34 = OpAccessChain  %35  %24 %36
 %38 = OpLoad  %4  %34
 %39 = OpFNegate  %4  %38
 OpStore %34 %39

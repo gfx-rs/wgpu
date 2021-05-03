@@ -90,7 +90,7 @@ OpDecorate %59 BuiltIn Position
 %55 = OpTypeVector %8 4
 %60 = OpTypePointer Output %20
 %59 = OpVariable  %60  Output
-%70 = OpConstant  %4  0
+%70 = OpConstant  %8  0
 %75 = OpTypeVector %4 3
 %43 = OpFunction  %2  None %44
 %39 = OpLabel

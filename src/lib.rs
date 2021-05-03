@@ -444,7 +444,7 @@ pub struct Constant {
 }
 
 /// A literal scalar value, used in constants.
-#[derive(Debug, PartialEq, Clone, Copy, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ScalarValue {
@@ -696,6 +696,19 @@ pub enum SwizzleComponent {
     W = 3,
 }
 
+bitflags::bitflags! {
+    /// Control barrier flags.
+    #[cfg_attr(feature = "serialize", derive(Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(Deserialize))]
+    #[derive(Default)]
+    pub struct Barrier: u32 {
+        /// Barrier affects all `StorageClass::Storage` accesses.
+        const STORAGE = 0x1;
+        /// Barrier affects all `StorageClass::WorkGroup` accesses.
+        const WORK_GROUP = 0x2;
+    }
+}
+
 /// An expression that can be evaluated to obtain a value.
 ///
 /// This is a Single Static Assignment (SSA) scheme similar to SPIR-V.
@@ -871,6 +884,8 @@ pub enum Statement {
     Return { value: Option<Handle<Expression>> },
     /// Aborts the current shader execution.
     Kill,
+    /// Synchronize accesses within the work group.
+    Barrier(Barrier),
     /// Stores a value at an address.
     ///
     /// This statement is a barrier for any operations on the

@@ -1,6 +1,6 @@
 use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
-    ExpressionError, FunctionInfo, ModuleInfo, TypeFlags, ValidationFlags,
+    ExpressionError, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags, ValidationFlags,
 };
 use crate::arena::{Arena, Handle};
 use bit_set::BitSet;
@@ -121,11 +121,17 @@ struct BlockContext<'a> {
     types: &'a Arena<crate::Type>,
     global_vars: &'a Arena<crate::GlobalVariable>,
     functions: &'a Arena<crate::Function>,
+    prev_infos: &'a [FunctionInfo],
     return_type: Option<Handle<crate::Type>>,
 }
 
 impl<'a> BlockContext<'a> {
-    fn new(fun: &'a crate::Function, module: &'a crate::Module, info: &'a FunctionInfo) -> Self {
+    fn new(
+        fun: &'a crate::Function,
+        module: &'a crate::Module,
+        info: &'a FunctionInfo,
+        prev_infos: &'a [FunctionInfo],
+    ) -> Self {
         Self {
             flags: Flags::CAN_JUMP,
             info,
@@ -133,6 +139,7 @@ impl<'a> BlockContext<'a> {
             types: &module.types,
             global_vars: &module.global_variables,
             functions: &module.functions,
+            prev_infos,
             return_type: fun.result.as_ref().map(|fr| fr.ty),
         }
     }
@@ -145,6 +152,7 @@ impl<'a> BlockContext<'a> {
             types: self.types,
             global_vars: self.global_vars,
             functions: self.functions,
+            prev_infos: self.prev_infos,
             return_type: self.return_type,
         }
     }
@@ -203,7 +211,7 @@ impl super::Validator {
         arguments: &[Handle<crate::Expression>],
         result: Option<Handle<crate::Expression>>,
         context: &BlockContext,
-    ) -> Result<(), CallError> {
+    ) -> Result<ShaderStages, CallError> {
         let fun = context
             .functions
             .try_get(function)
@@ -241,16 +249,18 @@ impl super::Validator {
             return Err(CallError::ExpressionMismatch(result));
         }
 
-        Ok(())
+        let callee_info = &context.prev_infos[function.index()];
+        Ok(callee_info.available_stages)
     }
 
     fn validate_block_impl(
         &mut self,
         statements: &[crate::Statement],
         context: &BlockContext,
-    ) -> Result<(), FunctionError> {
+    ) -> Result<ShaderStages, FunctionError> {
         use crate::{Statement as S, TypeInner as Ti};
         let mut finished = false;
+        let mut stages = ShaderStages::all();
         for statement in statements {
             if finished {
                 return Err(FunctionError::InstructionsAfterReturn);
@@ -265,7 +275,9 @@ impl super::Validator {
                         }
                     }
                 }
-                S::Block(ref block) => self.validate_block(block, context)?,
+                S::Block(ref block) => {
+                    stages &= self.validate_block(block, context)?;
+                }
                 S::If {
                     condition,
                     ref accept,
@@ -278,8 +290,8 @@ impl super::Validator {
                         } => {}
                         _ => return Err(FunctionError::InvalidIfType(condition)),
                     }
-                    self.validate_block(accept, context)?;
-                    self.validate_block(reject, context)?;
+                    stages &= self.validate_block(accept, context)?;
+                    stages &= self.validate_block(reject, context)?;
                 }
                 S::Switch {
                     selector,
@@ -300,9 +312,9 @@ impl super::Validator {
                         }
                     }
                     for case in cases {
-                        self.validate_block(&case.body, context)?;
+                        stages &= self.validate_block(&case.body, context)?;
                     }
-                    self.validate_block(default, context)?;
+                    stages &= self.validate_block(default, context)?;
                 }
                 S::Loop {
                     ref body,
@@ -311,11 +323,12 @@ impl super::Validator {
                     // special handling for block scoping is needed here,
                     // because the continuing{} block inherits the scope
                     let base_expression_count = self.valid_expression_list.len();
-                    self.validate_block_impl(
+                    stages &= self.validate_block_impl(
                         body,
                         &context.with_flags(Flags::CAN_JUMP | Flags::IN_LOOP),
                     )?;
-                    self.validate_block_impl(continuing, &context.with_flags(Flags::empty()))?;
+                    stages &=
+                        self.validate_block_impl(continuing, &context.with_flags(Flags::empty()))?;
                     for handle in self.valid_expression_list.drain(base_expression_count..) {
                         self.valid_expression_set.remove(handle.index());
                     }
@@ -346,6 +359,9 @@ impl super::Validator {
                 }
                 S::Kill => {
                     finished = true;
+                }
+                S::Barrier(_) => {
+                    stages &= ShaderStages::COMPUTE;
                 }
                 S::Store { pointer, value } => {
                     let mut current = pointer;
@@ -472,27 +488,26 @@ impl super::Validator {
                     function,
                     ref arguments,
                     result,
-                } => {
-                    if let Err(error) = self.validate_call(function, arguments, result, context) {
-                        return Err(FunctionError::InvalidCall { function, error });
-                    }
-                }
+                } => match self.validate_call(function, arguments, result, context) {
+                    Ok(callee_stages) => stages &= callee_stages,
+                    Err(error) => return Err(FunctionError::InvalidCall { function, error }),
+                },
             }
         }
-        Ok(())
+        Ok(stages)
     }
 
     fn validate_block(
         &mut self,
         statements: &[crate::Statement],
         context: &BlockContext,
-    ) -> Result<(), FunctionError> {
+    ) -> Result<ShaderStages, FunctionError> {
         let base_expression_count = self.valid_expression_list.len();
-        self.validate_block_impl(statements, context)?;
+        let stages = self.validate_block_impl(statements, context)?;
         for handle in self.valid_expression_list.drain(base_expression_count..) {
             self.valid_expression_set.remove(handle.index());
         }
-        Ok(())
+        Ok(stages)
     }
 
     fn validate_local_var(
@@ -573,7 +588,11 @@ impl super::Validator {
         }
 
         if self.flags.contains(ValidationFlags::BLOCKS) {
-            self.validate_block(&fun.body, &BlockContext::new(fun, module, &info))?;
+            let stages = self.validate_block(
+                &fun.body,
+                &BlockContext::new(fun, module, &info, &mod_info.functions),
+            )?;
+            info.available_stages &= stages;
         }
         Ok(info)
     }

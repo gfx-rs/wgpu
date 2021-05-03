@@ -1,0 +1,7 @@
+(
+	spv_version: (1, 1),
+	spv_capabilities: [ Shader ],
+	spv_debug: false,
+	spv_adjust_coordinate_space: false,
+	msl_custom: false,
+)

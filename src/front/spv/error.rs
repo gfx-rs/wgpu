@@ -9,7 +9,7 @@ pub enum Error {
     InvalidWordCount,
     #[error("unknown instruction {0}")]
     UnknownInstruction(u16),
-    #[error("unknown capability {0}")]
+    #[error("unknown capability %{0}")]
     UnknownCapability(spirv::Word),
     #[error("unsupported instruction {1:?} at {0:?}")]
     UnsupportedInstruction(ModuleState, spirv::Op),
@@ -19,27 +19,27 @@ pub enum Error {
     UnsupportedExtension(String),
     #[error("unsupported extension set {0}")]
     UnsupportedExtSet(String),
-    #[error("unsupported extension instantiation set {0}")]
+    #[error("unsupported extension instantiation set %{0}")]
     UnsupportedExtInstSet(spirv::Word),
-    #[error("unsupported extension instantiation {0}")]
+    #[error("unsupported extension instantiation %{0}")]
     UnsupportedExtInst(spirv::Word),
     #[error("unsupported type {0:?}")]
     UnsupportedType(Handle<crate::Type>),
-    #[error("unsupported execution model {0}")]
+    #[error("unsupported execution model %{0}")]
     UnsupportedExecutionModel(spirv::Word),
-    #[error("unsupported execution mode {0}")]
+    #[error("unsupported execution mode %{0}")]
     UnsupportedExecutionMode(spirv::Word),
-    #[error("unsupported storage class {0}")]
+    #[error("unsupported storage class %{0}")]
     UnsupportedStorageClass(spirv::Word),
-    #[error("unsupported image dimension {0}")]
+    #[error("unsupported image dimension %{0}")]
     UnsupportedImageDim(spirv::Word),
-    #[error("unsupported image format {0}")]
+    #[error("unsupported image format %{0}")]
     UnsupportedImageFormat(spirv::Word),
-    #[error("unsupported builtin {0}")]
+    #[error("unsupported builtin %{0}")]
     UnsupportedBuiltIn(spirv::Word),
-    #[error("unsupported control flow {0}")]
+    #[error("unsupported control flow %{0}")]
     UnsupportedControlFlow(spirv::Word),
-    #[error("unsupported binary operator {0}")]
+    #[error("unsupported binary operator %{0}")]
     UnsupportedBinaryOperator(spirv::Word),
     #[error("unknown binary operator {0:?}")]
     UnknownBinaryOperator(spirv::Op),
@@ -51,25 +51,25 @@ pub enum Error {
     InvalidOperandCount(spirv::Op, u16),
     #[error("invalid operand")]
     InvalidOperand,
-    #[error("invalid id {0}")]
+    #[error("invalid id %{0}")]
     InvalidId(spirv::Word),
-    #[error("invalid decoration {0}")]
+    #[error("invalid decoration %{0}")]
     InvalidDecoration(spirv::Word),
-    #[error("invalid type width {0}")]
+    #[error("invalid type width %{0}")]
     InvalidTypeWidth(spirv::Word),
-    #[error("invalid sign {0}")]
+    #[error("invalid sign %{0}")]
     InvalidSign(spirv::Word),
-    #[error("invalid inner type {0}")]
+    #[error("invalid inner type %{0}")]
     InvalidInnerType(spirv::Word),
-    #[error("invalid vector size {0}")]
+    #[error("invalid vector size %{0}")]
     InvalidVectorSize(spirv::Word),
-    #[error("invalid access type {0}")]
+    #[error("invalid access type %{0}")]
     InvalidAccessType(spirv::Word),
     #[error("invalid access {0:?}")]
     InvalidAccess(crate::Expression),
-    #[error("invalid access index {0}")]
+    #[error("invalid access index %{0}")]
     InvalidAccessIndex(spirv::Word),
-    #[error("invalid binding {0}")]
+    #[error("invalid binding %{0}")]
     InvalidBinding(spirv::Word),
     #[error("invalid global var {0:?}")]
     InvalidGlobalVar(crate::Expression),
@@ -83,9 +83,9 @@ pub enum Error {
     InvalidVectorType(Handle<crate::Type>),
     #[error("inconsistent comparison sampling {0:?}")]
     InconsistentComparisonSampling(Handle<crate::GlobalVariable>),
-    #[error("wrong function result type {0}")]
+    #[error("wrong function result type %{0}")]
     WrongFunctionResultType(spirv::Word),
-    #[error("wrong function argument type {0}")]
+    #[error("wrong function argument type %{0}")]
     WrongFunctionArgumentType(spirv::Word),
     #[error("missing decoration {0:?}")]
     MissingDecoration(spirv::Decoration),
@@ -97,8 +97,12 @@ pub enum Error {
     InvalidTerminator,
     #[error("invalid edge classification")]
     InvalidEdgeClassification,
-    #[error("recursive function call {0}")]
+    #[error("recursive function call %{0}")]
     FunctionCallCycle(spirv::Word),
+    #[error("invalid barrier scope %{0}")]
+    InvalidBarrierScope(spirv::Word),
+    #[error("invalid barrier memory semantics %{0}")]
+    InvalidBarrierMemorySemantics(spirv::Word),
     // incomplete implementation errors
     #[error("unsupported matrix stride {0}")]
     UnsupportedMatrixStride(spirv::Word),

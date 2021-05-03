@@ -1,0 +1,13 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+
+struct main1Input {
+};
+kernel void main1(
+  metal::uint3 global_id [[thread_position_in_grid]]
+) {
+    metal::threadgroup_barrier(metal::mem_flags::mem_device);
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    return;
+}

@@ -39,6 +39,7 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
         | Some(&mut S::Store { .. })
         | Some(&mut S::ImageStore { .. })
         | Some(&mut S::Call { .. })
+        | Some(&mut S::Barrier(_))
         | None => block.push(S::Return { value: None }),
     }
 }

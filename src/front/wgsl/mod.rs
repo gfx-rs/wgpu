@@ -980,6 +980,7 @@ impl Parser {
                         query: crate::ImageQuery::NumSamples,
                     }
                 }
+                // other
                 _ => {
                     let handle =
                         match self.parse_local_function_call(lexer, name, ctx.reborrow())? {
@@ -2337,6 +2338,16 @@ impl Parser {
             "break" => block.push(crate::Statement::Break),
             "continue" => block.push(crate::Statement::Continue),
             "discard" => block.push(crate::Statement::Kill),
+            "storageBarrier" => {
+                lexer.expect(Token::Paren('('))?;
+                lexer.expect(Token::Paren(')'))?;
+                block.push(crate::Statement::Barrier(crate::Barrier::STORAGE));
+            }
+            "workgroupBarrier" => {
+                lexer.expect(Token::Paren('('))?;
+                lexer.expect(Token::Paren(')'))?;
+                block.push(crate::Statement::Barrier(crate::Barrier::WORK_GROUP));
+            }
             "textureStore" => {
                 emitter.start(context.expressions);
                 lexer.open_arguments()?;

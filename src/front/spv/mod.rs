@@ -2094,6 +2094,42 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     emitter.start(expressions);
                 }
+                Op::ControlBarrier => {
+                    inst.expect(4)?;
+                    let exec_scope_id = self.next()?;
+                    let _mem_scope_raw = self.next()?;
+                    let semantics_id = self.next()?;
+                    let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
+                    let semantics_const = self.lookup_constant.lookup(semantics_id)?;
+                    let exec_scope = match const_arena[exec_scope_const.handle].inner {
+                        crate::ConstantInner::Scalar {
+                            value: crate::ScalarValue::Uint(raw),
+                            width: _,
+                        } => raw as u32,
+                        _ => return Err(Error::InvalidBarrierScope(exec_scope_id)),
+                    };
+                    let semantics = match const_arena[semantics_const.handle].inner {
+                        crate::ConstantInner::Scalar {
+                            value: crate::ScalarValue::Uint(raw),
+                            width: _,
+                        } => raw as u32,
+                        _ => return Err(Error::InvalidBarrierMemorySemantics(semantics_id)),
+                    };
+                    if exec_scope == spirv::Scope::Workgroup as u32 {
+                        let mut flags = crate::Barrier::empty();
+                        flags.set(
+                            crate::Barrier::STORAGE,
+                            semantics & spirv::MemorySemantics::UNIFORM_MEMORY.bits() != 0,
+                        );
+                        flags.set(
+                            crate::Barrier::WORK_GROUP,
+                            semantics & spirv::MemorySemantics::WORKGROUP_MEMORY.bits() != 0,
+                        );
+                        block.push(crate::Statement::Barrier(flags));
+                    } else {
+                        log::warn!("Unsupported barrier execution scope: {}", exec_scope);
+                    }
+                }
                 _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
             }
         };
@@ -2196,6 +2232,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 | S::Continue
                 | S::Return { .. }
                 | S::Kill
+                | S::Barrier(_)
                 | S::Store { .. }
                 | S::ImageStore { .. } => {}
                 S::Call {

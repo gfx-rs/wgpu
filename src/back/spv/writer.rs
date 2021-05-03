@@ -12,7 +12,6 @@ use std::{collections::hash_map::Entry, ops};
 use thiserror::Error;
 
 const BITS_PER_BYTE: crate::Bytes = 8;
-const CACHED_CONSTANT_INDICES: usize = 8;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
@@ -295,7 +294,7 @@ pub struct Writer {
     lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
     lookup_function_call: crate::FastHashMap<Handle<crate::Expression>, Word>,
     constant_ids: Vec<Word>,
-    index_constant_ids: Vec<Word>,
+    cached_constants: crate::FastHashMap<(crate::ScalarValue, crate::Bytes), Word>,
     global_variables: Vec<GlobalVariable>,
     cached: CachedExpressions,
     gl450_ext_inst_id: Word,
@@ -336,7 +335,7 @@ impl Writer {
             lookup_function_type: crate::FastHashMap::default(),
             lookup_function_call: crate::FastHashMap::default(),
             constant_ids: Vec::new(),
-            index_constant_ids: Vec::new(),
+            cached_constants: crate::FastHashMap::default(),
             global_variables: Vec::new(),
             cached: CachedExpressions::default(),
             gl450_ext_inst_id,
@@ -413,41 +412,6 @@ impl Writer {
             self.lookup_type.insert(lookup_type, id);
             id
         })
-    }
-
-    fn create_constant(&mut self, type_id: Word, value: &[Word]) -> Word {
-        let id = self.id_gen.next();
-        let instruction = Instruction::constant(type_id, id, value);
-        instruction.to_words(&mut self.logical_layout.declarations);
-        id
-    }
-
-    fn get_index_constant(
-        &mut self,
-        index: Word,
-        types: &Arena<crate::Type>,
-    ) -> Result<Word, Error> {
-        while self.index_constant_ids.len() <= index as usize {
-            self.index_constant_ids.push(0);
-        }
-        let cached = self.index_constant_ids[index as usize];
-        if cached != 0 {
-            return Ok(cached);
-        }
-
-        let type_id = self.get_type_id(
-            types,
-            LookupType::Local(LocalType::Value {
-                vector_size: None,
-                kind: crate::ScalarKind::Sint,
-                width: 4,
-                pointer_class: None,
-            }),
-        )?;
-
-        let id = self.create_constant(type_id, &[index]);
-        self.index_constant_ids[index as usize] = id;
-        Ok(id)
     }
 
     fn decorate(&mut self, id: Word, decoration: spirv::Decoration, operands: &[Word]) {
@@ -1019,6 +983,29 @@ impl Writer {
         Ok(id)
     }
 
+    fn get_index_constant(
+        &mut self,
+        index: Word,
+        types: &Arena<crate::Type>,
+    ) -> Result<Word, Error> {
+        self.get_constant_scalar(crate::ScalarValue::Uint(index as _), 4, types)
+    }
+
+    fn get_constant_scalar(
+        &mut self,
+        value: crate::ScalarValue,
+        width: crate::Bytes,
+        types: &Arena<crate::Type>,
+    ) -> Result<Word, Error> {
+        if let Some(&id) = self.cached_constants.get(&(value, width)) {
+            return Ok(id);
+        }
+        let id = self.id_gen.next();
+        self.write_constant_scalar(id, &value, width, None, types)?;
+        self.cached_constants.insert((value, width), id);
+        Ok(id)
+    }
+
     fn write_constant_scalar(
         &mut self,
         id: Word,
@@ -1046,17 +1033,6 @@ impl Writer {
             crate::ScalarValue::Sint(val) => {
                 let words = match width {
                     4 => {
-                        if debug_name.is_none()
-                            && 0 <= val
-                            && val < CACHED_CONSTANT_INDICES as i64
-                            && self.index_constant_ids.get(val as usize).unwrap_or(&0) == &0
-                        {
-                            // cache this as an indexing constant
-                            while self.index_constant_ids.len() <= val as usize {
-                                self.index_constant_ids.push(0);
-                            }
-                            self.index_constant_ids[val as usize] = id;
-                        }
                         solo = [val as u32];
                         &solo[..]
                     }
@@ -2070,13 +2046,9 @@ impl Writer {
                             depth_id,
                         );
 
-                        //TODO: cache this!
-                        let zero_id = self.id_gen.next();
-                        self.write_constant_scalar(
-                            zero_id,
-                            &crate::ScalarValue::Float(0.0),
+                        let zero_id = self.get_constant_scalar(
+                            crate::ScalarValue::Float(0.0),
                             4,
-                            None,
                             &ir_module.types,
                         )?;
 
@@ -2801,6 +2773,33 @@ impl Writer {
                 crate::Statement::Kill => {
                     block.termination = Some(Instruction::kill());
                 }
+                crate::Statement::Barrier(flags) => {
+                    let memory_scope = if flags.contains(crate::Barrier::STORAGE) {
+                        spirv::Scope::Device
+                    } else {
+                        spirv::Scope::Workgroup
+                    };
+                    let mut semantics = spirv::MemorySemantics::ACQUIRE_RELEASE;
+                    semantics.set(
+                        spirv::MemorySemantics::UNIFORM_MEMORY,
+                        flags.contains(crate::Barrier::STORAGE),
+                    );
+                    semantics.set(
+                        spirv::MemorySemantics::WORKGROUP_MEMORY,
+                        flags.contains(crate::Barrier::WORK_GROUP),
+                    );
+                    let exec_scope_id =
+                        self.get_index_constant(spirv::Scope::Workgroup as u32, &ir_module.types)?;
+                    let mem_scope_id =
+                        self.get_index_constant(memory_scope as u32, &ir_module.types)?;
+                    let semantics_id =
+                        self.get_index_constant(semantics.bits(), &ir_module.types)?;
+                    block.body.push(Instruction::control_barrier(
+                        exec_scope_id,
+                        mem_scope_id,
+                        semantics_id,
+                    ));
+                }
                 crate::Statement::Store { pointer, value } => {
                     let (pointer_id, _) = self.write_expression_pointer(
                         ir_module,
@@ -2930,15 +2929,20 @@ impl Writer {
             match constant.inner {
                 crate::ConstantInner::Composite { .. } => continue,
                 crate::ConstantInner::Scalar { width, ref value } => {
-                    let id = self.id_gen.next();
-                    self.constant_ids[handle.index()] = id;
-                    self.write_constant_scalar(
-                        id,
-                        value,
-                        width,
-                        constant.name.as_ref(),
-                        &ir_module.types,
-                    )?;
+                    self.constant_ids[handle.index()] = match constant.name {
+                        Some(ref name) => {
+                            let id = self.id_gen.next();
+                            self.write_constant_scalar(
+                                id,
+                                value,
+                                width,
+                                Some(name),
+                                &ir_module.types,
+                            )?;
+                            id
+                        }
+                        None => self.get_constant_scalar(*value, width, &ir_module.types)?,
+                    };
                 }
             }
         }

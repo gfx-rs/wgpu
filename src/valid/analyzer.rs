@@ -573,6 +573,13 @@ impl FunctionInfo {
                     result: Uniformity::new(),
                     exit: ExitFlags::MAY_KILL,
                 },
+                S::Barrier(_) => FunctionUniformity {
+                    result: Uniformity {
+                        non_uniform_result: None,
+                        requirements: UniformityRequirements::WORK_GROUP_BARRIER,
+                    },
+                    exit: ExitFlags::empty(),
+                },
                 S::Block(ref b) => self.process_block(b, other_functions, disruptor)?,
                 S::If {
                     condition,

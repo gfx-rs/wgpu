@@ -1392,9 +1392,15 @@ impl<'a, W: Write> Writer<'a, W> {
             // This is one of the places were glsl adds to the syntax of C in this case the discard
             // keyword which ceases all further processing in a fragment shader, it's called OpKill
             // in spir-v that's why it's called `Statement::Kill`
-            Statement::Kill => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
-                writeln!(self.out, "discard;")?
+            Statement::Kill => writeln!(self.out, "{}discard;", INDENT.repeat(indent))?,
+            // Just issue a memory barrier, ignoring the flags.
+            Statement::Barrier(flags) => {
+                if flags.contains(crate::Barrier::WORK_GROUP) {
+                    writeln!(self.out, "{}barrier();", INDENT.repeat(indent))?;
+                }
+                if flags.contains(crate::Barrier::STORAGE) {
+                    writeln!(self.out, "{}groupMemoryBarrier();", INDENT.repeat(indent))?;
+                }
             }
             // Stores in glsl are just variable assignments written as `pointer = value;`
             Statement::Store { pointer, value } => {

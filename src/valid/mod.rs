@@ -40,6 +40,7 @@ bitflags::bitflags! {
     }
 }
 
+#[must_use]
 bitflags::bitflags! {
     /// Validation flags.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]

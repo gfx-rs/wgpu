@@ -1347,6 +1347,22 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Kill => {
                     writeln!(self.out, "{}{}::discard_fragment();", level, NAMESPACE)?;
                 }
+                crate::Statement::Barrier(flags) => {
+                    if flags.contains(crate::Barrier::STORAGE) {
+                        writeln!(
+                            self.out,
+                            "{}{}::threadgroup_barrier({}::mem_flags::mem_device);",
+                            level, NAMESPACE, NAMESPACE,
+                        )?;
+                    }
+                    if flags.contains(crate::Barrier::WORK_GROUP) {
+                        writeln!(
+                            self.out,
+                            "{}{}::threadgroup_barrier({}::mem_flags::mem_threadgroup);",
+                            level, NAMESPACE, NAMESPACE,
+                        )?;
+                    }
+                }
                 crate::Statement::Store { pointer, value } => {
                     // we can't assign fixed-size arrays
                     let pointer_info = &context.expression.info[pointer];
