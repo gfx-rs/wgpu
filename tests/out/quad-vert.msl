@@ -16,6 +16,9 @@ struct type10 {
     float gl_PointSize1;
     type6 gl_ClipDistance1;
 };
+constant metal::float4 const_type4_ = {0.0, 0.0, 0.0, 1.0};
+constant type6 const_type6_ = {0.0};
+constant gl_PerVertex const_gl_PerVertex = {const_type4_, 1.0, const_type6_, const_type6_};
 
 void main1(
     thread metal::float2& v_uv,
@@ -44,7 +47,7 @@ vertex main2Output main2(
 ) {
     metal::float2 v_uv = {};
     metal::float2 a_uv = {};
-    gl_PerVertex perVertexStruct = {};
+    gl_PerVertex perVertexStruct = const_gl_PerVertex;
     metal::float2 a_pos = {};
     const auto a_uv1 = varyings.a_uv1;
     const auto a_pos1 = varyings.a_pos1;

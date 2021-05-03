@@ -99,6 +99,8 @@ pub enum Error {
     InvalidEdgeClassification,
     #[error("recursive function call %{0}")]
     FunctionCallCycle(spirv::Word),
+    #[error("invalid array size {0:?}")]
+    InvalidArraySize(Handle<crate::Constant>),
     #[error("invalid barrier scope %{0}")]
     InvalidBarrierScope(spirv::Word),
     #[error("invalid barrier memory semantics %{0}")]

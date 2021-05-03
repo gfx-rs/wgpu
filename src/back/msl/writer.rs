@@ -2027,6 +2027,7 @@ impl<W: Write> Writer<W> {
                             result.binding.as_ref(),
                         ));
                     }
+
                     writeln!(self.out, "struct {} {{", stage_out_name)?;
                     for (name, ty, binding) in result_members {
                         let ty_name = TypeContext {

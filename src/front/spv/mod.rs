@@ -31,6 +31,7 @@ mod error;
 mod flow;
 mod function;
 mod image;
+mod null;
 
 use convert::*;
 pub use error::Error;
@@ -3217,84 +3218,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
-    fn generate_null_constant(
-        &mut self,
-        constants: &mut Arena<crate::Constant>,
-        types: &mut Arena<crate::Type>,
-        ty: Handle<crate::Type>,
-    ) -> Result<crate::ConstantInner, Error> {
-        fn make_scalar_inner(kind: crate::ScalarKind, width: crate::Bytes) -> crate::ConstantInner {
-            crate::ConstantInner::Scalar {
-                width,
-                value: match kind {
-                    crate::ScalarKind::Uint => crate::ScalarValue::Uint(0),
-                    crate::ScalarKind::Sint => crate::ScalarValue::Sint(0),
-                    crate::ScalarKind::Float => crate::ScalarValue::Float(0.0),
-                    crate::ScalarKind::Bool => crate::ScalarValue::Bool(false),
-                },
-            }
-        }
-
-        let inner = match types[ty].inner {
-            crate::TypeInner::Scalar { kind, width } => make_scalar_inner(kind, width),
-            crate::TypeInner::Vector { size, kind, width } => {
-                let mut components = Vec::with_capacity(size as usize);
-                for _ in 0..size as usize {
-                    components.push(constants.fetch_or_append(crate::Constant {
-                        name: None,
-                        specialization: None,
-                        inner: make_scalar_inner(kind, width),
-                    }));
-                }
-                crate::ConstantInner::Composite { ty, components }
-            }
-            crate::TypeInner::Matrix {
-                columns,
-                rows,
-                width,
-            } => {
-                let vector_ty = types.fetch_or_append(crate::Type {
-                    name: None,
-                    inner: crate::TypeInner::Vector {
-                        kind: crate::ScalarKind::Float,
-                        size: rows,
-                        width,
-                    },
-                });
-                let vector_inner = self.generate_null_constant(constants, types, vector_ty)?;
-                let vector_handle = constants.fetch_or_append(crate::Constant {
-                    name: None,
-                    specialization: None,
-                    inner: vector_inner,
-                });
-                crate::ConstantInner::Composite {
-                    ty,
-                    components: vec![vector_handle; columns as usize],
-                }
-            }
-            crate::TypeInner::Struct { ref members, .. } => {
-                let mut components = Vec::with_capacity(members.len());
-                // copy out the types to avoid borrowing `members`
-                let member_tys = members.iter().map(|member| member.ty).collect::<Vec<_>>();
-                for member_ty in member_tys {
-                    let inner = self.generate_null_constant(constants, types, member_ty)?;
-                    components.push(constants.fetch_or_append(crate::Constant {
-                        name: None,
-                        specialization: None,
-                        inner,
-                    }));
-                }
-                crate::ConstantInner::Composite { ty, components }
-            }
-            //TODO: arrays
-            ref other => {
-                log::warn!("null constant type {:?}", other);
-                return Err(Error::UnsupportedType(ty));
-            }
-        };
-        Ok(inner)
-    }
-
     fn parse_null_constant(
         &mut self,
         inst: Instruction,
@@ -3307,7 +3230,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
 
-        let inner = self.generate_null_constant(&mut module.constants, &mut module.types, ty)?;
+        let inner = null::generate_null_constant(ty, &mut module.types, &mut module.constants)?;
 
         self.lookup_constant.insert(
             id,
@@ -3471,14 +3394,67 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 (inner, var)
             }
             ExtendedClass::Output => {
-                // For output interface blocks. this would be a structure.
+                // For output interface blocks, this would be a structure.
                 let binding = dec.io_binding().ok();
+                let init = match binding {
+                    Some(crate::Binding::BuiltIn(built_in)) => {
+                        match null::generate_default_built_in(
+                            Some(built_in),
+                            effective_ty,
+                            &mut module.types,
+                            &mut module.constants,
+                        ) {
+                            Ok(handle) => Some(handle),
+                            Err(e) => {
+                                log::warn!("Failed to initialize output built-in: {}", e);
+                                None
+                            }
+                        }
+                    }
+                    Some(crate::Binding::Location { .. }) => None,
+                    None => match module.types[effective_ty].inner {
+                        crate::TypeInner::Struct { ref members, .. } => {
+                            // A temporary to avoid borrowing `module.types`
+                            let pairs = members
+                                .iter()
+                                .map(|member| {
+                                    let built_in = match member.binding {
+                                        Some(crate::Binding::BuiltIn(built_in)) => Some(built_in),
+                                        _ => None,
+                                    };
+                                    (built_in, member.ty)
+                                })
+                                .collect::<Vec<_>>();
+
+                            let mut components = Vec::with_capacity(members.len());
+                            for (built_in, member_ty) in pairs {
+                                let handle = null::generate_default_built_in(
+                                    built_in,
+                                    member_ty,
+                                    &mut module.types,
+                                    &mut module.constants,
+                                )?;
+                                components.push(handle);
+                            }
+                            Some(module.constants.append(crate::Constant {
+                                name: None,
+                                specialization: None,
+                                inner: crate::ConstantInner::Composite {
+                                    ty: effective_ty,
+                                    components,
+                                },
+                            }))
+                        }
+                        _ => None,
+                    },
+                };
+
                 let var = crate::GlobalVariable {
                     name: dec.name,
                     class: crate::StorageClass::Private,
                     binding: None,
                     ty: effective_ty,
-                    init: None,
+                    init,
                     storage_access: crate::StorageAccess::empty(),
                 };
                 let inner = Variable::Output(crate::FunctionResult {
