@@ -36,29 +36,43 @@ pub trait DeviceExt {
 
 impl DeviceExt for crate::Device {
     fn create_buffer_init(&self, descriptor: &BufferInitDescriptor<'_>) -> crate::Buffer {
-        let unpadded_size = descriptor.contents.len() as crate::BufferAddress;
-        // Valid vulkan usage is
-        // 1. buffer size must be a multiple of COPY_BUFFER_ALIGNMENT.
-        // 2. buffer size must be greater than 0.
-        // Therefore we round the value up to the nearest multiple, and ensure it's at least COPY_BUFFER_ALIGNMENT.
-        let align_mask = crate::COPY_BUFFER_ALIGNMENT - 1;
-        let padded_size =
-            ((unpadded_size + align_mask) & !align_mask).max(crate::COPY_BUFFER_ALIGNMENT);
+        // Skip mapping if the buffer is zero sized
+        if descriptor.contents.is_empty() {
+            let wgt_descriptor = crate::BufferDescriptor {
+                label: descriptor.label,
+                size: 0,
+                usage: descriptor.usage,
+                mapped_at_creation: false,
+            };
 
-        let wgt_descriptor = crate::BufferDescriptor {
-            label: descriptor.label,
-            size: padded_size,
-            usage: descriptor.usage,
-            mapped_at_creation: true,
-        };
+            self.create_buffer(&wgt_descriptor)
+        } else {
+            let unpadded_size = descriptor.contents.len() as crate::BufferAddress;
+            // Valid vulkan usage is
+            // 1. buffer size must be a multiple of COPY_BUFFER_ALIGNMENT.
+            // 2. buffer size must be greater than 0.
+            // Therefore we round the value up to the nearest multiple, and ensure it's at least COPY_BUFFER_ALIGNMENT.
+            let align_mask = crate::COPY_BUFFER_ALIGNMENT - 1;
+            let padded_size =
+                ((unpadded_size + align_mask) & !align_mask).max(crate::COPY_BUFFER_ALIGNMENT);
 
-        let buffer = self.create_buffer(&wgt_descriptor);
-        buffer
-            .slice(..unpadded_size)
-            .get_mapped_range_mut()
-            .copy_from_slice(descriptor.contents);
-        buffer.unmap();
-        buffer
+            let wgt_descriptor = crate::BufferDescriptor {
+                label: descriptor.label,
+                size: padded_size,
+                usage: descriptor.usage,
+                mapped_at_creation: true,
+            };
+
+            let buffer = self.create_buffer(&wgt_descriptor);
+
+            buffer
+                .slice(..unpadded_size)
+                .get_mapped_range_mut()
+                .copy_from_slice(descriptor.contents);
+            buffer.unmap();
+
+            buffer
+        }
     }
 
     fn create_texture_with_data(
