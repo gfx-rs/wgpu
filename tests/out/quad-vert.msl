@@ -20,12 +20,12 @@ struct type10 {
 void main1(
     thread metal::float2& v_uv,
     thread metal::float2 const& a_uv,
-    thread gl_PerVertex& _,
+    thread gl_PerVertex& perVertexStruct,
     thread metal::float2 const& a_pos
 ) {
     v_uv = a_uv;
     metal::float2 _e13 = a_pos;
-    _.gl_Position = metal::float4(_e13.x, _e13.y, 0.0, 1.0);
+    perVertexStruct.gl_Position = metal::float4(_e13.x, _e13.y, 0.0, 1.0);
     return;
 }
 
@@ -44,13 +44,13 @@ vertex main2Output main2(
 ) {
     metal::float2 v_uv = {};
     metal::float2 a_uv = {};
-    gl_PerVertex _ = {};
+    gl_PerVertex perVertexStruct = {};
     metal::float2 a_pos = {};
     const auto a_uv1 = varyings.a_uv1;
     const auto a_pos1 = varyings.a_pos1;
     a_uv = a_uv1;
     a_pos = a_pos1;
-    main1(v_uv, a_uv, _, a_pos);
-    const auto _tmp = type10 {v_uv, _.gl_Position, _.gl_PointSize, _.gl_ClipDistance};
+    main1(v_uv, a_uv, perVertexStruct, a_pos);
+    const auto _tmp = type10 {v_uv, perVertexStruct.gl_Position, perVertexStruct.gl_PointSize, perVertexStruct.gl_ClipDistance};
     return main2Output { _tmp.member, _tmp.gl_Position1, _tmp.gl_PointSize1, {_tmp.gl_ClipDistance1.inner[0]} };
 }
