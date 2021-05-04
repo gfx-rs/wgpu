@@ -1815,6 +1815,13 @@ impl Writer {
                         arg0_id,
                         arg1_id,
                     )),
+                    Mf::Outer => MathOp::Custom(Instruction::binary(
+                        spirv::Op::OuterProduct,
+                        result_type_id,
+                        id,
+                        arg0_id,
+                        arg1_id,
+                    )),
                     Mf::Cross => MathOp::Ext(spirv::GLOp::Cross),
                     Mf::Distance => MathOp::Ext(spirv::GLOp::Distance),
                     Mf::Length => MathOp::Ext(spirv::GLOp::Length),
@@ -1848,7 +1855,7 @@ impl Writer {
                         arg0_id,
                     )),
                     Mf::Determinant => MathOp::Ext(spirv::GLOp::Determinant),
-                    Mf::Outer | Mf::ReverseBits | Mf::CountOneBits => {
+                    Mf::ReverseBits | Mf::CountOneBits => {
                         log::error!("unimplemented math function {:?}", fun);
                         return Err(Error::FeatureNotImplemented("math function"));
                     }
