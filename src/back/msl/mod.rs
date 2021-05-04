@@ -71,13 +71,27 @@ pub type BindingMap = std::collections::BTreeMap<BindSource, BindTarget>;
 #[derive(Clone, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct PushConstantsMap {
+pub struct PerStageResources {
     #[cfg_attr(feature = "deserialize", serde(default))]
-    pub vs_buffer: Option<Slot>,
+    pub push_constant_buffer: Option<Slot>,
+
+    /// The slot of a buffer that contains an array of `u32`,
+    /// one for the size of each bound buffer that contains a runtime array,
+    /// in order of [`GlobalVariable`] declarations.
     #[cfg_attr(feature = "deserialize", serde(default))]
-    pub fs_buffer: Option<Slot>,
+    pub sizes_buffer: Option<Slot>,
+}
+
+#[derive(Clone, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct PerStageMap {
     #[cfg_attr(feature = "deserialize", serde(default))]
-    pub cs_buffer: Option<Slot>,
+    pub vs: PerStageResources,
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub fs: PerStageResources,
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub cs: PerStageResources,
 }
 
 enum ResolvedBinding {
@@ -131,6 +145,8 @@ pub enum EntryPointError {
     MissingBinding(BindSource),
     #[error("mapping for push constants at stage {0:?} is missing")]
     MissingPushConstants(crate::ShaderStage),
+    #[error("mapping for sizes buffer for stage {0:?} is missing")]
+    MissingSizesBuffer(crate::ShaderStage),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -149,18 +165,14 @@ pub struct Options {
     pub lang_version: (u8, u8),
     /// Binding model mapping to Metal.
     pub binding_map: BindingMap,
-    /// Push constants mapping to Metal.
-    pub push_constants_map: PushConstantsMap,
+    /// Map of per-stage resources (e.g. push constants) to slots
+    pub per_stage_map: PerStageMap,
     /// Samplers to be inlined into the code.
     pub inline_samplers: Vec<sampler::InlineSampler>,
     /// Make it possible to link different stages via SPIRV-Cross.
     pub spirv_cross_compatibility: bool,
     /// Don't panic on missing bindings, instead generate invalid MSL.
     pub fake_missing_bindings: bool,
-    /// The slot of a buffer that contains an array of `u32`,
-    /// one for the size of each bound buffer that contains a runtime array,
-    /// in order of [`GlobalVariable`] declarations.
-    pub sizes_buffer_binding: Option<Slot>,
 }
 
 impl Default for Options {
@@ -168,11 +180,10 @@ impl Default for Options {
         Options {
             lang_version: (1, 0),
             binding_map: BindingMap::default(),
-            push_constants_map: PushConstantsMap::default(),
+            per_stage_map: PerStageMap::default(),
             inline_samplers: Vec::new(),
             spirv_cross_compatibility: false,
             fake_missing_bindings: true,
-            sizes_buffer_binding: None,
         }
     }
 }
@@ -263,9 +274,9 @@ impl Options {
         stage: crate::ShaderStage,
     ) -> Result<ResolvedBinding, EntryPointError> {
         let slot = match stage {
-            crate::ShaderStage::Vertex => self.push_constants_map.vs_buffer,
-            crate::ShaderStage::Fragment => self.push_constants_map.fs_buffer,
-            crate::ShaderStage::Compute => self.push_constants_map.cs_buffer,
+            crate::ShaderStage::Vertex => self.per_stage_map.vs.push_constant_buffer,
+            crate::ShaderStage::Fragment => self.per_stage_map.fs.push_constant_buffer,
+            crate::ShaderStage::Compute => self.per_stage_map.cs.push_constant_buffer,
         };
         match slot {
             Some(slot) => Ok(ResolvedBinding::Resource(BindTarget {
@@ -280,6 +291,32 @@ impl Options {
                 interpolation: None,
             }),
             None => Err(EntryPointError::MissingPushConstants(stage)),
+        }
+    }
+
+    fn resolve_sizes_buffer(
+        &self,
+        stage: crate::ShaderStage,
+    ) -> Result<ResolvedBinding, EntryPointError> {
+        let slot = match stage {
+            crate::ShaderStage::Vertex => self.per_stage_map.vs.sizes_buffer,
+            crate::ShaderStage::Fragment => self.per_stage_map.fs.sizes_buffer,
+            crate::ShaderStage::Compute => self.per_stage_map.cs.sizes_buffer,
+        };
+
+        match slot {
+            Some(slot) => Ok(ResolvedBinding::Resource(BindTarget {
+                buffer: Some(slot),
+                texture: None,
+                sampler: None,
+                mutable: false,
+            })),
+            None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
+                prefix: "fake",
+                index: 0,
+                interpolation: None,
+            }),
+            None => Err(EntryPointError::MissingSizesBuffer(stage)),
         }
     }
 }

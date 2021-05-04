@@ -12,7 +12,7 @@
 			(stage: Fragment, group: 0, binding: 1): (texture: Some(0)),
 			(stage: Fragment, group: 0, binding: 2): (sampler: Some(Inline(0))),
 		},
-		push_constants_map: (
+		per_stage_map: (
 		),
 		inline_samplers: [
 			(

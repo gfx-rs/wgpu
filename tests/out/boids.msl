@@ -32,7 +32,7 @@ kernel void main1(
 , constant SimParams& params [[buffer(0)]]
 , constant Particles& particlesSrc [[buffer(1)]]
 , device Particles& particlesDst [[buffer(2)]]
-, constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
+, constant _mslBufferSizes& _buffer_sizes [[buffer(3)]]
 ) {
     metal::float2 vPos;
     metal::float2 vVel;

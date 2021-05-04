@@ -9,11 +9,13 @@
 		binding_map: {
 			(stage: Vertex, group: 0, binding: 0): (buffer: Some(0), mutable: true),
 		},
-		push_constants_map: (
+		per_stage_map: (
+			vs: (
+				sizes_buffer: Some(24),
+			),
 		),
 		inline_samplers: [],
 		spirv_cross_compatibility: false,
 		fake_missing_bindings: false,
-        sizes_buffer_binding: Some(24),
 	),
 )
