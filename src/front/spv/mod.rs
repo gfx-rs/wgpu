@@ -993,29 +993,34 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     },
                                 }
                             }
-                            // we can't dynamically index matrices, so expecting constant index here
                             crate::TypeInner::Matrix { .. } => {
-                                let index = index_maybe
-                                    .ok_or_else(|| Error::InvalidAccess(index_expr_data.clone()))?;
                                 let load_override = match acex.load_override {
                                     // We are indexing inside a row-major matrix
                                     Some(LookupLoadOverride::Loaded(load_expr)) => {
-                                        let sub_expr =
+                                        let index = index_maybe.ok_or_else(|| {
+                                            Error::InvalidAccess(index_expr_data.clone())
+                                        })?;
+                                        let sub_handle =
                                             expressions.append(crate::Expression::AccessIndex {
                                                 base: load_expr,
                                                 index,
                                             });
-                                        Some(LookupLoadOverride::Loaded(sub_expr))
+                                        Some(LookupLoadOverride::Loaded(sub_handle))
                                     }
                                     _ => None,
                                 };
+                                let sub_expr = match index_maybe {
+                                    Some(index) => crate::Expression::AccessIndex {
+                                        base: acex.base_handle,
+                                        index,
+                                    },
+                                    None => crate::Expression::Access {
+                                        base: acex.base_handle,
+                                        index: index_expr.handle,
+                                    },
+                                };
                                 AccessExpression {
-                                    base_handle: expressions.append(
-                                        crate::Expression::AccessIndex {
-                                            base: acex.base_handle,
-                                            index,
-                                        },
-                                    ),
+                                    base_handle: expressions.append(sub_expr),
                                     type_id: type_lookup
                                         .base_id
                                         .ok_or(Error::InvalidAccessType(acex.type_id))?,

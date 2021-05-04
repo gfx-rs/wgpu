@@ -5,11 +5,12 @@ struct _mslBufferSizes {
     metal::uint size0;
 };
 
-typedef int type1[1];
+typedef int type2[1];
 struct Bar {
-    type1 data;
+    metal::float4x4 matrix;
+    type2 data;
 };
-struct type4 {
+struct type5 {
     int inner[5];
 };
 
@@ -23,5 +24,5 @@ vertex fooOutput foo(
 , device Bar& bar [[buffer(0)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
-    return fooOutput { static_cast<float4>(int4(type4 {bar.data[(1 + (_buffer_sizes.size0 - 0 - 4) / 4) - 1u], 2, 3, 4, 5}.inner[vi])) };
+    return fooOutput { static_cast<float4>(int4(type5 {bar.data[(1 + (_buffer_sizes.size0 - 64 - 4) / 4) - 1u], static_cast<int>(bar.matrix[3u].x), 3, 4, 5}.inner[vi])) };
 }

@@ -1224,9 +1224,10 @@ impl Parser {
             // insert the E::Load when we reach a value
             if needs_deref {
                 let now = match *ctx.resolve_type(handle)? {
-                    crate::TypeInner::Pointer { base, class: _ } => {
-                        ctx.types[base].inner.scalar_kind().is_some()
-                    }
+                    crate::TypeInner::Pointer { base, class: _ } => match ctx.types[base].inner {
+                        crate::TypeInner::Scalar { .. } | crate::TypeInner::Vector { .. } => true,
+                        _ => false,
+                    },
                     crate::TypeInner::ValuePointer { .. } => true,
                     _ => false,
                 };

@@ -156,6 +156,17 @@ impl<'a> ResolveContext<'a> {
                         width,
                         class,
                     },
+                    // Matrices are only dynamically indexed behind a pointer
+                    Ti::Matrix {
+                        columns: _,
+                        rows,
+                        width,
+                    } => Ti::ValuePointer {
+                        kind: crate::ScalarKind::Float,
+                        size: Some(rows),
+                        width,
+                        class,
+                    },
                     ref other => {
                         log::error!("Access sub-type {:?}", other);
                         return Err(ResolveError::InvalidSubAccess {
