@@ -1837,6 +1837,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 | Op::FUnordLessThanEqual
                 | Op::FOrdGreaterThanEqual
                 | Op::FUnordGreaterThanEqual
+                | Op::LogicalEqual
                 | Op::LogicalNotEqual => {
                     inst.expect(5)?;
                     let operator = map_binary_operator(inst.op)?;
