@@ -1426,6 +1426,29 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
+                Op::OuterProduct => {
+                    inst.expect(5)?;
+
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let left_id = self.next()?;
+                    let right_id = self.next()?;
+                    let left_lexp = self.lookup_expression.lookup(left_id)?;
+                    let right_lexp = self.lookup_expression.lookup(right_id)?;
+                    let expr = crate::Expression::Math {
+                        fun: crate::MathFunction::Outer,
+                        arg: left_lexp.handle,
+                        arg1: Some(right_lexp.handle),
+                        arg2: None,
+                    };
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: expressions.append(expr),
+                            type_id: result_type_id,
+                        },
+                    );
+                }
                 // Bitwise instructions
                 Op::Not => {
                     inst.expect(4)?;
