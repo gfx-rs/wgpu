@@ -29,6 +29,7 @@ bitflags::bitflags! {
         const NOPERSPECTIVE_QUALIFIER = 1 << 11;
         const SAMPLE_QUALIFIER = 1 << 12;
         const CLIP_DISTANCE = 1 << 13;
+        const CULL_DISTANCE = 1 << 14;
     }
 }
 
@@ -93,6 +94,7 @@ impl FeaturesManager {
         check_feature!(SAMPLE_QUALIFIER, 400, 320);
         // gl_ClipDistance is supported by core versions > 1.3 and aren't supported by an es versions without extensions
         check_feature!(CLIP_DISTANCE, 130, 300);
+        check_feature!(CULL_DISTANCE, 450, 300);
 
         // Return an error if there are missing features
         if missing.is_empty() {
@@ -173,9 +175,12 @@ impl FeaturesManager {
             }
         }
 
-        if self.0.contains(Features::CLIP_DISTANCE) && version.is_es() {
+        if (self.0.contains(Features::CLIP_DISTANCE) || self.0.contains(Features::CULL_DISTANCE))
+            && version.is_es()
+        {
+            // TODO: handle gl_ClipDistance and gl_CullDistance usage in better way
             // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_clip_cull_distance.txt
-            writeln!(out, "#extension GL_EXT_clip_cull_distance : require")?;
+            // writeln!(out, "#extension GL_EXT_clip_cull_distance : require")?;
         }
 
         Ok(())
@@ -298,11 +303,15 @@ impl<'a, W> Writer<'a, W> {
             _ => {
                 if let Some(binding) = binding {
                     match *binding {
-                        Binding::BuiltIn(builtin) => {
-                            if builtin == crate::BuiltIn::ClipDistance {
-                                self.features.request(Features::CLIP_DISTANCE);
+                        Binding::BuiltIn(builtin) => match builtin {
+                            crate::BuiltIn::ClipDistance => {
+                                self.features.request(Features::CLIP_DISTANCE)
                             }
-                        }
+                            crate::BuiltIn::CullDistance => {
+                                self.features.request(Features::CULL_DISTANCE)
+                            }
+                            _ => {}
+                        },
                         Binding::Location {
                             location: _,
                             interpolation,

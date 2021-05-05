@@ -21,8 +21,9 @@ void main() {
     tmp1_ = (int(vertex_index) / 2);
     tmp2_ = (int(vertex_index) & 1);
     vec4 _expr24 = vec4(((float(tmp1_) * 4.0) - 1.0), ((float(tmp2_) * 4.0) - 1.0), 0.0, 1.0);
-    gl_Position = VertexOutput(_expr24, (transpose(mat3x3(_group_0_binding_0.view[0].xyz, _group_0_binding_0.view[1].xyz, _group_0_binding_0.view[2].xyz)) * (_group_0_binding_0.proj_inv * _expr24).xyz)).position;
-    _vs2fs_location0 = VertexOutput(_expr24, (transpose(mat3x3(_group_0_binding_0.view[0].xyz, _group_0_binding_0.view[1].xyz, _group_0_binding_0.view[2].xyz)) * (_group_0_binding_0.proj_inv * _expr24).xyz)).uv;
+    VertexOutput _tmp_return = VertexOutput(_expr24, (transpose(mat3x3(_group_0_binding_0.view[0].xyz, _group_0_binding_0.view[1].xyz, _group_0_binding_0.view[2].xyz)) * (_group_0_binding_0.proj_inv * _expr24).xyz));
+    gl_Position = _tmp_return.position;
+    _vs2fs_location0 = _tmp_return.uv;
     return;
 }
 
