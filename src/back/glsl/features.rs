@@ -28,6 +28,7 @@ bitflags::bitflags! {
         /// Centroid are available in all GLSL versions we support.
         const NOPERSPECTIVE_QUALIFIER = 1 << 11;
         const SAMPLE_QUALIFIER = 1 << 12;
+        const CLIP_DISTANCE = 1 << 13;
     }
 }
 
@@ -90,6 +91,8 @@ impl FeaturesManager {
         check_feature!(TEXTURE_1D, 0);
         check_feature!(NOPERSPECTIVE_QUALIFIER, 130);
         check_feature!(SAMPLE_QUALIFIER, 400, 320);
+        // gl_ClipDistance is supported by core versions > 1.3 and aren't supported by an es versions without extensions
+        check_feature!(CLIP_DISTANCE, 130, 300);
 
         // Return an error if there are missing features
         if missing.is_empty() {
@@ -168,6 +171,11 @@ impl FeaturesManager {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt
                 writeln!(out, "#extension GL_ARB_conservative_depth : require")?;
             }
+        }
+
+        if self.0.contains(Features::CLIP_DISTANCE) && version.is_es() {
+            // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_clip_cull_distance.txt
+            writeln!(out, "#extension GL_EXT_clip_cull_distance : require")?;
         }
 
         Ok(())
@@ -288,17 +296,25 @@ impl<'a, W> Writer<'a, W> {
                 }
             }
             _ => {
-                if let Some(&Binding::Location {
-                    interpolation,
-                    sampling,
-                    ..
-                }) = binding
-                {
-                    if interpolation == Some(Interpolation::Linear) {
-                        self.features.request(Features::NOPERSPECTIVE_QUALIFIER);
-                    }
-                    if sampling == Some(Sampling::Sample) {
-                        self.features.request(Features::SAMPLE_QUALIFIER);
+                if let Some(binding) = binding {
+                    match *binding {
+                        Binding::BuiltIn(builtin) => {
+                            if builtin == crate::BuiltIn::ClipDistance {
+                                self.features.request(Features::CLIP_DISTANCE);
+                            }
+                        }
+                        Binding::Location {
+                            location: _,
+                            interpolation,
+                            sampling,
+                        } => {
+                            if interpolation == Some(Interpolation::Linear) {
+                                self.features.request(Features::NOPERSPECTIVE_QUALIFIER);
+                            }
+                            if sampling == Some(Sampling::Sample) {
+                                self.features.request(Features::SAMPLE_QUALIFIER);
+                            }
+                        }
                     }
                 }
             }
