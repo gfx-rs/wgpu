@@ -46,9 +46,12 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
         Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
         Err(_) => Parameters::default(),
     };
-    let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all())
-        .validate(module)
-        .unwrap();
+    let info = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::empty(),
+    )
+    .validate(module)
+    .unwrap();
 
     let dest = PathBuf::from(root).join(DIR_OUT).join(name);
 
@@ -282,9 +285,12 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
     )
     .unwrap();
     check_targets(&module, name, targets);
-    naga::valid::Validator::new(naga::valid::ValidationFlags::all())
-        .validate(&module)
-        .unwrap();
+    naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::empty(),
+    )
+    .validate(&module)
+    .unwrap();
 }
 
 #[cfg(feature = "spv-in")]

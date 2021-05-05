@@ -1,3 +1,4 @@
+use super::Capabilities;
 use crate::arena::{Arena, Handle};
 
 bitflags::bitflags! {
@@ -143,10 +144,13 @@ impl TypeInfo {
 }
 
 impl super::Validator {
-    pub(super) fn check_width(kind: crate::ScalarKind, width: crate::Bytes) -> bool {
+    pub(super) fn check_width(&self, kind: crate::ScalarKind, width: crate::Bytes) -> bool {
         match kind {
             crate::ScalarKind::Bool => width == crate::BOOL_WIDTH,
-            _ => width == 4,
+            crate::ScalarKind::Float => {
+                width == 4 || (width == 8 && self.capabilities.contains(Capabilities::FLOAT64))
+            }
+            crate::ScalarKind::Sint | crate::ScalarKind::Uint => width == 4,
         }
     }
 
@@ -164,7 +168,7 @@ impl super::Validator {
         use crate::TypeInner as Ti;
         Ok(match types[handle].inner {
             Ti::Scalar { kind, width } => {
-                if !Self::check_width(kind, width) {
+                if !self.check_width(kind, width) {
                     return Err(TypeError::InvalidWidth(kind, width));
                 }
                 TypeInfo::new(
@@ -176,7 +180,7 @@ impl super::Validator {
                 )
             }
             Ti::Vector { size, kind, width } => {
-                if !Self::check_width(kind, width) {
+                if !self.check_width(kind, width) {
                     return Err(TypeError::InvalidWidth(kind, width));
                 }
                 let count = if size >= crate::VectorSize::Tri { 4 } else { 2 };
@@ -193,7 +197,7 @@ impl super::Validator {
                 rows,
                 width,
             } => {
-                if !Self::check_width(crate::ScalarKind::Float, width) {
+                if !self.check_width(crate::ScalarKind::Float, width) {
                     return Err(TypeError::InvalidWidth(crate::ScalarKind::Float, width));
                 }
                 let count = if rows >= crate::VectorSize::Tri { 4 } else { 2 };
@@ -217,7 +221,7 @@ impl super::Validator {
                 width,
                 class: _,
             } => {
-                if !Self::check_width(kind, width) {
+                if !self.check_width(kind, width) {
                     return Err(TypeError::InvalidWidth(kind, width));
                 }
                 TypeInfo::new(TypeFlags::SIZED, 0)

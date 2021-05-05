@@ -175,14 +175,18 @@ fn main() {
     };
 
     // validate the IR
-    let info =
-        match naga::valid::Validator::new(naga::valid::ValidationFlags::all()).validate(&module) {
-            Ok(info) => Some(info),
-            Err(error) => {
-                print_err(error);
-                None
-            }
-        };
+    let info = match naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::all(),
+    )
+    .validate(&module)
+    {
+        Ok(info) => Some(info),
+        Err(error) => {
+            print_err(error);
+            None
+        }
+    };
 
     let output_path = match output_path {
         Some(ref string) => string,

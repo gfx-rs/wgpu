@@ -42,6 +42,16 @@ bitflags::bitflags! {
 
 #[must_use]
 bitflags::bitflags! {
+    /// Allowed IR capabilities.
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    pub struct Capabilities: u8 {
+        /// Float values with width = 8
+        const FLOAT64 = 0x1;
+    }
+}
+
+bitflags::bitflags! {
     /// Validation flags.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -70,6 +80,7 @@ impl ops::Index<Handle<crate::Function>> for ModuleInfo {
 #[derive(Debug)]
 pub struct Validator {
     flags: ValidationFlags,
+    capabilities: Capabilities,
     types: Vec<r#type::TypeInfo>,
     location_mask: BitSet,
     bind_group_masks: Vec<BitSet>,
@@ -171,9 +182,10 @@ impl crate::TypeInner {
 
 impl Validator {
     /// Construct a new validator instance.
-    pub fn new(flags: ValidationFlags) -> Self {
+    pub fn new(flags: ValidationFlags, capabilities: Capabilities) -> Self {
         Validator {
             flags,
+            capabilities,
             types: Vec::new(),
             location_mask: BitSet::new(),
             bind_group_masks: Vec::new(),
@@ -192,7 +204,7 @@ impl Validator {
         let con = &constants[handle];
         match con.inner {
             crate::ConstantInner::Scalar { width, ref value } => {
-                if !Self::check_width(value.scalar_kind(), width) {
+                if !self.check_width(value.scalar_kind(), width) {
                     return Err(ConstantError::InvalidType);
                 }
             }
