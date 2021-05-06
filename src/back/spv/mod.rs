@@ -58,6 +58,8 @@ pub struct Options {
     /// Configuration flags for the writer.
     pub flags: WriterFlags,
     /// Set of SPIR-V allowed capabilities, if provided.
+    // Note: there is a major bug currently associated with deriving the capabilities.
+    // We are calling `required_capabilities`, but the semantics of this is broken.
     pub capabilities: Option<crate::FastHashSet<Capability>>,
 }
 

@@ -1,6 +1,7 @@
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
-    Disalignment, FunctionError, ModuleInfo, ShaderStages, TypeFlags, ValidationFlags,
+    Capabilities, Disalignment, FunctionError, ModuleInfo, ShaderStages, TypeFlags,
+    ValidationFlags,
 };
 use crate::arena::{Arena, Handle};
 
@@ -24,6 +25,8 @@ pub enum GlobalVariableError {
         required: TypeFlags,
         seen: TypeFlags,
     },
+    #[error("Capability {0:?} is not supported")]
+    UnsupportedCapability(Capabilities),
     #[error("Binding decoration is missing or not applicable")]
     InvalidBinding,
     #[error("Alignment requirements for this storage class are not met by {0:?}")]
@@ -332,11 +335,18 @@ impl super::Validator {
             crate::StorageClass::Private | crate::StorageClass::WorkGroup => {
                 (crate::StorageAccess::empty(), TypeFlags::DATA, false)
             }
-            crate::StorageClass::PushConstant => (
-                crate::StorageAccess::LOAD,
-                TypeFlags::DATA | TypeFlags::HOST_SHARED,
-                false,
-            ),
+            crate::StorageClass::PushConstant => {
+                if !self.capabilities.contains(Capabilities::PUSH_CONSTANT) {
+                    return Err(GlobalVariableError::UnsupportedCapability(
+                        Capabilities::PUSH_CONSTANT,
+                    ));
+                }
+                (
+                    crate::StorageAccess::LOAD,
+                    TypeFlags::DATA | TypeFlags::HOST_SHARED,
+                    false,
+                )
+            }
         };
 
         if !allowed_storage_access.contains(var.storage_access) {

@@ -49,11 +49,14 @@ impl Default for ValidationFlags {
 #[must_use]
 bitflags::bitflags! {
     /// Allowed IR capabilities.
+    #[derive(Default)]
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     pub struct Capabilities: u8 {
-        /// Float values with width = 8
-        const FLOAT64 = 0x1;
+        /// Support for `StorageClass:PushConstant`.
+        const PUSH_CONSTANT = 0x1;
+        /// Float values with width = 8.
+        const FLOAT64 = 0x2;
     }
 }
 

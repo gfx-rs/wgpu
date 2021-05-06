@@ -21,18 +21,23 @@ bitflags::bitflags! {
 
 #[derive(Default, serde::Deserialize)]
 struct Parameters {
+    #[serde(default)]
+    god_mode: bool,
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_version: (u8, u8),
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_capabilities: naga::FastHashSet<spirv::Capability>,
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+    #[serde(default)]
     spv_debug: bool,
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+    #[serde(default)]
     spv_adjust_coordinate_space: bool,
     #[cfg(all(feature = "deserialize", feature = "msl-out"))]
     #[serde(default)]
     msl: naga::back::msl::Options,
     #[cfg(all(not(feature = "deserialize"), feature = "msl-out"))]
+    #[serde(default)]
     msl_custom: bool,
     #[cfg_attr(not(feature = "glsl-out"), allow(dead_code))]
     #[serde(default)]
@@ -46,12 +51,14 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
         Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
         Err(_) => Parameters::default(),
     };
-    let info = naga::valid::Validator::new(
-        naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::empty(),
-    )
-    .validate(module)
-    .unwrap();
+    let capabilities = if params.god_mode {
+        naga::valid::Capabilities::all()
+    } else {
+        naga::valid::Capabilities::empty()
+    };
+    let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+        .validate(module)
+        .unwrap();
 
     let dest = PathBuf::from(root).join(DIR_OUT).join(name);
 
@@ -248,7 +255,7 @@ fn convert_wgsl() {
         ),
         ("shadow", Targets::SPIRV | Targets::METAL | Targets::GLSL),
         ("image", Targets::SPIRV | Targets::METAL),
-        ("texture-array", Targets::SPIRV | Targets::METAL),
+        ("extra", Targets::SPIRV | Targets::METAL),
         ("operators", Targets::SPIRV | Targets::METAL | Targets::GLSL),
         (
             "interpolate",

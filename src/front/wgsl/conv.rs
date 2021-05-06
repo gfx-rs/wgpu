@@ -98,10 +98,18 @@ pub fn map_storage_format(word: &str) -> Result<crate::StorageFormat, Error<'_>>
 
 pub fn get_scalar_type(word: &str) -> Option<(crate::ScalarKind, crate::Bytes)> {
     match word {
+        "f16" => Some((crate::ScalarKind::Float, 2)),
         "f32" => Some((crate::ScalarKind::Float, 4)),
+        "f64" => Some((crate::ScalarKind::Float, 8)),
+        "i8" => Some((crate::ScalarKind::Sint, 1)),
+        "i16" => Some((crate::ScalarKind::Sint, 2)),
         "i32" => Some((crate::ScalarKind::Sint, 4)),
+        "i64" => Some((crate::ScalarKind::Sint, 8)),
+        "u8" => Some((crate::ScalarKind::Uint, 1)),
+        "u16" => Some((crate::ScalarKind::Uint, 2)),
         "u32" => Some((crate::ScalarKind::Uint, 4)),
-        "bool" => Some((crate::ScalarKind::Bool, 1)),
+        "u64" => Some((crate::ScalarKind::Uint, 8)),
+        "bool" => Some((crate::ScalarKind::Bool, crate::BOOL_WIDTH)),
         _ => None,
     }
 }

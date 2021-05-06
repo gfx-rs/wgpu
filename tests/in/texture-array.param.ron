@@ -1,8 +1,0 @@
-(
-	spv_flow_dump_prefix: "",
-	spv_version: (1, 5),
-	spv_capabilities: [ Shader ],
-	spv_debug: true,
-	spv_adjust_coordinate_space: false,
-	msl_custom: false,
-)

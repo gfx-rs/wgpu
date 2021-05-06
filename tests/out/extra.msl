@@ -1,0 +1,21 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+struct PushConstants {
+    metal::uint index;
+    char _pad1[12];
+    metal::float2 double1;
+};
+
+struct main1Input {
+    metal::float4 color [[user(loc0), center_perspective]];
+};
+struct main1Output {
+    metal::float4 member [[color(0)]];
+};
+fragment main1Output main1(
+  main1Input varyings [[stage_in]]
+) {
+    const auto color = varyings.color;
+    return main1Output { color };
+}

@@ -1637,23 +1637,10 @@ impl Parser {
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<crate::TypeInner, Error<'a>> {
+        if let Some((kind, width)) = conv::get_scalar_type(word) {
+            return Ok(crate::TypeInner::Scalar { kind, width });
+        }
         Ok(match word {
-            "f32" => crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Float,
-                width: 4,
-            },
-            "i32" => crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Sint,
-                width: 4,
-            },
-            "u32" => crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Uint,
-                width: 4,
-            },
-            "bool" => crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Bool,
-                width: crate::BOOL_WIDTH,
-            },
             "vec2" => {
                 let (kind, width) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Vector {
