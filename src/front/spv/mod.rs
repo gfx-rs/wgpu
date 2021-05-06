@@ -1673,6 +1673,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 | Op::ConvertUToF
                 | Op::ConvertFToU
                 | Op::ConvertFToS
+                | Op::FConvert
                 | Op::UConvert
                 | Op::SConvert => {
                     inst.expect_at_least(4)?;
@@ -3143,7 +3144,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         module: &mut crate::Module,
     ) -> Result<(), Error> {
         self.switch(ModuleState::Type, inst.op)?;
-        inst.expect_at_least(3)?;
+        inst.expect_at_least(4)?;
         let type_id = self.next()?;
         let id = self.next()?;
         let type_lookup = self.lookup_type.lookup(type_id)?;
@@ -3156,7 +3157,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             } => {
                 let low = self.next()?;
                 let high = if width > 4 {
-                    inst.expect(4)?;
+                    inst.expect(5)?;
                     self.next()?
                 } else {
                     0
@@ -3172,7 +3173,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             } => {
                 let low = self.next()?;
                 let high = if width > 4 {
-                    inst.expect(4)?;
+                    inst.expect(5)?;
                     self.next()?
                 } else {
                     0
@@ -3192,11 +3193,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 let extended = match width {
                     4 => f64::from(f32::from_bits(low)),
                     8 => {
-                        inst.expect(4)?;
+                        inst.expect(5)?;
                         let high = self.next()?;
                         f64::from_bits((u64::from(high) << 32) | u64::from(low))
                     }
-                    _ => return Err(Error::InvalidTypeWidth(u32::from(width))),
+                    _ => return Err(Error::InvalidTypeWidth(width as u32)),
                 };
                 crate::ConstantInner::Scalar {
                     width,
