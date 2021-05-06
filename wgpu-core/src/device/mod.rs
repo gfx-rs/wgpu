@@ -26,9 +26,7 @@ use hal::{
 };
 use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
-use wgt::{
-    BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat, TextureViewDimension,
-};
+use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat, TextureViewDimension};
 
 use std::{
     borrow::Cow,
@@ -4685,7 +4683,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferAddress>,
     ) -> Result<(*mut u8, u64), resource::BufferAccessError> {
         profiling::scope!("get_mapped_range", "Buffer");
 
@@ -4697,7 +4695,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| resource::BufferAccessError::Invalid)?;
 
         let range_size = if let Some(size) = size {
-            size.into()
+            size
         } else if offset > buffer.size {
             0
         } else {
