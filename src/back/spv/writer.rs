@@ -557,8 +557,8 @@ impl Writer {
         };
 
         let lookup_function_type = LookupFunctionType {
-            return_type_id,
             parameter_type_ids,
+            return_type_id,
         };
 
         let function_id = self.id_gen.next();

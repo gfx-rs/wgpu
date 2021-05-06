@@ -107,7 +107,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         .expressions
                         .append(crate::Expression::FunctionArgument(i as u32));
                     self.lookup_expression
-                        .insert(id, LookupExpression { type_id, handle });
+                        .insert(id, LookupExpression { handle, type_id });
                     //Note: we redo the lookup in order to work around `self` borrowing
 
                     if type_id
