@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches-ignore: [staging.tmp]
+    tags: [v0.8]
   pull_request:
     branches-ignore: [staging.tmp]
 
