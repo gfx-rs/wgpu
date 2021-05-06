@@ -332,8 +332,25 @@ impl<B: GfxBackend> Device<B> {
             //Note: we don't adjust the coordinate space, because `NDC_Y_UP` is required.
             spv::Options {
                 lang_version: (1, 0),
-                // doesn't matter, the preferred path is via a naga::Module
-                capabilities: None,
+                //TODO: can be `None` once `spirv` is published
+                capabilities: Some(
+                    [
+                        spv::Capability::Shader,
+                        spv::Capability::DerivativeControl,
+                        spv::Capability::InterpolationFunction,
+                        spv::Capability::Matrix,
+                        spv::Capability::ImageQuery,
+                        spv::Capability::Sampled1D,
+                        spv::Capability::Image1D,
+                        spv::Capability::SampledCubeArray,
+                        spv::Capability::ImageCubeArray,
+                        spv::Capability::ImageMSArray,
+                        spv::Capability::StorageImageExtendedFormats,
+                    ]
+                    .iter()
+                    .cloned()
+                    .collect(),
+                ),
                 flags,
             }
         };
@@ -715,8 +732,8 @@ impl<B: GfxBackend> Device<B> {
             format_features,
             framebuffer_attachment: hal::image::FramebufferAttachment {
                 usage,
-                format,
                 view_caps,
+                format,
             },
             full_range: TextureSelector {
                 levels: 0..desc.mip_level_count as hal::image::Level,
