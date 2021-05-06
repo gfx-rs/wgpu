@@ -6,7 +6,7 @@ use crate::{
     arena::{Arena, Handle},
     back::vector_size_str,
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
-    valid::{FunctionInfo, GlobalUse, ModuleInfo},
+    valid::{Capabilities, FunctionInfo, GlobalUse, ModuleInfo},
     FastHashMap,
 };
 use bit_set::BitSet;
@@ -1121,12 +1121,19 @@ impl<W: Write> Writer<W> {
                 convert,
             } => {
                 let scalar = scalar_kind_string(kind);
-                let size = match *context.resolve_type(expr) {
-                    crate::TypeInner::Scalar { .. } => "",
-                    crate::TypeInner::Vector { size, .. } => vector_size_str(size),
+                let (size, width) = match *context.resolve_type(expr) {
+                    crate::TypeInner::Scalar { width, .. } => ("", width),
+                    crate::TypeInner::Vector { size, width, .. } => (vector_size_str(size), width),
                     _ => return Err(Error::Validation),
                 };
-                let op = if convert { "static_cast" } else { "as_type" };
+                let op = match convert {
+                    Some(w) if w == width => "static_cast",
+                    Some(8) if kind == crate::ScalarKind::Float => {
+                        return Err(Error::CapabilityNotSupported(Capabilities::FLOAT64))
+                    }
+                    Some(_) => return Err(Error::Validation),
+                    None => "as_type",
+                };
                 write!(self.out, "{}<{}{}>(", op, scalar, size)?;
                 self.put_expression(expr, context, true)?;
                 write!(self.out, ")")?;
@@ -2404,7 +2411,7 @@ fn test_stack_size() {
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
         // last observed macOS value: 17664
-        if stack_size < 17000 || stack_size > 18500 {
+        if stack_size < 17000 || stack_size > 19000 {
             panic!("`put_expression` stack size {} has changed!", stack_size);
         }
     }

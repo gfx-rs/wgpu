@@ -160,10 +160,9 @@ impl<'a> ConstantSolver<'a> {
             } => {
                 let expr_constant = self.solve(expr)?;
 
-                if convert {
-                    self.cast(expr_constant, kind)
-                } else {
-                    Err(ConstantSolvingError::Bitcast)
+                match convert {
+                    Some(width) => self.cast(expr_constant, kind, width),
+                    None => Err(ConstantSolvingError::Bitcast),
                 }
             }
             Expression::ArrayLength(expr) => {
@@ -239,6 +238,7 @@ impl<'a> ConstantSolver<'a> {
         &mut self,
         constant: Handle<Constant>,
         kind: ScalarKind,
+        target_width: crate::Bytes,
     ) -> Result<Handle<Constant>, ConstantSolvingError> {
         fn inner_cast<A: num_traits::FromPrimitive>(value: ScalarValue) -> A {
             match value {
@@ -253,7 +253,11 @@ impl<'a> ConstantSolver<'a> {
         let mut inner = self.constants[constant].inner.clone();
 
         match inner {
-            ConstantInner::Scalar { ref mut value, .. } => {
+            ConstantInner::Scalar {
+                ref mut value,
+                ref mut width,
+            } => {
+                *width = target_width;
                 *value = match kind {
                     ScalarKind::Sint => ScalarValue::Sint(inner_cast(*value)),
                     ScalarKind::Uint => ScalarValue::Uint(inner_cast(*value)),
@@ -271,7 +275,7 @@ impl<'a> ConstantSolver<'a> {
                 }
 
                 for component in components {
-                    *component = self.cast(*component, kind)?;
+                    *component = self.cast(*component, kind, target_width)?;
                 }
             }
         }
@@ -561,7 +565,7 @@ mod tests {
         let root = expressions.append(Expression::As {
             expr,
             kind: ScalarKind::Bool,
-            convert: true,
+            convert: Some(crate::BOOL_WIDTH),
         });
 
         let mut solver = ConstantSolver {
@@ -575,7 +579,7 @@ mod tests {
         assert_eq!(
             constants[res].inner,
             ConstantInner::Scalar {
-                width: 4,
+                width: crate::BOOL_WIDTH,
                 value: ScalarValue::Bool(true),
             },
         );

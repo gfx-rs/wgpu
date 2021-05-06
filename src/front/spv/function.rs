@@ -216,7 +216,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         let handle = function.expressions.append(crate::Expression::As {
                             expr: arg_expr,
                             kind: crate::ScalarKind::Sint,
-                            convert: true,
+                            convert: Some(4),
                         });
                         function.body.push(crate::Statement::Emit(
                             function.expressions.range_from(old_len),

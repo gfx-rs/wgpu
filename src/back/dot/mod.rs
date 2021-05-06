@@ -326,9 +326,12 @@ fn write_fun(
                 expr,
                 convert,
             } => {
-                let fun = if convert { "Convert" } else { "Cast" };
                 edges.insert("", expr);
-                (Cow::Owned(format!("{}<{:?}>", fun, kind)), 3)
+                let string = match convert {
+                    Some(width) => format!("Convert<{:?},{}>", kind, width),
+                    None => format!("Bitcast<{:?}>", kind),
+                };
+                (Cow::Owned(string), 3)
             }
             E::Call(_function) => (Cow::Borrowed("Call"), 4),
             E::ArrayLength(expr) => {

@@ -104,7 +104,7 @@ fn extract_image_coordinates(
             let array_index = expressions.append(crate::Expression::As {
                 kind: crate::ScalarKind::Sint,
                 expr: array_index_f32,
-                convert: true,
+                convert: Some(4),
             });
             (extracted, Some(array_index))
         }

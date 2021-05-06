@@ -821,8 +821,9 @@ pub enum Expression {
         expr: Handle<Expression>,
         /// Target scalar kind.
         kind: ScalarKind,
-        /// True = conversion needs to take place; False = bitcast.
-        convert: bool,
+        /// If provided, converts to the specified byte width.
+        /// Otherwise, bitcast.
+        convert: Option<Bytes>,
     },
     /// Result of calling another function.
     Call(Handle<Function>),

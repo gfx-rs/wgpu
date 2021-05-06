@@ -989,12 +989,12 @@
                 As(
                     expr: 47,
                     kind: Sint,
-                    convert: false,
+                    convert: None,
                 ),
                 As(
                     expr: 63,
                     kind: Float,
-                    convert: true,
+                    convert: Some(4),
                 ),
                 Compose(
                     ty: 2,
@@ -1044,7 +1044,7 @@
                 As(
                     expr: 73,
                     kind: Sint,
-                    convert: true,
+                    convert: Some(4),
                 ),
                 ImageSample(
                     image: 4,

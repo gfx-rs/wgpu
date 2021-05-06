@@ -698,17 +698,40 @@ impl Writer {
         ))
     }
 
-    fn make_scalar(&self, id: Word, kind: crate::ScalarKind, width: crate::Bytes) -> Instruction {
+    fn make_scalar(
+        &mut self,
+        id: Word,
+        kind: crate::ScalarKind,
+        width: crate::Bytes,
+    ) -> Instruction {
+        use crate::ScalarKind as Sk;
+
         let bits = (width * BITS_PER_BYTE) as u32;
         match kind {
-            crate::ScalarKind::Sint => {
-                Instruction::type_int(id, bits, super::instructions::Signedness::Signed)
+            Sk::Sint | Sk::Uint => {
+                let signedness = if kind == Sk::Sint {
+                    super::instructions::Signedness::Signed
+                } else {
+                    super::instructions::Signedness::Unsigned
+                };
+                let cap = match bits {
+                    8 => Some(spirv::Capability::Int8),
+                    16 => Some(spirv::Capability::Int16),
+                    64 => Some(spirv::Capability::Int64),
+                    _ => None,
+                };
+                if let Some(cap) = cap {
+                    self.capabilities.insert(cap);
+                }
+                Instruction::type_int(id, bits, signedness)
             }
-            crate::ScalarKind::Uint => {
-                Instruction::type_int(id, bits, super::instructions::Signedness::Unsigned)
+            crate::ScalarKind::Float => {
+                if bits == 64 {
+                    self.capabilities.insert(spirv::Capability::Float64);
+                }
+                Instruction::type_float(id, bits)
             }
-            crate::ScalarKind::Float => Instruction::type_float(id, bits),
-            crate::ScalarKind::Bool => Instruction::type_bool(id),
+            Sk::Bool => Instruction::type_bool(id),
         }
     }
 
@@ -1885,11 +1908,14 @@ impl Writer {
                     .unwrap();
 
                 let op = match (expr_kind, kind) {
-                    _ if !convert => spirv::Op::Bitcast,
+                    _ if convert.is_none() => spirv::Op::Bitcast,
                     (crate::ScalarKind::Float, crate::ScalarKind::Uint) => spirv::Op::ConvertFToU,
                     (crate::ScalarKind::Float, crate::ScalarKind::Sint) => spirv::Op::ConvertFToS,
+                    (crate::ScalarKind::Float, crate::ScalarKind::Float) => spirv::Op::FConvert,
                     (crate::ScalarKind::Sint, crate::ScalarKind::Float) => spirv::Op::ConvertSToF,
+                    (crate::ScalarKind::Sint, crate::ScalarKind::Sint) => spirv::Op::SConvert,
                     (crate::ScalarKind::Uint, crate::ScalarKind::Float) => spirv::Op::ConvertUToF,
+                    (crate::ScalarKind::Uint, crate::ScalarKind::Uint) => spirv::Op::UConvert,
                     // We assume it's either an identity cast, or int-uint.
                     _ => spirv::Op::Bitcast,
                 };

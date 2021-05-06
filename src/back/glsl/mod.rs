@@ -2024,45 +2024,39 @@ impl<'a, W: Write> Writer<'a, W> {
                 convert,
             } => {
                 let inner = ctx.info[expr].ty.inner_with(&self.module.types);
-                if convert {
-                    // this is similar to `write_type`, but with the target kind
-                    match *inner {
-                        TypeInner::Scalar { kind: _, width } => {
-                            write!(self.out, "{}", glsl_scalar(target_kind, width)?.full)?
-                        }
-                        TypeInner::Vector {
-                            size,
-                            kind: _,
-                            width,
-                        } => write!(
-                            self.out,
-                            "{}vec{}",
-                            glsl_scalar(target_kind, width)?.prefix,
-                            size as u8
-                        )?,
-                        ref other => unreachable!("unexpected cast of {:?}", other),
-                    }
-                } else {
-                    let source_kind = inner.scalar_kind().unwrap();
-                    write!(
-                        self.out,
-                        "{}",
-                        match (source_kind, target_kind) {
-                            (ScalarKind::Float, ScalarKind::Sint) => "floatBitsToInt",
-                            (ScalarKind::Float, ScalarKind::Uint) => "floatBitsToUInt",
-                            (ScalarKind::Sint, ScalarKind::Float) => "intBitsToFloat",
-                            (ScalarKind::Uint, ScalarKind::Float) => "uintBitsToFloat",
-                            // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
-                            (ScalarKind::Uint, ScalarKind::Sint) => "int",
-                            (ScalarKind::Sint, ScalarKind::Uint) => "uint",
-                            _ => {
-                                return Err(Error::Custom(format!(
-                                    "Cannot bitcast {:?} to {:?}",
-                                    source_kind, target_kind
-                                )));
+                match convert {
+                    Some(width) => {
+                        // this is similar to `write_type`, but with the target kind
+                        let scalar = glsl_scalar(target_kind, width)?;
+                        match *inner {
+                            TypeInner::Vector { size, .. } => {
+                                write!(self.out, "{}vec{}", scalar.prefix, size as u8)?
                             }
+                            _ => write!(self.out, "{}", scalar.full)?,
                         }
-                    )?;
+                    }
+                    None => {
+                        let source_kind = inner.scalar_kind().unwrap();
+                        write!(
+                            self.out,
+                            "{}",
+                            match (source_kind, target_kind) {
+                                (ScalarKind::Float, ScalarKind::Sint) => "floatBitsToInt",
+                                (ScalarKind::Float, ScalarKind::Uint) => "floatBitsToUInt",
+                                (ScalarKind::Sint, ScalarKind::Float) => "intBitsToFloat",
+                                (ScalarKind::Uint, ScalarKind::Float) => "uintBitsToFloat",
+                                // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
+                                (ScalarKind::Uint, ScalarKind::Sint) => "int",
+                                (ScalarKind::Sint, ScalarKind::Uint) => "uint",
+                                _ => {
+                                    return Err(Error::Custom(format!(
+                                        "Cannot bitcast {:?} to {:?}",
+                                        source_kind, target_kind
+                                    )));
+                                }
+                            }
+                        )?;
+                    }
                 }
 
                 write!(self.out, "(")?;

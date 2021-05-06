@@ -137,6 +137,8 @@ pub enum Error {
     Validation,
     #[error("BuiltIn {0:?} is not supported")]
     UnsupportedBuiltIn(crate::BuiltIn),
+    #[error("capability {0:?} is not supported")]
+    CapabilityNotSupported(crate::valid::Capabilities),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]

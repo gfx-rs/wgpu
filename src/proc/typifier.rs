@@ -627,14 +627,21 @@ impl<'a> ResolveContext<'a> {
             crate::Expression::As {
                 expr,
                 kind,
-                convert: _,
+                convert,
             } => match *past(expr).inner_with(types) {
-                Ti::Scalar { kind: _, width } => TypeResolution::Value(Ti::Scalar { kind, width }),
+                Ti::Scalar { kind: _, width } => TypeResolution::Value(Ti::Scalar {
+                    kind,
+                    width: convert.unwrap_or(width),
+                }),
                 Ti::Vector {
                     kind: _,
                     size,
                     width,
-                } => TypeResolution::Value(Ti::Vector { kind, size, width }),
+                } => TypeResolution::Value(Ti::Vector {
+                    kind,
+                    size,
+                    width: convert.unwrap_or(width),
+                }),
                 ref other => {
                     return Err(ResolveError::IncompatibleOperands(format!(
                         "{:?} as {:?}",

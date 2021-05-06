@@ -1165,24 +1165,24 @@ impl Parser {
                                 value: last_component,
                             },
                             (
-                                &crate::TypeInner::Scalar { kind, .. },
+                                &crate::TypeInner::Scalar { kind, width, .. },
                                 &crate::TypeInner::Scalar { .. },
                             )
                             | (
-                                &crate::TypeInner::Vector { kind, .. },
+                                &crate::TypeInner::Vector { kind, width, .. },
                                 &crate::TypeInner::Vector { .. },
                             ) => crate::Expression::As {
                                 expr: last_component,
                                 kind,
-                                convert: true,
+                                convert: Some(width),
                             },
                             (
-                                &crate::TypeInner::Matrix { .. },
+                                &crate::TypeInner::Matrix { width, .. },
                                 &crate::TypeInner::Matrix { .. },
                             ) => crate::Expression::As {
                                 expr: last_component,
                                 kind: crate::ScalarKind::Float,
-                                convert: true,
+                                convert: Some(width),
                             },
                             _ => {
                                 return Err(Error::BadTypeCast(word));

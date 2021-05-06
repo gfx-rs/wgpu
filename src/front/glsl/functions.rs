@@ -1,7 +1,7 @@
 use super::super::Typifier;
 use crate::{
     proc::ensure_block_returns, BinaryOperator, Block, EntryPoint, Expression, Function,
-    MathFunction, RelationalFunction, SampleLevel, Type, TypeInner,
+    MathFunction, RelationalFunction, SampleLevel, ScalarKind, TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind};
@@ -15,46 +15,39 @@ impl Program<'_> {
                         TypeInner::Vector { .. } => true,
                         _ => false,
                     };
-                    let inner = &self.module.types[ty].inner;
-                    let kind = inner.scalar_kind().ok_or_else(|| {
-                        ErrorKind::SemanticError("Can only cast to scalar or vector".into())
-                    })?;
-                    let val = self.context.expressions.append(Expression::As {
-                        kind,
-                        expr: fc.args[0].expression,
-                        convert: true,
-                    });
 
-                    match *inner {
+                    match self.module.types[ty].inner {
                         TypeInner::Vector { size, .. } if !is_vec => {
-                            let components = std::iter::repeat(val).take(size as usize).collect();
-
-                            self.context
-                                .expressions
-                                .append(Expression::Compose { ty, components })
+                            self.context.expressions.append(Expression::Splat {
+                                size,
+                                value: fc.args[0].expression,
+                            })
+                        }
+                        TypeInner::Scalar { kind, width }
+                        | TypeInner::Vector { kind, width, .. } => {
+                            self.context.expressions.append(Expression::As {
+                                kind,
+                                expr: fc.args[0].expression,
+                                convert: Some(width),
+                            })
                         }
                         TypeInner::Matrix {
                             columns,
                             rows,
                             width,
                         } => {
-                            let column = if is_vec {
-                                val
-                            } else {
-                                let vec_ty = self.module.types.fetch_or_append(Type {
-                                    name: None,
-                                    inner: TypeInner::Vector {
-                                        size: rows,
-                                        kind,
-                                        width,
-                                    },
-                                });
-                                let rows = std::iter::repeat(val).take(rows as usize).collect();
+                            let value = self.context.expressions.append(Expression::As {
+                                kind: ScalarKind::Float,
+                                expr: fc.args[0].expression,
+                                convert: Some(width),
+                            });
 
-                                self.context.expressions.append(Expression::Compose {
-                                    ty: vec_ty,
-                                    components: rows,
-                                })
+                            let column = if is_vec {
+                                value
+                            } else {
+                                self.context
+                                    .expressions
+                                    .append(Expression::Splat { size: rows, value })
                             };
 
                             let columns =
@@ -65,7 +58,7 @@ impl Program<'_> {
                                 components: columns,
                             })
                         }
-                        _ => val,
+                        _ => return Err(ErrorKind::SemanticError("Bad cast".into())),
                     }
                 } else {
                     self.context.expressions.append(Expression::Compose {

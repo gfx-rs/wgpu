@@ -653,7 +653,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 expressions.append(crate::Expression::As {
                     expr: p1_lexp.handle,
                     kind,
-                    convert: true,
+                    convert: None,
                 })
             },
             right: if p2_lexp.type_id == result_type_id {
@@ -662,7 +662,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 expressions.append(crate::Expression::As {
                     expr: p2_lexp.handle,
                     kind,
-                    convert: true,
+                    convert: None,
                 })
             },
         };
@@ -693,7 +693,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let p2_handle = expressions.append(crate::Expression::As {
             expr: p2_lexp.handle,
             kind: crate::ScalarKind::Uint,
-            convert: false,
+            convert: None,
         });
 
         let expr = crate::Expression::Binary {
@@ -1683,15 +1683,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     let value_lexp = self.lookup_expression.lookup(value_id)?;
                     let ty_lookup = self.lookup_type.lookup(result_type_id)?;
-                    let kind = type_arena[ty_lookup.handle]
-                        .inner
-                        .scalar_kind()
-                        .ok_or(Error::InvalidAsType(ty_lookup.handle))?;
+                    let (kind, width) = match type_arena[ty_lookup.handle].inner {
+                        crate::TypeInner::Scalar { kind, width }
+                        | crate::TypeInner::Vector { kind, width, .. } => (kind, width),
+                        crate::TypeInner::Matrix { width, .. } => (crate::ScalarKind::Float, width),
+                        _ => return Err(Error::InvalidAsType(ty_lookup.handle)),
+                    };
 
                     let expr = crate::Expression::As {
                         expr: value_lexp.handle,
                         kind,
-                        convert: inst.op != Op::Bitcast,
+                        convert: if inst.op == Op::Bitcast {
+                            None
+                        } else {
+                            Some(width)
+                        },
                     };
                     self.lookup_expression.insert(
                         result_id,
@@ -1987,7 +1993,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             expressions.append(crate::Expression::As {
                                 kind: crate::ScalarKind::Sint,
                                 expr: selector_lexp.handle,
-                                convert: false,
+                                convert: None,
                             })
                         }
                         crate::TypeInner::Scalar {
