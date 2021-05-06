@@ -1,11 +1,13 @@
 <img align="right" width="25%" src="logo.png">
 
-This is an active GitHub mirror of the WebGPU implementation in Rust, which now lives in "gfx/wgpu" of [Mozilla-central](https://hg.mozilla.org/mozilla-central/file/tip/gfx/wgpu). Issues and pull requests are accepted, but some bidirectional synchronization may be involved.
+This github project is mirrored in "gfx/wgpu" of [Mozilla-central](https://hg.mozilla.org/mozilla-central/file/tip/gfx/wgpu).
+Issues and pull requests are welcome, but some bidirectional synchronization may be involved.
 
-# WebGPU
+# wgpu
 
 [![Matrix](https://img.shields.io/badge/Dev_Matrix-%23wgpu%3Amatrix.org-blueviolet.svg)](https://matrix.to/#/#wgpu:matrix.org) [![Matrix](https://img.shields.io/badge/User_Matrix-%23wgpu--users%3Amatrix.org-blueviolet.svg)](https://matrix.to/#/#wgpu-users:matrix.org)
 [![Build Status](https://github.com/gfx-rs/wgpu/workflows/CI/badge.svg)](https://github.com/gfx-rs/wgpu/actions)
+[![codecov.io](https://codecov.io/gh/gfx-rs/wgpu/branch/master/graph/badge.svg?token=84qJTesmeS)](https://codecov.io/gh/gfx-rs/wgpu)
 
 This is the core logic of an experimental [WebGPU](https://www.w3.org/community/gpu/) implementation. It's written in Rust and is based on [gfx-hal](https://github.com/gfx-rs/gfx) with help of [gpu-alloc](https://github.com/zakarumych/gpu-alloc) and [gpu-descriptor](https://github.com/zakarumych/gpu-descriptor). See the upstream [WebGPU specification](https://gpuweb.github.io/gpuweb/) (work in progress).
 
