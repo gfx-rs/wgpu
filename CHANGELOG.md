@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.8.1 (2021-05-06)
+  - fix SPIR-V generation from WGSL, which was broken due to "Kernel" capability
+  - validate buffer storage classes
+
 ## v0.8 (2021-04-29)
   - Naga is used by default to translate shaders, SPIRV-Cross is optional behind `cross` feature
   - Features:
