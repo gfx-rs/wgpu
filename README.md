@@ -5,7 +5,7 @@
 [![Docs.rs](https://docs.rs/naga/badge.svg)](https://docs.rs/naga)
 [![Build Status](https://github.com/gfx-rs/naga/workflows/pipeline/badge.svg)](https://github.com/gfx-rs/naga/actions)
 
-This is an experimental shader translation library for the needs of gfx-rs project and WebGPU.
+The shader translation library for the needs of [wgpu](https://github.com/gfx-rs/wgpu) and [gfx-rs](https://github.com/gfx-rs/gfx) projects.
 
 ## Supported end-points
 
@@ -14,9 +14,8 @@ Everything is still work-in-progress, but some end-points are usable:
 Front-end       |       Status       | Feature | Notes |
 --------------- | ------------------ | ------- | ----- |
 SPIR-V (binary) | :white_check_mark: | spv-in  |       |
-WGSL            | :white_check_mark: | wgsl-in |       |
-GLSL            | :construction:     | glsl-in | Vulkan flavor is expected |
-Rust            |                    |         |       |
+WGSL            | :white_check_mark: | wgsl-in | Fully validated |
+GLSL            | :construction:     | glsl-in | Temporarily broken |
 
 Back-end        |       Status       | Feature  | Notes |
 --------------- | ------------------ | -------- | ----- |
