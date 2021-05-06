@@ -1348,6 +1348,15 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "{}{}::discard_fragment();", level, NAMESPACE)?;
                 }
                 crate::Statement::Barrier(flags) => {
+                    //Note: OR-ring bitflags requires `__HAVE_MEMFLAG_OPERATORS__`,
+                    // so we try to avoid it here.
+                    if flags.is_empty() {
+                        writeln!(
+                            self.out,
+                            "{}{}::threadgroup_barrier({}::mem_flags::mem_none);",
+                            level, NAMESPACE, NAMESPACE,
+                        )?;
+                    }
                     if flags.contains(crate::Barrier::STORAGE) {
                         writeln!(
                             self.out,

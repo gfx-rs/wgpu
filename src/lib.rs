@@ -697,7 +697,7 @@ pub enum SwizzleComponent {
 }
 
 bitflags::bitflags! {
-    /// Control barrier flags.
+    /// Memory barrier flags.
     #[cfg_attr(feature = "serialize", derive(Serialize))]
     #[cfg_attr(feature = "deserialize", derive(Deserialize))]
     #[derive(Default)]
@@ -884,7 +884,9 @@ pub enum Statement {
     Return { value: Option<Handle<Expression>> },
     /// Aborts the current shader execution.
     Kill,
-    /// Synchronize accesses within the work group.
+    /// Synchronize invocations within the work group.
+    /// The `Barrier` flags control which memory accesses should be synchronized.
+    /// If empty, this becomes purely an execution barrier.
     Barrier(Barrier),
     /// Stores a value at an address.
     ///

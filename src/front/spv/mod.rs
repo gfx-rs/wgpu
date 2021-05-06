@@ -2129,7 +2129,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         );
                         flags.set(
                             crate::Barrier::WORK_GROUP,
-                            semantics & spirv::MemorySemantics::WORKGROUP_MEMORY.bits() != 0,
+                            semantics
+                                & (spirv::MemorySemantics::SUBGROUP_MEMORY
+                                    | spirv::MemorySemantics::WORKGROUP_MEMORY)
+                                    .bits()
+                                != 0,
                         );
                         block.push(crate::Statement::Barrier(flags));
                     } else {

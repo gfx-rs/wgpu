@@ -1393,12 +1393,11 @@ impl<'a, W: Write> Writer<'a, W> {
             // keyword which ceases all further processing in a fragment shader, it's called OpKill
             // in spir-v that's why it's called `Statement::Kill`
             Statement::Kill => writeln!(self.out, "{}discard;", INDENT.repeat(indent))?,
-            // Just issue a memory barrier, ignoring the flags.
+            // Issue an execution or a memory barrier.
             Statement::Barrier(flags) => {
-                if flags.contains(crate::Barrier::WORK_GROUP) {
+                if flags.is_empty() {
                     writeln!(self.out, "{}barrier();", INDENT.repeat(indent))?;
-                }
-                if flags.contains(crate::Barrier::STORAGE) {
+                } else {
                     writeln!(self.out, "{}groupMemoryBarrier();", INDENT.repeat(indent))?;
                 }
             }
