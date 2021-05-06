@@ -1,3 +1,4 @@
+# Regular testing.
 name: pipeline
 on: [push, pull_request]
 
