@@ -25,13 +25,23 @@ type BlockNodeIndex = NodeIndex<u32>;
 /// Internal representation of a CFG constisting of function's basic blocks.
 type ControlFlowGraph = petgraph::Graph<ControlFlowNode, ControlFlowEdgeType, Directed, u32>;
 
+type ConstructNodeIndex = NodeIndex<u32>;
+
+type ConstructsGraph = rose_tree::RoseTree<ConstructNode>;
+
 /// Control flow graph (CFG) containing relationships between blocks.
 pub(super) struct FlowGraph {
     ///
     flow: ControlFlowGraph,
 
+    ///
+    constructs: ConstructsGraph,
+
     /// Block ID to Node index mapping. Internal helper to speed up the classification.
     block_to_node: FastHashMap<BlockId, BlockNodeIndex>,
+
+    /// Reversed post-order traversal of the `flow` graph.
+    traversal_order: Vec<BlockNodeIndex>,
 }
 
 impl FlowGraph {
@@ -39,7 +49,13 @@ impl FlowGraph {
     pub(super) fn new() -> Self {
         Self {
             flow: ControlFlowGraph::default(),
+            constructs: ConstructsGraph::new(ConstructNode {
+                ty: ConstructType::Function,
+                ..Default::default()
+            })
+            .0,
             block_to_node: FastHashMap::default(),
+            traversal_order: Vec::new(),
         }
     }
 
@@ -52,7 +68,9 @@ impl FlowGraph {
 
     ///
     /// 1. Creates edges in the CFG.
-    /// 2. Classifies types of blocks and edges in the CFG.
+    /// 2. Computes the traversal order
+    /// 3. Finds constructs
+    /// 4. Classifies types of blocks and edges in the CFG.
     pub(super) fn classify(&mut self) {
         let block_to_node = &mut self.block_to_node;
 
@@ -157,6 +175,211 @@ impl FlowGraph {
         }
 
         // 2.
+        self.compute_postorder_traverse(Some(node_index(0)));
+        self.traversal_order.reverse();
+
+        for (i, node_index) in self.traversal_order.iter().enumerate() {
+            self.flow[*node_index].position = i;
+        }
+
+        for node_index in self.flow.node_indices() {
+            self.flow[node_index].visited = false;
+        }
+
+        // 3.
+        // The stack of enclosing constructs
+        let mut enclosing = vec![node_index(0)];
+
+        let postorder_len = self.traversal_order.len();
+        let push_construct = |enclosing: &mut Vec<ConstructNodeIndex>,
+                              constructs: &mut ConstructsGraph,
+                              ty: ConstructType,
+                              begin: BlockNodeIndex,
+                              begin_position: usize,
+                              end: BlockNodeIndex,
+                              end_position: usize,
+                              depth: usize|
+         -> ConstructNodeIndex {
+            let mut parent_index = *enclosing.last().unwrap_or(&node_index(0));
+
+            // A loop construct is added right after its associated continue construct.
+            // In that case, adjust the parent up.
+            if ty == ConstructType::Loop {
+                parent_index = constructs.parent(parent_index).unwrap();
+            }
+
+            let end_position = if end_position == 0 {
+                postorder_len
+            } else {
+                end_position
+            };
+
+            let node_index = constructs.add_child(
+                parent_index,
+                ConstructNode {
+                    ty,
+                    begin,
+                    begin_position,
+                    end,
+                    end_position,
+                    ..Default::default()
+                },
+            );
+
+            let mut construct = constructs[node_index];
+
+            let parent = {
+                if let Some(parent) = constructs.parent(parent_index) {
+                    if constructs[parent].depth < depth {
+                        Some(constructs[parent])
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
+
+            construct.enclosing_loop = {
+                if construct.ty == ConstructType::Loop {
+                    Some(node_index)
+                } else if let Some(parent) = parent {
+                    parent.enclosing_loop
+                } else {
+                    None
+                }
+            };
+
+            construct.enclosing_continue = {
+                if construct.ty == ConstructType::Continue {
+                    Some(node_index)
+                } else if let Some(parent) = parent {
+                    parent.enclosing_continue
+                } else {
+                    None
+                }
+            };
+
+            construct.enclosing_loop_or_continue_or_switch = {
+                if construct.ty == ConstructType::Continue {
+                    Some(node_index)
+                } else if let Some(parent) = parent {
+                    parent.enclosing_loop_or_continue_or_switch
+                } else {
+                    None
+                }
+            };
+
+            enclosing.push(node_index);
+
+            node_index
+        };
+
+        self.constructs[node_index(0)].begin = self.traversal_order[0];
+
+        for block_index in self.traversal_order.iter() {
+            let mut top_construct_index = *enclosing.last().unwrap();
+
+            if top_construct_index != node_index(0) {
+                while *block_index == self.constructs[top_construct_index].end {
+                    enclosing.pop().unwrap();
+                    top_construct_index = *enclosing.last().unwrap();
+                }
+            }
+
+            let depth = self.constructs[top_construct_index].depth;
+
+            if let Some(merge) = self.flow[*block_index].merge {
+                let merge_index = self.block_to_node[&merge.merge_block_id];
+
+                match self.flow[*block_index].ty {
+                    Some(ControlFlowNodeType::Loop) => {
+                        let continue_index = self.block_to_node[&merge.continue_block_id.unwrap()];
+
+                        top_construct_index = push_construct(
+                            &mut enclosing,
+                            &mut self.constructs,
+                            ConstructType::Continue,
+                            continue_index,
+                            self.flow[continue_index].position,
+                            merge_index,
+                            self.flow[merge_index].position,
+                            depth,
+                        );
+
+                        // A loop header that is its own continue target will have an
+                        // empty loop construct. Only create a loop construct when
+                        // the continue target is *not* the same as the loop header.
+                        if *block_index != continue_index {
+                            // From the interval rule, the loop construct consists of blocks
+                            // in the block order, starting at the header, until just
+                            // before the continue target.
+                            top_construct_index = push_construct(
+                                &mut enclosing,
+                                &mut self.constructs,
+                                ConstructType::Loop,
+                                *block_index,
+                                self.flow[*block_index].position,
+                                continue_index,
+                                self.flow[continue_index].position,
+                                depth,
+                            );
+
+                            // If the loop header branches to two different blocks inside the loop
+                            // construct, then the loop body should be modeled as an if-selection
+                            // construct
+                            let neighbors: Vec<BlockNodeIndex> = self
+                                .flow
+                                .neighbors_directed(*block_index, Direction::Outgoing)
+                                .collect();
+                            if neighbors.len() == 2 && neighbors[0] != neighbors[1] {
+                                let target0_pos = self.flow[neighbors[0]].position;
+                                let target1_pos = self.flow[neighbors[1]].position;
+                                if self.constructs[top_construct_index]
+                                    .contains_position(target0_pos)
+                                    && self.constructs[top_construct_index]
+                                        .contains_position(target1_pos)
+                                {
+                                    // Insert a synthetic if-selection
+                                    top_construct_index = push_construct(
+                                        &mut enclosing,
+                                        &mut self.constructs,
+                                        ConstructType::Selection,
+                                        *block_index,
+                                        self.flow[*block_index].position,
+                                        continue_index,
+                                        self.flow[continue_index].position,
+                                        depth + 1,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Some(ControlFlowNodeType::Header) => {
+                        let ty = match self.flow[*block_index].terminator {
+                            Terminator::Switch { .. } => ConstructType::Case,
+                            _ => ConstructType::Selection,
+                        };
+
+                        top_construct_index = push_construct(
+                            &mut enclosing,
+                            &mut self.constructs,
+                            ty,
+                            *block_index,
+                            self.flow[*block_index].position,
+                            merge_index,
+                            self.flow[merge_index].position,
+                            depth,
+                        );
+                    }
+                    _ => {}
+                }
+            }
+
+            self.flow[*block_index].construct = top_construct_index;
+        }
+
+        // 2.
         // Classify Nodes/Edges as one of [Break, Continue, Back]
         for edge_index in self.flow.edge_indices() {
             let (node_source_index, node_target_index) =
@@ -175,20 +398,99 @@ impl FlowGraph {
             while let Some((incoming_edge, incoming_source)) =
                 target_incoming_edges.next(&self.flow)
             {
-                // Loop continue
-                if self.flow[incoming_edge] == ControlFlowEdgeType::ForwardContinue {
-                    self.flow[node_source_index].ty = Some(ControlFlowNodeType::Continue);
-                    self.flow[edge_index] = ControlFlowEdgeType::LoopContinue;
-                }
-                // Loop break
+                // Loop break, Switch Break
                 if self.flow[incoming_source].ty == Some(ControlFlowNodeType::Loop)
                     && self.flow[incoming_edge] == ControlFlowEdgeType::ForwardMerge
                 {
                     self.flow[node_source_index].ty = Some(ControlFlowNodeType::Break);
                     self.flow[edge_index] = ControlFlowEdgeType::LoopBreak;
                 }
+
+                // Loop continue
+                if self.flow[incoming_edge] == ControlFlowEdgeType::ForwardContinue {
+                    self.flow[node_source_index].ty = Some(ControlFlowNodeType::Continue);
+                    self.flow[edge_index] = ControlFlowEdgeType::LoopContinue;
+                }
+            }
+
+            // If break
+            let construct_index = self.flow[node_source_index].construct;
+            let header_index = self.constructs[construct_index].begin;
+            if let Some(merge) = self.flow[header_index].merge {
+                if self.flow[node_target_index].id == merge.merge_block_id {
+                    self.flow[edge_index] = ControlFlowEdgeType::IfBreak;
+                }
             }
         }
+    }
+
+    fn header_if_breakable(&self, construct_index: ConstructNodeIndex) -> Option<NodeIndex> {
+        match self.constructs[construct_index].ty {
+            ConstructType::Loop | ConstructType::Case => {
+                Some(self.constructs[construct_index].begin)
+            }
+            ConstructType::Continue => {
+                let continue_target = self.constructs[construct_index].begin;
+                Some(
+                    self.flow
+                        .neighbors_directed(continue_target, Direction::Outgoing)
+                        .next()
+                        .unwrap(),
+                )
+            }
+            _ => None,
+        }
+    }
+
+    fn compute_postorder_traverse(&mut self, node_index: Option<BlockNodeIndex>) {
+        if node_index.is_none() {
+            return;
+        }
+        let node_index = node_index.unwrap();
+
+        if self.flow[node_index].visited {
+            return;
+        }
+        self.flow[node_index].visited = true;
+
+        if let Some(merge) = self.flow[node_index].merge {
+            self.compute_postorder_traverse(Some(self.block_to_node[&merge.merge_block_id]));
+        }
+
+        let continue_edge = self
+            .flow
+            .edges_directed(node_index, Direction::Outgoing)
+            .find(|&ty| *ty.weight() == ControlFlowEdgeType::ForwardContinue)
+            .map(|continue_edge| continue_edge.target());
+        self.compute_postorder_traverse(continue_edge);
+
+        let terminator = self.flow[node_index].terminator.clone();
+        match terminator {
+            Terminator::BranchConditional {
+                condition: _,
+                true_id,
+                false_id,
+            } => {
+                self.compute_postorder_traverse(Some(self.block_to_node[&false_id]));
+                self.compute_postorder_traverse(Some(self.block_to_node[&true_id]));
+            }
+            Terminator::Branch { target_id } => {
+                self.compute_postorder_traverse(Some(self.block_to_node[&target_id]));
+            }
+            Terminator::Switch {
+                selector: _,
+                default,
+                ref targets,
+            } => {
+                self.compute_postorder_traverse(Some(self.block_to_node[&default]));
+                for target in targets.iter() {
+                    self.compute_postorder_traverse(Some(self.block_to_node[&target.1]));
+                }
+            }
+            _ => {}
+        };
+
+        self.traversal_order.push(node_index);
     }
 
     /// Removes OpPhi instructions from the control flow graph and turns them into ordinary variables.
@@ -217,23 +519,29 @@ impl FlowGraph {
     }
 
     /// Traverses the flow graph and returns a list of Naga's statements.
-    pub(super) fn to_naga(&self) -> Result<crate::Block, Error> {
-        self.naga_traverse(node_index(0), None)
+    pub(super) fn convert_to_naga(&mut self) -> Result<crate::Block, Error> {
+        self.convert_to_naga_traverse(node_index(0), std::collections::HashSet::new())
     }
 
-    fn naga_traverse(
-        &self,
+    fn convert_to_naga_traverse(
+        &mut self,
         node_index: BlockNodeIndex,
-        stop_node_index: Option<BlockNodeIndex>,
+        stop_nodes: std::collections::HashSet<BlockNodeIndex>,
     ) -> Result<crate::Block, Error> {
-        if stop_node_index == Some(node_index) {
+        if stop_nodes.contains(&node_index) {
             return Ok(vec![]);
         }
 
-        let node = &self.flow[node_index];
+        if self.flow[node_index].visited {
+            return Err(Error::ControlFlowGraphCycle(self.flow[node_index].id));
+        }
 
-        match node.ty {
-            Some(ControlFlowNodeType::Header) => match node.terminator {
+        self.flow[node_index].visited = true;
+
+        let terminator = self.flow[node_index].terminator.clone();
+
+        match self.flow[node_index].ty {
+            Some(ControlFlowNodeType::Header) => match terminator {
                 Terminator::BranchConditional {
                     condition,
                     true_id,
@@ -241,37 +549,71 @@ impl FlowGraph {
                 } => {
                     let true_node_index = self.block_to_node[&true_id];
                     let false_node_index = self.block_to_node[&false_id];
-                    let merge_node_index = self.block_to_node[&node.merge.unwrap().merge_block_id];
+                    let merge_node_index =
+                        self.block_to_node[&self.flow[node_index].merge.unwrap().merge_block_id];
 
-                    let mut result = node.block.clone();
+                    let premerge_index: Option<NodeIndex> = {
+                        let second_head = self.flow[true_node_index]
+                            .position
+                            .max(self.flow[false_node_index].position);
+                        let end_first_clause = self.traversal_order[second_head - 1];
 
-                    if false_node_index != merge_node_index {
-                        result.push(crate::Statement::If {
-                            condition,
-                            accept: self.naga_traverse(true_node_index, Some(merge_node_index))?,
-                            reject: self.naga_traverse(false_node_index, Some(merge_node_index))?,
-                        });
+                        self.flow
+                            .edges_directed(end_first_clause, Direction::Outgoing)
+                            .find(|e| match *e.weight() {
+                                ControlFlowEdgeType::Forward
+                                | ControlFlowEdgeType::ForwardContinue
+                                | ControlFlowEdgeType::ForwardMerge
+                                | ControlFlowEdgeType::IfFalse
+                                | ControlFlowEdgeType::IfTrue => self.constructs
+                                    [self.flow[node_index].construct]
+                                    .contains_position(self.flow[e.target()].position),
+                                _ => false,
+                            })
+                            .map(|e| e.target())
+                    };
+
+                    let is_false_inside_construct = self.constructs
+                        [self.flow[node_index].construct]
+                        .contains_position(self.flow[false_node_index].position);
+
+                    let intended_merge = if let Some(premerge_index) = premerge_index {
+                        premerge_index
                     } else {
-                        let true_merges_to_false = has_path_connecting(
-                            &self.flow,
-                            true_node_index,
-                            false_node_index,
-                            None,
-                        );
-                        let stop_node_index = if true_merges_to_false {
-                            Some(merge_node_index)
-                        } else {
-                            stop_node_index
-                        };
+                        merge_node_index
+                    };
+                    let then_end_index = if is_false_inside_construct {
+                        false_node_index
+                    } else {
+                        intended_merge
+                    };
+                    let else_end_index = if let Some(premerge_index) = premerge_index {
+                        premerge_index
+                    } else {
+                        intended_merge
+                    };
 
-                        result.push(crate::Statement::If {
-                            condition,
-                            accept: self.naga_traverse(true_node_index, stop_node_index)?,
-                            reject: vec![],
-                        });
-                    }
+                    let mut result: crate::Block =
+                        std::mem::replace(&mut self.flow[node_index].block, Vec::new());
 
-                    result.extend(self.naga_traverse(merge_node_index, stop_node_index)?);
+                    let mut accept_stop_nodes = stop_nodes.clone();
+                    accept_stop_nodes.insert(merge_node_index);
+                    accept_stop_nodes.insert(intended_merge);
+                    accept_stop_nodes.insert(then_end_index);
+                    let mut reject_stop_nodes = stop_nodes.clone();
+                    reject_stop_nodes.insert(merge_node_index);
+                    reject_stop_nodes.insert(intended_merge);
+                    reject_stop_nodes.insert(else_end_index);
+
+                    result.push(crate::Statement::If {
+                        condition,
+                        accept: self
+                            .convert_to_naga_traverse(true_node_index, accept_stop_nodes)?,
+                        reject: self
+                            .convert_to_naga_traverse(false_node_index, reject_stop_nodes)?,
+                    });
+
+                    result.extend(self.convert_to_naga_traverse(merge_node_index, stop_nodes)?);
 
                     Ok(result)
                 }
@@ -280,9 +622,14 @@ impl FlowGraph {
                     default,
                     ref targets,
                 } => {
-                    let merge_node_index = self.block_to_node[&node.merge.unwrap().merge_block_id];
-                    let mut result = node.block.clone();
+                    let merge_node_index =
+                        self.block_to_node[&self.flow[node_index].merge.unwrap().merge_block_id];
+                    let mut result: crate::Block =
+                        std::mem::replace(&mut self.flow[node_index].block, Vec::new());
                     let mut cases = Vec::with_capacity(targets.len());
+
+                    let mut stop_nodes_cases = stop_nodes.clone();
+                    stop_nodes_cases.insert(merge_node_index);
 
                     for i in 0..targets.len() {
                         let left_target_node_index = self.block_to_node[&targets[i].1];
@@ -301,8 +648,10 @@ impl FlowGraph {
 
                         cases.push(crate::SwitchCase {
                             value: targets[i].0,
-                            body: self
-                                .naga_traverse(left_target_node_index, Some(merge_node_index))?,
+                            body: self.convert_to_naga_traverse(
+                                left_target_node_index,
+                                stop_nodes_cases.clone(),
+                            )?,
                             fall_through,
                         });
                     }
@@ -310,30 +659,38 @@ impl FlowGraph {
                     result.push(crate::Statement::Switch {
                         selector,
                         cases,
-                        default: self
-                            .naga_traverse(self.block_to_node[&default], Some(merge_node_index))?,
+                        default: self.convert_to_naga_traverse(
+                            self.block_to_node[&default],
+                            stop_nodes_cases,
+                        )?,
                     });
 
-                    result.extend(self.naga_traverse(merge_node_index, stop_node_index)?);
+                    result.extend(self.convert_to_naga_traverse(merge_node_index, stop_nodes)?);
 
                     Ok(result)
                 }
                 _ => Err(Error::InvalidTerminator),
             },
             Some(ControlFlowNodeType::Loop) => {
-                let merge_node_index = self.block_to_node[&node.merge.unwrap().merge_block_id];
+                let merge_node_index =
+                    self.block_to_node[&self.flow[node_index].merge.unwrap().merge_block_id];
                 let continuing: crate::Block = {
                     let continue_edge = self
                         .flow
                         .edges_directed(node_index, Direction::Outgoing)
                         .find(|&ty| *ty.weight() == ControlFlowEdgeType::ForwardContinue)
-                        .unwrap();
+                        .unwrap()
+                        .target();
 
-                    self.flow[continue_edge.target()].block.clone()
+                    std::mem::replace(&mut self.flow[continue_edge].block, Vec::new())
                 };
 
-                let mut body = node.block.clone();
-                match node.terminator {
+                let mut body: crate::Block =
+                    std::mem::replace(&mut self.flow[node_index].block, Vec::new());
+
+                let mut stop_nodes_merge = stop_nodes.clone();
+                stop_nodes_merge.insert(merge_node_index);
+                match self.flow[node_index].terminator {
                     Terminator::BranchConditional {
                         condition,
                         true_id,
@@ -347,29 +704,36 @@ impl FlowGraph {
                             accept: if true_node_index == merge_node_index {
                                 vec![crate::Statement::Break]
                             } else {
-                                self.naga_traverse(true_node_index, Some(merge_node_index))?
+                                self.convert_to_naga_traverse(
+                                    true_node_index,
+                                    stop_nodes_merge.clone(),
+                                )?
                             },
                             reject: if false_node_index == merge_node_index {
                                 vec![crate::Statement::Break]
                             } else {
-                                self.naga_traverse(false_node_index, Some(merge_node_index))?
+                                self.convert_to_naga_traverse(false_node_index, stop_nodes_merge)?
                             },
                         });
                     }
-                    Terminator::Branch { target_id } => body.extend(
-                        self.naga_traverse(self.block_to_node[&target_id], Some(merge_node_index))?,
-                    ),
+                    Terminator::Branch { target_id } => {
+                        body.extend(self.convert_to_naga_traverse(
+                            self.block_to_node[&target_id],
+                            stop_nodes_merge,
+                        )?)
+                    }
                     _ => return Err(Error::InvalidTerminator),
                 };
 
                 let mut result = vec![crate::Statement::Loop { body, continuing }];
-                result.extend(self.naga_traverse(merge_node_index, stop_node_index)?);
+                result.extend(self.convert_to_naga_traverse(merge_node_index, stop_nodes)?);
 
                 Ok(result)
             }
             Some(ControlFlowNodeType::Break) => {
-                let mut result = node.block.clone();
-                match node.terminator {
+                let mut result: crate::Block =
+                    std::mem::replace(&mut self.flow[node_index].block, Vec::new());
+                match self.flow[node_index].terminator {
                     Terminator::BranchConditional {
                         condition,
                         true_id,
@@ -387,12 +751,12 @@ impl FlowGraph {
                             result.push(crate::Statement::If {
                                 condition,
                                 accept: vec![crate::Statement::Break],
-                                reject: self.naga_traverse(false_node_id, stop_node_index)?,
+                                reject: self.convert_to_naga_traverse(false_node_id, stop_nodes)?,
                             });
                         } else if false_edge == ControlFlowEdgeType::LoopBreak {
                             result.push(crate::Statement::If {
                                 condition,
-                                accept: self.naga_traverse(true_node_id, stop_node_index)?,
+                                accept: self.convert_to_naga_traverse(true_node_id, stop_nodes)?,
                                 reject: vec![crate::Statement::Break],
                             });
                         } else {
@@ -406,31 +770,38 @@ impl FlowGraph {
                 };
                 Ok(result)
             }
-            Some(ControlFlowNodeType::Continue) => Ok(node.block.clone()),
-            Some(ControlFlowNodeType::Back) => Ok(node.block.clone()),
+            Some(ControlFlowNodeType::Continue) | Some(ControlFlowNodeType::Back) => Ok(
+                std::mem::replace(&mut self.flow[node_index].block, Vec::new()),
+            ),
             Some(ControlFlowNodeType::Kill) => {
-                let mut result = node.block.clone();
+                let mut result: crate::Block =
+                    std::mem::replace(&mut self.flow[node_index].block, Vec::new());
                 result.push(crate::Statement::Kill);
                 Ok(result)
             }
             Some(ControlFlowNodeType::Return) => {
-                let value = match node.terminator {
+                let value = match self.flow[node_index].terminator {
                     Terminator::Return { value } => value,
                     _ => return Err(Error::InvalidTerminator),
                 };
-                let mut result = node.block.clone();
+                let mut result: crate::Block =
+                    std::mem::replace(&mut self.flow[node_index].block, Vec::new());
                 result.push(crate::Statement::Return { value });
                 Ok(result)
             }
-            Some(ControlFlowNodeType::Merge) | None => match node.terminator {
+            Some(ControlFlowNodeType::Merge) | None => match self.flow[node_index].terminator {
                 Terminator::Branch { target_id } => {
-                    let mut result = node.block.clone();
+                    let mut result: crate::Block =
+                        std::mem::replace(&mut self.flow[node_index].block, Vec::new());
                     result.extend(
-                        self.naga_traverse(self.block_to_node[&target_id], stop_node_index)?,
+                        self.convert_to_naga_traverse(self.block_to_node[&target_id], stop_nodes)?,
                     );
                     Ok(result)
                 }
-                _ => Ok(node.block.clone()),
+                _ => Ok(std::mem::replace(
+                    &mut self.flow[node_index].block,
+                    Vec::new(),
+                )),
             },
         }
     }
@@ -443,14 +814,24 @@ impl FlowGraph {
 
         for node_index in self.flow.node_indices() {
             let node = &self.flow[node_index];
+            let shape = if self.constructs[node.construct].ty == ConstructType::Case
+                && node.ty != Some(ControlFlowNodeType::Header)
+            {
+                "point"
+            } else {
+                "ellipse"
+            };
             writeln!(
                 output,
-                "{} [ label = \"%{} {:?}\" ]",
+                "{} [ label = \"%{} {:?}\" shape={} ]",
                 node_index.index(),
                 node.id,
-                node.ty
+                node.ty,
+                shape
             )?;
         }
+
+        self.to_graphviz_constructs(&mut output, node_index(0))?;
 
         for edge in self.flow.raw_edges() {
             let source = edge.source();
@@ -466,6 +847,7 @@ impl FlowGraph {
                 ControlFlowEdgeType::IfTrue => "color=blue",
                 ControlFlowEdgeType::IfFalse => "color=red",
                 ControlFlowEdgeType::SwitchBreak => "color=yellow",
+                ControlFlowEdgeType::IfBreak => "color=yellow",
                 ControlFlowEdgeType::CaseFallThrough => "style=dotted",
             };
 
@@ -481,6 +863,39 @@ impl FlowGraph {
         output += "}\n";
 
         Ok(output)
+    }
+
+    fn to_graphviz_constructs(
+        &self,
+        output: &mut String,
+        node_index: ConstructNodeIndex,
+    ) -> Result<(), std::fmt::Error> {
+        let construct = self.constructs[node_index];
+
+        writeln!(
+            output,
+            "subgraph cluster_{:?} {{ label = {:?}",
+            construct.ty, construct.ty
+        )?;
+
+        let traversal_order_begin = self.flow[construct.begin].position;
+        let traversal_order_end = if construct.end.index() >= self.traversal_order.len() {
+            self.traversal_order.len() - 1
+        } else {
+            self.flow[construct.end].position
+        };
+
+        for i in traversal_order_begin..=traversal_order_end {
+            write!(output, "{} ", self.traversal_order[i].index())?;
+        }
+
+        for child_index in self.constructs.children(node_index) {
+            self.to_graphviz_constructs(output, child_index)?;
+        }
+
+        writeln!(output, "}}",)?;
+
+        Ok(())
     }
 }
 
@@ -520,6 +935,12 @@ pub(super) enum ControlFlowEdgeType {
     /// An edge from a node to the merge block of the nearest enclosing switch,
     /// where there is no intervening loop.
     SwitchBreak,
+
+    // An edge from a node to the merge block of the nearest enclosing structured
+    // construct, but which is neither a kSwitchBreak or a kLoopBreak.
+    // This can only occur for an "if" selection, i.e. where the selection
+    // header ends in OpBranchConditional.
+    IfBreak,
 
     /// An edge from one switch case to the next sibling switch case.
     CaseFallThrough,
@@ -568,6 +989,80 @@ pub(super) struct ControlFlowNode {
     /// Termination instruction of the block.
     pub terminator: Terminator,
 
-    /// Merge Instruction
+    /// Merge Instruction.
     pub merge: Option<MergeInstruction>,
+
+    /// Construct that this block belongs to.
+    pub construct: ConstructNodeIndex,
+
+    /// Position in the postorder traversal.
+    pub position: usize,
+
+    /// Flag determining whether this node was already visited by the graph traversal while converting a SPIR-V to Naga's IR.
+    /// This flag serves as a check in case an incorrect SPIR-V is supplied to the front-end. When a SPIR-V is correct there can be no cycles in it and there is no reason
+    /// to visit any node twice.
+    pub visited: bool,
+}
+/// Type of a node(block) in the `ConstructsGraph`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(super) enum ConstructType {
+    /// Includes all the nodes in the `ControlFlowGraph`.
+    Function,
+    /// Includes the nodes(blocks) dominated by a `ControlFlowNodeType::Header` node(block), while excluding nodes(blocks) dominated by the selection construct’s `ControlFlowNodeType::Merge` node(block).
+    Selection,
+    /// Includes the nodes(blocks) dominated by a `ControlFlowNodeType::Loop` Continue Target and post dominated by the corresponding loop’s `ControlFlowNodeType::Back` block, while excluding blocks dominated by that `ControlFlowNodeType::Merge` node(block).
+    Continue,
+    /// Includes the nodes(blocks) dominated by a `ControlFlowNodeType::Loop`, while excluding both that header’s continue construct and the blocks dominated by the loop’s `ControlFlowNodeType::Merge` node(block).
+    Loop,
+    /// Includes the nodes(blocks) dominated by an OpSwitch Target or Default (this construct is only defined for those OpSwitch Target or Default that are not equal to the OpSwitch’s corresponding merge block)
+    Case,
+}
+
+impl Default for ConstructType {
+    fn default() -> Self {
+        ConstructType::Function
+    }
+}
+
+/// ConstructsGraph's construct node that encompasses a series of blocks in `ControlFlowGraph`
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
+pub(super) struct ConstructNode {
+    ///
+    pub ty: ConstructType,
+
+    ///
+    pub begin: BlockNodeIndex,
+
+    ///
+    pub begin_position: usize,
+
+    ///
+    pub end: BlockNodeIndex,
+
+    ///
+    pub end_position: usize,
+
+    /// Control flow nesting depth. The entry block is at nesting depth 0.
+    pub depth: usize,
+
+    /// The nearest enclosing loop construct, if one exists.  Points to itself
+    /// when this is a loop construct.
+    pub enclosing_loop: Option<ConstructNodeIndex>,
+
+    /// The nearest enclosing continue construct, if one exists.  Points to
+    /// itself when this is a contnue construct.
+    pub enclosing_continue: Option<ConstructNodeIndex>,
+
+    /// The nearest enclosing loop construct or continue construct or
+    /// switch-selection construct, if one exists. The signficance is
+    /// that a high level language "break" will branch to the merge block
+    /// of such an enclosing construct. Points to itself when this is
+    /// a loop construct, a continue construct, or a switch-selection construct.
+    pub enclosing_loop_or_continue_or_switch: Option<ConstructNodeIndex>,
+}
+
+impl ConstructNode {
+    pub(super) fn contains_position(&self, position: usize) -> bool {
+        self.begin_position <= position && position < self.end_position
+    }
 }

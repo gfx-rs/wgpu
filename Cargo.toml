@@ -24,6 +24,7 @@ pomelo = { version = "0.1.4", optional = true }
 thiserror = "1.0.21"
 serde = { version = "1.0", features = ["derive"], optional = true }
 petgraph = { version ="0.5", optional = true }
+rose_tree = { version ="0.2", optional = true }
 pp-rs = { version = "0.1", optional = true }
 #env_logger = "0.8" # uncomment temporarily for developing with the binary target
 
@@ -36,7 +37,7 @@ glsl-out = ["petgraph"]
 msl-out = []
 serialize = ["serde"]
 deserialize = ["serde"]
-spv-in = ["petgraph", "spirv"]
+spv-in = ["petgraph", "spirv", "rose_tree"]
 spv-out = ["spirv"]
 wgsl-in = ["codespan-reporting"]
 wgsl-out = []

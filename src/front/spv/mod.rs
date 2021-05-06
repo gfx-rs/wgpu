@@ -2148,6 +2148,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             block,
             terminator,
             merge,
+            construct: petgraph::graph::node_index(0),
+            position: 0,
+            visited: false,
         })
     }
 

@@ -97,6 +97,8 @@ pub enum Error {
     InvalidTerminator,
     #[error("invalid edge classification")]
     InvalidEdgeClassification,
+    #[error("cycle detected in the CFG during traversal at {0}")]
+    ControlFlowGraphCycle(crate::front::spv::BlockId),
     #[error("recursive function call %{0}")]
     FunctionCallCycle(spirv::Word),
     #[error("invalid array size {0:?}")]

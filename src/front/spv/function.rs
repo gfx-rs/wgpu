@@ -181,7 +181,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             }
         }
 
-        fun.body = flow_graph.to_naga()?;
+        fun.body = flow_graph.convert_to_naga()?;
 
         // done
         let fun_handle = module.functions.append(fun);
