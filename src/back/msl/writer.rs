@@ -541,6 +541,58 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn put_array_length(
+        &mut self,
+        expr: Handle<crate::Expression>,
+        context: &ExpressionContext,
+    ) -> Result<(), Error> {
+        let handle = match context.function.expressions[expr] {
+            crate::Expression::AccessIndex { base, .. } => {
+                match context.function.expressions[base] {
+                    crate::Expression::GlobalVariable(handle) => handle,
+                    _ => return Err(Error::Validation),
+                }
+            }
+            _ => return Err(Error::Validation),
+        };
+
+        let global = &context.module.global_variables[handle];
+        if let crate::TypeInner::Struct { ref members, .. } = context.module.types[global.ty].inner
+        {
+            if let Some(&crate::StructMember {
+                offset,
+                ty: array_ty,
+                ..
+            }) = members.last()
+            {
+                let (span, stride) = match context.module.types[array_ty].inner {
+                    crate::TypeInner::Array { base, stride, .. } => (
+                        context.module.types[base]
+                            .inner
+                            .span(&context.module.constants),
+                        stride,
+                    ),
+                    _ => return Err(Error::Validation),
+                };
+
+                let buffer_idx = self.runtime_sized_buffers[&handle];
+                write!(
+                    self.out,
+                    "(1 + (_buffer_sizes.size{idx} - {offset} - {span}) / {stride})",
+                    idx = buffer_idx,
+                    offset = offset,
+                    span = span,
+                    stride = stride,
+                )?;
+                Ok(())
+            } else {
+                Err(Error::Validation)
+            }
+        } else {
+            Err(Error::Validation)
+        }
+    }
+
     fn put_expression(
         &mut self,
         expr_handle: Handle<crate::Expression>,
@@ -1063,51 +1115,7 @@ impl<W: Write> Writer<W> {
             // has to be a named expression
             crate::Expression::Call(_) => unreachable!(),
             crate::Expression::ArrayLength(expr) => {
-                let handle = match context.function.expressions[expr] {
-                    crate::Expression::AccessIndex { base, .. } => {
-                        match context.function.expressions[base] {
-                            crate::Expression::GlobalVariable(handle) => handle,
-                            _ => return Err(Error::Validation),
-                        }
-                    }
-                    _ => return Err(Error::Validation),
-                };
-
-                let global = &context.module.global_variables[handle];
-                if let crate::TypeInner::Struct { ref members, .. } =
-                    context.module.types[global.ty].inner
-                {
-                    if let Some(&crate::StructMember {
-                        offset,
-                        ty: array_ty,
-                        ..
-                    }) = members.last()
-                    {
-                        let (span, stride) = match context.module.types[array_ty].inner {
-                            crate::TypeInner::Array { base, stride, .. } => (
-                                context.module.types[base]
-                                    .inner
-                                    .span(&context.module.constants),
-                                stride,
-                            ),
-                            _ => return Err(Error::Validation),
-                        };
-
-                        let buffer_idx = self.runtime_sized_buffers[&handle];
-                        write!(
-                            self.out,
-                            "(1 + (_buffer_sizes.size{idx} - {offset} - {span}) / {stride})",
-                            idx = buffer_idx,
-                            offset = offset,
-                            span = span,
-                            stride = stride,
-                        )?;
-                    } else {
-                        return Err(Error::Validation);
-                    }
-                } else {
-                    return Err(Error::Validation);
-                }
+                self.put_array_length(expr, context)?;
             }
         }
         Ok(())
