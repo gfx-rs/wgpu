@@ -199,14 +199,6 @@ fn main() {
             }
         }
     };
-    if output_path == "-" {
-        println!("{:#?}", module);
-        if let Some(info) = info {
-            println!();
-            println!("{:#?}", info);
-        }
-        return;
-    }
 
     match Path::new(output_path)
         .extension()
@@ -214,6 +206,15 @@ fn main() {
         .to_str()
         .unwrap()
     {
+        "txt" => {
+            use std::io::Write;
+            let mut file = fs::File::create(output_path).unwrap();
+            writeln!(file, "{:#?}", module).unwrap();
+            if let Some(info) = info {
+                writeln!(file).unwrap();
+                writeln!(file, "{:#?}", info).unwrap();
+            }
+        }
         #[cfg(feature = "msl-out")]
         "metal" => {
             use naga::back::msl;
