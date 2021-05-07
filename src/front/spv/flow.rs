@@ -143,10 +143,10 @@ impl FlowGraph {
                 }
                 Terminator::Switch {
                     selector: _,
-                    default,
+                    default_id,
                     ref targets,
                 } => {
-                    let default_node_index = block_to_node[&default];
+                    let default_node_index = block_to_node[&default_id];
 
                     self.flow.add_edge(
                         source_node_index,
@@ -479,12 +479,12 @@ impl FlowGraph {
             }
             Terminator::Switch {
                 selector: _,
-                default,
+                default_id,
                 ref targets,
             } => {
-                self.compute_postorder_traverse(Some(self.block_to_node[&default]));
-                for target in targets.iter() {
-                    self.compute_postorder_traverse(Some(self.block_to_node[&target.1]));
+                self.compute_postorder_traverse(Some(self.block_to_node[&default_id]));
+                for &(_, target_id) in targets.iter() {
+                    self.compute_postorder_traverse(Some(self.block_to_node[&target_id]));
                 }
             }
             _ => {}
@@ -619,7 +619,7 @@ impl FlowGraph {
                 }
                 Terminator::Switch {
                     selector,
-                    default,
+                    default_id,
                     ref targets,
                 } => {
                     let merge_node_index =
@@ -660,7 +660,7 @@ impl FlowGraph {
                         selector,
                         cases,
                         default: self.convert_to_naga_traverse(
-                            self.block_to_node[&default],
+                            self.block_to_node[&default_id],
                             stop_nodes_cases,
                         )?,
                     });

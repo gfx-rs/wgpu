@@ -38,7 +38,7 @@ pub enum Terminator {
         ///
         selector: Handle<crate::Expression>,
         /// Default block of the switch case.
-        default: BlockId,
+        default_id: BlockId,
         /// Tuples of (literal, target block)
         targets: Vec<(i32, BlockId)>,
     },
