@@ -2181,6 +2181,7 @@ fn glsl_built_in(built_in: BuiltIn, output: bool) -> &'static str {
         BuiltIn::BaseInstance => "uint(gl_BaseInstance)",
         BuiltIn::BaseVertex => "uint(gl_BaseVertex)",
         BuiltIn::ClipDistance => "gl_ClipDistance",
+        BuiltIn::CullDistance => "gl_CullDistance",
         BuiltIn::InstanceIndex => "uint(gl_InstanceID)",
         BuiltIn::PointSize => "gl_PointSize",
         BuiltIn::VertexIndex => "uint(gl_VertexID)",

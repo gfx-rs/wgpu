@@ -1165,6 +1165,12 @@ impl<W: Write> Writer<W> {
                             {
                                 continue;
                             }
+                            if member.binding
+                                == Some(crate::Binding::BuiltIn(crate::BuiltIn::CullDistance))
+                            {
+                                log::warn!("Ignoring CullDistance BuiltIn");
+                                continue;
+                            }
                             let comma = if is_first { "" } else { "," };
                             is_first = false;
                             let name = &self.names[&NameKey::StructMember(result_ty, index as u32)];
@@ -2074,6 +2080,14 @@ impl<W: Write> Writer<W> {
                             first_time: true,
                         };
                         let binding = binding.ok_or(Error::Validation)?;
+                        // Cull Distance is not supported in Metal.
+                        // But we can't return UnsupportedBuiltIn error to user.
+                        // Because otherwise we can't generate msl shader from any glslang SPIR-V shaders.
+                        // glslang generates gl_PerVertex struct with gl_CullDistance builtin inside by default.
+                        if *binding == crate::Binding::BuiltIn(crate::BuiltIn::CullDistance) {
+                            log::warn!("Ignoring CullDistance BuiltIn");
+                            continue;
+                        }
                         if !pipeline_options.allow_point_size
                             && *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize)
                         {

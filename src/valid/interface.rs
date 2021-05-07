@@ -112,7 +112,7 @@ impl VaryingContext<'_> {
                                 width,
                             },
                     ),
-                    Bi::ClipDistance => (
+                    Bi::ClipDistance | Bi::CullDistance => (
                         self.stage == St::Vertex && self.output,
                         match *ty_inner {
                             Ti::Array { base, .. } => {

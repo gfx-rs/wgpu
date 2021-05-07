@@ -1165,6 +1165,7 @@ impl Writer {
                     Bi::BaseInstance => BuiltIn::BaseInstance,
                     Bi::BaseVertex => BuiltIn::BaseVertex,
                     Bi::ClipDistance => BuiltIn::ClipDistance,
+                    Bi::CullDistance => BuiltIn::CullDistance,
                     Bi::InstanceIndex => BuiltIn::InstanceIndex,
                     Bi::PointSize => BuiltIn::PointSize,
                     Bi::VertexIndex => BuiltIn::VertexIndex,

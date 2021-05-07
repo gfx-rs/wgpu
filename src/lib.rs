@@ -150,6 +150,7 @@ pub enum BuiltIn {
     BaseInstance,
     BaseVertex,
     ClipDistance,
+    CullDistance,
     InstanceIndex,
     PointSize,
     VertexIndex,

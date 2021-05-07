@@ -125,6 +125,7 @@ pub(super) fn map_builtin(word: spirv::Word) -> Result<crate::BuiltIn, Error> {
         Some(Bi::BaseInstance) => crate::BuiltIn::BaseInstance,
         Some(Bi::BaseVertex) => crate::BuiltIn::BaseVertex,
         Some(Bi::ClipDistance) => crate::BuiltIn::ClipDistance,
+        Some(Bi::CullDistance) => crate::BuiltIn::CullDistance,
         Some(Bi::InstanceIndex) => crate::BuiltIn::InstanceIndex,
         Some(Bi::PointSize) => crate::BuiltIn::PointSize,
         Some(Bi::VertexIndex) => crate::BuiltIn::VertexIndex,

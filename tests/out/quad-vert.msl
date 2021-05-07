@@ -15,6 +15,7 @@ struct type10 {
     metal::float4 gl_Position1;
     float gl_PointSize1;
     type6 gl_ClipDistance1;
+    type6 gl_CullDistance1;
 };
 constant metal::float4 const_type4_ = {0.0, 0.0, 0.0, 1.0};
 constant type6 const_type6_ = {0.0};
@@ -54,6 +55,6 @@ vertex main2Output main2(
     a_uv = a_uv1;
     a_pos = a_pos1;
     main1(v_uv, a_uv, perVertexStruct, a_pos);
-    const auto _tmp = type10 {v_uv, perVertexStruct.gl_Position, perVertexStruct.gl_PointSize, perVertexStruct.gl_ClipDistance};
+    const auto _tmp = type10 {v_uv, perVertexStruct.gl_Position, perVertexStruct.gl_PointSize, perVertexStruct.gl_ClipDistance, perVertexStruct.gl_CullDistance};
     return main2Output { _tmp.member, _tmp.gl_Position1, _tmp.gl_PointSize1, {_tmp.gl_ClipDistance1.inner[0]} };
 }

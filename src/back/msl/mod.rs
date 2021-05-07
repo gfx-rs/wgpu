@@ -135,6 +135,8 @@ pub enum Error {
     FeatureNotImplemented(String),
     #[error("module is not valid")]
     Validation,
+    #[error("BuiltIn {0:?} is not supported")]
+    UnsupportedBuiltIn(crate::BuiltIn),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -356,6 +358,7 @@ impl ResolvedBinding {
                     Bi::LocalInvocationIndex => "thread_index_in_threadgroup",
                     Bi::WorkGroupId => "threadgroup_position_in_grid",
                     Bi::WorkGroupSize => "dispatch_threads_per_threadgroup",
+                    _ => return Err(Error::UnsupportedBuiltIn(built_in)),
                 };
                 write!(out, "{}", name)?;
             }
