@@ -5,6 +5,7 @@ use std::{env, error::Error, path::Path};
 
 #[derive(Default)]
 struct Parameters {
+    validation_flags: naga::valid::ValidationFlags,
     #[cfg(feature = "spv-in")]
     spv_adjust_coordinate_space: bool,
     #[cfg(feature = "spv-in")]
@@ -60,6 +61,11 @@ fn main() {
         //TODO: use `strip_prefix` when MSRV reaches 1.45.0
         if arg.starts_with("--") {
             match &arg[2..] {
+                "validate" => {
+                    let value = args.next().unwrap().parse().unwrap();
+                    params.validation_flags =
+                        naga::valid::ValidationFlags::from_bits(value).unwrap();
+                }
                 #[cfg(feature = "spv-in")]
                 "flow-dir" => params.spv_flow_dump_prefix = args.next(),
                 #[cfg(feature = "glsl-out")]
@@ -176,7 +182,7 @@ fn main() {
 
     // validate the IR
     let info = match naga::valid::Validator::new(
-        naga::valid::ValidationFlags::all(),
+        params.validation_flags,
         naga::valid::Capabilities::all(),
     )
     .validate(&module)

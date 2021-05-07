@@ -40,6 +40,12 @@ bitflags::bitflags! {
     }
 }
 
+impl Default for ValidationFlags {
+    fn default() -> Self {
+        Self::all()
+    }
+}
+
 #[must_use]
 bitflags::bitflags! {
     /// Allowed IR capabilities.
