@@ -541,6 +541,96 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn put_image_sample_level(
+        &mut self,
+        image: Handle<crate::Expression>,
+        level: crate::SampleLevel,
+        context: &ExpressionContext,
+    ) -> Result<(), Error> {
+        let has_levels = match *context.resolve_type(image) {
+            crate::TypeInner::Image {
+                dim: crate::ImageDimension::D1,
+                ..
+            } => false,
+            _ => true,
+        };
+        match level {
+            crate::SampleLevel::Auto => {}
+            crate::SampleLevel::Zero => {
+                //TODO: do we support Zero on `Sampled` image classes?
+            }
+            _ if !has_levels => {
+                log::warn!("1D image can't be sampled with level {:?}", level);
+            }
+            crate::SampleLevel::Exact(h) => {
+                write!(self.out, ", {}::level(", NAMESPACE)?;
+                self.put_expression(h, context, true)?;
+                write!(self.out, ")")?;
+            }
+            crate::SampleLevel::Bias(h) => {
+                write!(self.out, ", {}::bias(", NAMESPACE)?;
+                self.put_expression(h, context, true)?;
+                write!(self.out, ")")?;
+            }
+            crate::SampleLevel::Gradient { x, y } => {
+                write!(self.out, ", {}::gradient(", NAMESPACE)?;
+                self.put_expression(x, context, true)?;
+                write!(self.out, ", ")?;
+                self.put_expression(y, context, true)?;
+                write!(self.out, ")")?;
+            }
+        }
+        Ok(())
+    }
+
+    fn put_compose(
+        &mut self,
+        ty: Handle<crate::Type>,
+        components: &[Handle<crate::Expression>],
+        context: &ExpressionContext,
+    ) -> Result<(), Error> {
+        match context.module.types[ty].inner {
+            crate::TypeInner::Scalar { width: 4, kind } if components.len() == 1 => {
+                write!(self.out, "{}", scalar_kind_string(kind))?;
+                self.put_call_parameters(components.iter().cloned(), context)?;
+            }
+            crate::TypeInner::Vector { size, kind, .. } => {
+                write!(
+                    self.out,
+                    "{}::{}{}",
+                    NAMESPACE,
+                    scalar_kind_string(kind),
+                    vector_size_str(size)
+                )?;
+                self.put_call_parameters(components.iter().cloned(), context)?;
+            }
+            crate::TypeInner::Matrix { columns, rows, .. } => {
+                let kind = crate::ScalarKind::Float;
+                write!(
+                    self.out,
+                    "{}::{}{}x{}",
+                    NAMESPACE,
+                    scalar_kind_string(kind),
+                    vector_size_str(columns),
+                    vector_size_str(rows)
+                )?;
+                self.put_call_parameters(components.iter().cloned(), context)?;
+            }
+            crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => {
+                write!(self.out, "{} {{", &self.names[&NameKey::Type(ty)])?;
+                for (i, &component) in components.iter().enumerate() {
+                    if i != 0 {
+                        write!(self.out, ", ")?;
+                    }
+                    self.put_expression(component, context, true)?;
+                }
+                write!(self.out, "}}")?;
+            }
+            _ => return Err(Error::UnsupportedCompose(ty)),
+        }
+        Ok(())
+    }
+
     fn put_array_length(
         &mut self,
         expr: Handle<crate::Expression>,
@@ -701,46 +791,7 @@ impl<W: Write> Writer<W> {
                 }
             }
             crate::Expression::Compose { ty, ref components } => {
-                let inner = &context.module.types[ty].inner;
-                match *inner {
-                    crate::TypeInner::Scalar { width: 4, kind } if components.len() == 1 => {
-                        write!(self.out, "{}", scalar_kind_string(kind))?;
-                        self.put_call_parameters(components.iter().cloned(), context)?;
-                    }
-                    crate::TypeInner::Vector { size, kind, .. } => {
-                        write!(
-                            self.out,
-                            "{}::{}{}",
-                            NAMESPACE,
-                            scalar_kind_string(kind),
-                            vector_size_str(size)
-                        )?;
-                        self.put_call_parameters(components.iter().cloned(), context)?;
-                    }
-                    crate::TypeInner::Matrix { columns, rows, .. } => {
-                        let kind = crate::ScalarKind::Float;
-                        write!(
-                            self.out,
-                            "{}::{}{}x{}",
-                            NAMESPACE,
-                            scalar_kind_string(kind),
-                            vector_size_str(columns),
-                            vector_size_str(rows)
-                        )?;
-                        self.put_call_parameters(components.iter().cloned(), context)?;
-                    }
-                    crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => {
-                        write!(self.out, "{} {{", &self.names[&NameKey::Type(ty)])?;
-                        for (i, &component) in components.iter().enumerate() {
-                            if i != 0 {
-                                write!(self.out, ", ")?;
-                            }
-                            self.put_expression(component, context, true)?;
-                        }
-                        write!(self.out, "}}")?;
-                    }
-                    _ => return Err(Error::UnsupportedCompose(ty)),
-                }
+                self.put_compose(ty, components, context)?;
             }
             crate::Expression::FunctionArgument(index) => {
                 let name_key = match context.origin {
@@ -839,39 +890,7 @@ impl<W: Write> Writer<W> {
                     self.put_expression(dref, context, true)?;
                 }
 
-                let has_levels = match *context.resolve_type(image) {
-                    crate::TypeInner::Image {
-                        dim: crate::ImageDimension::D1,
-                        ..
-                    } => false,
-                    _ => true,
-                };
-                match level {
-                    crate::SampleLevel::Auto => {}
-                    crate::SampleLevel::Zero => {
-                        //TODO: do we support Zero on `Sampled` image classes?
-                    }
-                    _ if !has_levels => {
-                        log::warn!("1D image can't be sampled with level {:?}", level);
-                    }
-                    crate::SampleLevel::Exact(h) => {
-                        write!(self.out, ", {}::level(", NAMESPACE)?;
-                        self.put_expression(h, context, true)?;
-                        write!(self.out, ")")?;
-                    }
-                    crate::SampleLevel::Bias(h) => {
-                        write!(self.out, ", {}::bias(", NAMESPACE)?;
-                        self.put_expression(h, context, true)?;
-                        write!(self.out, ")")?;
-                    }
-                    crate::SampleLevel::Gradient { x, y } => {
-                        write!(self.out, ", {}::gradient(", NAMESPACE)?;
-                        self.put_expression(x, context, true)?;
-                        write!(self.out, ", ")?;
-                        self.put_expression(y, context, true)?;
-                        write!(self.out, ")")?;
-                    }
-                }
+                self.put_image_sample_level(image, level, context)?;
 
                 if let Some(constant) = offset {
                     let coco = ConstantContext {
@@ -2370,8 +2389,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
-        // last observed macOS value: 23040
-        if stack_size < 21000 || stack_size > 25000 {
+        // last observed macOS value: 17664
+        if stack_size < 17000 || stack_size > 18500 {
             panic!("`put_expression` stack size {} has changed!", stack_size);
         }
     }
