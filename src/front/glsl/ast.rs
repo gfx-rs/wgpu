@@ -171,6 +171,8 @@ pub struct FunctionContext<'function> {
     pub lookup_global_var_exps: FastHashMap<String, VariableReference>,
     pub lookup_constant_exps: FastHashMap<String, VariableReference>,
     pub typifier: Typifier,
+
+    pub samplers: FastHashMap<Handle<Expression>, Handle<Expression>>,
 }
 
 impl<'function> FunctionContext<'function> {
@@ -181,6 +183,7 @@ impl<'function> FunctionContext<'function> {
             lookup_global_var_exps: FastHashMap::default(),
             lookup_constant_exps: FastHashMap::default(),
             typifier: Typifier::new(),
+            samplers: FastHashMap::default(),
         }
     }
 
@@ -388,7 +391,14 @@ impl<'function> FunctionContext<'function> {
                     var.load.unwrap_or(var.expr)
                 }
             }
-            ExprKind::Call(_) => todo!(),
+            ExprKind::Call(call) => {
+                let args: Vec<_> = call
+                    .args
+                    .into_iter()
+                    .map(|e| self.resolve(program, e, false))
+                    .collect::<Result<_, _>>()?;
+                program.function_call(self, call.kind, &args)?
+            }
             ExprKind::Conditional {
                 condition,
                 accept,
@@ -413,23 +423,6 @@ impl<'function> FunctionContext<'function> {
                 value
             }
         })
-    }
-}
-
-#[derive(Debug)]
-pub struct ExpressionRule {
-    pub expression: Handle<Expression>,
-    pub statements: Vec<Statement>,
-    pub sampler: Option<Handle<Expression>>,
-}
-
-impl ExpressionRule {
-    pub fn from_expression(expression: Handle<Expression>) -> ExpressionRule {
-        ExpressionRule {
-            expression,
-            statements: vec![],
-            sampler: None,
-        }
     }
 }
 
@@ -487,13 +480,6 @@ pub enum TypeQualifier {
     Sampling(Sampling),
     Layout(StructLayout),
     EarlyFragmentTests,
-}
-
-#[derive(Debug)]
-pub struct VarDeclaration {
-    pub type_qualifiers: Vec<TypeQualifier>,
-    pub ids_initializers: Vec<(Option<String>, Option<ExpressionRule>)>,
-    pub ty: Handle<Type>,
 }
 
 #[derive(Debug)]

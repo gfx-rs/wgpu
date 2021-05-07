@@ -1,6 +1,7 @@
 use super::{
     ast::{
-        Expr, ExprKind, FunctionContext, Profile, StorageQualifier, StructLayout, TypeQualifier,
+        Expr, ExprKind, FunctionCall, FunctionCallKind, FunctionContext, Profile, StorageQualifier,
+        StructLayout, TypeQualifier,
     },
     error::ErrorKind,
     lex::Lexer,
@@ -461,19 +462,52 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             TokenValue::Identifier(_) => {
                 let (name, meta) = self.expect_ident()?;
 
-                // TODO: function calls
-                // let mut args = Vec::new();
-                // while TokenValue::RightBracket != self.bump()?.value {
-                //     args.push(self.parse_expression(ctx)?)
-                // }
+                if self.bump_if(TokenValue::LeftParen).is_some() {
+                    let mut args = Vec::new();
+                    while TokenValue::RightParen != self.bump()?.value {
+                        args.push(self.parse_expression(ctx)?)
+                    }
 
-                let var = match self.program.lookup_variable(ctx, &name)? {
-                    Some(var) => var,
-                    None => return Err(ErrorKind::UnknownVariable(meta, name)),
+                    Expr {
+                        kind: ExprKind::Call(FunctionCall {
+                            kind: FunctionCallKind::Function(name),
+                            args,
+                        }),
+                        meta,
+                    }
+                } else {
+                    let var = match self.program.lookup_variable(ctx, &name)? {
+                        Some(var) => var,
+                        None => return Err(ErrorKind::UnknownVariable(meta, name)),
+                    };
+
+                    Expr {
+                        kind: ExprKind::Variable(var),
+                        meta,
+                    }
+                }
+            }
+            TokenValue::TypeName(_) => {
+                let Token { value, meta } = self.bump()?;
+
+                let handle = if let TokenValue::TypeName(ty) = value {
+                    self.program.module.types.append(ty)
+                } else {
+                    unreachable!()
                 };
 
+                self.expect(TokenValue::LeftParen)?;
+
+                let mut args = Vec::new();
+                while TokenValue::RightParen != self.bump()?.value {
+                    args.push(self.parse_expression(ctx)?)
+                }
+
                 Expr {
-                    kind: ExprKind::Variable(var),
+                    kind: ExprKind::Call(FunctionCall {
+                        kind: FunctionCallKind::TypeConstructor(handle),
+                        args,
+                    }),
                     meta,
                 }
             }
