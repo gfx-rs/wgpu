@@ -1,113 +1,80 @@
 use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind, TokenMetadata};
 use crate::{
-    proc::ResolveContext, Arena, ArraySize, BinaryOperator, Binding, Constant, Expression,
+    proc::ResolveContext, Arena, ArraySize, BinaryOperator, BuiltIn, Constant, Expression,
     FastHashMap, Function, FunctionArgument, GlobalVariable, Handle, Interpolation, Module,
     RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass, Type,
-    UnaryOperator,
+    TypeInner, UnaryOperator,
 };
+
+#[derive(Debug)]
+pub enum GlobalLookup {
+    Variable(Handle<GlobalVariable>),
+    Select(u32),
+}
 
 #[derive(Debug)]
 pub struct Program<'a> {
     pub version: u16,
     pub profile: Profile,
     pub entry_points: &'a FastHashMap<String, ShaderStage>,
+
     pub lookup_function: FastHashMap<String, Handle<Function>>,
     pub lookup_type: FastHashMap<String, Handle<Type>>,
-    pub lookup_global_variables: FastHashMap<String, Handle<GlobalVariable>>,
+    pub lookup_global_variables: FastHashMap<String, GlobalLookup>,
     pub lookup_constants: FastHashMap<String, Handle<Constant>>,
+
+    pub built_ins: Vec<(BuiltIn, Handle<GlobalVariable>)>,
+    pub entries: Vec<(String, ShaderStage, Handle<Function>)>,
+
+    pub input_struct: Handle<Type>,
+    pub output_struct: Handle<Type>,
+
     pub module: Module,
 }
 
 impl<'a> Program<'a> {
     pub fn new(entry_points: &'a FastHashMap<String, ShaderStage>) -> Program<'a> {
+        let mut module = Module::default();
+
         Program {
             version: 0,
             profile: Profile::Core,
             entry_points,
+
             lookup_function: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
             lookup_global_variables: FastHashMap::default(),
             lookup_constants: FastHashMap::default(),
-            module: Module::default(),
-        }
-    }
 
-    pub fn binary_expr(
-        &mut self,
-        function: &mut Function,
-        op: BinaryOperator,
-        left: &ExpressionRule,
-        right: &ExpressionRule,
-    ) -> ExpressionRule {
-        ExpressionRule::from_expression(function.expressions.append(Expression::Binary {
-            op,
-            left: left.expression,
-            right: right.expression,
-        }))
-    }
+            built_ins: Vec::new(),
+            entries: Vec::new(),
 
-    pub fn unary_expr(
-        &mut self,
-        function: &mut Function,
-        op: UnaryOperator,
-        tgt: &ExpressionRule,
-    ) -> ExpressionRule {
-        ExpressionRule::from_expression(function.expressions.append(Expression::Unary {
-            op,
-            expr: tgt.expression,
-        }))
-    }
-
-    /// Helper function to insert equality expressions, this handles the special
-    /// case of `vec1 == vec2` and `vec1 != vec2` since in the IR they are
-    /// represented as `all(equal(vec1, vec2))` and `any(notEqual(vec1, vec2))`
-    pub fn equality_expr(
-        &mut self,
-        context: &mut FunctionContext,
-        equals: bool,
-        left: &ExpressionRule,
-        right: &ExpressionRule,
-    ) -> Result<ExpressionRule, ErrorKind> {
-        let left_is_vector = match *self.resolve_type(context, left.expression)? {
-            crate::TypeInner::Vector { .. } => true,
-            _ => false,
-        };
-
-        let right_is_vector = match *self.resolve_type(context, right.expression)? {
-            crate::TypeInner::Vector { .. } => true,
-            _ => false,
-        };
-
-        let (op, fun) = match equals {
-            true => (BinaryOperator::Equal, RelationalFunction::All),
-            false => (BinaryOperator::NotEqual, RelationalFunction::Any),
-        };
-
-        let expr = ExpressionRule::from_expression(context.function.expressions.append(
-            Expression::Binary {
-                op,
-                left: left.expression,
-                right: right.expression,
-            },
-        ));
-
-        Ok(if left_is_vector && right_is_vector {
-            ExpressionRule::from_expression(context.function.expressions.append(
-                Expression::Relational {
-                    fun,
-                    argument: expr.expression,
+            input_struct: module.types.append(Type {
+                name: None,
+                inner: TypeInner::Struct {
+                    level: crate::StructLevel::Root,
+                    members: Vec::new(),
+                    span: 0,
                 },
-            ))
-        } else {
-            expr
-        })
+            }),
+            output_struct: module.types.append(Type {
+                name: None,
+                inner: TypeInner::Struct {
+                    level: crate::StructLevel::Root,
+                    members: Vec::new(),
+                    span: 0,
+                },
+            }),
+
+            module,
+        }
     }
 
     pub fn resolve_type<'b>(
         &'b mut self,
         context: &'b mut FunctionContext,
         handle: Handle<Expression>,
-    ) -> Result<&'b crate::TypeInner, ErrorKind> {
+    ) -> Result<&'b TypeInner, ErrorKind> {
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
             global_vars: &self.module.global_variables,
@@ -226,6 +193,61 @@ impl<'function> FunctionContext<'function> {
         None
     }
 
+    pub fn lookup_global_var(
+        &mut self,
+        program: &mut Program,
+        name: &str,
+    ) -> Option<VariableReference> {
+        self.lookup_global_var_exps.get(name).cloned().or_else(|| {
+            let expr = match *program.lookup_global_variables.get(name)? {
+                GlobalLookup::Variable(v) => Expression::GlobalVariable(v),
+                GlobalLookup::Select(index) => {
+                    let base = self
+                        .function
+                        .expressions
+                        .append(Expression::FunctionArgument(
+                            self.function.arguments.len() as u32 - 1,
+                        ));
+
+                    Expression::AccessIndex { base, index }
+                }
+            };
+
+            let expr = self.function.expressions.append(expr);
+            let var = VariableReference {
+                expr,
+                load: Some(
+                    self.function
+                        .expressions
+                        .append(Expression::Load { pointer: expr }),
+                ),
+            };
+
+            self.lookup_global_var_exps.insert(name.into(), var.clone());
+
+            Some(var)
+        })
+    }
+
+    pub fn lookup_constants_var(
+        &mut self,
+        program: &mut Program,
+        name: &str,
+    ) -> Option<VariableReference> {
+        self.lookup_constant_exps.get(name).cloned().or_else(|| {
+            let expr = self
+                .function
+                .expressions
+                .append(Expression::Constant(*program.lookup_constants.get(name)?));
+
+            let var = VariableReference { expr, load: None };
+
+            self.lookup_constant_exps.insert(name.into(), var.clone());
+
+            Some(var)
+        })
+    }
+
     #[cfg(feature = "glsl-validate")]
     pub fn lookup_local_var_current_scope(&self, name: &str) -> Option<VariableReference> {
         if let Some(current) = self.scopes.last() {
@@ -316,9 +338,41 @@ impl<'function> FunctionContext<'function> {
                 let left = self.resolve(program, *left, false)?;
                 let right = self.resolve(program, *right, false)?;
 
-                self.function
-                    .expressions
-                    .append(Expression::Binary { left, op, right })
+                if let BinaryOperator::Equal | BinaryOperator::NotEqual = op {
+                    let equals = op == BinaryOperator::Equal;
+                    let left_is_vector = match *program.resolve_type(self, left)? {
+                        crate::TypeInner::Vector { .. } => true,
+                        _ => false,
+                    };
+
+                    let right_is_vector = match *program.resolve_type(self, right)? {
+                        crate::TypeInner::Vector { .. } => true,
+                        _ => false,
+                    };
+
+                    let (op, fun) = match equals {
+                        true => (BinaryOperator::Equal, RelationalFunction::All),
+                        false => (BinaryOperator::NotEqual, RelationalFunction::Any),
+                    };
+
+                    let expr =
+                        self.function
+                            .expressions
+                            .append(Expression::Binary { op, left, right });
+
+                    if left_is_vector && right_is_vector {
+                        self.function.expressions.append(Expression::Relational {
+                            fun,
+                            argument: expr,
+                        })
+                    } else {
+                        expr
+                    }
+                } else {
+                    self.function
+                        .expressions
+                        .append(Expression::Binary { left, op, right })
+                }
             }
             ExprKind::Unary { op, expr } => {
                 let expr = self.resolve(program, *expr, false)?;
@@ -429,7 +483,7 @@ pub enum TypeQualifier {
     StorageQualifier(StorageQualifier),
     Interpolation(Interpolation),
     ResourceBinding(ResourceBinding),
-    Binding(Binding),
+    Location(u32),
     Sampling(Sampling),
     Layout(StructLayout),
     EarlyFragmentTests,
@@ -454,12 +508,11 @@ pub struct FunctionCall {
     pub args: Vec<Expr>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StorageQualifier {
     StorageClass(StorageClass),
     Input,
     Output,
-    InOut,
     Const,
 }
 

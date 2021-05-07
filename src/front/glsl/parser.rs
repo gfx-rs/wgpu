@@ -8,9 +8,8 @@ use super::{
     Program,
 };
 use crate::{
-    arena::Handle, ArraySize, BinaryOperator, Binding, Constant, ConstantInner, Function,
-    FunctionResult, ResourceBinding, ScalarValue, Statement, StorageClass, Type, TypeInner,
-    UnaryOperator,
+    arena::Handle, ArraySize, BinaryOperator, Constant, ConstantInner, Function, FunctionResult,
+    ResourceBinding, ScalarValue, Statement, StorageClass, Type, TypeInner, UnaryOperator,
 };
 use core::convert::TryFrom;
 use std::iter::Peekable;
@@ -72,6 +71,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         while self.lexer.peek().is_some() {
             self.parse_external_declaration()?;
         }
+
+        self.program.add_entry_points();
 
         Ok(())
     }
@@ -161,7 +162,6 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             | TokenValue::Const
             | TokenValue::In
             | TokenValue::Out
-            | TokenValue::InOut
             | TokenValue::Uniform
             | TokenValue::Layout => true,
             _ => false,
@@ -185,7 +185,6 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 TokenValue::Const => TypeQualifier::StorageQualifier(StorageQualifier::Const),
                 TokenValue::In => TypeQualifier::StorageQualifier(StorageQualifier::Input),
                 TokenValue::Out => TypeQualifier::StorageQualifier(StorageQualifier::Output),
-                TokenValue::InOut => TypeQualifier::StorageQualifier(StorageQualifier::InOut),
                 TokenValue::Uniform => TypeQualifier::StorageQualifier(
                     StorageQualifier::StorageClass(StorageClass::Uniform),
                 ),
@@ -242,6 +241,25 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         Ok(())
     }
 
+    fn parse_uint_constant(&mut self) -> Result<u32> {
+        let value = self.parse_constant_expression()?;
+
+        // TODO: better errors
+        match self.program.module.constants[value].inner {
+            ConstantInner::Scalar {
+                value: ScalarValue::Uint(int),
+                ..
+            } => u32::try_from(int)
+                .map_err(|_| ErrorKind::SemanticError("int constant overflows".into())),
+            ConstantInner::Scalar {
+                value: ScalarValue::Sint(int),
+                ..
+            } => u32::try_from(int)
+                .map_err(|_| ErrorKind::SemanticError("int constant overflows".into())),
+            _ => Err(ErrorKind::SemanticError("Expected a uint constant".into())),
+        }
+    }
+
     fn parse_layout_qualifier_id(
         &mut self,
         qualifiers: &mut Vec<TypeQualifier>,
@@ -256,18 +274,12 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         match token.value {
             TokenValue::Identifier(name) => {
                 if self.bump_if(TokenValue::Assign).is_some() {
-                    let value = self.parse_constant_expression()?;
+                    let value = self.parse_uint_constant()?;
 
                     match name.as_str() {
-                        "location" => qualifiers.push(TypeQualifier::Binding(Binding::Location {
-                            // TODO: use better error here
-                            location: u32::try_from(value).map_err(|_| ErrorKind::InvalidInput)?,
-                            interpolation: None,
-                            sampling: None,
-                        })),
-                        // TODO: produce error when try_from fails
-                        "set" => *group = u32::try_from(value).ok(),
-                        "binding" => *binding = u32::try_from(value).ok(),
+                        "location" => qualifiers.push(TypeQualifier::Location(value)),
+                        "set" => *group = Some(value),
+                        "binding" => *binding = Some(value),
                         _ => return Err(ErrorKind::UnknownLayoutQualifier(token.meta, name)),
                     }
                 } else {
@@ -287,13 +299,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         }
     }
 
-    // TODO: parse more than just integer literal
-    fn parse_constant_expression(&mut self) -> Result<i64> {
-        let token = self.bump()?;
-        match token.value {
-            TokenValue::IntConstant(int) => Ok(int.value as i64),
-            _ => Err(ErrorKind::InvalidToken(token)),
-        }
+    fn parse_constant_expression(&mut self) -> Result<Handle<Constant>> {
+        let mut function = Function::default();
+        let mut ctx = FunctionContext::new(&mut function);
+
+        let expr = self.parse_conditional(&mut ctx, None)?;
+        let root = ctx.resolve(self.program, expr, false)?;
+
+        self.program.solve_constant(&function.expressions, root)
     }
 
     fn parse_external_declaration(&mut self) -> Result<()> {
@@ -329,8 +342,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         //    type_qualifier IDENTIFIER identifier_list SEMICOLON
         // TODO: Handle precision qualifiers
         if self.peek_type_qualifier() || self.peek_type_name() {
-            // TODO: Use qualifiers
-            let _qualifiers = self.parse_type_qualifiers()?;
+            let qualifiers = self.parse_type_qualifiers()?;
 
             if self.peek_type_name() {
                 // Functions and variable declarations
@@ -371,9 +383,20 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         }
                         // Variable Declaration
                         TokenValue::Semicolon => {
-                            // TODO: are we supposed to consume the semicolon here
                             self.bump()?;
-                            // TODO: use parsed type & qualifiers
+
+                            if let Some(ty) = ty {
+                                if external {
+                                    self.program.add_global_var(qualifiers, ty, name, None)?;
+                                } else {
+                                    // TODO: local variables
+                                }
+                            } else {
+                                return Err(ErrorKind::SemanticError(
+                                    "Declaration cannot have void type".into(),
+                                ));
+                            }
+
                             Ok(true)
                         }
                         TokenValue::Comma => todo!(),

@@ -1,6 +1,7 @@
 use crate::{
-    proc::ensure_block_returns, BinaryOperator, EntryPoint, Expression, Function, MathFunction,
-    RelationalFunction, SampleLevel, TypeInner,
+    proc::ensure_block_returns, Arena, BinaryOperator, Binding, BuiltIn, EntryPoint, Expression,
+    Function, FunctionArgument, FunctionResult, MathFunction, RelationalFunction, SampleLevel,
+    ShaderStage, Statement, TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind};
@@ -294,69 +295,25 @@ impl Program<'_> {
     //     }
     // }
 
-    pub fn parse_relational_fun(
-        &mut self,
-        context: &mut FunctionContext,
-        name: String,
-        args: Vec<ExpressionRule>,
-        fun: RelationalFunction,
-    ) -> Result<ExpressionRule, ErrorKind> {
-        if args.len() != 1 {
-            return Err(ErrorKind::WrongNumberArgs(name, 1, args.len()));
-        }
-        Ok(ExpressionRule {
-            expression: context.function.expressions.append(Expression::Relational {
-                fun,
-                argument: args[0].expression,
-            }),
-            sampler: None,
-            statements: args.into_iter().flat_map(|a| a.statements).collect(),
-        })
-    }
-
     // TODO: Reenable later
-    // pub fn add_function_prelude(&mut self, context: &mut FunctionContext) {
-    //     for (var_handle, var) in self.module.global_variables.iter() {
-    //         if let Some(name) = var.name.as_ref() {
-    //             let expr = context
-    //                 .function
-    //                 .expressions
-    //                 .append(Expression::GlobalVariable(var_handle));
-    //             context.lookup_global_var_exps.insert(name.clone(), expr);
-    //         } else {
-    //             let ty = &self.module.types[var.ty];
-    //             // anonymous structs
-    //             if let TypeInner::Struct { ref members, .. } = ty.inner {
-    //                 let base = context
-    //                     .function
-    //                     .expressions
-    //                     .append(Expression::GlobalVariable(var_handle));
-    //                 for (idx, member) in members.iter().enumerate() {
-    //                     if let Some(name) = member.name.as_ref() {
-    //                         let exp =
-    //                             context
-    //                                 .function
-    //                                 .expressions
-    //                                 .append(Expression::AccessIndex {
-    //                                     base,
-    //                                     index: idx as u32,
-    //                                 });
-    //                         context.lookup_global_var_exps.insert(name.clone(), exp);
-    //                     }
-    //                 }
-    //             }
-    //         }
+    // pub fn parse_relational_fun(
+    //     &mut self,
+    //     context: &mut FunctionContext,
+    //     name: String,
+    //     args: Vec<ExpressionRule>,
+    //     fun: RelationalFunction,
+    // ) -> Result<ExpressionRule, ErrorKind> {
+    //     if args.len() != 1 {
+    //         return Err(ErrorKind::WrongNumberArgs(name, 1, args.len()));
     //     }
-
-    //     for (handle, constant) in self.module.constants.iter() {
-    //         if let Some(name) = constant.name.as_ref() {
-    //             let expr = context
-    //                 .function
-    //                 .expressions
-    //                 .append(Expression::Constant(handle));
-    //             context.lookup_constant_exps.insert(name.clone(), expr);
-    //         }
-    //     }
+    //     Ok(ExpressionRule {
+    //         expression: context.function.expressions.append(Expression::Relational {
+    //             fun,
+    //             argument: args[0].expression,
+    //         }),
+    //         sampler: None,
+    //         statements: args.into_iter().flat_map(|a| a.statements).collect(),
+    //     })
     // }
 
     pub fn add_function(&mut self, mut function: Function) -> Result<(), ErrorKind> {
@@ -366,18 +323,103 @@ impl Program<'_> {
             .clone()
             .ok_or_else(|| ErrorKind::SemanticError("Unnamed function".into()))?;
         let stage = self.entry_points.get(&name);
+
+        // Add the input variables as a function argument
+        function.arguments.push(FunctionArgument {
+            name: None,
+            ty: self.input_struct,
+            binding: None,
+        });
+
+        let handle = self.module.functions.append(function);
+
         if let Some(&stage) = stage {
+            self.entries.push((name, stage, handle));
+        } else {
+            self.lookup_function.insert(name, handle);
+        }
+
+        Ok(())
+    }
+
+    pub fn add_entry_points(&mut self) {
+        for (name, stage, function) in self.entries.iter().cloned() {
+            let mut arguments = Vec::new();
+            let mut expressions = Arena::new();
+            let mut body = Vec::new();
+
+            for (built_in, handle) in self.built_ins.iter().copied() {
+                let ty = self.module.global_variables[handle].ty;
+                let arg = arguments.len() as u32;
+
+                arguments.push(FunctionArgument {
+                    name: None,
+                    ty,
+                    binding: Some(Binding::BuiltIn(built_in)),
+                });
+
+                let pointer = expressions.append(Expression::GlobalVariable(handle));
+                let value = expressions.append(Expression::FunctionArgument(arg));
+
+                body.push(Statement::Store { pointer, value });
+            }
+
+            let i = arguments.len() as u32;
+            arguments.push(FunctionArgument {
+                name: None,
+                ty: self.input_struct,
+                binding: None,
+            });
+
+            let res = expressions.append(Expression::Call(function));
+
+            body.push(Statement::Call {
+                function,
+                arguments: vec![expressions.append(Expression::FunctionArgument(i))],
+                result: Some(res),
+            });
+
+            for (i, (built_in, handle)) in self.built_ins.iter().copied().enumerate() {
+                if !should_write(built_in, stage) {
+                    continue;
+                }
+
+                let value = expressions.append(Expression::GlobalVariable(handle));
+                let pointer = expressions.append(Expression::FunctionArgument(i as u32));
+
+                body.push(Statement::Store { pointer, value });
+            }
+
+            body.push(Statement::Return { value: Some(res) });
+
             self.module.entry_points.push(EntryPoint {
                 name,
                 stage,
+                // TODO
                 early_depth_test: None,
-                workgroup_size: [0; 3], //TODO
-                function,
+                workgroup_size: [0; 3],
+                function: Function {
+                    arguments,
+                    expressions,
+                    body,
+                    result: Some(FunctionResult {
+                        ty: self.output_struct,
+                        binding: None,
+                    }),
+                    ..Default::default()
+                },
             });
-        } else {
-            let handle = self.module.functions.append(function);
-            self.lookup_function.insert(name, handle);
         }
-        Ok(())
+    }
+}
+
+fn should_write(built_in: BuiltIn, stage: ShaderStage) -> bool {
+    match (built_in, stage) {
+        (BuiltIn::Position, ShaderStage::Vertex)
+        | (BuiltIn::ClipDistance, ShaderStage::Vertex)
+        | (BuiltIn::PointSize, ShaderStage::Vertex)
+        | (BuiltIn::FragDepth, ShaderStage::Fragment)
+        | (BuiltIn::SampleMask, ShaderStage::Fragment) => true,
+        _ => false,
     }
 }

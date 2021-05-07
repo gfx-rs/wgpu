@@ -14,15 +14,13 @@ mod error;
 pub use error::ParseError;
 mod constants;
 // TODO: Remove later
-#[allow(dead_code, unused_imports)]
+#[allow(unused_imports)]
 mod functions;
 mod parser;
 #[cfg(test)]
 mod parser_tests;
 mod token;
 mod types;
-// TODO: Remove later
-#[allow(dead_code)]
 mod variables;
 
 pub struct Options {
