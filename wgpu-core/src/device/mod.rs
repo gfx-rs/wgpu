@@ -1016,7 +1016,7 @@ impl<B: GfxBackend> Device<B> {
                 let module = match parser.parse() {
                     Ok(module) => Some(module),
                     Err(err) => {
-                        log::warn!("Failed to parse shader SPIR-V code: {:?}", err);
+                        log::warn!("Failed to parse shader SPIR-V code for {:?}: {:?}", desc.label, err);
                         if desc.flags.contains(wgt::ShaderFlags::VALIDATION) {
                             return Err(pipeline::CreateShaderModuleError::Parsing);
                         }
@@ -1033,7 +1033,7 @@ impl<B: GfxBackend> Device<B> {
                 match naga::front::wgsl::parse_str(&code) {
                     Ok(module) => (None, Some(module)),
                     Err(err) => {
-                        log::error!("Failed to parse WGSL code: {}", err);
+                        log::error!("Failed to parse WGSL code for {:?}: {}", desc.label, err);
                         return Err(pipeline::CreateShaderModuleError::Parsing);
                     }
                 }
