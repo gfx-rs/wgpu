@@ -49,7 +49,7 @@ fn main() {
     //env_logger::init(); // uncomment during development
 
     let mut input_path = None;
-    let mut output_path = None;
+    let mut output_paths = Vec::new();
     //TODO: read the parameters from RON?
     #[allow(unused_mut)]
     let mut params = Parameters::default();
@@ -87,10 +87,8 @@ fn main() {
             }
         } else if input_path.is_none() {
             input_path = Some(arg);
-        } else if output_path.is_none() {
-            output_path = Some(arg);
         } else {
-            log::warn!("Extra parameter: {}", arg);
+            output_paths.push(arg);
         }
     }
 
@@ -194,104 +192,107 @@ fn main() {
         }
     };
 
-    let output_path = match output_path {
-        Some(ref string) => string,
-        None => {
-            if info.is_some() {
-                println!("Validation successful");
-                return;
-            } else {
-                std::process::exit(!0);
+    if output_paths.is_empty() {
+        if info.is_some() {
+            println!("Validation successful");
+            return;
+        } else {
+            std::process::exit(!0);
+        }
+    }
+
+    for output_path in output_paths {
+        match Path::new(&output_path)
+            .extension()
+            .expect("Output has no extension?")
+            .to_str()
+            .unwrap()
+        {
+            "txt" => {
+                use std::io::Write;
+
+                let mut file = fs::File::create(output_path).unwrap();
+                writeln!(file, "{:#?}", module).unwrap();
+                if let Some(ref info) = info {
+                    writeln!(file).unwrap();
+                    writeln!(file, "{:#?}", info).unwrap();
+                }
             }
-        }
-    };
+            #[cfg(feature = "msl-out")]
+            "metal" => {
+                use naga::back::msl;
 
-    match Path::new(output_path)
-        .extension()
-        .expect("Output has no extension?")
-        .to_str()
-        .unwrap()
-    {
-        "txt" => {
-            use std::io::Write;
-            let mut file = fs::File::create(output_path).unwrap();
-            writeln!(file, "{:#?}", module).unwrap();
-            if let Some(info) = info {
-                writeln!(file).unwrap();
-                writeln!(file, "{:#?}", info).unwrap();
+                let pipeline_options = msl::PipelineOptions::default();
+                let (msl, _) = msl::write_string(
+                    &module,
+                    info.as_ref().unwrap(),
+                    &params.msl,
+                    &pipeline_options,
+                )
+                .unwrap_pretty();
+                fs::write(output_path, msl).unwrap();
             }
-        }
-        #[cfg(feature = "msl-out")]
-        "metal" => {
-            use naga::back::msl;
-            let pipeline_options = msl::PipelineOptions::default();
-            let (msl, _) = msl::write_string(
-                &module,
-                info.as_ref().unwrap(),
-                &params.msl,
-                &pipeline_options,
-            )
-            .unwrap_pretty();
-            fs::write(output_path, msl).unwrap();
-        }
-        #[cfg(feature = "spv-out")]
-        "spv" => {
-            use naga::back::spv;
+            #[cfg(feature = "spv-out")]
+            "spv" => {
+                use naga::back::spv;
 
-            let spv = spv::write_vec(&module, info.as_ref().unwrap(), &params.spv).unwrap_pretty();
-            let bytes = spv
-                .iter()
-                .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
-                    v.extend_from_slice(&w.to_le_bytes());
-                    v
-                });
+                let spv =
+                    spv::write_vec(&module, info.as_ref().unwrap(), &params.spv).unwrap_pretty();
+                let bytes = spv
+                    .iter()
+                    .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
+                        v.extend_from_slice(&w.to_le_bytes());
+                        v
+                    });
 
-            fs::write(output_path, bytes.as_slice()).unwrap();
-        }
-        #[cfg(feature = "glsl-out")]
-        stage @ "vert" | stage @ "frag" | stage @ "comp" => {
-            use naga::back::glsl;
+                fs::write(output_path, bytes.as_slice()).unwrap();
+            }
+            #[cfg(feature = "glsl-out")]
+            stage @ "vert" | stage @ "frag" | stage @ "comp" => {
+                use naga::back::glsl;
 
-            params.glsl.shader_stage = match stage {
-                "vert" => naga::ShaderStage::Vertex,
-                "frag" => naga::ShaderStage::Fragment,
-                "comp" => naga::ShaderStage::Compute,
-                _ => unreachable!(),
-            };
+                params.glsl.shader_stage = match stage {
+                    "vert" => naga::ShaderStage::Vertex,
+                    "frag" => naga::ShaderStage::Fragment,
+                    "comp" => naga::ShaderStage::Compute,
+                    _ => unreachable!(),
+                };
 
-            let mut buffer = String::new();
-            let mut writer =
-                glsl::Writer::new(&mut buffer, &module, info.as_ref().unwrap(), &params.glsl)
-                    .unwrap_pretty();
-            writer.write().unwrap();
-            fs::write(output_path, buffer).unwrap();
-        }
-        #[cfg(feature = "dot-out")]
-        "dot" => {
-            use naga::back::dot;
-            let output = dot::write(&module, info.as_ref()).unwrap();
-            fs::write(output_path, output).unwrap();
-        }
-        #[cfg(feature = "hlsl-out")]
-        "hlsl" => {
-            use naga::back::hlsl;
+                let mut buffer = String::new();
+                let mut writer =
+                    glsl::Writer::new(&mut buffer, &module, info.as_ref().unwrap(), &params.glsl)
+                        .unwrap_pretty();
+                writer.write().unwrap();
+                fs::write(output_path, buffer).unwrap();
+            }
+            #[cfg(feature = "dot-out")]
+            "dot" => {
+                use naga::back::dot;
 
-            let hlsl = hlsl::write_string(&module).unwrap_pretty();
-            fs::write(output_path, hlsl).unwrap();
-        }
-        #[cfg(feature = "wgsl-out")]
-        "wgsl" => {
-            use naga::back::wgsl;
+                let output = dot::write(&module, info.as_ref()).unwrap();
+                fs::write(output_path, output).unwrap();
+            }
+            #[cfg(feature = "hlsl-out")]
+            "hlsl" => {
+                use naga::back::hlsl;
 
-            let wgsl = wgsl::write_string(&module, info.as_ref().unwrap()).unwrap_pretty();
-            fs::write(output_path, wgsl).unwrap();
-        }
-        other => {
-            let _ = params;
-            panic!(
-                "Unknown output extension: {}, forgot to enable a feature?",
-                other
-            );
+                let hlsl = hlsl::write_string(&module).unwrap_pretty();
+                fs::write(output_path, hlsl).unwrap();
+            }
+            #[cfg(feature = "wgsl-out")]
+            "wgsl" => {
+                use naga::back::wgsl;
+
+                let wgsl = wgsl::write_string(&module, info.as_ref().unwrap()).unwrap_pretty();
+                fs::write(output_path, wgsl).unwrap();
+            }
+            other => {
+                let _ = params;
+                println!(
+                    "Unknown output extension: {}, forgot to enable a feature?",
+                    other
+                );
+            }
         }
     }
 }
