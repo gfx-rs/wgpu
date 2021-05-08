@@ -10,7 +10,7 @@ use super::token::TokenMetadata;
 impl Program<'_> {
     pub fn lookup_variable(
         &mut self,
-        context: &mut FunctionContext,
+        context: &mut Context,
         name: &str,
     ) -> Result<Option<VariableReference>, ErrorKind> {
         if let Some(local_var) = context.lookup_local_var(name) {
@@ -105,7 +105,7 @@ impl Program<'_> {
 
     pub fn field_selection(
         &mut self,
-        context: &mut FunctionContext,
+        context: &mut Context,
         expression: Handle<Expression>,
         name: &str,
         meta: TokenMetadata,
@@ -116,13 +116,10 @@ impl Program<'_> {
                     .iter()
                     .position(|m| m.name == Some(name.into()))
                     .ok_or_else(|| ErrorKind::UnknownField(meta, name.into()))?;
-                Ok(context
-                    .function
-                    .expressions
-                    .append(Expression::AccessIndex {
-                        base: expression,
-                        index: index as u32,
-                    }))
+                Ok(context.expressions.append(Expression::AccessIndex {
+                    base: expression,
+                    index: index as u32,
+                }))
             }
             // swizzles (xyzw, rgba, stpq)
             TypeInner::Vector { size, kind, width } => {
@@ -151,20 +148,17 @@ impl Program<'_> {
                     let components: Vec<Handle<Expression>> = v
                         .iter()
                         .map(|idx| {
-                            context
-                                .function
-                                .expressions
-                                .append(Expression::AccessIndex {
-                                    base: expression,
-                                    index: *idx as u32,
-                                })
+                            context.expressions.append(Expression::AccessIndex {
+                                base: expression,
+                                index: *idx as u32,
+                            })
                         })
                         .collect();
                     if components.len() == 1 {
                         // only single element swizzle, like pos.y, just return that component
                         Ok(components[0])
                     } else {
-                        Ok(context.function.expressions.append(Expression::Compose {
+                        Ok(context.expressions.append(Expression::Compose {
                             ty: self.module.types.fetch_or_append(Type {
                                 name: None,
                                 inner: TypeInner::Vector {

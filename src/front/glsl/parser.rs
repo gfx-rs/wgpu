@@ -1,6 +1,6 @@
 use super::{
     ast::{
-        Expr, ExprKind, FunctionCall, FunctionCallKind, FunctionContext, Profile, StorageQualifier,
+        Context, Expr, ExprKind, FunctionCall, FunctionCallKind, Profile, StorageQualifier,
         StructLayout, TypeQualifier,
     },
     error::ErrorKind,
@@ -9,8 +9,9 @@ use super::{
     Program,
 };
 use crate::{
-    arena::Handle, ArraySize, BinaryOperator, Constant, ConstantInner, Function, FunctionResult,
-    ResourceBinding, ScalarValue, Statement, StorageClass, Type, TypeInner, UnaryOperator,
+    arena::Handle, Arena, ArraySize, BinaryOperator, Block, Constant, ConstantInner, Function,
+    FunctionResult, ResourceBinding, ScalarValue, Statement, StorageClass, Type, TypeInner,
+    UnaryOperator,
 };
 use core::convert::TryFrom;
 use std::iter::Peekable;
@@ -301,13 +302,16 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     }
 
     fn parse_constant_expression(&mut self) -> Result<Handle<Constant>> {
-        let mut function = Function::default();
-        let mut ctx = FunctionContext::new(&mut function);
+        let mut expressions = Arena::new();
+        let mut locals = Arena::new();
+        let mut arguments = Vec::new();
+
+        let mut ctx = Context::new(&mut expressions, &mut locals, &mut arguments);
 
         let expr = self.parse_conditional(&mut ctx, None)?;
-        let root = ctx.resolve(self.program, expr, false)?;
+        let root = ctx.lower(self.program, expr, false, &mut Block::new())?;
 
-        self.program.solve_constant(&function.expressions, root)
+        self.program.solve_constant(&expressions, root)
     }
 
     fn parse_external_declaration(&mut self) -> Result<()> {
@@ -358,12 +362,15 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         TokenValue::LeftParen => {
                             self.bump()?;
 
-                            let mut function = Function {
-                                name: Some(name),
-                                result: ty.map(|ty| FunctionResult { ty, binding: None }),
-                                ..Default::default()
-                            };
-                            let mut context = FunctionContext::new(&mut function);
+                            let mut expressions = Arena::new();
+                            let mut local_variables = Arena::new();
+                            let mut arguments = self.program.function_args_prelude();
+
+                            let mut context = Context::new(
+                                &mut expressions,
+                                &mut local_variables,
+                                &mut arguments,
+                            );
 
                             self.parse_function_args(&mut context)?;
 
@@ -374,8 +381,17 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                 // TODO: Function prototypes
                                 TokenValue::Semicolon => todo!(),
                                 TokenValue::LeftBrace if external => {
-                                    self.parse_compound_statement(&mut context)?;
-                                    self.program.add_function(function)?;
+                                    let mut body = Block::new();
+
+                                    self.parse_compound_statement(&mut context, &mut body)?;
+                                    self.program.add_function(Function {
+                                        name: Some(name),
+                                        result: ty.map(|ty| FunctionResult { ty, binding: None }),
+                                        expressions,
+                                        local_variables,
+                                        arguments,
+                                        body,
+                                    })?;
 
                                     Ok(true)
                                 }
@@ -419,7 +435,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         }
     }
 
-    fn parse_primary(&mut self, ctx: &mut FunctionContext) -> Result<Expr> {
+    fn parse_primary(&mut self, ctx: &mut Context) -> Result<Expr> {
         let token = self.bump()?;
 
         let (width, value) = match token.value {
@@ -457,7 +473,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         })
     }
 
-    fn parse_postfix(&mut self, ctx: &mut FunctionContext) -> Result<Expr> {
+    fn parse_postfix(&mut self, ctx: &mut Context) -> Result<Expr> {
         let mut expr = match self.expect_peek()?.value {
             TokenValue::Identifier(_) => {
                 let (name, meta) = self.expect_ident()?;
@@ -551,7 +567,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         Ok(expr)
     }
 
-    fn parse_unary(&mut self, ctx: &mut FunctionContext) -> Result<Expr> {
+    fn parse_unary(&mut self, ctx: &mut Context) -> Result<Expr> {
         // TODO: prefix inc/dec
         match self.expect_peek()?.value {
             TokenValue::Plus | TokenValue::Dash | TokenValue::Bang | TokenValue::Tilde => {
@@ -580,7 +596,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
     fn parse_binary(
         &mut self,
-        ctx: &mut FunctionContext,
+        ctx: &mut Context,
         passtrough: Option<Expr>,
         min_bp: u8,
     ) -> Result<Expr> {
@@ -631,11 +647,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         Ok(expr)
     }
 
-    fn parse_conditional(
-        &mut self,
-        ctx: &mut FunctionContext,
-        passtrough: Option<Expr>,
-    ) -> Result<Expr> {
+    fn parse_conditional(&mut self, ctx: &mut Context, passtrough: Option<Expr>) -> Result<Expr> {
         let mut condition = self.parse_binary(ctx, passtrough, 0)?;
 
         if let TokenValue::Question = self.expect_peek()?.value {
@@ -658,7 +670,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         Ok(condition)
     }
 
-    fn parse_assignment(&mut self, ctx: &mut FunctionContext) -> Result<Expr> {
+    fn parse_assignment(&mut self, ctx: &mut Context) -> Result<Expr> {
         let pointer = self.parse_unary(ctx)?;
 
         if let TokenValue::Assign = self.expect_peek()?.value {
@@ -678,7 +690,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         }
     }
 
-    fn parse_expression(&mut self, ctx: &mut FunctionContext) -> Result<Expr> {
+    fn parse_expression(&mut self, ctx: &mut Context) -> Result<Expr> {
         let mut expr = self.parse_assignment(ctx)?;
 
         while let TokenValue::Comma = self.expect_peek()?.value {
@@ -689,52 +701,106 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         Ok(expr)
     }
 
-    fn parse_compound_statement(&mut self, ctx: &mut FunctionContext) -> Result<()> {
-        loop {
-            let token = self.bump()?;
-
-            match token.value {
-                TokenValue::Continue => {
-                    ctx.function.body.push(Statement::Continue);
-                    self.expect(TokenValue::Semicolon)?;
-                }
-                TokenValue::Break => {
-                    ctx.function.body.push(Statement::Break);
-                    self.expect(TokenValue::Semicolon)?;
-                }
-                TokenValue::Return => {
-                    let value = match self.expect_peek()?.value {
-                        TokenValue::Semicolon => {
-                            self.bump()?;
-                            None
-                        }
-                        _ => {
-                            let expr = self.parse_expression(ctx)?;
-                            self.expect(TokenValue::Semicolon)?;
-                            Some(ctx.resolve(self.program, expr, false)?)
-                        }
-                    };
-
-                    ctx.function.body.push(Statement::Return { value })
-                }
-                TokenValue::Discard => {
-                    ctx.function.body.push(Statement::Kill);
-                    self.expect(TokenValue::Semicolon)?;
-                }
-                TokenValue::LeftBrace => {
-                    ctx.push_scope();
-                    self.parse_compound_statement(ctx)?;
-                    ctx.remove_current_scope();
-                }
-                TokenValue::RightBrace => break,
-                _ => {}
+    fn parse_statement(&mut self, ctx: &mut Context, body: &mut Block) -> Result<()> {
+        match self.expect_peek()?.value {
+            TokenValue::Continue => {
+                self.bump()?;
+                body.push(Statement::Continue);
+                self.expect(TokenValue::Semicolon)?;
             }
+            TokenValue::Break => {
+                self.bump()?;
+                body.push(Statement::Break);
+                self.expect(TokenValue::Semicolon)?;
+            }
+            TokenValue::Return => {
+                self.bump()?;
+                let value = match self.expect_peek()?.value {
+                    TokenValue::Semicolon => {
+                        self.bump()?;
+                        None
+                    }
+                    _ => {
+                        let expr = self.parse_expression(ctx)?;
+                        self.expect(TokenValue::Semicolon)?;
+                        Some(ctx.lower(self.program, expr, false, body)?)
+                    }
+                };
+
+                body.push(Statement::Return { value })
+            }
+            TokenValue::Discard => {
+                self.bump()?;
+                body.push(Statement::Kill);
+                self.expect(TokenValue::Semicolon)?;
+            }
+            TokenValue::If => {
+                self.bump()?;
+
+                self.expect(TokenValue::LeftParen)?;
+                let condition = {
+                    let expr = self.parse_expression(ctx)?;
+                    ctx.lower(self.program, expr, false, body)?
+                };
+                self.expect(TokenValue::RightParen)?;
+
+                let mut accept = Block::new();
+                self.parse_statement(ctx, &mut accept)?;
+
+                let mut reject = Block::new();
+                if self.bump_if(TokenValue::Else).is_some() {
+                    self.parse_statement(ctx, &mut reject)?;
+                }
+
+                body.push(Statement::If {
+                    condition,
+                    accept,
+                    reject,
+                });
+            }
+            TokenValue::LeftBrace => {
+                self.bump()?;
+
+                let mut block = Block::new();
+                ctx.push_scope();
+
+                self.parse_compound_statement(ctx, &mut block)?;
+
+                ctx.remove_current_scope();
+                body.push(Statement::Block(block));
+            }
+            TokenValue::Plus
+            | TokenValue::Dash
+            | TokenValue::Bang
+            | TokenValue::Tilde
+            | TokenValue::LeftParen
+            | TokenValue::Identifier(_)
+            | TokenValue::TypeName(_)
+            | TokenValue::IntConstant(_)
+            | TokenValue::BoolConstant(_)
+            | TokenValue::FloatConstant(_) => {
+                self.parse_expression(ctx)?;
+                self.expect(TokenValue::Semicolon)?;
+            }
+            _ => {}
         }
 
         Ok(())
     }
 
-    fn parse_function_args(&mut self, context: &mut FunctionContext) -> Result<()> {
+    fn parse_compound_statement(&mut self, ctx: &mut Context, body: &mut Block) -> Result<()> {
+        loop {
+            if self.bump_if(TokenValue::RightBrace).is_some() {
+                break;
+            }
+
+            self.parse_statement(ctx, body)?;
+        }
+
+        Ok(())
+    }
+
+    fn parse_function_args(&mut self, context: &mut Context) -> Result<()> {
         loop {
             // TODO: parameter qualifier
             if self.peek_type_name() {

@@ -1,9 +1,9 @@
 use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind, TokenMetadata};
 use crate::{
-    proc::ResolveContext, Arena, ArraySize, BinaryOperator, BuiltIn, Constant, Expression,
-    FastHashMap, Function, FunctionArgument, GlobalVariable, Handle, Interpolation, Module,
-    RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass, Type,
-    TypeInner, UnaryOperator,
+    proc::ResolveContext, Arena, ArraySize, BinaryOperator, Block, BuiltIn, Constant, Expression,
+    FastHashMap, Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable,
+    Module, RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass,
+    Type, TypeInner, UnaryOperator,
 };
 
 #[derive(Debug)]
@@ -72,19 +72,19 @@ impl<'a> Program<'a> {
 
     pub fn resolve_type<'b>(
         &'b mut self,
-        context: &'b mut FunctionContext,
+        context: &'b mut Context,
         handle: Handle<Expression>,
     ) -> Result<&'b TypeInner, ErrorKind> {
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
             global_vars: &self.module.global_variables,
-            local_vars: &context.function.local_variables,
+            local_vars: &context.locals,
             functions: &self.module.functions,
-            arguments: &context.function.arguments,
+            arguments: &context.arguments,
         };
         match context.typifier.grow(
             handle,
-            &context.function.expressions,
+            &context.expressions,
             &mut self.module.types,
             &resolve_ctx,
         ) {
@@ -110,6 +110,14 @@ impl<'a> Program<'a> {
         solver
             .solve(root)
             .map_err(|_| ErrorKind::SemanticError("Can't solve constant".into()))
+    }
+
+    pub fn function_args_prelude(&self) -> Vec<FunctionArgument> {
+        vec![FunctionArgument {
+            name: None,
+            ty: self.input_struct,
+            binding: None,
+        }]
     }
 
     pub fn type_size(&self, ty: Handle<Type>) -> Result<u8, ErrorKind> {
@@ -164,21 +172,30 @@ pub enum Profile {
 }
 
 #[derive(Debug)]
-pub struct FunctionContext<'function> {
-    pub function: &'function mut Function,
+pub struct Context<'function> {
+    pub expressions: &'function mut Arena<Expression>,
+    pub locals: &'function mut Arena<LocalVariable>,
+    pub arguments: &'function mut Vec<FunctionArgument>,
+
     //TODO: Find less allocation heavy representation
     pub scopes: Vec<FastHashMap<String, VariableReference>>,
     pub lookup_global_var_exps: FastHashMap<String, VariableReference>,
     pub lookup_constant_exps: FastHashMap<String, VariableReference>,
     pub typifier: Typifier,
-
     pub samplers: FastHashMap<Handle<Expression>, Handle<Expression>>,
 }
 
-impl<'function> FunctionContext<'function> {
-    pub fn new(function: &'function mut Function) -> Self {
-        FunctionContext {
-            function,
+impl<'function> Context<'function> {
+    pub fn new(
+        expressions: &'function mut Arena<Expression>,
+        locals: &'function mut Arena<LocalVariable>,
+        arguments: &'function mut Vec<FunctionArgument>,
+    ) -> Self {
+        Context {
+            expressions,
+            locals,
+            arguments,
+
             scopes: vec![FastHashMap::default()],
             lookup_global_var_exps: FastHashMap::default(),
             lookup_constant_exps: FastHashMap::default(),
@@ -205,25 +222,16 @@ impl<'function> FunctionContext<'function> {
             let expr = match *program.lookup_global_variables.get(name)? {
                 GlobalLookup::Variable(v) => Expression::GlobalVariable(v),
                 GlobalLookup::Select(index) => {
-                    let base = self
-                        .function
-                        .expressions
-                        .append(Expression::FunctionArgument(
-                            self.function.arguments.len() as u32 - 1,
-                        ));
+                    let base = self.expressions.append(Expression::FunctionArgument(0));
 
                     Expression::AccessIndex { base, index }
                 }
             };
 
-            let expr = self.function.expressions.append(expr);
+            let expr = self.expressions.append(expr);
             let var = VariableReference {
                 expr,
-                load: Some(
-                    self.function
-                        .expressions
-                        .append(Expression::Load { pointer: expr }),
-                ),
+                load: Some(self.expressions.append(Expression::Load { pointer: expr })),
             };
 
             self.lookup_global_var_exps.insert(name.into(), var.clone());
@@ -239,7 +247,6 @@ impl<'function> FunctionContext<'function> {
     ) -> Option<VariableReference> {
         self.lookup_constant_exps.get(name).cloned().or_else(|| {
             let expr = self
-                .function
                 .expressions
                 .append(Expression::Constant(*program.lookup_constants.get(name)?));
 
@@ -268,10 +275,7 @@ impl<'function> FunctionContext<'function> {
     /// Add variable to current scope
     pub fn add_local_var(&mut self, name: String, expr: Handle<Expression>) {
         if let Some(current) = self.scopes.last_mut() {
-            let load = self
-                .function
-                .expressions
-                .append(Expression::Load { pointer: expr });
+            let load = self.expressions.append(Expression::Load { pointer: expr });
 
             (*current).insert(
                 name,
@@ -285,8 +289,8 @@ impl<'function> FunctionContext<'function> {
 
     /// Add function argument to current scope
     pub fn add_function_arg(&mut self, name: Option<String>, ty: Handle<Type>) {
-        let index = self.function.arguments.len();
-        self.function.arguments.push(FunctionArgument {
+        let index = self.arguments.len();
+        self.arguments.push(FunctionArgument {
             name: name.clone(),
             ty,
             binding: None,
@@ -295,7 +299,6 @@ impl<'function> FunctionContext<'function> {
         if let Some(name) = name {
             if let Some(current) = self.scopes.last_mut() {
                 let expr = self
-                    .function
                     .expressions
                     .append(Expression::FunctionArgument(index as u32));
 
@@ -313,33 +316,29 @@ impl<'function> FunctionContext<'function> {
         self.scopes.pop();
     }
 
-    pub fn resolve(
+    pub fn lower(
         &mut self,
         program: &mut Program,
         expr: Expr,
         lhs: bool,
+        body: &mut Block,
     ) -> Result<Handle<Expression>, ErrorKind> {
         Ok(match expr.kind {
             ExprKind::Access { base, index } => {
-                let base = self.resolve(program, *base, lhs)?;
-                let index = self.resolve(program, *index, false)?;
+                let base = self.lower(program, *base, lhs, body)?;
+                let index = self.lower(program, *index, false, body)?;
 
-                self.function
-                    .expressions
-                    .append(Expression::Access { base, index })
+                self.expressions.append(Expression::Access { base, index })
             }
             ExprKind::Select { base, field } => {
-                let base = self.resolve(program, *base, lhs)?;
+                let base = self.lower(program, *base, lhs, body)?;
 
                 program.field_selection(self, base, &field, expr.meta)?
             }
-            ExprKind::Constant(constant) => self
-                .function
-                .expressions
-                .append(Expression::Constant(constant)),
+            ExprKind::Constant(constant) => self.expressions.append(Expression::Constant(constant)),
             ExprKind::Binary { left, op, right } => {
-                let left = self.resolve(program, *left, false)?;
-                let right = self.resolve(program, *right, false)?;
+                let left = self.lower(program, *left, false, body)?;
+                let right = self.lower(program, *right, false, body)?;
 
                 if let BinaryOperator::Equal | BinaryOperator::NotEqual = op {
                     let equals = op == BinaryOperator::Equal;
@@ -358,13 +357,12 @@ impl<'function> FunctionContext<'function> {
                         false => (BinaryOperator::NotEqual, RelationalFunction::Any),
                     };
 
-                    let expr =
-                        self.function
-                            .expressions
-                            .append(Expression::Binary { op, left, right });
+                    let expr = self
+                        .expressions
+                        .append(Expression::Binary { op, left, right });
 
                     if left_is_vector && right_is_vector {
-                        self.function.expressions.append(Expression::Relational {
+                        self.expressions.append(Expression::Relational {
                             fun,
                             argument: expr,
                         })
@@ -372,17 +370,14 @@ impl<'function> FunctionContext<'function> {
                         expr
                     }
                 } else {
-                    self.function
-                        .expressions
+                    self.expressions
                         .append(Expression::Binary { left, op, right })
                 }
             }
             ExprKind::Unary { op, expr } => {
-                let expr = self.resolve(program, *expr, false)?;
+                let expr = self.lower(program, *expr, false, body)?;
 
-                self.function
-                    .expressions
-                    .append(Expression::Unary { op, expr })
+                self.expressions.append(Expression::Unary { op, expr })
             }
             ExprKind::Variable(var) => {
                 if lhs {
@@ -395,30 +390,30 @@ impl<'function> FunctionContext<'function> {
                 let args: Vec<_> = call
                     .args
                     .into_iter()
-                    .map(|e| self.resolve(program, e, false))
+                    .map(|e| self.lower(program, e, false, body))
                     .collect::<Result<_, _>>()?;
-                program.function_call(self, call.kind, &args)?
+                program.function_call(self, call.kind, &args, body)?
             }
             ExprKind::Conditional {
                 condition,
                 accept,
                 reject,
             } => {
-                let condition = self.resolve(program, *condition, false)?;
-                let accept = self.resolve(program, *accept, false)?;
-                let reject = self.resolve(program, *reject, false)?;
+                let condition = self.lower(program, *condition, false, body)?;
+                let accept = self.lower(program, *accept, false, body)?;
+                let reject = self.lower(program, *reject, false, body)?;
 
-                self.function.expressions.append(Expression::Select {
+                self.expressions.append(Expression::Select {
                     condition,
                     accept,
                     reject,
                 })
             }
             ExprKind::Assign { tgt, value } => {
-                let pointer = self.resolve(program, *tgt, false)?;
-                let value = self.resolve(program, *value, false)?;
+                let pointer = self.lower(program, *tgt, false, body)?;
+                let value = self.lower(program, *value, false, body)?;
 
-                self.function.body.push(Statement::Store { pointer, value });
+                body.push(Statement::Store { pointer, value });
 
                 value
             }

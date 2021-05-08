@@ -82,38 +82,38 @@ fn version() {
 
 #[test]
 fn control_flow() {
-    // TODO: Reenable tests later
-    // let mut entry_points = crate::FastHashMap::default();
-    // entry_points.insert("".to_string(), ShaderStage::Vertex);
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Vertex);
 
-    // let _program = parse_program(
-    //     r#"
-    //     #  version 450
-    //     void main() {
-    //         if (true) {
-    //             return 1;
-    //         } else {
-    //             return 2;
-    //         }
-    //     }
-    //     "#,
-    //     &entry_points,
-    // )
-    // .unwrap();
+    let _program = parse_program(
+        r#"
+        #  version 450
+        void main() {
+            if (true) {
+                return 1;
+            } else {
+                return 2;
+            }
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 
-    // let _program = parse_program(
-    //     r#"
-    //     #  version 450
-    //     void main() {
-    //         if (true) {
-    //             return 1;
-    //         }
-    //     }
-    //     "#,
-    //     &entry_points,
-    // )
-    // .unwrap();
+    let _program = parse_program(
+        r#"
+        #  version 450
+        void main() {
+            if (true) {
+                return 1;
+            }
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 
+    // TODO: Reenable later
     // let _program = parse_program(
     //     r#"
     //     #  version 450
