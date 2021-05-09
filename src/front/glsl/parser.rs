@@ -436,7 +436,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     }
 
     fn parse_primary(&mut self, ctx: &mut Context) -> Result<Expr> {
-        let token = self.bump()?;
+        let mut token = self.bump()?;
 
         let (width, value) = match token.value {
             TokenValue::IntConstant(int) => (
@@ -454,7 +454,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             TokenValue::BoolConstant(value) => (1, ScalarValue::Bool(value)),
             TokenValue::LeftParen => {
                 let expr = self.parse_expression(ctx)?;
-                self.expect(TokenValue::RightParen)?;
+                let meta = self.expect(TokenValue::RightParen)?.meta;
+
+                token.meta = token.meta.union(&meta);
 
                 return Ok(expr);
             }
@@ -476,11 +478,18 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     fn parse_postfix(&mut self, ctx: &mut Context) -> Result<Expr> {
         let mut expr = match self.expect_peek()?.value {
             TokenValue::Identifier(_) => {
-                let (name, meta) = self.expect_ident()?;
+                let (name, mut meta) = self.expect_ident()?;
 
                 if self.bump_if(TokenValue::LeftParen).is_some() {
                     let mut args = Vec::new();
-                    while TokenValue::RightParen != self.bump()?.value {
+                    loop {
+                        let token = self.bump()?;
+
+                        if let TokenValue::RightParen = token.value {
+                            meta = meta.union(&token.meta);
+                            break;
+                        }
+
                         args.push(self.parse_expression(ctx)?)
                     }
 
@@ -504,7 +513,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 }
             }
             TokenValue::TypeName(_) => {
-                let Token { value, meta } = self.bump()?;
+                let Token { value, mut meta } = self.bump()?;
 
                 let handle = if let TokenValue::TypeName(ty) = value {
                     self.program.module.types.append(ty)
@@ -515,7 +524,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 self.expect(TokenValue::LeftParen)?;
 
                 let mut args = Vec::new();
-                while TokenValue::RightParen != self.bump()?.value {
+                loop {
+                    let token = self.bump()?;
+
+                    if let TokenValue::RightParen = token.value {
+                        meta = meta.union(&token.meta);
+                        break;
+                    }
+
                     args.push(self.parse_expression(ctx)?)
                 }
 
@@ -537,27 +553,25 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             match value {
                 TokenValue::LeftBracket => {
                     let index = Box::new(self.parse_expression(ctx)?);
-                    self.expect(TokenValue::RightBracket)?;
+                    let end_meta = self.expect(TokenValue::RightBracket)?.meta;
 
-                    // TODO: metadata unification
                     expr = Expr {
                         kind: ExprKind::Access {
                             base: Box::new(expr),
                             index,
                         },
-                        meta,
+                        meta: meta.union(&end_meta),
                     }
                 }
                 TokenValue::Dot => {
-                    let field = self.expect_ident()?.0;
+                    let (field, end_meta) = self.expect_ident()?;
 
-                    // TODO: metadata unification
                     expr = Expr {
                         kind: ExprKind::Select {
                             base: Box::new(expr),
                             field,
                         },
-                        meta,
+                        meta: meta.union(&end_meta),
                     }
                 }
                 _ => unreachable!(),
@@ -574,6 +588,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 let Token { value, meta } = self.bump()?;
 
                 let expr = self.parse_unary(ctx)?;
+                let end_meta = expr.meta.clone();
 
                 let kind = match value {
                     TokenValue::Dash => ExprKind::Unary {
@@ -587,8 +602,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     _ => return Ok(expr),
                 };
 
-                // TODO: metadata unification
-                Ok(Expr { kind, meta })
+                Ok(Expr {
+                    kind,
+                    meta: meta.union(&end_meta),
+                })
             }
             _ => self.parse_postfix(ctx),
         }
@@ -603,15 +620,17 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let mut expr = passtrough
             .ok_or(ErrorKind::EndOfFile /* Dummy error */)
             .or_else(|_| self.parse_unary(ctx))?;
+        let start_meta = expr.meta.clone();
 
         while let Some((l_bp, r_bp)) = binding_power(&self.expect_peek()?.value) {
             if l_bp < min_bp {
                 break;
             }
 
-            let Token { value, meta } = self.bump()?;
+            let Token { value, .. } = self.bump()?;
 
             let right = Box::new(self.parse_binary(ctx, None, r_bp)?);
+            let end_meta = right.meta.clone();
 
             expr = Expr {
                 kind: ExprKind::Binary {
@@ -640,7 +659,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     },
                     right,
                 },
-                meta,
+                meta: start_meta.union(&end_meta),
             }
         }
 
@@ -649,13 +668,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
     fn parse_conditional(&mut self, ctx: &mut Context, passtrough: Option<Expr>) -> Result<Expr> {
         let mut condition = self.parse_binary(ctx, passtrough, 0)?;
+        let start_meta = condition.meta.clone();
 
-        if let TokenValue::Question = self.expect_peek()?.value {
-            let meta = self.bump()?.meta;
-
+        if self.bump_if(TokenValue::Question).is_some() {
             let accept = Box::new(self.parse_expression(ctx)?);
             self.expect(TokenValue::Colon)?;
             let reject = Box::new(self.parse_assignment(ctx)?);
+            let end_meta = reject.meta.clone();
 
             condition = Expr {
                 kind: ExprKind::Conditional {
@@ -663,7 +682,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     accept,
                     reject,
                 },
-                meta,
+                meta: start_meta.union(&end_meta),
             };
         }
 
@@ -672,18 +691,18 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
     fn parse_assignment(&mut self, ctx: &mut Context) -> Result<Expr> {
         let pointer = self.parse_unary(ctx)?;
+        let start_meta = pointer.meta.clone();
 
-        if let TokenValue::Assign = self.expect_peek()?.value {
-            let meta = self.bump()?.meta;
-
+        if self.bump_if(TokenValue::Assign).is_some() {
             let value = Box::new(self.parse_assignment(ctx)?);
+            let end_meta = value.meta.clone();
 
             Ok(Expr {
                 kind: ExprKind::Assign {
                     tgt: Box::new(pointer),
                     value,
                 },
-                meta,
+                meta: start_meta.union(&end_meta),
             })
         } else {
             self.parse_conditional(ctx, Some(pointer))

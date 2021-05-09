@@ -24,7 +24,7 @@ thiserror = "1.0.21"
 serde = { version = "1.0", features = ["derive"], optional = true }
 petgraph = { version ="0.5", optional = true }
 rose_tree = { version ="0.2", optional = true }
-pp-rs = { version = "0.1", optional = true }
+pp-rs = { git = "https://github.com/Kangz/glslpp-rs.git", optional = true, rev = "c02476b" }
 #env_logger = "0.8" # uncomment temporarily for developing with the binary target
 
 [features]

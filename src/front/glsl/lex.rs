@@ -30,19 +30,13 @@ impl<'a> Lexer<'a> {
 impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
-        let mut meta = TokenMetadata {
-            line: 0,
-            chars: 0..0,
-        };
+        let mut meta = TokenMetadata { chars: 0..0 };
         let pp_token = match self.tokens.pop_front() {
             Some(t) => t,
             None => match self.pp.next()? {
                 Ok(t) => t,
                 Err((err, loc)) => {
-                    meta.line = loc.line as usize;
-                    meta.chars.start = loc.pos as usize;
-                    //TODO: proper location end
-                    meta.chars.end = loc.pos as usize + 1;
+                    meta.chars = loc.into();
                     return Some(Token {
                         value: TokenValue::Unknown(err),
                         meta,
@@ -51,10 +45,7 @@ impl<'a> Iterator for Lexer<'a> {
             },
         };
 
-        meta.line = pp_token.location.line as usize;
-        meta.chars.start = pp_token.location.pos as usize;
-        //TODO: proper location end
-        meta.chars.end = pp_token.location.pos as usize + 1;
+        meta.chars = pp_token.location.into();
         let value = match pp_token.value {
             PPTokenValue::Extension(extension) => {
                 for t in extension.tokens {
@@ -195,10 +186,7 @@ mod tests {
             lex.next().unwrap(),
             Token {
                 value: TokenValue::Version,
-                meta: TokenMetadata {
-                    line: 1,
-                    chars: 1..2 //TODO
-                }
+                meta: TokenMetadata { chars: 1..8 }
             }
         );
         assert_eq!(
@@ -209,70 +197,49 @@ mod tests {
                     value: 450,
                     width: 32
                 }),
-                meta: TokenMetadata {
-                    line: 1,
-                    chars: 9..10 //TODO
-                },
+                meta: TokenMetadata { chars: 9..12 },
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::Void,
-                meta: TokenMetadata {
-                    line: 2,
-                    chars: 0..1 //TODO
-                }
+                meta: TokenMetadata { chars: 13..17 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::Identifier("main".into()),
-                meta: TokenMetadata {
-                    line: 2,
-                    chars: 5..6 //TODO
-                }
+                meta: TokenMetadata { chars: 18..22 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::LeftParen,
-                meta: TokenMetadata {
-                    line: 2,
-                    chars: 10..11 //TODO
-                }
+                meta: TokenMetadata { chars: 23..24 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::RightParen,
-                meta: TokenMetadata {
-                    line: 2,
-                    chars: 11..12 //TODO
-                }
+                meta: TokenMetadata { chars: 24..25 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::LeftBrace,
-                meta: TokenMetadata {
-                    line: 2,
-                    chars: 13..14 //TODO
-                }
+                meta: TokenMetadata { chars: 26..27 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::RightBrace,
-                meta: TokenMetadata {
-                    line: 2,
-                    chars: 14..15 //TODO
-                }
+                meta: TokenMetadata { chars: 27..28 }
             }
         );
         assert_eq!(lex.next(), None);

@@ -6,8 +6,15 @@ use std::ops::Range;
 #[derive(Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct TokenMetadata {
-    pub line: usize,
     pub chars: Range<usize>,
+}
+
+impl TokenMetadata {
+    pub fn union(&self, other: &Self) -> Self {
+        TokenMetadata {
+            chars: (self.chars.start.min(other.chars.start))..(self.chars.end.max(self.chars.end)),
+        }
+    }
 }
 
 #[derive(Debug)]
