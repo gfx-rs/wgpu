@@ -1016,7 +1016,11 @@ impl<B: GfxBackend> Device<B> {
                 let module = match parser.parse() {
                     Ok(module) => Some(module),
                     Err(err) => {
-                        log::warn!("Failed to parse shader SPIR-V code for {:?}: {:?}", desc.label, err);
+                        log::warn!(
+                            "Failed to parse shader SPIR-V code for {:?}: {:?}",
+                            desc.label,
+                            err
+                        );
                         if desc.flags.contains(wgt::ShaderFlags::VALIDATION) {
                             return Err(pipeline::CreateShaderModuleError::Parsing);
                         }
@@ -1044,21 +1048,23 @@ impl<B: GfxBackend> Device<B> {
         let (naga_result, interface) = match module {
             // If succeeded, then validate it and attempt to give it to gfx-hal directly.
             Some(module) if desc.flags.contains(wgt::ShaderFlags::VALIDATION) || spv.is_none() => {
+                use naga::valid::Capabilities as Caps;
                 profiling::scope!("naga::validate");
-                let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all())
+
+                let mut caps = Caps::empty();
+                caps.set(
+                    Caps::PUSH_CONSTANT,
+                    self.features.contains(wgt::Features::PUSH_CONSTANTS),
+                );
+                caps.set(
+                    Caps::FLOAT64,
+                    self.features.contains(wgt::Features::SHADER_FLOAT64),
+                );
+                let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
                     .validate(&module)?;
-                if !self.features.contains(wgt::Features::PUSH_CONSTANTS)
-                    && module
-                        .global_variables
-                        .iter()
-                        .any(|(_, var)| var.class == naga::StorageClass::PushConstant)
-                {
-                    return Err(pipeline::CreateShaderModuleError::MissingFeature(
-                        wgt::Features::PUSH_CONSTANTS,
-                    ));
-                }
                 let interface = validation::Interface::new(&module, &info);
                 let shader = hal::device::NagaShader { module, info };
+
                 let naga_result = if desc
                     .flags
                     .contains(wgt::ShaderFlags::EXPERIMENTAL_TRANSLATION)
