@@ -6,7 +6,7 @@ labels: bug
 assignees: ''
 ---
 
-<!-- Thank you for filing this! If this is an issue with the core library, validation, or the backends, please file an issue on the wgpu-core tracker here: https://github.com/gfx-rs/wgpu/issues/new/choose-->
+<!-- Thank you for filing this! If this is an issue with the core library, validation, or the backends, please file an issue on the wgpu-core tracker here: https://github.com/gfx-rs/wgpu/issues/new/choose -->
 
 **Description**
 A clear and concise description of what the bug is.
