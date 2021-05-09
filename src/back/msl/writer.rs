@@ -775,7 +775,7 @@ impl<W: Write> Writer<W> {
                 let scalar = scalar_kind_string(scalar_kind);
                 let size = vector_size_str(size);
 
-                write!(self.out, "{}{}(", scalar, size)?;
+                write!(self.out, "{}::{}{}(", NAMESPACE, scalar, size)?;
                 self.put_expression(value, context, true)?;
                 write!(self.out, ")")?;
             }

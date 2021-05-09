@@ -1380,7 +1380,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                         write!(self.out, "{}", INDENT.repeat(indent))?;
                                     }
                                     for (index, member) in members.iter().enumerate() {
-                                        // TODO: handle builtin in better way 
+                                        // TODO: handle builtin in better way
                                         if let Some(Binding::BuiltIn(builtin)) = member.binding {
                                             match builtin {
                                                 crate::BuiltIn::ClipDistance
