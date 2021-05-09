@@ -1,6 +1,6 @@
 use crate::{
-    Binding, BuiltIn, Constant, Expression, GlobalVariable, Handle, ScalarKind, StorageAccess,
-    StorageClass, StructMember, Type, TypeInner, VectorSize,
+    Binding, BuiltIn, Constant, Expression, GlobalVariable, Handle, LocalVariable, ScalarKind,
+    StorageAccess, StorageClass, StructMember, Type, TypeInner, VectorSize,
 };
 
 use super::ast::*;
@@ -19,7 +19,7 @@ impl Program<'_> {
         if let Some(global_var) = context.lookup_global_var(self, name) {
             return Ok(Some(global_var));
         }
-        if let Some(constant) = context.lookup_global_var(self, name) {
+        if let Some(constant) = context.lookup_constants_var(self, name) {
             return Ok(Some(constant));
         }
         match name {
@@ -195,14 +195,14 @@ impl Program<'_> {
         }
     }
 
-    // TODO: constants
     pub fn add_global_var(
         &mut self,
-        qualifiers: Vec<TypeQualifier>,
+        ctx: &mut Context,
+        qualifiers: &[TypeQualifier],
         ty: Handle<Type>,
         name: String,
         init: Option<Handle<Constant>>,
-    ) -> Result<(), ErrorKind> {
+    ) -> Result<Handle<Expression>, ErrorKind> {
         let mut storage = StorageQualifier::StorageClass(StorageClass::Function);
         let mut interpolation = None;
         let mut binding = None;
@@ -211,7 +211,7 @@ impl Program<'_> {
         let mut layout = None;
 
         for qualifier in qualifiers {
-            match qualifier {
+            match *qualifier {
                 TypeQualifier::StorageQualifier(s) => {
                     if StorageQualifier::StorageClass(StorageClass::Function) != storage {
                         return Err(ErrorKind::SemanticError(
@@ -230,14 +230,14 @@ impl Program<'_> {
 
                     interpolation = Some(i);
                 }
-                TypeQualifier::ResourceBinding(r) => {
+                TypeQualifier::ResourceBinding(ref r) => {
                     if binding.is_some() {
                         return Err(ErrorKind::SemanticError(
                             "Cannot use more than one storage qualifier per declaration".into(),
                         ));
                     }
 
-                    binding = Some(r);
+                    binding = Some(r.clone());
                 }
                 TypeQualifier::Location(l) => {
                     if location.is_some() {
@@ -257,7 +257,7 @@ impl Program<'_> {
 
                     sampling = Some(s);
                 }
-                TypeQualifier::Layout(l) => {
+                TypeQualifier::Layout(ref l) => {
                     if layout.is_some() {
                         return Err(ErrorKind::SemanticError(
                             "Cannot use more than one storage qualifier per declaration".into(),
@@ -300,26 +300,78 @@ impl Program<'_> {
                 }),
             );
 
-            if let Some(i) = index {
-                self.lookup_global_variables
-                    .insert(name, GlobalLookup::Select(i));
-            }
-        } else if let StorageQualifier::StorageClass(class) = storage {
-            let handle = self.module.global_variables.append(GlobalVariable {
-                name: Some(name.clone()),
-                class,
-                binding,
-                ty,
-                init,
-                // TODO
-                storage_access: StorageAccess::all(),
-            });
-
             self.lookup_global_variables
-                .insert(name, GlobalLookup::Variable(handle));
+                .insert(name, GlobalLookup::Select(index));
+
+            let base = ctx.expressions.append(Expression::FunctionArgument(0));
+            return Ok(ctx
+                .expressions
+                .append(Expression::AccessIndex { base, index }));
+        } else if let StorageQualifier::Const = storage {
+            let handle = init.ok_or_else(|| {
+                ErrorKind::SemanticError("Constant must have a initializer".into())
+            })?;
+
+            self.lookup_constants.insert(name, handle);
+
+            return Ok(ctx.expressions.append(Expression::Constant(handle)));
         }
 
-        Ok(())
+        let class = match storage {
+            StorageQualifier::StorageClass(class) => class,
+            _ => StorageClass::Function,
+        };
+
+        let handle = self.module.global_variables.append(GlobalVariable {
+            name: Some(name.clone()),
+            class,
+            binding,
+            ty,
+            init,
+            // TODO
+            storage_access: StorageAccess::all(),
+        });
+
+        self.lookup_global_variables
+            .insert(name, GlobalLookup::Variable(handle));
+
+        Ok(ctx.expressions.append(Expression::GlobalVariable(handle)))
+    }
+
+    pub fn add_local_var(
+        &mut self,
+        ctx: &mut Context,
+        qualifiers: &[TypeQualifier],
+        ty: Handle<Type>,
+        name: String,
+        init: Option<Handle<Constant>>,
+    ) -> Result<Handle<Expression>, ErrorKind> {
+        // FIXME: this should be removed after
+        // fixing the lack of constant qualifier support
+        #[allow(clippy::never_loop)]
+        for qualifier in qualifiers {
+            match *qualifier {
+                TypeQualifier::StorageQualifier(StorageQualifier::Const) => {
+                    return Err(ErrorKind::NotImplemented("const qualifier"));
+                }
+                _ => {
+                    return Err(ErrorKind::SemanticError(
+                        "Qualifier not supported in locals".into(),
+                    ));
+                }
+            }
+        }
+
+        let handle = ctx.locals.append(LocalVariable {
+            name: Some(name.clone()),
+            ty,
+            init,
+        });
+        let expr = ctx.expressions.append(Expression::LocalVariable(handle));
+
+        ctx.add_local_var(name, expr);
+
+        Ok(expr)
     }
 
     fn add_member(
@@ -328,7 +380,7 @@ impl Program<'_> {
         name: Option<String>,
         ty: Handle<Type>,
         binding: Option<Binding>,
-    ) -> Option<u32> {
+    ) -> u32 {
         let handle = match input {
             true => self.input_struct,
             false => self.output_struct,
@@ -360,9 +412,9 @@ impl Program<'_> {
                 offset,
             });
 
-            Some(members.len() as u32 - 1)
+            members.len() as u32 - 1
         } else {
-            None
+            unreachable!()
         }
     }
 }

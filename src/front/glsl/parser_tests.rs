@@ -327,60 +327,35 @@ fn functions() {
 
 #[test]
 fn constants() {
-    // TODO: Reenable tests later
-    // use crate::{Constant, ConstantInner, ScalarValue};
+    use crate::{Constant, ConstantInner, ScalarValue};
 
-    // let mut entry_points = crate::FastHashMap::default();
-    // entry_points.insert("".to_string(), ShaderStage::Vertex);
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Vertex);
 
-    // let program = parse_program(
-    //     r#"
-    //     #  version 450
-    //     const float a = 1.0;
-    //     float global = a;
-    //     const flat float b = a;
-    //     "#,
-    //     &entry_points,
-    // )
-    // .unwrap();
+    let program = parse_program(
+        r#"
+        #  version 450
+        const float a = 1.0;
+        float global = a;
+        const float b = a;
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 
-    // let mut constants = program.module.constants.iter();
+    let mut constants = program.module.constants.iter();
 
-    // assert_eq!(
-    //     constants.next().unwrap().1,
-    //     &Constant {
-    //         name: None,
-    //         specialization: None,
-    //         inner: ConstantInner::Scalar {
-    //             width: 4,
-    //             value: ScalarValue::Float(1.0)
-    //         }
-    //     }
-    // );
+    assert_eq!(
+        constants.next().unwrap().1,
+        &Constant {
+            name: None,
+            specialization: None,
+            inner: ConstantInner::Scalar {
+                width: 4,
+                value: ScalarValue::Float(1.0)
+            }
+        }
+    );
 
-    // assert_eq!(
-    //     constants.next().unwrap().1,
-    //     &Constant {
-    //         name: Some(String::from("a")),
-    //         specialization: None,
-    //         inner: ConstantInner::Scalar {
-    //             width: 4,
-    //             value: ScalarValue::Float(1.0)
-    //         }
-    //     }
-    // );
-
-    // assert_eq!(
-    //     constants.next().unwrap().1,
-    //     &Constant {
-    //         name: Some(String::from("b")),
-    //         specialization: None,
-    //         inner: ConstantInner::Scalar {
-    //             width: 4,
-    //             value: ScalarValue::Float(1.0)
-    //         }
-    //     }
-    // );
-
-    // assert!(constants.next().is_none());
+    assert!(constants.next().is_none());
 }

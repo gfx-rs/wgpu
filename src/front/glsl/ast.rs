@@ -542,7 +542,7 @@ pub enum StorageQualifier {
     Const,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum StructLayout {
     Std140,
 }

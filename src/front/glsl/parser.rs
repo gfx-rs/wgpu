@@ -110,6 +110,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         Ok(())
     }
 
+    /// Parses an optional array_specifier returning `Ok(None)` if there is no
+    /// LeftBracket
     fn parse_array_specifier(&mut self) -> Result<Option<ArraySize>> {
         // TODO: expressions
         if let Some(&TokenValue::LeftBracket) = self.lexer.peek().map(|t| &t.value) {
@@ -315,7 +317,20 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     }
 
     fn parse_external_declaration(&mut self) -> Result<()> {
-        if !self.parse_declaration(true)? {
+        // TODO: Create body and expressions arena to be used in all entry
+        // points to handle this case
+        // ```glsl
+        // // This is valid and the body of main will contain the assignment
+        // float b;
+        // float a = b = 1;
+        //
+        // void main() {}
+        // ```
+        let (mut e, mut l, mut a) = (Arena::new(), Arena::new(), Vec::new());
+        let mut ctx = Context::new(&mut e, &mut l, &mut a);
+        let mut body = Block::new();
+
+        if !self.parse_declaration(&mut ctx, &mut body, true)? {
             let token = self.bump()?;
             match token.value {
                 TokenValue::Semicolon if self.program.version == 460 => Ok(()),
@@ -356,12 +371,147 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         }
     }
 
+    fn parse_initializer(
+        &mut self,
+        ty: Handle<Type>,
+        ctx: &mut Context,
+        body: &mut Block,
+    ) -> Result<Handle<Expression>> {
+        // initializer:
+        //     assignment_expression
+        //     LEFT_BRACE initializer_list RIGHT_BRACE
+        //     LEFT_BRACE initializer_list COMMA RIGHT_BRACE
+        //
+        // initializer_list:
+        //     initializer
+        //     initializer_list COMMA initializer
+        if self.bump_if(TokenValue::LeftBrace).is_some() {
+            // initializer_list
+            let mut components = Vec::new();
+            loop {
+                // TODO: Change type
+                components.push(self.parse_initializer(ty, ctx, body)?);
+
+                let token = self.bump()?;
+                match token.value {
+                    TokenValue::Comma => {
+                        if self.bump_if(TokenValue::RightBrace).is_some() {
+                            break;
+                        }
+                    }
+                    TokenValue::RightBrace => break,
+                    _ => return Err(ErrorKind::InvalidToken(token)),
+                }
+            }
+
+            Ok(ctx
+                .expressions
+                .append(Expression::Compose { ty, components }))
+        } else {
+            let expr = self.parse_assignment(ctx)?;
+            let root = ctx.lower(self.program, expr, false, body)?;
+
+            Ok(root)
+        }
+    }
+
+    // Note: caller preparsed the type and qualifiers
+    // Note: caller skips this if the fallthrough token is not expected to be consumed here so this
+    // produced Error::InvalidToken if it isn't consumed
+    fn parse_init_declarator_list(
+        &mut self,
+        ty: Handle<Type>,
+        mut fallthrough: Option<Token>,
+        ctx: &mut DeclarationContext,
+    ) -> Result<()> {
+        // init_declarator_list:
+        //     single_declaration
+        //     init_declarator_list COMMA IDENTIFIER
+        //     init_declarator_list COMMA IDENTIFIER array_specifier
+        //     init_declarator_list COMMA IDENTIFIER array_specifier EQUAL initializer
+        //     init_declarator_list COMMA IDENTIFIER EQUAL initializer
+        //
+        // single_declaration:
+        //     fully_specified_type
+        //     fully_specified_type IDENTIFIER
+        //     fully_specified_type IDENTIFIER array_specifier
+        //     fully_specified_type IDENTIFIER array_specifier EQUAL initializer
+        //     fully_specified_type IDENTIFIER EQUAL initializer
+
+        // Consume any leading comma, e.g. this is valid: `float, a=1;`
+        if fallthrough
+            .as_ref()
+            .or_else(|| self.lexer.peek())
+            .filter(|t| t.value == TokenValue::Comma)
+            .is_some()
+        {
+            fallthrough.take().or_else(|| self.lexer.next());
+        }
+
+        loop {
+            let token = fallthrough
+                .take()
+                .ok_or(ErrorKind::EndOfFile)
+                .or_else(|_| self.bump())?;
+            let name = match token.value {
+                TokenValue::Semicolon => break,
+                TokenValue::Identifier(name) => name,
+                _ => return Err(ErrorKind::InvalidToken(token)),
+            };
+
+            // array_specifier
+            // array_specifier EQUAL initializer
+            // EQUAL initializer
+
+            // parse an array specifier if it exists
+            // NOTE: unlike other parse methods this one doesn't expect an array specifier and
+            // returns Ok(None) rather than an error if there is not one
+            let array_specifier = self.parse_array_specifier()?;
+            let ty = self.maybe_array(ty, array_specifier);
+
+            let init = self
+                .bump_if(TokenValue::Assign)
+                .map(|_| self.parse_initializer(ty, ctx.ctx, ctx.body))
+                .transpose()?;
+
+            let pointer = ctx.add_var(
+                ty,
+                name,
+                // TODO: Should we try to make constants here?
+                // This is mostly a hack because we don't yet support adding
+                // bodies to entry points for variable initialization
+                init.and_then(|root| self.program.solve_constant(ctx.ctx.expressions, root).ok()),
+                self.program,
+            )?;
+
+            if let Some(value) = init {
+                ctx.body.push(Statement::Store { pointer, value });
+            }
+
+            let token = self.bump()?;
+            match token.value {
+                TokenValue::Semicolon => break,
+                TokenValue::Comma => {}
+                _ => return Err(ErrorKind::InvalidToken(token)),
+            }
+        }
+
+        Ok(())
+    }
+
     /// `external` whether or not we are in a global or local context
-    fn parse_declaration(&mut self, external: bool) -> Result<bool> {
+    fn parse_declaration(
+        &mut self,
+        ctx: &mut Context,
+        body: &mut Block,
+        external: bool,
+    ) -> Result<bool> {
         //declaration:
         //    function_prototype  SEMICOLON
+        //
         //    init_declarator_list SEMICOLON
         //    PRECISION precision_qualifier type_specifier SEMICOLON
+        //
         //    type_qualifier IDENTIFIER LEFT_BRACE struct_declaration_list RIGHT_BRACE SEMICOLON
         //    type_qualifier IDENTIFIER LEFT_BRACE struct_declaration_list RIGHT_BRACE IDENTIFIER SEMICOLON
         //    type_qualifier IDENTIFIER LEFT_BRACE struct_declaration_list RIGHT_BRACE IDENTIFIER array_specifier SEMICOLON
@@ -377,8 +527,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                 let token = self.bump()?;
 
-                match token.value {
-                    TokenValue::Semicolon => Ok(true),
+                let token_fallthrough = match token.value {
                     TokenValue::Identifier(name) => match self.expect_peek()?.value {
                         // Function definition/prototype
                         TokenValue::LeftParen => {
@@ -400,7 +549,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             self.expect(TokenValue::RightParen)?;
 
                             let token = self.bump()?;
-                            match token.value {
+                            return match token.value {
                                 // TODO: Function prototypes
                                 TokenValue::Semicolon => {
                                     self.program.add_prototype(
@@ -436,31 +585,33 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                     Ok(true)
                                 }
                                 _ => Err(ErrorKind::InvalidToken(token)),
-                            }
+                            };
                         }
-                        // Variable Declaration
-                        TokenValue::Semicolon => {
-                            self.bump()?;
-
-                            if let Some(ty) = ty {
-                                if external {
-                                    self.program.add_global_var(qualifiers, ty, name, None)?;
-                                } else {
-                                    // TODO: local variables
-                                }
-                            } else {
-                                return Err(ErrorKind::SemanticError(
-                                    "Declaration cannot have void type".into(),
-                                ));
-                            }
-
-                            Ok(true)
-                        }
-                        TokenValue::Comma => todo!(),
-                        _ => Err(ErrorKind::InvalidToken(self.bump()?)),
+                        _ => Token {
+                            value: TokenValue::Identifier(name),
+                            meta: token.meta,
+                        },
                     },
-                    _ => Err(ErrorKind::InvalidToken(token)),
+                    _ => token,
+                };
+
+                // Variable Declaration
+                if let Some(ty) = ty {
+                    let mut ctx = DeclarationContext {
+                        qualifiers,
+                        external,
+                        ctx,
+                        body,
+                    };
+
+                    self.parse_init_declarator_list(ty, Some(token_fallthrough), &mut ctx)?;
+                } else {
+                    return Err(ErrorKind::SemanticError(
+                        "Declaration cannot have void type".into(),
+                    ));
                 }
+
+                Ok(true)
             } else {
                 // Structs and modifiers
                 let token = self.bump()?;
@@ -1048,6 +1199,29 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         }
 
         Ok(())
+    }
+}
+
+struct DeclarationContext<'ctx, 'fun> {
+    qualifiers: Vec<TypeQualifier>,
+    external: bool,
+
+    ctx: &'ctx mut Context<'fun>,
+    body: &'ctx mut Block,
+}
+
+impl<'ctx, 'fun> DeclarationContext<'ctx, 'fun> {
+    fn add_var(
+        &mut self,
+        ty: Handle<Type>,
+        name: String,
+        init: Option<Handle<Constant>>,
+        program: &mut Program,
+    ) -> Result<Handle<Expression>> {
+        match self.external {
+            true => program.add_global_var(self.ctx, &self.qualifiers, ty, name, init),
+            false => program.add_local_var(self.ctx, &self.qualifiers, ty, name, init),
+        }
     }
 }
 
