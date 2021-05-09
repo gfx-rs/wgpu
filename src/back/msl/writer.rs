@@ -1985,6 +1985,12 @@ impl<W: Write> Writer<W> {
                     info.entry_point_names.push(Err(err));
                     continue;
                 }
+                if !self.runtime_sized_buffers.is_empty() {
+                    if let Err(err) = options.resolve_sizes_buffer(ep.stage) {
+                        info.entry_point_names.push(Err(err));
+                        continue;
+                    }
+                }
             }
 
             writeln!(self.out)?;
@@ -2207,14 +2213,8 @@ impl<W: Write> Writer<W> {
             }
 
             if !self.runtime_sized_buffers.is_empty() {
-                let resolved = match options.resolve_sizes_buffer(ep.stage) {
-                    Ok(resolved) => resolved,
-                    Err(e) => {
-                        info.entry_point_names.push(Err(e));
-                        continue;
-                    }
-                };
-
+                // this is checked earlier
+                let resolved = options.resolve_sizes_buffer(ep.stage).unwrap();
                 let separator = if module.global_variables.is_empty() {
                     ' '
                 } else {
