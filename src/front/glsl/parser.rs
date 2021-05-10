@@ -10,11 +10,11 @@ use super::{
 };
 use crate::{
     arena::Handle, Arena, ArraySize, BinaryOperator, Block, Constant, ConstantInner, Function,
-    FunctionResult, ResourceBinding, ScalarValue, Statement, StorageClass, Type, TypeInner,
-    UnaryOperator,
+    FunctionResult, ResourceBinding, ScalarValue, Statement, StorageClass, SwitchCase, Type,
+    TypeInner, UnaryOperator,
 };
 use core::convert::TryFrom;
-use std::iter::Peekable;
+use std::{iter::Peekable, mem};
 
 type Result<T> = std::result::Result<T, ErrorKind>;
 
@@ -775,6 +775,101 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     condition,
                     accept,
                     reject,
+                });
+            }
+            TokenValue::Switch => {
+                self.bump()?;
+
+                self.expect(TokenValue::LeftParen)?;
+                let selector = {
+                    let expr = self.parse_expression(ctx)?;
+                    ctx.lower(self.program, expr, false, body)?
+                };
+                self.expect(TokenValue::RightParen)?;
+
+                let mut cases = Vec::new();
+                let mut default = Block::new();
+
+                self.expect(TokenValue::LeftBrace)?;
+                loop {
+                    match self.expect_peek()?.value {
+                        TokenValue::Case => {
+                            self.bump()?;
+                            let value = {
+                                let expr = self.parse_expression(ctx)?;
+                                let root = ctx.lower(self.program, expr, false, body)?;
+                                let constant =
+                                    self.program.solve_constant(&ctx.expressions, root)?;
+
+                                match self.program.module.constants[constant].inner {
+                                    ConstantInner::Scalar {
+                                        value: ScalarValue::Sint(int),
+                                        ..
+                                    } => int as i32,
+                                    ConstantInner::Scalar {
+                                        value: ScalarValue::Uint(int),
+                                        ..
+                                    } => int as i32,
+                                    _ => {
+                                        return Err(ErrorKind::SemanticError(
+                                            "Case values can only be integers".into(),
+                                        ))
+                                    }
+                                }
+                            };
+
+                            self.expect(TokenValue::Colon)?;
+
+                            let mut body = Block::new();
+
+                            loop {
+                                match self.expect_peek()?.value {
+                                    TokenValue::Case
+                                    | TokenValue::Default
+                                    | TokenValue::RightBrace => break,
+                                    _ => self.parse_statement(ctx, &mut body)?,
+                                }
+                            }
+
+                            let fall_through = body.iter().any(|s| {
+                                mem::discriminant(s) == mem::discriminant(&Statement::Break)
+                            });
+
+                            cases.push(SwitchCase {
+                                value,
+                                body,
+                                fall_through,
+                            })
+                        }
+                        TokenValue::Default => {
+                            self.bump()?;
+                            self.expect(TokenValue::Colon)?;
+
+                            if !default.is_empty() {
+                                return Err(ErrorKind::SemanticError(
+                                    "Can only have one default case per switch statement".into(),
+                                ));
+                            }
+
+                            loop {
+                                match self.expect_peek()?.value {
+                                    TokenValue::Case | TokenValue::RightBrace => break,
+                                    _ => self.parse_statement(ctx, &mut &mut default)?,
+                                }
+                            }
+                        }
+                        TokenValue::RightBrace => {
+                            self.bump()?;
+                            break;
+                        }
+                        _ => return Err(ErrorKind::InvalidToken(self.bump()?)),
+                    }
+                }
+
+                body.push(Statement::Switch {
+                    selector,
+                    cases,
+                    default,
                 });
             }
             TokenValue::LeftBrace => {

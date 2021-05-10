@@ -113,28 +113,29 @@ fn control_flow() {
     )
     .unwrap();
 
+    let _program = parse_program(
+        r#"
+        #  version 450
+        int x;
+        int y;
+
+        void main() {
+            switch (5) {
+                case 2:
+                    x = 2;
+                case 5:
+                    x = 5;
+                    y = 2;
+                    break;
+                default:
+                    x = 0;
+            }
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
     // TODO: Reenable later
-    // let _program = parse_program(
-    //     r#"
-    //     #  version 450
-    //     void main() {
-    //         int x;
-    //         int y = 3;
-    //         switch (5) {
-    //             case 2:
-    //                 x = 2;
-    //             case 5:
-    //                 x = 5;
-    //                 y = 2;
-    //                 break;
-    //             default:
-    //                 x = 0;
-    //         }
-    //     }
-    //     "#,
-    //     &entry_points,
-    // )
-    // .unwrap();
     // let _program = parse_program(
     //     r#"
     //     #  version 450
