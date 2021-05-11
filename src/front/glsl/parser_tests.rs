@@ -135,24 +135,25 @@ fn control_flow() {
         &entry_points,
     )
     .unwrap();
-    // TODO: Reenable later
-    // let _program = parse_program(
-    //     r#"
-    //     #  version 450
-    //     void main() {
-    //         int x = 0;
-    //         while(x < 5) {
-    //             x = x + 1;
-    //         }
-    //         do {
-    //             x = x - 1;
-    //         } while(x >= 4)
-    //     }
-    //     "#,
-    //     &entry_points,
-    // )
-    // .unwrap();
+    let _program = parse_program(
+        r#"
+        #  version 450
+        int x;
 
+        void main() {
+            while(x < 5) {
+                x = x + 1;
+            }
+            do {
+                x = x - 1;
+            } while(x >= 4)
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+
+    // TODO: Reenable later
     // let _program = parse_program(
     //     r#"
     //     #  version 450

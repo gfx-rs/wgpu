@@ -9,9 +9,9 @@ use super::{
     Program,
 };
 use crate::{
-    arena::Handle, Arena, ArraySize, BinaryOperator, Block, Constant, ConstantInner, Function,
-    FunctionResult, ResourceBinding, ScalarValue, Statement, StorageClass, SwitchCase, Type,
-    TypeInner, UnaryOperator,
+    arena::Handle, Arena, ArraySize, BinaryOperator, Block, Constant, ConstantInner, Expression,
+    Function, FunctionResult, ResourceBinding, ScalarValue, Statement, StorageClass, SwitchCase,
+    Type, TypeInner, UnaryOperator,
 };
 use core::convert::TryFrom;
 use std::{iter::Peekable, mem};
@@ -871,6 +871,62 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     cases,
                     default,
                 });
+            }
+            TokenValue::While => {
+                self.bump()?;
+
+                self.expect(TokenValue::LeftParen)?;
+                let root = self.parse_expression(ctx)?;
+                self.expect(TokenValue::RightParen)?;
+
+                let mut loop_body = Block::new();
+
+                let expr = ctx.lower(self.program, root, false, &mut loop_body)?;
+                let condition = ctx.expressions.append(Expression::Unary {
+                    op: UnaryOperator::Not,
+                    expr,
+                });
+
+                loop_body.push(Statement::If {
+                    condition,
+                    accept: vec![Statement::Break],
+                    reject: Block::new(),
+                });
+
+                self.parse_statement(ctx, &mut loop_body)?;
+
+                body.push(Statement::Loop {
+                    body: loop_body,
+                    continuing: Block::new(),
+                })
+            }
+            TokenValue::Do => {
+                self.bump()?;
+
+                let mut loop_body = Block::new();
+                self.parse_statement(ctx, &mut loop_body)?;
+
+                self.expect(TokenValue::While)?;
+                self.expect(TokenValue::LeftParen)?;
+                let root = self.parse_expression(ctx)?;
+                self.expect(TokenValue::RightParen)?;
+
+                let expr = ctx.lower(self.program, root, false, &mut loop_body)?;
+                let condition = ctx.expressions.append(Expression::Unary {
+                    op: UnaryOperator::Not,
+                    expr,
+                });
+
+                loop_body.push(Statement::If {
+                    condition,
+                    accept: vec![Statement::Break],
+                    reject: Block::new(),
+                });
+
+                body.push(Statement::Loop {
+                    body: loop_body,
+                    continuing: Block::new(),
+                })
             }
             TokenValue::LeftBrace => {
                 self.bump()?;
