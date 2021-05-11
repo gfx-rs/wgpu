@@ -79,7 +79,7 @@ pub enum Backend {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum PowerPreference {
-    /// Adapter that uses the least possible power. This is often an integerated GPU.
+    /// Adapter that uses the least possible power. This is often an integrated GPU.
     LowPower = 0,
     /// Adapter that has the highest performance. This is often a discrete GPU.
     HighPerformance = 1,
