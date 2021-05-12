@@ -3,7 +3,7 @@ struct gl_PerVertex {
     [[builtin(position)]] gl_Position: vec4<f32>;
 };
 
-struct type10 {
+struct VertexOutput {
     [[location(0), interpolate(perspective)]] member: vec2<f32>;
     [[builtin(position)]] gl_Position1: vec4<f32>;
 };
@@ -21,9 +21,9 @@ fn main() {
 }
 
 [[stage(vertex)]]
-fn main1([[location(1)]] a_uv1: vec2<f32>, [[location(0)]] a_pos1: vec2<f32>) -> type10 {
+fn main1([[location(1)]] a_uv1: vec2<f32>, [[location(0)]] a_pos1: vec2<f32>) -> VertexOutput {
     a_uv = a_uv1;
     a_pos = a_pos1;
     main();
-    return type10(v_uv, perVertexStruct.gl_Position);
+    return VertexOutput(v_uv, perVertexStruct.gl_Position);
 }

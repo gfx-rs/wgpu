@@ -13,6 +13,8 @@ pub enum Error {
     Custom(String),
     #[error("{0}")]
     Unimplemented(String), // TODO: Error used only during development
+    #[error("Unsupported math function: {0:?}")]
+    UnsupportedMathFunction(crate::MathFunction),
 }
 
 pub fn write_string(
