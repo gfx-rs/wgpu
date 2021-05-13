@@ -24,8 +24,7 @@ float fetch_shadow(
     metal::uint light_id,
     metal::float4 homogeneous_coords,
     metal::depth2d_array<float, metal::access::sample> t_shadow,
-    metal::sampler sampler_shadow,
-    constant _mslBufferSizes& _buffer_sizes
+    metal::sampler sampler_shadow
 ) {
     if (homogeneous_coords.w <= 0.0) {
         return 1.0;
@@ -47,7 +46,6 @@ fragment fs_mainOutput fs_main(
 , constant Lights& s_lights [[user(fake0)]]
 , metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
 , metal::sampler sampler_shadow [[user(fake0)]]
-, constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     const auto raw_normal = varyings.raw_normal;
     const auto position = varyings.position;
@@ -63,7 +61,7 @@ fragment fs_mainOutput fs_main(
             break;
         }
         Light _e21 = s_lights.data[i];
-        float _e25 = fetch_shadow(i, _e21.proj * position, t_shadow, sampler_shadow, _buffer_sizes);
+        float _e25 = fetch_shadow(i, _e21.proj * position, t_shadow, sampler_shadow);
         color1 = color1 + ((_e25 * metal::max(0.0, metal::dot(metal::normalize(raw_normal), metal::normalize(_e21.pos.xyz - position.xyz)))) * _e21.color.xyz);
     }
     return fs_mainOutput { metal::float4(color1, 1.0) };
