@@ -1,7 +1,8 @@
 use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Binding, Block, BuiltIn, EntryPoint,
     Expression, Function, FunctionArgument, FunctionResult, Handle, MathFunction,
-    RelationalFunction, SampleLevel, ScalarKind, ShaderStage, Statement, Type, TypeInner,
+    RelationalFunction, SampleLevel, ScalarKind, ShaderStage, Statement, StorageClass, Type,
+    TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind};
@@ -11,9 +12,15 @@ impl Program<'_> {
         &mut self,
         ctx: &mut Context,
         fc: FunctionCallKind,
-        args: &[Handle<Expression>],
+        raw_args: Vec<Expr>,
         body: &mut Block,
     ) -> Result<Handle<Expression>, ErrorKind> {
+        let args: Vec<_> = raw_args
+            .clone()
+            .into_iter()
+            .map(|e| ctx.lower(self, e, false, body))
+            .collect::<Result<_, _>>()?;
+
         match fc {
             FunctionCallKind::TypeConstructor(ty) => {
                 let h = if args.len() == 1 {
@@ -200,23 +207,43 @@ impl Program<'_> {
                         }))
                     }
                     "isinf" => {
-                        self.parse_relational_fun(ctx, name, args, RelationalFunction::IsInf)
+                        self.parse_relational_fun(ctx, name, &args, RelationalFunction::IsInf)
                     }
                     "isnan" => {
-                        self.parse_relational_fun(ctx, name, args, RelationalFunction::IsNan)
+                        self.parse_relational_fun(ctx, name, &args, RelationalFunction::IsNan)
                     }
-                    "all" => self.parse_relational_fun(ctx, name, args, RelationalFunction::All),
-                    "any" => self.parse_relational_fun(ctx, name, args, RelationalFunction::Any),
-                    func_name => {
-                        let function = *self.lookup_function.get(func_name).ok_or_else(|| {
-                            ErrorKind::SemanticError(
-                                format!("Unknown function: {}", func_name).into(),
-                            )
-                        })?;
-                        let arguments: Vec<_> = args.to_vec();
-                        let expression = ctx.expressions.append(Expression::Call(function));
+                    "all" => self.parse_relational_fun(ctx, name, &args, RelationalFunction::All),
+                    "any" => self.parse_relational_fun(ctx, name, &args, RelationalFunction::Any),
+                    _ => {
+                        let sig = FunctionSignature {
+                            name,
+                            parameters: args
+                                .iter()
+                                .map(|e| self.resolve_handle(ctx, *e))
+                                .collect::<Result<_, _>>()?,
+                        };
+
+                        let function = self
+                            .lookup_function
+                            .get(&sig)
+                            .ok_or_else(|| {
+                                ErrorKind::SemanticError(
+                                    format!("Unknown function: {:?}", sig).into(),
+                                )
+                            })?
+                            .clone();
+
+                        let mut arguments = Vec::with_capacity(raw_args.len());
+                        for (qualifier, expr) in
+                            function.parameters.iter().zip(raw_args.into_iter())
+                        {
+                            let handle = ctx.lower(self, expr, qualifier.is_lhs(), body)?;
+                            arguments.push(handle)
+                        }
+
+                        let expression = ctx.expressions.append(Expression::Call(function.handle));
                         body.push(crate::Statement::Call {
-                            function,
+                            function: function.handle,
                             arguments,
                             result: Some(expression),
                         });
@@ -244,7 +271,11 @@ impl Program<'_> {
         }))
     }
 
-    pub fn add_function(&mut self, mut function: Function) -> Result<(), ErrorKind> {
+    pub fn add_function(
+        &mut self,
+        mut function: Function,
+        parameters: Vec<ParameterQualifier>,
+    ) -> Result<(), ErrorKind> {
         ensure_block_returns(&mut function.body);
         let name = function
             .name
@@ -252,13 +283,86 @@ impl Program<'_> {
             .ok_or_else(|| ErrorKind::SemanticError("Unnamed function".into()))?;
         let stage = self.entry_points.get(&name);
 
-        let handle = self.module.functions.append(function);
-
         if let Some(&stage) = stage {
+            let handle = self.module.functions.append(function);
             self.entries.push((name, stage, handle));
         } else {
-            self.lookup_function.insert(name, handle);
+            let sig = FunctionSignature {
+                name,
+                parameters: function.arguments.iter().map(|p| p.ty).collect(),
+            };
+
+            for (arg, qualifier) in function.arguments.iter_mut().zip(parameters.iter()) {
+                if qualifier.is_lhs() {
+                    arg.ty = self.module.types.fetch_or_append(Type {
+                        name: None,
+                        inner: TypeInner::Pointer {
+                            base: arg.ty,
+                            class: StorageClass::Function,
+                        },
+                    })
+                }
+            }
+
+            if let Some(decl) = self.lookup_function.get_mut(&sig) {
+                if decl.defined {
+                    return Err(ErrorKind::SemanticError("Function already defined".into()));
+                }
+
+                decl.defined = true;
+                *self.module.functions.get_mut(decl.handle) = function;
+            } else {
+                let handle = self.module.functions.append(function);
+                self.lookup_function.insert(
+                    sig,
+                    FunctionDeclaration {
+                        parameters,
+                        handle,
+                        defined: true,
+                    },
+                );
+            }
         }
+
+        Ok(())
+    }
+
+    pub fn add_prototype(
+        &mut self,
+        mut function: Function,
+        parameters: Vec<ParameterQualifier>,
+    ) -> Result<(), ErrorKind> {
+        let name = function
+            .name
+            .clone()
+            .ok_or_else(|| ErrorKind::SemanticError("Unnamed function".into()))?;
+        let sig = FunctionSignature {
+            name,
+            parameters: function.arguments.iter().map(|p| p.ty).collect(),
+        };
+
+        for (arg, qualifier) in function.arguments.iter_mut().zip(parameters.iter()) {
+            if qualifier.is_lhs() {
+                arg.ty = self.module.types.fetch_or_append(Type {
+                    name: None,
+                    inner: TypeInner::Pointer {
+                        base: arg.ty,
+                        class: StorageClass::Function,
+                    },
+                })
+            }
+        }
+
+        let handle = self.module.functions.append(function);
+
+        self.lookup_function.insert(
+            sig,
+            FunctionDeclaration {
+                parameters,
+                handle,
+                defined: false,
+            },
+        );
 
         Ok(())
     }

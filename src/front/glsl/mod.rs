@@ -13,8 +13,6 @@ use ast::Program;
 mod error;
 pub use error::ParseError;
 mod constants;
-// TODO: Remove later
-#[allow(unused_imports)]
 mod functions;
 mod parser;
 #[cfg(test)]

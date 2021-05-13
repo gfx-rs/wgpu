@@ -12,13 +12,27 @@ pub enum GlobalLookup {
     Select(u32),
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct FunctionSignature {
+    pub name: String,
+    pub parameters: Vec<Handle<Type>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionDeclaration {
+    pub parameters: Vec<ParameterQualifier>,
+    pub handle: Handle<Function>,
+    /// Wheter this function was already defined or is just a prototype
+    pub defined: bool,
+}
+
 #[derive(Debug)]
 pub struct Program<'a> {
     pub version: u16,
     pub profile: Profile,
     pub entry_points: &'a FastHashMap<String, ShaderStage>,
 
-    pub lookup_function: FastHashMap<String, Handle<Function>>,
+    pub lookup_function: FastHashMap<FunctionSignature, FunctionDeclaration>,
     pub lookup_type: FastHashMap<String, Handle<Type>>,
     pub lookup_global_variables: FastHashMap<String, GlobalLookup>,
     pub lookup_constants: FastHashMap<String, Handle<Constant>>,
@@ -96,6 +110,32 @@ impl<'a> Program<'a> {
         }
     }
 
+    pub fn resolve_handle(
+        &mut self,
+        context: &mut Context,
+        handle: Handle<Expression>,
+    ) -> Result<Handle<Type>, ErrorKind> {
+        let resolve_ctx = ResolveContext {
+            constants: &self.module.constants,
+            global_vars: &self.module.global_variables,
+            local_vars: &context.locals,
+            functions: &self.module.functions,
+            arguments: &context.arguments,
+        };
+        match context.typifier.grow(
+            handle,
+            &context.expressions,
+            &mut self.module.types,
+            &resolve_ctx,
+        ) {
+            //TODO: better error report
+            Err(error) => Err(ErrorKind::SemanticError(
+                format!("Can't resolve type: {:?}", error).into(),
+            )),
+            Ok(()) => Ok(context.typifier.get_handle(handle, &mut self.module.types)),
+        }
+    }
+
     pub fn solve_constant(
         &mut self,
         expressions: &Arena<Expression>,
@@ -112,12 +152,15 @@ impl<'a> Program<'a> {
             .map_err(|_| ErrorKind::SemanticError("Can't solve constant".into()))
     }
 
-    pub fn function_args_prelude(&self) -> Vec<FunctionArgument> {
-        vec![FunctionArgument {
-            name: None,
-            ty: self.input_struct,
-            binding: None,
-        }]
+    pub fn function_args_prelude(&self) -> (Vec<FunctionArgument>, Vec<ParameterQualifier>) {
+        (
+            vec![FunctionArgument {
+                name: None,
+                ty: self.input_struct,
+                binding: None,
+            }],
+            vec![ParameterQualifier::In],
+        )
     }
 
     pub fn type_size(&self, ty: Handle<Type>) -> Result<u8, ErrorKind> {
@@ -335,8 +378,10 @@ impl<'function> Context<'function> {
 
                 program.field_selection(self, base, &field, expr.meta)?
             }
-            ExprKind::Constant(constant) => self.expressions.append(Expression::Constant(constant)),
-            ExprKind::Binary { left, op, right } => {
+            ExprKind::Constant(constant) if !lhs => {
+                self.expressions.append(Expression::Constant(constant))
+            }
+            ExprKind::Binary { left, op, right } if !lhs => {
                 let left = self.lower(program, *left, false, body)?;
                 let right = self.lower(program, *right, false, body)?;
 
@@ -374,7 +419,7 @@ impl<'function> Context<'function> {
                         .append(Expression::Binary { left, op, right })
                 }
             }
-            ExprKind::Unary { op, expr } => {
+            ExprKind::Unary { op, expr } if !lhs => {
                 let expr = self.lower(program, *expr, false, body)?;
 
                 self.expressions.append(Expression::Unary { op, expr })
@@ -386,19 +431,14 @@ impl<'function> Context<'function> {
                     var.load.unwrap_or(var.expr)
                 }
             }
-            ExprKind::Call(call) => {
-                let args: Vec<_> = call
-                    .args
-                    .into_iter()
-                    .map(|e| self.lower(program, e, false, body))
-                    .collect::<Result<_, _>>()?;
-                program.function_call(self, call.kind, &args, body)?
+            ExprKind::Call(call) if !lhs => {
+                program.function_call(self, call.kind, call.args, body)?
             }
             ExprKind::Conditional {
                 condition,
                 accept,
                 reject,
-            } => {
+            } if !lhs => {
                 let condition = self.lower(program, *condition, false, body)?;
                 let accept = self.lower(program, *accept, false, body)?;
                 let reject = self.lower(program, *reject, false, body)?;
@@ -409,13 +449,18 @@ impl<'function> Context<'function> {
                     reject,
                 })
             }
-            ExprKind::Assign { tgt, value } => {
-                let pointer = self.lower(program, *tgt, false, body)?;
+            ExprKind::Assign { tgt, value } if !lhs => {
+                let pointer = self.lower(program, *tgt, true, body)?;
                 let value = self.lower(program, *value, false, body)?;
 
                 body.push(Statement::Store { pointer, value });
 
                 value
+            }
+            _ => {
+                return Err(ErrorKind::SemanticError(
+                    format!("{:?} cannot be in the left hand side", expr).into(),
+                ))
             }
         })
     }
@@ -427,13 +472,13 @@ pub struct VariableReference {
     pub load: Option<Handle<Expression>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Expr {
     pub kind: ExprKind,
     pub meta: TokenMetadata,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExprKind {
     Access {
         base: Box<Expr>,
@@ -477,13 +522,13 @@ pub enum TypeQualifier {
     EarlyFragmentTests,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FunctionCallKind {
     TypeConstructor(Handle<Type>),
     Function(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionCall {
     pub kind: FunctionCallKind,
     pub args: Vec<Expr>,
@@ -500,4 +545,22 @@ pub enum StorageQualifier {
 #[derive(Debug, Clone)]
 pub enum StructLayout {
     Std140,
+}
+
+#[derive(Debug, Clone)]
+pub enum ParameterQualifier {
+    In,
+    Out,
+    InOut,
+    Const,
+}
+
+impl ParameterQualifier {
+    /// Returns true if the argument should be passed as a lhs expression
+    pub fn is_lhs(&self) -> bool {
+        match *self {
+            ParameterQualifier::Out | ParameterQualifier::InOut => true,
+            _ => false,
+        }
+    }
 }

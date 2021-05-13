@@ -231,18 +231,17 @@ fn functions() {
     let mut entry_points = crate::FastHashMap::default();
     entry_points.insert("".to_string(), ShaderStage::Vertex);
 
-    // TODO: Add support for function prototypes
-    // parse_program(
-    //     r#"
-    //     #  version 450
-    //     void test1(float);
-    //     void test1(float) {}
+    parse_program(
+        r#"
+        #  version 450
+        void test1(float);
+        void test1(float) {}
 
-    //     void main() {}
-    //     "#,
-    //     &entry_points,
-    // )
-    // .unwrap();
+        void main() {}
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 
     parse_program(
         r#"
@@ -278,6 +277,52 @@ fn functions() {
         &entry_points,
     )
     .unwrap();
+
+    // Function overloading
+    parse_program(
+        r#"
+        #  version 450
+        float test(vec2 p);
+        float test(vec3 p);
+        float test(vec4 p);
+
+        float test(vec2 p) {
+            return p.x;
+        }
+
+        float test(vec3 p) {
+            return p.x;
+        }
+
+        float test(vec4 p) {
+            return p.x;
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+
+    assert_eq!(
+        format!(
+            "{:?}",
+            parse_program(
+                r#"
+                #  version 450
+                int test(vec4 p) {
+                    return p.x;
+                }
+
+                float test(vec4 p) {
+                    return p.x;
+                }
+                "#,
+                &entry_points
+            )
+            .err()
+            .unwrap()
+        ),
+        "SemanticError(\"Function already defined\")"
+    );
 }
 
 #[test]

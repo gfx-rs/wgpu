@@ -1,7 +1,7 @@
 use super::{
     ast::{
-        Context, Expr, ExprKind, FunctionCall, FunctionCallKind, Profile, StorageQualifier,
-        StructLayout, TypeQualifier,
+        Context, Expr, ExprKind, FunctionCall, FunctionCallKind, ParameterQualifier, Profile,
+        StorageQualifier, StructLayout, TypeQualifier,
     },
     error::ErrorKind,
     lex::Lexer,
@@ -131,7 +131,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             TokenValue::Struct => todo!(),
             _ => return Err(ErrorKind::InvalidToken(token)),
         };
-        let handle = ty.map(|t| self.program.module.types.append(t));
+        let handle = ty.map(|t| self.program.module.types.fetch_or_append(t));
 
         let size = self.parse_array_specifier()?;
         Ok(handle.map(|ty| self.maybe_array(ty, size)))
@@ -144,7 +144,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
     fn maybe_array(&mut self, base: Handle<Type>, size: Option<ArraySize>) -> Handle<Type> {
         size.map(|size| {
-            self.program.module.types.append(Type {
+            self.program.module.types.fetch_or_append(Type {
                 name: None,
                 inner: TypeInner::Array {
                     base,
@@ -334,6 +334,28 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         })
     }
 
+    fn peek_parameter_qualifier(&mut self) -> bool {
+        self.lexer.peek().map_or(false, |t| match t.value {
+            TokenValue::In | TokenValue::Out | TokenValue::InOut | TokenValue::Const => true,
+            _ => false,
+        })
+    }
+
+    /// Returns the parsed `ParameterQualifier` or `ParameterQualifier::In`
+    fn parse_parameter_qualifier(&mut self) -> ParameterQualifier {
+        if self.peek_parameter_qualifier() {
+            match self.bump().unwrap().value {
+                TokenValue::In => ParameterQualifier::In,
+                TokenValue::Out => ParameterQualifier::Out,
+                TokenValue::InOut => ParameterQualifier::InOut,
+                TokenValue::Const => ParameterQualifier::Const,
+                _ => unreachable!(),
+            }
+        } else {
+            ParameterQualifier::In
+        }
+    }
+
     /// `external` whether or not we are in a global or local context
     fn parse_declaration(&mut self, external: bool) -> Result<bool> {
         //declaration:
@@ -364,7 +386,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                             let mut expressions = Arena::new();
                             let mut local_variables = Arena::new();
-                            let mut arguments = self.program.function_args_prelude();
+                            let (mut arguments, mut parameters) =
+                                self.program.function_args_prelude();
 
                             let mut context = Context::new(
                                 &mut expressions,
@@ -372,26 +395,43 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                 &mut arguments,
                             );
 
-                            self.parse_function_args(&mut context)?;
+                            self.parse_function_args(&mut context, &mut parameters)?;
 
                             self.expect(TokenValue::RightParen)?;
 
                             let token = self.bump()?;
                             match token.value {
                                 // TODO: Function prototypes
-                                TokenValue::Semicolon => todo!(),
+                                TokenValue::Semicolon => {
+                                    self.program.add_prototype(
+                                        Function {
+                                            name: Some(name),
+                                            result: ty
+                                                .map(|ty| FunctionResult { ty, binding: None }),
+                                            arguments,
+                                            ..Default::default()
+                                        },
+                                        parameters,
+                                    )?;
+
+                                    Ok(true)
+                                }
                                 TokenValue::LeftBrace if external => {
                                     let mut body = Block::new();
 
                                     self.parse_compound_statement(&mut context, &mut body)?;
-                                    self.program.add_function(Function {
-                                        name: Some(name),
-                                        result: ty.map(|ty| FunctionResult { ty, binding: None }),
-                                        expressions,
-                                        local_variables,
-                                        arguments,
-                                        body,
-                                    })?;
+                                    self.program.add_function(
+                                        Function {
+                                            name: Some(name),
+                                            result: ty
+                                                .map(|ty| FunctionResult { ty, binding: None }),
+                                            expressions,
+                                            local_variables,
+                                            arguments,
+                                            body,
+                                        },
+                                        parameters,
+                                    )?;
 
                                     Ok(true)
                                 }
@@ -516,7 +556,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 let Token { value, mut meta } = self.bump()?;
 
                 let handle = if let TokenValue::TypeName(ty) = value {
-                    self.program.module.types.append(ty)
+                    self.program.module.types.fetch_or_append(ty)
                 } else {
                     unreachable!()
                 };
@@ -970,10 +1010,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         Ok(())
     }
 
-    fn parse_function_args(&mut self, context: &mut Context) -> Result<()> {
+    fn parse_function_args(
+        &mut self,
+        context: &mut Context,
+        parameters: &mut Vec<ParameterQualifier>,
+    ) -> Result<()> {
         loop {
-            // TODO: parameter qualifier
-            if self.peek_type_name() {
+            if self.peek_type_name() || self.peek_parameter_qualifier() {
+                parameters.push(self.parse_parameter_qualifier());
                 let ty = self.parse_type_non_void()?;
 
                 match self.expect_peek()?.value {
