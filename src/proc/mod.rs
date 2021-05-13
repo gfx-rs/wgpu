@@ -94,7 +94,8 @@ impl super::TypeInner {
             } => {
                 let count = match size {
                     super::ArraySize::Constant(handle) => {
-                        constants[handle].to_array_length().unwrap()
+                        // Bad array lengths will be caught during validation.
+                        constants[handle].to_array_length().unwrap_or(1)
                     }
                     // A dynamically-sized array has to have at least one element
                     super::ArraySize::Dynamic => 1,
