@@ -1,4 +1,6 @@
-#[cfg(feature = "wgsl-in")]
+//! Tests for the WGSL front end.
+#![cfg(feature = "wgsl-in")]
+
 fn check(input: &str, snapshot: &str) {
     let output = naga::front::wgsl::parse_str(input)
         .expect_err("expected parser error")
@@ -15,7 +17,6 @@ fn check(input: &str, snapshot: &str) {
     }
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn function_without_identifier() {
     check(
@@ -30,7 +31,6 @@ fn function_without_identifier() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn invalid_integer() {
     check(
@@ -45,7 +45,6 @@ fn invalid_integer() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn invalid_float() {
     check(
@@ -60,7 +59,6 @@ fn invalid_float() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn invalid_scalar_width() {
     check(
