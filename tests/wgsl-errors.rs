@@ -74,3 +74,104 @@ fn invalid_scalar_width() {
 "###,
     );
 }
+
+macro_rules! check_validation_error {
+    ( $( $source:literal ),* : $pattern:pat ) => {
+        $(
+            let error = validation_error($source);
+            if ! matches!(error, $pattern) {
+                eprintln!("validation error does not match pattern:\n\
+                        {:?}\n\
+                        \n\
+                        expected match for pattern:\n\
+                        {}",
+                       error,
+                          stringify!($pattern));
+                panic!("validation error does not match pattern");
+            }
+        )*
+    }
+}
+
+fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
+    let module = naga::front::wgsl::parse_str(source).expect("expected WGSL parse to succeed");
+    naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::empty(),
+    )
+    .validate(&module)
+}
+
+#[test]
+fn invalid_arrays() {
+    check_validation_error! {
+        "type Bad = array<array<f32>, 4>;",
+        "type Bad = array<sampler, 4>;",
+        "type Bad = array<texture_2d<f32>, 4>;":
+        Err(naga::valid::ValidationError::Type {
+            error: naga::valid::TypeError::InvalidArrayBaseType(_),
+            ..
+        })
+    }
+
+    check_validation_error! {
+        r#"
+            [[block]] struct Block { value: f32; };
+            type Bad = array<Block, 4>;
+        "#:
+        Err(naga::valid::ValidationError::Type {
+            error: naga::valid::TypeError::NestedBlock,
+            ..
+        })
+    }
+
+    check_validation_error! {
+        r#"
+            type Bad = [[stride(2)]] array<f32, 4>;
+        "#:
+        Err(naga::valid::ValidationError::Type {
+            error: naga::valid::TypeError::InsufficientArrayStride { stride: 2, base_size: 4 },
+            ..
+        })
+    }
+
+    check_validation_error! {
+        "type Bad = array<f32, true>;",
+        r#"
+            let length: f32 = 2.718;
+            type Bad = array<f32, length>;
+        "#:
+        Err(naga::valid::ValidationError::Type {
+            error: naga::valid::TypeError::InvalidArraySizeConstant(_),
+            ..
+        })
+    }
+}
+
+#[test]
+fn invalid_structs() {
+    check_validation_error! {
+        "struct Bad { data: sampler; };",
+        "struct Bad { data: texture_2d<f32>; };":
+        Err(naga::valid::ValidationError::Type {
+            error: naga::valid::TypeError::InvalidData(_),
+            ..
+        })
+    }
+
+    check_validation_error! {
+        "[[block]] struct Bad { data: ptr<storage, f32>; };":
+        Err(naga::valid::ValidationError::Type {
+            error: naga::valid::TypeError::InvalidBlockType(_),
+            ..
+        })
+    }
+
+    check_validation_error! {
+        "struct Bad { data: array<f32>; other: f32; };":
+        Err(naga::valid::ValidationError::Type {
+            error: naga::valid::TypeError::InvalidDynamicArray(_, _),
+            ..
+        })
+    }
+}
