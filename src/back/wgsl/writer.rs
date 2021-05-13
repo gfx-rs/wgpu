@@ -6,8 +6,8 @@ use crate::{
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
     Arena, ArraySize, Binding, Constant, Expression, FastHashMap, Function, GlobalVariable, Handle,
-    ImageClass, ImageDimension, Interpolation, Module, Sampling, ScalarKind, ScalarValue,
-    ShaderStage, Statement, StorageFormat, StructLevel, StructMember, Type, TypeInner,
+    ImageClass, ImageDimension, Interpolation, Module, SampleLevel, Sampling, ScalarKind,
+    ScalarValue, ShaderStage, Statement, StorageFormat, StructLevel, StructMember, Type, TypeInner,
 };
 use bit_set::BitSet;
 use std::fmt::Write;
@@ -471,7 +471,7 @@ impl<W: Write> Writer<W> {
                 let (class_str, multisampled_str, scalar_str) = match class {
                     ImageClass::Sampled { kind, multi } => (
                         "",
-                        if multi { "multisampled" } else { "" },
+                        if multi { "multisampled_" } else { "" },
                         format!("<{}>", scalar_kind_str(kind)),
                     ),
                     ImageClass::Depth => ("depth", "", String::from("")),
@@ -606,7 +606,7 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, value, func_ctx)?;
                 writeln!(self.out, ";")?
             }
-            crate::Statement::Call {
+            Statement::Call {
                 function,
                 ref arguments,
                 result,
@@ -627,6 +627,25 @@ impl<W: Write> Writer<W> {
                     }
                 }
                 writeln!(self.out, ");")?
+            }
+            Statement::ImageStore {
+                image,
+                coordinate,
+                array_index,
+                value,
+            } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "textureStore(")?;
+                self.write_expr(module, image, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, coordinate, func_ctx)?;
+                if let Some(array_index_expr) = array_index {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, array_index_expr, func_ctx)?;
+                }
+                write!(self.out, ", ")?;
+                self.write_expr(module, value, func_ctx)?;
+                writeln!(self.out, ");")?;
             }
             _ => {
                 return Err(Error::Unimplemented(format!("write_stmt {:?}", stmt)));
@@ -769,11 +788,11 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}", name)?;
             }
             Expression::Binary { op, left, right } => {
+                write!(self.out, "(")?;
                 self.write_expr(module, left, func_ctx)?;
-
-                write!(self.out, " {} ", binary_operation_str(op),)?;
-
+                write!(self.out, " {} ", binary_operation_str(op))?;
                 self.write_expr(module, right, func_ctx)?;
+                write!(self.out, ")")?;
             }
             // TODO: copy-paste from glsl-out
             Expression::Access { base, index } => {
@@ -819,28 +838,97 @@ impl<W: Write> Writer<W> {
                 image,
                 sampler,
                 coordinate,
-                array_index: _,
-                offset: _,
+                array_index,
+                offset,
                 level,
-                depth_ref: _,
+                depth_ref,
             } => {
-                // TODO: other texture functions
-                // TODO: comments
-                let fun_name = match level {
-                    crate::SampleLevel::Auto => "textureSample",
-                    _ => {
-                        return Err(Error::Unimplemented(format!(
-                            "expression_imagesample_level {:?}",
-                            level
-                        )));
+                let texture_function = if depth_ref.is_some() {
+                    "textureSampleCompare"
+                } else {
+                    match level {
+                        SampleLevel::Auto | SampleLevel::Zero => "textureSample",
+                        SampleLevel::Exact(_) => "textureSampleLevel",
+                        SampleLevel::Bias(_) => "textureSampleBias",
+                        SampleLevel::Gradient { .. } => "textureSampleGrad",
                     }
                 };
-                write!(self.out, "{}(", fun_name)?;
+
+                write!(self.out, "{}(", texture_function)?;
                 self.write_expr(module, image, func_ctx)?;
                 write!(self.out, ", ")?;
                 self.write_expr(module, sampler, func_ctx)?;
                 write!(self.out, ", ")?;
                 self.write_expr(module, coordinate, func_ctx)?;
+
+                if let Some(array_index) = array_index {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, array_index, func_ctx)?;
+                }
+
+                if let SampleLevel::Bias(expr) = level {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, expr, func_ctx)?;
+                }
+
+                if let Some(depth_ref) = depth_ref {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, depth_ref, func_ctx)?;
+                }
+
+                if let SampleLevel::Gradient { x, y } = level {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, x, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, y, func_ctx)?;
+                }
+
+                if let SampleLevel::Exact(expr) = level {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, expr, func_ctx)?;
+                }
+
+                if let Some(offset) = offset {
+                    write!(self.out, ", ")?;
+                    self.write_constant(module, offset)?;
+                }
+
+                write!(self.out, ")")?;
+            }
+            Expression::ImageQuery { image, query } => {
+                let texture_function = match query {
+                    crate::ImageQuery::Size { .. } => "textureDimensions",
+                    crate::ImageQuery::NumLevels => "textureNumLevels",
+                    crate::ImageQuery::NumLayers => "textureNumLayers",
+                    crate::ImageQuery::NumSamples => "textureNumSamples",
+                };
+
+                write!(self.out, "{}(", texture_function)?;
+                self.write_expr(module, image, func_ctx)?;
+                if let crate::ImageQuery::Size { level: Some(level) } = query {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, level, func_ctx)?;
+                };
+                write!(self.out, ")")?;
+            }
+            Expression::ImageLoad {
+                image,
+                coordinate,
+                array_index,
+                index,
+            } => {
+                write!(self.out, "textureLoad(")?;
+                self.write_expr(module, image, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, coordinate, func_ctx)?;
+                if let Some(array_index) = array_index {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, array_index, func_ctx)?;
+                }
+                if let Some(index) = index {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, index, func_ctx)?;
+                }
                 write!(self.out, ")")?;
             }
             // TODO: copy-paste from msl-out
@@ -848,18 +936,26 @@ impl<W: Write> Writer<W> {
                 let name = &self.names[&NameKey::GlobalVariable(handle)];
                 write!(self.out, "{}", name)?;
             }
-            Expression::As {
-                expr,
-                kind,
-                convert: _, //TODO:
-            } => {
+            Expression::As { expr, kind, .. } => {
                 let inner = func_ctx.info[expr].ty.inner_with(&module.types);
-                let op = match *inner {
+                match *inner {
                     TypeInner::Matrix { columns, rows, .. } => {
-                        format!("mat{}x{}", vector_size_str(columns), vector_size_str(rows))
+                        write!(
+                            self.out,
+                            "mat{}x{}<f32>",
+                            vector_size_str(columns),
+                            vector_size_str(rows)
+                        )?;
                     }
-                    TypeInner::Vector { size, .. } => format!("vec{}", vector_size_str(size)),
-                    TypeInner::Scalar { kind, .. } => String::from(scalar_kind_str(kind)),
+                    TypeInner::Vector { size, .. } => {
+                        write!(
+                            self.out,
+                            "vec{}<{}>",
+                            vector_size_str(size),
+                            scalar_kind_str(kind)
+                        )?;
+                    }
+                    TypeInner::Scalar { .. } => write!(self.out, "{}", scalar_kind_str(kind))?,
                     _ => {
                         return Err(Error::Unimplemented(format!(
                             "write_expr expression::as {:?}",
@@ -867,8 +963,7 @@ impl<W: Write> Writer<W> {
                         )));
                     }
                 };
-                let scalar = scalar_kind_str(kind);
-                write!(self.out, "{}<{}>(", op, scalar)?;
+                write!(self.out, "(")?;
                 self.write_expr(module, expr, func_ctx)?;
                 write!(self.out, ")")?;
             }
