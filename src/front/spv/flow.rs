@@ -222,14 +222,13 @@ impl FlowGraph {
                     begin_position,
                     end,
                     end_position,
+                    depth,
                     ..Default::default()
                 },
             );
 
-            let mut construct = constructs[node_index];
-
             let parent = {
-                if let Some(parent) = constructs.parent(parent_index) {
+                if let Some(parent) = constructs.parent(node_index) {
                     if constructs[parent].depth < depth {
                         Some(constructs[parent])
                     } else {
@@ -240,8 +239,8 @@ impl FlowGraph {
                 }
             };
 
-            construct.enclosing_loop = {
-                if construct.ty == ConstructType::Loop {
+            constructs[node_index].enclosing_loop = {
+                if constructs[node_index].ty == ConstructType::Loop {
                     Some(node_index)
                 } else if let Some(parent) = parent {
                     parent.enclosing_loop
@@ -250,8 +249,8 @@ impl FlowGraph {
                 }
             };
 
-            construct.enclosing_continue = {
-                if construct.ty == ConstructType::Continue {
+            constructs[node_index].enclosing_continue = {
+                if constructs[node_index].ty == ConstructType::Continue {
                     Some(node_index)
                 } else if let Some(parent) = parent {
                     parent.enclosing_continue
@@ -260,8 +259,11 @@ impl FlowGraph {
                 }
             };
 
-            construct.enclosing_loop_or_continue_or_switch = {
-                if construct.ty == ConstructType::Continue {
+            constructs[node_index].enclosing_loop_or_continue_or_switch = {
+                if constructs[node_index].ty == ConstructType::Loop
+                    || constructs[node_index].ty == ConstructType::Continue
+                    || constructs[node_index].ty == ConstructType::Case
+                {
                     Some(node_index)
                 } else if let Some(parent) = parent {
                     parent.enclosing_loop_or_continue_or_switch
@@ -287,10 +289,9 @@ impl FlowGraph {
                 }
             }
 
-            let depth = self.constructs[top_construct_index].depth;
-
             if let Some(merge) = self.flow[*block_index].merge {
                 let merge_index = self.block_to_node[&merge.merge_block_id];
+                let depth = self.constructs[top_construct_index].depth + 1;
 
                 match self.flow[*block_index].ty {
                     Some(ControlFlowNodeType::Loop) => {
@@ -380,7 +381,7 @@ impl FlowGraph {
         }
 
         // 2.
-        // Classify Nodes/Edges as one of [Break, Continue, Back]
+        // Classify Nodes/Edges as one of [Break, Continue]
         for edge_index in self.flow.edge_indices() {
             let (node_source_index, node_target_index) =
                 self.flow.edge_endpoints(edge_index).unwrap();
@@ -391,34 +392,52 @@ impl FlowGraph {
                 continue;
             }
 
-            let mut target_incoming_edges = self
-                .flow
-                .neighbors_directed(node_target_index, Direction::Incoming)
-                .detach();
-            while let Some((incoming_edge, incoming_source)) =
-                target_incoming_edges.next(&self.flow)
-            {
-                // Loop break, Switch Break
-                if self.flow[incoming_source].ty == Some(ControlFlowNodeType::Loop)
-                    && self.flow[incoming_edge] == ControlFlowEdgeType::ForwardMerge
-                {
-                    self.flow[node_source_index].ty = Some(ControlFlowNodeType::Break);
-                    self.flow[edge_index] = ControlFlowEdgeType::LoopBreak;
-                }
+            let construct_index = self.flow[node_source_index].construct;
+            let header_index = self.constructs[construct_index].begin;
 
-                // Loop continue
-                if self.flow[incoming_edge] == ControlFlowEdgeType::ForwardContinue {
-                    self.flow[node_source_index].ty = Some(ControlFlowNodeType::Continue);
-                    self.flow[edge_index] = ControlFlowEdgeType::LoopContinue;
+            // Loop break/Switch break
+            if let Some(enclosing_construct_index) =
+                self.constructs[construct_index].enclosing_loop_or_continue_or_switch
+            {
+                let enclosing_construct = self.constructs[enclosing_construct_index];
+                let breakable_header = &self.flow[enclosing_construct.begin];
+
+                if let Some(merge_instruction) = breakable_header.merge {
+                    let merge_node_index = self.block_to_node[&merge_instruction.merge_block_id];
+                    if node_target_index == merge_node_index {
+                        self.flow[node_source_index].ty = Some(ControlFlowNodeType::Break);
+                        self.flow[edge_index] = if enclosing_construct.ty == ConstructType::Case {
+                            ControlFlowEdgeType::SwitchBreak
+                        } else {
+                            ControlFlowEdgeType::LoopBreak
+                        };
+                        continue;
+                    }
+                }
+            }
+
+            // Continue
+            if let Some(enclosing_construct_index) = self.constructs[construct_index].enclosing_loop
+            {
+                let loop_header = &self.flow[self.constructs[enclosing_construct_index].begin];
+
+                if let Some(continue_block_id) =
+                    loop_header.merge.and_then(|merge| merge.continue_block_id)
+                {
+                    if node_target_index == self.block_to_node[&continue_block_id] {
+                        self.flow[node_source_index].ty = Some(ControlFlowNodeType::Continue);
+                        self.flow[edge_index] = ControlFlowEdgeType::LoopContinue;
+                        continue;
+                    }
                 }
             }
 
             // If break
-            let construct_index = self.flow[node_source_index].construct;
-            let header_index = self.constructs[construct_index].begin;
-            if let Some(merge) = self.flow[header_index].merge {
-                if self.flow[node_target_index].id == merge.merge_block_id {
+            if let Some(merge_instruction) = self.flow[header_index].merge {
+                if node_target_index == self.block_to_node[&merge_instruction.merge_block_id] {
+                    self.flow[node_source_index].ty = Some(ControlFlowNodeType::Break);
                     self.flow[edge_index] = ControlFlowEdgeType::IfBreak;
+                    continue;
                 }
             }
         }
@@ -747,25 +766,43 @@ impl FlowGraph {
                         let false_edge =
                             self.flow[self.flow.find_edge(node_index, false_node_id).unwrap()];
 
-                        if true_edge == ControlFlowEdgeType::LoopBreak {
+                        if true_edge == ControlFlowEdgeType::LoopBreak
+                            || true_edge == ControlFlowEdgeType::IfBreak
+                        {
                             result.push(crate::Statement::If {
                                 condition,
-                                accept: vec![crate::Statement::Break],
+                                accept: if true_edge == ControlFlowEdgeType::LoopBreak {
+                                    vec![crate::Statement::Break]
+                                } else {
+                                    vec![]
+                                },
                                 reject: self.convert_to_naga_traverse(false_node_id, stop_nodes)?,
                             });
-                        } else if false_edge == ControlFlowEdgeType::LoopBreak {
+                        } else if false_edge == ControlFlowEdgeType::LoopBreak
+                            || false_edge == ControlFlowEdgeType::IfBreak
+                        {
                             result.push(crate::Statement::If {
                                 condition,
                                 accept: self.convert_to_naga_traverse(true_node_id, stop_nodes)?,
-                                reject: vec![crate::Statement::Break],
+                                reject: if false_edge == ControlFlowEdgeType::LoopBreak {
+                                    vec![crate::Statement::Break]
+                                } else {
+                                    vec![]
+                                },
                             });
                         } else {
                             return Err(Error::InvalidEdgeClassification);
                         }
                     }
-                    Terminator::Branch { .. } => {
-                        result.push(crate::Statement::Break);
-                    }
+                    Terminator::Branch { target_id } => {
+                        let target_index = self.block_to_node[&target_id];
+
+                        let edge = self.flow[self.flow.find_edge(node_index, target_index).unwrap()];
+
+                        if edge == ControlFlowEdgeType::LoopBreak {
+                            result.push(crate::Statement::Break);
+                        }
+                    },
                     _ => return Err(Error::InvalidTerminator),
                 };
                 Ok(result)
@@ -823,9 +860,10 @@ impl FlowGraph {
             };
             writeln!(
                 output,
-                "{} [ label = \"%{} {:?}\" shape={} ]",
+                "{} [ label = \"%{}({}) {:?}\" shape={} ]",
                 node_index.index(),
                 node.id,
+                node_index.index(),
                 node.ty,
                 shape
             )?;
@@ -842,11 +880,11 @@ impl FlowGraph {
                 ControlFlowEdgeType::ForwardMerge => "style=dotted",
                 ControlFlowEdgeType::ForwardContinue => "color=green",
                 ControlFlowEdgeType::Back => "style=dashed",
-                ControlFlowEdgeType::LoopBreak => "color=yellow",
                 ControlFlowEdgeType::LoopContinue => "color=green",
                 ControlFlowEdgeType::IfTrue => "color=blue",
                 ControlFlowEdgeType::IfFalse => "color=red",
-                ControlFlowEdgeType::SwitchBreak => "color=yellow",
+                ControlFlowEdgeType::LoopBreak => "color=orange",
+                ControlFlowEdgeType::SwitchBreak => "color=tomato",
                 ControlFlowEdgeType::IfBreak => "color=yellow",
                 ControlFlowEdgeType::CaseFallThrough => "style=dotted",
             };
@@ -916,11 +954,6 @@ pub(super) enum ControlFlowEdgeType {
     /// Can only be to a ControlFlowNodeType::Loop.
     Back,
 
-    /// An edge from a node to the merge block of the nearest enclosing loop, where
-    /// there is no intervening switch.
-    /// The source block is a "break block" as defined by SPIR-V.
-    LoopBreak,
-
     /// An edge from a node in a loop body to the associated continue target, where
     /// there are no other intervening loops or switches.
     /// The source block is a "continue block" as defined by SPIR-V.
@@ -932,14 +965,19 @@ pub(super) enum ControlFlowEdgeType {
     /// An edge from a node with OpBranchConditional to the block of false operand.
     IfFalse,
 
+    /// An edge from a node to the merge block of the nearest enclosing loop, where
+    /// there is no intervening switch.
+    /// The source block is a "break block" as defined by SPIR-V.
+    LoopBreak,
+
     /// An edge from a node to the merge block of the nearest enclosing switch,
     /// where there is no intervening loop.
     SwitchBreak,
 
-    // An edge from a node to the merge block of the nearest enclosing structured
-    // construct, but which is neither a kSwitchBreak or a kLoopBreak.
-    // This can only occur for an "if" selection, i.e. where the selection
-    // header ends in OpBranchConditional.
+    /// An edge from a node to the merge block of the nearest enclosing structured
+    /// construct, but which is neither a SwitchBreak or a LoopBreak.
+    /// This can only occur for an "if" selection, i.e. where the selection
+    /// header ends in OpBranchConditional.
     IfBreak,
 
     /// An edge from one switch case to the next sibling switch case.
