@@ -163,6 +163,7 @@ impl<'a> Program<'a> {
         )
     }
 
+    #[allow(dead_code)] // FIXME: Remove after implementing structs
     pub fn type_size(&self, ty: Handle<Type>) -> Result<u8, ErrorKind> {
         Ok(match self.module.types[ty].inner {
             crate::TypeInner::Scalar { width, .. } => width,
@@ -308,11 +309,6 @@ impl<'function> Context<'function> {
         } else {
             None
         }
-    }
-
-    pub fn clear_scopes(&mut self) {
-        self.scopes.clear();
-        self.scopes.push(FastHashMap::default());
     }
 
     /// Add variable to current scope

@@ -346,6 +346,11 @@ impl Program<'_> {
         name: String,
         init: Option<Handle<Constant>>,
     ) -> Result<Handle<Expression>, ErrorKind> {
+        #[cfg(feature = "glsl-validate")]
+        if ctx.lookup_local_var_current_scope(&name).is_some() {
+            return Err(ErrorKind::VariableAlreadyDeclared(name));
+        }
+
         // FIXME: this should be removed after
         // fixing the lack of constant qualifier support
         #[allow(clippy::never_loop)]

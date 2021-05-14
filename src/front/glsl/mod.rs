@@ -5,8 +5,6 @@ use crate::{FastHashMap, Module, ShaderStage};
 
 mod lex;
 
-// TODO: Remove later
-#[allow(dead_code)]
 mod ast;
 use ast::Program;
 

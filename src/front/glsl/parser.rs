@@ -163,6 +163,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     fn peek_type_qualifier(&mut self) -> bool {
         self.lexer.peek().map_or(false, |t| match t.value {
             TokenValue::Interpolation(_)
+            | TokenValue::Sampling(_)
             | TokenValue::Const
             | TokenValue::In
             | TokenValue::Out
@@ -192,6 +193,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 TokenValue::Uniform => TypeQualifier::StorageQualifier(
                     StorageQualifier::StorageClass(StorageClass::Uniform),
                 ),
+                TokenValue::Sampling(s) => TypeQualifier::Sampling(s),
 
                 _ => unreachable!(),
             })
