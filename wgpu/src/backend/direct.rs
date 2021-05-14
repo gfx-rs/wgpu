@@ -487,7 +487,7 @@ mod pass_impl {
             indirect_buffer: &super::Buffer,
             indirect_offset: wgt::BufferAddress,
         ) {
-            wgpu_render_pass_bundle_indexed_indirect(self, indirect_buffer.id, indirect_offset)
+            wgpu_render_bundle_draw_indexed_indirect(self, indirect_buffer.id, indirect_offset)
         }
         fn multi_draw_indirect(
             &mut self,
@@ -1352,7 +1352,7 @@ impl crate::Context for Context {
         match wgc::gfx_select!(buffer.id => global.buffer_get_mapped_range(
             buffer.id,
             sub_range.start,
-            wgt::BufferSize::new(size)
+            Some(size)
         )) {
             Ok((ptr, size)) => BufferMappedRange {
                 ptr,

@@ -26,20 +26,20 @@ cross = ["wgc/cross"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "e5ddb94be0221b0f53a8f43adfb15458daebfd7c"
+rev = "53eab747a32414232be45d47cae8a43a369395d0"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
 package = "wgpu-core"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "e5ddb94be0221b0f53a8f43adfb15458daebfd7c"
+rev = "53eab747a32414232be45d47cae8a43a369395d0"
 features = ["raw-window-handle"]
 optional = true
 
 [dependencies.wgt]
 package = "wgpu-types"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "e5ddb94be0221b0f53a8f43adfb15458daebfd7c"
+rev = "53eab747a32414232be45d47cae8a43a369395d0"
 
 [dependencies]
 arrayvec = "0.5"
@@ -68,13 +68,13 @@ env_logger = "0.8"
 # used to test all the example shaders
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-23"
+tag = "gfx-25"
 features = ["wgsl-in"]
 
 # used to generate SPIR-V for the Web target
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-23"
+tag = "gfx-25"
 features = ["wgsl-in", "spv-out"]
 
 [[example]]

@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     fmt,
     future::Future,
     ops::Range,
@@ -1149,9 +1148,12 @@ impl crate::Context for Context {
                     flags: spv::WriterFlags::empty(),
                     capabilities: None,
                 };
-                let analysis = Validator::new(naga::valid::ValidationFlags::all())
-                    .validate(&module)
-                    .unwrap();
+                let analysis = Validator::new(
+                    naga::valid::ValidationFlags::empty(),
+                    naga::valid::Capabilities::all(),
+                )
+                .validate(&module)
+                .unwrap();
                 let words = spv::write_vec(&module, &analysis, &options).unwrap();
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&words[..]))
             }
