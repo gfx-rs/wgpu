@@ -1,7 +1,7 @@
 use super::{
     ast::{
-        Context, Expr, ExprKind, FunctionCall, FunctionCallKind, ParameterQualifier, Profile,
-        StorageQualifier, StructLayout, TypeQualifier,
+        Context, Expr, ExprKind, FunctionCall, FunctionCallKind, GlobalLookup, ParameterQualifier,
+        Profile, StorageQualifier, StructLayout, TypeQualifier,
     },
     error::ErrorKind,
     lex::Lexer,
@@ -10,8 +10,8 @@ use super::{
 };
 use crate::{
     arena::Handle, Arena, ArraySize, BinaryOperator, Block, Constant, ConstantInner, Expression,
-    Function, FunctionResult, ResourceBinding, ScalarValue, Statement, StorageClass, SwitchCase,
-    Type, TypeInner, UnaryOperator,
+    Function, FunctionResult, GlobalVariable, ResourceBinding, ScalarValue, Statement,
+    StorageAccess, StorageClass, StructMember, SwitchCase, Type, TypeInner, UnaryOperator,
 };
 use core::convert::TryFrom;
 use std::{iter::Peekable, mem};
@@ -627,7 +627,16 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 // ```
                 let token = self.bump()?;
                 match token.value {
-                    TokenValue::Identifier(_) => todo!(),
+                    TokenValue::Identifier(ty_name) => {
+                        if self.bump_if(TokenValue::LeftBrace).is_some() {
+                            self.parse_block_declaration(&qualifiers, ty_name)
+                        } else {
+                            //TODO: declaration
+                            // type_qualifier IDENTIFIER SEMICOLON
+                            // type_qualifier IDENTIFIER identifier_list SEMICOLON
+                            todo!()
+                        }
+                    }
                     TokenValue::Semicolon => Ok(true),
                     _ => Err(ErrorKind::InvalidToken(token)),
                 }
@@ -636,6 +645,147 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             // TODO: Handle precision qualifiers
             Ok(false)
         }
+    }
+
+    fn parse_block_declaration(
+        &mut self,
+        qualifiers: &[TypeQualifier],
+        ty_name: String,
+    ) -> Result<bool> {
+        let mut class = StorageClass::Function;
+        let mut binding = None;
+        let mut layout = None;
+
+        for qualifier in qualifiers {
+            match *qualifier {
+                TypeQualifier::StorageQualifier(StorageQualifier::StorageClass(c)) => {
+                    if StorageClass::Function != class {
+                        return Err(ErrorKind::SemanticError(
+                            "Cannot use more than one storage qualifier per declaration".into(),
+                        ));
+                    }
+
+                    class = c;
+                }
+                TypeQualifier::ResourceBinding(ref r) => {
+                    if binding.is_some() {
+                        return Err(ErrorKind::SemanticError(
+                            "Cannot use more than one storage qualifier per declaration".into(),
+                        ));
+                    }
+
+                    binding = Some(r.clone());
+                }
+                TypeQualifier::Layout(ref l) => {
+                    if layout.is_some() {
+                        return Err(ErrorKind::SemanticError(
+                            "Cannot use more than one storage qualifier per declaration".into(),
+                        ));
+                    }
+
+                    layout = Some(l);
+                }
+                _ => {
+                    return Err(ErrorKind::SemanticError(
+                        "Qualifier not supported in block declarations".into(),
+                    ));
+                }
+            }
+        }
+
+        let mut members = Vec::new();
+        let span = self.parse_struct_declaration_list(&mut members)?;
+        self.expect(TokenValue::RightBrace)?;
+
+        let mut ty = self.program.module.types.append(Type {
+            name: Some(ty_name),
+            inner: TypeInner::Struct {
+                top_level: true,
+                members: members.clone(),
+                span,
+            },
+        });
+
+        let token = self.bump()?;
+        let name = match token.value {
+            TokenValue::Semicolon => None,
+            TokenValue::Identifier(name) => {
+                if let Some(size) = self.parse_array_specifier()? {
+                    ty = self.program.module.types.append(Type {
+                        name: None,
+                        inner: TypeInner::Array {
+                            base: ty,
+                            size,
+                            stride: self.program.module.types[ty]
+                                .inner
+                                .span(&self.program.module.constants),
+                        },
+                    });
+                }
+
+                self.expect(TokenValue::Semicolon)?;
+
+                Some(name)
+            }
+            _ => return Err(ErrorKind::InvalidToken(token)),
+        };
+
+        let handle = self.program.module.global_variables.append(GlobalVariable {
+            name: name.clone(),
+            class,
+            binding,
+            ty,
+            init: None,
+            // TODO
+            storage_access: StorageAccess::all(),
+        });
+
+        if let Some(k) = name {
+            self.program
+                .lookup_global_variables
+                .insert(k, GlobalLookup::Variable(handle));
+        }
+
+        for (i, k) in members
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, m)| m.name.map(|s| (i as u32, s)))
+        {
+            self.program
+                .lookup_global_variables
+                .insert(k, GlobalLookup::BlockSelect(handle, i));
+        }
+
+        Ok(true)
+    }
+
+    // TODO: Accept layout arguments
+    fn parse_struct_declaration_list(&mut self, members: &mut Vec<StructMember>) -> Result<u32> {
+        let mut span = 0;
+
+        loop {
+            // TODO: type_qualifier
+            if !self.peek_type_name() {
+                break;
+            }
+
+            let ty = self.parse_type_non_void()?;
+            let name = self.expect_ident()?.0;
+            self.expect(TokenValue::Semicolon)?;
+
+            members.push(StructMember {
+                name: Some(name),
+                ty,
+                binding: None,
+                offset: span,
+            });
+
+            span = self.program.module.types[ty]
+                .inner
+                .span(&self.program.module.constants);
+        }
+
+        Ok(span)
     }
 
     fn parse_primary(&mut self, ctx: &mut Context) -> Result<Expr> {

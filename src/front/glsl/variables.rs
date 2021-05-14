@@ -301,7 +301,7 @@ impl Program<'_> {
             );
 
             self.lookup_global_variables
-                .insert(name, GlobalLookup::Select(index));
+                .insert(name, GlobalLookup::InOutSelect(index));
 
             let base = ctx.expressions.append(Expression::FunctionArgument(0));
             return Ok(ctx

@@ -1,15 +1,16 @@
 use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind, TokenMetadata};
 use crate::{
-    proc::ResolveContext, Arena, ArraySize, BinaryOperator, Block, BuiltIn, Constant, Expression,
-    FastHashMap, Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable,
-    Module, RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass,
-    Type, TypeInner, UnaryOperator,
+    proc::ResolveContext, Arena, BinaryOperator, Block, BuiltIn, Constant, Expression, FastHashMap,
+    Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable, Module,
+    RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass, Type,
+    TypeInner, UnaryOperator,
 };
 
 #[derive(Debug)]
 pub enum GlobalLookup {
     Variable(Handle<GlobalVariable>),
-    Select(u32),
+    InOutSelect(u32),
+    BlockSelect(Handle<GlobalVariable>, u32),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -162,52 +163,6 @@ impl<'a> Program<'a> {
             vec![ParameterQualifier::In],
         )
     }
-
-    #[allow(dead_code)] // FIXME: Remove after implementing structs
-    pub fn type_size(&self, ty: Handle<Type>) -> Result<u8, ErrorKind> {
-        Ok(match self.module.types[ty].inner {
-            crate::TypeInner::Scalar { width, .. } => width,
-            crate::TypeInner::Vector { size, width, .. } => size as u8 * width,
-            crate::TypeInner::Matrix {
-                columns,
-                rows,
-                width,
-            } => columns as u8 * rows as u8 * width,
-            crate::TypeInner::Pointer { .. } => {
-                return Err(ErrorKind::NotImplemented("type size of pointer"))
-            }
-            crate::TypeInner::ValuePointer { .. } => {
-                return Err(ErrorKind::NotImplemented("type size of value pointer"))
-            }
-            crate::TypeInner::Array { size, stride, .. } => {
-                stride as u8
-                    * match size {
-                        ArraySize::Dynamic => {
-                            return Err(ErrorKind::NotImplemented("type size of dynamic array"))
-                        }
-                        ArraySize::Constant(constant) => {
-                            match self.module.constants[constant].inner {
-                                crate::ConstantInner::Scalar { width, .. } => width,
-                                crate::ConstantInner::Composite { .. } => {
-                                    return Err(ErrorKind::NotImplemented(
-                                        "type size of array with composite item size",
-                                    ))
-                                }
-                            }
-                        }
-                    }
-            }
-            crate::TypeInner::Struct { .. } => {
-                return Err(ErrorKind::NotImplemented("type size of struct"))
-            }
-            crate::TypeInner::Image { .. } => {
-                return Err(ErrorKind::NotImplemented("type size of image"))
-            }
-            crate::TypeInner::Sampler { .. } => {
-                return Err(ErrorKind::NotImplemented("type size of sampler"))
-            }
-        })
-    }
 }
 
 #[derive(Debug)]
@@ -265,8 +220,13 @@ impl<'function> Context<'function> {
         self.lookup_global_var_exps.get(name).cloned().or_else(|| {
             let expr = match *program.lookup_global_variables.get(name)? {
                 GlobalLookup::Variable(v) => Expression::GlobalVariable(v),
-                GlobalLookup::Select(index) => {
+                GlobalLookup::InOutSelect(index) => {
                     let base = self.expressions.append(Expression::FunctionArgument(0));
+
+                    Expression::AccessIndex { base, index }
+                }
+                GlobalLookup::BlockSelect(handle, index) => {
+                    let base = self.expressions.append(Expression::GlobalVariable(handle));
 
                     Expression::AccessIndex { base, index }
                 }
