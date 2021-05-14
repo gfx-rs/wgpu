@@ -339,7 +339,6 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         } else {
             Ok(())
         }
-        // TODO
     }
 
     fn peek_type_name(&mut self) -> bool {
@@ -517,22 +516,23 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         //    type_qualifier IDENTIFIER LEFT_BRACE struct_declaration_list RIGHT_BRACE IDENTIFIER array_specifier SEMICOLON
         //    type_qualifier SEMICOLON type_qualifier IDENTIFIER SEMICOLON
         //    type_qualifier IDENTIFIER identifier_list SEMICOLON
-        // TODO: Handle precision qualifiers
+
         if self.peek_type_qualifier() || self.peek_type_name() {
             let qualifiers = self.parse_type_qualifiers()?;
 
             if self.peek_type_name() {
-                // Functions and variable declarations
+                // This branch handles variables and function prototypes and if
+                // external is true also function definitions
                 let ty = self.parse_type()?;
 
                 let token = self.bump()?;
-
                 let token_fallthrough = match token.value {
                     TokenValue::Identifier(name) => match self.expect_peek()?.value {
-                        // Function definition/prototype
                         TokenValue::LeftParen => {
+                            // This branch handles function definition and prototypes
                             self.bump()?;
 
+                            let result = ty.map(|ty| FunctionResult { ty, binding: None });
                             let mut expressions = Arena::new();
                             let mut local_variables = Arena::new();
                             let (mut arguments, mut parameters) =
@@ -550,13 +550,12 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                             let token = self.bump()?;
                             return match token.value {
-                                // TODO: Function prototypes
                                 TokenValue::Semicolon => {
+                                    // This branch handles function prototypes
                                     self.program.add_prototype(
                                         Function {
                                             name: Some(name),
-                                            result: ty
-                                                .map(|ty| FunctionResult { ty, binding: None }),
+                                            result,
                                             arguments,
                                             ..Default::default()
                                         },
@@ -566,14 +565,17 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                     Ok(true)
                                 }
                                 TokenValue::LeftBrace if external => {
+                                    // This branch handles function definitions
+                                    // as you can see by the guard this branch
+                                    // only happens if external is also true
                                     let mut body = Block::new();
 
+                                    // parse the body
                                     self.parse_compound_statement(&mut context, &mut body)?;
                                     self.program.add_function(
                                         Function {
                                             name: Some(name),
-                                            result: ty
-                                                .map(|ty| FunctionResult { ty, binding: None }),
+                                            result,
                                             expressions,
                                             local_variables,
                                             arguments,
@@ -587,15 +589,19 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                 _ => Err(ErrorKind::InvalidToken(token)),
                             };
                         }
+                        // Pass the token to the init_declator_list parser
                         _ => Token {
                             value: TokenValue::Identifier(name),
                             meta: token.meta,
                         },
                     },
+                    // Pass the token to the init_declator_list parser
                     _ => token,
                 };
 
-                // Variable Declaration
+                // If program execution has reached here then this will be a
+                // init_declarator_list
+                // token_falltrough will have a token that was already bumped
                 if let Some(ty) = ty {
                     let mut ctx = DeclarationContext {
                         qualifiers,
@@ -613,7 +619,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                 Ok(true)
             } else {
-                // Structs and modifiers
+                // This branch handles struct definitions and modifiers like
+                // ```glsl
+                // layout(early_fragment_tests);
+                // ```
                 let token = self.bump()?;
                 match token.value {
                     TokenValue::Identifier(_) => todo!(),
@@ -622,6 +631,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 }
             }
         } else {
+            // TODO: Handle precision qualifiers
             Ok(false)
         }
     }
