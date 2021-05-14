@@ -41,9 +41,12 @@ fn parse_example_wgsl() {
 
             let module = wgsl::parse_str(&shader).unwrap();
             //TODO: re-use the validator
-            Validator::new(naga::valid::ValidationFlags::all())
-                .validate(&module)
-                .unwrap();
+            Validator::new(
+                naga::valid::ValidationFlags::all(),
+                naga::valid::Capabilities::all(),
+            )
+            .validate(&module)
+            .unwrap();
         }
     }
 }
