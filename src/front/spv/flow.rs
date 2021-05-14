@@ -797,12 +797,13 @@ impl FlowGraph {
                     Terminator::Branch { target_id } => {
                         let target_index = self.block_to_node[&target_id];
 
-                        let edge = self.flow[self.flow.find_edge(node_index, target_index).unwrap()];
+                        let edge =
+                            self.flow[self.flow.find_edge(node_index, target_index).unwrap()];
 
                         if edge == ControlFlowEdgeType::LoopBreak {
                             result.push(crate::Statement::Break);
                         }
-                    },
+                    }
                     _ => return Err(Error::InvalidTerminator),
                 };
                 Ok(result)

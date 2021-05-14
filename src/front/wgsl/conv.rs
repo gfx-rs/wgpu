@@ -118,7 +118,7 @@ pub fn map_derivative_axis(word: &str) -> Option<crate::DerivativeAxis> {
     match word {
         "dpdx" => Some(crate::DerivativeAxis::X),
         "dpdy" => Some(crate::DerivativeAxis::Y),
-        "dwidth" => Some(crate::DerivativeAxis::Width),
+        "fwidth" => Some(crate::DerivativeAxis::Width),
         _ => None,
     }
 }
