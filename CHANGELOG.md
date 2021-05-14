@@ -1,5 +1,18 @@
 # Change Log
 
+### v0.4.1 (2021-05-14)
+  - numerous additions and improvements to SPIR-V frontend:
+    - int8, in16, int64
+    - null constant initializers for structs and matrices
+    - `OpArrayLength`, `OpCopyMemory`, `OpInBoundsAccessChain`, `OpLogicalXxxEqual`
+    - outer product
+    - fix struct size alignment
+    - initialize built-ins with default values
+    - fix read-only decorations on struct members
+  - fix struct size alignment in WGSL
+  - fix `fwidth` in WGSL
+  - fix scalars arrays in GLSL backend
+
 ## v0.4 (2021-04-29)
   - development release for wgpu-0.8
   - API:
