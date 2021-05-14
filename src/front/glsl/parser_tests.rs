@@ -116,10 +116,9 @@ fn control_flow() {
     let _program = parse_program(
         r#"
         #  version 450
-        int x;
-        int y;
-
         void main() {
+            int x;
+            int y = 3;
             switch (5) {
                 case 2:
                     x = 2;
@@ -138,9 +137,8 @@ fn control_flow() {
     let _program = parse_program(
         r#"
         #  version 450
-        int x;
-
         void main() {
+            int x = 0;
             while(x < 5) {
                 x = x + 1;
             }
