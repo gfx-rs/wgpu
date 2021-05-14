@@ -218,6 +218,15 @@ fn declarations() {
         &entry_points,
     )
     .unwrap();
+
+    let _program = parse_program(
+        r#"
+        #version 450
+        float vector = vec4(1.0 / 17.0,  9.0 / 17.0,  3.0 / 17.0, 11.0 / 17.0);
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -338,6 +347,23 @@ fn functions() {
         ),
         "SemanticError(\"Function already defined\")"
     );
+
+    println!();
+
+    // Nested function call
+    let _program = parse_program(
+        r#"
+            #  version 450
+            layout(set = 0, binding = 1) uniform texture2D t_noise;
+            layout(set = 0, binding = 2) uniform sampler s_noise;
+
+            void main() {
+                textureLod(sampler2D(t_noise, s_noise), vec2(1.0), 0);
+            }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 }
 
 #[test]

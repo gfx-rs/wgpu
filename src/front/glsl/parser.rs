@@ -828,23 +828,40 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         })
     }
 
+    fn parse_function_call_args(
+        &mut self,
+        ctx: &mut Context,
+        meta: &mut TokenMetadata,
+    ) -> Result<Vec<Expr>> {
+        let mut args = Vec::new();
+        if let Some(token) = self.bump_if(TokenValue::RightParen) {
+            *meta = meta.union(&token.meta);
+        } else {
+            loop {
+                args.push(self.parse_assignment(ctx)?);
+
+                let token = self.bump()?;
+                match token.value {
+                    TokenValue::Comma => {}
+                    TokenValue::RightParen => {
+                        *meta = meta.union(&token.meta);
+                        break;
+                    }
+                    _ => return Err(ErrorKind::InvalidToken(token)),
+                }
+            }
+        }
+
+        Ok(args)
+    }
+
     fn parse_postfix(&mut self, ctx: &mut Context) -> Result<Expr> {
         let mut expr = match self.expect_peek()?.value {
             TokenValue::Identifier(_) => {
                 let (name, mut meta) = self.expect_ident()?;
 
                 if self.bump_if(TokenValue::LeftParen).is_some() {
-                    let mut args = Vec::new();
-                    loop {
-                        let token = self.bump()?;
-
-                        if let TokenValue::RightParen = token.value {
-                            meta = meta.union(&token.meta);
-                            break;
-                        }
-
-                        args.push(self.parse_expression(ctx)?)
-                    }
+                    let args = self.parse_function_call_args(ctx, &mut meta)?;
 
                     Expr {
                         kind: ExprKind::Call(FunctionCall {
@@ -875,18 +892,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 };
 
                 self.expect(TokenValue::LeftParen)?;
-
-                let mut args = Vec::new();
-                loop {
-                    let token = self.bump()?;
-
-                    if let TokenValue::RightParen = token.value {
-                        meta = meta.union(&token.meta);
-                        break;
-                    }
-
-                    args.push(self.parse_expression(ctx)?)
-                }
+                let args = self.parse_function_call_args(ctx, &mut meta)?;
 
                 Expr {
                     kind: ExprKind::Call(FunctionCall {
