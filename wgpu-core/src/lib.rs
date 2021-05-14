@@ -36,6 +36,8 @@ pub mod device;
 pub mod hub;
 pub mod id;
 pub mod instance;
+#[cfg(feature = "use-openxr")]
+pub mod openxr;
 mod memory_init_tracker;
 pub mod pipeline;
 pub mod resource;

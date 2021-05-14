@@ -584,6 +584,7 @@ impl<B: GfxBackend> Device<B> {
         self_id: id::DeviceId,
         adapter: &crate::instance::Adapter<B>,
         desc: &resource::TextureDescriptor,
+        raw_image: Option<u64>,
     ) -> Result<resource::Texture<B>, resource::CreateTextureError> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
@@ -653,34 +654,81 @@ impl<B: GfxBackend> Device<B> {
 
         // TODO: 2D arrays, cubemap arrays
 
-        let mut image = unsafe {
-            let mut image = self
-                .raw
-                .create_image(
-                    kind,
-                    desc.mip_level_count as hal::image::Level,
-                    format,
-                    hal::image::Tiling::Optimal,
-                    usage,
-                    view_caps,
-                )
-                .map_err(|err| match err {
-                    hal::image::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    _ => panic!("failed to create texture: {}", err),
-                })?;
-            if let Some(ref label) = desc.label {
-                self.raw.set_image_name(&mut image, label);
+        let mut image = match raw_image {
+            None => {
+                unsafe {
+                    let mut image = self
+                        .raw
+                        .create_image(
+                            kind,
+                            desc.mip_level_count as hal::image::Level,
+                            format,
+                            hal::image::Tiling::Optimal,
+                            usage,
+                            view_caps,
+                        )
+                        .map_err(|err| match err {
+                            hal::image::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                            _ => panic!("failed to create texture: {}", err),
+                        })?;
+                    if let Some(ref label) = desc.label {
+                        self.raw.set_image_name(&mut image, label);
+                    }
+                    image
+                }
             }
-            image
+            Some(raw_image) => {
+                #[cfg(feature="use-openxr")]
+                unsafe {
+                    let mut image = self
+                        .raw
+                        .create_image_from_openxr_raw_image(
+                            kind,
+                            desc.mip_level_count as hal::image::Level,
+                            format,
+                            hal::image::Tiling::Optimal,
+                            usage,
+                            view_caps,
+                            raw_image
+                        )
+                        .map_err(|err| match err {
+                            hal::image::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                            _ => panic!("failed to create texture: {}", err),
+                        })?;
+                    if let Some(ref label) = desc.label {
+                        self.raw.set_image_name(&mut image, label);
+                    }
+                    image
+                }
+
+                #[cfg(not(feature="use-openxr"))]
+                panic!("OpenXR feature not enabled");
+            },
         };
 
         let requirements = unsafe { self.raw.get_image_requirements(&image) };
-        let block = self.mem_allocator.lock().allocate(
-            &self.raw,
-            requirements,
-            gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
-        )?;
-        block.bind_image(&self.raw, &mut image)?;
+
+        let block = match raw_image {
+            None => {
+                let block = self.mem_allocator.lock().allocate(
+           &self.raw,
+                    requirements,
+              gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
+                )?;
+                block.bind_image(&self.raw, &mut image)?;
+                block
+            }
+            Some(_) => {
+                // FIXME this allocation is not required, since its already done by openxr
+                // tried setting size to 0, didn't work
+                let block = self.mem_allocator.lock().allocate(
+                    &self.raw,
+                    requirements,
+                    gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
+                )?;
+                block
+            }
+        };
 
         Ok(resource::Texture {
             raw: Some((image, block)),
@@ -2840,6 +2888,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
+        self.device_create_texture_raw_image::<B>(device_id, desc, None, id_in)
+    }
+
+    pub fn device_create_texture_raw_image<B: GfxBackend>(
+        &self,
+        device_id: id::DeviceId,
+        desc: &resource::TextureDescriptor,
+        raw_image: Option<u64>,
+        id_in: Input<G, id::TextureId>,
+    ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         span!(_guard, INFO, "Device::create_texture");
 
         let hub = B::hub(self);
@@ -2853,7 +2911,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             let adapter = &adapter_guard[device.adapter_id.value];
-            let texture = match device.create_texture(device_id, adapter, desc) {
+            let texture = match device.create_texture(device_id, adapter, desc, raw_image) {
                 Ok(texture) => texture,
                 Err(error) => break error,
             };

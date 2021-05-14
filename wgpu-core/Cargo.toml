@@ -19,6 +19,16 @@ trace = ["ron", "serde", "wgt/trace", "naga/serialize"]
 replay = ["serde", "wgt/replay", "naga/deserialize"]
 # Enable serializable compute/render passes, and bundle encoders.
 serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
+use-openxr = [
+    "openxr",
+    "hal/use-openxr",
+    "wgt/use-openxr",
+    "gfx-backend-vulkan/use-openxr",
+    #"gfx-backend-gl/use-openxr",
+    #"gfx-backend-metal/use-openxr",
+    #"gfx-backend-dx11/use-openxr",
+    #"gfx-backend-dx12/use-openxr"
+]
 
 [dependencies]
 arrayvec = "0.5"

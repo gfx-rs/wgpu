@@ -17,6 +17,10 @@
 use serde::{Deserialize, Serialize};
 use std::{num::NonZeroU32, ops::Range};
 
+#[cfg(feature = "use-openxr")]
+/// OpenXR
+pub mod openxr;
+
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
 /// Integral type used for buffer slice sizes.
