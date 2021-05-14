@@ -896,6 +896,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let pointer = self.parse_unary(ctx)?;
         let start_meta = pointer.meta.clone();
 
+        // TODO: More assign symbols
         if self.bump_if(TokenValue::Assign).is_some() {
             let value = Box::new(self.parse_assignment(ctx)?);
             let end_meta = value.meta.clone();
@@ -1131,6 +1132,76 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     continuing: Block::new(),
                 })
             }
+            TokenValue::For => {
+                self.bump()?;
+
+                ctx.push_scope();
+                self.expect(TokenValue::LeftParen)?;
+
+                if self.bump_if(TokenValue::Semicolon).is_none() {
+                    if self.peek_type_name() || self.peek_type_qualifier() {
+                        self.parse_declaration(ctx, body, false)?;
+                    } else {
+                        self.parse_expression(ctx)?;
+                        self.expect(TokenValue::Semicolon)?;
+                    }
+                }
+
+                let (mut block, mut continuing) = (Block::new(), Block::new());
+
+                if self.bump_if(TokenValue::Semicolon).is_none() {
+                    let expr = if self.peek_type_name() || self.peek_type_qualifier() {
+                        let qualifiers = self.parse_type_qualifiers()?;
+                        let ty = self.parse_type_non_void()?;
+                        let name = self.expect_ident()?.0;
+
+                        self.expect(TokenValue::Assign)?;
+
+                        let value = self.parse_initializer(ty, ctx, &mut block)?;
+
+                        let pointer =
+                            self.program
+                                .add_local_var(ctx, &qualifiers, ty, name, None)?;
+
+                        block.push(Statement::Store { pointer, value });
+
+                        value
+                    } else {
+                        let root = self.parse_expression(ctx)?;
+                        ctx.lower(self.program, root, false, &mut block)?
+                    };
+
+                    body.push(Statement::If {
+                        condition: ctx.expressions.append(Expression::Unary {
+                            op: UnaryOperator::Not,
+                            expr,
+                        }),
+                        accept: vec![Statement::Break],
+                        reject: Block::new(),
+                    });
+
+                    self.expect(TokenValue::Semicolon)?;
+                }
+
+                match self.expect_peek()?.value {
+                    TokenValue::RightParen => {}
+                    _ => {
+                        let rest = self.parse_expression(ctx)?;
+                        ctx.lower(self.program, rest, false, &mut &mut continuing)?;
+                    }
+                }
+
+                self.expect(TokenValue::RightParen)?;
+
+                self.parse_statement(ctx, &mut block)?;
+
+                body.push(Statement::Loop {
+                    body: block,
+                    continuing,
+                });
+
+                ctx.remove_current_scope();
+            }
             TokenValue::LeftBrace => {
                 self.bump()?;
 
@@ -1160,6 +1231,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             | TokenValue::FloatConstant(_) => {
                 self.parse_expression(ctx)?;
                 self.expect(TokenValue::Semicolon)?;
+            }
+            TokenValue::Semicolon => {
+                self.bump()?;
             }
             _ => {
                 if self.peek_type_name() || self.peek_type_qualifier() {

@@ -151,21 +151,21 @@ fn control_flow() {
     )
     .unwrap();
 
-    // TODO: Reenable later
-    // let _program = parse_program(
-    //     r#"
-    //     #  version 450
-    //     void main() {
-    //         int x = 0;
-    //         for(int i = 0; i < 10;) {
-    //             x = x + 2;
-    //         }
-    //         return x;
-    //     }
-    //     "#,
-    //     &entry_points,
-    // )
-    // .unwrap();
+    let _program = parse_program(
+        r#"
+        #  version 450
+        void main() {
+            int x = 0;
+            for(int i = 0; i < 10;) {
+                x = x + 2;
+            }
+            for(;;);
+            return x;
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 }
 
 #[test]
