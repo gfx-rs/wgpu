@@ -15,9 +15,9 @@ struct MemoryDevice<'a, B: hal::Backend>(&'a B::Device);
 impl<B: hal::Backend> MemoryAllocator<B> {
     pub fn new(mem_props: hal::adapter::MemoryProperties, limits: hal::Limits) -> Self {
         let mem_config = gpu_alloc::Config {
-            dedicated_treshold: 32 << 20,
-            preferred_dedicated_treshold: 8 << 20,
-            transient_dedicated_treshold: 128 << 20,
+            dedicated_threshold: 32 << 20,
+            preferred_dedicated_threshold: 8 << 20,
+            transient_dedicated_threshold: 128 << 20,
             linear_chunk: 128 << 20,
             minimal_buddy_size: 1 << 10,
             initial_buddy_dedicated_size: 8 << 20,
@@ -43,7 +43,7 @@ impl<B: hal::Backend> MemoryAllocator<B> {
                     .collect::<Vec<_>>(),
             ),
             max_memory_allocation_count: if limits.max_memory_allocation_count == 0 {
-                tracing::warn!("max_memory_allocation_count is not set by gfx-rs backend");
+                log::warn!("max_memory_allocation_count is not set by gfx-rs backend");
                 !0
             } else {
                 limits.max_memory_allocation_count.min(!0u32 as usize) as u32
@@ -140,6 +140,7 @@ impl<B: hal::Backend> MemoryBlock<B> {
         inner_offset: wgt::BufferAddress,
         data: &[u8],
     ) -> Result<(), DeviceError> {
+        profiling::scope!("write_bytes");
         let offset = inner_offset;
         unsafe {
             self.0
@@ -154,6 +155,7 @@ impl<B: hal::Backend> MemoryBlock<B> {
         inner_offset: wgt::BufferAddress,
         data: &mut [u8],
     ) -> Result<(), DeviceError> {
+        profiling::scope!("read_bytes");
         let offset = inner_offset;
         unsafe {
             self.0
@@ -169,7 +171,7 @@ impl<B: hal::Backend> MemoryBlock<B> {
     ) -> hal::memory::Segment {
         hal::memory::Segment {
             offset: self.0.offset() + inner_offset,
-            size: size.or(Some(self.0.size())),
+            size: size.or_else(|| Some(self.0.size())),
         }
     }
 
@@ -205,13 +207,14 @@ impl<B: hal::Backend> MemoryBlock<B> {
 }
 
 impl<B: hal::Backend> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B> {
-    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     unsafe fn allocate_memory(
         &self,
         size: u64,
         memory_type: u32,
         flags: gpu_alloc::AllocationFlags,
     ) -> Result<B::Memory, gpu_alloc::OutOfMemory> {
+        profiling::scope!("allocate_memory");
+
         assert!(flags.is_empty());
 
         self.0
@@ -219,18 +222,18 @@ impl<B: hal::Backend> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B>
             .map_err(|_| gpu_alloc::OutOfMemory::OutOfDeviceMemory)
     }
 
-    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     unsafe fn deallocate_memory(&self, memory: B::Memory) {
+        profiling::scope!("deallocate_memory");
         self.0.free_memory(memory);
     }
 
-    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     unsafe fn map_memory(
         &self,
         memory: &mut B::Memory,
         offset: u64,
         size: u64,
     ) -> Result<NonNull<u8>, gpu_alloc::DeviceMapError> {
+        profiling::scope!("map_memory");
         match self.0.map_memory(
             memory,
             hal::memory::Segment {
@@ -247,16 +250,16 @@ impl<B: hal::Backend> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B>
         }
     }
 
-    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     unsafe fn unmap_memory(&self, memory: &mut B::Memory) {
+        profiling::scope!("unmap_memory");
         self.0.unmap_memory(memory);
     }
 
-    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     unsafe fn invalidate_memory_ranges(
         &self,
         ranges: &[gpu_alloc::MappedMemoryRange<'_, B::Memory>],
     ) -> Result<(), gpu_alloc::OutOfMemory> {
+        profiling::scope!("invalidate_memory_ranges");
         self.0
             .invalidate_mapped_memory_ranges(ranges.iter().map(|r| {
                 (
@@ -270,11 +273,11 @@ impl<B: hal::Backend> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B>
             .map_err(|_| gpu_alloc::OutOfMemory::OutOfHostMemory)
     }
 
-    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     unsafe fn flush_memory_ranges(
         &self,
         ranges: &[gpu_alloc::MappedMemoryRange<'_, B::Memory>],
     ) -> Result<(), gpu_alloc::OutOfMemory> {
+        profiling::scope!("flush_memory_ranges");
         self.0
             .flush_mapped_memory_ranges(ranges.iter().map(|r| {
                 (

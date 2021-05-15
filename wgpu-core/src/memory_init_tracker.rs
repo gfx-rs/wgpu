@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 use std::ops::Range;
 
 #[derive(Debug, Clone, Copy)]
@@ -153,10 +157,10 @@ impl MemoryInitTracker {
 
     // Drains uninitialized ranges in a query range.
     #[must_use]
-    pub(crate) fn drain<'a>(
-        &'a mut self,
+    pub(crate) fn drain(
+        &mut self,
         drain_range: Range<wgt::BufferAddress>,
-    ) -> MemoryInitTrackerDrain<'a> {
+    ) -> MemoryInitTrackerDrain {
         let index = self.lower_bound(drain_range.start);
         MemoryInitTrackerDrain {
             drain_range,

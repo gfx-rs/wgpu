@@ -130,7 +130,7 @@ impl PendingTransition<BufferState> {
         self,
         buf: &'a resource::Buffer<B>,
     ) -> hal::memory::Barrier<'a, B> {
-        tracing::trace!("\tbuffer -> {:?}", self);
+        log::trace!("\tbuffer -> {:?}", self);
         let &(ref target, _) = buf.raw.as_ref().expect("Buffer is destroyed");
         hal::memory::Barrier::Buffer {
             states: conv::map_buffer_state(self.usage.start)
@@ -142,13 +142,22 @@ impl PendingTransition<BufferState> {
     }
 }
 
+impl From<PendingTransition<BufferState>> for UsageConflict {
+    fn from(e: PendingTransition<BufferState>) -> Self {
+        Self::Buffer {
+            id: e.id.0,
+            combined_use: e.usage.end,
+        }
+    }
+}
+
 impl PendingTransition<TextureState> {
     /// Produce the gfx-hal barrier corresponding to the transition.
     pub fn into_hal<'a, B: hal::Backend>(
         self,
         tex: &'a resource::Texture<B>,
     ) -> hal::memory::Barrier<'a, B> {
-        tracing::trace!("\ttexture -> {:?}", self);
+        log::trace!("\ttexture -> {:?}", self);
         let &(ref target, _) = tex.raw.as_ref().expect("Texture is destroyed");
         let aspects = tex.aspects;
         hal::memory::Barrier::Image {
@@ -163,6 +172,17 @@ impl PendingTransition<TextureState> {
                 layer_count: Some(self.selector.layers.end - self.selector.layers.start),
             },
             families: None,
+        }
+    }
+}
+
+impl From<PendingTransition<TextureState>> for UsageConflict {
+    fn from(e: PendingTransition<TextureState>) -> Self {
+        Self::Texture {
+            id: e.id.0,
+            mip_levels: e.selector.levels.start as u32..e.selector.levels.end as u32,
+            array_layers: e.selector.layers.start as u32..e.selector.layers.end as u32,
+            combined_use: e.usage.end,
         }
     }
 }
@@ -195,6 +215,10 @@ impl<S: ResourceState + fmt::Debug> fmt::Debug for ResourceTracker<S> {
     }
 }
 
+#[allow(
+    // Explicit lifetimes are easier to reason about here.
+    clippy::needless_lifetimes,
+)]
 impl<S: ResourceState> ResourceTracker<S> {
     /// Create a new empty tracker.
     pub fn new(backend: wgt::Backend) -> Self {
@@ -315,6 +339,18 @@ impl<S: ResourceState> ResourceTracker<S> {
         }
     }
 
+    fn get<'a>(
+        self_backend: wgt::Backend,
+        map: &'a mut FastHashMap<Index, Resource<S>>,
+        id: Valid<S::Id>,
+    ) -> &'a mut Resource<S> {
+        let (index, epoch, backend) = id.0.unzip();
+        debug_assert_eq!(self_backend, backend);
+        let e = map.get_mut(&index).unwrap();
+        assert_eq!(e.epoch, epoch);
+        e
+    }
+
     /// Extend the usage of a specified resource.
     ///
     /// Returns conflicting transition as an error.
@@ -342,6 +378,21 @@ impl<S: ResourceState> ResourceTracker<S> {
         res.state
             .change(id, selector, usage, Some(&mut self.temp))
             .ok(); //TODO: unwrap?
+        self.temp.drain(..)
+    }
+
+    /// Replace the usage of a specified already tracked resource.
+    /// (panics if the resource is not yet tracked)
+    pub(crate) fn change_replace_tracked(
+        &mut self,
+        id: Valid<S::Id>,
+        selector: S::Selector,
+        usage: S::Usage,
+    ) -> Drain<PendingTransition<S>> {
+        let res = Self::get(self.backend, &mut self.map, id);
+        res.state
+            .change(id, selector, usage, Some(&mut self.temp))
+            .ok();
         self.temp.drain(..)
     }
 
@@ -576,20 +627,8 @@ impl TrackerSet {
     /// Merge all the trackers of another instance by extending
     /// the usage. Panics on a conflict.
     pub fn merge_extend(&mut self, other: &Self) -> Result<(), UsageConflict> {
-        self.buffers
-            .merge_extend(&other.buffers)
-            .map_err(|e| UsageConflict::Buffer {
-                id: e.id.0,
-                combined_use: e.usage.end,
-            })?;
-        self.textures
-            .merge_extend(&other.textures)
-            .map_err(|e| UsageConflict::Texture {
-                id: e.id.0,
-                mip_levels: e.selector.levels.start as u32..e.selector.levels.end as u32,
-                array_layers: e.selector.layers.start as u32..e.selector.layers.end as u32,
-                combined_use: e.usage.end,
-            })?;
+        self.buffers.merge_extend(&other.buffers)?;
+        self.textures.merge_extend(&other.textures)?;
         self.views.merge_extend(&other.views).unwrap();
         self.bind_groups.merge_extend(&other.bind_groups).unwrap();
         self.samplers.merge_extend(&other.samplers).unwrap();

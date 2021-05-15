@@ -39,7 +39,7 @@ use crate::{
     device::DeviceError,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{DeviceId, SwapChainId, TextureViewId, Valid},
-    resource, span,
+    resource,
     track::TextureSelector,
     LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
 };
@@ -139,10 +139,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         swap_chain_id: SwapChainId,
         view_id_in: Input<G, TextureViewId>,
     ) -> Result<SwapChainOutput, SwapChainError> {
-        span!(_guard, INFO, "SwapChain::get_next_texture");
+        profiling::scope!("get_next_texture", "SwapChain");
 
         let hub = B::hub(self);
         let mut token = Token::root();
+        let fid = hub.texture_views.prepare(view_id_in);
 
         let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
         let surface = surface_guard
@@ -153,8 +154,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let sc = swap_chain_guard
             .get_mut(swap_chain_id)
             .map_err(|_| SwapChainError::Invalid)?;
-        #[cfg_attr(not(feature = "trace"), allow(unused_variables))]
+
+        #[allow(unused_variables)]
         let device = &device_guard[sc.device_id.value];
+        #[cfg(feature = "trace")]
+        if let Some(ref trace) = device.trace {
+            trace.lock().add(Action::GetSwapChainTexture {
+                id: fid.id(),
+                parent_id: swap_chain_id,
+            });
+        }
 
         let suf = B::get_surface_mut(surface);
         let (image, status) = match unsafe { suf.acquire_image(FRAME_TIMEOUT_MS * 1_000_000) } {
@@ -163,11 +172,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Err(err) => (
                 None,
                 match err {
-                    hal::window::AcquireError::OutOfMemory(_) => Err(DeviceError::OutOfMemory)?,
+                    hal::window::AcquireError::OutOfMemory(_) => {
+                        return Err(DeviceError::OutOfMemory.into())
+                    }
                     hal::window::AcquireError::NotReady { .. } => SwapChainStatus::Timeout,
                     hal::window::AcquireError::OutOfDate(_) => SwapChainStatus::Outdated,
                     hal::window::AcquireError::SurfaceLost(_) => SwapChainStatus::Lost,
-                    hal::window::AcquireError::DeviceLost(_) => Err(DeviceError::Lost)?,
+                    hal::window::AcquireError::DeviceLost(_) => {
+                        return Err(DeviceError::Lost.into())
+                    }
                 },
             ),
         };
@@ -187,11 +200,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     format_features: wgt::TextureFormatFeatures {
                         allowed_usages: wgt::TextureUsage::RENDER_ATTACHMENT,
                         flags: wgt::TextureFormatFeatureFlags::empty(),
+                        filterable: false,
                     },
+                    dimension: wgt::TextureViewDimension::D2,
                     extent: wgt::Extent3d {
                         width: sc.desc.width,
                         height: sc.desc.height,
-                        depth: 1,
+                        depth_or_array_layers: 1,
                     },
                     samples: 1,
                     framebuffer_attachment: sc.framebuffer_attachment.clone(),
@@ -204,9 +219,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
 
                 let ref_count = view.life_guard.add_ref();
-                let id = hub
-                    .texture_views
-                    .register_identity(view_id_in, view, &mut token);
+                let id = fid.assign(view, &mut token);
 
                 if sc.acquired_view_id.is_some() {
                     return Err(SwapChainError::AlreadyAcquired);
@@ -222,14 +235,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => None,
         };
 
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(Action::GetSwapChainTexture {
-                id: view_id,
-                parent_id: swap_chain_id,
-            });
-        }
-
         Ok(SwapChainOutput { status, view_id })
     }
 
@@ -237,7 +242,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         swap_chain_id: SwapChainId,
     ) -> Result<SwapChainStatus, SwapChainError> {
-        span!(_guard, INFO, "SwapChain::present");
+        profiling::scope!("present", "SwapChain");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -282,7 +287,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let queue = &mut device.queue_group.queues[0];
         let result = unsafe { queue.present(B::get_surface_mut(surface), image, sem) };
 
-        tracing::debug!(trace = true, "Presented. End of Frame");
+        log::debug!("Presented. End of Frame");
 
         match result {
             Ok(None) => Ok(SwapChainStatus::Good),

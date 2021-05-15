@@ -7,7 +7,7 @@ use crate::{
     device::{DeviceError, RenderPassContext},
     hub::Resource,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
-    validation, Label, LifeGuard, Stored,
+    validation, Label, LifeGuard, Stored, DOWNLEVEL_ERROR_WARNING_MESSAGE,
 };
 use std::borrow::Cow;
 use thiserror::Error;
@@ -56,10 +56,14 @@ impl<B: hal::Backend> Resource for ShaderModule<B> {
 pub enum CreateShaderModuleError {
     #[error("Failed to parse WGSL")]
     Parsing,
+    #[error("Failed to generate the backend-specific code")]
+    Generation,
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    Validation(#[from] naga::proc::ValidationError),
+    Validation(#[from] naga::valid::ValidationError),
+    #[error("missing required device features {0:?}")]
+    MissingFeature(wgt::Features),
 }
 
 /// Describes a programmable pipeline stage.
@@ -109,8 +113,15 @@ pub enum CreateComputePipelineError {
     InvalidLayout,
     #[error("unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
-    #[error(transparent)]
-    Stage(validation::StageError),
+    #[error("error matching shader requirements against the pipeline")]
+    Stage(#[from] validation::StageError),
+    #[error("Internal error: {0}")]
+    Internal(String),
+    #[error(
+        "Compute shaders are not supported by the underlying platform. {}",
+        DOWNLEVEL_ERROR_WARNING_MESSAGE
+    )]
+    ComputeShadersUnsupported,
 }
 
 #[derive(Debug)]
@@ -188,19 +199,36 @@ pub struct RenderPipelineDescriptor<'a> {
 }
 
 #[derive(Clone, Debug, Error)]
+pub enum ColorStateError {
+    #[error("output is missing")]
+    Missing,
+    #[error("output format {pipeline} is incompatible with the shader {shader}")]
+    IncompatibleFormat {
+        pipeline: validation::NumericType,
+        shader: validation::NumericType,
+    },
+    #[error("blend factors for {0:?} must be `One`")]
+    InvalidMinMaxBlendFactors(wgt::BlendComponent),
+}
+
+#[derive(Clone, Debug, Error)]
 pub enum CreateRenderPipelineError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("pipelie layout is invalid")]
+    #[error("pipeline layout is invalid")]
     InvalidLayout,
     #[error("unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
-    #[error("missing output at index {index}")]
-    MissingOutput { index: u8 },
-    #[error("incompatible output format at index {index}")]
-    IncompatibleOutputFormat { index: u8 },
+    #[error("color state [{0}] is invalid")]
+    ColorState(u8, #[source] ColorStateError),
     #[error("invalid sample count {0}")]
     InvalidSampleCount(u32),
+    #[error("the number of vertex buffers {given} exceeds the limit {limit}")]
+    TooManyVertexBuffers { given: u32, limit: u32 },
+    #[error("the total number of vertex attributes {given} exceeds the limit {limit}")]
+    TooManyVertexAttributes { given: u32, limit: u32 },
+    #[error("vertex buffer {index} stride {given} exceeds the limit {limit}")]
+    VertexStrideTooLarge { index: u32, given: u32, limit: u32 },
     #[error("vertex buffer {index} stride {stride} does not respect `VERTEX_STRIDE_ALIGNMENT`")]
     UnalignedVertexStride {
         index: u32,
@@ -211,20 +239,32 @@ pub enum CreateRenderPipelineError {
         location: wgt::ShaderLocation,
         offset: wgt::BufferAddress,
     },
+    #[error("strip index format was not set to None but to {strip_index_format:?} while using the non-strip topology {topology:?}")]
+    StripIndexFormatForNonStripTopology {
+        strip_index_format: Option<wgt::IndexFormat>,
+        topology: wgt::PrimitiveTopology,
+    },
+    #[error("Conservative Rasterization is only supported for wgt::PolygonMode::Fill")]
+    ConservativeRasterizationNonFillPolygonMode,
     #[error("missing required device features {0:?}")]
     MissingFeature(wgt::Features),
-    #[error("error in stage {flag:?}")]
+    #[error("error matching {stage:?} shader requirements against the pipeline")]
     Stage {
-        flag: wgt::ShaderStage,
+        stage: wgt::ShaderStage,
         #[source]
         error: validation::StageError,
+    },
+    #[error("Internal error in {stage:?} shader: {error}")]
+    Internal {
+        stage: wgt::ShaderStage,
+        error: String,
     },
 }
 
 bitflags::bitflags! {
     #[repr(transparent)]
     pub struct PipelineFlags: u32 {
-        const BLEND_COLOR = 1;
+        const BLEND_CONSTANT = 1;
         const STENCIL_REFERENCE = 2;
         const WRITES_DEPTH_STENCIL = 4;
     }

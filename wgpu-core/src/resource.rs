@@ -76,6 +76,7 @@ bitflags::bitflags! {
 pub enum BufferMapAsyncStatus {
     Success,
     Error,
+    Aborted,
     Unknown,
     ContextLost,
 }
@@ -120,7 +121,7 @@ unsafe impl Sync for BufferMapOperation {}
 
 impl BufferMapOperation {
     pub(crate) fn call_error(self) {
-        tracing::error!("wgpu_buffer_map_async failed: buffer mapping is pending");
+        log::error!("wgpu_buffer_map_async failed: buffer mapping is pending");
         unsafe {
             (self.callback)(BufferMapAsyncStatus::Error, self.user_data);
         }
@@ -141,8 +142,26 @@ pub enum BufferAccessError {
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("buffer is not mapped")]
     NotMapped,
-    #[error("buffer map range does not respect `COPY_BUFFER_ALIGNMENT`")]
+    #[error(
+        "buffer map range must start aligned to `MAP_ALIGNMENT` and end to `COPY_BUFFER_ALIGNMENT`"
+    )]
     UnalignedRange,
+    #[error("buffer offset invalid: offset {offset} must be multiple of 8")]
+    UnalignedOffset { offset: wgt::BufferAddress },
+    #[error("buffer range size invalid: range_size {range_size} must be multiple of 4")]
+    UnalignedRangeSize { range_size: wgt::BufferAddress },
+    #[error("buffer access out of bounds: index {index} would underrun the buffer (limit: {min})")]
+    OutOfBoundsUnderrun {
+        index: wgt::BufferAddress,
+        min: wgt::BufferAddress,
+    },
+    #[error(
+        "buffer access out of bounds: last index {index} would overrun the buffer (limit: {max})"
+    )]
+    OutOfBoundsOverrun {
+        index: wgt::BufferAddress,
+        max: wgt::BufferAddress,
+    },
 }
 
 #[derive(Debug)]
@@ -212,7 +231,7 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum TextureErrorDimension {
     X,
     Y,
@@ -223,8 +242,12 @@ pub enum TextureErrorDimension {
 pub enum TextureDimensionError {
     #[error("Dimension {0:?} is zero")]
     Zero(TextureErrorDimension),
-    #[error("1D textures must have height set to 1")]
-    InvalidHeight,
+    #[error("Dimension {0:?} value {given} exceeds the limit of {limit}")]
+    LimitExceeded {
+        dim: TextureErrorDimension,
+        given: u32,
+        limit: u32,
+    },
     #[error("sample count {0} is invalid")]
     InvalidSampleCount(u32),
 }
@@ -274,14 +297,14 @@ pub struct TextureViewDescriptor<'a> {
     /// The dimension of the texture view. For 1D textures, this must be `1D`. For 2D textures it must be one of
     /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `3D`
     pub dimension: Option<wgt::TextureViewDimension>,
-    /// Aspect of the texture. Color textures must be [`TextureAspect::All`].
+    /// Aspect of the texture. Color textures must be [`TextureAspect::All`](wgt::TextureAspect::All).
     pub aspect: wgt::TextureAspect,
     /// Base mip level.
     pub base_mip_level: u32,
     /// Mip level count.
     /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
     /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
-    pub level_count: Option<NonZeroU32>,
+    pub mip_level_count: Option<NonZeroU32>,
     /// Base array layer.
     pub base_array_layer: u32,
     /// Layer count.
@@ -309,6 +332,7 @@ pub struct TextureView<B: hal::Backend> {
     pub(crate) aspects: hal::format::Aspects,
     pub(crate) format: wgt::TextureFormat,
     pub(crate) format_features: wgt::TextureFormatFeatures,
+    pub(crate) dimension: wgt::TextureViewDimension,
     pub(crate) extent: wgt::Extent3d,
     pub(crate) samples: hal::image::NumSamples,
     pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
@@ -394,7 +418,7 @@ pub struct SamplerDescriptor<'a> {
     pub compare: Option<wgt::CompareFunction>,
     /// Valid values: 1, 2, 4, 8, and 16.
     pub anisotropy_clamp: Option<NonZeroU8>,
-    /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
+    /// Border color to use when address_mode is [`AddressMode::ClampToBorder`](wgt::AddressMode::ClampToBorder)
     pub border_color: Option<wgt::SamplerBorderColor>,
 }
 
@@ -422,6 +446,8 @@ pub struct Sampler<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
     /// `true` if this is a comparison sampler
     pub(crate) comparison: bool,
+    /// `true` if this is a filtering sampler
+    pub(crate) filtering: bool,
 }
 
 #[derive(Clone, Debug, Error)]

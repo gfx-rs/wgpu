@@ -15,7 +15,6 @@ use crate::{
     instance::{Adapter, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     resource::{Buffer, Sampler, Texture, TextureView},
-    span,
     swap_chain::SwapChain,
     Epoch, Index,
 };
@@ -181,6 +180,11 @@ impl<T, I: TypedId> Storage<T, I> {
         self.insert_impl(index as usize, Element::Error(epoch, label.to_string()))
     }
 
+    pub(crate) fn force_replace(&mut self, id: I, value: T) {
+        let (index, epoch, _) = id.unzip();
+        self.map[index as usize] = Element::Occupied(value, epoch);
+    }
+
     pub(crate) fn remove(&mut self, id: I) -> Option<T> {
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
@@ -218,7 +222,6 @@ impl<T, I: TypedId> Storage<T, I> {
                 }
                 _ => None,
             })
-            .into_iter()
     }
 }
 
@@ -302,7 +305,7 @@ thread_local! {
 ///
 /// Note: there can only be one non-borrowed `Token` alive on a thread
 /// at a time, which is enforced by `ACTIVE_TOKEN`.
-pub struct Token<'a, T: 'a> {
+pub(crate) struct Token<'a, T: 'a> {
     level: PhantomData<&'a T>,
 }
 
@@ -439,58 +442,56 @@ impl<T: Resource, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     }
 }
 
-impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
-    pub fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
-        debug_assert_eq!(id.unzip().2, self.backend);
-        self.data.write().insert(id, value);
+#[must_use]
+pub(crate) struct FutureId<'a, I: TypedId, T> {
+    id: I,
+    data: &'a RwLock<Storage<T, I>>,
+}
+
+impl<I: TypedId + Copy, T> FutureId<'_, I, T> {
+    #[cfg(feature = "trace")]
+    pub fn id(&self) -> I {
+        self.id
     }
 
-    pub fn read<'a, A: Access<T>>(
+    pub fn into_id(self) -> I {
+        self.id
+    }
+
+    pub fn assign<'a, A: Access<T>>(self, value: T, _: &'a mut Token<A>) -> Valid<I> {
+        self.data.write().insert(self.id, value);
+        Valid(self.id)
+    }
+
+    pub fn assign_error<'a, A: Access<T>>(self, label: &str, _: &'a mut Token<A>) -> I {
+        self.data.write().insert_error(self.id, label);
+        self.id
+    }
+}
+
+impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
+    pub(crate) fn prepare(
+        &self,
+        id_in: <F::Filter as IdentityHandler<I>>::Input,
+    ) -> FutureId<I, T> {
+        FutureId {
+            id: self.identity.process(id_in, self.backend),
+            data: &self.data,
+        }
+    }
+
+    pub(crate) fn read<'a, A: Access<T>>(
         &'a self,
         _token: &'a mut Token<A>,
     ) -> (RwLockReadGuard<'a, Storage<T, I>>, Token<'a, T>) {
         (self.data.read(), Token::new())
     }
 
-    pub fn write<'a, A: Access<T>>(
+    pub(crate) fn write<'a, A: Access<T>>(
         &'a self,
         _token: &'a mut Token<A>,
     ) -> (RwLockWriteGuard<'a, Storage<T, I>>, Token<'a, T>) {
         (self.data.write(), Token::new())
-    }
-
-    pub(crate) fn register_identity<A: Access<T>>(
-        &self,
-        id_in: <F::Filter as IdentityHandler<I>>::Input,
-        value: T,
-        token: &mut Token<A>,
-    ) -> Valid<I> {
-        let id = self.identity.process(id_in, self.backend);
-        self.register(id, value, token);
-        Valid(id)
-    }
-
-    pub(crate) fn register_identity_locked(
-        &self,
-        id_in: <F::Filter as IdentityHandler<I>>::Input,
-        value: T,
-        guard: &mut Storage<T, I>,
-    ) -> Valid<I> {
-        let id = self.identity.process(id_in, self.backend);
-        guard.insert(id, value);
-        Valid(id)
-    }
-
-    pub fn register_error<A: Access<T>>(
-        &self,
-        id_in: <F::Filter as IdentityHandler<I>>::Input,
-        label: &str,
-        _token: &mut Token<A>,
-    ) -> I {
-        let id = self.identity.process(id_in, self.backend);
-        debug_assert_eq!(id.unzip().2, self.backend);
-        self.data.write().insert_error(id, label);
-        id
     }
 
     pub fn unregister_locked(&self, id: I, guard: &mut Storage<T, I>) -> Option<T> {
@@ -501,7 +502,7 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
         value
     }
 
-    pub fn unregister<'a, A: Access<T>>(
+    pub(crate) fn unregister<'a, A: Access<T>>(
         &self,
         id: I,
         _token: &'a mut Token<A>,
@@ -511,14 +512,6 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
         self.identity.free(id);
         //Returning None is legal if it's an error ID
         (value, Token::new())
-    }
-
-    pub fn process_id(&self, id_in: <F::Filter as IdentityHandler<I>>::Input) -> I {
-        self.identity.process(id_in, self.backend)
-    }
-
-    pub fn free_id(&self, id: I) {
-        self.identity.free(id)
     }
 
     pub fn label_for_resource(&self, id: I) -> String {
@@ -596,7 +589,7 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
 
         let mut devices = self.devices.data.write();
         for element in devices.map.iter_mut() {
-            if let Element::Occupied(device, _) = element {
+            if let Element::Occupied(ref mut device, _) = *element {
                 device.prepare_to_die();
             }
         }
@@ -772,7 +765,7 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn new(name: &str, factory: G, backends: wgt::BackendBit) -> Self {
-        span!(_guard, INFO, "Global::new");
+        profiling::scope!("new", "Global");
         Self {
             instance: Instance::new(name, 1, backends),
             surfaces: Registry::without_backend(&factory, "Surface"),
@@ -791,7 +784,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            tracing::info!("Dropping Global");
+            profiling::scope!("drop", "Global");
+            log::info!("Dropping Global");
             let mut surface_guard = self.surfaces.data.write();
 
             // destroy hubs

@@ -10,7 +10,7 @@ use crate::{
     hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
     memory_init_tracker::MemoryInitTrackerAction,
-    track::{TrackerSet, DUMMY_SELECTOR},
+    track::{TrackerSet, UsageConflict, DUMMY_SELECTOR},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label, LifeGuard, MultiRefCount, Stored, MAX_BIND_GROUPS,
 };
@@ -42,6 +42,8 @@ pub enum CreateBindGroupLayoutError {
     #[error(transparent)]
     TooManyBindings(BindingTypeMaxCountError),
 }
+
+//TODO: refactor this to move out `enum BindingError`.
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBindGroupError {
@@ -89,8 +91,14 @@ pub enum CreateBindGroupError {
     SwapChainImage,
     #[error("buffer offset {0} does not respect `BIND_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(wgt::BufferAddress),
-    #[error("uniform buffer binding range exceeds `max_uniform_buffer_binding_size` limit")]
-    UniformBufferRangeTooLarge,
+    #[error(
+        "buffer binding {binding} range {given} exceeds `max_*_buffer_binding_size` limit {limit}"
+    )]
+    BufferRangeTooLarge {
+        binding: u32,
+        given: u32,
+        limit: u32,
+    },
     #[error("binding {binding} has a different type ({actual:?}) than the one in the layout ({expected:?})")]
     WrongBindingType {
         // Index of the binding
@@ -100,12 +108,48 @@ pub enum CreateBindGroupError {
         // Human-readable description of expected types
         expected: &'static str,
     },
-    #[error("the given sampler is/is not a comparison sampler, while the layout type indicates otherwise")]
-    WrongSamplerComparison,
+    #[error("texture binding {binding} expects multisampled = {layout_multisampled}, but given a view with samples = {view_samples}")]
+    InvalidTextureMultisample {
+        binding: u32,
+        layout_multisampled: bool,
+        view_samples: u32,
+    },
+    #[error("texture binding {binding} expects sample type = {layout_sample_type:?}, but given a view with format = {view_format:?}")]
+    InvalidTextureSampleType {
+        binding: u32,
+        layout_sample_type: wgt::TextureSampleType,
+        view_format: wgt::TextureFormat,
+    },
+    #[error("texture binding {binding} expects dimension = {layout_dimension:?}, but given a view with dimension = {view_dimension:?}")]
+    InvalidTextureDimension {
+        binding: u32,
+        layout_dimension: wgt::TextureViewDimension,
+        view_dimension: wgt::TextureViewDimension,
+    },
+    #[error("storage texture binding {binding} expects format = {layout_format:?}, but given a view with format = {view_format:?}")]
+    InvalidStorageTextureFormat {
+        binding: u32,
+        layout_format: wgt::TextureFormat,
+        view_format: wgt::TextureFormat,
+    },
+    #[error("sampler binding {binding} expects comparison = {layout_cmp}, but given a sampler with comparison = {sampler_cmp}")]
+    WrongSamplerComparison {
+        binding: u32,
+        layout_cmp: bool,
+        sampler_cmp: bool,
+    },
+    #[error("sampler binding {binding} expects filtering = {layout_flt}, but given a sampler with filtering = {sampler_flt}")]
+    WrongSamplerFiltering {
+        binding: u32,
+        layout_flt: bool,
+        sampler_flt: bool,
+    },
     #[error("bound texture views can not have both depth and stencil aspects enabled")]
     DepthStencilAspect,
     #[error("the adapter does not support simultaneous read + write storage texture access for the format {0:?}")]
     StorageReadWriteNotSupported(wgt::TextureFormat),
+    #[error(transparent)]
+    ResourceUsageConflict(#[from] UsageConflict),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -441,7 +485,7 @@ pub struct PipelineLayoutDescriptor<'a> {
     /// must define the range in push constant memory that corresponds to its single `layout(push_constant)`
     /// uniform block.
     ///
-    /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
+    /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`](wgt::Features::PUSH_CONSTANTS) must be enabled.
     pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
 }
 
@@ -559,6 +603,7 @@ pub struct BufferBinding {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum BindingResource<'a> {
     Buffer(BufferBinding),
+    BufferArray(Cow<'a, [BufferBinding]>),
     Sampler(SamplerId),
     TextureView(TextureViewId),
     TextureViewArray(Cow<'a, [TextureViewId]>),

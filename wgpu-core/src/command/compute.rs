@@ -5,18 +5,16 @@
 use crate::{
     binding_model::{BindError, BindGroup, PushConstantUploadError},
     command::{
-        bind::{Binder, LayoutChange},
-        end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer, CommandEncoderError,
-        MapPassErr, PassErrorScope, QueryUseError, StateChange,
+        bind::Binder, end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer,
+        CommandEncoderError, MapPassErr, PassErrorScope, QueryUseError, StateChange,
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, BufferUse, Texture},
-    span,
     track::{TrackerSet, UsageConflict},
     validation::{check_buffer_usage, MissingBufferUsageError},
-    Label,
+    Label, DOWNLEVEL_ERROR_WARNING_MESSAGE,
 };
 
 use hal::command::CommandBuffer as _;
@@ -24,7 +22,7 @@ use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, ShaderStage};
 
 use crate::track::UseExtendError;
-use std::{fmt, iter, mem, str};
+use std::{fmt, mem, str};
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
@@ -155,6 +153,11 @@ pub enum ComputePassErrorInner {
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("cannot pop debug group, because number of pushed debug groups is zero")]
     InvalidPopDebugGroup,
+    #[error(
+        "Compute shaders are not supported by the underlying platform. {}",
+        DOWNLEVEL_ERROR_WARNING_MESSAGE
+    )]
+    ComputeShadersUnsupported,
     #[error(transparent)]
     Dispatch(#[from] DispatchError),
     #[error(transparent)]
@@ -222,7 +225,7 @@ impl State {
             self.trackers.merge_extend(&bind_group_guard[id].used)?;
         }
 
-        tracing::trace!("Encoding dispatch barriers");
+        log::trace!("Encoding dispatch barriers");
 
         CommandBuffer::insert_barriers(
             raw_cmd_buf,
@@ -254,7 +257,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<ComputeCommand>,
     ) -> Result<(), ComputePassError> {
-        span!(_guard, INFO, "CommandEncoder::run_compute_pass");
+        profiling::scope!("run_compute_pass", "CommandEncoder");
         let scope = PassErrorScope::Pass(encoder_id);
 
         let hub = B::hub(self);
@@ -269,6 +272,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(crate::device::trace::Command::RunComputePass {
                 base: BasePass::from_ref(base),
+            });
+        }
+
+        if !cmd_buf
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::COMPUTE_SHADERS)
+        {
+            return Err(ComputePassError {
+                scope: PassErrorScope::Pass(encoder_id),
+                inner: ComputePassErrorInner::ComputeShadersUnsupported,
             });
         }
 
@@ -287,7 +301,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (texture_guard, _) = hub.textures.read(&mut token);
 
         let mut state = State {
-            binder: Binder::new(cmd_buf.limits.max_bind_groups),
+            binder: Binder::new(),
             pipeline: StateChange::new(),
             trackers: TrackerSet::new(B::VARIANT),
             debug_scope_depth: 0,
@@ -348,24 +362,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         ),
                     );
 
-                    if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
+                    let pipeline_layout_id = state.binder.pipeline_layout_id;
+                    let entries = state.binder.assign_group(
                         index as usize,
                         id::Valid(bind_group_id),
                         bind_group,
                         &temp_offsets,
-                    ) {
-                        let bind_groups = iter::once(bind_group.raw.raw()).chain(
-                            follow_ups
-                                .clone()
-                                .map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()),
-                        );
-                        temp_offsets.extend(follow_ups.flat_map(|(_, offsets)| offsets));
+                    );
+                    if !entries.is_empty() {
+                        let pipeline_layout =
+                            &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
+                        let desc_sets = entries.iter().map(|e| {
+                            bind_group_guard[e.group_id.as_ref().unwrap().value]
+                                .raw
+                                .raw()
+                        });
+                        let offsets = entries.iter().flat_map(|e| &e.dynamic_offsets).cloned();
                         unsafe {
                             raw.bind_compute_descriptor_sets(
-                                &pipeline_layout_guard[pipeline_layout_id].raw,
+                                pipeline_layout,
                                 index as usize,
-                                bind_groups,
-                                temp_offsets.iter().cloned(),
+                                desc_sets,
+                                offsets,
                             );
                         }
                     }
@@ -392,36 +410,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if state.binder.pipeline_layout_id != Some(pipeline.layout_id.value) {
                         let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id.value];
 
-                        state.binder.change_pipeline_layout(
+                        let (start_index, entries) = state.binder.change_pipeline_layout(
                             &*pipeline_layout_guard,
                             pipeline.layout_id.value,
                         );
-
-                        let mut is_compatible = true;
-
-                        for (index, (entry, &bgl_id)) in state
-                            .binder
-                            .entries
-                            .iter_mut()
-                            .zip(&pipeline_layout.bind_group_layout_ids)
-                            .enumerate()
-                        {
-                            match entry.expect_layout(bgl_id) {
-                                LayoutChange::Match(bg_id, offsets) if is_compatible => {
-                                    let desc_set = bind_group_guard[bg_id].raw.raw();
-                                    unsafe {
-                                        raw.bind_compute_descriptor_sets(
-                                            &pipeline_layout.raw,
-                                            index,
-                                            iter::once(desc_set),
-                                            offsets.iter().cloned(),
-                                        );
-                                    }
-                                }
-                                LayoutChange::Match(..) | LayoutChange::Unchanged => {}
-                                LayoutChange::Mismatch => {
-                                    is_compatible = false;
-                                }
+                        if !entries.is_empty() {
+                            let desc_sets = entries.iter().map(|e| {
+                                bind_group_guard[e.group_id.as_ref().unwrap().value]
+                                    .raw
+                                    .raw()
+                            });
+                            let offsets = entries.iter().flat_map(|e| &e.dynamic_offsets).cloned();
+                            unsafe {
+                                raw.bind_compute_descriptor_sets(
+                                    &pipeline_layout.raw,
+                                    start_index,
+                                    desc_sets,
+                                    offsets,
+                                );
                             }
                         }
 
@@ -658,7 +664,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 pub mod compute_ffi {
     use super::{ComputeCommand, ComputePass};
-    use crate::{id, span, RawString};
+    use crate::{id, RawString};
     use std::{convert::TryInto, ffi, slice};
     use wgt::{BufferAddress, DynamicOffset};
 
@@ -666,8 +672,6 @@ pub mod compute_ffi {
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `offset_length` elements.
-    // TODO: There might be other safety issues, such as using the unsafe
-    // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_set_bind_group(
         pass: &mut ComputePass,
@@ -676,7 +680,6 @@ pub mod compute_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        span!(_guard, DEBUG, "ComputePass::set_bind_group");
         pass.base.commands.push(ComputeCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
@@ -694,12 +697,15 @@ pub mod compute_ffi {
         pass: &mut ComputePass,
         pipeline_id: id::ComputePipelineId,
     ) {
-        span!(_guard, DEBUG, "ComputePass::set_pipeline");
         pass.base
             .commands
             .push(ComputeCommand::SetPipeline(pipeline_id));
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given pointer is
+    /// valid for `size_bytes` bytes.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_set_push_constant(
         pass: &mut ComputePass,
@@ -707,7 +713,6 @@ pub mod compute_ffi {
         size_bytes: u32,
         data: *const u8,
     ) {
-        span!(_guard, DEBUG, "ComputePass::set_push_constant");
         assert_eq!(
             offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
@@ -743,7 +748,6 @@ pub mod compute_ffi {
         groups_y: u32,
         groups_z: u32,
     ) {
-        span!(_guard, DEBUG, "ComputePass::dispatch");
         pass.base
             .commands
             .push(ComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
@@ -755,19 +759,21 @@ pub mod compute_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        span!(_guard, DEBUG, "ComputePass::dispatch_indirect");
         pass.base
             .commands
             .push(ComputeCommand::DispatchIndirect { buffer_id, offset });
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given `label`
+    /// is a valid null-terminated string.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_push_debug_group(
         pass: &mut ComputePass,
         label: RawString,
         color: u32,
     ) {
-        span!(_guard, DEBUG, "ComputePass::push_debug_group");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -779,17 +785,19 @@ pub mod compute_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_compute_pass_pop_debug_group(pass: &mut ComputePass) {
-        span!(_guard, DEBUG, "ComputePass::pop_debug_group");
         pass.base.commands.push(ComputeCommand::PopDebugGroup);
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given `label`
+    /// is a valid null-terminated string.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_insert_debug_marker(
         pass: &mut ComputePass,
         label: RawString,
         color: u32,
     ) {
-        span!(_guard, DEBUG, "ComputePass::insert_debug_marker");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -800,13 +808,11 @@ pub mod compute_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_write_timestamp(
+    pub extern "C" fn wgpu_compute_pass_write_timestamp(
         pass: &mut ComputePass,
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) {
-        span!(_guard, DEBUG, "ComputePass::write_timestamp");
-
         pass.base.commands.push(ComputeCommand::WriteTimestamp {
             query_set_id,
             query_index,
@@ -814,17 +820,11 @@ pub mod compute_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_begin_pipeline_statistics_query(
+    pub extern "C" fn wgpu_compute_pass_begin_pipeline_statistics_query(
         pass: &mut ComputePass,
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) {
-        span!(
-            _guard,
-            DEBUG,
-            "ComputePass::begin_pipeline_statistics query"
-        );
-
         pass.base
             .commands
             .push(ComputeCommand::BeginPipelineStatisticsQuery {
@@ -834,11 +834,7 @@ pub mod compute_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_end_pipeline_statistics_query(
-        pass: &mut ComputePass,
-    ) {
-        span!(_guard, DEBUG, "ComputePass::end_pipeline_statistics_query");
-
+    pub extern "C" fn wgpu_compute_pass_end_pipeline_statistics_query(pass: &mut ComputePass) {
         pass.base
             .commands
             .push(ComputeCommand::EndPipelineStatisticsQuery);

@@ -11,18 +11,21 @@
             id: Id(0, 1, Empty),
             desc: (
                 label: None,
-                experimental_translation: true,
+                flags: (bits: 3),
             ),
             data: "empty.wgsl",
         ),
-        CreateComputePipeline(Id(0, 1, Empty), (
-            label: None,
-            layout: Some(Id(0, 1, Empty)),
-            stage: (
-                module: Id(0, 1, Empty),
-                entry_point: "main",
+        CreateComputePipeline(
+            id: Id(0, 1, Empty),
+            desc: (
+                label: None,
+                layout: Some(Id(0, 1, Empty)),
+                stage: (
+                    module: Id(0, 1, Empty),
+                    entry_point: "main",
+                ),
             ),
-        )),
+        ),
         CreateBuffer(Id(0, 1, Empty), (
             label: None,
             size: 16,

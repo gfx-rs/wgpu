@@ -1,10 +1,10 @@
 [package]
 name = "wgpu-core"
-version = "0.7.0"
+version = "0.8.1"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "WebGPU core logic on gfx-hal"
-homepage = "https://github.com/gfx-rs/wgpu"
+homepage = "https://github.com/gfx-rs/wgpu/tree/v0.8"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
 license = "MPL-2.0"
@@ -13,10 +13,12 @@ license = "MPL-2.0"
 
 [features]
 default = []
+# Enable SPIRV-Cross
+cross = ["gfx-backend-metal/cross", "gfx-backend-gl/cross"]
 # Enable API tracing
-trace = ["ron", "serde", "wgt/trace", "naga/serialize"]
+trace = ["ron", "serde", "wgt/trace", "arrayvec/serde"]
 # Enable API replaying
-replay = ["serde", "wgt/replay", "naga/deserialize"]
+replay = ["serde", "wgt/replay", "arrayvec/serde"]
 # Enable serializable compute/render passes, and bundle encoders.
 serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 use-openxr = [
@@ -35,45 +37,47 @@ arrayvec = "0.5"
 bitflags = "1.0"
 copyless = "0.1"
 fxhash = "0.2"
+log = "0.4"
 parking_lot = "0.11"
+profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.3", optional = true }
 ron = { version = "0.6", optional = true }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
-tracing = { version = "0.1", default-features = false, features = ["std"] }
 thiserror = "1"
 
-gpu-alloc = { version = "0.3", features = ["tracing"] }
-gpu-descriptor = { version = "0.1", features = ["tracing"] }
+gpu-alloc = "0.4"
+gpu-descriptor = "0.1"
 
-hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx", rev = "d54cdcfac68711a91b55682c56da09f8e5b6f4e7" }
-gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "d54cdcfac68711a91b55682c56da09f8e5b6f4e7" }
+hal = { package = "gfx-hal", version = "0.8", path = "../../gfx/src/hal" }
+gfx-backend-empty = { version = "0.8", path = "../../gfx/src/backend/empty" }
+
+openxr = { path = "../../openxrs/openxr", features = ["loaded"], default-features = false, optional = true }
 
 [target.'cfg(all(not(target_arch = "wasm32"), all(unix, not(target_os = "ios"), not(target_os = "macos"))))'.dependencies]
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "d54cdcfac68711a91b55682c56da09f8e5b6f4e7", features = ["naga"] }
-gfx-backend-gl = { git = "https://github.com/gfx-rs/gfx", rev = "d54cdcfac68711a91b55682c56da09f8e5b6f4e7", features = ["naga"] }
+gfx-backend-vulkan = { version = "0.8", features = ["naga"], path = "../../gfx/src/backend/vulkan" }
+gfx-backend-gl = { version = "0.8", path = "../../gfx/src/backend/gl" }
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
-gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", rev = "d54cdcfac68711a91b55682c56da09f8e5b6f4e7", features = ["naga"] }
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "d54cdcfac68711a91b55682c56da09f8e5b6f4e7", optional = true }
+gfx-backend-metal = { version = "0.8" }
+#TODO: could also depend on gfx-backend-vulkan for Vulkan Portability
 
 [target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
-gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", rev = "d54cdcfac68711a91b55682c56da09f8e5b6f4e7" }
-gfx-backend-dx11 = { git = "https://github.com/gfx-rs/gfx", rev = "d54cdcfac68711a91b55682c56da09f8e5b6f4e7" }
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "d54cdcfac68711a91b55682c56da09f8e5b6f4e7", features = ["naga"] }
+gfx-backend-dx12 = { version = "0.8" }
+gfx-backend-dx11 = { version = "0.8" }
+gfx-backend-vulkan = { version = "0.8", features = ["naga"], path = "../../gfx/src/backend/vulkan" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-gfx-backend-gl = { git = "https://github.com/gfx-rs/gfx", rev = "d54cdcfac68711a91b55682c56da09f8e5b6f4e7", features = ["naga"] }
+gfx-backend-gl = { version = "0.8", path = "../../gfx/src/backend/gl" }
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-tag = "gfx-9"
+version = "0.4"
 features = ["spv-in", "spv-out", "wgsl-in"]
 
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.7"
+version = "0.8"
 
 [dev-dependencies]
 loom = "0.3"

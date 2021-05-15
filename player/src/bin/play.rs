@@ -17,12 +17,7 @@ fn main() {
     #[cfg(feature = "winit")]
     use winit::{event_loop::EventLoop, window::WindowBuilder};
 
-    wgpu_subscriber::initialize_default_subscriber(
-        std::env::var("WGPU_CHROME_TRACE")
-            .as_ref()
-            .map(Path::new)
-            .ok(),
-    );
+    env_logger::init();
 
     #[cfg(feature = "renderdoc")]
     #[cfg_attr(feature = "winit", allow(unused))]
@@ -51,7 +46,7 @@ fn main() {
     #[cfg(feature = "winit")]
     let window = WindowBuilder::new()
         .with_title("wgpu player")
-        .with_resizable(false)
+        .with_resizable(true)
         .build(&event_loop)
         .unwrap();
 
@@ -123,23 +118,35 @@ fn main() {
             event_loop::ControlFlow,
         };
 
+        let mut resize_desc = None;
         let mut frame_count = 0;
+        let mut done = false;
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
             match event {
                 Event::MainEventsCleared => {
                     window.request_redraw();
                 }
-                Event::RedrawRequested(_) => loop {
+                Event::RedrawRequested(_) if resize_desc.is_none() => loop {
                     match actions.pop() {
                         Some(trace::Action::CreateSwapChain(id, desc)) => {
                             log::info!("Initializing the swapchain");
                             assert_eq!(id.to_surface_id(), surface);
-                            window.set_inner_size(winit::dpi::PhysicalSize::new(
-                                desc.width,
-                                desc.height,
-                            ));
-                            gfx_select!(device => global.device_create_swap_chain(device, surface, &desc)).unwrap();
+                            let current_size: (u32, u32) = window.inner_size().into();
+                            let size = (desc.width, desc.height);
+                            if current_size != size {
+                                window.set_inner_size(winit::dpi::PhysicalSize::new(
+                                    desc.width,
+                                    desc.height,
+                                ));
+                                resize_desc = Some(desc);
+                                break;
+                            } else {
+                                let (_, error) = gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
+                                if let Some(e) = error {
+                                    panic!("{:?}", e);
+                                }
+                            }
                         }
                         Some(trace::Action::PresentSwapChain(id)) => {
                             frame_count += 1;
@@ -150,10 +157,24 @@ fn main() {
                         Some(action) => {
                             gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
                         }
-                        None => break,
+                        None => {
+                            if !done {
+                                println!("Finished the end at frame {}", frame_count);
+                                done = true;
+                            }
+                            break;
+                        }
                     }
                 },
                 Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::Resized(_) => {
+                        if let Some(desc) = resize_desc.take() {
+                            let (_, error) = gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
+                            if let Some(e) = error {
+                                panic!("{:?}", e);
+                            }
+                        }
+                    }
                     WindowEvent::KeyboardInput {
                         input:
                             KeyboardInput {

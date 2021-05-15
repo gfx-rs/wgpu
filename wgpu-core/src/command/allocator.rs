@@ -32,7 +32,7 @@ impl<B: hal::Backend> CommandPool<B> {
         for i in (0..self.pending.len()).rev() {
             if self.pending[i].1 <= last_done_index {
                 let (cmd_buf, index) = self.pending.swap_remove(i);
-                tracing::trace!(
+                log::trace!(
                     "recycling cmdbuf submitted in {} when {} is last done",
                     index,
                     last_done_index,
@@ -84,11 +84,13 @@ pub struct CommandAllocator<B: hal::Backend> {
 }
 
 impl<B: GfxBackend> CommandAllocator<B> {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn allocate(
         &self,
         device_id: Stored<DeviceId>,
         device: &B::Device,
         limits: wgt::Limits,
+        downlevel: wgt::DownlevelProperties,
         private_features: PrivateFeatures,
         label: &crate::Label,
         #[cfg(feature = "trace")] enable_tracing: bool,
@@ -98,26 +100,32 @@ impl<B: GfxBackend> CommandAllocator<B> {
         let mut inner = self.inner.lock();
 
         use std::collections::hash_map::Entry;
-        if let Entry::Vacant(e) = inner.pools.entry(thread_id) {
-            tracing::info!("Starting on thread {:?}", thread_id);
-            let raw = unsafe {
-                device
-                    .create_command_pool(
-                        self.queue_family,
-                        hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
-                    )
-                    .or(Err(DeviceError::OutOfMemory))?
-            };
-            e.insert(CommandPool {
-                raw,
-                total: 0,
-                available: Vec::new(),
-                pending: Vec::new(),
-            });
-        }
+        let pool = match inner.pools.entry(thread_id) {
+            Entry::Vacant(e) => {
+                log::info!("Starting on thread {:?}", thread_id);
+                let raw = unsafe {
+                    device
+                        .create_command_pool(
+                            self.queue_family,
+                            hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
+                        )
+                        .or(Err(DeviceError::OutOfMemory))?
+                };
+                e.insert(CommandPool {
+                    raw,
+                    total: 0,
+                    available: Vec::new(),
+                    pending: Vec::new(),
+                })
+            }
+            Entry::Occupied(e) => e.into_mut(),
+        };
+
+        //Note: we have to allocate the first buffer right here, or otherwise
+        // the pool may be cleaned up by maintenance called from another thread.
 
         Ok(CommandBuffer {
-            raw: Vec::new(),
+            raw: vec![pool.allocate()],
             is_recording: true,
             recorded_thread_id: thread_id,
             device_id,
@@ -125,6 +133,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
             used_swap_chains: Default::default(),
             buffer_memory_init_actions: Default::default(),
             limits,
+            downlevel,
             private_features,
             has_labels: label.is_some(),
             #[cfg(feature = "trace")]
@@ -145,7 +154,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
         device: &B::Device,
     ) -> Result<Self, CommandAllocatorError> {
         let internal_thread_id = thread::current().id();
-        tracing::info!("Starting on (internal) thread {:?}", internal_thread_id);
+        log::info!("Starting on (internal) thread {:?}", internal_thread_id);
         let mut pools = FastHashMap::default();
         pools.insert(
             internal_thread_id,
@@ -234,6 +243,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
     }
 
     pub fn maintain(&self, device: &B::Device, last_done_index: SubmissionIndex) {
+        profiling::scope!("maintain", "CommandAllocator");
         let mut inner = self.inner.lock();
         let mut remove_threads = Vec::new();
         for (&thread_id, pool) in inner.pools.iter_mut() {
@@ -244,7 +254,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
             }
         }
         for thread_id in remove_threads {
-            tracing::info!("Removing from thread {:?}", thread_id);
+            log::info!("Removing from thread {:?}", thread_id);
             let pool = inner.pools.remove(&thread_id).unwrap();
             pool.destroy(device);
         }
@@ -257,7 +267,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
                 pool.recycle(raw);
             }
             if pool.total != pool.available.len() {
-                tracing::error!(
+                log::error!(
                     "Some command buffers are still recorded, only tracking {} / {}",
                     pool.available.len(),
                     pool.total

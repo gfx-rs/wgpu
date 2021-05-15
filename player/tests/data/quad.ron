@@ -13,7 +13,7 @@
             id: Id(0, 1, Empty),
             desc: (
                 label: None,
-                experimental_translation: true,
+                flags: (bits: 3),
             ),
             data: "quad.wgsl",
         ),
@@ -22,7 +22,7 @@
             size: (
                 width: 64,
                 height: 64,
-                depth: 1,
+                depth_or_array_layers: 1,
             ),
             mip_level_count: 1,
             sample_count: 1,
@@ -53,28 +53,31 @@
             bind_group_layouts: [],
             push_constant_ranges: [],
         )),
-        CreateRenderPipeline(Id(0, 1, Empty), (
-            label: None,
-            layout: Some(Id(0, 1, Empty)),
-            vertex: (
-                stage: (
-                    module: Id(0, 1, Empty),
-                    entry_point: "vs_main",
-                ),
-                buffers: [],
-            ),
-            fragment: Some((
-                stage: (
-                    module: Id(0, 1, Empty),
-                    entry_point: "fs_main",
-                ),
-                targets: [
-                    (
-                        format: Rgba8Unorm,
+        CreateRenderPipeline(
+            id: Id(0, 1, Empty),
+            desc: (
+                label: None,
+                layout: Some(Id(0, 1, Empty)),
+                vertex: (
+                    stage: (
+                        module: Id(0, 1, Empty),
+                        entry_point: "vs_main",
                     ),
-                ],
-            )),
-        )),
+                    buffers: [],
+                ),
+                fragment: Some((
+                    stage: (
+                        module: Id(0, 1, Empty),
+                        entry_point: "fs_main",
+                    ),
+                    targets: [
+                        (
+                            format: Rgba8Unorm,
+                        ),
+                    ],
+                )),
+            ),
+        ),
         Submit(1, [
             RunRenderPass(
                 base: (
@@ -93,7 +96,7 @@
                 ),
                 target_colors: [
                     (
-                        attachment: Id(0, 1, Empty),
+                        view: Id(0, 1, Empty),
                         resolve_target: None,
                         channel: (
                             load_op: Clear,
@@ -120,14 +123,14 @@
                     buffer: Id(0, 1, Empty),
                     layout: (
                         offset: 0,
-                        bytes_per_row: 256,
-                        rows_per_image: 64,
+                        bytes_per_row: Some(256),
+                        rows_per_image: Some(64),
                     ),
                 ),
                 size: (
                     width: 64,
                     height: 64,
-                    depth: 1,
+                    depth_or_array_layers: 1,
                 ),
             ),
         ]),

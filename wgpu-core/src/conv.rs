@@ -4,6 +4,7 @@
 
 use crate::{
     command::{LoadOp, PassChannel, StoreOp},
+    pipeline::ColorStateError,
     resource, PrivateFeatures,
 };
 
@@ -154,13 +155,32 @@ pub fn map_shader_stage_flags(shader_stage_flags: wgt::ShaderStage) -> hal::pso:
     value
 }
 
+pub fn map_hal_flags_to_shader_stage(
+    shader_stage_flags: hal::pso::ShaderStageFlags,
+) -> wgt::ShaderStage {
+    use hal::pso::ShaderStageFlags as H;
+    use wgt::ShaderStage as Ss;
+
+    let mut value = Ss::empty();
+    if shader_stage_flags.contains(H::VERTEX) {
+        value |= Ss::VERTEX;
+    }
+    if shader_stage_flags.contains(H::FRAGMENT) {
+        value |= Ss::FRAGMENT;
+    }
+    if shader_stage_flags.contains(H::COMPUTE) {
+        value |= Ss::COMPUTE;
+    }
+    value
+}
+
 pub fn map_extent(extent: &wgt::Extent3d, dim: wgt::TextureDimension) -> hal::image::Extent {
     hal::image::Extent {
         width: extent.width,
         height: extent.height,
         depth: match dim {
             wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => 1,
-            wgt::TextureDimension::D3 => extent.depth,
+            wgt::TextureDimension::D3 => extent.depth_or_array_layers,
         },
     }
 }
@@ -177,22 +197,24 @@ pub fn map_primitive_topology(primitive_topology: wgt::PrimitiveTopology) -> hal
     }
 }
 
-pub fn map_color_target_state(desc: &wgt::ColorTargetState) -> hal::pso::ColorBlendDesc {
+pub fn map_color_target_state(
+    desc: &wgt::ColorTargetState,
+) -> Result<hal::pso::ColorBlendDesc, ColorStateError> {
     let color_mask = desc.write_mask;
-    let blend_state = if desc.color_blend != wgt::BlendState::REPLACE
-        || desc.alpha_blend != wgt::BlendState::REPLACE
-    {
-        Some(hal::pso::BlendState {
-            color: map_blend_state(&desc.color_blend),
-            alpha: map_blend_state(&desc.alpha_blend),
+    let blend = desc
+        .blend
+        .as_ref()
+        .map(|bs| {
+            Ok(hal::pso::BlendState {
+                color: map_blend_component(&bs.color)?,
+                alpha: map_blend_component(&bs.alpha)?,
+            })
         })
-    } else {
-        None
-    };
-    hal::pso::ColorBlendDesc {
+        .transpose()?;
+    Ok(hal::pso::ColorBlendDesc {
         mask: map_color_write_flags(color_mask),
-        blend: blend_state,
-    }
+        blend,
+    })
 }
 
 fn map_color_write_flags(flags: wgt::ColorWrite) -> hal::pso::ColorMask {
@@ -215,25 +237,48 @@ fn map_color_write_flags(flags: wgt::ColorWrite) -> hal::pso::ColorMask {
     value
 }
 
-fn map_blend_state(blend_desc: &wgt::BlendState) -> hal::pso::BlendOp {
+fn map_blend_component(
+    component: &wgt::BlendComponent,
+) -> Result<hal::pso::BlendOp, ColorStateError> {
     use hal::pso::BlendOp as H;
     use wgt::BlendOperation as Bo;
-    match blend_desc.operation {
-        Bo::Add => H::Add {
-            src: map_blend_factor(blend_desc.src_factor),
-            dst: map_blend_factor(blend_desc.dst_factor),
+    Ok(match *component {
+        wgt::BlendComponent {
+            operation: Bo::Add,
+            src_factor,
+            dst_factor,
+        } => H::Add {
+            src: map_blend_factor(src_factor),
+            dst: map_blend_factor(dst_factor),
         },
-        Bo::Subtract => H::Sub {
-            src: map_blend_factor(blend_desc.src_factor),
-            dst: map_blend_factor(blend_desc.dst_factor),
+        wgt::BlendComponent {
+            operation: Bo::Subtract,
+            src_factor,
+            dst_factor,
+        } => H::Sub {
+            src: map_blend_factor(src_factor),
+            dst: map_blend_factor(dst_factor),
         },
-        Bo::ReverseSubtract => H::RevSub {
-            src: map_blend_factor(blend_desc.src_factor),
-            dst: map_blend_factor(blend_desc.dst_factor),
+        wgt::BlendComponent {
+            operation: Bo::ReverseSubtract,
+            src_factor,
+            dst_factor,
+        } => H::RevSub {
+            src: map_blend_factor(src_factor),
+            dst: map_blend_factor(dst_factor),
         },
-        Bo::Min => H::Min,
-        Bo::Max => H::Max,
-    }
+        wgt::BlendComponent {
+            operation: Bo::Min,
+            src_factor: wgt::BlendFactor::One,
+            dst_factor: wgt::BlendFactor::One,
+        } => H::Min,
+        wgt::BlendComponent {
+            operation: Bo::Max,
+            src_factor: wgt::BlendFactor::One,
+            dst_factor: wgt::BlendFactor::One,
+        } => H::Max,
+        _ => return Err(ColorStateError::InvalidMinMaxBlendFactors(*component)),
+    })
 }
 
 fn map_blend_factor(blend_factor: wgt::BlendFactor) -> hal::pso::Factor {
@@ -242,17 +287,17 @@ fn map_blend_factor(blend_factor: wgt::BlendFactor) -> hal::pso::Factor {
     match blend_factor {
         Bf::Zero => H::Zero,
         Bf::One => H::One,
-        Bf::SrcColor => H::SrcColor,
-        Bf::OneMinusSrcColor => H::OneMinusSrcColor,
+        Bf::Src => H::SrcColor,
+        Bf::OneMinusSrc => H::OneMinusSrcColor,
         Bf::SrcAlpha => H::SrcAlpha,
         Bf::OneMinusSrcAlpha => H::OneMinusSrcAlpha,
-        Bf::DstColor => H::DstColor,
-        Bf::OneMinusDstColor => H::OneMinusDstColor,
+        Bf::Dst => H::DstColor,
+        Bf::OneMinusDst => H::OneMinusDstColor,
         Bf::DstAlpha => H::DstAlpha,
         Bf::OneMinusDstAlpha => H::OneMinusDstAlpha,
         Bf::SrcAlphaSaturated => H::SrcAlphaSaturate,
-        Bf::BlendColor => H::ConstColor,
-        Bf::OneMinusBlendColor => H::OneMinusConstColor,
+        Bf::Constant => H::ConstColor,
+        Bf::OneMinusConstant => H::OneMinusConstColor,
     }
 }
 
@@ -462,40 +507,40 @@ pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> hal::format::Forma
     use hal::format::Format as H;
     use wgt::VertexFormat as Vf;
     match vertex_format {
-        Vf::Uchar2 => H::Rg8Uint,
-        Vf::Uchar4 => H::Rgba8Uint,
-        Vf::Char2 => H::Rg8Sint,
-        Vf::Char4 => H::Rgba8Sint,
-        Vf::Uchar2Norm => H::Rg8Unorm,
-        Vf::Uchar4Norm => H::Rgba8Unorm,
-        Vf::Char2Norm => H::Rg8Snorm,
-        Vf::Char4Norm => H::Rgba8Snorm,
-        Vf::Ushort2 => H::Rg16Uint,
-        Vf::Ushort4 => H::Rgba16Uint,
-        Vf::Short2 => H::Rg16Sint,
-        Vf::Short4 => H::Rgba16Sint,
-        Vf::Ushort2Norm => H::Rg16Unorm,
-        Vf::Ushort4Norm => H::Rgba16Unorm,
-        Vf::Short2Norm => H::Rg16Snorm,
-        Vf::Short4Norm => H::Rgba16Snorm,
-        Vf::Half2 => H::Rg16Sfloat,
-        Vf::Half4 => H::Rgba16Sfloat,
-        Vf::Float => H::R32Sfloat,
-        Vf::Float2 => H::Rg32Sfloat,
-        Vf::Float3 => H::Rgb32Sfloat,
-        Vf::Float4 => H::Rgba32Sfloat,
-        Vf::Uint => H::R32Uint,
-        Vf::Uint2 => H::Rg32Uint,
-        Vf::Uint3 => H::Rgb32Uint,
-        Vf::Uint4 => H::Rgba32Uint,
-        Vf::Int => H::R32Sint,
-        Vf::Int2 => H::Rg32Sint,
-        Vf::Int3 => H::Rgb32Sint,
-        Vf::Int4 => H::Rgba32Sint,
-        Vf::Double => H::R64Sfloat,
-        Vf::Double2 => H::Rg64Sfloat,
-        Vf::Double3 => H::Rgb64Sfloat,
-        Vf::Double4 => H::Rgba64Sfloat,
+        Vf::Uint8x2 => H::Rg8Uint,
+        Vf::Uint8x4 => H::Rgba8Uint,
+        Vf::Sint8x2 => H::Rg8Sint,
+        Vf::Sint8x4 => H::Rgba8Sint,
+        Vf::Unorm8x2 => H::Rg8Unorm,
+        Vf::Unorm8x4 => H::Rgba8Unorm,
+        Vf::Snorm8x2 => H::Rg8Snorm,
+        Vf::Snorm8x4 => H::Rgba8Snorm,
+        Vf::Uint16x2 => H::Rg16Uint,
+        Vf::Uint16x4 => H::Rgba16Uint,
+        Vf::Sint16x2 => H::Rg16Sint,
+        Vf::Sint16x4 => H::Rgba16Sint,
+        Vf::Unorm16x2 => H::Rg16Unorm,
+        Vf::Unorm16x4 => H::Rgba16Unorm,
+        Vf::Snorm16x2 => H::Rg16Snorm,
+        Vf::Snorm16x4 => H::Rgba16Snorm,
+        Vf::Float16x2 => H::Rg16Sfloat,
+        Vf::Float16x4 => H::Rgba16Sfloat,
+        Vf::Float32 => H::R32Sfloat,
+        Vf::Float32x2 => H::Rg32Sfloat,
+        Vf::Float32x3 => H::Rgb32Sfloat,
+        Vf::Float32x4 => H::Rgba32Sfloat,
+        Vf::Uint32 => H::R32Uint,
+        Vf::Uint32x2 => H::Rg32Uint,
+        Vf::Uint32x3 => H::Rgb32Uint,
+        Vf::Uint32x4 => H::Rgba32Uint,
+        Vf::Sint32 => H::R32Sint,
+        Vf::Sint32x2 => H::Rg32Sint,
+        Vf::Sint32x3 => H::Rgb32Sint,
+        Vf::Sint32x4 => H::Rgba32Sint,
+        Vf::Float64 => H::R64Sfloat,
+        Vf::Float64x2 => H::Rg64Sfloat,
+        Vf::Float64x3 => H::Rgb64Sfloat,
+        Vf::Float64x4 => H::Rgba64Sfloat,
     }
 }
 
@@ -524,52 +569,63 @@ pub fn map_texture_dimension_size(
     wgt::Extent3d {
         width,
         height,
-        depth,
+        depth_or_array_layers,
     }: wgt::Extent3d,
     sample_size: u32,
+    limits: &wgt::Limits,
 ) -> Result<hal::image::Kind, resource::TextureDimensionError> {
     use hal::image::Kind as H;
-    use resource::TextureDimensionError as Tde;
+    use resource::{TextureDimensionError as Tde, TextureErrorDimension as Ted};
     use wgt::TextureDimension::*;
 
-    let zero_dim = if width == 0 {
-        Some(resource::TextureErrorDimension::X)
-    } else if height == 0 {
-        Some(resource::TextureErrorDimension::Y)
-    } else if depth == 0 {
-        Some(resource::TextureErrorDimension::Z)
-    } else {
-        None
+    let layers = depth_or_array_layers.try_into().unwrap_or(!0);
+    let (kind, extent_limits, sample_limit) = match dimension {
+        D1 => (
+            H::D1(width, layers),
+            [
+                limits.max_texture_dimension_1d,
+                1,
+                limits.max_texture_array_layers,
+            ],
+            1,
+        ),
+        D2 => (
+            H::D2(width, height, layers, sample_size as u8),
+            [
+                limits.max_texture_dimension_2d,
+                limits.max_texture_dimension_2d,
+                limits.max_texture_array_layers,
+            ],
+            32,
+        ),
+        D3 => (
+            H::D3(width, height, depth_or_array_layers),
+            [
+                limits.max_texture_dimension_3d,
+                limits.max_texture_dimension_3d,
+                limits.max_texture_dimension_3d,
+            ],
+            1,
+        ),
     };
-    if let Some(dim) = zero_dim {
-        return Err(resource::TextureDimensionError::Zero(dim));
+
+    for (&dim, (&given, &limit)) in [Ted::X, Ted::Y, Ted::Z].iter().zip(
+        [width, height, depth_or_array_layers]
+            .iter()
+            .zip(extent_limits.iter()),
+    ) {
+        if given == 0 {
+            return Err(Tde::Zero(dim));
+        }
+        if given > limit {
+            return Err(Tde::LimitExceeded { dim, given, limit });
+        }
+    }
+    if sample_size == 0 || sample_size > sample_limit || !is_power_of_two(sample_size) {
+        return Err(Tde::InvalidSampleCount(sample_size));
     }
 
-    Ok(match dimension {
-        D1 => {
-            if height != 1 {
-                return Err(Tde::InvalidHeight);
-            }
-            if sample_size != 1 {
-                return Err(Tde::InvalidSampleCount(sample_size));
-            }
-            let layers = depth.try_into().unwrap_or(!0);
-            H::D1(width, layers)
-        }
-        D2 => {
-            if sample_size > 32 || !is_power_of_two(sample_size) {
-                return Err(Tde::InvalidSampleCount(sample_size));
-            }
-            let layers = depth.try_into().unwrap_or(!0);
-            H::D2(width, height, layers, sample_size as u8)
-        }
-        D3 => {
-            if sample_size != 1 {
-                return Err(Tde::InvalidSampleCount(sample_size));
-            }
-            H::D3(width, height, depth)
-        }
-    })
+    Ok(kind)
 }
 
 pub fn map_texture_view_dimension(dimension: wgt::TextureViewDimension) -> hal::image::ViewKind {
@@ -678,7 +734,7 @@ pub(crate) fn map_texture_state(
 }
 
 pub fn map_query_type(ty: &wgt::QueryType) -> (hal::query::Type, u32) {
-    match ty {
+    match *ty {
         wgt::QueryType::PipelineStatistics(pipeline_statistics) => {
             let mut ps = hal::query::PipelineStatistic::empty();
             ps.set(
@@ -785,39 +841,32 @@ pub fn map_primitive_state_to_rasterizer(
     depth_stencil: Option<&wgt::DepthStencilState>,
 ) -> hal::pso::Rasterizer {
     use hal::pso;
-    let (depth_clamping, depth_bias) = match depth_stencil {
-        Some(dsd) => {
-            let bias = if dsd.bias.is_enabled() {
-                Some(pso::State::Static(pso::DepthBias {
-                    const_factor: dsd.bias.constant as f32,
-                    slope_factor: dsd.bias.slope_scale,
-                    clamp: dsd.bias.clamp,
-                }))
-            } else {
-                None
-            };
-            (dsd.clamp_depth, bias)
-        }
-        None => (false, None),
+    let depth_bias = match depth_stencil {
+        Some(dsd) if dsd.bias.is_enabled() => Some(pso::State::Static(pso::DepthBias {
+            const_factor: dsd.bias.constant as f32,
+            slope_factor: dsd.bias.slope_scale,
+            clamp: dsd.bias.clamp,
+        })),
+        _ => None,
     };
     pso::Rasterizer {
-        depth_clamping,
+        depth_clamping: desc.clamp_depth,
         polygon_mode: match desc.polygon_mode {
             wgt::PolygonMode::Fill => pso::PolygonMode::Fill,
             wgt::PolygonMode::Line => pso::PolygonMode::Line,
             wgt::PolygonMode::Point => pso::PolygonMode::Point,
         },
         cull_face: match desc.cull_mode {
-            wgt::CullMode::None => pso::Face::empty(),
-            wgt::CullMode::Front => pso::Face::FRONT,
-            wgt::CullMode::Back => pso::Face::BACK,
+            None => pso::Face::empty(),
+            Some(wgt::Face::Front) => pso::Face::FRONT,
+            Some(wgt::Face::Back) => pso::Face::BACK,
         },
         front_face: match desc.front_face {
             wgt::FrontFace::Ccw => pso::FrontFace::CounterClockwise,
             wgt::FrontFace::Cw => pso::FrontFace::Clockwise,
         },
         depth_bias,
-        conservative: false,
+        conservative: desc.conservative,
         line_width: pso::State::Static(1.0),
     }
 }

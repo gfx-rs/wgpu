@@ -7,7 +7,7 @@ use crate::device::trace::Action;
 use crate::{
     command::{
         texture_copy_view_to_hal, validate_linear_texture_data, validate_texture_copy_range,
-        CommandAllocator, CommandBuffer, CopySide, TextureCopyView, TransferError, BITS_PER_BYTE,
+        CommandAllocator, CommandBuffer, CopySide, ImageCopyTexture, TransferError, BITS_PER_BYTE,
     },
     conv,
     device::{alloc, DeviceError, WaitIdleError},
@@ -15,7 +15,7 @@ use crate::{
     id,
     memory_init_tracker::MemoryInitKind,
     resource::{BufferAccessError, BufferMapState, BufferUse, TextureUse},
-    span, FastHashMap, FastHashSet,
+    FastHashMap, FastHashSet,
 };
 
 use hal::{command::CommandBuffer as _, device::Device as _, queue::Queue as _};
@@ -109,9 +109,14 @@ impl<B: hal::Backend> super::Device<B> {
     }
 
     fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<B>, DeviceError> {
+        profiling::scope!("prepare_stage");
         let mut buffer = unsafe {
             self.raw
-                .create_buffer(size, hal::buffer::Usage::TRANSFER_SRC)
+                .create_buffer(
+                    size,
+                    hal::buffer::Usage::TRANSFER_SRC,
+                    hal::memory::SparseFlags::empty(),
+                )
                 .map_err(|err| match err {
                     hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
                     _ => panic!("failed to create staging buffer: {}", err),
@@ -148,8 +153,8 @@ impl<B: hal::Backend> super::Device<B> {
     }
 }
 
-#[error("queue is invalid")]
 #[derive(Clone, Debug, Error)]
+#[error("queue is invalid")]
 pub struct InvalidQueue;
 
 #[derive(Clone, Debug, Error)]
@@ -188,7 +193,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_offset: wgt::BufferAddress,
         data: &[u8],
     ) -> Result<(), QueueWriteError> {
-        span!(_guard, INFO, "Queue::write_buffer");
+        profiling::scope!("write_buffer", "Queue");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -212,7 +217,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let data_size = data.len() as wgt::BufferAddress;
         if data_size == 0 {
-            tracing::trace!("Ignoring write_buffer of size 0");
+            log::trace!("Ignoring write_buffer of size 0");
             return Ok(());
         }
 
@@ -229,26 +234,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         if !dst.usage.contains(wgt::BufferUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag(
-                Some(buffer_id),
-                None,
-            ))?;
+            return Err(TransferError::MissingCopyDstUsageFlag(Some(buffer_id), None).into());
         }
         dst.life_guard.use_at(device.active_submission_index + 1);
 
         if data_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            Err(TransferError::UnalignedCopySize(data_size))?
+            return Err(TransferError::UnalignedCopySize(data_size).into());
         }
         if buffer_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            Err(TransferError::UnalignedBufferOffset(buffer_offset))?
+            return Err(TransferError::UnalignedBufferOffset(buffer_offset).into());
         }
         if buffer_offset + data_size > dst.size {
-            Err(TransferError::BufferOverrun {
+            return Err(TransferError::BufferOverrun {
                 start_offset: buffer_offset,
                 end_offset: buffer_offset + data_size,
                 buffer_size: dst.size,
                 side: CopySide::Destination,
-            })?
+            }
+            .into());
         }
 
         let region = hal::command::BufferCopy {
@@ -292,12 +295,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn queue_write_texture<B: GfxBackend>(
         &self,
         queue_id: id::QueueId,
-        destination: &TextureCopyView,
+        destination: &ImageCopyTexture,
         data: &[u8],
-        data_layout: &wgt::TextureDataLayout,
+        data_layout: &wgt::ImageDataLayout,
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
-        span!(_guard, INFO, "Queue::write_texture");
+        profiling::scope!("write_texture", "Queue");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -316,13 +319,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             trace.add(Action::WriteTexture {
                 to: destination.clone(),
                 data: data_path,
-                layout: data_layout.clone(),
+                layout: *data_layout,
                 size: *size,
             });
         }
 
-        if size.width == 0 || size.height == 0 || size.depth == 0 {
-            tracing::trace!("Ignoring write_texture of size 0");
+        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
+            log::trace!("Ignoring write_texture of size 0");
             return Ok(());
         }
 
@@ -338,6 +341,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             CopySide::Source,
             bytes_per_block as wgt::BufferAddress,
             size,
+            false,
         )?;
 
         let (block_width, block_height) = texture_format.describe().block_dimensions;
@@ -345,13 +349,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let block_height = block_height as u32;
 
         if !conv::is_valid_copy_dst_texture_format(texture_format) {
-            Err(TransferError::CopyToForbiddenTextureFormat(texture_format))?
+            return Err(TransferError::CopyToForbiddenTextureFormat(texture_format).into());
         }
         let width_blocks = size.width / block_width;
         let height_blocks = size.height / block_width;
 
-        let texel_rows_per_image = data_layout.rows_per_image;
-        let block_rows_per_image = data_layout.rows_per_image / block_height;
+        let texel_rows_per_image = if let Some(rows_per_image) = data_layout.rows_per_image {
+            rows_per_image.get()
+        } else {
+            // doesn't really matter because we need this only if we copy more than one layer, and then we validate for this being not None
+            size.height
+        };
+        let block_rows_per_image = texel_rows_per_image / block_height;
 
         let bytes_per_row_alignment = get_lowest_common_denom(
             device.hal_limits.optimal_buffer_copy_pitch_alignment as u32,
@@ -359,7 +368,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         let stage_bytes_per_row = align_to(bytes_per_block * width_blocks, bytes_per_row_alignment);
 
-        let block_rows_in_copy = (size.depth - 1) * block_rows_per_image + height_blocks;
+        let block_rows_in_copy =
+            (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
         let mut stage = device.prepare_stage(stage_size)?;
 
@@ -379,10 +389,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         if !dst.usage.contains(wgt::TextureUsage::COPY_DST) {
-            Err(TransferError::MissingCopyDstUsageFlag(
-                None,
-                Some(destination.texture),
-            ))?
+            return Err(
+                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
+            );
         }
         validate_texture_copy_range(
             destination,
@@ -393,23 +402,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         )?;
         dst.life_guard.use_at(device.active_submission_index + 1);
 
+        let bytes_per_row = if let Some(bytes_per_row) = data_layout.bytes_per_row {
+            bytes_per_row.get()
+        } else {
+            width_blocks * bytes_per_block
+        };
+
         let ptr = stage.memory.map(&device.raw, 0, stage_size)?;
         unsafe {
+            profiling::scope!("copy");
             //TODO: https://github.com/zakarumych/gpu-alloc/issues/13
-            if stage_bytes_per_row == data_layout.bytes_per_row {
+            if stage_bytes_per_row == bytes_per_row {
                 // Fast path if the data isalready being aligned optimally.
                 ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), stage_size as usize);
             } else {
                 // Copy row by row into the optimal alignment.
-                let copy_bytes_per_row =
-                    stage_bytes_per_row.min(data_layout.bytes_per_row) as usize;
-                for layer in 0..size.depth {
+                let copy_bytes_per_row = stage_bytes_per_row.min(bytes_per_row) as usize;
+                for layer in 0..size.depth_or_array_layers {
                     let rows_offset = layer * block_rows_per_image;
                     for row in 0..height_blocks {
                         ptr::copy_nonoverlapping(
-                            data.as_ptr().offset(
-                                (rows_offset + row) as isize * data_layout.bytes_per_row as isize,
-                            ),
+                            data.as_ptr()
+                                .offset((rows_offset + row) as isize * bytes_per_row as isize),
                             ptr.as_ptr().offset(
                                 (rows_offset + row) as isize * stage_bytes_per_row as isize,
                             ),
@@ -432,7 +446,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let image_extent = wgt::Extent3d {
             width: size.width.min(max_image_extent.width),
             height: size.height.min(max_image_extent.height),
-            depth: size.depth,
+            depth_or_array_layers: size.depth_or_array_layers,
         };
 
         let region = hal::command::BufferImageCopy {
@@ -500,7 +514,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .get(cmb_id)
                     .map_err(|_| QueueSubmitError::InvalidCommandBuffer(cmb_id))?;
 
-                if cmdbuf.buffer_memory_init_actions.len() == 0 {
+                if cmdbuf.buffer_memory_init_actions.is_empty() {
                     continue;
                 }
 
@@ -559,9 +573,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            let (buffer, transition) = trackers
-                .buffers
-                .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST)
+            // Don't do use_replace since the buffer may already no longer have a ref_count.
+            // However, we *know* that it is currently in use, so the tracker must already know about it.
+            let transition = trackers.buffers.change_replace_tracked(
+                id::Valid(buffer_id),
+                (),
+                BufferUse::COPY_DST,
+            );
+            let buffer = buffer_guard
+                .get(buffer_id)
                 .map_err(|_| QueueSubmitError::DestroyedBuffer(buffer_id))?;
             let &(ref buffer_raw, _) = buffer
                 .raw
@@ -601,7 +621,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id: id::QueueId,
         command_buffer_ids: &[id::CommandBufferId],
     ) -> Result<(), QueueSubmitError> {
-        span!(_guard, INFO, "Queue::submit");
+        profiling::scope!("submit", "Queue");
 
         self.initialize_used_uninitialized_memory::<B>(queue_id, command_buffer_ids)?;
 
@@ -624,6 +644,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
 
                 if !command_buffer_ids.is_empty() {
+                    profiling::scope!("prepare");
+
                     let (render_bundle_guard, mut token) = hub.render_bundles.read(&mut token);
                     let (_, mut token) = hub.pipeline_layouts.read(&mut token);
                     let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
@@ -674,11 +696,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         for id in cmdbuf.trackers.buffers.used() {
                             let buffer = &mut buffer_guard[id];
                             if buffer.raw.is_none() {
-                                return Err(QueueSubmitError::DestroyedBuffer(id.0))?;
+                                return Err(QueueSubmitError::DestroyedBuffer(id.0));
                             }
                             if !buffer.life_guard.use_at(submit_index) {
                                 if let BufferMapState::Active { .. } = buffer.map_state {
-                                    tracing::warn!("Dropped buffer has a pending mapping.");
+                                    log::warn!("Dropped buffer has a pending mapping.");
                                     super::unmap_buffer(&device.raw, buffer)?;
                                 }
                                 device.temp_suspected.buffers.push(id);
@@ -692,7 +714,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         for id in cmdbuf.trackers.textures.used() {
                             let texture = &texture_guard[id];
                             if texture.raw.is_none() {
-                                return Err(QueueSubmitError::DestroyedTexture(id.0))?;
+                                return Err(QueueSubmitError::DestroyedTexture(id.0));
                             }
                             if !texture.life_guard.use_at(submit_index) {
                                 device.temp_suspected.textures.push(id);
@@ -737,7 +759,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             transit
                                 .begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
                         }
-                        tracing::trace!("Stitching command buffer {:?} before submission", cmb_id);
+                        log::trace!("Stitching command buffer {:?} before submission", cmb_id);
                         CommandBuffer::insert_barriers(
                             &mut transit,
                             &mut *trackers,
@@ -751,7 +773,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         cmdbuf.raw.insert(0, transit);
                     }
 
-                    tracing::trace!("Device after submission {}: {:#?}", submit_index, trackers);
+                    log::trace!("Device after submission {}: {:#?}", submit_index, trackers);
                 }
 
                 // now prepare the GPU submission
@@ -790,6 +812,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
             };
+
+            profiling::scope!("cleanup");
             super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
                 submit_index,
                 fence,
@@ -809,6 +833,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             callbacks
         };
 
+        // the map callbacks should execute with nothing locked!
+        drop(token);
         super::fire_map_callbacks(callbacks);
 
         Ok(())
@@ -818,8 +844,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         queue_id: id::QueueId,
     ) -> Result<f32, InvalidQueue> {
-        span!(_guard, INFO, "Queue::get_timestamp_period");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);

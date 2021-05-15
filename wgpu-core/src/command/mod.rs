@@ -26,7 +26,6 @@ use crate::{
     id,
     memory_init_tracker::MemoryInitTrackerAction,
     resource::{Buffer, Texture},
-    span,
     track::TrackerSet,
     Label, PrivateFeatures, Stored,
 };
@@ -49,6 +48,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) used_swap_chains: SmallVec<[Stored<id::SwapChainId>; 1]>,
     pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     limits: wgt::Limits,
+    downlevel: wgt::DownlevelProperties,
     private_features: PrivateFeatures,
     has_labels: bool,
     #[cfg(feature = "trace")]
@@ -78,6 +78,7 @@ impl<B: GfxBackend> CommandBuffer<B> {
     ) {
         use hal::command::CommandBuffer as _;
 
+        profiling::scope!("insert_barriers");
         debug_assert_eq!(B::VARIANT, base.backend());
         debug_assert_eq!(B::VARIANT, head.backend());
 
@@ -175,7 +176,7 @@ impl<C: Clone> BasePass<C> {
 
     pub fn as_ref(&self) -> BasePassRef<C> {
         BasePassRef {
-            label: self.label.as_ref().map(String::as_str),
+            label: self.label.as_deref(),
             commands: &self.commands,
             dynamic_offsets: &self.dynamic_offsets,
             string_data: &self.string_data,
@@ -198,7 +199,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor<Label>,
     ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
-        span!(_guard, INFO, "CommandEncoder::finish");
+        profiling::scope!("finish", "CommandEncoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -217,7 +218,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .expect("Used swap chain frame has already presented");
                     cmd_buf.trackers.views.remove(view_id.value);
                 }
-                tracing::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
+                log::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
                 None
             }
             Err(e) => Some(e),
@@ -231,7 +232,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) -> Result<(), CommandEncoderError> {
-        span!(_guard, DEBUG, "CommandEncoder::push_debug_group");
+        profiling::scope!("push_debug_group", "CommandEncoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -251,7 +252,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) -> Result<(), CommandEncoderError> {
-        span!(_guard, DEBUG, "CommandEncoder::insert_debug_marker");
+        profiling::scope!("insert_debug_marker", "CommandEncoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -270,7 +271,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
     ) -> Result<(), CommandEncoderError> {
-        span!(_guard, DEBUG, "CommandEncoder::pop_debug_marker");
+        profiling::scope!("pop_debug_marker", "CommandEncoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();
