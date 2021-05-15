@@ -1,13 +1,12 @@
-// TODO: temp
-#![allow(dead_code)]
 use super::Error;
 use crate::{
     back::{binary_operation_str, vector_size_str, wgsl::keywords::RESERVED},
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
-    Arena, ArraySize, Binding, Constant, Expression, FastHashMap, Function, GlobalVariable, Handle,
-    ImageClass, ImageDimension, Interpolation, Module, SampleLevel, Sampling, ScalarKind,
-    ScalarValue, ShaderStage, Statement, StorageFormat, StructMember, Type, TypeInner,
+    Arena, ArraySize, Binding, Constant, ConstantInner, Expression, FastHashMap, Function,
+    GlobalVariable, Handle, ImageClass, ImageDimension, Interpolation, Module, SampleLevel,
+    Sampling, ScalarKind, ScalarValue, ShaderStage, Statement, StorageClass, StorageFormat,
+    StructMember, Type, TypeInner,
 };
 use bit_set::BitSet;
 use std::fmt::Write;
@@ -107,7 +106,7 @@ impl<W: Write> Writer<W> {
         // Write all constants
         for (handle, constant) in module.constants.iter() {
             if constant.name.is_some() {
-                self.write_global_constant(&constant, handle)?;
+                self.write_global_constant(&module, &constant.inner, handle)?;
             }
         }
 
@@ -173,7 +172,7 @@ impl<W: Write> Writer<W> {
     fn write_scalar_value(&mut self, value: ScalarValue) -> BackendResult {
         match value {
             ScalarValue::Sint(value) => write!(self.out, "{}", value)?,
-            ScalarValue::Uint(value) => write!(self.out, "{}", value)?,
+            ScalarValue::Uint(value) => write!(self.out, "{}u", value)?,
             // Floats are written using `Debug` instead of `Display` because it always appends the
             // decimal part even it's zero
             ScalarValue::Float(value) => write!(self.out, "{:?}", value)?,
@@ -501,7 +500,7 @@ impl<W: Write> Writer<W> {
                         if multi { "multisampled_" } else { "" },
                         format!("<{}>", scalar_kind_str(kind)),
                     ),
-                    ImageClass::Depth => ("depth", "", String::from("")),
+                    ImageClass::Depth => ("depth_", "", String::from("")),
                     ImageClass::Storage(storage_format) => (
                         "storage_",
                         "",
@@ -682,8 +681,105 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, value, func_ctx)?;
                 writeln!(self.out, ");")?;
             }
-            _ => {
-                return Err(Error::Unimplemented(format!("write_stmt {:?}", stmt)));
+            // TODO: copy-paste from glsl-out
+            Statement::Block(ref block) => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                writeln!(self.out, "{{")?;
+                for sta in block.iter() {
+                    // Increase the indentation to help with readability
+                    self.write_stmt(module, sta, func_ctx, indent + 1)?
+                }
+                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
+            }
+            Statement::Switch {
+                selector,
+                ref cases,
+                ref default,
+            } => {
+                // Start the switch
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "switch(")?;
+                self.write_expr(module, selector, func_ctx)?;
+                writeln!(self.out, ") {{")?;
+
+                // Write all cases
+                let mut write_case = true;
+                let all_fall_through = cases
+                    .iter()
+                    .all(|case| case.fall_through && case.body.is_empty());
+                if !cases.is_empty() {
+                    for case in cases {
+                        if write_case {
+                            write!(self.out, "{}case ", INDENT.repeat(indent + 1))?;
+                        }
+                        if !all_fall_through && case.fall_through && case.body.is_empty() {
+                            write_case = false;
+                            write!(self.out, "{}, ", case.value)?;
+                            continue;
+                        } else {
+                            write_case = true;
+                            writeln!(self.out, "{}: {{", case.value)?;
+                        }
+
+                        for sta in case.body.iter() {
+                            self.write_stmt(module, sta, func_ctx, indent + 2)?;
+                        }
+
+                        if case.fall_through {
+                            writeln!(self.out, "{}fallthrough;", INDENT.repeat(indent + 2))?;
+                        }
+                    }
+
+                    writeln!(self.out, "{}}}", INDENT.repeat(indent + 1))?;
+                }
+
+                if !default.is_empty() {
+                    writeln!(self.out, "{}default: {{", INDENT.repeat(indent + 1))?;
+
+                    for sta in default {
+                        self.write_stmt(module, sta, func_ctx, indent + 2)?;
+                    }
+
+                    writeln!(self.out, "{}}}", INDENT.repeat(indent + 1))?
+                }
+
+                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
+            }
+            Statement::Loop {
+                ref body,
+                ref continuing,
+            } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                writeln!(self.out, "loop {{")?;
+
+                for sta in body.iter() {
+                    self.write_stmt(module, sta, func_ctx, indent + 1)?;
+                }
+
+                if !continuing.is_empty() {
+                    writeln!(self.out, "{}continuing {{", INDENT.repeat(indent + 1))?;
+                    for sta in continuing.iter() {
+                        self.write_stmt(module, sta, func_ctx, indent + 2)?;
+                    }
+                    writeln!(self.out, "{}}}", INDENT.repeat(indent + 1))?;
+                }
+
+                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
+            }
+            Statement::Break => {
+                writeln!(self.out, "{}break;", INDENT.repeat(indent))?;
+            }
+            Statement::Continue => {
+                writeln!(self.out, "{}continue;", INDENT.repeat(indent))?;
+            }
+            Statement::Barrier(barrier) => {
+                if barrier.contains(crate::Barrier::STORAGE) {
+                    writeln!(self.out, "{}storageBarrier();", INDENT.repeat(indent))?;
+                }
+
+                if barrier.contains(crate::Barrier::WORK_GROUP) {
+                    writeln!(self.out, "{}workgroupBarrier();", INDENT.repeat(indent))?;
+                }
             }
         }
 
@@ -969,7 +1065,6 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, ")")?;
             }
-            // TODO: copy-paste from msl-out
             Expression::GlobalVariable(handle) => {
                 let name = &self.names[&NameKey::GlobalVariable(handle)];
                 write!(self.out, "{}", name)?;
@@ -1023,7 +1118,6 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, value, func_ctx)?;
                 write!(self.out, ")")?;
             }
-            //TODO: add pointer logic
             Expression::Load { pointer } => self.write_expr(module, pointer, func_ctx)?,
             Expression::LocalVariable(handle) => {
                 let name_key = match func_ctx.ty {
@@ -1036,6 +1130,9 @@ impl<W: Write> Writer<W> {
             }
             Expression::ArrayLength(expr) => {
                 write!(self.out, "arrayLength(")?;
+                if is_deref_required(expr, module, func_ctx.info) {
+                    write!(self.out, "&")?;
+                };
                 self.write_expr(module, expr, func_ctx)?;
                 write!(self.out, ")")?;
             }
@@ -1128,8 +1225,67 @@ impl<W: Write> Writer<W> {
                     self.out.write_char(COMPONENTS[sc as usize])?;
                 }
             }
-            _ => {
-                return Err(Error::Unimplemented(format!("write_expr {:?}", expression)));
+            Expression::Unary { op, expr } => {
+                let unary = match op {
+                    crate::UnaryOperator::Negate => "-",
+                    crate::UnaryOperator::Not => {
+                        match *func_ctx.info[expr].ty.inner_with(&module.types) {
+                            TypeInner::Scalar {
+                                kind: ScalarKind::Bool,
+                                ..
+                            }
+                            | TypeInner::Vector { .. } => "!",
+                            _ => "~",
+                        }
+                    }
+                };
+
+                write!(self.out, "{}(", unary)?;
+                self.write_expr(module, expr, func_ctx)?;
+
+                write!(self.out, ")")?
+            }
+            Expression::Select {
+                condition,
+                accept,
+                reject,
+            } => {
+                write!(self.out, "select(")?;
+                self.write_expr(module, accept, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, reject, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, condition, func_ctx)?;
+                write!(self.out, ")")?
+            }
+            Expression::Derivative { axis, expr } => {
+                let op = match axis {
+                    crate::DerivativeAxis::X => "dpdx",
+                    crate::DerivativeAxis::Y => "dpdy",
+                    crate::DerivativeAxis::Width => "fwidth",
+                };
+                write!(self.out, "{}(", op)?;
+                self.write_expr(module, expr, func_ctx)?;
+                write!(self.out, ")")?
+            }
+            Expression::Relational { fun, argument } => {
+                let fun_name = match fun {
+                    crate::RelationalFunction::IsFinite => "isFinite",
+                    crate::RelationalFunction::IsInf => "isInf",
+                    crate::RelationalFunction::IsNan => "isNan",
+                    crate::RelationalFunction::IsNormal => "isNormal",
+                    crate::RelationalFunction::All => "all",
+                    crate::RelationalFunction::Any => "any",
+                };
+                write!(self.out, "{}(", fun_name)?;
+
+                self.write_expr(module, argument, func_ctx)?;
+
+                write!(self.out, ")")?
+            }
+            Expression::Call(function) => {
+                let func_name = &self.names[&NameKey::Function(function)];
+                write!(self.out, "{}(", func_name)?
             }
         }
 
@@ -1158,8 +1314,12 @@ impl<W: Write> Writer<W> {
             writeln!(self.out)?;
         }
 
-        // First write only global name
-        write!(self.out, "var {}: ", name)?;
+        // First write global name and storage class if supported
+        write!(self.out, "var")?;
+        if let Some(storage_class) = storage_class_str(global.class) {
+            write!(self.out, "<{}>", storage_class)?;
+        }
+        write!(self.out, " {}: ", name)?;
         // Write access attribute if present
         if !global.storage_access.is_empty() {
             self.write_attributes(&[Attribute::Access(global.storage_access)], true)?;
@@ -1215,10 +1375,11 @@ impl<W: Write> Writer<W> {
     /// Ends in a newline
     fn write_global_constant(
         &mut self,
-        constant: &Constant,
+        module: &Module,
+        inner: &ConstantInner,
         handle: Handle<Constant>,
     ) -> BackendResult {
-        match constant.inner {
+        match *inner {
             crate::ConstantInner::Scalar {
                 width: _,
                 ref value,
@@ -1232,7 +1393,7 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "i32 = {}", value)?;
                     }
                     crate::ScalarValue::Uint(value) => {
-                        write!(self.out, "u32 = {}", value)?;
+                        write!(self.out, "u32 = {}u", value)?;
                     }
                     crate::ScalarValue::Float(value) => {
                         // Floats are written using `Debug` instead of `Display` because it always appends the
@@ -1243,18 +1404,33 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "bool = {}", value)?;
                     }
                 };
-                // End with semicolon and extra newline for readability
+                // End with semicolon
                 writeln!(self.out, ";")?;
-                writeln!(self.out)?;
             }
-            _ => {
-                return Err(Error::Unimplemented(format!(
-                    "write_global_constant {:?}",
-                    constant.inner
-                )));
+            ConstantInner::Composite { ty, ref components } => {
+                let name = self.names[&NameKey::Constant(handle)].clone();
+                // First write only constant name
+                write!(self.out, "let {}: ", name)?;
+                // Next write constant type
+                self.write_type(module, ty)?;
+
+                write!(self.out, " = ")?;
+                self.write_type(module, ty)?;
+
+                write!(self.out, "(")?;
+                for (index, constant) in components.iter().enumerate() {
+                    self.write_constant(module, *constant)?;
+                    // Only write a comma if isn't the last element
+                    if index != components.len().saturating_sub(1) {
+                        // The leading space is for readability only
+                        write!(self.out, ", ")?;
+                    }
+                }
+                write!(self.out, ");")?;
             }
         }
-
+        // End with extra newline for readability
+        writeln!(self.out)?;
         Ok(())
     }
 
@@ -1355,6 +1531,17 @@ fn sampling_str(sampling: Sampling) -> &'static str {
     }
 }
 
+fn storage_class_str(storage_class: StorageClass) -> Option<&'static str> {
+    match storage_class {
+        StorageClass::Private => Some("private"),
+        StorageClass::Uniform => Some("uniform"),
+        StorageClass::Storage => Some("storage"),
+        StorageClass::PushConstant => Some("push_constant"),
+        StorageClass::WorkGroup => Some("workgroup"),
+        StorageClass::Function | StorageClass::Handle => None,
+    }
+}
+
 fn map_binding_to_attribute(binding: &Binding) -> Vec<Attribute> {
     match *binding {
         Binding::BuiltIn(built_in) => vec![Attribute::BuiltIn(built_in)],
@@ -1366,5 +1553,18 @@ fn map_binding_to_attribute(binding: &Binding) -> Vec<Attribute> {
             Attribute::Location(location),
             Attribute::Interpolate(interpolation, sampling),
         ],
+    }
+}
+
+fn is_deref_required(expr: Handle<Expression>, module: &Module, info: &FunctionInfo) -> bool {
+    let base_ty_res = &info[expr].ty;
+    let resolved = base_ty_res.inner_with(&module.types);
+    match *resolved {
+        TypeInner::Pointer { base, class: _ } => match module.types[base].inner {
+            TypeInner::Scalar { .. } | TypeInner::Vector { .. } | TypeInner::Array { .. } => true,
+            _ => false,
+        },
+        TypeInner::ValuePointer { .. } => true,
+        _ => false,
     }
 }

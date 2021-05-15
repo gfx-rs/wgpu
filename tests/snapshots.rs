@@ -252,28 +252,47 @@ fn convert_wgsl() {
             "quad",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::DOT | Targets::WGSL,
         ),
-        ("boids", Targets::SPIRV | Targets::METAL | Targets::GLSL),
-        ("skybox", Targets::SPIRV | Targets::METAL | Targets::GLSL),
+        (
+            "boids",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
+        (
+            "skybox",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
         (
             "collatz",
-            Targets::SPIRV | Targets::METAL | Targets::IR | Targets::ANALYSIS,
+            Targets::SPIRV | Targets::METAL | Targets::IR | Targets::ANALYSIS | Targets::WGSL,
         ),
-        ("shadow", Targets::SPIRV | Targets::METAL | Targets::GLSL),
+        (
+            "shadow",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
         ("image", Targets::SPIRV | Targets::METAL | Targets::WGSL),
-        ("extra", Targets::SPIRV | Targets::METAL),
-        ("operators", Targets::SPIRV | Targets::METAL | Targets::GLSL),
+        ("extra", Targets::SPIRV | Targets::METAL | Targets::WGSL),
+        (
+            "operators",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
         (
             "interpolate",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
-        ("access", Targets::SPIRV | Targets::METAL),
+        ("access", Targets::SPIRV | Targets::METAL | Targets::WGSL),
         (
             "control-flow",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
-        ("standard", Targets::SPIRV | Targets::METAL | Targets::GLSL),
+        (
+            "standard",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
+        (
+            "standard",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
         //TODO: GLSL https://github.com/gfx-rs/naga/issues/874
-        ("interface", Targets::SPIRV | Targets::METAL),
+        ("interface", Targets::SPIRV | Targets::METAL | Targets::WGSL),
     ];
 
     for &(name, targets) in inputs.iter() {

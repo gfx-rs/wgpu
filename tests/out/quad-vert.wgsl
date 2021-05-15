@@ -8,10 +8,10 @@ struct VertexOutput {
     [[builtin(position)]] gl_Position1: vec4<f32>;
 };
 
-var v_uv: vec2<f32>;
-var a_uv: vec2<f32>;
-var perVertexStruct: gl_PerVertex;
-var a_pos: vec2<f32>;
+var<private> v_uv: vec2<f32>;
+var<private> a_uv: vec2<f32>;
+var<private> perVertexStruct: gl_PerVertex;
+var<private> a_pos: vec2<f32>;
 
 fn main() {
     v_uv = a_uv;
