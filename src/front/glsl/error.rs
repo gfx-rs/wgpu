@@ -24,8 +24,8 @@ pub enum ErrorKind {
     #[cfg(feature = "glsl-validate")]
     #[error("Variable already declared: {0}")]
     VariableAlreadyDeclared(String),
-    #[error("{0}")]
-    SemanticError(Cow<'static, str>),
+    #[error("{1}")]
+    SemanticError(SourceMetadata, Cow<'static, str>),
     #[error("Function \"{0}\" expects {1} arguments, got {2}")]
     WrongNumberArgs(String, usize, usize),
 }
@@ -38,6 +38,7 @@ impl ErrorKind {
             | ErrorKind::InvalidProfile(ref metadata, _)
             | ErrorKind::InvalidVersion(ref metadata, _)
             | ErrorKind::UnknownLayoutQualifier(ref metadata, _)
+            | ErrorKind::SemanticError(ref metadata, _)
             | ErrorKind::UnknownField(ref metadata, _) => Some(metadata),
             ErrorKind::InvalidToken(ref token) => Some(&token.meta),
             _ => None,

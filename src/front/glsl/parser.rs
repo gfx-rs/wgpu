@@ -6,6 +6,7 @@ use super::{
     error::ErrorKind,
     lex::Lexer,
     token::{SourceMetadata, Token, TokenValue},
+    variables::VarDeclaration,
     Program,
 };
 use crate::{
@@ -125,7 +126,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         }
     }
 
-    fn parse_type(&mut self) -> Result<Option<Handle<Type>>> {
+    fn parse_type(&mut self) -> Result<(Option<Handle<Type>>, SourceMetadata)> {
         let token = self.bump()?;
         let ty = match token.value {
             TokenValue::Void => None,
@@ -136,12 +137,15 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let handle = ty.map(|t| self.program.module.types.fetch_or_append(t));
 
         let size = self.parse_array_specifier()?;
-        Ok(handle.map(|ty| self.maybe_array(ty, size)))
+        Ok((handle.map(|ty| self.maybe_array(ty, size)), token.meta))
     }
 
-    fn parse_type_non_void(&mut self) -> Result<Handle<Type>> {
-        self.parse_type()?
-            .ok_or_else(|| ErrorKind::SemanticError("Type can't be void".into()))
+    fn parse_type_non_void(&mut self) -> Result<(Handle<Type>, SourceMetadata)> {
+        let (maybe_ty, meta) = self.parse_type()?;
+        let ty = maybe_ty
+            .ok_or_else(|| ErrorKind::SemanticError(meta.clone(), "Type can't be void".into()))?;
+
+        Ok((ty, meta))
     }
 
     fn maybe_array(&mut self, base: Handle<Type>, size: Option<ArraySize>) -> Handle<Type> {
@@ -223,21 +227,22 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         self.expect(TokenValue::RightParen)?;
 
         match (group, binding) {
-            (Some(group), Some(binding)) => {
+            (Some((group, _)), Some((binding, _))) => {
                 qualifiers.push(TypeQualifier::ResourceBinding(ResourceBinding {
                     group,
                     binding,
                 }))
             }
             // Produce an error if we have one of group or binding but not the other
-            // TODO: include at least line info in errors?
-            (Some(_), None) => {
+            (Some((_, meta)), None) => {
                 return Err(ErrorKind::SemanticError(
+                    meta,
                     "set specified with no binding".into(),
                 ))
             }
-            (None, Some(_)) => {
+            (None, Some((_, meta))) => {
                 return Err(ErrorKind::SemanticError(
+                    meta,
                     "binding specified with no set".into(),
                 ))
             }
@@ -247,45 +252,52 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         Ok(())
     }
 
-    fn parse_uint_constant(&mut self) -> Result<u32> {
-        let value = self.parse_constant_expression()?;
+    fn parse_uint_constant(&mut self) -> Result<(u32, SourceMetadata)> {
+        let (value, meta) = self.parse_constant_expression()?;
 
-        // TODO: better errors
-        match self.program.module.constants[value].inner {
+        let int = match self.program.module.constants[value].inner {
             ConstantInner::Scalar {
                 value: ScalarValue::Uint(int),
                 ..
-            } => u32::try_from(int)
-                .map_err(|_| ErrorKind::SemanticError("int constant overflows".into())),
+            } => u32::try_from(int).map_err(|_| {
+                ErrorKind::SemanticError(meta.clone(), "int constant overflows".into())
+            }),
             ConstantInner::Scalar {
                 value: ScalarValue::Sint(int),
                 ..
-            } => u32::try_from(int)
-                .map_err(|_| ErrorKind::SemanticError("int constant overflows".into())),
-            _ => Err(ErrorKind::SemanticError("Expected a uint constant".into())),
-        }
+            } => u32::try_from(int).map_err(|_| {
+                ErrorKind::SemanticError(meta.clone(), "int constant overflows".into())
+            }),
+            _ => Err(ErrorKind::SemanticError(
+                meta.clone(),
+                "Expected a uint constant".into(),
+            )),
+        }?;
+
+        Ok((int, meta))
     }
 
     fn parse_layout_qualifier_id(
         &mut self,
         qualifiers: &mut Vec<TypeQualifier>,
-        group: &mut Option<u32>,
-        binding: &mut Option<u32>,
+        group: &mut Option<(u32, SourceMetadata)>,
+        binding: &mut Option<(u32, SourceMetadata)>,
     ) -> Result<()> {
         // layout_qualifier_id:
         //     IDENTIFIER
         //     IDENTIFIER EQUAL constant_expression
         //     SHARED
-        let token = self.bump()?;
+        let mut token = self.bump()?;
         match token.value {
             TokenValue::Identifier(name) => {
                 if self.bump_if(TokenValue::Assign).is_some() {
-                    let value = self.parse_uint_constant()?;
+                    let (value, end_meta) = self.parse_uint_constant()?;
+                    token.meta = token.meta.union(&end_meta);
 
                     match name.as_str() {
                         "location" => qualifiers.push(TypeQualifier::Location(value)),
-                        "set" => *group = Some(value),
-                        "binding" => *binding = Some(value),
+                        "set" => *group = Some((value, end_meta)),
+                        "binding" => *binding = Some((value, end_meta)),
                         _ => return Err(ErrorKind::UnknownLayoutQualifier(token.meta, name)),
                     }
                 } else {
@@ -305,7 +317,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         }
     }
 
-    fn parse_constant_expression(&mut self) -> Result<Handle<Constant>> {
+    fn parse_constant_expression(&mut self) -> Result<(Handle<Constant>, SourceMetadata)> {
         let mut expressions = Arena::new();
         let mut locals = Arena::new();
         let mut arguments = Vec::new();
@@ -313,9 +325,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let mut ctx = Context::new(&mut expressions, &mut locals, &mut arguments);
 
         let expr = self.parse_conditional(&mut ctx, None)?;
+        let meta = expr.meta.clone();
         let root = ctx.lower(self.program, expr, false, &mut Block::new())?;
 
-        self.program.solve_constant(&expressions, root)
+        Ok((
+            self.program
+                .solve_constant(&expressions, root, meta.clone())?,
+            meta,
+        ))
     }
 
     fn parse_external_declaration(&mut self) -> Result<()> {
@@ -377,7 +394,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         ty: Handle<Type>,
         ctx: &mut Context,
         body: &mut Block,
-    ) -> Result<Handle<Expression>> {
+    ) -> Result<(Handle<Expression>, SourceMetadata)> {
         // initializer:
         //     assignment_expression
         //     LEFT_BRACE initializer_list RIGHT_BRACE
@@ -386,33 +403,42 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         // initializer_list:
         //     initializer
         //     initializer_list COMMA initializer
-        if self.bump_if(TokenValue::LeftBrace).is_some() {
+        if let Some(Token { mut meta, .. }) = self.bump_if(TokenValue::LeftBrace) {
             // initializer_list
             let mut components = Vec::new();
             loop {
                 // TODO: Change type
-                components.push(self.parse_initializer(ty, ctx, body)?);
+                components.push(self.parse_initializer(ty, ctx, body)?.0);
 
                 let token = self.bump()?;
                 match token.value {
                     TokenValue::Comma => {
-                        if self.bump_if(TokenValue::RightBrace).is_some() {
+                        if let Some(Token { meta: end_meta, .. }) =
+                            self.bump_if(TokenValue::RightBrace)
+                        {
+                            meta = meta.union(&end_meta);
                             break;
                         }
                     }
-                    TokenValue::RightBrace => break,
+                    TokenValue::RightBrace => {
+                        meta = meta.union(&token.meta);
+                        break;
+                    }
                     _ => return Err(ErrorKind::InvalidToken(token)),
                 }
             }
 
-            Ok(ctx
-                .expressions
-                .append(Expression::Compose { ty, components }))
+            Ok((
+                ctx.expressions
+                    .append(Expression::Compose { ty, components }),
+                meta,
+            ))
         } else {
             let expr = self.parse_assignment(ctx)?;
+            let meta = expr.meta.clone();
             let root = ctx.lower(self.program, expr, false, body)?;
 
-            Ok(root)
+            Ok((root, meta))
         }
     }
 
@@ -459,6 +485,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 TokenValue::Identifier(name) => name,
                 _ => return Err(ErrorKind::InvalidToken(token)),
             };
+            let mut meta = token.meta;
 
             // array_specifier
             // array_specifier EQUAL initializer
@@ -472,20 +499,25 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
             let init = self
                 .bump_if(TokenValue::Assign)
-                .map(|_| self.parse_initializer(ty, ctx.ctx, ctx.body))
+                .map(|_| {
+                    let (expr, init_meta) = self.parse_initializer(ty, ctx.ctx, ctx.body)?;
+                    meta = meta.union(&init_meta);
+                    Ok((expr, init_meta))
+                })
                 .transpose()?;
 
-            let pointer = ctx.add_var(
-                ty,
-                name,
-                // TODO: Should we try to make constants here?
-                // This is mostly a hack because we don't yet support adding
-                // bodies to entry points for variable initialization
-                init.and_then(|root| self.program.solve_constant(ctx.ctx.expressions, root).ok()),
-                self.program,
-            )?;
+            // TODO: Should we try to make constants here?
+            // This is mostly a hack because we don't yet support adding
+            // bodies to entry points for variable initialization
+            let maybe_constant = init.clone().and_then(|(root, meta)| {
+                self.program
+                    .solve_constant(ctx.ctx.expressions, root, meta)
+                    .ok()
+            });
 
-            if let Some(value) = init {
+            let pointer = ctx.add_var(self.program, ty, name, maybe_constant, meta)?;
+
+            if let Some((value, _)) = init {
                 ctx.body.push(Statement::Store { pointer, value });
             }
 
@@ -525,7 +557,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             if self.peek_type_name() {
                 // This branch handles variables and function prototypes and if
                 // external is true also function definitions
-                let ty = self.parse_type()?;
+                let (ty, mut meta) = self.parse_type()?;
 
                 let token = self.bump()?;
                 let token_fallthrough = match token.value {
@@ -548,7 +580,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                             self.parse_function_args(&mut context, &mut parameters)?;
 
-                            self.expect(TokenValue::RightParen)?;
+                            let end_meta = self.expect(TokenValue::RightParen)?.meta;
+                            meta = meta.union(&end_meta);
 
                             let token = self.bump()?;
                             return match token.value {
@@ -562,6 +595,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                             ..Default::default()
                                         },
                                         parameters,
+                                        meta,
                                     )?;
 
                                     Ok(true)
@@ -584,6 +618,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                             body,
                                         },
                                         parameters,
+                                        meta,
                                     )?;
 
                                     Ok(true)
@@ -615,6 +650,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     self.parse_init_declarator_list(ty, Some(token_fallthrough), &mut ctx)?;
                 } else {
                     return Err(ErrorKind::SemanticError(
+                        meta,
                         "Declaration cannot have void type".into(),
                     ));
                 }
@@ -629,7 +665,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 match token.value {
                     TokenValue::Identifier(ty_name) => {
                         if self.bump_if(TokenValue::LeftBrace).is_some() {
-                            self.parse_block_declaration(&qualifiers, ty_name)
+                            self.parse_block_declaration(&qualifiers, ty_name, token.meta)
                         } else {
                             //TODO: declaration
                             // type_qualifier IDENTIFIER SEMICOLON
@@ -651,6 +687,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         &mut self,
         qualifiers: &[TypeQualifier],
         ty_name: String,
+        meta: SourceMetadata,
     ) -> Result<bool> {
         let mut class = StorageClass::Function;
         let mut binding = None;
@@ -661,6 +698,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 TypeQualifier::StorageQualifier(StorageQualifier::StorageClass(c)) => {
                     if StorageClass::Function != class {
                         return Err(ErrorKind::SemanticError(
+                            meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
                         ));
                     }
@@ -670,6 +708,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 TypeQualifier::ResourceBinding(ref r) => {
                     if binding.is_some() {
                         return Err(ErrorKind::SemanticError(
+                            meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
                         ));
                     }
@@ -679,6 +718,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 TypeQualifier::Layout(ref l) => {
                     if layout.is_some() {
                         return Err(ErrorKind::SemanticError(
+                            meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
                         ));
                     }
@@ -687,6 +727,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 }
                 _ => {
                     return Err(ErrorKind::SemanticError(
+                        meta,
                         "Qualifier not supported in block declarations".into(),
                     ));
                 }
@@ -769,7 +810,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 break;
             }
 
-            let ty = self.parse_type_non_void()?;
+            let ty = self.parse_type_non_void()?.0;
             let name = self.expect_ident()?.0;
             self.expect(TokenValue::Semicolon)?;
 
@@ -1052,7 +1093,6 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let pointer = self.parse_unary(ctx)?;
         let start_meta = pointer.meta.clone();
 
-        // TODO: More assign symbols
         match self.expect_peek()?.value {
             TokenValue::Assign => {
                 self.bump()?;
@@ -1202,9 +1242,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             self.bump()?;
                             let value = {
                                 let expr = self.parse_expression(ctx)?;
+                                let meta = expr.meta.clone();
                                 let root = ctx.lower(self.program, expr, false, body)?;
-                                let constant =
-                                    self.program.solve_constant(&ctx.expressions, root)?;
+                                let constant = self.program.solve_constant(
+                                    &ctx.expressions,
+                                    root,
+                                    meta.clone(),
+                                )?;
 
                                 match self.program.module.constants[constant].inner {
                                     ConstantInner::Scalar {
@@ -1217,6 +1261,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                     } => int as i32,
                                     _ => {
                                         return Err(ErrorKind::SemanticError(
+                                            meta,
                                             "Case values can only be integers".into(),
                                         ))
                                     }
@@ -1247,11 +1292,12 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             })
                         }
                         TokenValue::Default => {
-                            self.bump()?;
+                            let Token { meta, .. } = self.bump()?;
                             self.expect(TokenValue::Colon)?;
 
                             if !default.is_empty() {
                                 return Err(ErrorKind::SemanticError(
+                                    meta,
                                     "Can only have one default case per switch statement".into(),
                                 ));
                             }
@@ -1353,16 +1399,22 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 if self.bump_if(TokenValue::Semicolon).is_none() {
                     let expr = if self.peek_type_name() || self.peek_type_qualifier() {
                         let qualifiers = self.parse_type_qualifiers()?;
-                        let ty = self.parse_type_non_void()?;
+                        let (ty, meta) = self.parse_type_non_void()?;
                         let name = self.expect_ident()?.0;
 
                         self.expect(TokenValue::Assign)?;
 
-                        let value = self.parse_initializer(ty, ctx, &mut block)?;
+                        let (value, end_meta) = self.parse_initializer(ty, ctx, &mut block)?;
 
-                        let pointer =
-                            self.program
-                                .add_local_var(ctx, &qualifiers, ty, name, None)?;
+                        let decl = VarDeclaration {
+                            qualifiers: &qualifiers,
+                            ty,
+                            name,
+                            init: None,
+                            meta: meta.union(&end_meta),
+                        };
+
+                        let pointer = self.program.add_local_var(ctx, decl)?;
 
                         block.push(Statement::Store { pointer, value });
 
@@ -1467,7 +1519,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         loop {
             if self.peek_type_name() || self.peek_parameter_qualifier() {
                 parameters.push(self.parse_parameter_qualifier());
-                let ty = self.parse_type_non_void()?;
+                let ty = self.parse_type_non_void()?.0;
 
                 match self.expect_peek()?.value {
                     TokenValue::Comma => {
@@ -1511,14 +1563,23 @@ struct DeclarationContext<'ctx, 'fun> {
 impl<'ctx, 'fun> DeclarationContext<'ctx, 'fun> {
     fn add_var(
         &mut self,
+        program: &mut Program,
         ty: Handle<Type>,
         name: String,
         init: Option<Handle<Constant>>,
-        program: &mut Program,
+        meta: SourceMetadata,
     ) -> Result<Handle<Expression>> {
+        let decl = VarDeclaration {
+            qualifiers: &self.qualifiers,
+            ty,
+            name,
+            init,
+            meta,
+        };
+
         match self.external {
-            true => program.add_global_var(self.ctx, &self.qualifiers, ty, name, init),
-            false => program.add_local_var(self.ctx, &self.qualifiers, ty, name, init),
+            true => program.add_global_var(self.ctx, decl),
+            false => program.add_local_var(self.ctx, decl),
         }
     }
 }

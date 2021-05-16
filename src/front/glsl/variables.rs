@@ -7,6 +7,14 @@ use super::ast::*;
 use super::error::ErrorKind;
 use super::token::SourceMetadata;
 
+pub struct VarDeclaration<'a> {
+    pub qualifiers: &'a [TypeQualifier],
+    pub ty: Handle<Type>,
+    pub name: String,
+    pub init: Option<Handle<Constant>>,
+    pub meta: SourceMetadata,
+}
+
 impl Program<'_> {
     pub fn lookup_variable(
         &mut self,
@@ -110,7 +118,7 @@ impl Program<'_> {
         name: &str,
         meta: SourceMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
-        match *self.resolve_type(context, expression)? {
+        match *self.resolve_type(context, expression, meta.clone())? {
             TypeInner::Struct { ref members, .. } => {
                 let index = members
                     .iter()
@@ -170,6 +178,7 @@ impl Program<'_> {
                                         4 => VectorSize::Quad,
                                         _ => {
                                             return Err(ErrorKind::SemanticError(
+                                                meta,
                                                 format!(
                                                     "Bad swizzle size for \"{:?}\": {:?}",
                                                     name, v
@@ -185,11 +194,13 @@ impl Program<'_> {
                     }
                 } else {
                     Err(ErrorKind::SemanticError(
+                        meta,
                         format!("Invalid swizzle for vector \"{}\"", name).into(),
                     ))
                 }
             }
             _ => Err(ErrorKind::SemanticError(
+                meta,
                 format!("Can't lookup field on this type \"{}\"", name).into(),
             )),
         }
@@ -198,10 +209,13 @@ impl Program<'_> {
     pub fn add_global_var(
         &mut self,
         ctx: &mut Context,
-        qualifiers: &[TypeQualifier],
-        ty: Handle<Type>,
-        name: String,
-        init: Option<Handle<Constant>>,
+        VarDeclaration {
+            qualifiers,
+            ty,
+            name,
+            init,
+            meta,
+        }: VarDeclaration,
     ) -> Result<Handle<Expression>, ErrorKind> {
         let mut storage = StorageQualifier::StorageClass(StorageClass::Function);
         let mut interpolation = None;
@@ -215,6 +229,7 @@ impl Program<'_> {
                 TypeQualifier::StorageQualifier(s) => {
                     if StorageQualifier::StorageClass(StorageClass::Function) != storage {
                         return Err(ErrorKind::SemanticError(
+                            meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
                         ));
                     }
@@ -224,6 +239,7 @@ impl Program<'_> {
                 TypeQualifier::Interpolation(i) => {
                     if interpolation.is_some() {
                         return Err(ErrorKind::SemanticError(
+                            meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
                         ));
                     }
@@ -233,6 +249,7 @@ impl Program<'_> {
                 TypeQualifier::ResourceBinding(ref r) => {
                     if binding.is_some() {
                         return Err(ErrorKind::SemanticError(
+                            meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
                         ));
                     }
@@ -242,6 +259,7 @@ impl Program<'_> {
                 TypeQualifier::Location(l) => {
                     if location.is_some() {
                         return Err(ErrorKind::SemanticError(
+                            meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
                         ));
                     }
@@ -251,6 +269,7 @@ impl Program<'_> {
                 TypeQualifier::Sampling(s) => {
                     if sampling.is_some() {
                         return Err(ErrorKind::SemanticError(
+                            meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
                         ));
                     }
@@ -260,6 +279,7 @@ impl Program<'_> {
                 TypeQualifier::Layout(ref l) => {
                     if layout.is_some() {
                         return Err(ErrorKind::SemanticError(
+                            meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
                         ));
                     }
@@ -268,6 +288,7 @@ impl Program<'_> {
                 }
                 TypeQualifier::EarlyFragmentTests => {
                     return Err(ErrorKind::SemanticError(
+                        meta,
                         "Cannot set early fragment tests on a declaration".into(),
                     ));
                 }
@@ -276,12 +297,14 @@ impl Program<'_> {
 
         if binding.is_some() && storage != StorageQualifier::StorageClass(StorageClass::Uniform) {
             return Err(ErrorKind::SemanticError(
+                meta,
                 "binding requires uniform or buffer storage qualifier".into(),
             ));
         }
 
         if (sampling.is_some() || interpolation.is_some()) && location.is_none() {
             return Err(ErrorKind::SemanticError(
+                meta,
                 "Sampling and interpolation qualifiers can only be used in in/out variables".into(),
             ));
         }
@@ -309,7 +332,7 @@ impl Program<'_> {
                 .append(Expression::AccessIndex { base, index }));
         } else if let StorageQualifier::Const = storage {
             let handle = init.ok_or_else(|| {
-                ErrorKind::SemanticError("Constant must have a initializer".into())
+                ErrorKind::SemanticError(meta, "Constant must have a initializer".into())
             })?;
 
             self.lookup_constants.insert(name, handle);
@@ -341,10 +364,13 @@ impl Program<'_> {
     pub fn add_local_var(
         &mut self,
         ctx: &mut Context,
-        qualifiers: &[TypeQualifier],
-        ty: Handle<Type>,
-        name: String,
-        init: Option<Handle<Constant>>,
+        VarDeclaration {
+            qualifiers,
+            ty,
+            name,
+            init,
+            meta,
+        }: VarDeclaration,
     ) -> Result<Handle<Expression>, ErrorKind> {
         #[cfg(feature = "glsl-validate")]
         if ctx.lookup_local_var_current_scope(&name).is_some() {
@@ -361,6 +387,7 @@ impl Program<'_> {
                 }
                 _ => {
                     return Err(ErrorKind::SemanticError(
+                        meta,
                         "Qualifier not supported in locals".into(),
                     ));
                 }

@@ -89,6 +89,7 @@ impl<'a> Program<'a> {
         &'b mut self,
         context: &'b mut Context,
         handle: Handle<Expression>,
+        meta: SourceMetadata,
     ) -> Result<&'b TypeInner, ErrorKind> {
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
@@ -105,6 +106,7 @@ impl<'a> Program<'a> {
         ) {
             //TODO: better error report
             Err(error) => Err(ErrorKind::SemanticError(
+                meta,
                 format!("Can't resolve type: {:?}", error).into(),
             )),
             Ok(()) => Ok(context.typifier.get(handle, &self.module.types)),
@@ -115,6 +117,7 @@ impl<'a> Program<'a> {
         &mut self,
         context: &mut Context,
         handle: Handle<Expression>,
+        meta: SourceMetadata,
     ) -> Result<Handle<Type>, ErrorKind> {
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
@@ -131,6 +134,7 @@ impl<'a> Program<'a> {
         ) {
             //TODO: better error report
             Err(error) => Err(ErrorKind::SemanticError(
+                meta,
                 format!("Can't resolve type: {:?}", error).into(),
             )),
             Ok(()) => Ok(context.typifier.get_handle(handle, &mut self.module.types)),
@@ -141,6 +145,7 @@ impl<'a> Program<'a> {
         &mut self,
         expressions: &Arena<Expression>,
         root: Handle<Expression>,
+        meta: SourceMetadata,
     ) -> Result<Handle<Constant>, ErrorKind> {
         let mut solver = ConstantSolver {
             types: &self.module.types,
@@ -150,7 +155,7 @@ impl<'a> Program<'a> {
 
         solver
             .solve(root)
-            .map_err(|_| ErrorKind::SemanticError("Can't solve constant".into()))
+            .map_err(|_| ErrorKind::SemanticError(meta, "Can't solve constant".into()))
     }
 
     pub fn function_args_prelude(&self) -> (Vec<FunctionArgument>, Vec<ParameterQualifier>) {
@@ -338,17 +343,18 @@ impl<'function> Context<'function> {
                 self.expressions.append(Expression::Constant(constant))
             }
             ExprKind::Binary { left, op, right } if !lhs => {
+                let (left_meta, right_meta) = (left.meta.clone(), right.meta.clone());
                 let left = self.lower(program, *left, false, body)?;
                 let right = self.lower(program, *right, false, body)?;
 
                 if let BinaryOperator::Equal | BinaryOperator::NotEqual = op {
                     let equals = op == BinaryOperator::Equal;
-                    let left_is_vector = match *program.resolve_type(self, left)? {
+                    let left_is_vector = match *program.resolve_type(self, left, left_meta)? {
                         crate::TypeInner::Vector { .. } => true,
                         _ => false,
                     };
 
-                    let right_is_vector = match *program.resolve_type(self, right)? {
+                    let right_is_vector = match *program.resolve_type(self, right, right_meta)? {
                         crate::TypeInner::Vector { .. } => true,
                         _ => false,
                     };
@@ -388,7 +394,7 @@ impl<'function> Context<'function> {
                 }
             }
             ExprKind::Call(call) if !lhs => {
-                program.function_call(self, call.kind, call.args, body)?
+                program.function_call(self, body, call.kind, call.args, expr.meta)?
             }
             ExprKind::Conditional {
                 condition,
@@ -415,6 +421,7 @@ impl<'function> Context<'function> {
             }
             _ => {
                 return Err(ErrorKind::SemanticError(
+                    expr.meta.clone(),
                     format!("{:?} cannot be in the left hand side", expr).into(),
                 ))
             }

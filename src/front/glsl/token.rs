@@ -12,7 +12,7 @@ pub struct SourceMetadata {
 impl SourceMetadata {
     pub fn union(&self, other: &Self) -> Self {
         SourceMetadata {
-            chars: (self.chars.start.min(other.chars.start))..(self.chars.end.max(self.chars.end)),
+            chars: (self.chars.start.min(other.chars.start))..(self.chars.end.max(other.chars.end)),
         }
     }
 }

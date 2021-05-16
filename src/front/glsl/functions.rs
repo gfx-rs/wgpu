@@ -5,15 +5,16 @@ use crate::{
     TypeInner,
 };
 
-use super::{ast::*, error::ErrorKind};
+use super::{ast::*, error::ErrorKind, SourceMetadata};
 
 impl Program<'_> {
     pub fn function_call(
         &mut self,
         ctx: &mut Context,
+        body: &mut Block,
         fc: FunctionCallKind,
         raw_args: Vec<Expr>,
-        body: &mut Block,
+        meta: SourceMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
         let args: Vec<_> = raw_args
             .clone()
@@ -24,7 +25,7 @@ impl Program<'_> {
         match fc {
             FunctionCallKind::TypeConstructor(ty) => {
                 let h = if args.len() == 1 {
-                    let is_vec = match *self.resolve_type(ctx, args[0])? {
+                    let is_vec = match *self.resolve_type(ctx, args[0], raw_args[0].meta.clone())? {
                         TypeInner::Vector { .. } => true,
                         _ => false,
                     };
@@ -70,7 +71,7 @@ impl Program<'_> {
                                 components: columns,
                             })
                         }
-                        _ => return Err(ErrorKind::SemanticError("Bad cast".into())),
+                        _ => return Err(ErrorKind::SemanticError(meta, "Bad cast".into())),
                     }
                 } else {
                     ctx.expressions.append(Expression::Compose {
@@ -105,7 +106,7 @@ impl Program<'_> {
                                 depth_ref: None,
                             }))
                         } else {
-                            Err(ErrorKind::SemanticError("Bad call to texture".into()))
+                            Err(ErrorKind::SemanticError(meta, "Bad call to texture".into()))
                         }
                     }
                     "textureLod" => {
@@ -123,7 +124,10 @@ impl Program<'_> {
                                 depth_ref: None,
                             }))
                         } else {
-                            Err(ErrorKind::SemanticError("Bad call to textureLod".into()))
+                            Err(ErrorKind::SemanticError(
+                                meta,
+                                "Bad call to textureLod".into(),
+                            ))
                         }
                     }
                     "ceil" | "round" | "floor" | "fract" | "trunc" | "sin" | "abs" | "sqrt"
@@ -219,7 +223,8 @@ impl Program<'_> {
                             name,
                             parameters: args
                                 .iter()
-                                .map(|e| self.resolve_handle(ctx, *e))
+                                .zip(raw_args.iter().map(|e| e.meta.clone()))
+                                .map(|(e, meta)| self.resolve_handle(ctx, *e, meta))
                                 .collect::<Result<_, _>>()?,
                         };
 
@@ -228,6 +233,8 @@ impl Program<'_> {
                             .get(&sig)
                             .ok_or_else(|| {
                                 ErrorKind::SemanticError(
+                                    meta,
+                                    // FIXME: Proper signature display
                                     format!("Unknown function: {:?}", sig).into(),
                                 )
                             })?
@@ -275,12 +282,13 @@ impl Program<'_> {
         &mut self,
         mut function: Function,
         parameters: Vec<ParameterQualifier>,
+        meta: SourceMetadata,
     ) -> Result<(), ErrorKind> {
         ensure_block_returns(&mut function.body);
         let name = function
             .name
             .clone()
-            .ok_or_else(|| ErrorKind::SemanticError("Unnamed function".into()))?;
+            .ok_or_else(|| ErrorKind::SemanticError(meta.clone(), "Unnamed function".into()))?;
         let stage = self.entry_points.get(&name);
 
         if let Some(&stage) = stage {
@@ -306,7 +314,10 @@ impl Program<'_> {
 
             if let Some(decl) = self.lookup_function.get_mut(&sig) {
                 if decl.defined {
-                    return Err(ErrorKind::SemanticError("Function already defined".into()));
+                    return Err(ErrorKind::SemanticError(
+                        meta,
+                        "Function already defined".into(),
+                    ));
                 }
 
                 decl.defined = true;
@@ -331,11 +342,12 @@ impl Program<'_> {
         &mut self,
         mut function: Function,
         parameters: Vec<ParameterQualifier>,
+        meta: SourceMetadata,
     ) -> Result<(), ErrorKind> {
         let name = function
             .name
             .clone()
-            .ok_or_else(|| ErrorKind::SemanticError("Unnamed function".into()))?;
+            .ok_or_else(|| ErrorKind::SemanticError(meta, "Unnamed function".into()))?;
         let sig = FunctionSignature {
             name,
             parameters: function.arguments.iter().map(|p| p.ty).collect(),

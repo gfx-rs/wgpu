@@ -329,7 +329,10 @@ fn functions() {
         )
         .err()
         .unwrap(),
-        ErrorKind::SemanticError("Function already defined".into())
+        ErrorKind::SemanticError(
+            SourceMetadata { chars: 134..152 },
+            "Function already defined".into()
+        )
     );
 
     println!();
