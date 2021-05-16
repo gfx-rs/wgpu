@@ -1518,13 +1518,15 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     ) -> Result<()> {
         loop {
             if self.peek_type_name() || self.peek_parameter_qualifier() {
-                parameters.push(self.parse_parameter_qualifier());
+                let qualifier = self.parse_parameter_qualifier();
+                let mutable = qualifier != ParameterQualifier::Const;
+                parameters.push(qualifier);
                 let ty = self.parse_type_non_void()?.0;
 
                 match self.expect_peek()?.value {
                     TokenValue::Comma => {
                         self.bump()?;
-                        context.add_function_arg(None, ty);
+                        context.add_function_arg(None, ty, mutable);
                         continue;
                     }
                     TokenValue::Identifier(_) => {
@@ -1533,7 +1535,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         let size = self.parse_array_specifier()?;
                         let ty = self.maybe_array(ty, size);
 
-                        context.add_function_arg(Some(name), ty);
+                        context.add_function_arg(Some(name), ty, mutable);
 
                         if self.bump_if(TokenValue::Comma).is_some() {
                             continue;

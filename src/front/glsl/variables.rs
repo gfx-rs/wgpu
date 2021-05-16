@@ -385,13 +385,19 @@ impl Program<'_> {
             return Err(ErrorKind::VariableAlreadyDeclared(name));
         }
 
-        // FIXME: this should be removed after
-        // fixing the lack of constant qualifier support
-        #[allow(clippy::never_loop)]
+        let mut mutable = true;
+
         for qualifier in qualifiers {
             match *qualifier {
                 TypeQualifier::StorageQualifier(StorageQualifier::Const) => {
-                    return Err(ErrorKind::NotImplemented("const qualifier"));
+                    if !mutable {
+                        return Err(ErrorKind::SemanticError(
+                            meta,
+                            "Cannot use more than one constant qualifier per declaration".into(),
+                        ));
+                    }
+
+                    mutable = false;
                 }
                 _ => {
                     return Err(ErrorKind::SemanticError(
@@ -409,7 +415,7 @@ impl Program<'_> {
         });
         let expr = ctx.expressions.append(Expression::LocalVariable(handle));
 
-        ctx.add_local_var(name, expr);
+        ctx.add_local_var(name, expr, mutable);
 
         Ok(expr)
     }

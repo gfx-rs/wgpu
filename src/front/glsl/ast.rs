@@ -200,6 +200,8 @@ impl<'function> Context<'function> {
             let var = VariableReference {
                 expr,
                 load: Some(self.expressions.append(Expression::Load { pointer: expr })),
+                // TODO: respect constant qualifier
+                mutable: true,
             };
 
             self.lookup_global_var_exps.insert(name.into(), var.clone());
@@ -218,7 +220,11 @@ impl<'function> Context<'function> {
                 .expressions
                 .append(Expression::Constant(*program.lookup_constants.get(name)?));
 
-            let var = VariableReference { expr, load: None };
+            let var = VariableReference {
+                expr,
+                load: None,
+                mutable: false,
+            };
 
             self.lookup_constant_exps.insert(name.into(), var.clone());
 
@@ -236,7 +242,7 @@ impl<'function> Context<'function> {
     }
 
     /// Add variable to current scope
-    pub fn add_local_var(&mut self, name: String, expr: Handle<Expression>) {
+    pub fn add_local_var(&mut self, name: String, expr: Handle<Expression>, mutable: bool) {
         if let Some(current) = self.scopes.last_mut() {
             let load = self.expressions.append(Expression::Load { pointer: expr });
 
@@ -245,13 +251,14 @@ impl<'function> Context<'function> {
                 VariableReference {
                     expr,
                     load: Some(load),
+                    mutable,
                 },
             );
         }
     }
 
     /// Add function argument to current scope
-    pub fn add_function_arg(&mut self, name: Option<String>, ty: Handle<Type>) {
+    pub fn add_function_arg(&mut self, name: Option<String>, ty: Handle<Type>, mutable: bool) {
         let index = self.arguments.len();
         self.arguments.push(FunctionArgument {
             name: name.clone(),
@@ -265,7 +272,14 @@ impl<'function> Context<'function> {
                     .expressions
                     .append(Expression::FunctionArgument(index as u32));
 
-                (*current).insert(name, VariableReference { expr, load: None });
+                (*current).insert(
+                    name,
+                    VariableReference {
+                        expr,
+                        load: None,
+                        mutable,
+                    },
+                );
             }
         }
     }
@@ -347,6 +361,13 @@ impl<'function> Context<'function> {
             }
             ExprKind::Variable(var) => {
                 if lhs {
+                    if !var.mutable {
+                        return Err(ErrorKind::SemanticError(
+                            expr.meta,
+                            "Variable cannot be used in LHS position".into(),
+                        ));
+                    }
+
                     var.expr
                 } else {
                     var.load.unwrap_or(var.expr)
@@ -392,6 +413,7 @@ impl<'function> Context<'function> {
 pub struct VariableReference {
     pub expr: Handle<Expression>,
     pub load: Option<Handle<Expression>>,
+    pub mutable: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -469,7 +491,7 @@ pub enum StructLayout {
     Std140,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ParameterQualifier {
     In,
     Out,
