@@ -322,32 +322,36 @@ impl<'function> Context<'function> {
 
                 if let BinaryOperator::Equal | BinaryOperator::NotEqual = op {
                     let equals = op == BinaryOperator::Equal;
-                    let left_is_vector = match *program.resolve_type(self, left, left_meta)? {
-                        crate::TypeInner::Vector { .. } => true,
-                        _ => false,
-                    };
+                    let (left_is_vector, left_dims) =
+                        match *program.resolve_type(self, left, left_meta)? {
+                            crate::TypeInner::Vector { .. } => (true, 1),
+                            crate::TypeInner::Matrix { .. } => (false, 2),
+                            _ => (false, 0),
+                        };
 
-                    let right_is_vector = match *program.resolve_type(self, right, right_meta)? {
-                        crate::TypeInner::Vector { .. } => true,
-                        _ => false,
-                    };
+                    let (right_is_vector, right_dims) =
+                        match *program.resolve_type(self, right, right_meta)? {
+                            crate::TypeInner::Vector { .. } => (true, 1),
+                            crate::TypeInner::Matrix { .. } => (false, 2),
+                            _ => (false, 0),
+                        };
 
                     let (op, fun) = match equals {
                         true => (BinaryOperator::Equal, RelationalFunction::All),
                         false => (BinaryOperator::NotEqual, RelationalFunction::Any),
                     };
 
-                    let expr = self
+                    let argument = self
                         .expressions
                         .append(Expression::Binary { op, left, right });
 
-                    if left_is_vector && right_is_vector {
-                        self.expressions.append(Expression::Relational {
-                            fun,
-                            argument: expr,
-                        })
+                    if left_dims != right_dims {
+                        return Err(ErrorKind::SemanticError(expr.meta, "Cannot compare".into()));
+                    } else if left_is_vector && right_is_vector {
+                        self.expressions
+                            .append(Expression::Relational { fun, argument })
                     } else {
-                        expr
+                        argument
                     }
                 } else {
                     self.expressions
