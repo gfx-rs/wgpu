@@ -86,14 +86,14 @@ impl Program<'_> {
                 match name.as_str() {
                     "sampler2D" => {
                         if args.len() != 2 {
-                            return Err(ErrorKind::WrongNumberArgs(name, 2, args.len()));
+                            return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
                         ctx.samplers.insert(args[0], args[1]);
                         Ok(args[0])
                     }
                     "texture" => {
                         if args.len() != 2 {
-                            return Err(ErrorKind::WrongNumberArgs(name, 2, args.len()));
+                            return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
                         if let Some(sampler) = ctx.samplers.get(&args[0]).copied() {
                             Ok(ctx.expressions.append(Expression::ImageSample {
@@ -111,7 +111,7 @@ impl Program<'_> {
                     }
                     "textureLod" => {
                         if args.len() != 3 {
-                            return Err(ErrorKind::WrongNumberArgs(name, 3, args.len()));
+                            return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
                         if let Some(sampler) = ctx.samplers.get(&args[0]).copied() {
                             Ok(ctx.expressions.append(Expression::ImageSample {
@@ -134,7 +134,7 @@ impl Program<'_> {
                     | "inversesqrt" | "exp" | "exp2" | "sign" | "transpose" | "inverse"
                     | "normalize" => {
                         if args.len() != 1 {
-                            return Err(ErrorKind::WrongNumberArgs(name, 1, args.len()));
+                            return Err(ErrorKind::wrong_function_args(name, 1, args.len(), meta));
                         }
                         Ok(ctx.expressions.append(Expression::Math {
                             fun: match name.as_str() {
@@ -162,7 +162,7 @@ impl Program<'_> {
                     }
                     "pow" | "dot" | "max" => {
                         if args.len() != 2 {
-                            return Err(ErrorKind::WrongNumberArgs(name, 2, args.len()));
+                            return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
                         Ok(ctx.expressions.append(Expression::Math {
                             fun: match name.as_str() {
@@ -178,7 +178,7 @@ impl Program<'_> {
                     }
                     "mix" | "clamp" => {
                         if args.len() != 3 {
-                            return Err(ErrorKind::WrongNumberArgs(name, 3, args.len()));
+                            return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
                         Ok(ctx.expressions.append(Expression::Math {
                             fun: match name.as_str() {
@@ -194,7 +194,7 @@ impl Program<'_> {
                     "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" | "equal"
                     | "notEqual" => {
                         if args.len() != 2 {
-                            return Err(ErrorKind::WrongNumberArgs(name, 2, args.len()));
+                            return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
                         Ok(ctx.expressions.append(Expression::Binary {
                             op: match name.as_str() {
@@ -211,13 +211,17 @@ impl Program<'_> {
                         }))
                     }
                     "isinf" => {
-                        self.parse_relational_fun(ctx, name, &args, RelationalFunction::IsInf)
+                        self.parse_relational_fun(ctx, name, &args, RelationalFunction::IsInf, meta)
                     }
                     "isnan" => {
-                        self.parse_relational_fun(ctx, name, &args, RelationalFunction::IsNan)
+                        self.parse_relational_fun(ctx, name, &args, RelationalFunction::IsNan, meta)
                     }
-                    "all" => self.parse_relational_fun(ctx, name, &args, RelationalFunction::All),
-                    "any" => self.parse_relational_fun(ctx, name, &args, RelationalFunction::Any),
+                    "all" => {
+                        self.parse_relational_fun(ctx, name, &args, RelationalFunction::All, meta)
+                    }
+                    "any" => {
+                        self.parse_relational_fun(ctx, name, &args, RelationalFunction::Any, meta)
+                    }
                     _ => {
                         let sig = FunctionSignature {
                             name,
@@ -267,9 +271,10 @@ impl Program<'_> {
         name: String,
         args: &[Handle<Expression>],
         fun: RelationalFunction,
+        meta: SourceMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
         if args.len() != 1 {
-            return Err(ErrorKind::WrongNumberArgs(name, 1, args.len()));
+            return Err(ErrorKind::wrong_function_args(name, 1, args.len(), meta));
         }
 
         Ok(ctx.expressions.append(Expression::Relational {

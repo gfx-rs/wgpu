@@ -26,8 +26,6 @@ pub enum ErrorKind {
     VariableAlreadyDeclared(String),
     #[error("{1}")]
     SemanticError(SourceMetadata, Cow<'static, str>),
-    #[error("Function \"{0}\" expects {1} arguments, got {2}")]
-    WrongNumberArgs(String, usize, usize),
 }
 
 impl ErrorKind {
@@ -43,6 +41,20 @@ impl ErrorKind {
             ErrorKind::InvalidToken(ref token) => Some(&token.meta),
             _ => None,
         }
+    }
+
+    pub(crate) fn wrong_function_args(
+        name: String,
+        expected: usize,
+        got: usize,
+        meta: SourceMetadata,
+    ) -> Self {
+        let msg = format!(
+            "Function \"{}\" expects {} arguments, got {}",
+            name, expected, got
+        );
+
+        ErrorKind::SemanticError(meta, msg.into())
     }
 }
 
