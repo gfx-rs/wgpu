@@ -1,31 +1,37 @@
 use super::token::{SourceMetadata, Token};
-use std::{borrow::Cow, fmt};
+use std::borrow::Cow;
+use thiserror::Error;
 
-//TODO: use `thiserror`
-#[derive(Debug)]
+#[derive(Debug, Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum ErrorKind {
+    #[error("Unexpected end of file")]
     EndOfFile,
-    InvalidInput,
+    #[error("Invalid profile: {1}")]
     InvalidProfile(SourceMetadata, String),
-    InvalidToken(Token),
+    #[error("Invalid version: {1}")]
     InvalidVersion(SourceMetadata, u64),
-    ParserFail,
-    ParserStackOverflow,
+    #[error("Unexpected token: {0}")]
+    InvalidToken(Token),
+    #[error("Not implemented {0}")]
     NotImplemented(&'static str),
+    #[error("Unknown variable: {1}")]
     UnknownVariable(SourceMetadata, String),
+    #[error("Unknown field: {1}")]
     UnknownField(SourceMetadata, String),
+    #[error("Unknown layout qualifier: {1}")]
     UnknownLayoutQualifier(SourceMetadata, String),
     #[cfg(feature = "glsl-validate")]
+    #[error("Variable already declared: {0}")]
     VariableAlreadyDeclared(String),
-    ExpectedConstant,
+    #[error("{0}")]
     SemanticError(Cow<'static, str>),
-    PreprocessorError(String),
+    #[error("Function \"{0}\" expects {1} arguments, got {2}")]
     WrongNumberArgs(String, usize, usize),
 }
 
 impl ErrorKind {
-    // Returns the TokenMetadata if available
+    /// Returns the TokenMetadata if available
     pub fn metadata(&self) -> Option<&SourceMetadata> {
         match *self {
             ErrorKind::UnknownVariable(ref metadata, _)
@@ -39,53 +45,10 @@ impl ErrorKind {
     }
 }
 
-impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            ErrorKind::EndOfFile => write!(f, "Unexpected end of file"),
-            ErrorKind::InvalidInput => write!(f, "InvalidInput"),
-            ErrorKind::InvalidProfile(_, ref val) => {
-                write!(f, "Invalid profile {}", val)
-            }
-            ErrorKind::InvalidToken(ref token) => write!(f, "Invalid Token {:?}", token),
-            ErrorKind::InvalidVersion(_, ref val) => {
-                write!(f, "Invalid version {}", val)
-            }
-            ErrorKind::ParserFail => write!(f, "Parser failed"),
-            ErrorKind::ParserStackOverflow => write!(f, "Parser stack overflow"),
-            ErrorKind::NotImplemented(ref msg) => write!(f, "Not implemented: {}", msg),
-            ErrorKind::UnknownVariable(_, ref val) => {
-                write!(f, "Unknown variable {}", val)
-            }
-            ErrorKind::UnknownField(_, ref val) => {
-                write!(f, "Unknown field {}", val)
-            }
-            ErrorKind::UnknownLayoutQualifier(_, ref val) => {
-                write!(f, "Unknown layout qualifier name {}", val)
-            }
-            #[cfg(feature = "glsl-validate")]
-            ErrorKind::VariableAlreadyDeclared(ref val) => {
-                write!(f, "Variable {} already declared in current scope", val)
-            }
-            ErrorKind::ExpectedConstant => write!(f, "Expected constant"),
-            ErrorKind::SemanticError(ref msg) => write!(f, "Semantic error: {}", msg),
-            ErrorKind::PreprocessorError(ref val) => write!(f, "Preprocessor error: {}", val),
-            ErrorKind::WrongNumberArgs(ref fun, expected, actual) => {
-                write!(f, "{} requires {} args, got {}", fun, expected, actual)
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[error("{kind}")]
 pub struct ParseError {
     pub kind: ErrorKind,
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
 }
 
 impl From<ErrorKind> for ParseError {
@@ -93,5 +56,3 @@ impl From<ErrorKind> for ParseError {
         ParseError { kind }
     }
 }
-
-impl std::error::Error for ParseError {}

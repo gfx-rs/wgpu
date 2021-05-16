@@ -1,7 +1,7 @@
 pub use pp_rs::token::{Float, Integer, PreprocessorError};
 
 use crate::{Interpolation, Sampling, Type};
-use std::ops::Range;
+use std::{fmt, ops::Range};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -115,4 +115,10 @@ pub enum TokenValue {
     Caret,
     Ampersand,
     Question,
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.value)
+    }
 }
