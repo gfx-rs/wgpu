@@ -1,4 +1,7 @@
-use super::token::{SourceMetadata, Token};
+use super::{
+    constants::ConstantSolvingError,
+    token::{SourceMetadata, Token},
+};
 use std::borrow::Cow;
 use thiserror::Error;
 
@@ -55,6 +58,12 @@ impl ErrorKind {
         );
 
         ErrorKind::SemanticError(meta, msg.into())
+    }
+}
+
+impl From<(SourceMetadata, ConstantSolvingError)> for ErrorKind {
+    fn from((meta, err): (SourceMetadata, ConstantSolvingError)) -> Self {
+        ErrorKind::SemanticError(meta, err.to_string().into())
     }
 }
 

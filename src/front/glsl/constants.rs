@@ -51,6 +51,8 @@ pub enum ConstantSolvingError {
     InvalidBinaryOpArgs,
     #[error("Splat/swizzle type is not registered")]
     DestinationTypeNotFound,
+    #[error("Not implemented: {0}")]
+    NotImplemented(String),
 }
 
 impl<'a> ConstantSolver<'a> {
@@ -152,7 +154,9 @@ impl<'a> ConstantSolver<'a> {
 
                 self.binary_op(op, left_constant, right_constant)
             }
-            Expression::Math { .. } => todo!(),
+            Expression::Math { fun, .. } => {
+                Err(ConstantSolvingError::NotImplemented(format!("{:?}", fun)))
+            }
             Expression::As {
                 convert,
                 expr,

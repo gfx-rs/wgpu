@@ -153,9 +153,7 @@ impl<'a> Program<'a> {
             constants: &mut self.module.constants,
         };
 
-        solver
-            .solve(root)
-            .map_err(|_| ErrorKind::SemanticError(meta, "Can't solve constant".into()))
+        solver.solve(root).map_err(|e| (meta, e).into())
     }
 
     pub fn function_args_prelude(&self) -> (Vec<FunctionArgument>, Vec<ParameterQualifier>) {

@@ -499,7 +499,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
             let init = self
                 .bump_if(TokenValue::Assign)
-                .map(|_| {
+                .map::<Result<_>, _>(|_| {
                     let (expr, init_meta) = self.parse_initializer(ty, ctx.ctx, ctx.body)?;
                     meta = meta.union(&init_meta);
                     Ok((expr, init_meta))
