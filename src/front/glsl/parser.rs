@@ -1388,7 +1388,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     TokenValue::RightParen => {}
                     _ => {
                         let rest = self.parse_expression(ctx)?;
-                        ctx.lower(self.program, rest, false, &mut &mut continuing)?;
+                        ctx.lower(self.program, rest, false, &mut continuing)?;
                     }
                 }
 
@@ -1430,7 +1430,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             | TokenValue::IntConstant(_)
             | TokenValue::BoolConstant(_)
             | TokenValue::FloatConstant(_) => {
-                self.parse_expression(ctx)?;
+                let expr = self.parse_expression(ctx)?;
+                ctx.lower(self.program, expr, false, body)?;
                 self.expect(TokenValue::Semicolon)?;
             }
             TokenValue::Semicolon => {
