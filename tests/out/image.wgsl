@@ -19,13 +19,33 @@ var image_aa: texture_multisampled_2d<f32>;
 
 [[stage(compute), workgroup_size(16, 1, 1)]]
 fn main([[builtin(local_invocation_id)]] local_id: vec3<u32>) {
-    let _e10: vec2<i32> = ((textureDimensions(image_src) * vec2<i32>(local_id.xy)) % vec2<i32>(10, 20));
+    let _e3: vec2<i32> = textureDimensions(image_src);
+    let _e10: vec2<i32> = ((_e3 * vec2<i32>(local_id.xy)) % vec2<i32>(10, 20));
     let _e11: vec4<u32> = textureLoad(image_src, _e10);
-    textureStore(image_dst, _e10[0], _e11);
+    textureStore(image_dst, _e10.x, _e11);
     return;
 }
 
 [[stage(vertex)]]
 fn queries() -> [[builtin(position)]] vec4<f32> {
-    return vec4<f32>(f32(((((((((((((((((((textureDimensions(image_1d) + textureDimensions(image_2d)[1]) + textureDimensions(image_2d, 1)[1]) + textureDimensions(image_2d_array)[1]) + textureDimensions(image_2d_array, 1)[1]) + textureNumLayers(image_2d_array)) + textureDimensions(image_cube)[1]) + textureDimensions(image_cube, 1)[1]) + textureDimensions(image_cube_array)[1]) + textureDimensions(image_cube_array, 1)[1]) + textureNumLayers(image_cube_array)) + textureDimensions(image_3d)[2]) + textureDimensions(image_3d, 1)[2]) + textureNumSamples(image_aa)) + textureNumLevels(image_2d)) + textureNumLevels(image_2d_array)) + textureNumLevels(image_3d)) + textureNumLevels(image_cube)) + textureNumLevels(image_cube_array))));
+    let _e9: i32 = textureDimensions(image_1d);
+    let _e10: vec2<i32> = textureDimensions(image_2d);
+    let _e11: i32 = textureNumLevels(image_2d);
+    let _e13: vec2<i32> = textureDimensions(image_2d, 1);
+    let _e14: vec2<i32> = textureDimensions(image_2d_array);
+    let _e15: i32 = textureNumLevels(image_2d_array);
+    let _e17: vec2<i32> = textureDimensions(image_2d_array, 1);
+    let _e18: i32 = textureNumLayers(image_2d_array);
+    let _e19: vec3<i32> = textureDimensions(image_cube);
+    let _e20: i32 = textureNumLevels(image_cube);
+    let _e22: vec3<i32> = textureDimensions(image_cube, 1);
+    let _e23: vec3<i32> = textureDimensions(image_cube_array);
+    let _e24: i32 = textureNumLevels(image_cube_array);
+    let _e26: vec3<i32> = textureDimensions(image_cube_array, 1);
+    let _e27: i32 = textureNumLayers(image_cube_array);
+    let _e28: vec3<i32> = textureDimensions(image_3d);
+    let _e29: i32 = textureNumLevels(image_3d);
+    let _e31: vec3<i32> = textureDimensions(image_3d, 1);
+    let _e32: i32 = textureNumSamples(image_aa);
+    return vec4<f32>(f32(((((((((((((((((((_e9 + _e10.y) + _e13.y) + _e14.y) + _e17.y) + _e18) + _e19.y) + _e22.y) + _e23.y) + _e26.y) + _e27) + _e28.z) + _e31.z) + _e32) + _e11) + _e15) + _e29) + _e20) + _e24)));
 }

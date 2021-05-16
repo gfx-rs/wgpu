@@ -571,8 +571,16 @@ impl<W: Write> Writer<W> {
         match *stmt {
             Statement::Emit(ref range) => {
                 for handle in range.clone() {
-                    let min_ref_count = func_ctx.expressions[handle].bake_ref_count();
-                    if min_ref_count <= func_ctx.info[handle].ref_count {
+                    let expr = &func_ctx.expressions[handle];
+                    let min_ref_count = expr.bake_ref_count();
+                    // Forcefully creating baking expressions in some cases to help with readability
+                    let required_baking_expr = match *expr {
+                        Expression::ImageLoad { .. }
+                        | Expression::ImageQuery { .. }
+                        | Expression::ImageSample { .. } => true,
+                        _ => false,
+                    };
+                    if min_ref_count <= func_ctx.info[handle].ref_count || required_baking_expr {
                         write!(self.out, "{}", INDENT.repeat(indent))?;
                         self.start_baking_expr(module, handle, &func_ctx)?;
                         self.write_expr(module, handle, &func_ctx)?;
@@ -843,8 +851,11 @@ impl<W: Write> Writer<W> {
                 };
 
                 match *resolved {
-                    TypeInner::Vector { .. }
-                    | TypeInner::Matrix { .. }
+                    TypeInner::Vector { .. } => {
+                        // Write vector access as a swizzle
+                        write!(self.out, ".{}", COMPONENTS[index as usize])?
+                    }
+                    TypeInner::Matrix { .. }
                     | TypeInner::Array { .. }
                     | TypeInner::ValuePointer { .. } => write!(self.out, "[{}]", index)?,
                     TypeInner::Struct { .. } => {

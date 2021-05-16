@@ -18,8 +18,8 @@ fn main([[location(0)]] pos: vec2<f32>, [[location(1)]] uv1: vec2<f32>) -> Verte
 [[stage(fragment)]]
 fn main1([[location(0), interpolate(perspective)]] uv2: vec2<f32>) -> [[location(0)]] vec4<f32> {
     let _e4: vec4<f32> = textureSample(u_texture, u_sampler, uv2);
-    if ((_e4[3] == 0.0)) {
+    if ((_e4.w == 0.0)) {
         discard;
     }
-    return (_e4[3] * _e4);
+    return (_e4.w * _e4);
 }

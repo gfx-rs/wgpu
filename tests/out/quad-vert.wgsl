@@ -16,7 +16,7 @@ var a_pos: vec2<f32>;
 fn main() {
     v_uv = a_uv;
     let _e13: vec2<f32> = a_pos;
-    perVertexStruct.gl_Position = vec4<f32>(_e13[0], _e13[1], 0.0, 1.0);
+    perVertexStruct.gl_Position = vec4<f32>(_e13.x, _e13.y, 0.0, 1.0);
     return;
 }
 
