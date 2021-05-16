@@ -1,5 +1,5 @@
 pub use error::ErrorKind;
-pub use token::{Token, TokenMetadata};
+pub use token::{SourceMetadata, Token};
 
 use crate::{FastHashMap, Module, ShaderStage};
 

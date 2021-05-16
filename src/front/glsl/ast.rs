@@ -1,4 +1,4 @@
-use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind, TokenMetadata};
+use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind, SourceMetadata};
 use crate::{
     proc::ResolveContext, Arena, BinaryOperator, Block, BuiltIn, Constant, Expression, FastHashMap,
     Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable, Module,
@@ -165,7 +165,7 @@ impl<'a> Program<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Profile {
     Core,
 }
@@ -431,7 +431,7 @@ pub struct VariableReference {
 #[derive(Debug, Clone)]
 pub struct Expr {
     pub kind: ExprKind,
-    pub meta: TokenMetadata,
+    pub meta: SourceMetadata,
 }
 
 #[derive(Debug, Clone)]

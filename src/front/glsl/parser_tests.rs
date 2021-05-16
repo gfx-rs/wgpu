@@ -1,8 +1,13 @@
-use super::ast::Program;
-use super::error::ErrorKind;
+use pp_rs::token::PreprocessorError;
+
 use super::lex::Lexer;
 use super::parser;
-use crate::ShaderStage;
+use super::{ast::Profile, error::ErrorKind};
+use super::{ast::Program, SourceMetadata};
+use crate::{
+    front::glsl::{token::TokenValue, Token},
+    ShaderStage,
+};
 
 fn parse_program<'a>(
     source: &str,
@@ -23,61 +28,43 @@ fn version() {
     entry_points.insert("".to_string(), ShaderStage::Vertex);
     // invalid versions
     assert_eq!(
-        format!(
-            "{:?}",
-            parse_program("#version 99000", &entry_points)
-                .err()
-                .unwrap()
-        ),
-        "InvalidVersion(TokenMetadata { chars: 9..14 }, 99000)"
+        parse_program("#version 99000", &entry_points)
+            .err()
+            .unwrap(),
+        ErrorKind::InvalidVersion(SourceMetadata { chars: 9..14 }, 99000),
     );
 
     assert_eq!(
-        format!(
-            "{:?}",
-            parse_program("#version 449", &entry_points).err().unwrap()
-        ),
-        "InvalidVersion(TokenMetadata { chars: 9..12 }, 449)"
+        parse_program("#version 449", &entry_points).err().unwrap(),
+        ErrorKind::InvalidVersion(SourceMetadata { chars: 9..12 }, 449)
     );
 
     assert_eq!(
-        format!(
-            "{:?}",
-            parse_program("#version 450 smart", &entry_points)
-                .err()
-                .unwrap()
-        ),
-        "InvalidProfile(TokenMetadata { chars: 13..18 }, \"smart\")"
+        parse_program("#version 450 smart", &entry_points)
+            .err()
+            .unwrap(),
+        ErrorKind::InvalidProfile(SourceMetadata { chars: 13..18 }, "smart".into())
     );
 
     assert_eq!(
-        format!(
-            "{:?}",
-            parse_program("#version 450\nvoid f(){} #version 450", &entry_points)
-                .err()
-                .unwrap()
-        ),
-        "InvalidToken(Token { value: Unknown(UnexpectedHash), meta: TokenMetadata { chars: 24..25 } })"
+        parse_program("#version 450\nvoid f(){} #version 450", &entry_points)
+            .err()
+            .unwrap(),
+        ErrorKind::InvalidToken(Token {
+            value: TokenValue::Unknown(PreprocessorError::UnexpectedHash),
+            meta: SourceMetadata { chars: 24..25 }
+        })
     );
 
     // valid versions
     let program = parse_program("  #  version 450\nvoid main() {}", &entry_points).unwrap();
-    assert_eq!(
-        format!("{:?}", (program.version, program.profile)),
-        "(450, Core)"
-    );
+    assert_eq!((program.version, program.profile), (450, Profile::Core));
 
     let program = parse_program("#version 450\nvoid main() {}", &entry_points).unwrap();
-    assert_eq!(
-        format!("{:?}", (program.version, program.profile)),
-        "(450, Core)"
-    );
+    assert_eq!((program.version, program.profile), (450, Profile::Core));
 
     let program = parse_program("#version 450 core\nvoid main() {}", &entry_points).unwrap();
-    assert_eq!(
-        format!("{:?}", (program.version, program.profile)),
-        "(450, Core)"
-    );
+    assert_eq!((program.version, program.profile), (450, Profile::Core));
 }
 
 #[test]
@@ -327,10 +314,8 @@ fn functions() {
     .unwrap();
 
     assert_eq!(
-        format!(
-            "{:?}",
-            parse_program(
-                r#"
+        parse_program(
+            r#"
                 #  version 450
                 int test(vec4 p) {
                     return p.x;
@@ -340,12 +325,11 @@ fn functions() {
                     return p.x;
                 }
                 "#,
-                &entry_points
-            )
-            .err()
-            .unwrap()
-        ),
-        "SemanticError(\"Function already defined\")"
+            &entry_points
+        )
+        .err()
+        .unwrap(),
+        ErrorKind::SemanticError("Function already defined".into())
     );
 
     println!();

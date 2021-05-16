@@ -1,21 +1,21 @@
-use super::token::{Token, TokenMetadata};
-use std::{borrow::Cow, fmt, io};
+use super::token::{SourceMetadata, Token};
+use std::{borrow::Cow, fmt};
 
 //TODO: use `thiserror`
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum ErrorKind {
     EndOfFile,
     InvalidInput,
-    InvalidProfile(TokenMetadata, String),
+    InvalidProfile(SourceMetadata, String),
     InvalidToken(Token),
-    InvalidVersion(TokenMetadata, u64),
-    IoError(io::Error),
+    InvalidVersion(SourceMetadata, u64),
     ParserFail,
     ParserStackOverflow,
     NotImplemented(&'static str),
-    UnknownVariable(TokenMetadata, String),
-    UnknownField(TokenMetadata, String),
-    UnknownLayoutQualifier(TokenMetadata, String),
+    UnknownVariable(SourceMetadata, String),
+    UnknownField(SourceMetadata, String),
+    UnknownLayoutQualifier(SourceMetadata, String),
     #[cfg(feature = "glsl-validate")]
     VariableAlreadyDeclared(String),
     ExpectedConstant,
@@ -24,30 +24,44 @@ pub enum ErrorKind {
     WrongNumberArgs(String, usize, usize),
 }
 
+impl ErrorKind {
+    // Returns the TokenMetadata if available
+    pub fn metadata(&self) -> Option<&SourceMetadata> {
+        match *self {
+            ErrorKind::UnknownVariable(ref metadata, _)
+            | ErrorKind::InvalidProfile(ref metadata, _)
+            | ErrorKind::InvalidVersion(ref metadata, _)
+            | ErrorKind::UnknownLayoutQualifier(ref metadata, _)
+            | ErrorKind::UnknownField(ref metadata, _) => Some(metadata),
+            ErrorKind::InvalidToken(ref token) => Some(&token.meta),
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             ErrorKind::EndOfFile => write!(f, "Unexpected end of file"),
             ErrorKind::InvalidInput => write!(f, "InvalidInput"),
-            ErrorKind::InvalidProfile(ref meta, ref val) => {
-                write!(f, "Invalid profile {} at {:?}", val, meta)
+            ErrorKind::InvalidProfile(_, ref val) => {
+                write!(f, "Invalid profile {}", val)
             }
             ErrorKind::InvalidToken(ref token) => write!(f, "Invalid Token {:?}", token),
-            ErrorKind::InvalidVersion(ref meta, ref val) => {
-                write!(f, "Invalid version {} at {:?}", val, meta)
+            ErrorKind::InvalidVersion(_, ref val) => {
+                write!(f, "Invalid version {}", val)
             }
-            ErrorKind::IoError(ref error) => write!(f, "IO Error {}", error),
             ErrorKind::ParserFail => write!(f, "Parser failed"),
             ErrorKind::ParserStackOverflow => write!(f, "Parser stack overflow"),
             ErrorKind::NotImplemented(ref msg) => write!(f, "Not implemented: {}", msg),
-            ErrorKind::UnknownVariable(ref meta, ref val) => {
-                write!(f, "Unknown variable {} at {:?}", val, meta)
+            ErrorKind::UnknownVariable(_, ref val) => {
+                write!(f, "Unknown variable {}", val)
             }
-            ErrorKind::UnknownField(ref meta, ref val) => {
-                write!(f, "Unknown field {} at {:?}", val, meta)
+            ErrorKind::UnknownField(_, ref val) => {
+                write!(f, "Unknown field {}", val)
             }
-            ErrorKind::UnknownLayoutQualifier(ref meta, ref val) => {
-                write!(f, "Unknown layout qualifier name {} at {:?}", val, meta)
+            ErrorKind::UnknownLayoutQualifier(_, ref val) => {
+                write!(f, "Unknown layout qualifier name {}", val)
             }
             #[cfg(feature = "glsl-validate")]
             ErrorKind::VariableAlreadyDeclared(ref val) => {
@@ -71,14 +85,6 @@ pub struct ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
-    }
-}
-
-impl From<io::Error> for ParseError {
-    fn from(error: io::Error) -> Self {
-        ParseError {
-            kind: ErrorKind::IoError(error),
-        }
     }
 }
 

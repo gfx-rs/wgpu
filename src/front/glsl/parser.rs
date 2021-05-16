@@ -5,7 +5,7 @@ use super::{
     },
     error::ErrorKind,
     lex::Lexer,
-    token::{Token, TokenMetadata, TokenValue},
+    token::{SourceMetadata, Token, TokenValue},
     Program,
 };
 use crate::{
@@ -31,7 +31,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         }
     }
 
-    fn expect_ident(&mut self) -> Result<(String, TokenMetadata)> {
+    fn expect_ident(&mut self) -> Result<(String, SourceMetadata)> {
         let token = self.bump()?;
 
         match token.value {
@@ -831,7 +831,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     fn parse_function_call_args(
         &mut self,
         ctx: &mut Context,
-        meta: &mut TokenMetadata,
+        meta: &mut SourceMetadata,
     ) -> Result<Vec<Expr>> {
         let mut args = Vec::new();
         if let Some(token) = self.bump_if(TokenValue::RightParen) {

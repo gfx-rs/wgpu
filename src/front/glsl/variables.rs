@@ -5,7 +5,7 @@ use crate::{
 
 use super::ast::*;
 use super::error::ErrorKind;
-use super::token::TokenMetadata;
+use super::token::SourceMetadata;
 
 impl Program<'_> {
     pub fn lookup_variable(
@@ -108,7 +108,7 @@ impl Program<'_> {
         context: &mut Context,
         expression: Handle<Expression>,
         name: &str,
-        meta: TokenMetadata,
+        meta: SourceMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
         match *self.resolve_type(context, expression)? {
             TypeInner::Struct { ref members, .. } => {

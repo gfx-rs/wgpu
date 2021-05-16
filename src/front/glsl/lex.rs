@@ -1,5 +1,5 @@
 use super::{
-    token::{Token, TokenMetadata, TokenValue},
+    token::{SourceMetadata, Token, TokenValue},
     types::parse_type,
 };
 use crate::FastHashMap;
@@ -30,7 +30,7 @@ impl<'a> Lexer<'a> {
 impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
-        let mut meta = TokenMetadata { chars: 0..0 };
+        let mut meta = SourceMetadata { chars: 0..0 };
         let pp_token = match self.tokens.pop_front() {
             Some(t) => t,
             None => match self.pp.next()? {
@@ -172,7 +172,7 @@ mod tests {
     use pp_rs::token::Integer;
 
     use super::{
-        super::token::{Token, TokenMetadata, TokenValue},
+        super::token::{SourceMetadata, Token, TokenValue},
         Lexer,
     };
 
@@ -186,7 +186,7 @@ mod tests {
             lex.next().unwrap(),
             Token {
                 value: TokenValue::Version,
-                meta: TokenMetadata { chars: 1..8 }
+                meta: SourceMetadata { chars: 1..8 }
             }
         );
         assert_eq!(
@@ -197,49 +197,49 @@ mod tests {
                     value: 450,
                     width: 32
                 }),
-                meta: TokenMetadata { chars: 9..12 },
+                meta: SourceMetadata { chars: 9..12 },
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::Void,
-                meta: TokenMetadata { chars: 13..17 }
+                meta: SourceMetadata { chars: 13..17 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::Identifier("main".into()),
-                meta: TokenMetadata { chars: 18..22 }
+                meta: SourceMetadata { chars: 18..22 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::LeftParen,
-                meta: TokenMetadata { chars: 23..24 }
+                meta: SourceMetadata { chars: 23..24 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::RightParen,
-                meta: TokenMetadata { chars: 24..25 }
+                meta: SourceMetadata { chars: 24..25 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::LeftBrace,
-                meta: TokenMetadata { chars: 26..27 }
+                meta: SourceMetadata { chars: 26..27 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::RightBrace,
-                meta: TokenMetadata { chars: 27..28 }
+                meta: SourceMetadata { chars: 27..28 }
             }
         );
         assert_eq!(lex.next(), None);
