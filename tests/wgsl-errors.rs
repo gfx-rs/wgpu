@@ -120,7 +120,7 @@ fn invalid_arrays() {
             type Bad = array<Block, 4>;
         "#:
         Err(naga::valid::ValidationError::Type {
-            error: naga::valid::TypeError::NestedBlock,
+            error: naga::valid::TypeError::NestedTopLevel,
             ..
         })
     }

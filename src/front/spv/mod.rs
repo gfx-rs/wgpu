@@ -40,6 +40,7 @@ use function::*;
 
 use crate::{
     arena::{Arena, Handle},
+    proc::{Alignment, Layouter},
     FastHashMap,
 };
 
@@ -189,28 +190,6 @@ impl crate::ImageDimension {
             crate::ImageDimension::D3 => Some(crate::VectorSize::Tri),
             crate::ImageDimension::Cube => Some(crate::VectorSize::Tri),
         }
-    }
-}
-
-//TODO: should this be shared with `crate::proc::wgsl::layout` logic?
-fn get_alignment(ty: Handle<crate::Type>, arena: &Arena<crate::Type>) -> crate::Alignment {
-    use crate::TypeInner as Ti;
-    match arena[ty].inner {
-        Ti::Scalar { width, .. } => crate::Alignment::new(width as u32).unwrap(),
-        Ti::Vector { size, width, .. }
-        | Ti::Matrix {
-            rows: size, width, ..
-        } => {
-            let count = if size >= crate::VectorSize::Tri { 4 } else { 2 };
-            crate::Alignment::new((count * width) as u32).unwrap()
-        }
-        Ti::Pointer { .. } | Ti::ValuePointer { .. } => crate::Alignment::new(1).unwrap(),
-        Ti::Array { stride, .. } => crate::Alignment::new(stride).unwrap(),
-        Ti::Struct { ref level, .. } => match *level {
-            crate::StructLevel::Root => crate::Alignment::new(1).unwrap(),
-            crate::StructLevel::Normal { alignment } => alignment,
-        },
-        Ti::Image { .. } | Ti::Sampler { .. } => crate::Alignment::new(1).unwrap(),
     }
 }
 
@@ -395,6 +374,7 @@ impl Default for Options {
 pub struct Parser<I> {
     data: I,
     state: ModuleState,
+    layouter: Layouter,
     temp_bytes: Vec<u8>,
     ext_glsl_id: Option<spirv::Word>,
     future_decor: FastHashMap<spirv::Word, Decoration>,
@@ -432,6 +412,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Parser {
             data,
             state: ModuleState::Empty,
+            layouter: Layouter::default(),
             temp_bytes: Vec::new(),
             ext_glsl_id: None,
             future_decor: FastHashMap::default(),
@@ -2319,6 +2300,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             self.index_constants.push(handle);
         }
 
+        self.layouter.clear();
         self.dummy_functions = Arena::new();
         self.lookup_function.clear();
         self.function_call_graph.clear();
@@ -2946,7 +2928,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let parent_decor = self.future_decor.remove(&id);
         let block_decor = parent_decor.as_ref().and_then(|decor| decor.block.clone());
 
-        let mut struct_alignment = crate::Alignment::new(1).unwrap();
+        self.layouter
+            .update(&module.types, &module.constants)
+            .unwrap();
+
+        let mut struct_alignment = Alignment::new(1).unwrap();
         let mut members = Vec::<crate::StructMember>::with_capacity(inst.wc as usize - 2);
         let mut member_lookups = Vec::with_capacity(members.capacity());
         let mut storage_access = crate::StorageAccess::empty();
@@ -2989,8 +2975,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
             }
 
-            let alignment = get_alignment(ty, &module.types);
-            struct_alignment = struct_alignment.max(alignment);
+            struct_alignment = struct_alignment.max(self.layouter[ty].alignment);
 
             members.push(crate::StructMember {
                 name: decor.name,
@@ -3001,12 +2986,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
 
         let inner = crate::TypeInner::Struct {
-            level: match block_decor {
-                Some(_) => crate::StructLevel::Root,
-                None => crate::StructLevel::Normal {
-                    alignment: struct_alignment,
-                },
-            },
+            top_level: block_decor.is_some(),
             span: match members.last() {
                 Some(member) => {
                     let end = member.offset + module.types[member.ty].inner.span(&module.constants);

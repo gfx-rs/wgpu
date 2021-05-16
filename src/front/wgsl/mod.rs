@@ -3,14 +3,15 @@
 //! [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
 
 mod conv;
-mod layout;
 mod lexer;
 #[cfg(test)]
 mod tests;
 
 use crate::{
     arena::{Arena, Handle},
-    proc::{ensure_block_returns, ResolveContext, ResolveError, TypeResolution},
+    proc::{
+        ensure_block_returns, Alignment, Layouter, ResolveContext, ResolveError, TypeResolution,
+    },
     FastHashMap,
 };
 
@@ -607,7 +608,7 @@ impl std::error::Error for ParseError {
 pub struct Parser {
     scopes: Vec<Scope>,
     lookup_type: FastHashMap<String, Handle<crate::Type>>,
-    layouter: layout::Layouter,
+    layouter: Layouter,
 }
 
 impl Parser {
@@ -1557,9 +1558,9 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
-    ) -> Result<(Vec<crate::StructMember>, u32, crate::Alignment), Error<'a>> {
+    ) -> Result<(Vec<crate::StructMember>, u32), Error<'a>> {
         let mut offset = 0;
-        let mut alignment = crate::Alignment::new(1).unwrap();
+        let mut alignment = Alignment::new(1).unwrap();
         let mut members = Vec::new();
 
         lexer.expect(Token::Paren('{'))?;
@@ -1606,8 +1607,8 @@ impl Parser {
             let name = match lexer.next() {
                 (Token::Word(word), _) => word,
                 (Token::Paren('}'), _) => {
-                    let span = layout::Layouter::round_up(alignment, offset);
-                    return Ok((members, span, alignment));
+                    let span = Layouter::round_up(alignment, offset);
+                    return Ok((members, span));
                 }
                 other => return Err(Error::Unexpected(other, "field name")),
             };
@@ -1615,7 +1616,8 @@ impl Parser {
             let (ty, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
             lexer.expect(Token::Separator(';'))?;
 
-            self.layouter.update(type_arena, const_arena);
+            self.layouter.update(type_arena, const_arena).unwrap();
+
             let (range, align) = self.layouter.member_placement(offset, ty, align, size);
             alignment = alignment.max(align);
             offset = range.end;
@@ -2603,16 +2605,12 @@ impl Parser {
             (Token::Separator(';'), _) => {}
             (Token::Word("struct"), _) => {
                 let name = lexer.next_ident()?;
-                let (members, span, alignment) =
+                let (members, span) =
                     self.parse_struct_body(lexer, &mut module.types, &mut module.constants)?;
                 let ty = module.types.fetch_or_append(crate::Type {
                     name: Some(name.to_string()),
                     inner: crate::TypeInner::Struct {
-                        level: if is_block {
-                            crate::StructLevel::Root
-                        } else {
-                            crate::StructLevel::Normal { alignment }
-                        },
+                        top_level: is_block,
                         members,
                         span,
                     },

@@ -7,6 +7,7 @@ mod r#type;
 
 use crate::{
     arena::{Arena, Handle},
+    proc::{InvalidBaseType, Layouter},
     FastHashSet,
 };
 use bit_set::BitSet;
@@ -91,6 +92,7 @@ pub struct Validator {
     flags: ValidationFlags,
     capabilities: Capabilities,
     types: Vec<r#type::TypeInfo>,
+    layouter: Layouter,
     location_mask: BitSet,
     bind_group_masks: Vec<BitSet>,
     select_cases: FastHashSet<i32>,
@@ -112,6 +114,8 @@ pub enum ConstantError {
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum ValidationError {
+    #[error(transparent)]
+    Layouter(#[from] InvalidBaseType),
     #[error("Type {handle:?} '{name}' is invalid")]
     Type {
         handle: Handle<crate::Type>,
@@ -196,6 +200,7 @@ impl Validator {
             flags,
             capabilities,
             types: Vec::new(),
+            layouter: Layouter::default(),
             location_mask: BitSet::new(),
             bind_group_masks: Vec::new(),
             select_cases: FastHashSet::default(),
@@ -246,6 +251,7 @@ impl Validator {
     /// Check the given module to be valid.
     pub fn validate(&mut self, module: &crate::Module) -> Result<ModuleInfo, ValidationError> {
         self.reset_types(module.types.len());
+        self.layouter.update(&module.types, &module.constants)?;
 
         if self.flags.contains(ValidationFlags::CONSTANTS) {
             for (handle, constant) in module.constants.iter() {

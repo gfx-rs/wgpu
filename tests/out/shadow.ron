@@ -102,7 +102,7 @@
         (
             name: Some("Globals"),
             inner: Struct(
-                level: Root,
+                top_level: true,
                 members: [
                     (
                         name: Some("num_lights"),
@@ -146,9 +146,7 @@
         (
             name: Some("Light"),
             inner: Struct(
-                level: Normal(
-                    alignment: 16,
-                ),
+                top_level: false,
                 members: [
                     (
                         name: Some("proj"),
@@ -183,7 +181,7 @@
         (
             name: Some("Lights"),
             inner: Struct(
-                level: Root,
+                top_level: true,
                 members: [
                     (
                         name: Some("data"),

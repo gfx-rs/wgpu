@@ -916,11 +916,11 @@ impl Writer {
                 }
             }
             crate::TypeInner::Struct {
-                ref level,
+                top_level,
                 ref members,
                 span: _,
             } => {
-                if let crate::StructLevel::Root = *level {
+                if top_level {
                     self.decorate(id, Decoration::Block, &[]);
                 }
 

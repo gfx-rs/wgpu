@@ -521,46 +521,34 @@ pomelo! {
         if i.1 == "gl_PerVertex" {
             None
         } else {
-            let level = if t.is_empty() {
-                //TODO
-                crate::StructLevel::Normal { alignment: crate::Alignment::new(1).unwrap() }
-            } else {
-                crate::StructLevel::Root
-            };
             Some(VarDeclaration {
-                type_qualifiers: t,
                 ids_initializers: vec![(None, None)],
                 ty: extra.module.types.fetch_or_append(Type{
                     name: Some(i.1),
                     inner: TypeInner::Struct {
-                        level,
+                        top_level: !t.is_empty(),
                         members: sdl,
                         span: 0, //TODO
                     },
                 }),
+                type_qualifiers: t,
             })
         }
     }
 
     declaration ::= type_qualifier(t) Identifier(i1) LeftBrace
         struct_declaration_list(sdl) RightBrace Identifier(i2) Semicolon {
-        let level = if t.is_empty() {
-            //TODO
-            crate::StructLevel::Normal { alignment: crate::Alignment::new(1).unwrap() }
-        } else {
-            crate::StructLevel::Root
-        };
         Some(VarDeclaration {
-            type_qualifiers: t,
             ids_initializers: vec![(Some(i2.1), None)],
             ty: extra.module.types.fetch_or_append(Type{
                 name: Some(i1.1),
                 inner: TypeInner::Struct {
-                    level,
+                    top_level: !t.is_empty(),
                     members: sdl,
                     span: 0, //TODO
                 },
             }),
+            type_qualifiers: t,
         })
     }
 
@@ -761,7 +749,7 @@ pomelo! {
         Type{
             name: Some(i.1),
             inner: TypeInner::Struct {
-                level: crate::StructLevel::Normal { alignment: crate::Alignment::new(1).unwrap() },
+                top_level: false,
                 members: vec![],
                 span: 0,
             }

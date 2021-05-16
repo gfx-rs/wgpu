@@ -262,7 +262,7 @@ impl VaryingContext<'_> {
                 match self.types[self.ty].inner {
                     //TODO: check the member types
                     crate::TypeInner::Struct {
-                        level: crate::StructLevel::Normal { .. },
+                        top_level: false,
                         ref members,
                         ..
                     } => {
@@ -303,7 +303,7 @@ impl super::Validator {
                 }
                 (
                     crate::StorageAccess::all(),
-                    TypeFlags::DATA | TypeFlags::HOST_SHARED | TypeFlags::BLOCK,
+                    TypeFlags::DATA | TypeFlags::HOST_SHARED | TypeFlags::TOP_LEVEL,
                     true,
                 )
             }
@@ -315,7 +315,10 @@ impl super::Validator {
                 }
                 (
                     crate::StorageAccess::empty(),
-                    TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::HOST_SHARED | TypeFlags::BLOCK,
+                    TypeFlags::DATA
+                        | TypeFlags::SIZED
+                        | TypeFlags::HOST_SHARED
+                        | TypeFlags::TOP_LEVEL,
                     true,
                 )
             }

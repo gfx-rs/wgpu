@@ -353,9 +353,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     let ty = module.types.append(crate::Type {
                         name: None,
                         inner: crate::TypeInner::Struct {
-                            level: crate::StructLevel::Normal {
-                                alignment: crate::Alignment::new(1).unwrap(),
-                            },
+                            top_level: false,
                             members,
                             span: 0xFFFF, // shouldn't matter
                         },

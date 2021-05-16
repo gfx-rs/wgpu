@@ -18,7 +18,7 @@
         (
             name: Some("PrimeIndices"),
             inner: Struct(
-                level: Root,
+                top_level: true,
                 members: [
                     (
                         name: Some("data"),

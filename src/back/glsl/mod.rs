@@ -663,7 +663,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // glsl has no pointer types so just write types as normal and loads are skipped
             TypeInner::Pointer { base, .. } => self.write_type(base),
             TypeInner::Struct {
-                level: crate::StructLevel::Root,
+                top_level: true,
                 ref members,
                 span: _,
             } => self.write_struct(true, ty, members),
@@ -743,8 +743,7 @@ impl<'a, W: Write> Writer<'a, W> {
         if let Some(storage_class) = glsl_storage_class(global.class) {
             write!(self.out, "{} ", storage_class)?;
         } else if let TypeInner::Struct {
-            level: crate::StructLevel::Root,
-            ..
+            top_level: true, ..
         } = self.module.types[global.ty].inner
         {
             write!(self.out, "struct ")?;

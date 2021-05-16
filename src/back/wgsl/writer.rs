@@ -7,7 +7,7 @@ use crate::{
     valid::{FunctionInfo, ModuleInfo},
     Arena, ArraySize, Binding, Constant, Expression, FastHashMap, Function, GlobalVariable, Handle,
     ImageClass, ImageDimension, Interpolation, Module, SampleLevel, Sampling, ScalarKind,
-    ScalarValue, ShaderStage, Statement, StorageFormat, StructLevel, StructMember, Type, TypeInner,
+    ScalarValue, ShaderStage, Statement, StorageFormat, StructMember, Type, TypeInner,
 };
 use bit_set::BitSet;
 use std::fmt::Write;
@@ -94,11 +94,12 @@ impl<W: Write> Writer<W> {
         // Write all structs
         for (handle, ty) in module.types.iter() {
             if let TypeInner::Struct {
-                level, ref members, ..
+                top_level,
+                ref members,
+                ..
             } = ty.inner
             {
-                let block = level == StructLevel::Root;
-                self.write_struct(module, handle, block, members)?;
+                self.write_struct(module, handle, top_level, members)?;
                 writeln!(self.out)?;
             }
         }
