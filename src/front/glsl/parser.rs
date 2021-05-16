@@ -1053,19 +1053,64 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let start_meta = pointer.meta.clone();
 
         // TODO: More assign symbols
-        if self.bump_if(TokenValue::Assign).is_some() {
-            let value = Box::new(self.parse_assignment(ctx)?);
-            let end_meta = value.meta.clone();
+        match self.expect_peek()?.value {
+            TokenValue::Assign => {
+                self.bump()?;
+                let value = Box::new(self.parse_assignment(ctx)?);
+                let end_meta = value.meta.clone();
 
-            Ok(Expr {
-                kind: ExprKind::Assign {
-                    tgt: Box::new(pointer),
-                    value,
-                },
-                meta: start_meta.union(&end_meta),
-            })
-        } else {
-            self.parse_conditional(ctx, Some(pointer))
+                Ok(Expr {
+                    kind: ExprKind::Assign {
+                        tgt: Box::new(pointer),
+                        value,
+                    },
+                    meta: start_meta.union(&end_meta),
+                })
+            }
+            TokenValue::OrAssign
+            | TokenValue::AndAssign
+            | TokenValue::AddAssign
+            | TokenValue::DivAssign
+            | TokenValue::ModAssign
+            | TokenValue::SubAssign
+            | TokenValue::MulAssign
+            | TokenValue::LeftShiftAssign
+            | TokenValue::RightShiftAssign
+            | TokenValue::XorAssign => {
+                let token = self.bump()?;
+                let right = Box::new(self.parse_assignment(ctx)?);
+                let end_meta = right.meta.clone();
+
+                let value = Box::new(Expr {
+                    meta: start_meta.union(&end_meta),
+                    kind: ExprKind::Binary {
+                        left: Box::new(pointer.clone()),
+                        op: match token.value {
+                            TokenValue::OrAssign => BinaryOperator::ExclusiveOr,
+                            TokenValue::AndAssign => BinaryOperator::ExclusiveOr,
+                            TokenValue::AddAssign => BinaryOperator::ExclusiveOr,
+                            TokenValue::DivAssign => BinaryOperator::ExclusiveOr,
+                            TokenValue::ModAssign => BinaryOperator::ExclusiveOr,
+                            TokenValue::SubAssign => BinaryOperator::ExclusiveOr,
+                            TokenValue::MulAssign => BinaryOperator::ExclusiveOr,
+                            TokenValue::LeftShiftAssign => BinaryOperator::ExclusiveOr,
+                            TokenValue::RightShiftAssign => BinaryOperator::ExclusiveOr,
+                            TokenValue::XorAssign => BinaryOperator::ExclusiveOr,
+                            _ => unreachable!(),
+                        },
+                        right,
+                    },
+                });
+
+                Ok(Expr {
+                    kind: ExprKind::Assign {
+                        tgt: Box::new(pointer),
+                        value,
+                    },
+                    meta: start_meta.union(&end_meta),
+                })
+            }
+            _ => self.parse_conditional(ctx, Some(pointer)),
         }
     }
 
