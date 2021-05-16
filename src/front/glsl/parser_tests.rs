@@ -337,6 +337,21 @@ fn functions() {
 
     println!();
 
+    let _program = parse_program(
+        r#"
+        #  version 450
+        float callee(uint q) {
+            return float(q);
+        }
+
+        float caller() {
+            callee(1u);
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+
     // Nested function call
     let _program = parse_program(
         r#"

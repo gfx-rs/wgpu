@@ -569,8 +569,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             let result = ty.map(|ty| FunctionResult { ty, binding: None });
                             let mut expressions = Arena::new();
                             let mut local_variables = Arena::new();
-                            let (mut arguments, mut parameters) =
-                                self.program.function_args_prelude();
+                            let mut arguments = Vec::new();
+                            let mut parameters = Vec::new();
 
                             let mut context = Context::new(
                                 &mut expressions,

@@ -1,6 +1,6 @@
 use crate::{
     Binding, BuiltIn, Constant, Expression, GlobalVariable, Handle, LocalVariable, ScalarKind,
-    StorageAccess, StorageClass, StructMember, Type, TypeInner, VectorSize,
+    StorageAccess, StorageClass, Type, TypeInner, VectorSize,
 };
 
 use super::ast::*;
@@ -50,7 +50,8 @@ impl Program<'_> {
                     storage_access: StorageAccess::all(),
                 });
 
-                self.built_ins.push((BuiltIn::Position, handle));
+                self.entry_args
+                    .push((Binding::BuiltIn(BuiltIn::Position), true, handle));
 
                 self.lookup_global_variables
                     .insert(name.into(), GlobalLookup::Variable(handle));
@@ -75,7 +76,8 @@ impl Program<'_> {
                     storage_access: StorageAccess::all(),
                 });
 
-                self.built_ins.push((BuiltIn::VertexIndex, handle));
+                self.entry_args
+                    .push((Binding::BuiltIn(BuiltIn::VertexIndex), true, handle));
 
                 self.lookup_global_variables
                     .insert(name.into(), GlobalLookup::Variable(handle));
@@ -100,7 +102,8 @@ impl Program<'_> {
                     storage_access: StorageAccess::all(),
                 });
 
-                self.built_ins.push((BuiltIn::InstanceIndex, handle));
+                self.entry_args
+                    .push((Binding::BuiltIn(BuiltIn::InstanceIndex), true, handle));
 
                 self.lookup_global_variables
                     .insert(name.into(), GlobalLookup::Variable(handle));
@@ -312,24 +315,29 @@ impl Program<'_> {
         if let Some(location) = location {
             let input = StorageQualifier::Input == storage;
 
-            let index = self.add_member(
-                input,
-                Some(name.clone()),
+            let handle = self.module.global_variables.append(GlobalVariable {
+                name: Some(name.clone()),
+                class: StorageClass::Function,
+                binding: None,
                 ty,
-                Some(Binding::Location {
+                init,
+                storage_access: StorageAccess::all(),
+            });
+
+            self.entry_args.push((
+                Binding::Location {
                     location,
                     interpolation,
                     sampling,
-                }),
-            );
+                },
+                input,
+                handle,
+            ));
 
             self.lookup_global_variables
-                .insert(name, GlobalLookup::InOutSelect(index));
+                .insert(name, GlobalLookup::Variable(handle));
 
-            let base = ctx.expressions.append(Expression::FunctionArgument(0));
-            return Ok(ctx
-                .expressions
-                .append(Expression::AccessIndex { base, index }));
+            return Ok(ctx.expressions.append(Expression::GlobalVariable(handle)));
         } else if let StorageQualifier::Const = storage {
             let handle = init.ok_or_else(|| {
                 ErrorKind::SemanticError(meta, "Constant must have a initializer".into())
@@ -404,49 +412,5 @@ impl Program<'_> {
         ctx.add_local_var(name, expr);
 
         Ok(expr)
-    }
-
-    fn add_member(
-        &mut self,
-        input: bool,
-        name: Option<String>,
-        ty: Handle<Type>,
-        binding: Option<Binding>,
-    ) -> u32 {
-        let handle = match input {
-            true => self.input_struct,
-            false => self.output_struct,
-        };
-
-        let offset = if let TypeInner::Struct { ref members, .. } = self.module.types[handle].inner
-        {
-            members
-                .last()
-                .map(|member| {
-                    member.offset
-                        + self.module.types[member.ty]
-                            .inner
-                            .span(&self.module.constants)
-                })
-                .unwrap_or(0)
-        } else {
-            0
-        };
-
-        if let TypeInner::Struct {
-            ref mut members, ..
-        } = self.module.types.get_mut(handle).inner
-        {
-            members.push(StructMember {
-                name,
-                ty,
-                binding,
-                offset,
-            });
-
-            members.len() as u32 - 1
-        } else {
-            unreachable!()
-        }
     }
 }

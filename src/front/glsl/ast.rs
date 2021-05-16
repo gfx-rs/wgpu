@@ -1,6 +1,6 @@
 use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind, SourceMetadata};
 use crate::{
-    proc::ResolveContext, Arena, BinaryOperator, Block, BuiltIn, Constant, Expression, FastHashMap,
+    proc::ResolveContext, Arena, BinaryOperator, Binding, Block, Constant, Expression, FastHashMap,
     Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable, Module,
     RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass, Type,
     TypeInner, UnaryOperator,
@@ -9,7 +9,6 @@ use crate::{
 #[derive(Debug)]
 pub enum GlobalLookup {
     Variable(Handle<GlobalVariable>),
-    InOutSelect(u32),
     BlockSelect(Handle<GlobalVariable>, u32),
 }
 
@@ -38,19 +37,14 @@ pub struct Program<'a> {
     pub lookup_global_variables: FastHashMap<String, GlobalLookup>,
     pub lookup_constants: FastHashMap<String, Handle<Constant>>,
 
-    pub built_ins: Vec<(BuiltIn, Handle<GlobalVariable>)>,
+    pub entry_args: Vec<(Binding, bool, Handle<GlobalVariable>)>,
     pub entries: Vec<(String, ShaderStage, Handle<Function>)>,
-
-    pub input_struct: Handle<Type>,
-    pub output_struct: Handle<Type>,
 
     pub module: Module,
 }
 
 impl<'a> Program<'a> {
     pub fn new(entry_points: &'a FastHashMap<String, ShaderStage>) -> Program<'a> {
-        let mut module = Module::default();
-
         Program {
             version: 0,
             profile: Profile::Core,
@@ -61,27 +55,10 @@ impl<'a> Program<'a> {
             lookup_global_variables: FastHashMap::default(),
             lookup_constants: FastHashMap::default(),
 
-            built_ins: Vec::new(),
+            entry_args: Vec::new(),
             entries: Vec::new(),
 
-            input_struct: module.types.append(Type {
-                name: None,
-                inner: TypeInner::Struct {
-                    level: crate::StructLevel::Root,
-                    members: Vec::new(),
-                    span: 0,
-                },
-            }),
-            output_struct: module.types.append(Type {
-                name: None,
-                inner: TypeInner::Struct {
-                    level: crate::StructLevel::Root,
-                    members: Vec::new(),
-                    span: 0,
-                },
-            }),
-
-            module,
+            module: Module::default(),
         }
     }
 
@@ -155,17 +132,6 @@ impl<'a> Program<'a> {
 
         solver.solve(root).map_err(|e| (meta, e).into())
     }
-
-    pub fn function_args_prelude(&self) -> (Vec<FunctionArgument>, Vec<ParameterQualifier>) {
-        (
-            vec![FunctionArgument {
-                name: None,
-                ty: self.input_struct,
-                binding: None,
-            }],
-            vec![ParameterQualifier::In],
-        )
-    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -223,11 +189,6 @@ impl<'function> Context<'function> {
         self.lookup_global_var_exps.get(name).cloned().or_else(|| {
             let expr = match *program.lookup_global_variables.get(name)? {
                 GlobalLookup::Variable(v) => Expression::GlobalVariable(v),
-                GlobalLookup::InOutSelect(index) => {
-                    let base = self.expressions.append(Expression::FunctionArgument(0));
-
-                    Expression::AccessIndex { base, index }
-                }
                 GlobalLookup::BlockSelect(handle, index) => {
                     let base = self.expressions.append(Expression::GlobalVariable(handle));
 

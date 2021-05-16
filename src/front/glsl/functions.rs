@@ -1,8 +1,8 @@
 use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Binding, Block, BuiltIn, EntryPoint,
     Expression, Function, FunctionArgument, FunctionResult, Handle, MathFunction,
-    RelationalFunction, SampleLevel, ScalarKind, ShaderStage, Statement, StorageClass, Type,
-    TypeInner,
+    RelationalFunction, SampleLevel, ScalarKind, ShaderStage, Statement, StorageClass,
+    StructMember, Type, TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind, SourceMetadata};
@@ -223,14 +223,15 @@ impl Program<'_> {
                         self.parse_relational_fun(ctx, name, &args, RelationalFunction::Any, meta)
                     }
                     _ => {
-                        let sig = FunctionSignature {
-                            name,
-                            parameters: args
-                                .iter()
-                                .zip(raw_args.iter().map(|e| e.meta.clone()))
-                                .map(|(e, meta)| self.resolve_handle(ctx, *e, meta))
-                                .collect::<Result<_, _>>()?,
-                        };
+                        let mut parameters = Vec::new();
+
+                        for (e, meta) in args.iter().zip(raw_args.iter().map(|e| e.meta.clone())) {
+                            let handle = self.resolve_handle(ctx, *e, meta)?;
+
+                            parameters.push(handle)
+                        }
+
+                        let sig = FunctionSignature { name, parameters };
 
                         let function = self
                             .lookup_function
@@ -390,20 +391,19 @@ impl Program<'_> {
             let mut expressions = Arena::new();
             let mut body = Vec::new();
 
-            arguments.push(FunctionArgument {
-                name: None,
-                ty: self.input_struct,
-                binding: None,
-            });
+            for (binding, input, handle) in self.entry_args.iter().cloned() {
+                match binding {
+                    Binding::Location { .. } if !input => continue,
+                    _ => {}
+                }
 
-            for (built_in, handle) in self.built_ins.iter().copied() {
                 let ty = self.module.global_variables[handle].ty;
                 let arg = arguments.len() as u32;
 
                 arguments.push(FunctionArgument {
                     name: None,
                     ty,
-                    binding: Some(Binding::BuiltIn(built_in)),
+                    binding: Some(binding),
                 });
 
                 let pointer = expressions.append(Expression::GlobalVariable(handle));
@@ -412,25 +412,49 @@ impl Program<'_> {
                 body.push(Statement::Store { pointer, value });
             }
 
-            let res = expressions.append(Expression::Call(function));
-
             body.push(Statement::Call {
                 function,
-                arguments: vec![expressions.append(Expression::FunctionArgument(0))],
-                result: Some(res),
+                arguments: Vec::new(),
+                result: None,
             });
 
-            for (i, (built_in, handle)) in self.built_ins.iter().copied().enumerate() {
-                if !should_write(built_in, stage) {
-                    continue;
+            let mut span = 0;
+            let mut members = Vec::new();
+            let mut components = Vec::new();
+
+            for (binding, input, handle) in self.entry_args.iter().cloned() {
+                match binding {
+                    Binding::Location { .. } if input => continue,
+                    Binding::BuiltIn(builtin) if !should_write(builtin, stage) => continue,
+                    _ => {}
                 }
 
-                let value = expressions.append(Expression::GlobalVariable(handle));
-                let pointer = expressions.append(Expression::FunctionArgument(i as u32 + 1));
+                let ty = self.module.global_variables[handle].ty;
 
-                body.push(Statement::Store { pointer, value });
+                members.push(StructMember {
+                    name: None,
+                    ty,
+                    binding: Some(binding),
+                    offset: span,
+                });
+
+                span += self.module.types[ty].inner.span(&self.module.constants);
+
+                let pointer = expressions.append(Expression::GlobalVariable(handle));
+                let load = expressions.append(Expression::Load { pointer });
+                components.push(load)
             }
 
+            let ty = self.module.types.append(Type {
+                name: None,
+                inner: TypeInner::Struct {
+                    top_level: true,
+                    members,
+                    span,
+                },
+            });
+
+            let res = expressions.append(Expression::Compose { ty, components });
             body.push(Statement::Return { value: Some(res) });
 
             self.module.entry_points.push(EntryPoint {
@@ -443,10 +467,7 @@ impl Program<'_> {
                     arguments,
                     expressions,
                     body,
-                    result: Some(FunctionResult {
-                        ty: self.output_struct,
-                        binding: None,
-                    }),
+                    result: Some(FunctionResult { ty, binding: None }),
                     ..Default::default()
                 },
             });
