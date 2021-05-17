@@ -392,6 +392,14 @@ impl<B: GfxBackend> Device<B> {
         })
     }
 
+    pub(crate) fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
+        if self.features.contains(feature) {
+            Ok(())
+        } else {
+            Err(MissingFeatures(feature))
+        }
+    }
+
     pub(crate) fn last_completed_submission_index(&self) -> SubmissionIndex {
         self.life_guard.submission_index.load(Ordering::Acquire)
     }
@@ -615,13 +623,8 @@ impl<B: GfxBackend> Device<B> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
         let format_desc = desc.format.describe();
-        let required_features = format_desc.required_features;
-        if !self.features.contains(required_features) {
-            return Err(resource::CreateTextureError::MissingFeature(
-                required_features,
-                desc.format,
-            ));
-        }
+        self.require_features(format_desc.required_features)
+            .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
 
         // Ensure `D24Plus` textures cannot be copied
         match desc.format {
@@ -916,17 +919,12 @@ impl<B: GfxBackend> Device<B> {
         self_id: id::DeviceId,
         desc: &resource::SamplerDescriptor,
     ) -> Result<resource::Sampler<B>, resource::CreateSamplerError> {
-        let clamp_to_border_enabled = self
-            .features
-            .contains(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER);
-        let clamp_to_border_found = desc
+        if desc
             .address_modes
             .iter()
-            .any(|am| am == &wgt::AddressMode::ClampToBorder);
-        if clamp_to_border_found && !clamp_to_border_enabled {
-            return Err(resource::CreateSamplerError::MissingFeature(
-                wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
-            ));
+            .any(|am| am == &wgt::AddressMode::ClampToBorder)
+        {
+            self.require_features(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER)?;
         }
 
         let actual_clamp = if let Some(clamp) = desc.anisotropy_clamp {
@@ -1197,9 +1195,11 @@ impl<B: GfxBackend> Device<B> {
         entry_map: binding_model::BindEntryMap,
     ) -> Result<binding_model::BindGroupLayout<B>, binding_model::CreateBindGroupLayoutError> {
         let mut desc_count = descriptor::DescriptorTotalCount::default();
-        for binding in entry_map.values() {
+        for entry in entry_map.values() {
             use wgt::BindingType as Bt;
-            let (counter, array_feature, is_writable_storage) = match binding.ty {
+
+            let mut required_features = wgt::Features::empty();
+            let (counter, array_feature, is_writable_storage) = match entry.ty {
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -1240,35 +1240,41 @@ impl<B: GfxBackend> Device<B> {
                 Bt::StorageTexture { access, .. } => (
                     &mut desc_count.storage_image,
                     None,
-                    access != wgt::StorageTextureAccess::ReadOnly,
+                    match access {
+                        wgt::StorageTextureAccess::ReadOnly => false,
+                        wgt::StorageTextureAccess::WriteOnly => true,
+                        wgt::StorageTextureAccess::ReadWrite => {
+                            required_features |=
+                                wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+                            true
+                        }
+                    },
                 ),
             };
 
-            *counter += match binding.count {
+            *counter += match entry.count {
                 // Validate the count parameter
                 Some(count) => {
-                    let feature = array_feature
-                        .ok_or(binding_model::CreateBindGroupLayoutError::ArrayUnsupported)?;
-                    if !self.features.contains(feature) {
-                        return Err(binding_model::CreateBindGroupLayoutError::MissingFeature(
-                            feature,
-                        ));
-                    }
+                    required_features |= array_feature
+                        .ok_or(binding_model::BindGroupLayoutEntryError::ArrayUnsupported)
+                        .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
+                            binding: entry.binding,
+                            error,
+                        })?;
                     count.get()
                 }
                 None => 1,
             };
-
-            if is_writable_storage
-                && binding.visibility.contains(wgt::ShaderStage::FRAGMENT)
-                && !self
-                    .features
-                    .contains(wgt::Features::VERTEX_WRITABLE_STORAGE)
-            {
-                return Err(binding_model::CreateBindGroupLayoutError::MissingFeature(
-                    wgt::Features::VERTEX_WRITABLE_STORAGE,
-                ));
+            if is_writable_storage && entry.visibility.contains(wgt::ShaderStage::VERTEX) {
+                required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
             }
+
+            self.require_features(required_features)
+                .map_err(binding_model::BindGroupLayoutEntryError::MissingFeatures)
+                .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
+                    binding: entry.binding,
+                    error,
+                })?;
         }
 
         let raw_bindings = entry_map
@@ -1493,11 +1499,6 @@ impl<B: GfxBackend> Device<B> {
                     SmallVec::from([buffer_desc])
                 }
                 Br::BufferArray(ref bindings_array) => {
-                    let required_feats = wgt::Features::BUFFER_BINDING_ARRAY;
-                    if !self.features.contains(required_feats) {
-                        return Err(Error::MissingFeatures(required_feats));
-                    }
-
                     if let Some(count) = decl.count {
                         let count = count.get() as usize;
                         let num_bindings = bindings_array.len();
@@ -1646,13 +1647,9 @@ impl<B: GfxBackend> Device<B> {
                                     if !view.format_features.flags.contains(
                                         wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
                                     ) {
-                                        return Err(if self.features.contains(
-                                            wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                                        ) {
-                                            Error::StorageReadWriteNotSupported(view.format)
-                                        } else {
-                                            Error::MissingFeatures(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
-                                        });
+                                        return Err(Error::StorageReadWriteNotSupported(
+                                            view.format,
+                                        ));
                                     }
 
                                     resource::TextureUse::STORAGE_STORE
@@ -1701,11 +1698,6 @@ impl<B: GfxBackend> Device<B> {
                     }
                 }
                 Br::TextureViewArray(ref bindings_array) => {
-                    let required_feats = wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY;
-                    if !self.features.contains(required_feats) {
-                        return Err(Error::MissingFeatures(required_feats));
-                    }
-
                     if let Some(count) = decl.count {
                         let count = count.get() as usize;
                         let num_bindings = bindings_array.len();
@@ -1829,11 +1821,10 @@ impl<B: GfxBackend> Device<B> {
             });
         }
 
-        if !desc.push_constant_ranges.is_empty()
-            && !self.features.contains(wgt::Features::PUSH_CONSTANTS)
-        {
-            return Err(Error::MissingFeature(wgt::Features::PUSH_CONSTANTS));
+        if !desc.push_constant_ranges.is_empty() {
+            self.require_features(wgt::Features::PUSH_CONSTANTS)?;
         }
+
         let mut used_stages = wgt::ShaderStage::empty();
         for (index, pc) in desc.push_constant_ranges.iter().enumerate() {
             if pc.stages.intersects(used_stages) {
@@ -2184,14 +2175,7 @@ impl<B: GfxBackend> Device<B> {
                 | wgt::VertexFormat::Float64x3
                 | wgt::VertexFormat::Float64x4 = attribute.format
                 {
-                    if !self
-                        .features
-                        .contains(wgt::Features::VERTEX_ATTRIBUTE_64BIT)
-                    {
-                        return Err(pipeline::CreateRenderPipelineError::MissingFeature(
-                            wgt::Features::VERTEX_ATTRIBUTE_64BIT,
-                        ));
-                    }
+                    self.require_features(wgt::Features::VERTEX_ATTRIBUTE_64BIT)?;
                 }
 
                 attributes.alloc().init(hal::pso::AttributeDesc {
@@ -2236,27 +2220,15 @@ impl<B: GfxBackend> Device<B> {
             );
         }
 
-        if desc.primitive.clamp_depth && !self.features.contains(wgt::Features::DEPTH_CLAMPING) {
-            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
-                wgt::Features::DEPTH_CLAMPING,
-            ));
+        if desc.primitive.clamp_depth {
+            self.require_features(wgt::Features::DEPTH_CLAMPING)?;
         }
-        if desc.primitive.polygon_mode != wgt::PolygonMode::Fill
-            && !self.features.contains(wgt::Features::NON_FILL_POLYGON_MODE)
-        {
-            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
-                wgt::Features::NON_FILL_POLYGON_MODE,
-            ));
+        if desc.primitive.polygon_mode != wgt::PolygonMode::Fill {
+            self.require_features(wgt::Features::NON_FILL_POLYGON_MODE)?;
         }
 
-        if desc.primitive.conservative
-            && !self
-                .features
-                .contains(wgt::Features::CONSERVATIVE_RASTERIZATION)
-        {
-            return Err(pipeline::CreateRenderPipelineError::MissingFeature(
-                wgt::Features::CONSERVATIVE_RASTERIZATION,
-            ));
+        if desc.primitive.conservative {
+            self.require_features(wgt::Features::CONSERVATIVE_RASTERIZATION)?;
         }
 
         if desc.primitive.conservative && desc.primitive.polygon_mode != wgt::PolygonMode::Fill {
@@ -2611,6 +2583,47 @@ impl<B: GfxBackend> Device<B> {
             Ok(())
         }
     }
+
+    fn create_query_set(
+        &self,
+        self_id: id::DeviceId,
+        desc: &wgt::QuerySetDescriptor,
+    ) -> Result<resource::QuerySet<B>, resource::CreateQuerySetError> {
+        use resource::CreateQuerySetError as Error;
+
+        match desc.ty {
+            wgt::QueryType::Timestamp => {
+                self.require_features(wgt::Features::TIMESTAMP_QUERY)?;
+            }
+            wgt::QueryType::PipelineStatistics(..) => {
+                self.require_features(wgt::Features::PIPELINE_STATISTICS_QUERY)?;
+            }
+        }
+
+        if desc.count == 0 {
+            return Err(Error::ZeroCount);
+        }
+
+        if desc.count >= wgt::QUERY_SET_MAX_QUERIES {
+            return Err(Error::TooManyQueries {
+                count: desc.count,
+                maximum: wgt::QUERY_SET_MAX_QUERIES,
+            });
+        }
+
+        let (hal_type, elements) = conv::map_query_type(&desc.ty);
+
+        Ok(resource::QuerySet {
+            raw: unsafe { self.raw.create_query_pool(hal_type, desc.count).unwrap() },
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            life_guard: LifeGuard::new(""),
+            desc: desc.clone(),
+            elements,
+        })
+    }
 }
 
 impl<B: hal::Backend> Device<B> {
@@ -2717,6 +2730,10 @@ impl DeviceError {
         }
     }
 }
+
+#[derive(Clone, Debug, Error)]
+#[error("Features {0:?} are required but not enabled on the device")]
+pub struct MissingFeatures(pub wgt::Features);
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -4032,50 +4049,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            match desc.ty {
-                wgt::QueryType::Timestamp => {
-                    if !device.features.contains(wgt::Features::TIMESTAMP_QUERY) {
-                        break resource::CreateQuerySetError::MissingFeature(
-                            wgt::Features::TIMESTAMP_QUERY,
-                        );
-                    }
-                }
-                wgt::QueryType::PipelineStatistics(..) => {
-                    if !device
-                        .features
-                        .contains(wgt::Features::PIPELINE_STATISTICS_QUERY)
-                    {
-                        break resource::CreateQuerySetError::MissingFeature(
-                            wgt::Features::PIPELINE_STATISTICS_QUERY,
-                        );
-                    }
-                }
-            }
-
-            if desc.count == 0 {
-                break resource::CreateQuerySetError::ZeroCount;
-            }
-
-            if desc.count >= wgt::QUERY_SET_MAX_QUERIES {
-                break resource::CreateQuerySetError::TooManyQueries {
-                    count: desc.count,
-                    maximum: wgt::QUERY_SET_MAX_QUERIES,
-                };
-            }
-
-            let query_set = {
-                let (hal_type, elements) = conv::map_query_type(&desc.ty);
-
-                resource::QuerySet {
-                    raw: unsafe { device.raw.create_query_pool(hal_type, desc.count).unwrap() },
-                    device_id: Stored {
-                        value: id::Valid(device_id),
-                        ref_count: device.life_guard.add_ref(),
-                    },
-                    life_guard: LifeGuard::new(""),
-                    desc: desc.clone(),
-                    elements,
-                }
+            let query_set = match device.create_query_set(device_id, desc) {
+                Ok(query_set) => query_set,
+                Err(err) => break err,
             };
 
             let ref_count = query_set.life_guard.add_ref();
