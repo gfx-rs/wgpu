@@ -75,6 +75,24 @@ fn invalid_scalar_width() {
     );
 }
 
+#[test]
+fn unknown_identifier() {
+    check(
+        r###"
+              fn f(x: f32) -> f32 {
+                  return x * schmoo;
+              }
+          "###,
+        r###"error: unknown identifier: 'schmoo'
+  ┌─ wgsl:3:30
+  │
+3 │                   return x * schmoo;
+  │                              ^^^^^^ unknown identifier
+
+"###,
+    );
+}
+
 macro_rules! check_validation_error {
     ( $( $source:literal ),* : $pattern:pat ) => {
         $(
