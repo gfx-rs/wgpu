@@ -1814,7 +1814,7 @@ impl StencilState {
     }
     /// Returns true if the stencil state uses the reference value for testing.
     pub fn needs_ref_value(&self) -> bool {
-        self.front.compare.needs_ref_value() || self.back.compare.needs_ref_value()
+        self.front.needs_ref_value() || self.back.needs_ref_value()
     }
 }
 
@@ -1944,6 +1944,14 @@ impl StencilFaceState {
         depth_fail_op: StencilOperation::Keep,
         pass_op: StencilOperation::Keep,
     };
+
+    /// Returns true if the face state uses the reference value for testing or operation.
+    pub fn needs_ref_value(&self) -> bool {
+        self.compare.needs_ref_value()
+            || self.fail_op == StencilOperation::Replace
+            || self.depth_fail_op == StencilOperation::Replace
+            || self.pass_op == StencilOperation::Replace
+    }
 }
 
 impl Default for StencilFaceState {
