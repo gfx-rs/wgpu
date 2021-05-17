@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::{alloc::MemoryBlock, DeviceError, HostMap},
+    device::{alloc::MemoryBlock, DeviceError, HostMap, MissingFeatures},
     hub::Resource,
     id::{DeviceId, SwapChainId, TextureId},
     memory_init_tracker::MemoryInitTracker,
@@ -266,8 +266,8 @@ pub enum CreateTextureError {
     InvalidMipLevelCount(u32),
     #[error("The texture usages {0:?} are not allowed on a texture of type {1:?}")]
     InvalidUsages(wgt::TextureUsage, wgt::TextureFormat),
-    #[error("Feature {0:?} must be enabled to create a texture of type {1:?}")]
-    MissingFeature(wgt::Features, wgt::TextureFormat),
+    #[error("Texture format {0:?} can't be used")]
+    MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
 }
 
 impl<B: hal::Backend> Resource for Texture<B> {
@@ -458,9 +458,9 @@ pub enum CreateSamplerError {
     InvalidClamp(u8),
     #[error("cannot create any more samplers")]
     TooManyObjects,
-    /// AddressMode::ClampToBorder requires feature ADDRESS_MODE_CLAMP_TO_BORDER
-    #[error("Feature {0:?} must be enabled")]
-    MissingFeature(wgt::Features),
+    /// AddressMode::ClampToBorder requires feature ADDRESS_MODE_CLAMP_TO_BORDER.
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
 }
 
 impl<B: hal::Backend> Resource for Sampler<B> {
@@ -484,8 +484,8 @@ pub enum CreateQuerySetError {
     ZeroCount,
     #[error("{count} is too many queries for a single QuerySet. QuerySets cannot be made more than {maximum} queries.")]
     TooManyQueries { count: u32, maximum: u32 },
-    #[error("Feature {0:?} must be enabled")]
-    MissingFeature(wgt::Features),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
 }
 
 #[derive(Debug)]
