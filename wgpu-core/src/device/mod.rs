@@ -342,7 +342,6 @@ impl<B: GfxBackend> Device<B> {
                         spv::Capability::Image1D,
                         spv::Capability::SampledCubeArray,
                         spv::Capability::ImageCubeArray,
-                        spv::Capability::ImageMSArray,
                         spv::Capability::StorageImageExtendedFormats,
                     ]
                     .iter()

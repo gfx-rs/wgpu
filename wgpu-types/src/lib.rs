@@ -526,6 +526,15 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0010_0000_0000;
+        /// Enables bindings of writable storage buffers and textures visible to vertex shaders.
+        ///
+        /// Note: some (tiled-based) platforms do not support vertex shaders with any side-effects.
+        ///
+        /// Supported Platforms:
+        /// - All
+        ///
+        /// This is a native-only feature.
+        const VERTEX_WRITABLE_STORAGE = 0x0000_0020_0000_0000;
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).

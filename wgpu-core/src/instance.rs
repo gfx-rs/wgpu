@@ -217,9 +217,14 @@ impl<B: GfxBackend> Adapter<B> {
             wgt::Features::STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             adapter_features.contains(hal::Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING),
         );
-        #[cfg(not(target_os = "ios"))]
-        //TODO: https://github.com/gfx-rs/gfx/issues/3346
-        features.set(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER, true);
+        features.set(
+            wgt::Features::VERTEX_WRITABLE_STORAGE,
+            adapter_features.contains(hal::Features::VERTEX_STORES_AND_ATOMICS),
+        );
+        features.set(
+            wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+            adapter_features.contains(hal::Features::SAMPLER_BORDER_COLOR),
+        );
 
         let private_features = PrivateFeatures {
             anisotropic_filtering: adapter_features.contains(hal::Features::SAMPLER_ANISOTROPY),
@@ -452,12 +457,12 @@ impl<B: GfxBackend> Adapter<B> {
 
         // Check features that are always needed
         let wishful_features = hal::Features::ROBUST_BUFFER_ACCESS
-            | hal::Features::VERTEX_STORES_AND_ATOMICS
             | hal::Features::FRAGMENT_STORES_AND_ATOMICS
             | hal::Features::NDC_Y_UP
             | hal::Features::INDEPENDENT_BLENDING
             | hal::Features::SAMPLER_ANISOTROPY
-            | hal::Features::IMAGE_CUBE_ARRAY;
+            | hal::Features::IMAGE_CUBE_ARRAY
+            | hal::Features::SAMPLE_RATE_SHADING;
         let mut enabled_features = available_features & wishful_features;
         if enabled_features != wishful_features {
             log::warn!(
@@ -555,6 +560,16 @@ impl<B: GfxBackend> Adapter<B> {
             hal::Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING,
             desc.features
                 .contains(wgt::Features::STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
+        );
+        enabled_features.set(
+            hal::Features::VERTEX_STORES_AND_ATOMICS,
+            desc.features
+                .contains(wgt::Features::VERTEX_WRITABLE_STORAGE),
+        );
+        enabled_features.set(
+            hal::Features::SAMPLER_BORDER_COLOR,
+            desc.features
+                .contains(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER),
         );
 
         let family = self
