@@ -1665,12 +1665,6 @@ impl<B: GfxBackend> Device<B> {
                                 "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
                         }),
                     };
-                    if view
-                        .aspects
-                        .contains(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL)
-                    {
-                        return Err(Error::DepthStencilAspect);
-                    }
                     match view.inner {
                         resource::TextureViewInner::Native {
                             ref raw,

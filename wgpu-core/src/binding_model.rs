@@ -152,8 +152,6 @@ pub enum CreateBindGroupError {
         layout_flt: bool,
         sampler_flt: bool,
     },
-    #[error("bound texture views can not have both depth and stencil aspects enabled")]
-    DepthStencilAspect,
     #[error("the adapter does not support simultaneous read + write storage texture access for the format {0:?}")]
     StorageReadWriteNotSupported(wgt::TextureFormat),
     #[error(transparent)]
