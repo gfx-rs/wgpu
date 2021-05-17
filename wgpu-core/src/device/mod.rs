@@ -1199,7 +1199,7 @@ impl<B: GfxBackend> Device<B> {
         let mut desc_count = descriptor::DescriptorTotalCount::default();
         for binding in entry_map.values() {
             use wgt::BindingType as Bt;
-            let (counter, array_feature) = match binding.ty {
+            let (counter, array_feature, is_writable_storage) = match binding.ty {
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -1207,6 +1207,7 @@ impl<B: GfxBackend> Device<B> {
                 } => (
                     &mut desc_count.uniform_buffer,
                     Some(wgt::Features::BUFFER_BINDING_ARRAY),
+                    false,
                 ),
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Uniform,
@@ -1215,30 +1216,34 @@ impl<B: GfxBackend> Device<B> {
                 } => (
                     &mut desc_count.uniform_buffer_dynamic,
                     Some(wgt::Features::BUFFER_BINDING_ARRAY),
+                    false,
                 ),
                 Bt::Buffer {
-                    ty: wgt::BufferBindingType::Storage { .. },
-                    has_dynamic_offset: false,
+                    ty: wgt::BufferBindingType::Storage { read_only },
+                    has_dynamic_offset,
                     min_binding_size: _,
                 } => (
-                    &mut desc_count.storage_buffer,
+                    if has_dynamic_offset {
+                        &mut desc_count.storage_buffer_dynamic
+                    } else {
+                        &mut desc_count.storage_buffer
+                    },
                     Some(wgt::Features::BUFFER_BINDING_ARRAY),
+                    !read_only,
                 ),
-                Bt::Buffer {
-                    ty: wgt::BufferBindingType::Storage { .. },
-                    has_dynamic_offset: true,
-                    min_binding_size: _,
-                } => (
-                    &mut desc_count.storage_buffer_dynamic,
-                    Some(wgt::Features::BUFFER_BINDING_ARRAY),
-                ),
-                Bt::Sampler { .. } => (&mut desc_count.sampler, None),
+                Bt::Sampler { .. } => (&mut desc_count.sampler, None, false),
                 Bt::Texture { .. } => (
                     &mut desc_count.sampled_image,
                     Some(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
+                    false,
                 ),
-                Bt::StorageTexture { .. } => (&mut desc_count.storage_image, None),
+                Bt::StorageTexture { access, .. } => (
+                    &mut desc_count.storage_image,
+                    None,
+                    access != wgt::StorageTextureAccess::ReadOnly,
+                ),
             };
+
             *counter += match binding.count {
                 // Validate the count parameter
                 Some(count) => {
@@ -1253,6 +1258,17 @@ impl<B: GfxBackend> Device<B> {
                 }
                 None => 1,
             };
+
+            if is_writable_storage
+                && binding.visibility.contains(wgt::ShaderStage::FRAGMENT)
+                && !self
+                    .features
+                    .contains(wgt::Features::VERTEX_WRITABLE_STORAGE)
+            {
+                return Err(binding_model::CreateBindGroupLayoutError::MissingFeature(
+                    wgt::Features::VERTEX_WRITABLE_STORAGE,
+                ));
+            }
         }
 
         let raw_bindings = entry_map
