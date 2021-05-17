@@ -116,6 +116,87 @@ impl crate::hub::Resource for Surface {
     }
 }
 
+const FEATURE_MAP: &[(wgt::Features, hal::Features)] = &[
+    (wgt::Features::DEPTH_CLAMPING, hal::Features::DEPTH_CLAMP),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_BC,
+        hal::Features::FORMAT_BC,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ETC2,
+        hal::Features::FORMAT_ETC2,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+        hal::Features::FORMAT_ASTC_LDR,
+    ),
+    (
+        wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
+        hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
+    ),
+    (
+        wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING,
+        hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
+    ),
+    (
+        wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
+    ),
+    (
+        wgt::Features::UNSIZED_BINDING_ARRAY,
+        hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
+    ),
+    (
+        wgt::Features::MULTI_DRAW_INDIRECT,
+        hal::Features::MULTI_DRAW_INDIRECT,
+    ),
+    (
+        wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
+        hal::Features::DRAW_INDIRECT_COUNT,
+    ),
+    (
+        wgt::Features::NON_FILL_POLYGON_MODE,
+        hal::Features::NON_FILL_POLYGON_MODE,
+    ),
+    (
+        wgt::Features::PIPELINE_STATISTICS_QUERY,
+        hal::Features::PIPELINE_STATISTICS_QUERY,
+    ),
+    (wgt::Features::SHADER_FLOAT64, hal::Features::SHADER_FLOAT64),
+    (
+        wgt::Features::CONSERVATIVE_RASTERIZATION,
+        hal::Features::CONSERVATIVE_RASTERIZATION,
+    ),
+    (
+        wgt::Features::BUFFER_BINDING_ARRAY,
+        hal::Features::BUFFER_DESCRIPTOR_ARRAY,
+    ),
+    (
+        wgt::Features::UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING,
+        hal::Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING,
+    ),
+    (
+        wgt::Features::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        hal::Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING,
+    ),
+    (
+        wgt::Features::STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING,
+        hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING,
+    ),
+    (
+        wgt::Features::STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        hal::Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING,
+    ),
+    (
+        wgt::Features::VERTEX_WRITABLE_STORAGE,
+        hal::Features::VERTEX_STORES_AND_ATOMICS,
+    ),
+    (
+        wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+        hal::Features::SAMPLER_BORDER_COLOR,
+    ),
+];
+
 #[derive(Debug)]
 pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
@@ -137,93 +218,12 @@ impl<B: GfxBackend> Adapter<B> {
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
             | wgt::Features::PUSH_CONSTANTS
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-        features.set(
-            wgt::Features::DEPTH_CLAMPING,
-            adapter_features.contains(hal::Features::DEPTH_CLAMP),
-        );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_BC,
-            adapter_features.contains(hal::Features::FORMAT_BC),
-        );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_ETC2,
-            adapter_features.contains(hal::Features::FORMAT_ETC2),
-        );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
-            adapter_features.contains(hal::Features::FORMAT_ASTC_LDR),
-        );
-        features.set(
-            wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
-            adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
-        );
-        features.set(
-            wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING,
-            adapter_features.contains(hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING),
-        );
-        features.set(
-            wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-            adapter_features.contains(hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING),
-        );
-        features.set(
-            wgt::Features::UNSIZED_BINDING_ARRAY,
-            adapter_features.contains(hal::Features::UNSIZED_DESCRIPTOR_ARRAY),
-        );
-        features.set(
-            wgt::Features::MULTI_DRAW_INDIRECT,
-            adapter_features.contains(hal::Features::MULTI_DRAW_INDIRECT),
-        );
-        features.set(
-            wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
-            adapter_features.contains(hal::Features::DRAW_INDIRECT_COUNT),
-        );
-        features.set(
-            wgt::Features::NON_FILL_POLYGON_MODE,
-            adapter_features.contains(hal::Features::NON_FILL_POLYGON_MODE),
-        );
+        for &(hi, lo) in FEATURE_MAP.iter() {
+            features.set(hi, adapter_features.contains(lo));
+        }
         features.set(
             wgt::Features::TIMESTAMP_QUERY,
             properties.limits.timestamp_compute_and_graphics,
-        );
-        features.set(
-            wgt::Features::PIPELINE_STATISTICS_QUERY,
-            adapter_features.contains(hal::Features::PIPELINE_STATISTICS_QUERY),
-        );
-        features.set(
-            wgt::Features::SHADER_FLOAT64,
-            adapter_features.contains(hal::Features::SHADER_FLOAT64),
-        );
-        features.set(
-            wgt::Features::CONSERVATIVE_RASTERIZATION,
-            adapter_features.contains(hal::Features::CONSERVATIVE_RASTERIZATION),
-        );
-        features.set(
-            wgt::Features::BUFFER_BINDING_ARRAY,
-            adapter_features.contains(hal::Features::BUFFER_DESCRIPTOR_ARRAY),
-        );
-        features.set(
-            wgt::Features::UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING,
-            adapter_features.contains(hal::Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING),
-        );
-        features.set(
-            wgt::Features::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            adapter_features.contains(hal::Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING),
-        );
-        features.set(
-            wgt::Features::STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING,
-            adapter_features.contains(hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING),
-        );
-        features.set(
-            wgt::Features::STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            adapter_features.contains(hal::Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING),
-        );
-        features.set(
-            wgt::Features::VERTEX_WRITABLE_STORAGE,
-            adapter_features.contains(hal::Features::VERTEX_STORES_AND_ATOMICS),
-        );
-        features.set(
-            wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
-            adapter_features.contains(hal::Features::SAMPLER_BORDER_COLOR),
         );
 
         let private_features = PrivateFeatures {
@@ -471,106 +471,10 @@ impl<B: GfxBackend> Adapter<B> {
             );
         }
 
-        // Features
-        enabled_features.set(
-            hal::Features::DEPTH_CLAMP,
-            desc.features.contains(wgt::Features::DEPTH_CLAMPING),
-        );
-        enabled_features.set(
-            hal::Features::FORMAT_BC,
-            desc.features
-                .contains(wgt::Features::TEXTURE_COMPRESSION_BC),
-        );
-        enabled_features.set(
-            hal::Features::FORMAT_ETC2,
-            desc.features
-                .contains(wgt::Features::TEXTURE_COMPRESSION_ETC2),
-        );
-        enabled_features.set(
-            hal::Features::FORMAT_ASTC_LDR,
-            desc.features
-                .contains(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR),
-        );
-        enabled_features.set(
-            hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
-            desc.features
-                .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
-        );
-        enabled_features.set(
-            hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
-            desc.features
-                .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
-        );
-        enabled_features.set(
-            hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
-            desc.features
-                .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
-        );
-        enabled_features.set(
-            hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
-            desc.features.contains(wgt::Features::UNSIZED_BINDING_ARRAY),
-        );
-        enabled_features.set(
-            hal::Features::MULTI_DRAW_INDIRECT,
-            desc.features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
-        );
-        enabled_features.set(
-            hal::Features::DRAW_INDIRECT_COUNT,
-            desc.features
-                .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT),
-        );
-        enabled_features.set(
-            hal::Features::NON_FILL_POLYGON_MODE,
-            desc.features.contains(wgt::Features::NON_FILL_POLYGON_MODE),
-        );
-        enabled_features.set(
-            hal::Features::PIPELINE_STATISTICS_QUERY,
-            desc.features
-                .contains(wgt::Features::PIPELINE_STATISTICS_QUERY),
-        );
-        enabled_features.set(
-            hal::Features::SHADER_FLOAT64,
-            desc.features.contains(wgt::Features::SHADER_FLOAT64),
-        );
-        enabled_features.set(
-            hal::Features::CONSERVATIVE_RASTERIZATION,
-            desc.features
-                .contains(wgt::Features::CONSERVATIVE_RASTERIZATION),
-        );
-        enabled_features.set(
-            hal::Features::BUFFER_DESCRIPTOR_ARRAY,
-            desc.features.contains(wgt::Features::BUFFER_BINDING_ARRAY),
-        );
-        enabled_features.set(
-            hal::Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING,
-            desc.features
-                .contains(wgt::Features::UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING),
-        );
-        enabled_features.set(
-            hal::Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING,
-            desc.features
-                .contains(wgt::Features::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
-        );
-        enabled_features.set(
-            hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING,
-            desc.features
-                .contains(wgt::Features::STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING),
-        );
-        enabled_features.set(
-            hal::Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING,
-            desc.features
-                .contains(wgt::Features::STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
-        );
-        enabled_features.set(
-            hal::Features::VERTEX_STORES_AND_ATOMICS,
-            desc.features
-                .contains(wgt::Features::VERTEX_WRITABLE_STORAGE),
-        );
-        enabled_features.set(
-            hal::Features::SAMPLER_BORDER_COLOR,
-            desc.features
-                .contains(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER),
-        );
+        // Enable low-level features
+        for &(hi, lo) in FEATURE_MAP.iter() {
+            enabled_features.set(lo, desc.features.contains(hi));
+        }
 
         let family = self
             .raw
