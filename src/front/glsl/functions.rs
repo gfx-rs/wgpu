@@ -13,19 +13,18 @@ impl Program<'_> {
         ctx: &mut Context,
         body: &mut Block,
         fc: FunctionCallKind,
-        raw_args: Vec<Expr>,
+        raw_args: &[Handle<HirExpr>],
         meta: SourceMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
         let args: Vec<_> = raw_args
-            .clone()
-            .into_iter()
-            .map(|e| ctx.lower(self, e, false, body))
+            .iter()
+            .map(|e| ctx.lower(self, *e, false, body))
             .collect::<Result<_, _>>()?;
 
         match fc {
             FunctionCallKind::TypeConstructor(ty) => {
                 let h = if args.len() == 1 {
-                    let is_vec = match *self.resolve_type(ctx, args[0], raw_args[0].meta.clone())? {
+                    let is_vec = match *self.resolve_type(ctx, args[0].0, args[0].1.clone())? {
                         TypeInner::Vector { .. } => true,
                         _ => false,
                     };
@@ -34,14 +33,14 @@ impl Program<'_> {
                         TypeInner::Vector { size, .. } if !is_vec => {
                             ctx.expressions.append(Expression::Splat {
                                 size,
-                                value: args[0],
+                                value: args[0].0,
                             })
                         }
                         TypeInner::Scalar { kind, width }
                         | TypeInner::Vector { kind, width, .. } => {
                             ctx.expressions.append(Expression::As {
                                 kind,
-                                expr: args[0],
+                                expr: args[0].0,
                                 convert: Some(width),
                             })
                         }
@@ -52,7 +51,7 @@ impl Program<'_> {
                         } => {
                             let value = ctx.expressions.append(Expression::As {
                                 kind: ScalarKind::Float,
-                                expr: args[0],
+                                expr: args[0].0,
                                 convert: Some(width),
                             });
 
@@ -76,7 +75,7 @@ impl Program<'_> {
                 } else {
                     ctx.expressions.append(Expression::Compose {
                         ty,
-                        components: args.to_vec(),
+                        components: args.iter().map(|e| e.0).collect(),
                     })
                 };
 
@@ -88,18 +87,18 @@ impl Program<'_> {
                         if args.len() != 2 {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
-                        ctx.samplers.insert(args[0], args[1]);
-                        Ok(args[0])
+                        ctx.samplers.insert(args[0].0, args[1].0);
+                        Ok(args[0].0)
                     }
                     "texture" => {
                         if args.len() != 2 {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
-                        if let Some(sampler) = ctx.samplers.get(&args[0]).copied() {
+                        if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
                             Ok(ctx.expressions.append(Expression::ImageSample {
-                                image: args[0],
+                                image: args[0].0,
                                 sampler,
-                                coordinate: args[1],
+                                coordinate: args[1].0,
                                 array_index: None, //TODO
                                 offset: None,      //TODO
                                 level: SampleLevel::Auto,
@@ -113,14 +112,14 @@ impl Program<'_> {
                         if args.len() != 3 {
                             return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
-                        if let Some(sampler) = ctx.samplers.get(&args[0]).copied() {
+                        if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
                             Ok(ctx.expressions.append(Expression::ImageSample {
-                                image: args[0],
+                                image: args[0].0,
                                 sampler,
-                                coordinate: args[1],
+                                coordinate: args[1].0,
                                 array_index: None, //TODO
                                 offset: None,      //TODO
-                                level: SampleLevel::Exact(args[2]),
+                                level: SampleLevel::Exact(args[2].0),
                                 depth_ref: None,
                             }))
                         } else {
@@ -155,7 +154,7 @@ impl Program<'_> {
                                 "normalize" => MathFunction::Normalize,
                                 _ => unreachable!(),
                             },
-                            arg: args[0],
+                            arg: args[0].0,
                             arg1: None,
                             arg2: None,
                         }))
@@ -171,8 +170,8 @@ impl Program<'_> {
                                 "max" => MathFunction::Max,
                                 _ => unreachable!(),
                             },
-                            arg: args[0],
-                            arg1: Some(args[1]),
+                            arg: args[0].0,
+                            arg1: Some(args[1].0),
                             arg2: None,
                         }))
                     }
@@ -186,9 +185,9 @@ impl Program<'_> {
                                 "clamp" => MathFunction::Clamp,
                                 _ => unreachable!(),
                             },
-                            arg: args[0],
-                            arg1: Some(args[1]),
-                            arg2: Some(args[2]),
+                            arg: args[0].0,
+                            arg1: Some(args[1].0),
+                            arg2: Some(args[2].0),
                         }))
                     }
                     "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" | "equal"
@@ -206,8 +205,8 @@ impl Program<'_> {
                                 "notEqual" => BinaryOperator::NotEqual,
                                 _ => unreachable!(),
                             },
-                            left: args[0],
-                            right: args[1],
+                            left: args[0].0,
+                            right: args[1].0,
                         }))
                     }
                     "isinf" => {
@@ -225,15 +224,15 @@ impl Program<'_> {
                     _ => {
                         let mut parameters = Vec::new();
 
-                        for (e, meta) in args.iter().zip(raw_args.iter().map(|e| e.meta.clone())) {
-                            let handle = self.resolve_handle(ctx, *e, meta)?;
+                        for (e, meta) in args {
+                            let handle = self.resolve_handle(ctx, e, meta)?;
 
                             parameters.push(handle)
                         }
 
                         let sig = FunctionSignature { name, parameters };
 
-                        let function = self
+                        let fun = self
                             .lookup_function
                             .get(&sig)
                             .ok_or_else(|| {
@@ -246,16 +245,14 @@ impl Program<'_> {
                             .clone();
 
                         let mut arguments = Vec::with_capacity(raw_args.len());
-                        for (qualifier, expr) in
-                            function.parameters.iter().zip(raw_args.into_iter())
-                        {
-                            let handle = ctx.lower(self, expr, qualifier.is_lhs(), body)?;
+                        for (qualifier, expr) in fun.parameters.iter().zip(raw_args.iter()) {
+                            let handle = ctx.lower(self, *expr, qualifier.is_lhs(), body)?.0;
                             arguments.push(handle)
                         }
 
-                        let expression = ctx.expressions.append(Expression::Call(function.handle));
+                        let expression = ctx.expressions.append(Expression::Call(fun.handle));
                         body.push(crate::Statement::Call {
-                            function: function.handle,
+                            function: fun.handle,
                             arguments,
                             result: Some(expression),
                         });
@@ -270,7 +267,7 @@ impl Program<'_> {
         &mut self,
         ctx: &mut Context,
         name: String,
-        args: &[Handle<Expression>],
+        args: &[(Handle<Expression>, SourceMetadata)],
         fun: RelationalFunction,
         meta: SourceMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
@@ -280,7 +277,7 @@ impl Program<'_> {
 
         Ok(ctx.expressions.append(Expression::Relational {
             fun,
-            argument: args[0],
+            argument: args[0].0,
         }))
     }
 

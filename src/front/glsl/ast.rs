@@ -151,6 +151,8 @@ pub struct Context<'function> {
     pub lookup_constant_exps: FastHashMap<String, VariableReference>,
     pub typifier: Typifier,
     pub samplers: FastHashMap<Handle<Expression>, Handle<Expression>>,
+
+    pub hir_exprs: Arena<HirExpr>,
 }
 
 impl<'function> Context<'function> {
@@ -169,6 +171,8 @@ impl<'function> Context<'function> {
             lookup_constant_exps: FastHashMap::default(),
             typifier: Typifier::new(),
             samplers: FastHashMap::default(),
+
+            hir_exprs: Arena::default(),
         }
     }
 
@@ -296,29 +300,30 @@ impl<'function> Context<'function> {
     pub fn lower(
         &mut self,
         program: &mut Program,
-        expr: Expr,
+        expr: Handle<HirExpr>,
         lhs: bool,
         body: &mut Block,
-    ) -> Result<Handle<Expression>, ErrorKind> {
-        Ok(match expr.kind {
-            ExprKind::Access { base, index } => {
-                let base = self.lower(program, *base, lhs, body)?;
-                let index = self.lower(program, *index, false, body)?;
+    ) -> Result<(Handle<Expression>, SourceMetadata), ErrorKind> {
+        let HirExpr { kind, meta } = self.hir_exprs[expr].clone();
+
+        let handle = match kind {
+            HirExprKind::Access { base, index } => {
+                let base = self.lower(program, base, lhs, body)?.0;
+                let index = self.lower(program, index, false, body)?.0;
 
                 self.expressions.append(Expression::Access { base, index })
             }
-            ExprKind::Select { base, field } => {
-                let base = self.lower(program, *base, lhs, body)?;
+            HirExprKind::Select { base, field } => {
+                let base = self.lower(program, base, lhs, body)?.0;
 
-                program.field_selection(self, base, &field, expr.meta)?
+                program.field_selection(self, base, &field, meta.clone())?
             }
-            ExprKind::Constant(constant) if !lhs => {
+            HirExprKind::Constant(constant) if !lhs => {
                 self.expressions.append(Expression::Constant(constant))
             }
-            ExprKind::Binary { left, op, right } if !lhs => {
-                let (left_meta, right_meta) = (left.meta.clone(), right.meta.clone());
-                let left = self.lower(program, *left, false, body)?;
-                let right = self.lower(program, *right, false, body)?;
+            HirExprKind::Binary { left, op, right } if !lhs => {
+                let (left, left_meta) = self.lower(program, left, false, body)?;
+                let (right, right_meta) = self.lower(program, right, false, body)?;
 
                 if let BinaryOperator::Equal | BinaryOperator::NotEqual = op {
                     let equals = op == BinaryOperator::Equal;
@@ -346,7 +351,7 @@ impl<'function> Context<'function> {
                         .append(Expression::Binary { op, left, right });
 
                     if left_dims != right_dims {
-                        return Err(ErrorKind::SemanticError(expr.meta, "Cannot compare".into()));
+                        return Err(ErrorKind::SemanticError(meta, "Cannot compare".into()));
                     } else if left_is_vector && right_is_vector {
                         self.expressions
                             .append(Expression::Relational { fun, argument })
@@ -358,16 +363,16 @@ impl<'function> Context<'function> {
                         .append(Expression::Binary { left, op, right })
                 }
             }
-            ExprKind::Unary { op, expr } if !lhs => {
-                let expr = self.lower(program, *expr, false, body)?;
+            HirExprKind::Unary { op, expr } if !lhs => {
+                let expr = self.lower(program, expr, false, body)?.0;
 
                 self.expressions.append(Expression::Unary { op, expr })
             }
-            ExprKind::Variable(var) => {
+            HirExprKind::Variable(var) => {
                 if lhs {
                     if !var.mutable {
                         return Err(ErrorKind::SemanticError(
-                            expr.meta,
+                            meta,
                             "Variable cannot be used in LHS position".into(),
                         ));
                     }
@@ -377,17 +382,17 @@ impl<'function> Context<'function> {
                     var.load.unwrap_or(var.expr)
                 }
             }
-            ExprKind::Call(call) if !lhs => {
-                program.function_call(self, body, call.kind, call.args, expr.meta)?
+            HirExprKind::Call(call) if !lhs => {
+                program.function_call(self, body, call.kind, &call.args, meta.clone())?
             }
-            ExprKind::Conditional {
+            HirExprKind::Conditional {
                 condition,
                 accept,
                 reject,
             } if !lhs => {
-                let condition = self.lower(program, *condition, false, body)?;
-                let accept = self.lower(program, *accept, false, body)?;
-                let reject = self.lower(program, *reject, false, body)?;
+                let condition = self.lower(program, condition, false, body)?.0;
+                let accept = self.lower(program, accept, false, body)?.0;
+                let reject = self.lower(program, reject, false, body)?.0;
 
                 self.expressions.append(Expression::Select {
                     condition,
@@ -395,9 +400,9 @@ impl<'function> Context<'function> {
                     reject,
                 })
             }
-            ExprKind::Assign { tgt, value } if !lhs => {
-                let pointer = self.lower(program, *tgt, true, body)?;
-                let value = self.lower(program, *value, false, body)?;
+            HirExprKind::Assign { tgt, value } if !lhs => {
+                let pointer = self.lower(program, tgt, true, body)?.0;
+                let value = self.lower(program, value, false, body)?.0;
 
                 body.push(Statement::Store { pointer, value });
 
@@ -405,11 +410,13 @@ impl<'function> Context<'function> {
             }
             _ => {
                 return Err(ErrorKind::SemanticError(
-                    expr.meta.clone(),
-                    format!("{:?} cannot be in the left hand side", expr).into(),
+                    meta,
+                    format!("{:?} cannot be in the left hand side", self.hir_exprs[expr]).into(),
                 ))
             }
-        })
+        };
+
+        Ok((handle, meta))
     }
 }
 
@@ -421,41 +428,41 @@ pub struct VariableReference {
 }
 
 #[derive(Debug, Clone)]
-pub struct Expr {
-    pub kind: ExprKind,
+pub struct HirExpr {
+    pub kind: HirExprKind,
     pub meta: SourceMetadata,
 }
 
 #[derive(Debug, Clone)]
-pub enum ExprKind {
+pub enum HirExprKind {
     Access {
-        base: Box<Expr>,
-        index: Box<Expr>,
+        base: Handle<HirExpr>,
+        index: Handle<HirExpr>,
     },
     Select {
-        base: Box<Expr>,
+        base: Handle<HirExpr>,
         field: String,
     },
     Constant(Handle<Constant>),
     Binary {
-        left: Box<Expr>,
+        left: Handle<HirExpr>,
         op: BinaryOperator,
-        right: Box<Expr>,
+        right: Handle<HirExpr>,
     },
     Unary {
         op: UnaryOperator,
-        expr: Box<Expr>,
+        expr: Handle<HirExpr>,
     },
     Variable(VariableReference),
     Call(FunctionCall),
     Conditional {
-        condition: Box<Expr>,
-        accept: Box<Expr>,
-        reject: Box<Expr>,
+        condition: Handle<HirExpr>,
+        accept: Handle<HirExpr>,
+        reject: Handle<HirExpr>,
     },
     Assign {
-        tgt: Box<Expr>,
-        value: Box<Expr>,
+        tgt: Handle<HirExpr>,
+        value: Handle<HirExpr>,
     },
 }
 
@@ -479,7 +486,7 @@ pub enum FunctionCallKind {
 #[derive(Debug, Clone)]
 pub struct FunctionCall {
     pub kind: FunctionCallKind,
-    pub args: Vec<Expr>,
+    pub args: Vec<Handle<HirExpr>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
