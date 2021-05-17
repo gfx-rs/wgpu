@@ -33,15 +33,15 @@ pub enum ErrorKind {
 
 impl ErrorKind {
     /// Returns the TokenMetadata if available
-    pub fn metadata(&self) -> Option<&SourceMetadata> {
+    pub fn metadata(&self) -> Option<SourceMetadata> {
         match *self {
-            ErrorKind::UnknownVariable(ref metadata, _)
-            | ErrorKind::InvalidProfile(ref metadata, _)
-            | ErrorKind::InvalidVersion(ref metadata, _)
-            | ErrorKind::UnknownLayoutQualifier(ref metadata, _)
-            | ErrorKind::SemanticError(ref metadata, _)
-            | ErrorKind::UnknownField(ref metadata, _) => Some(metadata),
-            ErrorKind::InvalidToken(ref token) => Some(&token.meta),
+            ErrorKind::UnknownVariable(metadata, _)
+            | ErrorKind::InvalidProfile(metadata, _)
+            | ErrorKind::InvalidVersion(metadata, _)
+            | ErrorKind::UnknownLayoutQualifier(metadata, _)
+            | ErrorKind::SemanticError(metadata, _)
+            | ErrorKind::UnknownField(metadata, _) => Some(metadata),
+            ErrorKind::InvalidToken(ref token) => Some(token.meta),
             _ => None,
         }
     }

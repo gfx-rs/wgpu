@@ -316,7 +316,7 @@ impl<'function> Context<'function> {
             HirExprKind::Select { base, field } => {
                 let base = self.lower(program, base, lhs, body)?.0;
 
-                program.field_selection(self, base, &field, meta.clone())?
+                program.field_selection(self, base, &field, meta)?
             }
             HirExprKind::Constant(constant) if !lhs => {
                 self.expressions.append(Expression::Constant(constant))
@@ -383,7 +383,7 @@ impl<'function> Context<'function> {
                 }
             }
             HirExprKind::Call(call) if !lhs => {
-                program.function_call(self, body, call.kind, &call.args, meta.clone())?
+                program.function_call(self, body, call.kind, &call.args, meta)?
             }
             HirExprKind::Conditional {
                 condition,

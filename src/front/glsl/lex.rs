@@ -30,13 +30,14 @@ impl<'a> Lexer<'a> {
 impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
-        let mut meta = SourceMetadata { chars: 0..0 };
+        let mut meta = SourceMetadata::default();
         let pp_token = match self.tokens.pop_front() {
             Some(t) => t,
             None => match self.pp.next()? {
                 Ok(t) => t,
                 Err((err, loc)) => {
-                    meta.chars = loc.into();
+                    meta.start = loc.start as usize;
+                    meta.end = loc.end as usize;
                     return Some(Token {
                         value: TokenValue::Unknown(err),
                         meta,
@@ -45,7 +46,8 @@ impl<'a> Iterator for Lexer<'a> {
             },
         };
 
-        meta.chars = pp_token.location.into();
+        meta.start = pp_token.location.start as usize;
+        meta.end = pp_token.location.end as usize;
         let value = match pp_token.value {
             PPTokenValue::Extension(extension) => {
                 for t in extension.tokens {
@@ -186,7 +188,7 @@ mod tests {
             lex.next().unwrap(),
             Token {
                 value: TokenValue::Version,
-                meta: SourceMetadata { chars: 1..8 }
+                meta: SourceMetadata { start: 1, end: 8 }
             }
         );
         assert_eq!(
@@ -197,49 +199,49 @@ mod tests {
                     value: 450,
                     width: 32
                 }),
-                meta: SourceMetadata { chars: 9..12 },
+                meta: SourceMetadata { start: 9, end: 12 },
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::Void,
-                meta: SourceMetadata { chars: 13..17 }
+                meta: SourceMetadata { start: 13, end: 17 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::Identifier("main".into()),
-                meta: SourceMetadata { chars: 18..22 }
+                meta: SourceMetadata { start: 18, end: 22 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::LeftParen,
-                meta: SourceMetadata { chars: 23..24 }
+                meta: SourceMetadata { start: 23, end: 24 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::RightParen,
-                meta: SourceMetadata { chars: 24..25 }
+                meta: SourceMetadata { start: 24, end: 25 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::LeftBrace,
-                meta: SourceMetadata { chars: 26..27 }
+                meta: SourceMetadata { start: 26, end: 27 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
             Token {
                 value: TokenValue::RightBrace,
-                meta: SourceMetadata { chars: 27..28 }
+                meta: SourceMetadata { start: 27, end: 28 }
             }
         );
         assert_eq!(lex.next(), None);

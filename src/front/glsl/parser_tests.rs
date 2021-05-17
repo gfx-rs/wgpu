@@ -31,19 +31,19 @@ fn version() {
         parse_program("#version 99000", &entry_points)
             .err()
             .unwrap(),
-        ErrorKind::InvalidVersion(SourceMetadata { chars: 9..14 }, 99000),
+        ErrorKind::InvalidVersion(SourceMetadata { start: 9, end: 14 }, 99000),
     );
 
     assert_eq!(
         parse_program("#version 449", &entry_points).err().unwrap(),
-        ErrorKind::InvalidVersion(SourceMetadata { chars: 9..12 }, 449)
+        ErrorKind::InvalidVersion(SourceMetadata { start: 9, end: 12 }, 449)
     );
 
     assert_eq!(
         parse_program("#version 450 smart", &entry_points)
             .err()
             .unwrap(),
-        ErrorKind::InvalidProfile(SourceMetadata { chars: 13..18 }, "smart".into())
+        ErrorKind::InvalidProfile(SourceMetadata { start: 13, end: 18 }, "smart".into())
     );
 
     assert_eq!(
@@ -52,7 +52,7 @@ fn version() {
             .unwrap(),
         ErrorKind::InvalidToken(Token {
             value: TokenValue::Unknown(PreprocessorError::UnexpectedHash),
-            meta: SourceMetadata { chars: 24..25 }
+            meta: SourceMetadata { start: 24, end: 25 }
         })
     );
 
@@ -330,7 +330,10 @@ fn functions() {
         .err()
         .unwrap(),
         ErrorKind::SemanticError(
-            SourceMetadata { chars: 134..152 },
+            SourceMetadata {
+                start: 134,
+                end: 152
+            },
             "Function already defined".into()
         )
     );

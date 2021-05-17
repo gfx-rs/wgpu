@@ -24,7 +24,7 @@ impl Program<'_> {
         match fc {
             FunctionCallKind::TypeConstructor(ty) => {
                 let h = if args.len() == 1 {
-                    let is_vec = match *self.resolve_type(ctx, args[0].0, args[0].1.clone())? {
+                    let is_vec = match *self.resolve_type(ctx, args[0].0, args[0].1)? {
                         TypeInner::Vector { .. } => true,
                         _ => false,
                     };
@@ -291,7 +291,7 @@ impl Program<'_> {
         let name = function
             .name
             .clone()
-            .ok_or_else(|| ErrorKind::SemanticError(meta.clone(), "Unnamed function".into()))?;
+            .ok_or_else(|| ErrorKind::SemanticError(meta, "Unnamed function".into()))?;
         let stage = self.entry_points.get(&name);
 
         if let Some(&stage) = stage {

@@ -121,7 +121,7 @@ impl Program<'_> {
         name: &str,
         meta: SourceMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
-        match *self.resolve_type(context, expression, meta.clone())? {
+        match *self.resolve_type(context, expression, meta)? {
             TypeInner::Struct { ref members, .. } => {
                 let index = members
                     .iter()

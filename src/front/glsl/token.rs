@@ -3,17 +3,28 @@ pub use pp_rs::token::{Float, Integer, PreprocessorError};
 use crate::{Interpolation, Sampling, Type};
 use std::{fmt, ops::Range};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, Default)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct SourceMetadata {
-    pub chars: Range<usize>,
+    /// Byte offset into the source where the first char starts
+    pub start: usize,
+    /// Byte offset into the source where the first char not belonging to this
+    /// source metadata starts
+    pub end: usize,
 }
 
 impl SourceMetadata {
     pub fn union(&self, other: &Self) -> Self {
         SourceMetadata {
-            chars: (self.chars.start.min(other.chars.start))..(self.chars.end.max(other.chars.end)),
+            start: self.start.min(other.start),
+            end: self.end.max(other.end),
         }
+    }
+}
+
+impl From<SourceMetadata> for Range<usize> {
+    fn from(meta: SourceMetadata) -> Self {
+        meta.start..meta.end
     }
 }
 

@@ -143,7 +143,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     fn parse_type_non_void(&mut self) -> Result<(Handle<Type>, SourceMetadata)> {
         let (maybe_ty, meta) = self.parse_type()?;
         let ty = maybe_ty
-            .ok_or_else(|| ErrorKind::SemanticError(meta.clone(), "Type can't be void".into()))?;
+            .ok_or_else(|| ErrorKind::SemanticError(meta, "Type can't be void".into()))?;
 
         Ok((ty, meta))
     }
@@ -260,16 +260,16 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 value: ScalarValue::Uint(int),
                 ..
             } => u32::try_from(int).map_err(|_| {
-                ErrorKind::SemanticError(meta.clone(), "int constant overflows".into())
+                ErrorKind::SemanticError(meta, "int constant overflows".into())
             }),
             ConstantInner::Scalar {
                 value: ScalarValue::Sint(int),
                 ..
             } => u32::try_from(int).map_err(|_| {
-                ErrorKind::SemanticError(meta.clone(), "int constant overflows".into())
+                ErrorKind::SemanticError(meta, "int constant overflows".into())
             }),
             _ => Err(ErrorKind::SemanticError(
-                meta.clone(),
+                meta,
                 "Expected a uint constant".into(),
             )),
         }?;
@@ -329,7 +329,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
         Ok((
             self.program
-                .solve_constant(&expressions, root, meta.clone())?,
+                .solve_constant(&expressions, root, meta)?,
             meta,
         ))
     }
@@ -980,7 +980,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 let Token { value, meta } = self.bump()?;
 
                 let expr = self.parse_unary(ctx)?;
-                let end_meta = ctx.hir_exprs[expr].meta.clone();
+                let end_meta = ctx.hir_exprs[expr].meta;
 
                 let kind = match value {
                     TokenValue::Dash => HirExprKind::Unary {
@@ -1012,7 +1012,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let mut left = passtrough
             .ok_or(ErrorKind::EndOfFile /* Dummy error */)
             .or_else(|_| self.parse_unary(ctx))?;
-        let start_meta = ctx.hir_exprs[left].meta.clone();
+        let start_meta = ctx.hir_exprs[left].meta;
 
         while let Some((l_bp, r_bp)) = binding_power(&self.expect_peek()?.value) {
             if l_bp < min_bp {
@@ -1022,7 +1022,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             let Token { value, .. } = self.bump()?;
 
             let right = self.parse_binary(ctx, None, r_bp)?;
-            let end_meta = ctx.hir_exprs[right].meta.clone();
+            let end_meta = ctx.hir_exprs[right].meta;
 
             left = ctx.hir_exprs.append(HirExpr {
                 kind: HirExprKind::Binary {
@@ -1064,13 +1064,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         passtrough: Option<Handle<HirExpr>>,
     ) -> Result<Handle<HirExpr>> {
         let mut condition = self.parse_binary(ctx, passtrough, 0)?;
-        let start_meta = ctx.hir_exprs[condition].meta.clone();
+        let start_meta = ctx.hir_exprs[condition].meta;
 
         if self.bump_if(TokenValue::Question).is_some() {
             let accept = self.parse_expression(ctx)?;
             self.expect(TokenValue::Colon)?;
             let reject = self.parse_assignment(ctx)?;
-            let end_meta = ctx.hir_exprs[reject].meta.clone();
+            let end_meta = ctx.hir_exprs[reject].meta;
 
             condition = ctx.hir_exprs.append(HirExpr {
                 kind: HirExprKind::Conditional {
@@ -1087,13 +1087,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
     fn parse_assignment(&mut self, ctx: &mut Context) -> Result<Handle<HirExpr>> {
         let tgt = self.parse_unary(ctx)?;
-        let start_meta = ctx.hir_exprs[tgt].meta.clone();
+        let start_meta = ctx.hir_exprs[tgt].meta;
 
         Ok(match self.expect_peek()?.value {
             TokenValue::Assign => {
                 self.bump()?;
                 let value = self.parse_assignment(ctx)?;
-                let end_meta = ctx.hir_exprs[value].meta.clone();
+                let end_meta = ctx.hir_exprs[value].meta;
 
                 ctx.hir_exprs.append(HirExpr {
                     kind: HirExprKind::Assign { tgt, value },
@@ -1112,7 +1112,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             | TokenValue::XorAssign => {
                 let token = self.bump()?;
                 let right = self.parse_assignment(ctx)?;
-                let end_meta = ctx.hir_exprs[right].meta.clone();
+                let end_meta = ctx.hir_exprs[right].meta;
 
                 let value = ctx.hir_exprs.append(HirExpr {
                     meta: start_meta.union(&end_meta),
@@ -1236,7 +1236,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                 let constant = self.program.solve_constant(
                                     &ctx.expressions,
                                     root,
-                                    meta.clone(),
+                                    meta,
                                 )?;
 
                                 match self.program.module.constants[constant].inner {
