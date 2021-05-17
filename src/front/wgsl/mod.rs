@@ -1007,6 +1007,89 @@ impl Parser {
         Ok(Some(ctx.expressions.append(expr)))
     }
 
+    fn parse_construction<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        type_name: &'a str,
+        mut ctx: ExpressionContext<'a, '_, '_>,
+    ) -> Result<Option<Handle<crate::Expression>>, Error<'a>> {
+        let ty_resolution = match self.lookup_type.get(type_name) {
+            Some(&handle) => TypeResolution::Handle(handle),
+            None => match self.parse_type_decl_impl(
+                lexer,
+                TypeAttributes::default(),
+                type_name,
+                ctx.types,
+                ctx.constants,
+            )? {
+                Some(inner) => TypeResolution::Value(inner),
+                None => return Ok(None),
+            },
+        };
+
+        lexer.open_arguments()?;
+        let mut components = Vec::new();
+        let mut last_component = self.parse_general_expression(lexer, ctx.reborrow())?;
+        while lexer.next_argument()? {
+            components.push(last_component);
+            last_component = self.parse_general_expression(lexer, ctx.reborrow())?;
+        }
+
+        let expr = if components.is_empty()
+            && ty_resolution.inner_with(ctx.types).scalar_kind().is_some()
+        {
+            // We can't use the `TypeInner` returned by this because
+            // `resolve_type` borrows context mutably.
+            // Use it to insert into the right maps,
+            // and then grab it again immutably.
+            ctx.resolve_type(last_component)?;
+            match (
+                ty_resolution.inner_with(ctx.types),
+                ctx.typifier.get(last_component, ctx.types),
+            ) {
+                (&crate::TypeInner::Vector { size, .. }, &crate::TypeInner::Scalar { .. }) => {
+                    crate::Expression::Splat {
+                        size,
+                        value: last_component,
+                    }
+                }
+                (
+                    &crate::TypeInner::Scalar { kind, width, .. },
+                    &crate::TypeInner::Scalar { .. },
+                )
+                | (
+                    &crate::TypeInner::Vector { kind, width, .. },
+                    &crate::TypeInner::Vector { .. },
+                ) => crate::Expression::As {
+                    expr: last_component,
+                    kind,
+                    convert: Some(width),
+                },
+                (&crate::TypeInner::Matrix { width, .. }, &crate::TypeInner::Matrix { .. }) => {
+                    crate::Expression::As {
+                        expr: last_component,
+                        kind: crate::ScalarKind::Float,
+                        convert: Some(width),
+                    }
+                }
+                _ => {
+                    return Err(Error::BadTypeCast(type_name));
+                }
+            }
+        } else {
+            let ty = match ty_resolution {
+                TypeResolution::Handle(handle) => handle,
+                TypeResolution::Value(inner) => {
+                    ctx.types.fetch_or_append(crate::Type { name: None, inner })
+                }
+            };
+            components.push(last_component);
+            crate::Expression::Compose { ty, components }
+        };
+
+        Ok(Some(ctx.expressions.append(expr)))
+    }
+
     fn parse_const_expression_impl<'a>(
         &mut self,
         first_token_span: TokenSpan<'a>,
@@ -1122,84 +1205,10 @@ impl Parser {
                 {
                     //TODO: resolve the duplicate call in `parse_singular_expression`
                     expr
+                } else if let Some(expr) = self.parse_construction(lexer, word, ctx.reborrow())? {
+                    expr
                 } else {
-                    let ty_resolution = match self.lookup_type.get(word) {
-                        Some(&handle) => TypeResolution::Handle(handle),
-                        None => {
-                            let inner = self.parse_type_decl_impl(
-                                lexer,
-                                TypeAttributes::default(),
-                                word,
-                                ctx.types,
-                                ctx.constants,
-                            )?;
-                            TypeResolution::Value(inner)
-                        }
-                    };
-
-                    lexer.open_arguments()?;
-                    let mut components = Vec::new();
-                    let mut last_component =
-                        self.parse_general_expression(lexer, ctx.reborrow())?;
-                    while lexer.next_argument()? {
-                        components.push(last_component);
-                        last_component = self.parse_general_expression(lexer, ctx.reborrow())?;
-                    }
-
-                    let expr = if components.is_empty()
-                        && ty_resolution.inner_with(ctx.types).scalar_kind().is_some()
-                    {
-                        // We can't use the `TypeInner` returned by this because
-                        // `resolve_type` borrows context mutably.
-                        // Use it to insert into the right maps,
-                        // and then grab it again immutably.
-                        ctx.resolve_type(last_component)?;
-                        match (
-                            ty_resolution.inner_with(ctx.types),
-                            ctx.typifier.get(last_component, ctx.types),
-                        ) {
-                            (
-                                &crate::TypeInner::Vector { size, .. },
-                                &crate::TypeInner::Scalar { .. },
-                            ) => crate::Expression::Splat {
-                                size,
-                                value: last_component,
-                            },
-                            (
-                                &crate::TypeInner::Scalar { kind, width, .. },
-                                &crate::TypeInner::Scalar { .. },
-                            )
-                            | (
-                                &crate::TypeInner::Vector { kind, width, .. },
-                                &crate::TypeInner::Vector { .. },
-                            ) => crate::Expression::As {
-                                expr: last_component,
-                                kind,
-                                convert: Some(width),
-                            },
-                            (
-                                &crate::TypeInner::Matrix { width, .. },
-                                &crate::TypeInner::Matrix { .. },
-                            ) => crate::Expression::As {
-                                expr: last_component,
-                                kind: crate::ScalarKind::Float,
-                                convert: Some(width),
-                            },
-                            _ => {
-                                return Err(Error::BadTypeCast(word));
-                            }
-                        }
-                    } else {
-                        let ty = match ty_resolution {
-                            TypeResolution::Handle(handle) => handle,
-                            TypeResolution::Value(inner) => {
-                                ctx.types.fetch_or_append(crate::Type { name: None, inner })
-                            }
-                        };
-                        components.push(last_component);
-                        crate::Expression::Compose { ty, components }
-                    };
-                    ctx.expressions.append(expr)
+                    return Err(Error::UnknownIdent(word));
                 }
             }
             other => return Err(Error::Unexpected(other, "primary expression")),
@@ -1638,11 +1647,11 @@ impl Parser {
         word: &'a str,
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
-    ) -> Result<crate::TypeInner, Error<'a>> {
+    ) -> Result<Option<crate::TypeInner>, Error<'a>> {
         if let Some((kind, width)) = conv::get_scalar_type(word) {
-            return Ok(crate::TypeInner::Scalar { kind, width });
+            return Ok(Some(crate::TypeInner::Scalar { kind, width }));
         }
-        Ok(match word {
+        Ok(Some(match word {
             "vec2" => {
                 let (kind, width) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Vector {
@@ -1899,8 +1908,8 @@ impl Parser {
                     class: crate::ImageClass::Storage(format),
                 }
             }
-            _ => return Err(Error::UnknownType(word)),
-        })
+            _ => return Ok(None),
+        }))
     }
 
     /// Parse type declaration of a given name and attribute.
@@ -1916,12 +1925,13 @@ impl Parser {
         Ok(match self.lookup_type.get(name) {
             Some(&handle) => handle,
             None => {
-                let inner =
-                    self.parse_type_decl_impl(lexer, attribute, name, type_arena, const_arena)?;
-                type_arena.fetch_or_append(crate::Type {
-                    name: debug_name.map(|s| s.to_string()),
-                    inner,
-                })
+                match self.parse_type_decl_impl(lexer, attribute, name, type_arena, const_arena)? {
+                    Some(inner) => type_arena.fetch_or_append(crate::Type {
+                        name: debug_name.map(|s| s.to_string()),
+                        inner,
+                    }),
+                    None => return Err(Error::UnknownType(name)),
+                }
             }
         })
     }
