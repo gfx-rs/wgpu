@@ -40,11 +40,11 @@ void main() {
     vec2 pos1;
     vec2 vel1;
     uint i = 0u;
-    if((global_invocation_id[0] >= 1500u)) {
+    if((global_invocation_id.x >= 1500u)) {
         return;
     }
-    vPos = _group_0_binding_1.particles[global_invocation_id[0]].pos;
-    vVel = _group_0_binding_1.particles[global_invocation_id[0]].vel;
+    vPos = _group_0_binding_1.particles[global_invocation_id.x].pos;
+    vVel = _group_0_binding_1.particles[global_invocation_id.x].vel;
     cMass = vec2(0.0, 0.0);
     cVel = vec2(0.0, 0.0);
     colVel = vec2(0.0, 0.0);
@@ -52,7 +52,7 @@ void main() {
         if((i >= 1500u)) {
             break;
         }
-        if((i == global_invocation_id[0])) {
+        if((i == global_invocation_id.x)) {
             continue;
         }
         pos1 = _group_0_binding_1.particles[i].pos;
@@ -79,20 +79,20 @@ void main() {
     vVel = (((vVel + (cMass * _group_0_binding_0.rule1Scale)) + (colVel * _group_0_binding_0.rule2Scale)) + (cVel * _group_0_binding_0.rule3Scale));
     vVel = (normalize(vVel) * clamp(length(vVel), 0.0, 0.1));
     vPos = (vPos + (vVel * _group_0_binding_0.deltaT));
-    if((vPos[0] < -1.0)) {
-        vPos[0] = 1.0;
+    if((vPos.x < -1.0)) {
+        vPos.x = 1.0;
     }
-    if((vPos[0] > 1.0)) {
-        vPos[0] = -1.0;
+    if((vPos.x > 1.0)) {
+        vPos.x = -1.0;
     }
-    if((vPos[1] < -1.0)) {
-        vPos[1] = 1.0;
+    if((vPos.y < -1.0)) {
+        vPos.y = 1.0;
     }
-    if((vPos[1] > 1.0)) {
-        vPos[1] = -1.0;
+    if((vPos.y > 1.0)) {
+        vPos.y = -1.0;
     }
-    _group_0_binding_2.particles[global_invocation_id[0]].pos = vPos;
-    _group_0_binding_2.particles[global_invocation_id[0]].vel = vVel;
+    _group_0_binding_2.particles[global_invocation_id.x].pos = vPos;
+    _group_0_binding_2.particles[global_invocation_id.x].vel = vVel;
     return;
 }
 

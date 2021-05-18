@@ -30,7 +30,7 @@ smooth layout(location = 0) out vec2 _vs2fs_location0;
 void main1() {
     v_uv = a_uv;
     vec2 _expr13 = a_pos;
-    perVertexStruct.gen_gl_Position = vec4(_expr13[0], _expr13[1], 0.0, 1.0);
+    perVertexStruct.gen_gl_Position = vec4(_expr13.x, _expr13.y, 0.0, 1.0);
     return;
 }
 

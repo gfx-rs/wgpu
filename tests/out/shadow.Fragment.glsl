@@ -23,10 +23,10 @@ smooth layout(location = 1) in vec4 _vs2fs_location1;
 layout(location = 0) out vec4 _fs2p_location0;
 
 float fetch_shadow(uint light_id, vec4 homogeneous_coords) {
-    if((homogeneous_coords[3] <= 0.0)) {
+    if((homogeneous_coords.w <= 0.0)) {
         return 1.0;
     }
-    float _expr26 = textureGrad(_group_0_binding_2, vec4((((homogeneous_coords.xy * vec2(0.5, -0.5)) / vec2(homogeneous_coords[3])) + vec2(0.5, 0.5)), int(light_id), (homogeneous_coords[2] / homogeneous_coords[3])), vec2(0, 0), vec2(0,0));
+    float _expr26 = textureGrad(_group_0_binding_2, vec4((((homogeneous_coords.xy * vec2(0.5, -0.5)) / vec2(homogeneous_coords.w)) + vec2(0.5, 0.5)), int(light_id), (homogeneous_coords.z / homogeneous_coords.w)), vec2(0, 0), vec2(0,0));
     return _expr26;
 }
 
@@ -36,7 +36,7 @@ void main() {
     vec3 color1 = vec3(0.05, 0.05, 0.05);
     uint i = 0u;
     while(true) {
-        if((i >= min(_group_0_binding_0.num_lights[0], 10u))) {
+        if((i >= min(_group_0_binding_0.num_lights.x, 10u))) {
             break;
         }
         Light _expr21 = _group_0_binding_1.data[i];
