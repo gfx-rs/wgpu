@@ -177,7 +177,7 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::UnknownIdent(ref ident_span, ident) => ParseError {
-                message: format!("unknown identifier: '{}'", ident),
+                message: format!("no definition in scope for identifier: '{}'", ident),
                 labels: vec![(ident_span.clone(), "unknown identifier".into())],
                 notes: vec![],
             },

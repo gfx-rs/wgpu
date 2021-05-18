@@ -83,7 +83,7 @@ fn unknown_identifier() {
                   return x * schmoo;
               }
           "###,
-        r###"error: unknown identifier: 'schmoo'
+        r###"error: no definition in scope for identifier: 'schmoo'
   ┌─ wgsl:3:30
   │
 3 │                   return x * schmoo;
