@@ -25,6 +25,7 @@ use codespan_reporting::{
     },
 };
 use std::{
+    borrow::Cow,
     io::{self, Write},
     iter,
     num::NonZeroU32,
@@ -140,7 +141,10 @@ impl<'a> Error<'a> {
                     expected,
                     &source[unexpected_span.clone()],
                 ),
-                labels: vec![(unexpected_span.clone(), format!("expected {}", expected))],
+                labels: vec![(
+                    unexpected_span.clone(),
+                    format!("expected {}", expected).into(),
+                )],
                 notes: vec![],
             },
             Error::BadInteger(ref bad_span) => ParseError {
@@ -148,7 +152,7 @@ impl<'a> Error<'a> {
                     "expected integer literal, found `{}`",
                     &source[bad_span.clone()],
                 ),
-                labels: vec![(bad_span.clone(), "expected integer".to_string())],
+                labels: vec![(bad_span.clone(), "expected integer".into())],
                 notes: vec![],
             },
             Error::BadFloat(ref bad_span) => ParseError {
@@ -156,15 +160,12 @@ impl<'a> Error<'a> {
                     "expected floating-point literal, found `{}`",
                     &source[bad_span.clone()],
                 ),
-                labels: vec![(
-                    bad_span.clone(),
-                    "expected floating-point literal".to_string(),
-                )],
+                labels: vec![(bad_span.clone(), "expected floating-point literal".into())],
                 notes: vec![],
             },
             Error::BadScalarWidth(ref bad_span, width) => ParseError {
                 message: format!("invalid width of `{}` for literal", width,),
-                labels: vec![(bad_span.clone(), "invalid width".to_string())],
+                labels: vec![(bad_span.clone(), "invalid width".into())],
                 notes: vec!["valid width is 32".to_string()],
             },
             Error::BadAccessor(ref accessor_span) => ParseError {
@@ -172,12 +173,12 @@ impl<'a> Error<'a> {
                     "invalid field accessor `{}`",
                     &source[accessor_span.clone()],
                 ),
-                labels: vec![(accessor_span.clone(), "invalid accessor".to_string())],
+                labels: vec![(accessor_span.clone(), "invalid accessor".into())],
                 notes: vec![],
             },
             Error::UnknownIdent(ref ident_span, ident) => ParseError {
                 message: format!("unknown identifier: '{}'", ident),
-                labels: vec![(ident_span.clone(), "unknown identifier".to_string())],
+                labels: vec![(ident_span.clone(), "unknown identifier".into())],
                 notes: vec![],
             },
             ref error => ParseError {
@@ -543,7 +544,7 @@ struct ParsedVariable<'a> {
 #[derive(Clone, Debug)]
 pub struct ParseError {
     message: String,
-    labels: Vec<(Span, String)>,
+    labels: Vec<(Span, Cow<'static, str>)>,
     notes: Vec<String>,
 }
 
