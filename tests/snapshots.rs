@@ -244,6 +244,8 @@ fn convert_wgsl() {
         ),
         ("access", Targets::SPIRV | Targets::METAL | Targets::WGSL),
         ("standard", Targets::SPIRV | Targets::METAL | Targets::GLSL),
+        //TODO: GLSL https://github.com/gfx-rs/naga/issues/874
+        ("interface", Targets::SPIRV | Targets::METAL),
     ];
 
     for &(name, targets) in inputs.iter() {

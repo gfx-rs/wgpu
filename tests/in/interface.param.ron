@@ -1,0 +1,6 @@
+(
+	spv_version: (1, 0),
+	spv_debug: false,
+	spv_capabilities: [ Shader, SampleRateShading ],
+	spv_adjust_coordinate_space: false,
+)
