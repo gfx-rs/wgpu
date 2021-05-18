@@ -4592,6 +4592,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         B::hub(self).devices.label_for_resource(id)
     }
 
+    pub fn device_start_capture<B: GfxBackend>(&self, id: id::DeviceId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, _) = hub.devices.read(&mut token);
+        if let Ok(device) = device_guard.get(id) {
+            device.raw.start_capture();
+        }
+    }
+
+    pub fn device_stop_capture<B: GfxBackend>(&self, id: id::DeviceId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, _) = hub.devices.read(&mut token);
+        if let Ok(device) = device_guard.get(id) {
+            device.raw.stop_capture();
+        }
+    }
+
     pub fn device_drop<B: GfxBackend>(&self, device_id: id::DeviceId) {
         profiling::scope!("drop", "Device");
 
@@ -4867,29 +4885,5 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         self.buffer_unmap_inner::<B>(buffer_id)
             //Note: outside inner function so no locks are held when calling the callback
             .map(|pending_callback| fire_map_callbacks(pending_callback.into_iter()))
-    }
-
-    pub fn start_capture<B: GfxBackend>(
-        &self,
-        device_id: id::DeviceId,
-    ) -> Result<(), InvalidDevice> {
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let (device_guard, _) = hub.devices.read(&mut token);
-        let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
-        device.raw.start_capture();
-        Ok(())
-    }
-
-    pub fn stop_capture<B: GfxBackend>(
-        &self,
-        device_id: id::DeviceId,
-    ) -> Result<(), InvalidDevice> {
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let (device_guard, _) = hub.devices.read(&mut token);
-        let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
-        device.raw.stop_capture();
-        Ok(())
     }
 }
