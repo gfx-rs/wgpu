@@ -1491,9 +1491,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::ImageWrite => {
                     let extra = inst.expect_at_least(4)?;
+                    block.extend(emitter.finish(expressions));
                     let stmt =
                         self.parse_image_write(extra, type_arena, global_arena, expressions)?;
                     block.push(stmt);
+                    emitter.start(expressions);
                 }
                 Op::ImageFetch | Op::ImageRead => {
                     let extra = inst.expect_at_least(5)?;
