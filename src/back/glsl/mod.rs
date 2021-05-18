@@ -1489,8 +1489,11 @@ impl<'a, W: Write> Writer<'a, W> {
                 };
 
                 match *resolved {
-                    TypeInner::Vector { .. }
-                    | TypeInner::Matrix { .. }
+                    TypeInner::Vector { .. } => {
+                        // Write vector access as a swizzle
+                        write!(self.out, ".{}", COMPONENTS[index as usize])?
+                    }
+                    TypeInner::Matrix { .. }
                     | TypeInner::Array { .. }
                     | TypeInner::ValuePointer { .. } => write!(self.out, "[{}]", index)?,
                     TypeInner::Struct { .. } => {
