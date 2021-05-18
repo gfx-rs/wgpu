@@ -396,15 +396,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
 
 [[package]]
-name = "float-cmp"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1267f4ac4f343772758f7b1bdcbe767c218bbab93bb432acbf5162bbf85a6c4"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1135,7 +1126,6 @@ dependencies = [
  "env_logger",
  "log",
  "raw-window-handle",
- "renderdoc",
  "ron",
  "serde",
  "wgpu-core",
@@ -1213,21 +1203,6 @@ name = "regex-syntax"
 version = "0.6.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b181ba2dcf07aaccad5448e8ead58db5b742cf85dfe035e2227f137a539a189"
-
-[[package]]
-name = "renderdoc"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58fd0c55a54ecce0889aaca4ee87831cfe8c83c275c439443162be1f0eab5fdc"
-dependencies = [
- "bitflags",
- "float-cmp",
- "libloading 0.6.5",
- "once_cell",
- "renderdoc-sys",
- "winapi 0.3.9",
- "wio",
-]
 
 [[package]]
 name = "renderdoc-sys"

@@ -85,7 +85,7 @@ jobs:
             channel: stable
             prepare_command: rustup default stable-msvc
             additional_core_features: trace,serial-pass
-            additional_player_features: renderdoc
+            additional_player_features:
           - name: Windows Nightly
             os: windows-2019
             channel: nightly
