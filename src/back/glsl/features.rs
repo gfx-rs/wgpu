@@ -97,7 +97,7 @@ impl FeaturesManager {
         // gl_ClipDistance is supported by core versions > 1.3 and aren't supported by an es versions without extensions
         check_feature!(CLIP_DISTANCE, 130, 300);
         check_feature!(CULL_DISTANCE, 450, 300);
-        check_feature!(SAMPLE_VARIABLES, 300, 300);
+        check_feature!(SAMPLE_VARIABLES, 400, 300);
 
         // Return an error if there are missing features
         if missing.is_empty() {

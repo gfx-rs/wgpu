@@ -1,0 +1,62 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+struct VertexOutput {
+    metal::float4 position;
+    float varying;
+};
+struct FragmentOutput {
+    float depth;
+    metal::uint sample_mask;
+    float color;
+};
+
+struct vertex1Input {
+    metal::uint color1 [[attribute(10)]];
+};
+struct vertex1Output {
+    metal::float4 position [[position]];
+    float varying [[user(loc1), center_perspective]];
+};
+vertex vertex1Output vertex1(
+  vertex1Input varyings [[stage_in]]
+, metal::uint vertex_index [[vertex_id]]
+, metal::uint instance_index [[instance_id]]
+) {
+    const auto color1 = varyings.color1;
+    const auto _tmp = VertexOutput {metal::float4(1.0), static_cast<float>((vertex_index + instance_index) + color1)};
+    return vertex1Output { _tmp.position, _tmp.varying };
+}
+
+
+struct fragment1Input {
+    float varying [[user(loc1), center_perspective]];
+};
+struct fragment1Output {
+    float depth [[depth(any)]];
+    metal::uint sample_mask [[sample_mask]];
+    float color [[color(0)]];
+};
+fragment fragment1Output fragment1(
+  fragment1Input varyings1 [[stage_in]]
+, metal::float4 position [[position]]
+, bool front_facing [[front_facing]]
+, metal::uint sample_index [[sample_id]]
+, metal::uint sample_mask1 [[sample_mask]]
+) {
+    const VertexOutput in = { position, varyings1.varying };
+    const auto _tmp = FragmentOutput {in.varying, sample_mask1 & (1u << sample_index), front_facing ? 0.0 : 1.0};
+    return fragment1Output { _tmp.depth, _tmp.sample_mask, _tmp.color };
+}
+
+
+struct compute1Input {
+};
+kernel void compute1(
+  metal::uint3 global_id [[thread_position_in_grid]]
+, metal::uint3 local_id [[thread_position_in_threadgroup]]
+, metal::uint local_index [[thread_index_in_threadgroup]]
+, metal::uint3 wg_id [[threadgroup_position_in_grid]]
+) {
+    return;
+}
