@@ -30,6 +30,8 @@ bitflags::bitflags! {
         const SAMPLE_QUALIFIER = 1 << 12;
         const CLIP_DISTANCE = 1 << 13;
         const CULL_DISTANCE = 1 << 14;
+        // Sample ID
+        const SAMPLE_VARIABLES = 1 << 15;
     }
 }
 
@@ -95,6 +97,7 @@ impl FeaturesManager {
         // gl_ClipDistance is supported by core versions > 1.3 and aren't supported by an es versions without extensions
         check_feature!(CLIP_DISTANCE, 130, 300);
         check_feature!(CULL_DISTANCE, 450, 300);
+        check_feature!(SAMPLE_VARIABLES, 300, 300);
 
         // Return an error if there are missing features
         if missing.is_empty() {
@@ -181,6 +184,11 @@ impl FeaturesManager {
             // TODO: handle gl_ClipDistance and gl_CullDistance usage in better way
             // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_clip_cull_distance.txt
             // writeln!(out, "#extension GL_EXT_clip_cull_distance : require")?;
+        }
+
+        if self.0.contains(Features::SAMPLE_VARIABLES) && version.is_es() {
+            // https://www.khronos.org/registry/OpenGL/extensions/OES/OES_sample_variables.txt
+            writeln!(out, "#extension GL_OES_sample_variables : require")?;
         }
 
         Ok(())
@@ -309,6 +317,9 @@ impl<'a, W> Writer<'a, W> {
                             }
                             crate::BuiltIn::CullDistance => {
                                 self.features.request(Features::CULL_DISTANCE)
+                            }
+                            crate::BuiltIn::SampleIndex => {
+                                self.features.request(Features::SAMPLE_VARIABLES)
                             }
                             _ => {}
                         },
