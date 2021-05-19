@@ -448,9 +448,8 @@ trait Context: Debug + Send + Sized + Sync {
     );
     fn queue_get_timestamp_period(&self, queue: &Self::QueueId) -> f32;
 
-    fn start_capture(&self, device: &Self::DeviceId);
-
-    fn stop_capture(&self, device: &Self::DeviceId);
+    fn device_start_capture(&self, device: &Self::DeviceId);
+    fn device_stop_capture(&self, device: &Self::DeviceId);
 }
 
 /// Context for all other wgpu objects. Instance of wgpu.
@@ -1667,12 +1666,12 @@ impl Device {
 
     /// Starts frame capture.
     pub fn start_capture(&self) {
-        Context::start_capture(&*self.context, &self.id)
+        Context::device_start_capture(&*self.context, &self.id)
     }
 
     /// Stops frame capture.
     pub fn stop_capture(&self) {
-        Context::stop_capture(&*self.context, &self.id)
+        Context::device_stop_capture(&*self.context, &self.id)
     }
 }
 

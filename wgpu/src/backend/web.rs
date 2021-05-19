@@ -2026,9 +2026,8 @@ impl crate::Context for Context {
         1.0 //TODO
     }
 
-    fn start_capture(&self, device: &Self::DeviceId) {}
-
-    fn stop_capture(&self, device: &Self::DeviceId) {}
+    fn device_start_capture(&self, _device: &Self::DeviceId) {}
+    fn device_stop_capture(&self, _device: &Self::DeviceId) {}
 }
 
 pub(crate) type SwapChainOutputDetail = ();
