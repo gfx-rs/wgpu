@@ -27,7 +27,7 @@ impl crate::Module {
     /// binding that can vary, and everything else either defaults to flat, or
     /// requires an explicit flat qualifier/attribute/what-have-you.
     ///
-    /// [`Binding`]: super::Binding
+    /// [`Binding`]: crate::Binding
     pub fn apply_common_default_interpolation(&mut self) {
         use crate::{Binding, ScalarKind, Type, TypeInner};
 

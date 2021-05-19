@@ -1,22 +1,108 @@
 /*! Universal shader translator.
 
-The central structure of the crate is [`Module`].
+The central structure of the crate is [`Module`]. A `Module` contains:
 
-To improve performance and reduce memory usage, most structures are stored
-in an [`Arena`], and can be retrieved using the corresponding [`Handle`].
+- [`EntryPoint`]s, the main functions for pipeline stages like vertex shading or
+  fragment shading,
 
-Functions are described in terms of statement trees. A statement may have
-branching control flow, and it may be mutating. Statements refer to expressions.
+- [`Function`]s, representing functions used by `EntryPoint`s and other `Function`s,
 
-Expressions form a DAG, without any side effects. Expressions need to be
-emitted in order to take effect. This happens in one of the following ways:
-  1. Constants and function arguments are implicitly emitted at function start.
-      This corresponds to `expression.needs_pre_emit()` condition.
-  2. Local and global variables are implicitly emitted. However, in order to use parts
-      of them in right-hand-side expressions, the `Expression::Load` must be explicitly emitted,
-      with an exception of `StorageClass::Handle` global variables.
-  3. Result of `Statement::Call` is automatically emitted.
-  4. `Statement::Emit` range is explicitly emitted.
+- [`Constant`]s and [`GlobalVariable`]s used by `EntryPoint`s and `Function`s, and
+
+- [`Type`]s used by the above.
+
+The body of an `EntryPoint` or `Function` is represented using two types:
+
+- An [`Expression`] produces a value, but has no side effects or control flow.
+  `Expressions` include variable references, unary and binary operators, and so
+  on.
+
+- A [`Statement`] can have side effects and structured control flow.
+  `Statement`s do not produce a value, other than by storing one in some
+  designated place. `Statements` include blocks, conditionals, and loops, but also
+  operations that have side effects, like stores and function calls.
+
+`Statement`s form a tree, with pointers into the DAG of `Expression`s.
+
+Restricting side effects to statements simplifies analysis and code generation.
+A Naga backend can generate code to evaluate an `Expression` however and
+whenever it pleases, as long as it is certain to observe the side effects of all
+previously executed `Statement`s.
+
+Many `Statement` variants use the [`Block`] type, which is simply `Vec<Block>`,
+representing a series of statements executed in order. The body of an
+`EntryPoint`s or `Function` is a `Block`, and `Statement` has a
+[`Block`][Statement::Block] variant.
+
+To improve translator performance and reduce memory usage, most structures are
+stored in an [`Arena`]. An `Arena<T>` stores a series of `T` values, indexed by
+[`Handle<T>`](Handle) values, which are just wrappers around integer indexes.
+For example, a `Function`'s expressions are stored in an `Arena<Expression>`,
+and compound expressions refer to their sub-expressions via `Handle<Expression>`
+values. (When examining the serialized form of a `Module`, note that the first
+element of an `Arena` has an index of 1, not 0.)
+
+## Function Calls
+
+The Naga IR's representation of function calls is unusual. Most languages treat
+function calls as expressions, but because calls may have side effects, Naga
+represents them with [`Statement::Call`]. A call statement may designate a
+particular `Expression` to represent its return value, if any, which can be used
+by subsequent statements and their expressions.
+
+## `Expression` evaluation time and scope
+
+While the order of execution of [`Statement`]s is apparent from their structure,
+it is not so obvious exactly when a given [`Expression`] should be evaluated,
+since many `Statement`s and `Expression`s may refer to its value. But it is
+essential to clearly specify an expression's evaluation time, since that
+determines which statements' effects the expression should observe. It is also
+helpful to backends to limit the visibility of an `Expression`'s value to a
+portion of the statement tree.
+
+An `Expression` may only be used, whether by a `Statement` or another
+`Expression`, if one of the following is true:
+
+- The expression is an [`Expression::Constant`], [`Expression::FunctionArgument`], or
+  [`Expression::GlobalVariable`].
+
+- The expression is an [`Expression::LocalVariable`] that is either the
+  `pointer` (destination) of a [`Statement::Store`], or initialized by some
+  previously executed `Statement::Store`.
+
+- The expression is the `result` of a [`Statement::Call`], representing the
+  call's return value. The call must be 'in scope' for the use (see below).
+
+- The expression is included in the range of some [`Statement::Emit`] that is
+  'in scope' for the use (see below). The [`Expression::needs_pre_emit`] method
+  returns `true` if the given expression does *not* need to be covered by an
+  `Emit` statement.
+
+The scope of an expression evaluated by an `Emit` statement covers the
+subsequent expressions in that `Emit`, any following statements in the `Block`
+to which that `Emit` belongs (if any) and their sub-statements (if any).
+
+If a `Call` statement has a `result` expression, then it is in scope for any
+statements following the `Call` in the `Block` to which that `Call` belongs (if
+any) and their sub-statements (if any).
+
+This means that, for example, an expression evaluated by some statement in a
+nested `Block` is not available in the `Block`'s parents. Such a value would
+need to be stored in a local variable to be carried upwards in the statement
+tree.
+
+## Variables
+
+An [`Expression::LocalVariable`] or [`Expression::GlobalVariable`] produces a
+pointer value referring to the variable's value. To retrieve the variable's
+value, use an [`Expression::Load`], with the variable expression as its
+`pointer` operand. To assign to a variable, use a [`Statement::Store`] with the
+variable expression as its `pointer` operand.
+
+As an exception, [`Expression::GlobalVariable`]s referring to
+[`GlobalVariable`]s whose `class` is [`StorageClass::Handle`] produce the
+variable's value directly; no `Load` is needed. These global variables refer to
+opaque values like samplers and images.
 
 !*/
 
@@ -778,6 +864,9 @@ pub enum Expression {
         right: Handle<Expression>,
     },
     /// Select between two values based on a condition.
+    ///
+    /// Note that, because expressions have no side effects, it is unobservable
+    /// whether the non-selected branch is evaluated.
     Select {
         /// Boolean expression
         condition: Handle<Expression>,
@@ -848,6 +937,10 @@ pub struct SwitchCase {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Statement {
     /// Emit a range of expressions, visible to all statements that follow in this block.
+    ///
+    /// See the [module-level documentation][emit] for details.
+    ///
+    /// [emit]: index.html#expression-evaluation-time-and-scope
     Emit(Range<Expression>),
     /// A block containing more statements, to be executed sequentially.
     Block(Block),
@@ -981,7 +1074,7 @@ pub struct EntryPoint {
 /// To create a new module, use the `Default` implementation.
 /// Alternatively, you can load an existing shader using one of the [available front ends][front].
 ///
-/// When finished, you can export modules using one of the [available back ends][back].
+/// When finished, you can export modules using one of the [available backends][back].
 #[derive(Debug, Default)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
