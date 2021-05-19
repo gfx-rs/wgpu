@@ -1,6 +1,5 @@
 (
 	spv_version: (1, 1),
-	spv_capabilities: [ Shader, ImageQuery, Image1D, Sampled1D ],
 	spv_debug: true,
 	spv_adjust_coordinate_space: false,
 	msl_custom: false,

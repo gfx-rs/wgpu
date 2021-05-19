@@ -2,9 +2,7 @@
 ; Version: 1.1
 ; Generator: rspirv
 ; Bound: 31
-OpCapability Image1D
 OpCapability Shader
-OpCapability Sampled1D
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %19 "foo" %14 %17

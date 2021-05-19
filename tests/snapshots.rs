@@ -24,6 +24,7 @@ struct Parameters {
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_version: (u8, u8),
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+    #[serde(default)]
     spv_capabilities: naga::FastHashSet<spirv::Capability>,
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_debug: bool,
@@ -127,7 +128,11 @@ fn check_output_spv(
     let options = spv::Options {
         lang_version: params.spv_version,
         flags,
-        capabilities: Some(params.spv_capabilities.clone()),
+        capabilities: if params.spv_capabilities.is_empty() {
+            None
+        } else {
+            Some(params.spv_capabilities.clone())
+        },
     };
 
     let spv = spv::write_vec(module, info, &options).unwrap();
