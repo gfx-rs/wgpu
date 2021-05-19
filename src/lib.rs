@@ -2,10 +2,10 @@
 
 The central structure of the crate is [`Module`]. A `Module` contains:
 
-- [`EntryPoint`]s, the main functions for pipeline stages like vertex shading or
-  fragment shading,
+- [`Function`]s, which have arguments, a return type, local variables, and a body,
 
-- [`Function`]s, representing functions used by `EntryPoint`s and other `Function`s,
+- [`EntryPoint`]s, which are specialized functions that can serve as the entry
+  point for pipeline stages like vertex shading or fragment shading,
 
 - [`Constant`]s and [`GlobalVariable`]s used by `EntryPoint`s and `Function`s, and
 
@@ -34,6 +34,8 @@ representing a series of statements executed in order. The body of an
 `EntryPoint`s or `Function` is a `Block`, and `Statement` has a
 [`Block`][Statement::Block] variant.
 
+## Arenas
+
 To improve translator performance and reduce memory usage, most structures are
 stored in an [`Arena`]. An `Arena<T>` stores a series of `T` values, indexed by
 [`Handle<T>`](Handle) values, which are just wrappers around integer indexes.
@@ -44,65 +46,87 @@ element of an `Arena` has an index of 1, not 0.)
 
 ## Function Calls
 
-The Naga IR's representation of function calls is unusual. Most languages treat
+Naga's representation of function calls is unusual. Most languages treat
 function calls as expressions, but because calls may have side effects, Naga
-represents them with [`Statement::Call`]. A call statement may designate a
-particular `Expression` to represent its return value, if any, which can be used
-by subsequent statements and their expressions.
+represents them as a kind of statement, [`Statement::Call`]. If the function
+returns a value, a call statement designates a particular [`Expression::Call`]
+expression to represent its return value, for use by subsequent statements and
+expressions.
 
 ## `Expression` evaluation time and scope
 
-While the order of execution of [`Statement`]s is apparent from their structure,
-it is not so obvious exactly when a given [`Expression`] should be evaluated,
-since many `Statement`s and `Expression`s may refer to its value. But it is
-essential to clearly specify an expression's evaluation time, since that
-determines which statements' effects the expression should observe. It is also
-helpful to backends to limit the visibility of an `Expression`'s value to a
-portion of the statement tree.
+It is essential to know when an [`Expression`] should be evaluated, because its
+value may depend on previous [`Statement`]s' effects. But whereas the order of
+execution for a tree of `Statement`s is apparent from its structure, it is not
+so clear for `Expressions`, since an expression may be referred to by any number
+of `Statement`s and other `Expression`s.
 
-An `Expression` may only be used, whether by a `Statement` or another
-`Expression`, if one of the following is true:
+Naga's rules for when `Expression`s are evaluated are as follows:
 
-- The expression is an [`Expression::Constant`], [`Expression::FunctionArgument`], or
-  [`Expression::GlobalVariable`].
+-   [`Constant`](Expression::Constant) expressions are considered to be
+    implicitly evaluated before execution begins.
 
-- The expression is an [`Expression::LocalVariable`] that is either the
-  `pointer` (destination) of a [`Statement::Store`], or initialized by some
-  previously executed `Statement::Store`.
+-   [`FunctionArgument`] and [`LocalVariable`] expressions are considered
+    implicitly evaluated upon entry to the function to which they belong.
+    Function arguments cannot be assigned to, and `LocalVariable` expressions
+    produce a *pointer to* the variable's value (for use with [`Load`] and
+    [`Store`]). Neither varies while the function executes, so it suffices to
+    consider these expressions evaluated once on entry.
 
-- The expression is the `result` of a [`Statement::Call`], representing the
-  call's return value. The call must be 'in scope' for the use (see below).
+-   Similarly, [`GlobalVariable`] expressions are considered implicitly
+    evaluated before execution begins, since their value does not change while
+    code executes, for one of two reasons:
 
-- The expression is included in the range of some [`Statement::Emit`] that is
-  'in scope' for the use (see below). The [`Expression::needs_pre_emit`] method
-  returns `true` if the given expression does *not* need to be covered by an
-  `Emit` statement.
+    -   Most `GlobalVariable` expressions produce a pointer to the variable's
+        value, for use with [`Load`] and [`Store`], as `LocalVariable`
+        expressions do. Although the variable's value may change, its address
+        does not.
 
-The scope of an expression evaluated by an `Emit` statement covers the
-subsequent expressions in that `Emit`, any following statements in the `Block`
-to which that `Emit` belongs (if any) and their sub-statements (if any).
+    -   A `GlobalVariable` expression referring to a global in the
+        [`StorageClass::Handle`] storage class produces the value directly, not
+        a pointer. Such global variables hold opaque types like shaders or
+        images, and cannot be assigned to.
 
-If a `Call` statement has a `result` expression, then it is in scope for any
-statements following the `Call` in the `Block` to which that `Call` belongs (if
-any) and their sub-statements (if any).
+-   A [`Call`](Expression::Call) expression that is the `result` of a
+    [`Statement::Call`], representing the call's return value, is evaluated when
+    the `Call` statement is executed.
 
-This means that, for example, an expression evaluated by some statement in a
+-   All other expressions are evaluated when the (unique) [`Statement::Emit`]
+    statement that covers them is executed. The [`Expression::needs_pre_emit`]
+    method returns `true` if the given expression is one of those variants that
+    does *not* need to be covered by an `Emit` statement.
+
+Each `Expression` has a *scope*, which is the region of the function within
+which it can be used by `Statement`s and other `Expression`s. It is a validation
+error to use an `Expression` outside its scope.
+
+An expression's scope is defined as follows:
+
+-   The scope of a [`Constant`], [`GlobalVariable`], [`FunctionArgument`] or
+    [`LocalVariable`] expression covers the entire `Function` in which it
+    occurs.
+
+-   The scope of an expression evaluated by an [`Emit`] statement covers the
+    subsequent expressions in that `Emit`, the subsequent statements in the `Block`
+    to which that `Emit` belongs (if any) and their sub-statements (if any).
+
+-   If a [`Call`] statement has a `result` expression, then that expression's
+    scope covers the subsequent statements in the `Block` to which that `Call`
+    belongs (if any) and their sub-statements (if any).
+
+For example, this implies that an expression evaluated by some statement in a
 nested `Block` is not available in the `Block`'s parents. Such a value would
 need to be stored in a local variable to be carried upwards in the statement
 tree.
 
-## Variables
-
-An [`Expression::LocalVariable`] or [`Expression::GlobalVariable`] produces a
-pointer value referring to the variable's value. To retrieve the variable's
-value, use an [`Expression::Load`], with the variable expression as its
-`pointer` operand. To assign to a variable, use a [`Statement::Store`] with the
-variable expression as its `pointer` operand.
-
-As an exception, [`Expression::GlobalVariable`]s referring to
-[`GlobalVariable`]s whose `class` is [`StorageClass::Handle`] produce the
-variable's value directly; no `Load` is needed. These global variables refer to
-opaque values like samplers and images.
+[`Call`]: Statement::Call
+[`Constant`]: Expression::Constant
+[`Emit`]: Statement::Emit
+[`FunctionArgument`]: Expression::FunctionArgument
+[`GlobalVariable`]: Expression::GlobalVariable
+[`Load`]: Expression::Load
+[`LocalVariable`]: Expression::LocalVariable
+[`Store`]: Statement::Store
 
 !*/
 
@@ -917,6 +941,8 @@ pub enum Expression {
         index: u32,
     },
     /// Constant value.
+    ///
+    /// Every `Constant` expression 
     Constant(Handle<Constant>),
     /// Splat scalar into a vector.
     Splat {
@@ -934,12 +960,40 @@ pub enum Expression {
         ty: Handle<Type>,
         components: Vec<Handle<Expression>>,
     },
+
     /// Reference a function parameter, by its index.
+    ///
+    /// A `FunctionArgument` expression evaluates to a pointer to the argument's
+    /// value. You must use a [`Load`] expression to retrieve its value, or a
+    /// [`Store`] statement to assign it a new value.
+    ///
+    /// [`Load`]: Expression::Load
+    /// [`Store`]: Statement::Store
     FunctionArgument(u32),
+
     /// Reference a global variable.
+    ///
+    /// If the given `GlobalVariable`'s [`class`] is [`StorageClass::Handle`],
+    /// then the variable stores some opaque type like a sampler or an image,
+    /// and a `GlobalVariable` expression referring to it produces the
+    /// variable's value directly.
+    ///
+    /// For any other storage class, a `GlobalVariable` expression produces a
+    /// pointer to the variable's value. You must use a [`Load`] expression to
+    /// retrieve its value, or a [`Store`] statement to assign it a new value.
+    ///
+    /// [`class`]: GlobalVariable::class
+    /// [`Load`]: Expression::Load
+    /// [`Store`]: Statement::Store
     GlobalVariable(Handle<GlobalVariable>),
+
     /// Reference a local variable.
+    ///
+    /// A `LocalVariable` expression evaluates to a pointer to the variable's value.
+    /// You must use a [`Load`](Expression::Load) expression to retrieve its value,
+    /// or a [`Store`](Statement::Store) statement to assign it a new value.
     LocalVariable(Handle<LocalVariable>),
+
     /// Load a value indirectly.
     Load { pointer: Handle<Expression> },
     /// Sample a point from a sampled or a depth image.
