@@ -1897,26 +1897,14 @@ impl crate::Context for Context {
         }
     }
 
-    fn start_capture(&self, device: &Self::DeviceId) {
+    fn device_start_capture(&self, device: &Self::DeviceId) {
         let global = &self.0;
-        let res = wgc::gfx_select!(device.id => global.start_capture(device.id));
-        match res {
-            Ok(v) => v,
-            Err(cause) => {
-                self.handle_error_fatal(cause, "Device::start_capture");
-            }
-        }
+        wgc::gfx_select!(device.id => global.device_start_capture(device.id));
     }
 
-    fn stop_capture(&self, device: &Self::DeviceId) {
+    fn device_stop_capture(&self, device: &Self::DeviceId) {
         let global = &self.0;
-        let res = wgc::gfx_select!(device.id => global.stop_capture(device.id));
-        match res {
-            Ok(v) => v,
-            Err(cause) => {
-                self.handle_error_fatal(cause, "Device::stop_capture");
-            }
-        }
+        wgc::gfx_select!(device.id => global.device_stop_capture(device.id));
     }
 }
 
