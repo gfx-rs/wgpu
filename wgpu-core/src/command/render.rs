@@ -391,6 +391,10 @@ pub enum RenderPassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("attachment texture view {0:?} is invalid")]
     InvalidAttachment(id::TextureViewId),
+    #[error("attachment format {0:?} is not a color format")]
+    InvalidColorAttachmentFormat(wgt::TextureFormat),
+    #[error("attachment format {0:?} is not a depth-stencil format")]
+    InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
     #[error("necessary attachments are missing")]
     MissingAttachments,
     #[error("attachments have differing sizes: {previous:?} is followed by {mismatch:?}")]
@@ -567,6 +571,11 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     add_view(view, "depth")?;
 
                     depth_stencil_aspects = view.aspects;
+                    if view.aspects.contains(hal::format::Aspects::COLOR) {
+                        return Err(RenderPassErrorInner::InvalidDepthStencilAttachmentFormat(
+                            view.format,
+                        ));
+                    }
 
                     let source_id = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => source_id,
@@ -623,6 +632,12 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     .use_extend(&*view_guard, at.view, (), ())
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
                 add_view(view, "color")?;
+
+                if !view.aspects.contains(hal::format::Aspects::COLOR) {
+                    return Err(RenderPassErrorInner::InvalidColorAttachmentFormat(
+                        view.format,
+                    ));
+                }
 
                 let layouts = match view.inner {
                     TextureViewInner::Native { ref source_id, .. } => {
