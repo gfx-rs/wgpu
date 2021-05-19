@@ -2,9 +2,7 @@
 ; Version: 1.1
 ; Generator: rspirv
 ; Bound: 49
-OpCapability Image1D
 OpCapability Shader
-OpCapability Sampled1D
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450

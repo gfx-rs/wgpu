@@ -283,7 +283,7 @@ pub struct Writer {
     logical_layout: LogicalLayout,
     id_gen: IdGenerator,
     capabilities: crate::FastHashSet<spirv::Capability>,
-    strict_capabilities: bool,
+    forbidden_caps: Option<&'static [spirv::Capability]>,
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     flags: WriterFlags,
@@ -313,19 +313,22 @@ impl Writer {
         let gl450_ext_inst_id = id_gen.next();
         let void_type = id_gen.next();
 
+        let (capabilities, forbidden_caps) = match options.capabilities {
+            Some(ref caps) => (caps.clone(), None),
+            None => {
+                let mut caps = crate::FastHashSet::default();
+                caps.insert(spirv::Capability::Shader);
+                let forbidden: &[_] = &[spirv::Capability::Kernel];
+                (caps, Some(forbidden))
+            }
+        };
+
         Ok(Writer {
             physical_layout: PhysicalLayout::new(raw_version),
             logical_layout: LogicalLayout::default(),
             id_gen,
-            capabilities: match options.capabilities {
-                Some(ref caps) => caps.clone(),
-                None => {
-                    let mut caps = crate::FastHashSet::default();
-                    caps.insert(spirv::Capability::Shader);
-                    caps
-                }
-            },
-            strict_capabilities: options.capabilities.is_some(),
+            capabilities,
+            forbidden_caps,
             debugs: vec![],
             annotations: vec![],
             flags: options.flags,
@@ -344,20 +347,21 @@ impl Writer {
     }
 
     fn check(&mut self, capabilities: &[spirv::Capability]) -> Result<(), Error> {
-        if self.strict_capabilities {
-            if capabilities.is_empty()
-                || capabilities
-                    .iter()
-                    .any(|cap| self.capabilities.contains(cap))
-            {
-                Ok(())
-            } else {
-                Err(Error::MissingCapabilities(capabilities.to_vec()))
-            }
-        } else {
-            self.capabilities.extend(capabilities);
-            Ok(())
+        if capabilities.is_empty()
+            || capabilities
+                .iter()
+                .any(|cap| self.capabilities.contains(cap))
+        {
+            return Ok(());
         }
+        if let Some(forbidden) = self.forbidden_caps {
+            // take the first allowed capability, blindly
+            if let Some(&cap) = capabilities.iter().find(|cap| !forbidden.contains(cap)) {
+                self.capabilities.insert(cap);
+                return Ok(());
+            }
+        }
+        Err(Error::MissingCapabilities(capabilities.to_vec()))
     }
 
     fn get_type_id(
@@ -887,7 +891,15 @@ impl Writer {
                 let kind = match class {
                     crate::ImageClass::Sampled { kind, multi: _ } => kind,
                     crate::ImageClass::Depth => crate::ScalarKind::Float,
-                    crate::ImageClass::Storage(format) => format.into(),
+                    crate::ImageClass::Storage(format) => {
+                        let required_caps: &[_] = match dim {
+                            crate::ImageDimension::D1 => &[spirv::Capability::Image1D],
+                            crate::ImageDimension::Cube => &[spirv::Capability::ImageCubeArray],
+                            _ => &[],
+                        };
+                        self.check(required_caps)?;
+                        format.into()
+                    }
                 };
                 let local_type = LocalType::Value {
                     vector_size: None,
@@ -895,9 +907,9 @@ impl Writer {
                     width: 4,
                     pointer_class: None,
                 };
-                let type_id = self.get_type_id(arena, LookupType::Local(local_type))?;
                 let dim = map_dim(dim);
                 self.check(dim.required_capabilities())?;
+                let type_id = self.get_type_id(arena, LookupType::Local(local_type))?;
                 Instruction::type_image(id, type_id, dim, arrayed, class)
             }
             crate::TypeInner::Sampler { comparison: _ } => Instruction::type_sampler(id),
@@ -2212,6 +2224,8 @@ impl Writer {
                     }
                 };
 
+                self.check(&[spirv::Capability::ImageQuery])?;
+
                 match query {
                     Iq::Size { level } => {
                         let dim_coords = match dim {
@@ -2248,6 +2262,7 @@ impl Writer {
                                 (spirv::Op::ImageQuerySizeLod, Some(level_id))
                             }
                         };
+
                         // The ID of the vector returned by SPIR-V, which contains the dimensions
                         // as well as the layer count.
                         let id_extended = self.id_gen.next();

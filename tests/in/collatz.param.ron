@@ -1,5 +1,4 @@
 (
 	spv_version: (1, 0),
-	spv_capabilities: [ Shader ],
 	spv_debug: true,
 )
