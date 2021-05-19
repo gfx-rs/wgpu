@@ -43,7 +43,7 @@ impl Program<'_> {
 
                 let handle = self.module.global_variables.append(GlobalVariable {
                     name: Some(name.into()),
-                    class: StorageClass::Function,
+                    class: StorageClass::Private,
                     binding: None,
                     ty,
                     init: None,
@@ -69,7 +69,7 @@ impl Program<'_> {
 
                 let handle = self.module.global_variables.append(GlobalVariable {
                     name: Some(name.into()),
-                    class: StorageClass::Function,
+                    class: StorageClass::Private,
                     binding: None,
                     ty,
                     init: None,
@@ -95,7 +95,7 @@ impl Program<'_> {
 
                 let handle = self.module.global_variables.append(GlobalVariable {
                     name: Some(name.into()),
-                    class: StorageClass::Function,
+                    class: StorageClass::Private,
                     binding: None,
                     ty,
                     init: None,
@@ -220,7 +220,7 @@ impl Program<'_> {
             meta,
         }: VarDeclaration,
     ) -> Result<Handle<Expression>, ErrorKind> {
-        let mut storage = StorageQualifier::StorageClass(StorageClass::Function);
+        let mut storage = StorageQualifier::StorageClass(StorageClass::Private);
         let mut interpolation = None;
         let mut binding = None;
         let mut location = None;
@@ -230,7 +230,7 @@ impl Program<'_> {
         for qualifier in qualifiers {
             match *qualifier {
                 TypeQualifier::StorageQualifier(s) => {
-                    if StorageQualifier::StorageClass(StorageClass::Function) != storage {
+                    if StorageQualifier::StorageClass(StorageClass::Private) != storage {
                         return Err(ErrorKind::SemanticError(
                             meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
@@ -317,7 +317,7 @@ impl Program<'_> {
 
             let handle = self.module.global_variables.append(GlobalVariable {
                 name: Some(name.clone()),
-                class: StorageClass::Function,
+                class: StorageClass::Private,
                 binding: None,
                 ty,
                 init,
@@ -350,7 +350,7 @@ impl Program<'_> {
 
         let class = match storage {
             StorageQualifier::StorageClass(class) => class,
-            _ => StorageClass::Function,
+            _ => StorageClass::Private,
         };
 
         let handle = self.module.global_variables.append(GlobalVariable {

@@ -142,8 +142,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
     fn parse_type_non_void(&mut self) -> Result<(Handle<Type>, SourceMetadata)> {
         let (maybe_ty, meta) = self.parse_type()?;
-        let ty = maybe_ty
-            .ok_or_else(|| ErrorKind::SemanticError(meta, "Type can't be void".into()))?;
+        let ty =
+            maybe_ty.ok_or_else(|| ErrorKind::SemanticError(meta, "Type can't be void".into()))?;
 
         Ok((ty, meta))
     }
@@ -259,15 +259,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             ConstantInner::Scalar {
                 value: ScalarValue::Uint(int),
                 ..
-            } => u32::try_from(int).map_err(|_| {
-                ErrorKind::SemanticError(meta, "int constant overflows".into())
-            }),
+            } => u32::try_from(int)
+                .map_err(|_| ErrorKind::SemanticError(meta, "int constant overflows".into())),
             ConstantInner::Scalar {
                 value: ScalarValue::Sint(int),
                 ..
-            } => u32::try_from(int).map_err(|_| {
-                ErrorKind::SemanticError(meta, "int constant overflows".into())
-            }),
+            } => u32::try_from(int)
+                .map_err(|_| ErrorKind::SemanticError(meta, "int constant overflows".into())),
             _ => Err(ErrorKind::SemanticError(
                 meta,
                 "Expected a uint constant".into(),
@@ -327,11 +325,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let expr = self.parse_conditional(&mut ctx, None)?;
         let (root, meta) = ctx.lower(self.program, expr, false, &mut Block::new())?;
 
-        Ok((
-            self.program
-                .solve_constant(&expressions, root, meta)?,
-            meta,
-        ))
+        Ok((self.program.solve_constant(&expressions, root, meta)?, meta))
     }
 
     fn parse_external_declaration(&mut self) -> Result<()> {
@@ -685,14 +679,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         ty_name: String,
         meta: SourceMetadata,
     ) -> Result<bool> {
-        let mut class = StorageClass::Function;
+        let mut class = StorageClass::Private;
         let mut binding = None;
         let mut layout = None;
 
         for qualifier in qualifiers {
             match *qualifier {
                 TypeQualifier::StorageQualifier(StorageQualifier::StorageClass(c)) => {
-                    if StorageClass::Function != class {
+                    if StorageClass::Private != class {
                         return Err(ErrorKind::SemanticError(
                             meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
@@ -1233,11 +1227,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             let value = {
                                 let expr = self.parse_expression(ctx)?;
                                 let (root, meta) = ctx.lower(self.program, expr, false, body)?;
-                                let constant = self.program.solve_constant(
-                                    &ctx.expressions,
-                                    root,
-                                    meta,
-                                )?;
+                                let constant =
+                                    self.program.solve_constant(&ctx.expressions, root, meta)?;
 
                                 match self.program.module.constants[constant].inner {
                                     ConstantInner::Scalar {
