@@ -1,6 +1,6 @@
 use crate::{
-    Binding, BuiltIn, Constant, Expression, GlobalVariable, Handle, LocalVariable, ScalarKind,
-    StorageAccess, StorageClass, Type, TypeInner, VectorSize,
+    Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle, LocalVariable,
+    ScalarKind, StorageAccess, StorageClass, Type, TypeInner, VectorSize,
 };
 
 use super::ast::*;
@@ -18,119 +18,102 @@ pub struct VarDeclaration<'a> {
 impl Program<'_> {
     pub fn lookup_variable(
         &mut self,
-        context: &mut Context,
+        ctx: &mut Context,
+        body: &mut Block,
         name: &str,
     ) -> Result<Option<VariableReference>, ErrorKind> {
-        if let Some(local_var) = context.lookup_local_var(name) {
+        if let Some(local_var) = ctx.lookup_local_var(name) {
             return Ok(Some(local_var));
         }
-        if let Some(global_var) = context.lookup_global_var(self, name) {
+        if let Some(global_var) = ctx.lookup_global_var(name) {
             return Ok(Some(global_var));
         }
-        if let Some(constant) = context.lookup_constants_var(self, name) {
-            return Ok(Some(constant));
-        }
+
+        let mut add_builtin = |inner, builtin, mutable| {
+            let ty = self
+                .module
+                .types
+                .fetch_or_append(Type { name: None, inner });
+
+            let handle = self.module.global_variables.append(GlobalVariable {
+                name: Some(name.into()),
+                class: StorageClass::Private,
+                binding: None,
+                ty,
+                init: None,
+                storage_access: StorageAccess::all(),
+            });
+
+            self.entry_args
+                .push((Binding::BuiltIn(builtin), true, handle));
+
+            self.global_variables
+                .push((name.into(), GlobalLookup::Variable(handle)));
+
+            let expr = ctx.add_expression(Expression::GlobalVariable(handle), body);
+            let load = ctx.add_expression(Expression::Load { pointer: expr }, body);
+            ctx.lookup_global_var_exps.insert(
+                name.into(),
+                VariableReference {
+                    expr,
+                    load: Some(load),
+                    mutable,
+                },
+            );
+
+            Ok(ctx.lookup_global_var(name))
+        };
         match name {
-            "gl_Position" => {
-                let ty = self.module.types.fetch_or_append(Type {
-                    name: None,
-                    inner: TypeInner::Vector {
-                        size: VectorSize::Quad,
-                        kind: ScalarKind::Float,
-                        width: 4,
-                    },
-                });
-
-                let handle = self.module.global_variables.append(GlobalVariable {
-                    name: Some(name.into()),
-                    class: StorageClass::Private,
-                    binding: None,
-                    ty,
-                    init: None,
-                    storage_access: StorageAccess::all(),
-                });
-
-                self.entry_args
-                    .push((Binding::BuiltIn(BuiltIn::Position), true, handle));
-
-                self.lookup_global_variables
-                    .insert(name.into(), GlobalLookup::Variable(handle));
-
-                Ok(context.lookup_global_var(self, name))
-            }
-            "gl_VertexIndex" => {
-                let ty = self.module.types.fetch_or_append(Type {
-                    name: None,
-                    inner: TypeInner::Scalar {
-                        kind: ScalarKind::Sint,
-                        width: 4,
-                    },
-                });
-
-                let handle = self.module.global_variables.append(GlobalVariable {
-                    name: Some(name.into()),
-                    class: StorageClass::Private,
-                    binding: None,
-                    ty,
-                    init: None,
-                    storage_access: StorageAccess::all(),
-                });
-
-                self.entry_args
-                    .push((Binding::BuiltIn(BuiltIn::VertexIndex), true, handle));
-
-                self.lookup_global_variables
-                    .insert(name.into(), GlobalLookup::Variable(handle));
-
-                Ok(context.lookup_global_var(self, name))
-            }
-            "gl_InstanceIndex" => {
-                let ty = self.module.types.fetch_or_append(Type {
-                    name: None,
-                    inner: TypeInner::Scalar {
-                        kind: ScalarKind::Sint,
-                        width: 4,
-                    },
-                });
-
-                let handle = self.module.global_variables.append(GlobalVariable {
-                    name: Some(name.into()),
-                    class: StorageClass::Private,
-                    binding: None,
-                    ty,
-                    init: None,
-                    storage_access: StorageAccess::all(),
-                });
-
-                self.entry_args
-                    .push((Binding::BuiltIn(BuiltIn::InstanceIndex), true, handle));
-
-                self.lookup_global_variables
-                    .insert(name.into(), GlobalLookup::Variable(handle));
-
-                Ok(context.lookup_global_var(self, name))
-            }
+            "gl_Position" => add_builtin(
+                TypeInner::Vector {
+                    size: VectorSize::Quad,
+                    kind: ScalarKind::Float,
+                    width: 4,
+                },
+                BuiltIn::Position,
+                true,
+            ),
+            "gl_VertexIndex" => add_builtin(
+                TypeInner::Scalar {
+                    kind: ScalarKind::Sint,
+                    width: 4,
+                },
+                BuiltIn::VertexIndex,
+                false,
+            ),
+            "gl_InstanceIndex" => add_builtin(
+                TypeInner::Scalar {
+                    kind: ScalarKind::Sint,
+                    width: 4,
+                },
+                BuiltIn::InstanceIndex,
+                false,
+            ),
             _ => Ok(None),
         }
     }
 
     pub fn field_selection(
         &mut self,
-        context: &mut Context,
+        ctx: &mut Context,
+        body: &mut Block,
         expression: Handle<Expression>,
         name: &str,
         meta: SourceMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
-        match *self.resolve_type(context, expression, meta)? {
+        match *self.resolve_type(ctx, expression, meta)? {
             TypeInner::Struct { ref members, .. } => {
                 let index = members
                     .iter()
                     .position(|m| m.name == Some(name.into()))
                     .ok_or_else(|| ErrorKind::UnknownField(meta, name.into()))?;
-                Ok(context.expressions.append(Expression::AccessIndex {
-                    base: expression,
-                    index: index as u32,
-                }))
+                Ok(ctx.add_expression(
+                    Expression::AccessIndex {
+                        base: expression,
+                        index: index as u32,
+                    },
+                    body,
+                ))
             }
             // swizzles (xyzw, rgba, stpq)
             TypeInner::Vector { size, kind, width } => {
@@ -159,41 +142,40 @@ impl Program<'_> {
                     let components: Vec<Handle<Expression>> = v
                         .iter()
                         .map(|idx| {
-                            context.expressions.append(Expression::AccessIndex {
-                                base: expression,
-                                index: *idx as u32,
-                            })
+                            ctx.add_expression(
+                                Expression::AccessIndex {
+                                    base: expression,
+                                    index: *idx as u32,
+                                },
+                                body,
+                            )
                         })
                         .collect();
                     if components.len() == 1 {
                         // only single element swizzle, like pos.y, just return that component
                         Ok(components[0])
                     } else {
-                        Ok(context.expressions.append(Expression::Compose {
-                            ty: self.module.types.fetch_or_append(Type {
-                                name: None,
-                                inner: TypeInner::Vector {
-                                    kind,
-                                    width,
-                                    size: match components.len() {
-                                        2 => VectorSize::Bi,
-                                        3 => VectorSize::Tri,
-                                        4 => VectorSize::Quad,
-                                        _ => {
-                                            return Err(ErrorKind::SemanticError(
-                                                meta,
-                                                format!(
-                                                    "Bad swizzle size for \"{:?}\": {:?}",
-                                                    name, v
-                                                )
-                                                .into(),
-                                            ));
-                                        }
-                                    },
-                                },
-                            }),
-                            components,
-                        }))
+                        let size = match components.len() {
+                            2 => VectorSize::Bi,
+                            3 => VectorSize::Tri,
+                            4 => VectorSize::Quad,
+                            _ => {
+                                return Err(ErrorKind::SemanticError(
+                                    meta,
+                                    format!("Bad swizzle size for \"{:?}\": {:?}", name, v).into(),
+                                ));
+                            }
+                        };
+                        Ok(ctx.add_expression(
+                            Expression::Compose {
+                                ty: self.module.types.fetch_or_append(Type {
+                                    name: None,
+                                    inner: TypeInner::Vector { kind, width, size },
+                                }),
+                                components,
+                            },
+                            body,
+                        ))
                     }
                 } else {
                     Err(ErrorKind::SemanticError(
@@ -212,6 +194,7 @@ impl Program<'_> {
     pub fn add_global_var(
         &mut self,
         ctx: &mut Context,
+        body: &mut Block,
         VarDeclaration {
             qualifiers,
             ty,
@@ -334,18 +317,18 @@ impl Program<'_> {
                 handle,
             ));
 
-            self.lookup_global_variables
-                .insert(name, GlobalLookup::Variable(handle));
+            self.global_variables
+                .push((name, GlobalLookup::Variable(handle)));
 
-            return Ok(ctx.expressions.append(Expression::GlobalVariable(handle)));
+            return Ok(ctx.add_expression(Expression::GlobalVariable(handle), body));
         } else if let StorageQualifier::Const = storage {
             let handle = init.ok_or_else(|| {
                 ErrorKind::SemanticError(meta, "Constant must have a initializer".into())
             })?;
 
-            self.lookup_constants.insert(name, handle);
+            self.constants.push((name, handle));
 
-            return Ok(ctx.expressions.append(Expression::Constant(handle)));
+            return Ok(ctx.add_expression(Expression::Constant(handle), body));
         }
 
         let class = match storage {
@@ -363,15 +346,16 @@ impl Program<'_> {
             storage_access: StorageAccess::all(),
         });
 
-        self.lookup_global_variables
-            .insert(name, GlobalLookup::Variable(handle));
+        self.global_variables
+            .push((name, GlobalLookup::Variable(handle)));
 
-        Ok(ctx.expressions.append(Expression::GlobalVariable(handle)))
+        Ok(ctx.add_expression(Expression::GlobalVariable(handle), body))
     }
 
     pub fn add_local_var(
         &mut self,
         ctx: &mut Context,
+        body: &mut Block,
         VarDeclaration {
             qualifiers,
             ty,
@@ -413,7 +397,7 @@ impl Program<'_> {
             ty,
             init,
         });
-        let expr = ctx.expressions.append(Expression::LocalVariable(handle));
+        let expr = ctx.add_expression(Expression::LocalVariable(handle), body);
 
         ctx.add_local_var(name, expr, mutable);
 

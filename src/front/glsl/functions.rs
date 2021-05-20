@@ -30,53 +30,63 @@ impl Program<'_> {
                     };
 
                     match self.module.types[ty].inner {
-                        TypeInner::Vector { size, .. } if !is_vec => {
-                            ctx.expressions.append(Expression::Splat {
+                        TypeInner::Vector { size, .. } if !is_vec => ctx.add_expression(
+                            Expression::Splat {
                                 size,
                                 value: args[0].0,
-                            })
-                        }
+                            },
+                            body,
+                        ),
                         TypeInner::Scalar { kind, width }
-                        | TypeInner::Vector { kind, width, .. } => {
-                            ctx.expressions.append(Expression::As {
+                        | TypeInner::Vector { kind, width, .. } => ctx.add_expression(
+                            Expression::As {
                                 kind,
                                 expr: args[0].0,
                                 convert: Some(width),
-                            })
-                        }
+                            },
+                            body,
+                        ),
                         TypeInner::Matrix {
                             columns,
                             rows,
                             width,
                         } => {
-                            let value = ctx.expressions.append(Expression::As {
-                                kind: ScalarKind::Float,
-                                expr: args[0].0,
-                                convert: Some(width),
-                            });
+                            let value = ctx.add_expression(
+                                Expression::As {
+                                    kind: ScalarKind::Float,
+                                    expr: args[0].0,
+                                    convert: Some(width),
+                                },
+                                body,
+                            );
 
                             let column = if is_vec {
                                 value
                             } else {
-                                ctx.expressions
-                                    .append(Expression::Splat { size: rows, value })
+                                ctx.add_expression(Expression::Splat { size: rows, value }, body)
                             };
 
                             let columns =
                                 std::iter::repeat(column).take(columns as usize).collect();
 
-                            ctx.expressions.append(Expression::Compose {
-                                ty,
-                                components: columns,
-                            })
+                            ctx.add_expression(
+                                Expression::Compose {
+                                    ty,
+                                    components: columns,
+                                },
+                                body,
+                            )
                         }
                         _ => return Err(ErrorKind::SemanticError(meta, "Bad cast".into())),
                     }
                 } else {
-                    ctx.expressions.append(Expression::Compose {
-                        ty,
-                        components: args.iter().map(|e| e.0).collect(),
-                    })
+                    ctx.add_expression(
+                        Expression::Compose {
+                            ty,
+                            components: args.iter().map(|e| e.0).collect(),
+                        },
+                        body,
+                    )
                 };
 
                 Ok(h)
@@ -95,15 +105,18 @@ impl Program<'_> {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
                         if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
-                            Ok(ctx.expressions.append(Expression::ImageSample {
-                                image: args[0].0,
-                                sampler,
-                                coordinate: args[1].0,
-                                array_index: None, //TODO
-                                offset: None,      //TODO
-                                level: SampleLevel::Auto,
-                                depth_ref: None,
-                            }))
+                            Ok(ctx.add_expression(
+                                Expression::ImageSample {
+                                    image: args[0].0,
+                                    sampler,
+                                    coordinate: args[1].0,
+                                    array_index: None, //TODO
+                                    offset: None,      //TODO
+                                    level: SampleLevel::Auto,
+                                    depth_ref: None,
+                                },
+                                body,
+                            ))
                         } else {
                             Err(ErrorKind::SemanticError(meta, "Bad call to texture".into()))
                         }
@@ -113,15 +126,18 @@ impl Program<'_> {
                             return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
                         if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
-                            Ok(ctx.expressions.append(Expression::ImageSample {
-                                image: args[0].0,
-                                sampler,
-                                coordinate: args[1].0,
-                                array_index: None, //TODO
-                                offset: None,      //TODO
-                                level: SampleLevel::Exact(args[2].0),
-                                depth_ref: None,
-                            }))
+                            Ok(ctx.add_expression(
+                                Expression::ImageSample {
+                                    image: args[0].0,
+                                    sampler,
+                                    coordinate: args[1].0,
+                                    array_index: None, //TODO
+                                    offset: None,      //TODO
+                                    level: SampleLevel::Exact(args[2].0),
+                                    depth_ref: None,
+                                },
+                                body,
+                            ))
                         } else {
                             Err(ErrorKind::SemanticError(
                                 meta,
@@ -135,91 +151,102 @@ impl Program<'_> {
                         if args.len() != 1 {
                             return Err(ErrorKind::wrong_function_args(name, 1, args.len(), meta));
                         }
-                        Ok(ctx.expressions.append(Expression::Math {
-                            fun: match name.as_str() {
-                                "ceil" => MathFunction::Ceil,
-                                "round" => MathFunction::Round,
-                                "floor" => MathFunction::Floor,
-                                "fract" => MathFunction::Fract,
-                                "trunc" => MathFunction::Trunc,
-                                "sin" => MathFunction::Sin,
-                                "abs" => MathFunction::Abs,
-                                "sqrt" => MathFunction::Sqrt,
-                                "inversesqrt" => MathFunction::InverseSqrt,
-                                "exp" => MathFunction::Exp,
-                                "exp2" => MathFunction::Exp2,
-                                "sign" => MathFunction::Sign,
-                                "transpose" => MathFunction::Transpose,
-                                "inverse" => MathFunction::Inverse,
-                                "normalize" => MathFunction::Normalize,
-                                _ => unreachable!(),
+                        Ok(ctx.add_expression(
+                            Expression::Math {
+                                fun: match name.as_str() {
+                                    "ceil" => MathFunction::Ceil,
+                                    "round" => MathFunction::Round,
+                                    "floor" => MathFunction::Floor,
+                                    "fract" => MathFunction::Fract,
+                                    "trunc" => MathFunction::Trunc,
+                                    "sin" => MathFunction::Sin,
+                                    "abs" => MathFunction::Abs,
+                                    "sqrt" => MathFunction::Sqrt,
+                                    "inversesqrt" => MathFunction::InverseSqrt,
+                                    "exp" => MathFunction::Exp,
+                                    "exp2" => MathFunction::Exp2,
+                                    "sign" => MathFunction::Sign,
+                                    "transpose" => MathFunction::Transpose,
+                                    "inverse" => MathFunction::Inverse,
+                                    "normalize" => MathFunction::Normalize,
+                                    _ => unreachable!(),
+                                },
+                                arg: args[0].0,
+                                arg1: None,
+                                arg2: None,
                             },
-                            arg: args[0].0,
-                            arg1: None,
-                            arg2: None,
-                        }))
+                            body,
+                        ))
                     }
                     "pow" | "dot" | "max" => {
                         if args.len() != 2 {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
-                        Ok(ctx.expressions.append(Expression::Math {
-                            fun: match name.as_str() {
-                                "pow" => MathFunction::Pow,
-                                "dot" => MathFunction::Dot,
-                                "max" => MathFunction::Max,
-                                _ => unreachable!(),
+                        Ok(ctx.add_expression(
+                            Expression::Math {
+                                fun: match name.as_str() {
+                                    "pow" => MathFunction::Pow,
+                                    "dot" => MathFunction::Dot,
+                                    "max" => MathFunction::Max,
+                                    _ => unreachable!(),
+                                },
+                                arg: args[0].0,
+                                arg1: Some(args[1].0),
+                                arg2: None,
                             },
-                            arg: args[0].0,
-                            arg1: Some(args[1].0),
-                            arg2: None,
-                        }))
+                            body,
+                        ))
                     }
                     "mix" | "clamp" => {
                         if args.len() != 3 {
                             return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
-                        Ok(ctx.expressions.append(Expression::Math {
-                            fun: match name.as_str() {
-                                "mix" => MathFunction::Mix,
-                                "clamp" => MathFunction::Clamp,
-                                _ => unreachable!(),
+                        Ok(ctx.add_expression(
+                            Expression::Math {
+                                fun: match name.as_str() {
+                                    "mix" => MathFunction::Mix,
+                                    "clamp" => MathFunction::Clamp,
+                                    _ => unreachable!(),
+                                },
+                                arg: args[0].0,
+                                arg1: Some(args[1].0),
+                                arg2: Some(args[2].0),
                             },
-                            arg: args[0].0,
-                            arg1: Some(args[1].0),
-                            arg2: Some(args[2].0),
-                        }))
+                            body,
+                        ))
                     }
                     "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" | "equal"
                     | "notEqual" => {
                         if args.len() != 2 {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
-                        Ok(ctx.expressions.append(Expression::Binary {
-                            op: match name.as_str() {
-                                "lessThan" => BinaryOperator::Less,
-                                "greaterThan" => BinaryOperator::Greater,
-                                "lessThanEqual" => BinaryOperator::LessEqual,
-                                "greaterThanEqual" => BinaryOperator::GreaterEqual,
-                                "equal" => BinaryOperator::Equal,
-                                "notEqual" => BinaryOperator::NotEqual,
-                                _ => unreachable!(),
+                        Ok(ctx.add_expression(
+                            Expression::Binary {
+                                op: match name.as_str() {
+                                    "lessThan" => BinaryOperator::Less,
+                                    "greaterThan" => BinaryOperator::Greater,
+                                    "lessThanEqual" => BinaryOperator::LessEqual,
+                                    "greaterThanEqual" => BinaryOperator::GreaterEqual,
+                                    "equal" => BinaryOperator::Equal,
+                                    "notEqual" => BinaryOperator::NotEqual,
+                                    _ => unreachable!(),
+                                },
+                                left: args[0].0,
+                                right: args[1].0,
                             },
-                            left: args[0].0,
-                            right: args[1].0,
-                        }))
+                            body,
+                        ))
                     }
-                    "isinf" => {
-                        self.parse_relational_fun(ctx, name, &args, RelationalFunction::IsInf, meta)
-                    }
-                    "isnan" => {
-                        self.parse_relational_fun(ctx, name, &args, RelationalFunction::IsNan, meta)
-                    }
-                    "all" => {
-                        self.parse_relational_fun(ctx, name, &args, RelationalFunction::All, meta)
-                    }
-                    "any" => {
-                        self.parse_relational_fun(ctx, name, &args, RelationalFunction::Any, meta)
+                    "isinf" | "isnan" | "all" | "any" => {
+                        let fun = match name.as_str() {
+                            "isinf" => RelationalFunction::IsInf,
+                            "isnan" => RelationalFunction::IsNan,
+                            "all" => RelationalFunction::All,
+                            "any" => RelationalFunction::Any,
+                            _ => unreachable!(),
+                        };
+
+                        self.parse_relational_fun(ctx, body, name, &args, fun, meta)
                     }
                     _ => {
                         let mut parameters = Vec::new();
@@ -250,12 +277,17 @@ impl Program<'_> {
                             arguments.push(handle)
                         }
 
-                        let expression = ctx.expressions.append(Expression::Call(fun.handle));
+                        ctx.emit_flush(body);
+
+                        let expression = ctx.add_expression(Expression::Call(fun.handle), body);
                         body.push(crate::Statement::Call {
                             function: fun.handle,
                             arguments,
                             result: Some(expression),
                         });
+
+                        ctx.emit_start();
+
                         Ok(expression)
                     }
                 }
@@ -266,6 +298,7 @@ impl Program<'_> {
     pub fn parse_relational_fun(
         &mut self,
         ctx: &mut Context,
+        body: &mut Block,
         name: String,
         args: &[(Handle<Expression>, SourceMetadata)],
         fun: RelationalFunction,
@@ -275,10 +308,13 @@ impl Program<'_> {
             return Err(ErrorKind::wrong_function_args(name, 1, args.len(), meta));
         }
 
-        Ok(ctx.expressions.append(Expression::Relational {
-            fun,
-            argument: args[0].0,
-        }))
+        Ok(ctx.add_expression(
+            Expression::Relational {
+                fun,
+                argument: args[0].0,
+            },
+            body,
+        ))
     }
 
     pub fn add_function(
@@ -438,7 +474,9 @@ impl Program<'_> {
                 span += self.module.types[ty].inner.span(&self.module.constants);
 
                 let pointer = expressions.append(Expression::GlobalVariable(handle));
+                let len = expressions.len();
                 let load = expressions.append(Expression::Load { pointer });
+                body.push(Statement::Emit(expressions.range_from(len)));
                 components.push(load)
             }
 
@@ -451,7 +489,9 @@ impl Program<'_> {
                 },
             });
 
+            let len = expressions.len();
             let res = expressions.append(Expression::Compose { ty, components });
+            body.push(Statement::Emit(expressions.range_from(len)));
             body.push(Statement::Return { value: Some(res) });
 
             self.module.entry_points.push(EntryPoint {

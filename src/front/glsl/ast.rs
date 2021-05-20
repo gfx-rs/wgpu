@@ -1,12 +1,12 @@
 use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind, SourceMetadata};
 use crate::{
-    proc::ResolveContext, Arena, BinaryOperator, Binding, Block, Constant, Expression, FastHashMap,
-    Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable, Module,
-    RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass, Type,
-    TypeInner, UnaryOperator,
+    front::Emitter, proc::ResolveContext, Arena, BinaryOperator, Binding, Block, Constant,
+    Expression, FastHashMap, Function, FunctionArgument, GlobalVariable, Handle, Interpolation,
+    LocalVariable, Module, RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement,
+    StorageClass, Type, TypeInner, UnaryOperator,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum GlobalLookup {
     Variable(Handle<GlobalVariable>),
     BlockSelect(Handle<GlobalVariable>, u32),
@@ -34,8 +34,9 @@ pub struct Program<'a> {
 
     pub lookup_function: FastHashMap<FunctionSignature, FunctionDeclaration>,
     pub lookup_type: FastHashMap<String, Handle<Type>>,
-    pub lookup_global_variables: FastHashMap<String, GlobalLookup>,
-    pub lookup_constants: FastHashMap<String, Handle<Constant>>,
+
+    pub global_variables: Vec<(String, GlobalLookup)>,
+    pub constants: Vec<(String, Handle<Constant>)>,
 
     pub entry_args: Vec<(Binding, bool, Handle<GlobalVariable>)>,
     pub entries: Vec<(String, ShaderStage, Handle<Function>)>,
@@ -52,8 +53,8 @@ impl<'a> Program<'a> {
 
             lookup_function: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
-            lookup_global_variables: FastHashMap::default(),
-            lookup_constants: FastHashMap::default(),
+            global_variables: Vec::new(),
+            constants: Vec::new(),
 
             entry_args: Vec::new(),
             entries: Vec::new(),
@@ -120,13 +121,13 @@ impl<'a> Program<'a> {
 
     pub fn solve_constant(
         &mut self,
-        expressions: &Arena<Expression>,
+        ctx: &Context,
         root: Handle<Expression>,
         meta: SourceMetadata,
     ) -> Result<Handle<Constant>, ErrorKind> {
         let mut solver = ConstantSolver {
             types: &self.module.types,
-            expressions,
+            expressions: ctx.expressions,
             constants: &mut self.module.constants,
         };
 
@@ -141,38 +142,98 @@ pub enum Profile {
 
 #[derive(Debug)]
 pub struct Context<'function> {
-    pub expressions: &'function mut Arena<Expression>,
+    expressions: &'function mut Arena<Expression>,
     pub locals: &'function mut Arena<LocalVariable>,
     pub arguments: &'function mut Vec<FunctionArgument>,
 
     //TODO: Find less allocation heavy representation
     pub scopes: Vec<FastHashMap<String, VariableReference>>,
     pub lookup_global_var_exps: FastHashMap<String, VariableReference>,
-    pub lookup_constant_exps: FastHashMap<String, VariableReference>,
-    pub typifier: Typifier,
     pub samplers: FastHashMap<Handle<Expression>, Handle<Expression>>,
+    pub typifier: Typifier,
 
     pub hir_exprs: Arena<HirExpr>,
+    emitter: Emitter,
 }
 
 impl<'function> Context<'function> {
     pub fn new(
+        program: &mut Program,
+        body: &mut Block,
         expressions: &'function mut Arena<Expression>,
         locals: &'function mut Arena<LocalVariable>,
         arguments: &'function mut Vec<FunctionArgument>,
     ) -> Self {
-        Context {
+        let mut this = Context {
             expressions,
             locals,
             arguments,
 
             scopes: vec![FastHashMap::default()],
-            lookup_global_var_exps: FastHashMap::default(),
-            lookup_constant_exps: FastHashMap::default(),
+            lookup_global_var_exps: FastHashMap::with_capacity_and_hasher(
+                program.constants.len() + program.global_variables.len(),
+                Default::default(),
+            ),
             typifier: Typifier::new(),
             samplers: FastHashMap::default(),
 
             hir_exprs: Arena::default(),
+            emitter: Emitter::default(),
+        };
+
+        this.emit_start();
+
+        for &(ref name, lookup) in program.global_variables.iter() {
+            let expr = match lookup {
+                GlobalLookup::Variable(v) => Expression::GlobalVariable(v),
+                GlobalLookup::BlockSelect(handle, index) => {
+                    let base = this.add_expression(Expression::GlobalVariable(handle), body);
+
+                    Expression::AccessIndex { base, index }
+                }
+            };
+
+            let expr = this.add_expression(expr, body);
+            let var = VariableReference {
+                expr,
+                load: Some(this.add_expression(Expression::Load { pointer: expr }, body)),
+                // TODO: respect constant qualifier
+                mutable: true,
+            };
+
+            this.lookup_global_var_exps.insert(name.into(), var);
+        }
+
+        for &(ref name, handle) in program.constants.iter() {
+            let expr = this.add_expression(Expression::Constant(handle), body);
+            let var = VariableReference {
+                expr,
+                load: None,
+                mutable: false,
+            };
+
+            this.lookup_global_var_exps.insert(name.into(), var);
+        }
+
+        this
+    }
+
+    pub fn emit_start(&mut self) {
+        self.emitter.start(&self.expressions)
+    }
+
+    pub fn emit_flush(&mut self, body: &mut Block) {
+        body.extend(self.emitter.finish(&self.expressions))
+    }
+
+    pub fn add_expression(&mut self, expr: Expression, body: &mut Block) -> Handle<Expression> {
+        if expr.needs_pre_emit() {
+            self.emit_flush(body);
+            let expr = self.expressions.append(expr);
+            self.emit_start();
+            expr
+        } else {
+            self.expressions.append(expr)
         }
     }
 
@@ -185,55 +246,8 @@ impl<'function> Context<'function> {
         None
     }
 
-    pub fn lookup_global_var(
-        &mut self,
-        program: &mut Program,
-        name: &str,
-    ) -> Option<VariableReference> {
-        self.lookup_global_var_exps.get(name).cloned().or_else(|| {
-            let expr = match *program.lookup_global_variables.get(name)? {
-                GlobalLookup::Variable(v) => Expression::GlobalVariable(v),
-                GlobalLookup::BlockSelect(handle, index) => {
-                    let base = self.expressions.append(Expression::GlobalVariable(handle));
-
-                    Expression::AccessIndex { base, index }
-                }
-            };
-
-            let expr = self.expressions.append(expr);
-            let var = VariableReference {
-                expr,
-                load: Some(self.expressions.append(Expression::Load { pointer: expr })),
-                // TODO: respect constant qualifier
-                mutable: true,
-            };
-
-            self.lookup_global_var_exps.insert(name.into(), var.clone());
-
-            Some(var)
-        })
-    }
-
-    pub fn lookup_constants_var(
-        &mut self,
-        program: &mut Program,
-        name: &str,
-    ) -> Option<VariableReference> {
-        self.lookup_constant_exps.get(name).cloned().or_else(|| {
-            let expr = self
-                .expressions
-                .append(Expression::Constant(*program.lookup_constants.get(name)?));
-
-            let var = VariableReference {
-                expr,
-                load: None,
-                mutable: false,
-            };
-
-            self.lookup_constant_exps.insert(name.into(), var.clone());
-
-            Some(var)
-        })
+    pub fn lookup_global_var(&mut self, name: &str) -> Option<VariableReference> {
+        self.lookup_global_var_exps.get(name).cloned()
     }
 
     #[cfg(feature = "glsl-validate")]
@@ -311,15 +325,15 @@ impl<'function> Context<'function> {
                 let base = self.lower(program, base, lhs, body)?.0;
                 let index = self.lower(program, index, false, body)?.0;
 
-                self.expressions.append(Expression::Access { base, index })
+                self.add_expression(Expression::Access { base, index }, body)
             }
             HirExprKind::Select { base, field } => {
                 let base = self.lower(program, base, lhs, body)?.0;
 
-                program.field_selection(self, base, &field, meta)?
+                program.field_selection(self, body, base, &field, meta)?
             }
             HirExprKind::Constant(constant) if !lhs => {
-                self.expressions.append(Expression::Constant(constant))
+                self.add_expression(Expression::Constant(constant), body)
             }
             HirExprKind::Binary { left, op, right } if !lhs => {
                 let (left, left_meta) = self.lower(program, left, false, body)?;
@@ -353,20 +367,18 @@ impl<'function> Context<'function> {
                     if left_dims != right_dims {
                         return Err(ErrorKind::SemanticError(meta, "Cannot compare".into()));
                     } else if left_is_vector && right_is_vector {
-                        self.expressions
-                            .append(Expression::Relational { fun, argument })
+                        self.add_expression(Expression::Relational { fun, argument }, body)
                     } else {
                         argument
                     }
                 } else {
-                    self.expressions
-                        .append(Expression::Binary { left, op, right })
+                    self.add_expression(Expression::Binary { left, op, right }, body)
                 }
             }
             HirExprKind::Unary { op, expr } if !lhs => {
                 let expr = self.lower(program, expr, false, body)?.0;
 
-                self.expressions.append(Expression::Unary { op, expr })
+                self.add_expression(Expression::Unary { op, expr }, body)
             }
             HirExprKind::Variable(var) => {
                 if lhs {
@@ -394,15 +406,21 @@ impl<'function> Context<'function> {
                 let accept = self.lower(program, accept, false, body)?.0;
                 let reject = self.lower(program, reject, false, body)?.0;
 
-                self.expressions.append(Expression::Select {
-                    condition,
-                    accept,
-                    reject,
-                })
+                self.add_expression(
+                    Expression::Select {
+                        condition,
+                        accept,
+                        reject,
+                    },
+                    body,
+                )
             }
             HirExprKind::Assign { tgt, value } if !lhs => {
                 let pointer = self.lower(program, tgt, true, body)?.0;
                 let value = self.lower(program, value, false, body)?.0;
+
+                self.emit_flush(body);
+                self.emit_start();
 
                 body.push(Statement::Store { pointer, value });
 

@@ -319,13 +319,20 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let mut expressions = Arena::new();
         let mut locals = Arena::new();
         let mut arguments = Vec::new();
+        let mut block = Block::new();
 
-        let mut ctx = Context::new(&mut expressions, &mut locals, &mut arguments);
+        let mut ctx = Context::new(
+            self.program,
+            &mut block,
+            &mut expressions,
+            &mut locals,
+            &mut arguments,
+        );
 
-        let expr = self.parse_conditional(&mut ctx, None)?;
-        let (root, meta) = ctx.lower(self.program, expr, false, &mut Block::new())?;
+        let expr = self.parse_conditional(&mut ctx, &mut block, None)?;
+        let (root, meta) = ctx.lower(self.program, expr, false, &mut block)?;
 
-        Ok((self.program.solve_constant(&expressions, root, meta)?, meta))
+        Ok((self.program.solve_constant(&ctx, root, meta)?, meta))
     }
 
     fn parse_external_declaration(&mut self) -> Result<()> {
@@ -339,8 +346,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         // void main() {}
         // ```
         let (mut e, mut l, mut a) = (Arena::new(), Arena::new(), Vec::new());
-        let mut ctx = Context::new(&mut e, &mut l, &mut a);
         let mut body = Block::new();
+        let mut ctx = Context::new(self.program, &mut body, &mut e, &mut l, &mut a);
 
         if !self.parse_declaration(&mut ctx, &mut body, true)? {
             let token = self.bump()?;
@@ -422,12 +429,11 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             }
 
             Ok((
-                ctx.expressions
-                    .append(Expression::Compose { ty, components }),
+                ctx.add_expression(Expression::Compose { ty, components }, body),
                 meta,
             ))
         } else {
-            let expr = self.parse_assignment(ctx)?;
+            let expr = self.parse_assignment(ctx, body)?;
             Ok(ctx.lower(self.program, expr, false, body)?)
         }
     }
@@ -499,15 +505,15 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             // TODO: Should we try to make constants here?
             // This is mostly a hack because we don't yet support adding
             // bodies to entry points for variable initialization
-            let maybe_constant = init.clone().and_then(|(root, meta)| {
-                self.program
-                    .solve_constant(ctx.ctx.expressions, root, meta)
-                    .ok()
-            });
+            let maybe_constant = init
+                .clone()
+                .and_then(|(root, meta)| self.program.solve_constant(ctx.ctx, root, meta).ok());
 
             let pointer = ctx.add_var(self.program, ty, name, maybe_constant, meta)?;
 
             if let Some((value, _)) = init {
+                ctx.ctx.emit_flush(ctx.body);
+                ctx.ctx.emit_start();
                 ctx.body.push(Statement::Store { pointer, value });
             }
 
@@ -561,8 +567,11 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             let mut local_variables = Arena::new();
                             let mut arguments = Vec::new();
                             let mut parameters = Vec::new();
+                            let mut body = Block::new();
 
                             let mut context = Context::new(
+                                self.program,
+                                &mut body,
                                 &mut expressions,
                                 &mut local_variables,
                                 &mut arguments,
@@ -594,10 +603,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                     // This branch handles function definitions
                                     // as you can see by the guard this branch
                                     // only happens if external is also true
-                                    let mut body = Block::new();
 
                                     // parse the body
                                     self.parse_compound_statement(&mut context, &mut body)?;
+
                                     self.program.add_function(
                                         Function {
                                             name: Some(name),
@@ -773,8 +782,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
         if let Some(k) = name {
             self.program
-                .lookup_global_variables
-                .insert(k, GlobalLookup::Variable(handle));
+                .global_variables
+                .push((k, GlobalLookup::Variable(handle)));
         }
 
         for (i, k) in members
@@ -783,8 +792,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             .filter_map(|(i, m)| m.name.map(|s| (i as u32, s)))
         {
             self.program
-                .lookup_global_variables
-                .insert(k, GlobalLookup::BlockSelect(handle, i));
+                .global_variables
+                .push((k, GlobalLookup::BlockSelect(handle, i)));
         }
 
         Ok(true)
@@ -819,7 +828,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         Ok(span)
     }
 
-    fn parse_primary(&mut self, ctx: &mut Context) -> Result<Handle<HirExpr>> {
+    fn parse_primary(&mut self, ctx: &mut Context, body: &mut Block) -> Result<Handle<HirExpr>> {
         let mut token = self.bump()?;
 
         let (width, value) = match token.value {
@@ -837,7 +846,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             ),
             TokenValue::BoolConstant(value) => (1, ScalarValue::Bool(value)),
             TokenValue::LeftParen => {
-                let expr = self.parse_expression(ctx)?;
+                let expr = self.parse_expression(ctx, body)?;
                 let meta = self.expect(TokenValue::RightParen)?.meta;
 
                 token.meta = token.meta.union(&meta);
@@ -862,6 +871,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     fn parse_function_call_args(
         &mut self,
         ctx: &mut Context,
+        body: &mut Block,
         meta: &mut SourceMetadata,
     ) -> Result<Vec<Handle<HirExpr>>> {
         let mut args = Vec::new();
@@ -869,7 +879,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             *meta = meta.union(&token.meta);
         } else {
             loop {
-                args.push(self.parse_assignment(ctx)?);
+                args.push(self.parse_assignment(ctx, body)?);
 
                 let token = self.bump()?;
                 match token.value {
@@ -886,13 +896,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         Ok(args)
     }
 
-    fn parse_postfix(&mut self, ctx: &mut Context) -> Result<Handle<HirExpr>> {
+    fn parse_postfix(&mut self, ctx: &mut Context, body: &mut Block) -> Result<Handle<HirExpr>> {
         let mut base = match self.expect_peek()?.value {
             TokenValue::Identifier(_) => {
                 let (name, mut meta) = self.expect_ident()?;
 
                 let expr = if self.bump_if(TokenValue::LeftParen).is_some() {
-                    let args = self.parse_function_call_args(ctx, &mut meta)?;
+                    let args = self.parse_function_call_args(ctx, body, &mut meta)?;
 
                     HirExpr {
                         kind: HirExprKind::Call(FunctionCall {
@@ -902,7 +912,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         meta,
                     }
                 } else {
-                    let var = match self.program.lookup_variable(ctx, &name)? {
+                    let var = match self.program.lookup_variable(ctx, body, &name)? {
                         Some(var) => var,
                         None => return Err(ErrorKind::UnknownVariable(meta, name)),
                     };
@@ -925,7 +935,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 };
 
                 self.expect(TokenValue::LeftParen)?;
-                let args = self.parse_function_call_args(ctx, &mut meta)?;
+                let args = self.parse_function_call_args(ctx, body, &mut meta)?;
 
                 ctx.hir_exprs.append(HirExpr {
                     kind: HirExprKind::Call(FunctionCall {
@@ -935,7 +945,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     meta,
                 })
             }
-            _ => self.parse_primary(ctx)?,
+            _ => self.parse_primary(ctx, body)?,
         };
 
         // TODO: postfix inc/dec
@@ -944,7 +954,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
             match value {
                 TokenValue::LeftBracket => {
-                    let index = self.parse_expression(ctx)?;
+                    let index = self.parse_expression(ctx, body)?;
                     let end_meta = self.expect(TokenValue::RightBracket)?.meta;
 
                     base = ctx.hir_exprs.append(HirExpr {
@@ -967,13 +977,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         Ok(base)
     }
 
-    fn parse_unary(&mut self, ctx: &mut Context) -> Result<Handle<HirExpr>> {
+    fn parse_unary(&mut self, ctx: &mut Context, body: &mut Block) -> Result<Handle<HirExpr>> {
         // TODO: prefix inc/dec
         Ok(match self.expect_peek()?.value {
             TokenValue::Plus | TokenValue::Dash | TokenValue::Bang | TokenValue::Tilde => {
                 let Token { value, meta } = self.bump()?;
 
-                let expr = self.parse_unary(ctx)?;
+                let expr = self.parse_unary(ctx, body)?;
                 let end_meta = ctx.hir_exprs[expr].meta;
 
                 let kind = match value {
@@ -993,19 +1003,20 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     meta: meta.union(&end_meta),
                 })
             }
-            _ => self.parse_postfix(ctx)?,
+            _ => self.parse_postfix(ctx, body)?,
         })
     }
 
     fn parse_binary(
         &mut self,
         ctx: &mut Context,
+        body: &mut Block,
         passtrough: Option<Handle<HirExpr>>,
         min_bp: u8,
     ) -> Result<Handle<HirExpr>> {
         let mut left = passtrough
             .ok_or(ErrorKind::EndOfFile /* Dummy error */)
-            .or_else(|_| self.parse_unary(ctx))?;
+            .or_else(|_| self.parse_unary(ctx, body))?;
         let start_meta = ctx.hir_exprs[left].meta;
 
         while let Some((l_bp, r_bp)) = binding_power(&self.expect_peek()?.value) {
@@ -1015,7 +1026,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
             let Token { value, .. } = self.bump()?;
 
-            let right = self.parse_binary(ctx, None, r_bp)?;
+            let right = self.parse_binary(ctx, body, None, r_bp)?;
             let end_meta = ctx.hir_exprs[right].meta;
 
             left = ctx.hir_exprs.append(HirExpr {
@@ -1055,15 +1066,16 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     fn parse_conditional(
         &mut self,
         ctx: &mut Context,
+        body: &mut Block,
         passtrough: Option<Handle<HirExpr>>,
     ) -> Result<Handle<HirExpr>> {
-        let mut condition = self.parse_binary(ctx, passtrough, 0)?;
+        let mut condition = self.parse_binary(ctx, body, passtrough, 0)?;
         let start_meta = ctx.hir_exprs[condition].meta;
 
         if self.bump_if(TokenValue::Question).is_some() {
-            let accept = self.parse_expression(ctx)?;
+            let accept = self.parse_expression(ctx, body)?;
             self.expect(TokenValue::Colon)?;
-            let reject = self.parse_assignment(ctx)?;
+            let reject = self.parse_assignment(ctx, body)?;
             let end_meta = ctx.hir_exprs[reject].meta;
 
             condition = ctx.hir_exprs.append(HirExpr {
@@ -1079,14 +1091,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         Ok(condition)
     }
 
-    fn parse_assignment(&mut self, ctx: &mut Context) -> Result<Handle<HirExpr>> {
-        let tgt = self.parse_unary(ctx)?;
+    fn parse_assignment(&mut self, ctx: &mut Context, body: &mut Block) -> Result<Handle<HirExpr>> {
+        let tgt = self.parse_unary(ctx, body)?;
         let start_meta = ctx.hir_exprs[tgt].meta;
 
         Ok(match self.expect_peek()?.value {
             TokenValue::Assign => {
                 self.bump()?;
-                let value = self.parse_assignment(ctx)?;
+                let value = self.parse_assignment(ctx, body)?;
                 let end_meta = ctx.hir_exprs[value].meta;
 
                 ctx.hir_exprs.append(HirExpr {
@@ -1105,7 +1117,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             | TokenValue::RightShiftAssign
             | TokenValue::XorAssign => {
                 let token = self.bump()?;
-                let right = self.parse_assignment(ctx)?;
+                let right = self.parse_assignment(ctx, body)?;
                 let end_meta = ctx.hir_exprs[right].meta;
 
                 let value = ctx.hir_exprs.append(HirExpr {
@@ -1134,16 +1146,16 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     meta: start_meta.union(&end_meta),
                 })
             }
-            _ => self.parse_conditional(ctx, Some(tgt))?,
+            _ => self.parse_conditional(ctx, body, Some(tgt))?,
         })
     }
 
-    fn parse_expression(&mut self, ctx: &mut Context) -> Result<Handle<HirExpr>> {
-        let mut expr = self.parse_assignment(ctx)?;
+    fn parse_expression(&mut self, ctx: &mut Context, body: &mut Block) -> Result<Handle<HirExpr>> {
+        let mut expr = self.parse_assignment(ctx, body)?;
 
         while let TokenValue::Comma = self.expect_peek()?.value {
             self.bump()?;
-            expr = self.parse_assignment(ctx)?;
+            expr = self.parse_assignment(ctx, body)?;
         }
 
         Ok(expr)
@@ -1169,11 +1181,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         None
                     }
                     _ => {
-                        let expr = self.parse_expression(ctx)?;
+                        let expr = self.parse_expression(ctx, body)?;
                         self.expect(TokenValue::Semicolon)?;
                         Some(ctx.lower(self.program, expr, false, body)?.0)
                     }
                 };
+
+                ctx.emit_flush(body);
+                ctx.emit_start();
 
                 body.push(Statement::Return { value })
             }
@@ -1187,10 +1202,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                 self.expect(TokenValue::LeftParen)?;
                 let condition = {
-                    let expr = self.parse_expression(ctx)?;
+                    let expr = self.parse_expression(ctx, body)?;
                     ctx.lower(self.program, expr, false, body)?.0
                 };
                 self.expect(TokenValue::RightParen)?;
+
+                ctx.emit_flush(body);
+                ctx.emit_start();
 
                 let mut accept = Block::new();
                 self.parse_statement(ctx, &mut accept)?;
@@ -1211,10 +1229,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                 self.expect(TokenValue::LeftParen)?;
                 let selector = {
-                    let expr = self.parse_expression(ctx)?;
+                    let expr = self.parse_expression(ctx, body)?;
                     ctx.lower(self.program, expr, false, body)?.0
                 };
                 self.expect(TokenValue::RightParen)?;
+
+                ctx.emit_flush(body);
+                ctx.emit_start();
 
                 let mut cases = Vec::new();
                 let mut default = Block::new();
@@ -1225,10 +1246,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         TokenValue::Case => {
                             self.bump()?;
                             let value = {
-                                let expr = self.parse_expression(ctx)?;
+                                let expr = self.parse_expression(ctx, body)?;
                                 let (root, meta) = ctx.lower(self.program, expr, false, body)?;
-                                let constant =
-                                    self.program.solve_constant(&ctx.expressions, root, meta)?;
+                                let constant = self.program.solve_constant(&ctx, root, meta)?;
 
                                 match self.program.module.constants[constant].inner {
                                     ConstantInner::Scalar {
@@ -1306,17 +1326,23 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             TokenValue::While => {
                 self.bump()?;
 
-                self.expect(TokenValue::LeftParen)?;
-                let root = self.parse_expression(ctx)?;
-                self.expect(TokenValue::RightParen)?;
-
                 let mut loop_body = Block::new();
 
+                self.expect(TokenValue::LeftParen)?;
+                let root = self.parse_expression(ctx, &mut loop_body)?;
+                self.expect(TokenValue::RightParen)?;
+
                 let expr = ctx.lower(self.program, root, false, &mut loop_body)?.0;
-                let condition = ctx.expressions.append(Expression::Unary {
-                    op: UnaryOperator::Not,
-                    expr,
-                });
+                let condition = ctx.add_expression(
+                    Expression::Unary {
+                        op: UnaryOperator::Not,
+                        expr,
+                    },
+                    &mut loop_body,
+                );
+
+                ctx.emit_flush(&mut loop_body);
+                ctx.emit_start();
 
                 loop_body.push(Statement::If {
                     condition,
@@ -1339,14 +1365,20 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                 self.expect(TokenValue::While)?;
                 self.expect(TokenValue::LeftParen)?;
-                let root = self.parse_expression(ctx)?;
+                let root = self.parse_expression(ctx, &mut loop_body)?;
                 self.expect(TokenValue::RightParen)?;
 
                 let expr = ctx.lower(self.program, root, false, &mut loop_body)?.0;
-                let condition = ctx.expressions.append(Expression::Unary {
-                    op: UnaryOperator::Not,
-                    expr,
-                });
+                let condition = ctx.add_expression(
+                    Expression::Unary {
+                        op: UnaryOperator::Not,
+                        expr,
+                    },
+                    &mut loop_body,
+                );
+
+                ctx.emit_flush(&mut loop_body);
+                ctx.emit_start();
 
                 loop_body.push(Statement::If {
                     condition,
@@ -1369,10 +1401,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     if self.peek_type_name() || self.peek_type_qualifier() {
                         self.parse_declaration(ctx, body, false)?;
                     } else {
-                        self.parse_expression(ctx)?;
+                        self.parse_expression(ctx, body)?;
                         self.expect(TokenValue::Semicolon)?;
                     }
                 }
+
+                ctx.emit_flush(body);
+                ctx.emit_start();
 
                 let (mut block, mut continuing) = (Block::new(), Block::new());
 
@@ -1394,21 +1429,32 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             meta: meta.union(&end_meta),
                         };
 
-                        let pointer = self.program.add_local_var(ctx, decl)?;
+                        let pointer = self.program.add_local_var(ctx, &mut block, decl)?;
+
+                        ctx.emit_flush(&mut block);
+                        ctx.emit_start();
 
                         block.push(Statement::Store { pointer, value });
 
                         value
                     } else {
-                        let root = self.parse_expression(ctx)?;
+                        let root = self.parse_expression(ctx, &mut block)?;
                         ctx.lower(self.program, root, false, &mut block)?.0
                     };
 
-                    body.push(Statement::If {
-                        condition: ctx.expressions.append(Expression::Unary {
+                    let condition = ctx.add_expression(
+                        Expression::Unary {
                             op: UnaryOperator::Not,
                             expr,
-                        }),
+                        },
+                        &mut block,
+                    );
+
+                    ctx.emit_flush(&mut block);
+                    ctx.emit_start();
+
+                    body.push(Statement::If {
+                        condition,
                         accept: vec![Statement::Break],
                         reject: Block::new(),
                     });
@@ -1419,7 +1465,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 match self.expect_peek()?.value {
                     TokenValue::RightParen => {}
                     _ => {
-                        let rest = self.parse_expression(ctx)?;
+                        let rest = self.parse_expression(ctx, &mut continuing)?;
                         ctx.lower(self.program, rest, false, &mut continuing)?;
                     }
                 }
@@ -1462,7 +1508,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             | TokenValue::IntConstant(_)
             | TokenValue::BoolConstant(_)
             | TokenValue::FloatConstant(_) => {
-                let expr = self.parse_expression(ctx)?;
+                let expr = self.parse_expression(ctx, body)?;
                 ctx.lower(self.program, expr, false, body)?;
                 self.expect(TokenValue::Semicolon)?;
             }
@@ -1560,8 +1606,8 @@ impl<'ctx, 'fun> DeclarationContext<'ctx, 'fun> {
         };
 
         match self.external {
-            true => program.add_global_var(self.ctx, decl),
-            false => program.add_local_var(self.ctx, decl),
+            true => program.add_global_var(self.ctx, self.body, decl),
+            false => program.add_local_var(self.ctx, self.body, decl),
         }
     }
 }
