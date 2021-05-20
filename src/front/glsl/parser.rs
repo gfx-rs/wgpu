@@ -577,7 +577,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                 &mut arguments,
                             );
 
-                            self.parse_function_args(&mut context, &mut parameters)?;
+                            self.parse_function_args(&mut context, &mut body, &mut parameters)?;
 
                             let end_meta = self.expect(TokenValue::RightParen)?.meta;
                             meta = meta.union(&end_meta);
@@ -1540,19 +1540,19 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     fn parse_function_args(
         &mut self,
         context: &mut Context,
+        body: &mut Block,
         parameters: &mut Vec<ParameterQualifier>,
     ) -> Result<()> {
         loop {
             if self.peek_type_name() || self.peek_parameter_qualifier() {
                 let qualifier = self.parse_parameter_qualifier();
-                let mutable = qualifier != ParameterQualifier::Const;
                 parameters.push(qualifier);
                 let ty = self.parse_type_non_void()?.0;
 
                 match self.expect_peek()?.value {
                     TokenValue::Comma => {
                         self.bump()?;
-                        context.add_function_arg(None, ty, mutable);
+                        context.add_function_arg(body, None, ty, qualifier);
                         continue;
                     }
                     TokenValue::Identifier(_) => {
@@ -1561,7 +1561,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         let size = self.parse_array_specifier()?;
                         let ty = self.maybe_array(ty, size);
 
-                        context.add_function_arg(Some(name), ty, mutable);
+                        context.add_function_arg(body, Some(name), ty, qualifier);
 
                         if self.bump_if(TokenValue::Comma).is_some() {
                             continue;

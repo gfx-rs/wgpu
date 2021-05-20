@@ -276,7 +276,13 @@ impl<'function> Context<'function> {
     }
 
     /// Add function argument to current scope
-    pub fn add_function_arg(&mut self, name: Option<String>, ty: Handle<Type>, mutable: bool) {
+    pub fn add_function_arg(
+        &mut self,
+        body: &mut Block,
+        name: Option<String>,
+        ty: Handle<Type>,
+        parameter: ParameterQualifier,
+    ) {
         let index = self.arguments.len();
         self.arguments.push(FunctionArgument {
             name: name.clone(),
@@ -285,16 +291,20 @@ impl<'function> Context<'function> {
         });
 
         if let Some(name) = name {
-            if let Some(current) = self.scopes.last_mut() {
-                let expr = self
-                    .expressions
-                    .append(Expression::FunctionArgument(index as u32));
+            let expr = self.add_expression(Expression::FunctionArgument(index as u32), body);
+            let mutable = parameter != ParameterQualifier::Const;
+            let load = if parameter.is_lhs() {
+                Some(self.add_expression(Expression::Load { pointer: expr }, body))
+            } else {
+                None
+            };
 
+            if let Some(current) = self.scopes.last_mut() {
                 (*current).insert(
                     name,
                     VariableReference {
                         expr,
-                        load: None,
+                        load,
                         mutable,
                     },
                 );
@@ -520,7 +530,7 @@ pub enum StructLayout {
     Std140,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum ParameterQualifier {
     In,
     Out,
