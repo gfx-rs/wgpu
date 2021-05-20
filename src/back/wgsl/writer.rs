@@ -632,8 +632,15 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
                 writeln!(self.out, "discard;")?
             }
-            // TODO: copy-paste from glsl-out
             Statement::Store { pointer, value } => {
+                // WGSL does not support all SPIR-V builtins and we should skip it in generated shaders.
+                // We already skip them when we generate struct type.
+                // Now we need to find expression that used struct with ignored builtins
+                if let Expression::AccessIndex { base, index } = func_ctx.expressions[pointer] {
+                    if access_to_unsupported_builtin(base, index, module, &func_ctx.info) {
+                        return Ok(());
+                    }
+                }
                 write!(self.out, "{}", INDENT.repeat(indent))?;
                 self.write_expr(module, pointer, func_ctx)?;
                 write!(self.out, " = ")?;
@@ -857,35 +864,11 @@ impl<W: Write> Writer<W> {
                 for component in components {
                     let mut skip_component = false;
                     if let Expression::Load { pointer } = func_ctx.expressions[*component] {
-                        if let Expression::AccessIndex {
-                            base,
-                            index: access_index,
-                        } = func_ctx.expressions[pointer]
+                        if let Expression::AccessIndex { base, index } =
+                            func_ctx.expressions[pointer]
                         {
-                            let base_ty_res = &func_ctx.info[base].ty;
-                            let resolved = base_ty_res.inner_with(&module.types);
-                            if let TypeInner::Pointer {
-                                base: pointer_base_handle,
-                                ..
-                            } = *resolved
-                            {
-                                // Let's check that we try to access a struct member with unsupported built-in and skip it.
-                                if let TypeInner::Struct { ref members, .. } =
-                                    module.types[pointer_base_handle].inner
-                                {
-                                    if let Some(Binding::BuiltIn(builtin)) =
-                                        members[access_index as usize].binding
-                                    {
-                                        if builtin_str(builtin).is_none() {
-                                            // glslang why you did this with us...
-                                            log::warn!(
-                                                "Skip component with unsupported builtin {:?}",
-                                                builtin
-                                            );
-                                            skip_component = true;
-                                        }
-                                    }
-                                }
+                            if access_to_unsupported_builtin(base, index, module, &func_ctx.info) {
+                                skip_component = true;
                             }
                         }
                     }
@@ -1567,4 +1550,32 @@ fn is_deref_required(expr: Handle<Expression>, module: &Module, info: &FunctionI
         TypeInner::ValuePointer { .. } => true,
         _ => false,
     }
+}
+
+/// Helper function that check that expression don't access to structure member with unsupported builtin.
+fn access_to_unsupported_builtin(
+    expr: Handle<Expression>,
+    index: u32,
+    module: &Module,
+    info: &FunctionInfo,
+) -> bool {
+    let base_ty_res = &info[expr].ty;
+    let resolved = base_ty_res.inner_with(&module.types);
+    if let TypeInner::Pointer {
+        base: pointer_base_handle,
+        ..
+    } = *resolved
+    {
+        // Let's check that we try to access a struct member with unsupported built-in and skip it.
+        if let TypeInner::Struct { ref members, .. } = module.types[pointer_base_handle].inner {
+            if let Some(Binding::BuiltIn(builtin)) = members[index as usize].binding {
+                if builtin_str(builtin).is_none() {
+                    log::warn!("Skip component with unsupported builtin {:?}", builtin);
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
 }
