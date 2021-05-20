@@ -729,7 +729,7 @@ impl Writer {
                 }
                 Instruction::type_int(id, bits, signedness)
             }
-            crate::ScalarKind::Float => {
+            Sk::Float => {
                 if bits == 64 {
                     self.capabilities.insert(spirv::Capability::Float64);
                 }
