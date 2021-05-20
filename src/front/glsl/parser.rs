@@ -512,8 +512,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             let pointer = ctx.add_var(self.program, ty, name, maybe_constant, meta)?;
 
             if let Some((value, _)) = init {
-                ctx.ctx.emit_flush(ctx.body);
-                ctx.ctx.emit_start();
+                ctx.flush_expressions();
                 ctx.body.push(Statement::Store { pointer, value });
             }
 
@@ -1614,6 +1613,11 @@ impl<'ctx, 'fun> DeclarationContext<'ctx, 'fun> {
             true => program.add_global_var(self.ctx, self.body, decl),
             false => program.add_local_var(self.ctx, self.body, decl),
         }
+    }
+
+    fn flush_expressions(&mut self) {
+        self.ctx.emit_flush(self.body);
+        self.ctx.emit_start()
     }
 }
 

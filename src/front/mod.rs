@@ -15,7 +15,7 @@ use crate::{
 /// Helper class to emit expressions
 #[allow(dead_code)]
 #[derive(Default, Debug)]
-pub(crate) struct Emitter {
+struct Emitter {
     start_len: Option<usize>,
 }
 

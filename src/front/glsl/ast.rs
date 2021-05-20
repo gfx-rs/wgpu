@@ -1,9 +1,14 @@
-use super::{super::Typifier, constants::ConstantSolver, error::ErrorKind, SourceMetadata};
+use super::{
+    super::{Emitter, Typifier},
+    constants::ConstantSolver,
+    error::ErrorKind,
+    SourceMetadata,
+};
 use crate::{
-    front::Emitter, proc::ResolveContext, Arena, BinaryOperator, Binding, Block, Constant,
-    Expression, FastHashMap, Function, FunctionArgument, GlobalVariable, Handle, Interpolation,
-    LocalVariable, Module, RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement,
-    StorageClass, Type, TypeInner, UnaryOperator,
+    proc::ResolveContext, Arena, BinaryOperator, Binding, Block, Constant, Expression, FastHashMap,
+    Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable, Module,
+    RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass, Type,
+    TypeInner, UnaryOperator,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -185,33 +190,36 @@ impl<'function> Context<'function> {
 
         this.emit_start();
 
-        for &(ref name, lookup) in program.global_variables.iter() {
-            let expr = match lookup {
-                GlobalLookup::Variable(v) => Expression::GlobalVariable(v),
-                GlobalLookup::BlockSelect(handle, index) => {
-                    let base = this.add_expression(Expression::GlobalVariable(handle), body);
-
-                    Expression::AccessIndex { base, index }
-                }
-            };
-
-            let expr = this.add_expression(expr, body);
+        for &(ref name, handle) in program.constants.iter() {
+            let expr = this.expressions.append(Expression::Constant(handle));
             let var = VariableReference {
                 expr,
-                load: Some(this.add_expression(Expression::Load { pointer: expr }, body)),
-                // TODO: respect constant qualifier
-                mutable: true,
+                load: None,
+                mutable: false,
             };
 
             this.lookup_global_var_exps.insert(name.into(), var);
         }
 
-        for &(ref name, handle) in program.constants.iter() {
-            let expr = this.add_expression(Expression::Constant(handle), body);
+        for &(ref name, lookup) in program.global_variables.iter() {
+            this.emit_flush(body);
+            let expr = match lookup {
+                GlobalLookup::Variable(v) => Expression::GlobalVariable(v),
+                GlobalLookup::BlockSelect(handle, index) => {
+                    let base = this.expressions.append(Expression::GlobalVariable(handle));
+
+                    Expression::AccessIndex { base, index }
+                }
+            };
+
+            let expr = this.expressions.append(expr);
+            this.emit_start();
+
             let var = VariableReference {
                 expr,
-                load: None,
-                mutable: false,
+                load: Some(this.add_expression(Expression::Load { pointer: expr }, body)),
+                // TODO: respect constant qualifier
+                mutable: true,
             };
 
             this.lookup_global_var_exps.insert(name.into(), var);
@@ -231,9 +239,9 @@ impl<'function> Context<'function> {
     pub fn add_expression(&mut self, expr: Expression, body: &mut Block) -> Handle<Expression> {
         if expr.needs_pre_emit() {
             self.emit_flush(body);
-            let expr = self.expressions.append(expr);
+            let handle = self.expressions.append(expr);
             self.emit_start();
-            expr
+            handle
         } else {
             self.expressions.append(expr)
         }
