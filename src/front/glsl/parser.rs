@@ -330,7 +330,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         );
 
         let expr = self.parse_conditional(&mut ctx, &mut block, None)?;
-        let (root, meta) = ctx.lower(self.program, expr, false, &mut block)?;
+        let (root, meta) = ctx.lower_expect(self.program, expr, false, &mut block)?;
 
         Ok((self.program.solve_constant(&ctx, root, meta)?, meta))
     }
@@ -434,7 +434,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             ))
         } else {
             let expr = self.parse_assignment(ctx, body)?;
-            Ok(ctx.lower(self.program, expr, false, body)?)
+            Ok(ctx.lower_expect(self.program, expr, false, body)?)
         }
     }
 
@@ -1183,7 +1183,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     _ => {
                         let expr = self.parse_expression(ctx, body)?;
                         self.expect(TokenValue::Semicolon)?;
-                        Some(ctx.lower(self.program, expr, false, body)?.0)
+                        Some(ctx.lower_expect(self.program, expr, false, body)?.0)
                     }
                 };
 
@@ -1203,7 +1203,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 self.expect(TokenValue::LeftParen)?;
                 let condition = {
                     let expr = self.parse_expression(ctx, body)?;
-                    ctx.lower(self.program, expr, false, body)?.0
+                    ctx.lower_expect(self.program, expr, false, body)?.0
                 };
                 self.expect(TokenValue::RightParen)?;
 
@@ -1230,7 +1230,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 self.expect(TokenValue::LeftParen)?;
                 let selector = {
                     let expr = self.parse_expression(ctx, body)?;
-                    ctx.lower(self.program, expr, false, body)?.0
+                    ctx.lower_expect(self.program, expr, false, body)?.0
                 };
                 self.expect(TokenValue::RightParen)?;
 
@@ -1247,7 +1247,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             self.bump()?;
                             let value = {
                                 let expr = self.parse_expression(ctx, body)?;
-                                let (root, meta) = ctx.lower(self.program, expr, false, body)?;
+                                let (root, meta) =
+                                    ctx.lower_expect(self.program, expr, false, body)?;
                                 let constant = self.program.solve_constant(&ctx, root, meta)?;
 
                                 match self.program.module.constants[constant].inner {
@@ -1332,7 +1333,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 let root = self.parse_expression(ctx, &mut loop_body)?;
                 self.expect(TokenValue::RightParen)?;
 
-                let expr = ctx.lower(self.program, root, false, &mut loop_body)?.0;
+                let expr = ctx
+                    .lower_expect(self.program, root, false, &mut loop_body)?
+                    .0;
                 let condition = ctx.add_expression(
                     Expression::Unary {
                         op: UnaryOperator::Not,
@@ -1368,7 +1371,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 let root = self.parse_expression(ctx, &mut loop_body)?;
                 self.expect(TokenValue::RightParen)?;
 
-                let expr = ctx.lower(self.program, root, false, &mut loop_body)?.0;
+                let expr = ctx
+                    .lower_expect(self.program, root, false, &mut loop_body)?
+                    .0;
                 let condition = ctx.add_expression(
                     Expression::Unary {
                         op: UnaryOperator::Not,
@@ -1439,7 +1444,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         value
                     } else {
                         let root = self.parse_expression(ctx, &mut block)?;
-                        ctx.lower(self.program, root, false, &mut block)?.0
+                        ctx.lower_expect(self.program, root, false, &mut block)?.0
                     };
 
                     let condition = ctx.add_expression(

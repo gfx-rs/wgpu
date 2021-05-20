@@ -15,10 +15,10 @@ impl Program<'_> {
         fc: FunctionCallKind,
         raw_args: &[Handle<HirExpr>],
         meta: SourceMetadata,
-    ) -> Result<Handle<Expression>, ErrorKind> {
+    ) -> Result<Option<Handle<Expression>>, ErrorKind> {
         let args: Vec<_> = raw_args
             .iter()
-            .map(|e| ctx.lower(self, *e, false, body))
+            .map(|e| ctx.lower_expect(self, *e, false, body))
             .collect::<Result<_, _>>()?;
 
         match fc {
@@ -89,7 +89,7 @@ impl Program<'_> {
                     )
                 };
 
-                Ok(h)
+                Ok(Some(h))
             }
             FunctionCallKind::Function(name) => {
                 match name.as_str() {
@@ -98,14 +98,14 @@ impl Program<'_> {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
                         ctx.samplers.insert(args[0].0, args[1].0);
-                        Ok(args[0].0)
+                        Ok(Some(args[0].0))
                     }
                     "texture" => {
                         if args.len() != 2 {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
                         if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
-                            Ok(ctx.add_expression(
+                            Ok(Some(ctx.add_expression(
                                 Expression::ImageSample {
                                     image: args[0].0,
                                     sampler,
@@ -116,7 +116,7 @@ impl Program<'_> {
                                     depth_ref: None,
                                 },
                                 body,
-                            ))
+                            )))
                         } else {
                             Err(ErrorKind::SemanticError(meta, "Bad call to texture".into()))
                         }
@@ -126,7 +126,7 @@ impl Program<'_> {
                             return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
                         if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
-                            Ok(ctx.add_expression(
+                            Ok(Some(ctx.add_expression(
                                 Expression::ImageSample {
                                     image: args[0].0,
                                     sampler,
@@ -137,7 +137,7 @@ impl Program<'_> {
                                     depth_ref: None,
                                 },
                                 body,
-                            ))
+                            )))
                         } else {
                             Err(ErrorKind::SemanticError(
                                 meta,
@@ -151,7 +151,7 @@ impl Program<'_> {
                         if args.len() != 1 {
                             return Err(ErrorKind::wrong_function_args(name, 1, args.len(), meta));
                         }
-                        Ok(ctx.add_expression(
+                        Ok(Some(ctx.add_expression(
                             Expression::Math {
                                 fun: match name.as_str() {
                                     "ceil" => MathFunction::Ceil,
@@ -176,13 +176,13 @@ impl Program<'_> {
                                 arg2: None,
                             },
                             body,
-                        ))
+                        )))
                     }
                     "pow" | "dot" | "max" => {
                         if args.len() != 2 {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
-                        Ok(ctx.add_expression(
+                        Ok(Some(ctx.add_expression(
                             Expression::Math {
                                 fun: match name.as_str() {
                                     "pow" => MathFunction::Pow,
@@ -195,13 +195,13 @@ impl Program<'_> {
                                 arg2: None,
                             },
                             body,
-                        ))
+                        )))
                     }
                     "mix" | "clamp" => {
                         if args.len() != 3 {
                             return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
-                        Ok(ctx.add_expression(
+                        Ok(Some(ctx.add_expression(
                             Expression::Math {
                                 fun: match name.as_str() {
                                     "mix" => MathFunction::Mix,
@@ -213,14 +213,14 @@ impl Program<'_> {
                                 arg2: Some(args[2].0),
                             },
                             body,
-                        ))
+                        )))
                     }
                     "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" | "equal"
                     | "notEqual" => {
                         if args.len() != 2 {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
-                        Ok(ctx.add_expression(
+                        Ok(Some(ctx.add_expression(
                             Expression::Binary {
                                 op: match name.as_str() {
                                     "lessThan" => BinaryOperator::Less,
@@ -235,7 +235,7 @@ impl Program<'_> {
                                 right: args[1].0,
                             },
                             body,
-                        ))
+                        )))
                     }
                     "isinf" | "isnan" | "all" | "any" => {
                         let fun = match name.as_str() {
@@ -246,7 +246,9 @@ impl Program<'_> {
                             _ => unreachable!(),
                         };
 
-                        self.parse_relational_fun(ctx, body, name, &args, fun, meta)
+                        Ok(Some(
+                            self.parse_relational_fun(ctx, body, name, &args, fun, meta)?,
+                        ))
                     }
                     _ => {
                         let mut parameters = Vec::new();
@@ -273,22 +275,27 @@ impl Program<'_> {
 
                         let mut arguments = Vec::with_capacity(raw_args.len());
                         for (qualifier, expr) in fun.parameters.iter().zip(raw_args.iter()) {
-                            let handle = ctx.lower(self, *expr, qualifier.is_lhs(), body)?.0;
+                            let handle = ctx.lower_expect(self, *expr, qualifier.is_lhs(), body)?.0;
                             arguments.push(handle)
                         }
 
                         ctx.emit_flush(body);
 
-                        let expression = ctx.add_expression(Expression::Call(fun.handle), body);
+                        let result = if !fun.void {
+                            Some(ctx.add_expression(Expression::Call(fun.handle), body))
+                        } else {
+                            None
+                        };
+
                         body.push(crate::Statement::Call {
                             function: fun.handle,
                             arguments,
-                            result: Some(expression),
+                            result,
                         });
 
                         ctx.emit_start();
 
-                        Ok(expression)
+                        Ok(result)
                     }
                 }
             }
@@ -351,6 +358,8 @@ impl Program<'_> {
                 }
             }
 
+            let void = function.result.is_none();
+
             if let Some(decl) = self.lookup_function.get_mut(&sig) {
                 if decl.defined {
                     return Err(ErrorKind::SemanticError(
@@ -369,6 +378,7 @@ impl Program<'_> {
                         parameters,
                         handle,
                         defined: true,
+                        void,
                     },
                 );
             }
@@ -391,6 +401,7 @@ impl Program<'_> {
             name,
             parameters: function.arguments.iter().map(|p| p.ty).collect(),
         };
+        let void = function.result.is_none();
 
         for (arg, qualifier) in function.arguments.iter_mut().zip(parameters.iter()) {
             if qualifier.is_lhs() {
@@ -412,6 +423,7 @@ impl Program<'_> {
                 parameters,
                 handle,
                 defined: false,
+                void,
             },
         );
 

@@ -24,6 +24,8 @@ pub struct FunctionDeclaration {
     pub handle: Handle<Function>,
     /// Wheter this function was already defined or is just a prototype
     pub defined: bool,
+    /// Wheter or not this function returns void (nothing)
+    pub void: bool,
 }
 
 #[derive(Debug)]
@@ -321,24 +323,46 @@ impl<'function> Context<'function> {
         self.scopes.pop();
     }
 
-    pub fn lower(
+    pub fn lower_expect(
         &mut self,
         program: &mut Program,
         expr: Handle<HirExpr>,
         lhs: bool,
         body: &mut Block,
     ) -> Result<(Handle<Expression>, SourceMetadata), ErrorKind> {
+        let (maybe_expr, meta) = self.lower(program, expr, lhs, body)?;
+
+        let expr = match maybe_expr {
+            Some(e) => e,
+            None => {
+                return Err(ErrorKind::SemanticError(
+                    meta,
+                    "Expression returns void".into(),
+                ))
+            }
+        };
+
+        Ok((expr, meta))
+    }
+
+    pub fn lower(
+        &mut self,
+        program: &mut Program,
+        expr: Handle<HirExpr>,
+        lhs: bool,
+        body: &mut Block,
+    ) -> Result<(Option<Handle<Expression>>, SourceMetadata), ErrorKind> {
         let HirExpr { kind, meta } = self.hir_exprs[expr].clone();
 
         let handle = match kind {
             HirExprKind::Access { base, index } => {
-                let base = self.lower(program, base, lhs, body)?.0;
-                let index = self.lower(program, index, false, body)?.0;
+                let base = self.lower_expect(program, base, lhs, body)?.0;
+                let index = self.lower_expect(program, index, false, body)?.0;
 
                 self.add_expression(Expression::Access { base, index }, body)
             }
             HirExprKind::Select { base, field } => {
-                let base = self.lower(program, base, lhs, body)?.0;
+                let base = self.lower_expect(program, base, lhs, body)?.0;
 
                 program.field_selection(self, body, base, &field, meta)?
             }
@@ -346,8 +370,8 @@ impl<'function> Context<'function> {
                 self.add_expression(Expression::Constant(constant), body)
             }
             HirExprKind::Binary { left, op, right } if !lhs => {
-                let (left, left_meta) = self.lower(program, left, false, body)?;
-                let (right, right_meta) = self.lower(program, right, false, body)?;
+                let (left, left_meta) = self.lower_expect(program, left, false, body)?;
+                let (right, right_meta) = self.lower_expect(program, right, false, body)?;
 
                 if let BinaryOperator::Equal | BinaryOperator::NotEqual = op {
                     let equals = op == BinaryOperator::Equal;
@@ -386,7 +410,7 @@ impl<'function> Context<'function> {
                 }
             }
             HirExprKind::Unary { op, expr } if !lhs => {
-                let expr = self.lower(program, expr, false, body)?.0;
+                let expr = self.lower_expect(program, expr, false, body)?.0;
 
                 self.add_expression(Expression::Unary { op, expr }, body)
             }
@@ -405,16 +429,17 @@ impl<'function> Context<'function> {
                 }
             }
             HirExprKind::Call(call) if !lhs => {
-                program.function_call(self, body, call.kind, &call.args, meta)?
+                let maybe_expr = program.function_call(self, body, call.kind, &call.args, meta)?;
+                return Ok((maybe_expr, meta));
             }
             HirExprKind::Conditional {
                 condition,
                 accept,
                 reject,
             } if !lhs => {
-                let condition = self.lower(program, condition, false, body)?.0;
-                let accept = self.lower(program, accept, false, body)?.0;
-                let reject = self.lower(program, reject, false, body)?.0;
+                let condition = self.lower_expect(program, condition, false, body)?.0;
+                let accept = self.lower_expect(program, accept, false, body)?.0;
+                let reject = self.lower_expect(program, reject, false, body)?.0;
 
                 self.add_expression(
                     Expression::Select {
@@ -426,8 +451,8 @@ impl<'function> Context<'function> {
                 )
             }
             HirExprKind::Assign { tgt, value } if !lhs => {
-                let pointer = self.lower(program, tgt, true, body)?.0;
-                let value = self.lower(program, value, false, body)?.0;
+                let pointer = self.lower_expect(program, tgt, true, body)?.0;
+                let value = self.lower_expect(program, value, false, body)?.0;
 
                 self.emit_flush(body);
                 self.emit_start();
@@ -444,7 +469,7 @@ impl<'function> Context<'function> {
             }
         };
 
-        Ok((handle, meta))
+        Ok((Some(handle), meta))
     }
 }
 
