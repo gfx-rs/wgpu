@@ -39,9 +39,16 @@ use std::thread::ThreadId;
 const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
 
 #[derive(Debug)]
+enum CommandEncoderStatus {
+    Recording,
+    Finished,
+    Error,
+}
+
+#[derive(Debug)]
 pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) raw: Vec<B::CommandBuffer>,
-    is_recording: bool,
+    status: CommandEncoderStatus,
     recorded_thread_id: ThreadId,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
@@ -63,9 +70,19 @@ impl<B: GfxBackend> CommandBuffer<B> {
         id: id::CommandEncoderId,
     ) -> Result<&mut Self, CommandEncoderError> {
         match storage.get_mut(id) {
-            Ok(cmd_buf) if cmd_buf.is_recording => Ok(cmd_buf),
-            Ok(_) => Err(CommandEncoderError::NotRecording),
+            Ok(cmd_buf) => match cmd_buf.status {
+                CommandEncoderStatus::Recording => Ok(cmd_buf),
+                CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
+                CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
+            },
             Err(_) => Err(CommandEncoderError::Invalid),
+        }
+    }
+
+    pub fn is_finished(&self) -> bool {
+        match self.status {
+            CommandEncoderStatus::Finished => true,
+            _ => false,
         }
     }
 
@@ -209,7 +226,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let error = match CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id) {
             Ok(cmd_buf) => {
-                cmd_buf.is_recording = false;
+                cmd_buf.status = CommandEncoderStatus::Finished;
                 // stop tracking the swapchain image, if used
                 for sc_id in cmd_buf.used_swap_chains.iter() {
                     let view_id = swap_chain_guard[sc_id.value]

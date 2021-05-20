@@ -6,7 +6,8 @@ use crate::{
     binding_model::{BindError, BindGroup, PushConstantUploadError},
     command::{
         bind::Binder, end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer,
-        CommandEncoderError, MapPassErr, PassErrorScope, QueryUseError, StateChange,
+        CommandEncoderError, CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError,
+        StateChange,
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
@@ -266,6 +267,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf =
             CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id).map_pass_err(scope)?;
+        // will be reset to true if recording is done without errors
+        cmd_buf.status = CommandEncoderStatus::Error;
         let raw = cmd_buf.raw.last_mut().unwrap();
 
         #[cfg(feature = "trace")]
@@ -657,6 +660,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 raw.end_debug_marker();
             }
         }
+        cmd_buf.status = CommandEncoderStatus::Recording;
 
         Ok(())
     }
