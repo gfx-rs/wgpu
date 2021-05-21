@@ -905,7 +905,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     log::trace!("\t\t\tlooking up expr {:?}", base_id);
                     let mut acex = {
                         // the base type has to be a pointer,
-                        // so we derefernce it here for the traversal
+                        // so we dereference it here for the traversal
                         let lexp = self.lookup_expression.lookup(base_id)?;
                         let lty = self.lookup_type.lookup(lexp.type_id)?;
                         AccessExpression {
