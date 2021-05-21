@@ -1,8 +1,8 @@
 use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Binding, Block, BuiltIn, EntryPoint,
     Expression, Function, FunctionArgument, FunctionResult, Handle, MathFunction,
-    RelationalFunction, SampleLevel, ScalarKind, ShaderStage, Statement, StorageClass,
-    StructMember, Type, TypeInner,
+    RelationalFunction, SampleLevel, ShaderStage, Statement, StorageClass, StructMember,
+    SwizzleComponent, Type, TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind, SourceMetadata};
@@ -37,8 +37,7 @@ impl Program<'_> {
                             },
                             body,
                         ),
-                        TypeInner::Scalar { kind, width }
-                        | TypeInner::Vector { kind, width, .. } => ctx.add_expression(
+                        TypeInner::Scalar { kind, width } => ctx.add_expression(
                             Expression::As {
                                 kind,
                                 expr: args[0].0,
@@ -46,24 +45,80 @@ impl Program<'_> {
                             },
                             body,
                         ),
-                        TypeInner::Matrix {
-                            columns,
-                            rows,
-                            width,
-                        } => {
-                            let value = ctx.add_expression(
-                                Expression::As {
-                                    kind: ScalarKind::Float,
-                                    expr: args[0].0,
-                                    convert: Some(width),
+                        TypeInner::Vector { size, kind, width } => {
+                            let expr = ctx.add_expression(
+                                Expression::Swizzle {
+                                    size,
+                                    vector: args[0].0,
+                                    pattern: [
+                                        SwizzleComponent::X,
+                                        SwizzleComponent::Y,
+                                        SwizzleComponent::Z,
+                                        SwizzleComponent::W,
+                                    ],
                                 },
                                 body,
                             );
 
-                            let column = if is_vec {
-                                value
-                            } else {
-                                ctx.add_expression(Expression::Splat { size: rows, value }, body)
+                            ctx.add_expression(
+                                Expression::As {
+                                    kind,
+                                    expr,
+                                    convert: Some(width),
+                                },
+                                body,
+                            )
+                        }
+                        TypeInner::Matrix { columns, rows, .. } => {
+                            // TODO: casts
+                            // `Expression::As` doesn't support matrix width
+                            // casts so we need to do some extra work for casts
+
+                            let column = match *self.resolve_type(ctx, args[0].0, args[0].1)? {
+                                TypeInner::Scalar { .. } => ctx.add_expression(
+                                    Expression::Splat {
+                                        size: rows,
+                                        value: args[0].0,
+                                    },
+                                    body,
+                                ),
+                                TypeInner::Matrix { .. } => {
+                                    let mut components = Vec::new();
+
+                                    for n in 0..columns as u32 {
+                                        let vector = ctx.add_expression(
+                                            Expression::AccessIndex {
+                                                base: args[0].0,
+                                                index: n,
+                                            },
+                                            body,
+                                        );
+
+                                        let c = ctx.add_expression(
+                                            Expression::Swizzle {
+                                                size: rows,
+                                                vector,
+                                                pattern: [
+                                                    SwizzleComponent::X,
+                                                    SwizzleComponent::Y,
+                                                    SwizzleComponent::Z,
+                                                    SwizzleComponent::W,
+                                                ],
+                                            },
+                                            body,
+                                        );
+
+                                        components.push(c)
+                                    }
+
+                                    let h = ctx.add_expression(
+                                        Expression::Compose { ty, components },
+                                        body,
+                                    );
+
+                                    return Ok(Some(h));
+                                }
+                                _ => args[0].0,
                             };
 
                             let columns =
