@@ -45,6 +45,8 @@ pub enum VaryingError {
     InvalidBuiltInStage(crate::BuiltIn),
     #[error("BuiltIn type for {0:?} is invalid")]
     InvalidBuiltInType(crate::BuiltIn),
+    #[error("Entry point arguments and return values must all have bindings")]
+    MissingBinding,
     #[error("Struct member {0} is missing a binding")]
     MemberMissingBinding(u32),
     #[error("Multiple bindings at location {location} are present")]
@@ -276,7 +278,7 @@ impl VaryingContext<'_> {
                             }
                         }
                     }
-                    _ => return Err(VaryingError::InvalidType(self.ty)),
+                    _ => return Err(VaryingError::MissingBinding),
                 }
                 Ok(())
             }

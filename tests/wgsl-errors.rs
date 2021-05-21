@@ -99,7 +99,7 @@ macro_rules! check_validation_error {
             let error = validation_error($source);
             if ! matches!(error, $pattern) {
                 eprintln!("validation error does not match pattern:\n\
-                        {:?}\n\
+                        {:#?}\n\
                         \n\
                         expected match for pattern:\n\
                         {}",
@@ -189,6 +189,81 @@ fn invalid_structs() {
         "struct Bad { data: array<f32>; other: f32; };":
         Err(naga::valid::ValidationError::Type {
             error: naga::valid::TypeError::InvalidDynamicArray(_, _),
+            ..
+        })
+    }
+}
+
+#[test]
+fn missing_bindings() {
+    check_validation_error! {
+        "
+        [[stage(vertex)]]
+        fn vertex(input: vec4<f32>) -> [[location(0)]] vec4<f32> {
+           return input;
+        }
+        ":
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            error: naga::valid::EntryPointError::Argument(
+                0,
+                naga::valid::VaryingError::MissingBinding,
+            ),
+            ..
+        })
+    }
+
+    check_validation_error! {
+        "
+        [[stage(vertex)]]
+        fn vertex([[location(0)]] input: vec4<f32>, more_input: f32) -> [[location(0)]] vec4<f32> {
+           return input + more_input;
+        }
+        ":
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            error: naga::valid::EntryPointError::Argument(
+                1,
+                naga::valid::VaryingError::MissingBinding,
+            ),
+            ..
+        })
+    }
+
+    check_validation_error! {
+        "
+        [[stage(vertex)]]
+        fn vertex([[location(0)]] input: vec4<f32>) -> vec4<f32> {
+           return input;
+        }
+        ":
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            error: naga::valid::EntryPointError::Result(
+                naga::valid::VaryingError::MissingBinding,
+            ),
+            ..
+        })
+    }
+
+    check_validation_error! {
+        "
+        struct VertexIn {
+          [[location(0)]] pos: vec4<f32>;
+          uv: vec2<f32>;
+        };
+
+        [[stage(vertex)]]
+        fn vertex(input: VertexIn) -> [[location(0)]] vec4<f32> {
+           return input.pos;
+        }
+        ":
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            error: naga::valid::EntryPointError::Argument(
+                0,
+                naga::valid::VaryingError::MemberMissingBinding(1),
+            ),
             ..
         })
     }
