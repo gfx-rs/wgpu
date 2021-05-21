@@ -203,12 +203,15 @@ impl<'function> Context<'function> {
 
         for &(ref name, lookup) in program.global_variables.iter() {
             this.emit_flush(body);
-            let expr = match lookup {
-                GlobalLookup::Variable(v) => Expression::GlobalVariable(v),
+            let (expr, load) = match lookup {
+                GlobalLookup::Variable(v) => (
+                    Expression::GlobalVariable(v),
+                    program.module.global_variables[v].class != StorageClass::Handle,
+                ),
                 GlobalLookup::BlockSelect(handle, index) => {
                     let base = this.expressions.append(Expression::GlobalVariable(handle));
 
-                    Expression::AccessIndex { base, index }
+                    (Expression::AccessIndex { base, index }, true)
                 }
             };
 
@@ -217,7 +220,11 @@ impl<'function> Context<'function> {
 
             let var = VariableReference {
                 expr,
-                load: Some(this.add_expression(Expression::Load { pointer: expr }, body)),
+                load: if load {
+                    Some(this.add_expression(Expression::Load { pointer: expr }, body))
+                } else {
+                    None
+                },
                 // TODO: respect constant qualifier
                 mutable: true,
             };

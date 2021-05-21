@@ -1,6 +1,6 @@
 use crate::{
-    Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle, LocalVariable,
-    ScalarKind, StorageAccess, StorageClass, Type, TypeInner, VectorSize,
+    Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle, ImageClass,
+    LocalVariable, ScalarKind, StorageAccess, StorageClass, Type, TypeInner, VectorSize,
 };
 
 use super::ast::*;
@@ -41,7 +41,7 @@ impl Program<'_> {
                 binding: None,
                 ty,
                 init: None,
-                storage_access: StorageAccess::all(),
+                storage_access: StorageAccess::empty(),
             });
 
             self.entry_args
@@ -304,7 +304,7 @@ impl Program<'_> {
                 binding: None,
                 ty,
                 init,
-                storage_access: StorageAccess::all(),
+                storage_access: StorageAccess::empty(),
             });
 
             self.entry_args.push((
@@ -331,9 +331,25 @@ impl Program<'_> {
             return Ok(ctx.add_expression(Expression::Constant(handle), body));
         }
 
-        let class = match storage {
-            StorageQualifier::StorageClass(class) => class,
-            _ => StorageClass::Private,
+        let (class, storage_access) = match self.module.types[ty].inner {
+            TypeInner::Image { class, .. } => (
+                StorageClass::Handle,
+                if let ImageClass::Storage(_) = class {
+                    // TODO: Add support for qualifiers such as readonly,
+                    // writeonly and readwrite
+                    StorageAccess::all()
+                } else {
+                    StorageAccess::empty()
+                },
+            ),
+            TypeInner::Sampler { .. } => (StorageClass::Handle, StorageAccess::empty()),
+            _ => (
+                match storage {
+                    StorageQualifier::StorageClass(class) => class,
+                    _ => StorageClass::Private,
+                },
+                StorageAccess::empty(),
+            ),
         };
 
         let handle = self.module.global_variables.append(GlobalVariable {
@@ -342,8 +358,7 @@ impl Program<'_> {
             binding,
             ty,
             init,
-            // TODO
-            storage_access: StorageAccess::all(),
+            storage_access,
         });
 
         self.global_variables

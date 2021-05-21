@@ -785,8 +785,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             binding,
             ty,
             init: None,
-            // TODO
-            storage_access: StorageAccess::all(),
+            storage_access: StorageAccess::empty(),
         });
 
         if let Some(k) = name {
