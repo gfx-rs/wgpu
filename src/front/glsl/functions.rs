@@ -439,6 +439,7 @@ impl Program<'_> {
             for (binding, input, handle) in self.entry_args.iter().cloned() {
                 match binding {
                     Binding::Location { .. } if !input => continue,
+                    Binding::BuiltIn(builtin) if !should_read(builtin, stage) => continue,
                     _ => {}
                 }
 
@@ -521,6 +522,32 @@ impl Program<'_> {
                 },
             });
         }
+    }
+}
+
+// FIXME: Both of the functions below should be removed they are a temporary solution
+//
+// The fix should analyze the entry point and children function calls
+// (recursively) and store something like `GlobalUse` and then later only read
+// or store the globals that need to be read or written in that stage
+
+fn should_read(built_in: BuiltIn, stage: ShaderStage) -> bool {
+    match (built_in, stage) {
+        (BuiltIn::Position, ShaderStage::Fragment)
+        | (BuiltIn::BaseInstance, ShaderStage::Vertex)
+        | (BuiltIn::BaseVertex, ShaderStage::Vertex)
+        | (BuiltIn::ClipDistance, ShaderStage::Fragment)
+        | (BuiltIn::InstanceIndex, ShaderStage::Vertex)
+        | (BuiltIn::VertexIndex, ShaderStage::Vertex)
+        | (BuiltIn::FrontFacing, ShaderStage::Fragment)
+        | (BuiltIn::SampleIndex, ShaderStage::Fragment)
+        | (BuiltIn::SampleMask, ShaderStage::Fragment)
+        | (BuiltIn::GlobalInvocationId, ShaderStage::Compute)
+        | (BuiltIn::LocalInvocationId, ShaderStage::Compute)
+        | (BuiltIn::LocalInvocationIndex, ShaderStage::Compute)
+        | (BuiltIn::WorkGroupId, ShaderStage::Compute)
+        | (BuiltIn::WorkGroupSize, ShaderStage::Compute) => true,
+        _ => false,
     }
 }
 
