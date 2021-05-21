@@ -495,7 +495,7 @@ impl Program<'_> {
             let ty = self.module.types.append(Type {
                 name: None,
                 inner: TypeInner::Struct {
-                    top_level: true,
+                    top_level: false,
                     members,
                     span,
                 },
