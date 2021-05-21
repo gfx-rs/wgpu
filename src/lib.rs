@@ -891,7 +891,7 @@ pub enum Expression {
         arg1: Option<Handle<Expression>>,
         arg2: Option<Handle<Expression>>,
     },
-    /// Cast a simply type to another kind.
+    /// Cast a simple type to another kind.
     As {
         /// Source expression, which can only be a scalar or a vector.
         expr: Handle<Expression>,
