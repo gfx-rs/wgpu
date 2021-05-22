@@ -180,6 +180,14 @@ impl Program<'_> {
                         if args.len() != 3 {
                             return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
+                        let exact = ctx.add_expression(
+                            Expression::As {
+                                kind: crate::ScalarKind::Float,
+                                expr: args[2].0,
+                                convert: Some(4),
+                            },
+                            body,
+                        );
                         if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
                             Ok(Some(ctx.add_expression(
                                 Expression::ImageSample {
@@ -188,7 +196,7 @@ impl Program<'_> {
                                     coordinate: args[1].0,
                                     array_index: None, //TODO
                                     offset: None,      //TODO
-                                    level: SampleLevel::Exact(args[2].0),
+                                    level: SampleLevel::Exact(exact),
                                     depth_ref: None,
                                 },
                                 body,
