@@ -191,6 +191,34 @@ fn declarations() {
     let _program = parse_program(
         r#"
         #version 450
+        layout(push_constant, set = 2, binding = 0)
+        uniform u_locals {
+            vec3 model_offs;
+            float load_time;
+            ivec4 atlas_offs;
+        };
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+
+    let _program = parse_program(
+        r#"
+        #version 450
+        layout(std430, set = 2, binding = 0)
+        uniform u_locals {
+            vec3 model_offs;
+            float load_time;
+            ivec4 atlas_offs;
+        };
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+
+    let _program = parse_program(
+        r#"
+        #version 450
         layout(std140, set = 2, binding = 0)
         uniform u_locals {
             vec3 model_offs;

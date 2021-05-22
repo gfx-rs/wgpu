@@ -561,6 +561,7 @@ pub enum StorageQualifier {
 #[derive(Debug, Clone, Copy)]
 pub enum StructLayout {
     Std140,
+    Std430,
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]

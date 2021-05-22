@@ -300,7 +300,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     }
                 } else {
                     match name.as_str() {
+                        "push_constant" => {
+                            qualifiers.push(TypeQualifier::StorageQualifier(
+                                StorageQualifier::StorageClass(StorageClass::PushConstant),
+                            ));
+                            qualifiers.push(TypeQualifier::Layout(StructLayout::Std430));
+                        }
                         "std140" => qualifiers.push(TypeQualifier::Layout(StructLayout::Std140)),
+                        "std430" => qualifiers.push(TypeQualifier::Layout(StructLayout::Std430)),
                         "early_fragment_tests" => {
                             qualifiers.push(TypeQualifier::EarlyFragmentTests)
                         }
@@ -694,7 +701,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         for qualifier in qualifiers {
             match *qualifier {
                 TypeQualifier::StorageQualifier(StorageQualifier::StorageClass(c)) => {
-                    if StorageClass::Private != class {
+                    if StorageClass::PushConstant == class && c == StorageClass::Uniform {
+                        // Ignore the Uniform qualifier if the class was already set to PushConstant
+                        continue;
+                    } else if StorageClass::Private != class {
                         return Err(ErrorKind::SemanticError(
                             meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
