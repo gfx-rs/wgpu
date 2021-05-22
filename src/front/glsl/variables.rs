@@ -1,6 +1,7 @@
 use crate::{
     Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle, ImageClass,
-    LocalVariable, ScalarKind, StorageAccess, StorageClass, Type, TypeInner, VectorSize,
+    Interpolation, LocalVariable, ScalarKind, StorageAccess, StorageClass, Type, TypeInner,
+    VectorSize,
 };
 
 use super::ast::*;
@@ -297,6 +298,13 @@ impl Program<'_> {
 
         if let Some(location) = location {
             let input = StorageQualifier::Input == storage;
+            let interpolation = self.module.types[ty].inner.scalar_kind().map(|kind| {
+                if let ScalarKind::Float = kind {
+                    Interpolation::Perspective
+                } else {
+                    Interpolation::Flat
+                }
+            });
 
             let handle = self.module.global_variables.append(GlobalVariable {
                 name: Some(name.clone()),
