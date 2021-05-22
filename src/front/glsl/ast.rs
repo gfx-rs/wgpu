@@ -25,7 +25,7 @@ pub struct FunctionSignature {
 
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
-    pub parameters: Vec<ParameterQualifier>,
+    pub qualifiers: Vec<ParameterQualifier>,
     pub handle: Handle<Function>,
     /// Wheter this function was already defined or is just a prototype
     pub defined: bool,
@@ -295,22 +295,37 @@ impl<'function> Context<'function> {
     /// Add function argument to current scope
     pub fn add_function_arg(
         &mut self,
+        program: &mut Program,
+        sig: &mut FunctionSignature,
         body: &mut Block,
         name: Option<String>,
         ty: Handle<Type>,
-        parameter: ParameterQualifier,
+        qualifier: ParameterQualifier,
     ) {
         let index = self.arguments.len();
-        self.arguments.push(FunctionArgument {
+        let mut arg = FunctionArgument {
             name: name.clone(),
             ty,
             binding: None,
-        });
+        };
+        sig.parameters.push(ty);
+
+        if qualifier.is_lhs() {
+            arg.ty = program.module.types.fetch_or_append(Type {
+                name: None,
+                inner: TypeInner::Pointer {
+                    base: arg.ty,
+                    class: StorageClass::Function,
+                },
+            })
+        }
+
+        self.arguments.push(arg);
 
         if let Some(name) = name {
             let expr = self.add_expression(Expression::FunctionArgument(index as u32), body);
-            let mutable = parameter != ParameterQualifier::Const;
-            let load = if parameter.is_lhs() {
+            let mutable = qualifier != ParameterQualifier::Const;
+            let load = if qualifier.is_lhs() {
                 Some(self.add_expression(Expression::Load { pointer: expr }, body))
             } else {
                 None

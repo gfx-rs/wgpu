@@ -397,6 +397,22 @@ fn functions() {
         &entry_points,
     )
     .unwrap();
+
+    parse_program(
+        r#"
+        #  version 450
+        void fun(vec2 in_parameter, out float out_parameter) {
+            ivec2 _ = ivec2(in_parameter);
+        }
+
+        void main() {
+            float a;
+            fun(vec2(1.0), a);
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 }
 
 #[test]

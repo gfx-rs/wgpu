@@ -1,7 +1,7 @@
 use super::{
     ast::{
-        Context, FunctionCall, FunctionCallKind, GlobalLookup, HirExpr, HirExprKind,
-        ParameterQualifier, Profile, StorageQualifier, StructLayout, TypeQualifier,
+        Context, FunctionCall, FunctionCallKind, FunctionSignature, GlobalLookup, HirExpr,
+        HirExprKind, ParameterQualifier, Profile, StorageQualifier, StructLayout, TypeQualifier,
     },
     error::ErrorKind,
     lex::Lexer,
@@ -574,6 +574,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             let mut arguments = Vec::new();
                             let mut parameters = Vec::new();
                             let mut body = Block::new();
+                            let mut sig = FunctionSignature {
+                                name: name.clone(),
+                                parameters: Vec::new(),
+                            };
 
                             let mut context = Context::new(
                                 self.program,
@@ -583,7 +587,12 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                 &mut arguments,
                             );
 
-                            self.parse_function_args(&mut context, &mut body, &mut parameters)?;
+                            self.parse_function_args(
+                                &mut context,
+                                &mut body,
+                                &mut parameters,
+                                &mut sig,
+                            )?;
 
                             let end_meta = self.expect(TokenValue::RightParen)?.meta;
                             meta = meta.union(&end_meta);
@@ -599,6 +608,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                             arguments,
                                             ..Default::default()
                                         },
+                                        sig,
                                         parameters,
                                         meta,
                                     )?;
@@ -622,6 +632,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                             arguments,
                                             body,
                                         },
+                                        sig,
                                         parameters,
                                         meta,
                                     )?;
@@ -1555,6 +1566,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         context: &mut Context,
         body: &mut Block,
         parameters: &mut Vec<ParameterQualifier>,
+        sig: &mut FunctionSignature,
     ) -> Result<()> {
         loop {
             if self.peek_type_name() || self.peek_parameter_qualifier() {
@@ -1565,7 +1577,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 match self.expect_peek()?.value {
                     TokenValue::Comma => {
                         self.bump()?;
-                        context.add_function_arg(body, None, ty, qualifier);
+                        context.add_function_arg(&mut self.program, sig, body, None, ty, qualifier);
                         continue;
                     }
                     TokenValue::Identifier(_) => {
@@ -1574,7 +1586,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         let size = self.parse_array_specifier()?;
                         let ty = self.maybe_array(ty, size);
 
-                        context.add_function_arg(body, Some(name), ty, qualifier);
+                        context.add_function_arg(
+                            &mut self.program,
+                            sig,
+                            body,
+                            Some(name),
+                            ty,
+                            qualifier,
+                        );
 
                         if self.bump_if(TokenValue::Comma).is_some() {
                             continue;

@@ -1,8 +1,8 @@
 use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Binding, Block, BuiltIn, EntryPoint,
     Expression, Function, FunctionArgument, FunctionResult, Handle, MathFunction,
-    RelationalFunction, SampleLevel, ShaderStage, Statement, StorageClass, StructMember,
-    SwizzleComponent, Type, TypeInner,
+    RelationalFunction, SampleLevel, ShaderStage, Statement, StructMember, SwizzleComponent, Type,
+    TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind, SourceMetadata};
@@ -337,7 +337,7 @@ impl Program<'_> {
                             .clone();
 
                         let mut arguments = Vec::with_capacity(raw_args.len());
-                        for (qualifier, expr) in fun.parameters.iter().zip(raw_args.iter()) {
+                        for (qualifier, expr) in fun.qualifiers.iter().zip(raw_args.iter()) {
                             let handle = ctx.lower_expect(self, *expr, qualifier.is_lhs(), body)?.0;
                             arguments.push(handle)
                         }
@@ -390,37 +390,17 @@ impl Program<'_> {
     pub fn add_function(
         &mut self,
         mut function: Function,
-        parameters: Vec<ParameterQualifier>,
+        sig: FunctionSignature,
+        qualifiers: Vec<ParameterQualifier>,
         meta: SourceMetadata,
     ) -> Result<(), ErrorKind> {
         ensure_block_returns(&mut function.body);
-        let name = function
-            .name
-            .clone()
-            .ok_or_else(|| ErrorKind::SemanticError(meta, "Unnamed function".into()))?;
-        let stage = self.entry_points.get(&name);
+        let stage = self.entry_points.get(&sig.name);
 
         if let Some(&stage) = stage {
             let handle = self.module.functions.append(function);
-            self.entries.push((name, stage, handle));
+            self.entries.push((sig.name, stage, handle));
         } else {
-            let sig = FunctionSignature {
-                name,
-                parameters: function.arguments.iter().map(|p| p.ty).collect(),
-            };
-
-            for (arg, qualifier) in function.arguments.iter_mut().zip(parameters.iter()) {
-                if qualifier.is_lhs() {
-                    arg.ty = self.module.types.fetch_or_append(Type {
-                        name: None,
-                        inner: TypeInner::Pointer {
-                            base: arg.ty,
-                            class: StorageClass::Function,
-                        },
-                    })
-                }
-            }
-
             let void = function.result.is_none();
 
             if let Some(decl) = self.lookup_function.get_mut(&sig) {
@@ -438,7 +418,7 @@ impl Program<'_> {
                 self.lookup_function.insert(
                     sig,
                     FunctionDeclaration {
-                        parameters,
+                        qualifiers,
                         handle,
                         defined: true,
                         void,
@@ -452,43 +432,33 @@ impl Program<'_> {
 
     pub fn add_prototype(
         &mut self,
-        mut function: Function,
-        parameters: Vec<ParameterQualifier>,
+        function: Function,
+        sig: FunctionSignature,
+        qualifiers: Vec<ParameterQualifier>,
         meta: SourceMetadata,
     ) -> Result<(), ErrorKind> {
-        let name = function
-            .name
-            .clone()
-            .ok_or_else(|| ErrorKind::SemanticError(meta, "Unnamed function".into()))?;
-        let sig = FunctionSignature {
-            name,
-            parameters: function.arguments.iter().map(|p| p.ty).collect(),
-        };
         let void = function.result.is_none();
-
-        for (arg, qualifier) in function.arguments.iter_mut().zip(parameters.iter()) {
-            if qualifier.is_lhs() {
-                arg.ty = self.module.types.fetch_or_append(Type {
-                    name: None,
-                    inner: TypeInner::Pointer {
-                        base: arg.ty,
-                        class: StorageClass::Function,
-                    },
-                })
-            }
-        }
 
         let handle = self.module.functions.append(function);
 
-        self.lookup_function.insert(
-            sig,
-            FunctionDeclaration {
-                parameters,
-                handle,
-                defined: false,
-                void,
-            },
-        );
+        if self
+            .lookup_function
+            .insert(
+                sig,
+                FunctionDeclaration {
+                    qualifiers,
+                    handle,
+                    defined: false,
+                    void,
+                },
+            )
+            .is_some()
+        {
+            return Err(ErrorKind::SemanticError(
+                meta,
+                "Prototype already defined".into(),
+            ));
+        }
 
         Ok(())
     }
