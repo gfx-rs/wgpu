@@ -346,9 +346,11 @@ impl super::Validator {
                 };
                 (access, TypeFlags::empty(), true)
             }
-            crate::StorageClass::Private | crate::StorageClass::WorkGroup => {
-                (crate::StorageAccess::empty(), TypeFlags::DATA, false)
-            }
+            crate::StorageClass::Private | crate::StorageClass::WorkGroup => (
+                crate::StorageAccess::empty(),
+                TypeFlags::DATA | TypeFlags::SIZED,
+                false,
+            ),
             crate::StorageClass::PushConstant => {
                 if !self.capabilities.contains(Capabilities::PUSH_CONSTANT) {
                     return Err(GlobalVariableError::UnsupportedCapability(
@@ -357,7 +359,7 @@ impl super::Validator {
                 }
                 (
                     crate::StorageAccess::LOAD,
-                    TypeFlags::DATA | TypeFlags::HOST_SHARED,
+                    TypeFlags::DATA | TypeFlags::HOST_SHARED | TypeFlags::SIZED,
                     false,
                 )
             }

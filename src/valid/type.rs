@@ -294,8 +294,12 @@ impl super::Validator {
 
                         TypeFlags::SIZED
                     }
-                    //Note: this will be detected at the struct level
-                    crate::ArraySize::Dynamic => TypeFlags::empty(),
+                    crate::ArraySize::Dynamic => {
+                        // Non-SIZED types may only appear as the last element of a structure.
+                        // This is enforced by checks for SIZED-ness for all compound types,
+                        // and a special case for structs.
+                        TypeFlags::empty()
+                    }
                 };
 
                 let base_mask = TypeFlags::HOST_SHARED | TypeFlags::INTERFACE;
