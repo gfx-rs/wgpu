@@ -111,6 +111,7 @@ pub enum ResolveError {
 
 pub struct ResolveContext<'a> {
     pub constants: &'a Arena<crate::Constant>,
+    pub types: &'a Arena<crate::Type>,
     pub global_vars: &'a Arena<crate::GlobalVariable>,
     pub local_vars: &'a Arena<crate::LocalVariable>,
     pub functions: &'a Arena<crate::Function>,
@@ -121,10 +122,10 @@ impl<'a> ResolveContext<'a> {
     pub fn resolve(
         &self,
         expr: &crate::Expression,
-        types: &'a Arena<crate::Type>,
         past: impl Fn(Handle<crate::Expression>) -> &'a TypeResolution,
     ) -> Result<TypeResolution, ResolveError> {
         use crate::TypeInner as Ti;
+        let types = self.types;
         Ok(match *expr {
             crate::Expression::Access { base, .. } => match *past(base).inner_with(types) {
                 Ti::Array { base, .. } => TypeResolution::Handle(base),
@@ -144,37 +145,39 @@ impl<'a> ResolveContext<'a> {
                     width,
                     class,
                 }),
-                Ti::Pointer { base, class } => TypeResolution::Value(match types[base].inner {
-                    Ti::Array { base, .. } => Ti::Pointer { base, class },
-                    Ti::Vector {
-                        size: _,
-                        kind,
-                        width,
-                    } => Ti::ValuePointer {
-                        size: None,
-                        kind,
-                        width,
-                        class,
-                    },
-                    // Matrices are only dynamically indexed behind a pointer
-                    Ti::Matrix {
-                        columns: _,
-                        rows,
-                        width,
-                    } => Ti::ValuePointer {
-                        kind: crate::ScalarKind::Float,
-                        size: Some(rows),
-                        width,
-                        class,
-                    },
-                    ref other => {
-                        log::error!("Access sub-type {:?}", other);
-                        return Err(ResolveError::InvalidSubAccess {
-                            ty: base,
-                            indexed: false,
-                        });
-                    }
-                }),
+                Ti::Pointer { base, class } => {
+                    TypeResolution::Value(match types[base].inner {
+                        Ti::Array { base, .. } => Ti::Pointer { base, class },
+                        Ti::Vector {
+                            size: _,
+                            kind,
+                            width,
+                        } => Ti::ValuePointer {
+                            size: None,
+                            kind,
+                            width,
+                            class,
+                        },
+                        // Matrices are only dynamically indexed behind a pointer
+                        Ti::Matrix {
+                            columns: _,
+                            rows,
+                            width,
+                        } => Ti::ValuePointer {
+                            kind: crate::ScalarKind::Float,
+                            size: Some(rows),
+                            width,
+                            class,
+                        },
+                        ref other => {
+                            log::error!("Access sub-type {:?}", other);
+                            return Err(ResolveError::InvalidSubAccess {
+                                ty: base,
+                                indexed: false,
+                            });
+                        }
+                    })
+                }
                 ref other => {
                     log::error!("Access type {:?}", other);
                     return Err(ResolveError::InvalidAccess {

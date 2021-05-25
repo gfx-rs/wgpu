@@ -78,17 +78,16 @@ impl<'a> Program<'a> {
     ) -> Result<&'b TypeInner, ErrorKind> {
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
+            types: &self.module.types,
             global_vars: &self.module.global_variables,
             local_vars: &context.locals,
             functions: &self.module.functions,
             arguments: &context.arguments,
         };
-        match context.typifier.grow(
-            handle,
-            &context.expressions,
-            &mut self.module.types,
-            &resolve_ctx,
-        ) {
+        match context
+            .typifier
+            .grow(handle, &context.expressions, &resolve_ctx)
+        {
             //TODO: better error report
             Err(error) => Err(ErrorKind::SemanticError(
                 meta,
@@ -106,17 +105,16 @@ impl<'a> Program<'a> {
     ) -> Result<Handle<Type>, ErrorKind> {
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
+            types: &self.module.types,
             global_vars: &self.module.global_variables,
             local_vars: &context.locals,
             functions: &self.module.functions,
             arguments: &context.arguments,
         };
-        match context.typifier.grow(
-            handle,
-            &context.expressions,
-            &mut self.module.types,
-            &resolve_ctx,
-        ) {
+        match context
+            .typifier
+            .grow(handle, &context.expressions, &resolve_ctx)
+        {
             //TODO: better error report
             Err(error) => Err(ErrorKind::SemanticError(
                 meta,

@@ -97,12 +97,11 @@ impl Typifier {
         &mut self,
         expr_handle: Handle<crate::Expression>,
         expressions: &Arena<crate::Expression>,
-        types: &mut Arena<crate::Type>,
         ctx: &ResolveContext,
     ) -> Result<(), ResolveError> {
         if self.resolutions.len() <= expr_handle.index() {
             for (eh, expr) in expressions.iter().skip(self.resolutions.len()) {
-                let resolution = ctx.resolve(expr, types, |h| &self.resolutions[h.index()])?;
+                let resolution = ctx.resolve(expr, |h| &self.resolutions[h.index()])?;
                 log::debug!("Resolving {:?} = {:?} : {:?}", eh, expr, resolution);
                 self.resolutions.push(resolution);
             }

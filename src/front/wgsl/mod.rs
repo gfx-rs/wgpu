@@ -294,15 +294,13 @@ impl<'a> ExpressionContext<'a, '_, '_> {
     ) -> Result<&crate::TypeInner, Error<'a>> {
         let resolve_ctx = ResolveContext {
             constants: self.constants,
+            types: self.types,
             global_vars: self.global_vars,
             local_vars: self.local_vars,
             functions: self.functions,
             arguments: self.arguments,
         };
-        match self
-            .typifier
-            .grow(handle, self.expressions, self.types, &resolve_ctx)
-        {
+        match self.typifier.grow(handle, self.expressions, &resolve_ctx) {
             Err(e) => Err(Error::InvalidResolve(e)),
             Ok(()) => Ok(self.typifier.get(handle, self.types)),
         }
