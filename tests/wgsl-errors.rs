@@ -54,6 +54,8 @@ fn invalid_float() {
   │
 1 │ let scale: f32 = 1.1.;
   │                  ^^^^ expected floating-point literal
+  │
+  = note: invalid float literal
 
 "###,
     );
@@ -69,7 +71,21 @@ fn invalid_scalar_width() {
 1 │ let scale: f32 = 1.1f1000;
   │                  ^^^^^^^^ invalid width
   │
-  = note: valid width is 32
+  = note: valid widths are 8, 16, 32, 64
+
+"###,
+    );
+}
+
+#[test]
+fn invalid_texture_sample_type() {
+    check(
+        "let x: texture_2d<f16>;",
+        r###"error: texture sample type must be one of f32, i32 or u32, but found f16
+  ┌─ wgsl:1:19
+  │
+1 │ let x: texture_2d<f16>;
+  │                   ^^^ must be one of f32, i32 or u32
 
 "###,
     );

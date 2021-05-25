@@ -1,17 +1,17 @@
-use super::Error;
+use super::{Error, Span};
 
-pub fn map_storage_class(word: &str) -> Result<crate::StorageClass, Error<'_>> {
+pub fn map_storage_class(word: &str, span: Span) -> Result<crate::StorageClass, Error<'_>> {
     match word {
         "private" => Ok(crate::StorageClass::Private),
         "workgroup" => Ok(crate::StorageClass::WorkGroup),
         "uniform" => Ok(crate::StorageClass::Uniform),
         "storage" => Ok(crate::StorageClass::Storage),
         "push_constant" => Ok(crate::StorageClass::PushConstant),
-        _ => Err(Error::UnknownStorageClass(word)),
+        _ => Err(Error::UnknownStorageClass(span)),
     }
 }
 
-pub fn map_built_in(word: &str) -> Result<crate::BuiltIn, Error<'_>> {
+pub fn map_built_in(word: &str, span: Span) -> Result<crate::BuiltIn, Error<'_>> {
     Ok(match word {
         "position" => crate::BuiltIn::Position,
         // vertex
@@ -28,37 +28,37 @@ pub fn map_built_in(word: &str) -> Result<crate::BuiltIn, Error<'_>> {
         "local_invocation_index" => crate::BuiltIn::LocalInvocationIndex,
         "workgroup_id" => crate::BuiltIn::WorkGroupId,
         "workgroup_size" => crate::BuiltIn::WorkGroupSize,
-        _ => return Err(Error::UnknownBuiltin(word)),
+        _ => return Err(Error::UnknownBuiltin(span)),
     })
 }
 
-pub fn map_shader_stage(word: &str) -> Result<crate::ShaderStage, Error<'_>> {
+pub fn map_shader_stage(word: &str, span: Span) -> Result<crate::ShaderStage, Error<'_>> {
     match word {
         "vertex" => Ok(crate::ShaderStage::Vertex),
         "fragment" => Ok(crate::ShaderStage::Fragment),
         "compute" => Ok(crate::ShaderStage::Compute),
-        _ => Err(Error::UnknownShaderStage(word)),
+        _ => Err(Error::UnknownShaderStage(span)),
     }
 }
 
-pub fn map_interpolation(word: &str) -> Result<crate::Interpolation, Error<'_>> {
+pub fn map_interpolation(word: &str, span: Span) -> Result<crate::Interpolation, Error<'_>> {
     match word {
         "linear" => Ok(crate::Interpolation::Linear),
         "flat" => Ok(crate::Interpolation::Flat),
         "perspective" => Ok(crate::Interpolation::Perspective),
-        _ => Err(Error::UnknownAttribute(word)),
+        _ => Err(Error::UnknownAttribute(span)),
     }
 }
 
-pub fn map_sampling(word: &str) -> Result<crate::Sampling, Error<'_>> {
+pub fn map_sampling(word: &str, span: Span) -> Result<crate::Sampling, Error<'_>> {
     match word {
         "centroid" => Ok(crate::Sampling::Centroid),
         "sample" => Ok(crate::Sampling::Sample),
-        _ => Err(Error::UnknownAttribute(word)),
+        _ => Err(Error::UnknownAttribute(span)),
     }
 }
 
-pub fn map_storage_format(word: &str) -> Result<crate::StorageFormat, Error<'_>> {
+pub fn map_storage_format(word: &str, span: Span) -> Result<crate::StorageFormat, Error<'_>> {
     use crate::StorageFormat as Sf;
     Ok(match word {
         "r8unorm" => Sf::R8Unorm,
@@ -93,7 +93,7 @@ pub fn map_storage_format(word: &str) -> Result<crate::StorageFormat, Error<'_>>
         "rgba32uint" => Sf::Rgba32Uint,
         "rgba32sint" => Sf::Rgba32Sint,
         "rgba32float" => Sf::Rgba32Float,
-        _ => return Err(Error::UnknownStorageFormat(word)),
+        _ => return Err(Error::UnknownStorageFormat(span)),
     })
 }
 
@@ -196,12 +196,15 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
     })
 }
 
-pub fn map_conservative_depth(word: &str) -> Result<crate::ConservativeDepth, Error<'_>> {
+pub fn map_conservative_depth(
+    word: &str,
+    span: Span,
+) -> Result<crate::ConservativeDepth, Error<'_>> {
     use crate::ConservativeDepth as Cd;
     match word {
         "greater_equal" => Ok(Cd::GreaterEqual),
         "less_equal" => Ok(Cd::LessEqual),
         "unchanged" => Ok(Cd::Unchanged),
-        _ => Err(Error::UnknownConservativeDepth(word)),
+        _ => Err(Error::UnknownConservativeDepth(span)),
     }
 }
