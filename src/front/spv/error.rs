@@ -53,6 +53,4 @@ pub enum Error {
     InvalidEdgeClassification,
     FunctionCallCycle(spirv::Word),
     InvalidArraySize(Handle<crate::Constant>),
-    // incomplete implementation error
-    UnsupportedMatrixStride(spirv::Word),
 }

@@ -2870,14 +2870,25 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             let offset = decor.offset.unwrap_or(0);
 
             if let crate::TypeInner::Matrix {
-                columns: _,
+                columns,
                 rows,
                 width,
             } = module.types[ty].inner
             {
                 if let Some(stride) = decor.matrix_stride {
-                    if stride.get() != (rows as u32) * (width as u32) {
-                        return Err(Error::UnsupportedMatrixStride(stride.get()));
+                    let rounded_rows = if rows > crate::VectorSize::Bi {
+                        4
+                    } else {
+                        rows as u32
+                    };
+                    if stride.get() != rounded_rows * (width as u32) {
+                        log::warn!(
+                            "Unexpected matrix stride {} for an {}x{} matrix with scalar width={}",
+                            stride.get(),
+                            columns as u8,
+                            rows as u8,
+                            width,
+                        );
                     }
                 }
             }
