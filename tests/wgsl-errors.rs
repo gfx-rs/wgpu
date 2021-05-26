@@ -94,21 +94,35 @@ fn unknown_identifier() {
 }
 
 macro_rules! check_validation_error {
+    // We want to support an optional guard expression after the pattern, so
+    // that we can check values we can't match against, like strings.
+    // Unfortunately, we can't simply include `$( if $guard:expr )?` in the
+    // pattern, because Rust treats `?` as a repetition operator, and its count
+    // (0 or 1) will not necessarily match `$source`.
     ( $( $source:literal ),* : $pattern:pat ) => {
+        check_validation_error!( @full $( $source ),* : $pattern if true ; "");
+    };
+
+    ( $( $source:literal ),* : $pattern:pat if $guard:expr ) => {
+        check_validation_error!( @full $( $source ),* : $pattern if $guard ; stringify!( $guard ) );
+    };
+
+    ( @full $( $source:literal ),* : $pattern:pat if $guard:expr ; $guard_string:expr ) => {
         $(
             let error = validation_error($source);
-            if ! matches!(error, $pattern) {
+            if ! matches!(&error, $pattern if $guard) {
                 eprintln!("validation error does not match pattern:\n\
-                        {:#?}\n\
-                        \n\
-                        expected match for pattern:\n\
-                        {}",
-                       error,
-                          stringify!($pattern));
+                           {:#?}\n\
+                           \n\
+                           expected match for pattern:\n\
+                           {}{}",
+                          error,
+                          stringify!($pattern),
+                          $guard_string);
                 panic!("validation error does not match pattern");
             }
         )*
-    }
+    };
 }
 
 fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
@@ -191,6 +205,22 @@ fn invalid_structs() {
             error: naga::valid::TypeError::InvalidDynamicArray(_, _),
             ..
         })
+    }
+}
+
+#[test]
+fn invalid_functions() {
+    check_validation_error! {
+        "fn bogus(data: array<f32>) -> f32 { return data[0]; }":
+        Err(naga::valid::ValidationError::Function {
+            name: function_name,
+            error: naga::valid::FunctionError::InvalidArgumentType {
+                index: 0,
+                name: argument_name,
+            },
+            ..
+        })
+        if function_name == "bogus" && argument_name == "data"
     }
 }
 
