@@ -1,15 +1,25 @@
 //! Module processing functionality.
 
+mod index;
 mod interpolator;
 mod layouter;
 mod namer;
 mod terminator;
 mod typifier;
 
+pub use index::IndexableLength;
 pub use layouter::{Alignment, InvalidBaseType, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
 pub use typifier::{ResolveContext, ResolveError, TypeResolution};
+
+#[derive(Clone, Debug, thiserror::Error, PartialEq)]
+pub enum ProcError {
+    #[error("type is not indexable, and has no length (validation error)")]
+    TypeNotIndexable,
+    #[error("array length is wrong kind of constant (validation error)")]
+    InvalidArraySizeConstant(crate::Handle<crate::Constant>),
+}
 
 impl From<super::StorageFormat> for super::ScalarKind {
     fn from(format: super::StorageFormat) -> Self {
@@ -217,7 +227,19 @@ impl crate::SampleLevel {
 }
 
 impl crate::Constant {
-    pub fn to_array_length(&self) -> Option<u32> {
+    /// Interpret this constant as an array length, and return it as a `u32`.
+    ///
+    /// Ignore any specialization available for this constant; return its
+    /// unspecialized value.
+    ///
+    /// If the constant has an inappropriate kind (non-scalar or non-integer) or
+    /// value (negative, out of range for u32), return `None`. This usually
+    /// indicates an error, but only the caller has enough information to report
+    /// the error helpfully: in back ends, it's a validation error, but in front
+    /// ends, it may indicate ill-formed input (for example, a SPIR-V
+    /// `OpArrayType` referring to an inappropriate `OpConstant`). So we return
+    /// `Option` and let the caller sort things out.
+    pub(crate) fn to_array_length(&self) -> Option<u32> {
         use std::convert::TryInto;
         match self.inner {
             crate::ConstantInner::Scalar { value, width: _ } => match value {

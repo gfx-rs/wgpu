@@ -52,6 +52,8 @@ pub enum TypeError {
     InvalidArrayBaseType(Handle<crate::Type>),
     #[error("The constant {0:?} can not be used for an array size")]
     InvalidArraySizeConstant(Handle<crate::Constant>),
+    #[error("Array type {0:?} must have a length of one or more")]
+    NonPositiveArrayLength(Handle<crate::Constant>),
     #[error("Array stride {stride} is smaller than the base element size {base_size}")]
     InsufficientArrayStride { stride: u32, base_size: u32 },
     #[error("Field '{0}' can't be dynamically-sized, has type {1:?}")]
@@ -288,15 +290,15 @@ impl super::Validator {
 
                 let sized_flag = match size {
                     crate::ArraySize::Constant(const_handle) => {
-                        match constants.try_get(const_handle) {
+                        let length_is_positive = match constants.try_get(const_handle) {
                             Some(&crate::Constant {
                                 inner:
                                     crate::ConstantInner::Scalar {
                                         width: _,
-                                        value: crate::ScalarValue::Uint(_),
+                                        value: crate::ScalarValue::Uint(length),
                                     },
                                 ..
-                            }) => {}
+                            }) => length > 0,
                             // Accept a signed integer size to avoid
                             // requiring an explicit uint
                             // literal. Type inference should make
@@ -305,14 +307,18 @@ impl super::Validator {
                                 inner:
                                     crate::ConstantInner::Scalar {
                                         width: _,
-                                        value: crate::ScalarValue::Sint(_),
+                                        value: crate::ScalarValue::Sint(length),
                                     },
                                 ..
-                            }) => {}
+                            }) => length > 0,
                             other => {
                                 log::warn!("Array size {:?}", other);
                                 return Err(TypeError::InvalidArraySizeConstant(const_handle));
                             }
+                        };
+
+                        if !length_is_positive {
+                            return Err(TypeError::NonPositiveArrayLength(const_handle));
                         }
 
                         TypeFlags::SIZED

@@ -6,6 +6,7 @@ use std::{env, error::Error, path::Path};
 #[derive(Default)]
 struct Parameters {
     validation_flags: naga::valid::ValidationFlags,
+    index_bounds_check_policy: naga::back::IndexBoundsCheckPolicy,
     spv_adjust_coordinate_space: bool,
     spv_flow_dump_prefix: Option<String>,
     spv: naga::back::spv::Options,
@@ -68,6 +69,24 @@ fn main() {
                     let value = args.next().unwrap().parse().unwrap();
                     params.validation_flags =
                         naga::valid::ValidationFlags::from_bits(value).unwrap();
+                }
+                "index-bounds-check-policy" => {
+                    let value = args.next().unwrap();
+                    params.index_bounds_check_policy = match value.as_str() {
+                        "Restrict" => naga::back::IndexBoundsCheckPolicy::Restrict,
+                        "ReadZeroSkipWrite" => {
+                            naga::back::IndexBoundsCheckPolicy::ReadZeroSkipWrite
+                        }
+                        "UndefinedBehavior" => {
+                            naga::back::IndexBoundsCheckPolicy::UndefinedBehavior
+                        }
+                        other => {
+                            panic!(
+                                "Unrecognized '--index-bounds-check-policy' value: {:?}",
+                                other
+                            );
+                        }
+                    };
                 }
                 "flow-dir" => params.spv_flow_dump_prefix = args.next(),
                 "entry-point" => params.glsl.entry_point = args.next().unwrap(),
@@ -240,6 +259,8 @@ fn main() {
             }
             "spv" => {
                 use naga::back::spv;
+
+                params.spv.index_bounds_check_policy = params.index_bounds_check_policy;
 
                 let spv =
                     spv::write_vec(&module, info.as_ref().unwrap(), &params.spv).unwrap_pretty();

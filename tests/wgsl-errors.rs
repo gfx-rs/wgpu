@@ -109,6 +109,25 @@ fn unknown_identifier() {
     );
 }
 
+#[test]
+fn negative_index() {
+    check(
+        r#"
+            fn main() -> f32 {
+                let a = array<f32, 3>(0., 1., 2.);
+                return a[-1];
+            }
+        "#,
+        r#"error: expected non-negative integer constant expression, found `-1`
+  ┌─ wgsl:4:26
+  │
+4 │                 return a[-1];
+  │                          ^^ expected non-negative integer
+
+"#,
+    );
+}
+
 macro_rules! check_validation_error {
     // We want to support an optional guard expression after the pattern, so
     // that we can check values we can't match against, like strings.
@@ -146,7 +165,13 @@ macro_rules! check_validation_error {
 }
 
 fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
-    let module = naga::front::wgsl::parse_str(source).expect("expected WGSL parse to succeed");
+    let module = match naga::front::wgsl::parse_str(source) {
+        Ok(module) => module,
+        Err(err) => {
+            eprintln!("WGSL parse failed:");
+            panic!("{}", err.emit_to_string(source));
+        }
+    };
     naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::empty(),
@@ -349,6 +374,22 @@ fn invalid_access() {
         Err(naga::valid::ValidationError::Function {
             error: naga::valid::FunctionError::Expression {
                 error: naga::valid::ExpressionError::IndexMustBeConstant(_),
+                ..
+            },
+            ..
+        })
+    }
+
+    check_validation_error! {
+        r#"
+            fn main() -> f32 {
+                let a = array<f32, 3>(0., 1., 2.);
+                return a[3];
+            }
+        "#:
+        Err(naga::valid::ValidationError::Function {
+            error: naga::valid::FunctionError::Expression {
+                error: naga::valid::ExpressionError::IndexOutOfBounds(_, _),
                 ..
             },
             ..

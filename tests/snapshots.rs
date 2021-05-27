@@ -23,6 +23,15 @@ bitflags::bitflags! {
 struct Parameters {
     #[serde(default)]
     god_mode: bool,
+
+    // We can only deserialize `IndexBoundsCheckPolicy` values if `deserialize`
+    // feature was enabled, but features should not affect snapshot contents, so
+    // just take the policy as booleans instead.
+    #[serde(default)]
+    bounds_check_read_zero_skip_write: bool,
+    #[serde(default)]
+    bounds_check_restrict: bool,
+
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_version: (u8, u8),
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
@@ -52,6 +61,9 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
         Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
         Err(_) => Parameters::default(),
     };
+    if params.bounds_check_restrict && params.bounds_check_read_zero_skip_write {
+        panic!("select only one bounds check policy");
+    }
     let capabilities = if params.god_mode {
         naga::valid::Capabilities::all()
     } else {
@@ -143,6 +155,14 @@ fn check_output_spv(
         } else {
             Some(params.spv_capabilities.clone())
         },
+        index_bounds_check_policy: if params.bounds_check_restrict {
+            naga::back::IndexBoundsCheckPolicy::Restrict
+        } else if params.bounds_check_read_zero_skip_write {
+            naga::back::IndexBoundsCheckPolicy::ReadZeroSkipWrite
+        } else {
+            naga::back::IndexBoundsCheckPolicy::UndefinedBehavior
+        },
+        ..spv::Options::default()
     };
 
     let spv = spv::write_vec(module, info, &options).unwrap();
@@ -318,6 +338,7 @@ fn convert_wgsl() {
             "globals",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
+        ("bounds-check-zero", Targets::SPIRV),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -366,6 +387,12 @@ fn convert_spv_quad_vert() {
 #[test]
 fn convert_spv_shadow() {
     convert_spv("shadow", true, Targets::IR | Targets::ANALYSIS);
+}
+
+#[cfg(all(feature = "spv-in", feature = "spv-out"))]
+#[test]
+fn convert_spv_pointer_access() {
+    convert_spv("pointer-access", true, Targets::SPIRV);
 }
 
 #[cfg(feature = "glsl-in")]

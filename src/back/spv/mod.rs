@@ -2,13 +2,14 @@
 !*/
 
 mod helpers;
+mod index;
 mod instructions;
 mod layout;
 mod writer;
 
 pub use spirv::Capability;
 
-use crate::arena::Handle;
+use crate::{arena::Handle, back::IndexBoundsCheckPolicy};
 
 use spirv::Word;
 use std::ops;
@@ -57,6 +58,8 @@ pub enum Error {
     FeatureNotImplemented(&'static str),
     #[error("module is not validated properly: {0}")]
     Validation(&'static str),
+    #[error(transparent)]
+    Proc(#[from] crate::proc::ProcError),
 }
 
 #[derive(Default)]
@@ -108,6 +111,20 @@ struct Function {
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
     blocks: Vec<Block>,
     entry_point_context: Option<EntryPointContext>,
+}
+
+impl Function {
+    fn consume(&mut self, mut block: Block, termination: Instruction) {
+        block.termination = Some(termination);
+        self.blocks.push(block);
+    }
+
+    fn parameter_id(&self, index: u32) -> Word {
+        match self.entry_point_context {
+            Some(ref context) => context.argument_ids[index as usize],
+            None => self.parameters[index as usize].result_id.unwrap(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
@@ -211,7 +228,8 @@ pub struct Writer {
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     flags: WriterFlags,
-    void_type: u32,
+    index_bounds_check_policy: IndexBoundsCheckPolicy,
+    void_type: Word,
     //TODO: convert most of these into vectors, addressable by handle indices
     lookup_type: crate::FastHashMap<LookupType, Word>,
     lookup_function: crate::FastHashMap<Handle<crate::Function>, Word>,
@@ -245,6 +263,9 @@ pub struct Options {
     // Note: there is a major bug currently associated with deriving the capabilities.
     // We are calling `required_capabilities`, but the semantics of this is broken.
     pub capabilities: Option<crate::FastHashSet<Capability>>,
+    /// How should the generated code handle array, vector, or matrix indices
+    /// that are out of range?
+    pub index_bounds_check_policy: IndexBoundsCheckPolicy,
 }
 
 impl Default for Options {
@@ -257,6 +278,7 @@ impl Default for Options {
             lang_version: (1, 0),
             flags,
             capabilities: None,
+            index_bounds_check_policy: super::IndexBoundsCheckPolicy::default(),
         }
     }
 }

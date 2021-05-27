@@ -1,0 +1,4 @@
+(
+        bounds_check_read_zero_skip_write: true,
+	spv_version: (1, 1),
+)

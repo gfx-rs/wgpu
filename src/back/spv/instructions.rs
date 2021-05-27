@@ -758,6 +758,21 @@ impl super::Instruction {
     // Control-Flow Instructions
     //
 
+    pub(super) fn phi(
+        result_type_id: Word,
+        result_id: Word,
+        var_parent_pairs: &[(Word, Word)],
+    ) -> Self {
+        let mut instruction = Self::new(Op::Phi);
+        instruction.add_operand(result_type_id);
+        instruction.add_operand(result_id);
+        for &(variable, parent) in var_parent_pairs {
+            instruction.add_operand(variable);
+            instruction.add_operand(parent);
+        }
+        instruction
+    }
+
     pub(super) fn selection_merge(
         merge_id: Word,
         selection_control: spirv::SelectionControl,

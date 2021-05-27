@@ -1,5 +1,6 @@
 use super::{
     helpers::{contains_builtin, map_storage_class},
+    index::{BoundsCheckResult, ExpressionPointer},
     Block, CachedExpressions, Dimension, EntryPointContext, Error, Function, GlobalVariable,
     IdGenerator, Instruction, LocalType, LocalVariable, LogicalLayout, LookupFunctionType,
     LookupType, Options, PhysicalLayout, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
@@ -48,11 +49,6 @@ impl Function {
             }
             block.termination.as_ref().unwrap().to_words(sink);
         }
-    }
-
-    fn consume(&mut self, mut block: Block, termination: Instruction) {
-        block.termination = Some(termination);
-        self.blocks.push(block);
     }
 }
 
@@ -146,6 +142,7 @@ impl Writer {
             debugs: vec![],
             annotations: vec![],
             flags: options.flags,
+            index_bounds_check_policy: options.index_bounds_check_policy,
             void_type,
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
@@ -189,7 +186,7 @@ impl Writer {
         }
     }
 
-    fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Result<Word, Error> {
+    pub(super) fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Result<Word, Error> {
         let lookup_ty = match *tr {
             TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
             TypeResolution::Value(ref inner) => {
@@ -222,6 +219,26 @@ impl Writer {
             self.lookup_type.insert(lookup_type, id);
             id
         })
+    }
+
+    pub(super) fn get_uint_type_id(&mut self) -> Result<Word, Error> {
+        let local_type = LocalType::Value {
+            vector_size: None,
+            kind: crate::ScalarKind::Uint,
+            width: 4,
+            pointer_class: None,
+        };
+        self.get_type_id(local_type.into())
+    }
+
+    pub(super) fn get_bool_type_id(&mut self) -> Result<Word, Error> {
+        let local_type = LocalType::Value {
+            vector_size: None,
+            kind: crate::ScalarKind::Bool,
+            width: 1,
+            pointer_class: None,
+        };
+        self.get_type_id(local_type.into())
     }
 
     fn decorate(&mut self, id: Word, decoration: spirv::Decoration, operands: &[Word]) {
@@ -798,7 +815,7 @@ impl Writer {
         Ok(id)
     }
 
-    fn get_index_constant(&mut self, index: Word) -> Result<Word, Error> {
+    pub(super) fn get_index_constant(&mut self, index: Word) -> Result<Word, Error> {
         self.get_constant_scalar(crate::ScalarValue::Uint(index as _), 4)
     }
 
@@ -905,7 +922,7 @@ impl Writer {
         Ok(())
     }
 
-    fn write_constant_null(&mut self, type_id: Word) -> Word {
+    pub(super) fn write_constant_null(&mut self, type_id: Word) -> Word {
         let null_id = self.id_gen.next();
         Instruction::constant_null(type_id, null_id)
             .to_words(&mut self.logical_layout.declarations);
@@ -1199,33 +1216,31 @@ impl Writer {
                 0
             }
             crate::Expression::Access { base, index } => {
-                let index_id = self.cached[index];
-                let base_id = self.cached[base];
-                match *fun_info[base].ty.inner_with(&ir_module.types) {
-                    crate::TypeInner::Vector { .. } => {
-                        let id = self.id_gen.next();
-                        block.body.push(Instruction::vector_extract_dynamic(
-                            result_type_id,
-                            id,
-                            base_id,
-                            index_id,
-                        ));
-                        id
-                    }
-                    crate::TypeInner::Array { .. } => {
-                        return Err(Error::Validation(
-                            "dynamic indexing of arrays not permitted",
-                        ));
-                    }
+                let base_ty = fun_info[base].ty.inner_with(&ir_module.types);
+                match *base_ty {
+                    crate::TypeInner::Vector { .. } => (),
                     ref other => {
                         log::error!(
                             "Unable to access base {:?} of type {:?}",
                             ir_function.expressions[base],
                             other
                         );
-                        return Err(Error::FeatureNotImplemented("access for type"));
+                        return Err(Error::Validation(
+                            "only vectors may be dynamically indexed by value",
+                        ));
                     }
-                }
+                };
+
+                self.write_vector_access(
+                    ir_module,
+                    ir_function,
+                    fun_info,
+                    function,
+                    expr_handle,
+                    base,
+                    index,
+                    block,
+                )?
             }
             crate::Expression::AccessIndex { base, index: _ }
                 if self.is_intermediate(base, ir_function, &ir_module.types) =>
@@ -1609,19 +1624,45 @@ impl Writer {
             }
             crate::Expression::LocalVariable(variable) => function.variables[&variable].id,
             crate::Expression::Load { pointer } => {
-                let pointer_id =
-                    self.write_expression_pointer(ir_function, fun_info, pointer, block, function)?;
-
-                let id = self.id_gen.next();
-                block
-                    .body
-                    .push(Instruction::load(result_type_id, id, pointer_id, None));
-                id
+                match self.write_expression_pointer(
+                    ir_module,
+                    ir_function,
+                    fun_info,
+                    pointer,
+                    block,
+                    function,
+                )? {
+                    ExpressionPointer::Ready { pointer_id } => {
+                        let id = self.id_gen.next();
+                        block
+                            .body
+                            .push(Instruction::load(result_type_id, id, pointer_id, None));
+                        id
+                    }
+                    ExpressionPointer::Conditional { condition, access } => {
+                        self.write_conditional_indexed_load(
+                            result_type_id,
+                            condition,
+                            function,
+                            block,
+                            move |id_gen, block| {
+                                // The in-bounds path. Perform the access and the load.
+                                let pointer_id = access.result_id.unwrap();
+                                let value_id = id_gen.next();
+                                block.body.push(access);
+                                block.body.push(Instruction::load(
+                                    result_type_id,
+                                    value_id,
+                                    pointer_id,
+                                    None,
+                                ));
+                                value_id
+                            },
+                        )
+                    }
+                }
             }
-            crate::Expression::FunctionArgument(index) => match function.entry_point_context {
-                Some(ref context) => context.argument_ids[index as usize],
-                None => function.parameters[index as usize].result_id.unwrap(),
-            },
+            crate::Expression::FunctionArgument(index) => function.parameter_id(index),
             crate::Expression::Call(_function) => self.lookup_function_call[&expr_handle],
             crate::Expression::As {
                 expr,
@@ -2079,36 +2120,7 @@ impl Writer {
                 id
             }
             crate::Expression::ArrayLength(expr) => {
-                let (structure_id, member_idx) = match ir_function.expressions[expr] {
-                    crate::Expression::AccessIndex { base, .. } => {
-                        match ir_function.expressions[base] {
-                            crate::Expression::GlobalVariable(handle) => {
-                                let global = &ir_module.global_variables[handle];
-                                let last_idx = match ir_module.types[global.ty].inner {
-                                    crate::TypeInner::Struct { ref members, .. } => {
-                                        members.len() as u32 - 1
-                                    }
-                                    _ => return Err(Error::Validation("array length expression")),
-                                };
-
-                                (self.global_variables[handle.index()].id, last_idx)
-                            }
-                            _ => return Err(Error::Validation("array length expression")),
-                        }
-                    }
-                    _ => return Err(Error::Validation("array length expression")),
-                };
-
-                // let structure_id = self.get_expression_global(ir_function, global);
-                let id = self.id_gen.next();
-
-                block.body.push(Instruction::array_length(
-                    result_type_id,
-                    id,
-                    structure_id,
-                    member_idx,
-                ));
-                id
+                self.write_runtime_array_length(expr, ir_function, function, block)?
             }
         };
 
@@ -2116,15 +2128,21 @@ impl Writer {
         Ok(())
     }
 
-    /// Write a left-hand-side expression, returning an `id` of the pointer.
+    /// Build an `OpAccessChain` instruction for a left-hand-side expression.
+    ///
+    /// Emit any needed bounds-checking expressions to `block`.
+    ///
+    /// On success, the return value is an [`ExpressionPointer`] value; see the
+    /// documentation for that type.
     fn write_expression_pointer(
         &mut self,
+        ir_module: &crate::Module,
         ir_function: &crate::Function,
         fun_info: &FunctionInfo,
         mut expr_handle: Handle<crate::Expression>,
         block: &mut Block,
         function: &mut Function,
-    ) -> Result<Word, Error> {
+    ) -> Result<ExpressionPointer, Error> {
         let result_lookup_ty = match fun_info[expr_handle].ty {
             TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
             TypeResolution::Value(ref inner) => {
@@ -2133,12 +2151,60 @@ impl Writer {
         };
         let result_type_id = self.get_type_id(result_lookup_ty)?;
 
+        // The id of the boolean `and` of all dynamic bounds checks up to this point. If
+        // `None`, then we haven't done any dynamic bounds checks yet.
+        //
+        // When we have a chain of bounds checks, we combine them with `OpLogicalAnd`, not
+        // a short-circuit branch. This means we might do comparisons we don't need to,
+        // but we expect these checks to almost always succeed, and keeping branches to a
+        // minimum is essential.
+        let mut accumulated_checks = None;
+
         self.temp_list.clear();
         let root_id = loop {
             expr_handle = match ir_function.expressions[expr_handle] {
                 crate::Expression::Access { base, index } => {
-                    let index_id = self.cached[index];
+                    let index_id = match self.write_bounds_check(
+                        ir_module,
+                        ir_function,
+                        fun_info,
+                        function,
+                        base,
+                        index,
+                        block,
+                    )? {
+                        BoundsCheckResult::KnownInBounds(known_index) => {
+                            // Even if the index is known, `OpAccessIndex`
+                            // requires expression operands, not literals.
+                            let scalar = crate::ScalarValue::Uint(known_index as u64);
+                            self.get_constant_scalar(scalar, 4)?
+                        }
+                        BoundsCheckResult::Computed(computed_index_id) => computed_index_id,
+                        BoundsCheckResult::Conditional(comparison_id) => {
+                            match accumulated_checks {
+                                Some(prior_checks) => {
+                                    let combined = self.id_gen.next();
+                                    block.body.push(Instruction::binary(
+                                        spirv::Op::LogicalAnd,
+                                        self.get_bool_type_id()?,
+                                        combined,
+                                        prior_checks,
+                                        comparison_id,
+                                    ));
+                                    accumulated_checks = Some(combined);
+                                }
+                                None => {
+                                    // Start a fresh chain of checks.
+                                    accumulated_checks = Some(comparison_id);
+                                }
+                            }
+
+                            // Either way, the index to use is unchanged.
+                            self.cached[index]
+                        }
+                    };
                     self.temp_list.push(index_id);
+
                     base
                 }
                 crate::Expression::AccessIndex { base, index } => {
@@ -2162,20 +2228,30 @@ impl Writer {
             }
         };
 
-        let id = if self.temp_list.is_empty() {
-            root_id
+        let pointer = if self.temp_list.is_empty() {
+            ExpressionPointer::Ready {
+                pointer_id: root_id,
+            }
         } else {
             self.temp_list.reverse();
-            let id = self.id_gen.next();
-            block.body.push(Instruction::access_chain(
-                result_type_id,
-                id,
-                root_id,
-                &self.temp_list,
-            ));
-            id
+            let pointer_id = self.id_gen.next();
+            let access =
+                Instruction::access_chain(result_type_id, pointer_id, root_id, &self.temp_list);
+
+            // If we generated some bounds checks, we need to leave it to our
+            // caller to generate the branch, the access, the load or store, and
+            // the zero value (for loads). Otherwise, we can emit the access
+            // ourselves, and just hand them the id of the pointer.
+            match accumulated_checks {
+                Some(condition) => ExpressionPointer::Conditional { condition, access },
+                None => {
+                    block.body.push(access);
+                    ExpressionPointer::Ready { pointer_id }
+                }
+            }
         };
-        Ok(id)
+
+        Ok(pointer)
     }
 
     fn get_expression_global(
@@ -2539,18 +2615,53 @@ impl Writer {
                     ));
                 }
                 crate::Statement::Store { pointer, value } => {
-                    let pointer_id = self.write_expression_pointer(
+                    let value_id = self.cached[value];
+                    match self.write_expression_pointer(
+                        ir_module,
                         ir_function,
                         fun_info,
                         pointer,
                         &mut block,
                         function,
-                    )?;
-                    let value_id = self.cached[value];
+                    )? {
+                        ExpressionPointer::Ready { pointer_id } => {
+                            block
+                                .body
+                                .push(Instruction::store(pointer_id, value_id, None));
+                        }
+                        ExpressionPointer::Conditional { condition, access } => {
+                            let merge_block = self.id_gen.next();
+                            let in_bounds_block = self.id_gen.next();
 
-                    block
-                        .body
-                        .push(Instruction::store(pointer_id, value_id, None));
+                            // Emit the conditional branch.
+                            block.body.push(Instruction::selection_merge(
+                                merge_block,
+                                spirv::SelectionControl::NONE,
+                            ));
+                            function.consume(
+                                std::mem::replace(&mut block, Block::new(in_bounds_block)),
+                                Instruction::branch_conditional(
+                                    condition,
+                                    in_bounds_block,
+                                    merge_block,
+                                ),
+                            );
+
+                            // The in-bounds path. Perform the access and the store.
+                            let pointer_id = access.result_id.unwrap();
+                            block.body.push(access);
+                            block
+                                .body
+                                .push(Instruction::store(pointer_id, value_id, None));
+
+                            // Finish the in-bounds block and start the merge block. This
+                            // is the block we'll leave current on return.
+                            function.consume(
+                                std::mem::replace(&mut block, Block::new(merge_block)),
+                                Instruction::branch(merge_block),
+                            );
+                        }
+                    };
                 }
                 crate::Statement::ImageStore {
                     image,

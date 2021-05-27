@@ -1,0 +1,57 @@
+;;; Indexing into composite values passed by pointer.
+
+OpCapability Shader
+OpCapability Linkage
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+OpMemoryModel Logical GLSL450
+OpName %dpa_arg_array "dpa_arg_array"
+OpName %dpa_arg_index "dpa_arg_index"
+OpName %dpra_arg_struct "dpra_arg_struct"
+OpName %dpra_arg_index "dpra_arg_index"
+OpDecorate %run_array ArrayStride 4
+OpDecorate %run_struct Block
+OpDecorate %dummy_var DescriptorSet 0
+OpDecorate %dummy_var Binding 0
+OpMemberDecorate %run_struct 0 Offset 0
+
+%uint = OpTypeInt 32 0
+%uint_ptr = OpTypePointer StorageBuffer %uint
+%const_0 = OpConstant %uint 0
+%const_7 = OpConstant %uint 7
+
+%array = OpTypeArray %uint %const_7
+%array_ptr = OpTypePointer StorageBuffer %array
+%dpa_type = OpTypeFunction %uint %array_ptr %uint
+
+%run_array = OpTypeRuntimeArray %uint
+%run_struct = OpTypeStruct %run_array
+%run_struct_ptr = OpTypePointer StorageBuffer %run_struct
+%dpra_type = OpTypeFunction %uint %run_struct_ptr %uint
+
+;;; This makes Naga request SPV_KHR_storage_buffer_storage_class in the output,
+;;; too.
+%dummy_var = OpVariable %run_struct_ptr StorageBuffer
+
+;;; Take a pointer to an array of unsigned integers, and an index,
+;;; and return the given element of the array.
+%dpa = OpFunction %uint None %dpa_type
+%dpa_arg_array = OpFunctionParameter %array_ptr
+%dpa_arg_index = OpFunctionParameter %uint
+
+    %dpa_label = OpLabel
+    %elt_ptr = OpAccessChain %uint_ptr %dpa_arg_array %dpa_arg_index
+    %elt_value = OpLoad %uint %elt_ptr
+    OpReturnValue %elt_value
+    OpFunctionEnd
+
+;;; Take a pointer to a struct containing a run-time array, and an index, and
+;;; return the given element of the array.
+%dpra = OpFunction %uint None %dpra_type
+%dpra_arg_struct = OpFunctionParameter %run_struct_ptr
+%dpra_arg_index = OpFunctionParameter %uint
+
+    %dpra_label = OpLabel
+    %elt_ptr2 = OpAccessChain %uint_ptr %dpra_arg_struct %const_0 %dpra_arg_index
+    %elt_value2 = OpLoad %uint %elt_ptr2
+    OpReturnValue %elt_value2
+    OpFunctionEnd
