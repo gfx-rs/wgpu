@@ -40,6 +40,7 @@ exclude = [
 "BufferDescriptor_RawString" = "BufferDescriptor"
 "CommandBufferDescriptor_RawString" = "CommandBufferDescriptor"
 "CommandEncoderDescriptor_RawString" = "CommandEncoderDescriptor"
+"RenderBundleDescriptor_RawString" = "RenderBundleDescriptor"
 "DeviceDescriptor_RawString" = "DeviceDescriptor"
 "TextureDescriptor_RawString" = "TextureDescriptor"
 "SamplerDescriptor_RawString" = "SamplerDescriptor"

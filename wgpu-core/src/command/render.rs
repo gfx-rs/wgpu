@@ -2339,7 +2339,7 @@ pub mod render_ffi {
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `render_bundle_ids_length` elements.
     #[no_mangle]
-    pub unsafe fn wgpu_render_pass_execute_bundles(
+    pub unsafe extern "C" fn wgpu_render_pass_execute_bundles(
         pass: &mut RenderPass,
         render_bundle_ids: *const id::RenderBundleId,
         render_bundle_ids_length: usize,

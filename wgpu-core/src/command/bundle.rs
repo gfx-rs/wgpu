@@ -1303,7 +1303,7 @@ pub mod bundle_ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_bundle_indexed_indirect(
+    pub extern "C" fn wgpu_render_bundle_draw_indexed_indirect(
         bundle: &mut RenderBundleEncoder,
         buffer_id: id::BufferId,
         offset: BufferAddress,

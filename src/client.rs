@@ -256,6 +256,15 @@ pub struct TextureViewDescriptor<'a> {
     array_layer_count: Option<NonZeroU32>,
 }
 
+#[repr(C)]
+pub struct RenderBundleEncoderDescriptor<'a> {
+    label: RawString,
+    color_formats: *const wgt::TextureFormat,
+    color_formats_length: usize,
+    depth_stencil_format: Option<&'a wgt::TextureFormat>,
+    sample_count: u32,
+}
+
 #[derive(Debug, Default)]
 struct IdentityHub {
     adapters: IdentityManager,
@@ -603,6 +612,54 @@ pub extern "C" fn wgpu_client_create_command_encoder(
     id
 }
 
+#[no_mangle]
+pub extern "C" fn wgpu_device_create_render_bundle_encoder(
+    device_id: id::DeviceId,
+    desc: &RenderBundleEncoderDescriptor,
+) -> *mut wgc::command::RenderBundleEncoder {
+    let descriptor = wgc::command::RenderBundleEncoderDescriptor {
+        label: cow_label(&desc.label),
+        color_formats: Cow::Borrowed(make_slice(desc.color_formats, desc.color_formats_length)),
+        depth_stencil_format: desc.depth_stencil_format.cloned(),
+        sample_count: desc.sample_count,
+    };
+    match wgc::command::RenderBundleEncoder::new(&descriptor, device_id, None) {
+        Ok(encoder) => Box::into_raw(Box::new(encoder)),
+        Err(e) => panic!("Error in Device::create_render_bundle_encoder: {}", e),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_render_bundle_encoder_destroy(
+    pass: *mut wgc::command::RenderBundleEncoder,
+) {
+    // The RB encoder is just a boxed Rust struct, it doesn't have any API primitives
+    // associated with it right now, but in the future it will.
+    let _ = Box::from_raw(pass);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_client_create_render_bundle(
+    client: &Client,
+    encoder: *mut wgc::command::RenderBundleEncoder,
+    device_id: id::DeviceId,
+    desc: &wgt::RenderBundleDescriptor<RawString>,
+    bb: &mut ByteBuf,
+) -> id::RenderBundleId {
+    let backend = device_id.backend();
+    let id = client
+        .identities
+        .lock()
+        .select(backend)
+        .render_bundles
+        .alloc(backend);
+
+    let action =
+        DeviceAction::CreateRenderBundle(id, *Box::from_raw(encoder), desc.map_label(cow_label));
+    *bb = make_byte_buf(&action);
+    id
+}
+
 #[repr(C)]
 pub struct ComputePassDescriptor {
     pub label: RawString,
@@ -871,6 +928,7 @@ pub unsafe extern "C" fn wgpu_client_create_compute_pipeline(
     device_id: id::DeviceId,
     desc: &ComputePipelineDescriptor,
     bb: &mut ByteBuf,
+    implicit_pipeline_layout_id: *mut Option<id::PipelineLayoutId>,
     implicit_bind_group_layout_ids: *mut Option<id::BindGroupLayoutId>,
 ) -> id::ComputePipelineId {
     let backend = device_id.backend();
@@ -887,6 +945,7 @@ pub unsafe extern "C" fn wgpu_client_create_compute_pipeline(
         Some(_) => None,
         None => {
             let implicit = ImplicitLayout::new(identities.select(backend), backend);
+            ptr::write(implicit_pipeline_layout_id, Some(implicit.pipeline));
             for (i, bgl_id) in implicit.bind_groups.iter().enumerate() {
                 *implicit_bind_group_layout_ids.add(i) = Some(*bgl_id);
             }
@@ -905,6 +964,7 @@ pub unsafe extern "C" fn wgpu_client_create_render_pipeline(
     device_id: id::DeviceId,
     desc: &RenderPipelineDescriptor,
     bb: &mut ByteBuf,
+    implicit_pipeline_layout_id: *mut Option<id::PipelineLayoutId>,
     implicit_bind_group_layout_ids: *mut Option<id::BindGroupLayoutId>,
 ) -> id::RenderPipelineId {
     let backend = device_id.backend();
@@ -925,6 +985,7 @@ pub unsafe extern "C" fn wgpu_client_create_render_pipeline(
         Some(_) => None,
         None => {
             let implicit = ImplicitLayout::new(identities.select(backend), backend);
+            ptr::write(implicit_pipeline_layout_id, Some(implicit.pipeline));
             for (i, bgl_id) in implicit.bind_groups.iter().enumerate() {
                 *implicit_bind_group_layout_ids.add(i) = Some(*bgl_id);
             }
@@ -998,6 +1059,17 @@ pub unsafe extern "C" fn wgpu_render_pass_set_index_buffer(
     size: Option<wgt::BufferSize>,
 ) {
     pass.set_index_buffer(buffer, index_format, offset, size);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_render_bundle_set_index_buffer(
+    encoder: &mut wgc::command::RenderBundleEncoder,
+    buffer: wgc::id::BufferId,
+    index_format: wgt::IndexFormat,
+    offset: wgt::BufferAddress,
+    size: Option<wgt::BufferSize>,
+) {
+    encoder.set_index_buffer(buffer, index_format, offset, size);
 }
 
 #[no_mangle]

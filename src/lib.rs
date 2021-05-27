@@ -110,8 +110,8 @@ enum DeviceAction<'a> {
     ),
     CreateRenderBundle(
         id::RenderBundleId,
-        wgc::command::RenderBundleEncoderDescriptor<'a>,
-        wgc::command::BasePass<wgc::command::RenderCommand>,
+        wgc::command::RenderBundleEncoder,
+        wgc::command::RenderBundleDescriptor<'a>,
     ),
     CreateCommandEncoder(
         id::CommandEncoderId,
