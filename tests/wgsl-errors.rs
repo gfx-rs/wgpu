@@ -128,10 +128,14 @@ macro_rules! check_validation_error {
             let error = validation_error($source);
             if ! matches!(&error, $pattern if $guard) {
                 eprintln!("validation error does not match pattern:\n\
+                           source code: {}\n\
+                           \n\
+                           actual result:\n\
                            {:#?}\n\
                            \n\
                            expected match for pattern:\n\
                            {}{}",
+                          stringify!($source),
                           error,
                           stringify!($pattern),
                           $guard_string);
@@ -227,7 +231,12 @@ fn invalid_structs() {
 #[test]
 fn invalid_functions() {
     check_validation_error! {
-        "fn bogus(data: array<f32>) -> f32 { return data[0]; }":
+        "fn unacceptable_unsized(arg: array<f32>) { }",
+        "fn unacceptable_unsized(arg: ptr<storage, array<f32>>) { }",
+        "
+        struct Unsized { data: array<f32>; };
+        fn unacceptable_unsized(arg: Unsized) { }
+        ":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
             error: naga::valid::FunctionError::InvalidArgumentType {
@@ -236,7 +245,16 @@ fn invalid_functions() {
             },
             ..
         })
-        if function_name == "bogus" && argument_name == "data"
+        if function_name == "unacceptable_unsized" && argument_name == "arg"
+    }
+
+    // A *valid* way to pass an unsized value.
+    check_validation_error! {
+        "
+        struct Unsized { data: array<f32>; };
+        fn acceptable_ptr_to_unsized(okay: ptr<storage, Unsized>) { }
+        ":
+        Ok(_)
     }
 }
 
@@ -355,5 +373,26 @@ fn valid_access() {
         }
         ":
         Ok(_)
+    }
+}
+
+#[test]
+fn invalid_local_vars() {
+    check_validation_error! {
+        "
+        struct Unsized { data: array<f32>; };
+        fn local_ptr_dynamic_array(okay: ptr<storage, Unsized>) {
+            var not_okay: ptr<storage, array<f32>> = okay.data;
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            error: naga::valid::FunctionError::LocalVariable {
+                name: local_var_name,
+                error: naga::valid::LocalVariableError::InvalidType(_),
+                ..
+            },
+            ..
+        })
+        if local_var_name == "not_okay"
     }
 }

@@ -42,6 +42,8 @@ pub enum TypeError {
     InvalidWidth(crate::ScalarKind, crate::Bytes),
     #[error("The base handle {0:?} can not be resolved")]
     UnresolvedBase(Handle<crate::Type>),
+    #[error("Invalid type for pointer target {0:?}")]
+    InvalidPointerBase(Handle<crate::Type>),
     #[error("Expected data type, found {0:?}")]
     InvalidData(Handle<crate::Type>),
     #[error("Structure type {0:?} can not be a block structure")]
@@ -197,7 +199,23 @@ impl super::Validator {
                 if base >= handle {
                     return Err(TypeError::UnresolvedBase(base));
                 }
-                TypeInfo::new(TypeFlags::DATA | TypeFlags::SIZED, 0)
+
+                // Pointers to dynamically-sized arrays are needed, to serve as
+                // the type of an `AccessIndex` expression referring to a
+                // dynamically sized array appearing as the final member of a
+                // top-level `Struct`. But such pointers cannot be passed to
+                // functions, stored in varibles, etc. So, we mark them as not
+                // `DATA`.
+                let base_info = &self.types[base.index()];
+                let data_flag = if base_info.flags.contains(TypeFlags::SIZED) {
+                    TypeFlags::DATA
+                } else if let crate::TypeInner::Struct { .. } = types[base].inner {
+                    TypeFlags::DATA
+                } else {
+                    TypeFlags::empty()
+                };
+
+                TypeInfo::new(data_flag | TypeFlags::SIZED, 0)
             }
             Ti::ValuePointer {
                 size: _,

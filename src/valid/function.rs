@@ -37,6 +37,8 @@ pub enum CallError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum LocalVariableError {
+    #[error("Local variable has a type {0:?} that can't be stored in a local variable.")]
+    InvalidType(Handle<crate::Type>),
     #[error("Initializer doesn't match the variable type")]
     InitializerType,
 }
@@ -517,6 +519,12 @@ impl super::Validator {
         constants: &Arena<crate::Constant>,
     ) -> Result<(), LocalVariableError> {
         log::debug!("var {:?}", var);
+        if !self.types[var.ty.index()]
+            .flags
+            .contains(TypeFlags::DATA | TypeFlags::SIZED)
+        {
+            return Err(LocalVariableError::InvalidType(var.ty));
+        }
         if let Some(const_handle) = var.init {
             match constants[const_handle].inner {
                 crate::ConstantInner::Scalar { width, ref value } => {
