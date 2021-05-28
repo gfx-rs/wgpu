@@ -59,12 +59,12 @@ gfx-backend-vulkan = { version = "0.8", features = ["naga"], path = "../../gfx/s
 gfx-backend-gl = { version = "0.8", path = "../../gfx/src/backend/gl" }
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
-gfx-backend-metal = { version = "0.8" }
+gfx-backend-metal = { version = "0.8", path = "../../gfx/src/backend/metal" }
 #TODO: could also depend on gfx-backend-vulkan for Vulkan Portability
 
 [target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
-gfx-backend-dx12 = { version = "0.8" }
-gfx-backend-dx11 = { version = "0.8" }
+gfx-backend-dx12 = { version = "0.8", path = "../../gfx/src/backend/dx12" }
+gfx-backend-dx11 = { version = "0.8", path = "../../gfx/src/backend/dx11" }
 gfx-backend-vulkan = { version = "0.8", features = ["naga"], path = "../../gfx/src/backend/vulkan" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
