@@ -1,5 +1,15 @@
 # Change Log
 
+### v0.4.2 (2021-05-28)
+  - SPIR-V frontend:
+    - fix image stores
+    - fix matrix stride check
+  - SPIR-V backend:
+    - fix auto-deriving the capabilities
+  - GLSL backend:
+    - support sample interpolation
+    - write out swizzled vector accesses
+
 ### v0.4.1 (2021-05-14)
   - numerous additions and improvements to SPIR-V frontend:
     - int8, in16, int64
