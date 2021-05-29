@@ -136,8 +136,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
             limits,
             downlevel,
             private_features,
-            support_fill_buffer_texture: features
-                .contains(wgt::Features::BUFFER_FILL_AND_IMAGE_CLEAR),
+            support_fill_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
             has_labels: label.is_some(),
             #[cfg(feature = "trace")]
             commands: if enable_tracing {

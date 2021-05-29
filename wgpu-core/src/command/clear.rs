@@ -19,26 +19,24 @@ use crate::{
 
 use hal::command::CommandBuffer as _;
 use thiserror::Error;
-use wgt::{BufferAddress, BufferUsage, Color, ImageSubresourceRange, TextureAspect, TextureUsage};
+use wgt::{BufferAddress, BufferUsage, ImageSubresourceRange, TextureAspect, TextureUsage};
 
 /// Error encountered while attempting a clear.
 #[derive(Clone, Debug, Error)]
-pub enum FillOrClearError {
-    #[error(
-        "to use fill_buffer/texture the BUFFER_FILL_AND_IMAGE_CLEAR feature needs to be enabled"
-    )]
-    MissingBufferFillAndImageClearFeature,
+pub enum ClearError {
+    #[error("to use clear_buffer/texture the CLEAR_COMMANDS feature needs to be enabled")]
+    MissingClearCommandsFeature,
     #[error("command encoder {0:?} is invalid")]
     InvalidCommandEncoder(CommandEncoderId),
     #[error("buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
     #[error("texture {0:?} is invalid or destroyed")]
     InvalidTexture(TextureId),
-    #[error("buffer fill size {0:?} is not a multiple of 4")]
+    #[error("buffer clear size {0:?} is not a multiple of 4")]
     UnalignedFillSize(BufferAddress),
     #[error("buffer offset {0:?} is not a multiple of 4")]
     UnalignedBufferOffset(BufferAddress),
-    #[error("fill of {start_offset}..{end_offset} would end up overrunning the bounds of the buffer of size {buffer_size}")]
+    #[error("clear of {start_offset}..{end_offset} would end up overrunning the bounds of the buffer of size {buffer_size}")]
     BufferOverrun {
         start_offset: BufferAddress,
         end_offset: BufferAddress,
@@ -68,61 +66,55 @@ whereas subesource range specified start {subresource_layer_start} and count {su
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_fill_buffer<B: GfxBackend>(
+    pub fn command_encoder_clear_buffer<B: GfxBackend>(
         &self,
         command_encoder_id: CommandEncoderId,
         dst: BufferId,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-        data: u32,
-    ) -> Result<(), FillOrClearError> {
+    ) -> Result<(), ClearError> {
         profiling::scope!("CommandEncoder::fill_buffer");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)
-            .map_err(|_| FillOrClearError::InvalidCommandEncoder(command_encoder_id))?;
+            .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
         let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
-            list.push(TraceCommand::FillBuffer {
-                dst,
-                offset,
-                size,
-                data,
-            });
+            list.push(TraceCommand::ClearBuffer { dst, offset, size });
         }
 
         if !cmd_buf.support_fill_buffer_texture {
-            return Err(FillOrClearError::MissingBufferFillAndImageClearFeature);
+            return Err(ClearError::MissingClearCommandsFeature);
         }
 
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
             .buffers
             .use_replace(&*buffer_guard, dst, (), BufferUse::COPY_DST)
-            .map_err(FillOrClearError::InvalidBuffer)?;
+            .map_err(ClearError::InvalidBuffer)?;
         let &(ref dst_raw, _) = dst_buffer
             .raw
             .as_ref()
-            .ok_or(FillOrClearError::InvalidBuffer(dst))?;
+            .ok_or(ClearError::InvalidBuffer(dst))?;
         if !dst_buffer.usage.contains(BufferUsage::COPY_DST) {
-            return Err(FillOrClearError::MissingCopyDstUsageFlag(Some(dst), None).into());
+            return Err(ClearError::MissingCopyDstUsageFlag(Some(dst), None).into());
         }
 
         // Check if offset & size are valid.
-        if offset % std::mem::size_of_val(&data) as BufferAddress != 0 {
-            return Err(FillOrClearError::UnalignedBufferOffset(offset).into());
+        if offset % 4 != 0 {
+            return Err(ClearError::UnalignedBufferOffset(offset).into());
         }
         if let Some(size) = size {
-            if size % std::mem::size_of_val(&data) as BufferAddress != 0 {
-                return Err(FillOrClearError::UnalignedFillSize(size).into());
+            if size % 4 != 0 {
+                return Err(ClearError::UnalignedFillSize(size).into());
             }
             let destination_end_offset = offset + size;
             if destination_end_offset > dst_buffer.size {
-                return Err(FillOrClearError::BufferOverrun {
+                return Err(ClearError::BufferOverrun {
                     start_offset: offset,
                     end_offset: destination_end_offset,
                     buffer_size: dst_buffer.size,
@@ -160,7 +152,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::memory::Dependencies::empty(),
                 dst_barrier.into_iter(),
             );
-            cmd_buf_raw.fill_buffer(dst_raw, hal::buffer::SubRange { offset, size }, data);
+            cmd_buf_raw.fill_buffer(dst_raw, hal::buffer::SubRange { offset, size }, 0);
         }
         Ok(())
     }
@@ -170,15 +162,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         command_encoder_id: CommandEncoderId,
         dst: TextureId,
         subresource_range: ImageSubresourceRange,
-        clear_color: Color,
-    ) -> Result<(), FillOrClearError> {
+    ) -> Result<(), ClearError> {
         profiling::scope!("CommandEncoder::clear_image");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)
-            .map_err(|_| FillOrClearError::InvalidCommandEncoder(command_encoder_id))?;
+            .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
         let (_, mut token) = hub.buffers.read(&mut token); // skip token
         let (texture_guard, _) = hub.textures.read(&mut token);
 
@@ -187,17 +178,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             list.push(TraceCommand::ClearImage {
                 dst,
                 subresource_range: subresource_range.clone(),
-                clear_color,
             });
         }
 
         if !cmd_buf.support_fill_buffer_texture {
-            return Err(FillOrClearError::MissingBufferFillAndImageClearFeature);
+            return Err(ClearError::MissingClearCommandsFeature);
         }
 
         let dst_texture = texture_guard
             .get(dst)
-            .map_err(|_| FillOrClearError::InvalidTexture(dst))?;
+            .map_err(|_| ClearError::InvalidTexture(dst))?;
 
         // Check if subresource aspects are valid.
         let aspects = match subresource_range.aspects {
@@ -206,7 +196,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             wgt::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
         };
         if !dst_texture.aspects.contains(aspects) {
-            return Err(FillOrClearError::MissingTextureAspect {
+            return Err(ClearError::MissingTextureAspect {
                 texture_aspects: dst_texture.aspects,
                 subresource_range_aspects: subresource_range.aspects,
             });
@@ -220,7 +210,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if dst_texture.full_range.levels.start > subresource_range.level_start
             || dst_texture.full_range.levels.end < subresource_level_end
         {
-            return Err(FillOrClearError::InvalidTextureLevelRange {
+            return Err(ClearError::InvalidTextureLevelRange {
                 texture_level_range: dst_texture.full_range.levels.clone(),
                 subresource_level_start: subresource_range.level_start,
                 subresource_level_count: subresource_range.level_count,
@@ -235,7 +225,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if dst_texture.full_range.layers.start > subresource_range.layer_start
             || dst_texture.full_range.layers.end < subresource_layer_end
         {
-            return Err(FillOrClearError::InvalidTextureLayerRange {
+            return Err(ClearError::InvalidTextureLayerRange {
                 texture_layer_range: dst_texture.full_range.layers.clone(),
                 subresource_layer_start: subresource_range.layer_start,
                 subresource_layer_count: subresource_range.layer_count,
@@ -255,13 +245,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 },
                 TextureUse::COPY_DST,
             )
-            .map_err(FillOrClearError::InvalidTexture)?;
+            .map_err(ClearError::InvalidTexture)?;
         let &(ref dst_raw, _) = dst_texture
             .raw
             .as_ref()
-            .ok_or(FillOrClearError::InvalidTexture(dst))?;
+            .ok_or(ClearError::InvalidTexture(dst))?;
         if !dst_texture.usage.contains(TextureUsage::COPY_DST) {
-            return Err(FillOrClearError::MissingCopyDstUsageFlag(None, Some(dst)).into());
+            return Err(ClearError::MissingCopyDstUsageFlag(None, Some(dst)).into());
         }
 
         // actual hal barrier & operation
@@ -280,7 +270,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::image::Layout::TransferDstOptimal,
                 hal::command::ClearValue {
                     color: hal::command::ClearColor {
-                        float32: conv::map_color_f32(&clear_color),
+                        float32: conv::map_color_f32(&wgt::Color::TRANSPARENT),
                     },
                 },
                 std::iter::once(hal::image::SubresourceRange {

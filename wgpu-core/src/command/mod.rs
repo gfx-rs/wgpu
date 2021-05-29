@@ -5,9 +5,9 @@
 mod allocator;
 mod bind;
 mod bundle;
+mod clear;
 mod compute;
 mod draw;
-mod fill_clear;
 mod query;
 mod render;
 mod transfer;

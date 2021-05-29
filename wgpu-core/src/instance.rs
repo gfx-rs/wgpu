@@ -218,7 +218,7 @@ impl<B: GfxBackend> Adapter<B> {
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
             | wgt::Features::PUSH_CONSTANTS
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-	    | wgt::Features::BUFFER_FILL_AND_IMAGE_CLEAR;
+            | wgt::Features::CLEAR_COMMANDS;
         for &(hi, lo) in FEATURE_MAP.iter() {
             features.set(hi, adapter_features.contains(lo));
         }

@@ -7,8 +7,8 @@
             offset: 0,
             data: Raw([
                 0x00, 0x00, 0x00, 0x00,
-                0x78, 0x56, 0x34, 0x12,
-                0x78, 0x56, 0x34, 0x12,
+                0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
             ]),
         )
@@ -26,11 +26,10 @@
             ),
         ),
         Submit(1, [
-            FillBuffer(
+            ClearBuffer(
                 dst: Id(0, 1, Empty),
                 offset: 4,
                 size: Some(8),
-                data: 0x12345678,
             )
         ]),
     ],

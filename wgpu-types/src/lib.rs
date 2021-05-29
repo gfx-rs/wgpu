@@ -535,13 +535,13 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const VERTEX_WRITABLE_STORAGE = 0x0000_0020_0000_0000;
-        /// Enables buffer fill & image clear functions on command buffer.
+        /// Enables clear to zero for buffers & images.
         ///
         /// Supported platforms:
         /// - All
         ///
         /// This is a native only feature.
-        const BUFFER_FILL_AND_IMAGE_CLEAR = 0x0000_0001_0000_0000;
+        const CLEAR_COMMANDS = 0x0000_0001_0000_0000;
 
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
