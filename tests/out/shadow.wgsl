@@ -30,7 +30,7 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
     if ((homogeneous_coords.w <= 0.0)) {
         return 1.0;
     }
-    let _e26: f32 = textureSampleCompare(t_shadow, sampler_shadow, (((homogeneous_coords.xy * vec2<f32>(0.5, -0.5)) / vec2<f32>(homogeneous_coords.w)) + vec2<f32>(0.5, 0.5)), i32(light_id), (homogeneous_coords.z / homogeneous_coords.w));
+    let _e26: f32 = textureSampleCompareLevel(t_shadow, sampler_shadow, (((homogeneous_coords.xy * vec2<f32>(0.5, -0.5)) / vec2<f32>(homogeneous_coords.w)) + vec2<f32>(0.5, 0.5)), i32(light_id), (homogeneous_coords.z / homogeneous_coords.w));
     return _e26;
 }
 

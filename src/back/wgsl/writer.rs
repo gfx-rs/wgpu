@@ -960,18 +960,18 @@ impl<W: Write> Writer<W> {
                 level,
                 depth_ref,
             } => {
-                let texture_function = if depth_ref.is_some() {
-                    "textureSampleCompare"
-                } else {
-                    match level {
-                        SampleLevel::Auto | SampleLevel::Zero => "textureSample",
-                        SampleLevel::Exact(_) => "textureSampleLevel",
-                        SampleLevel::Bias(_) => "textureSampleBias",
-                        SampleLevel::Gradient { .. } => "textureSampleGrad",
-                    }
+                let suffix_cmp = match depth_ref {
+                    Some(_) => "Compare",
+                    None => "",
+                };
+                let suffix_level = match level {
+                    SampleLevel::Auto => "",
+                    SampleLevel::Zero | SampleLevel::Exact(_) => "Level",
+                    SampleLevel::Bias(_) => "Bias",
+                    SampleLevel::Gradient { .. } => "Grad",
                 };
 
-                write!(self.out, "{}(", texture_function)?;
+                write!(self.out, "textureSample{}{}(", suffix_cmp, suffix_level)?;
                 self.write_expr(module, image, func_ctx)?;
                 write!(self.out, ", ")?;
                 self.write_expr(module, sampler, func_ctx)?;
@@ -983,26 +983,33 @@ impl<W: Write> Writer<W> {
                     self.write_expr(module, array_index, func_ctx)?;
                 }
 
-                if let SampleLevel::Bias(expr) = level {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, expr, func_ctx)?;
-                }
-
                 if let Some(depth_ref) = depth_ref {
                     write!(self.out, ", ")?;
                     self.write_expr(module, depth_ref, func_ctx)?;
                 }
 
-                if let SampleLevel::Gradient { x, y } = level {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, x, func_ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, y, func_ctx)?;
-                }
-
-                if let SampleLevel::Exact(expr) = level {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, expr, func_ctx)?;
+                match level {
+                    SampleLevel::Auto => {}
+                    SampleLevel::Zero => {
+                        // Level 0 is implied for depth comparison
+                        if depth_ref.is_none() {
+                            write!(self.out, ", 0.0")?;
+                        }
+                    }
+                    SampleLevel::Exact(expr) => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, expr, func_ctx)?;
+                    }
+                    SampleLevel::Bias(expr) => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, expr, func_ctx)?;
+                    }
+                    SampleLevel::Gradient { x, y } => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, x, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, y, func_ctx)?;
+                    }
                 }
 
                 if let Some(offset) = offset {
