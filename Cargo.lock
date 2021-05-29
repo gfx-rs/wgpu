@@ -457,7 +457,6 @@ dependencies = [
 [[package]]
 name = "gfx-auxil"
 version = "0.9.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=27a1dae3796d33d23812f2bb8c7e3b5aea18b521#27a1dae3796d33d23812f2bb8c7e3b5aea18b521"
 dependencies = [
  "fxhash",
  "gfx-hal",
@@ -467,12 +466,12 @@ dependencies = [
 [[package]]
 name = "gfx-backend-dx11"
 version = "0.8.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=27a1dae3796d33d23812f2bb8c7e3b5aea18b521#27a1dae3796d33d23812f2bb8c7e3b5aea18b521"
 dependencies = [
  "arrayvec",
  "bitflags",
  "gfx-auxil",
  "gfx-hal",
+ "gfx-renderdoc",
  "libloading 0.7.0",
  "log",
  "parking_lot",
@@ -488,7 +487,6 @@ dependencies = [
 [[package]]
 name = "gfx-backend-dx12"
 version = "0.8.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=27a1dae3796d33d23812f2bb8c7e3b5aea18b521#27a1dae3796d33d23812f2bb8c7e3b5aea18b521"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -496,6 +494,7 @@ dependencies = [
  "d3d12",
  "gfx-auxil",
  "gfx-hal",
+ "gfx-renderdoc",
  "log",
  "parking_lot",
  "range-alloc",
@@ -509,7 +508,6 @@ dependencies = [
 [[package]]
 name = "gfx-backend-empty"
 version = "0.8.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=27a1dae3796d33d23812f2bb8c7e3b5aea18b521#27a1dae3796d33d23812f2bb8c7e3b5aea18b521"
 dependencies = [
  "gfx-hal",
  "log",
@@ -519,7 +517,6 @@ dependencies = [
 [[package]]
 name = "gfx-backend-gl"
 version = "0.8.1"
-source = "git+https://github.com/gfx-rs/gfx?rev=27a1dae3796d33d23812f2bb8c7e3b5aea18b521#27a1dae3796d33d23812f2bb8c7e3b5aea18b521"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -542,7 +539,6 @@ dependencies = [
 [[package]]
 name = "gfx-backend-metal"
 version = "0.8.1"
-source = "git+https://github.com/gfx-rs/gfx?rev=27a1dae3796d33d23812f2bb8c7e3b5aea18b521#27a1dae3796d33d23812f2bb8c7e3b5aea18b521"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -568,21 +564,19 @@ dependencies = [
 [[package]]
 name = "gfx-backend-vulkan"
 version = "0.8.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=27a1dae3796d33d23812f2bb8c7e3b5aea18b521#27a1dae3796d33d23812f2bb8c7e3b5aea18b521"
 dependencies = [
  "arrayvec",
  "ash",
  "byteorder",
  "core-graphics-types",
  "gfx-hal",
+ "gfx-renderdoc",
  "inplace_it",
- "libloading 0.7.0",
  "log",
  "naga",
  "objc",
  "parking_lot",
  "raw-window-handle",
- "renderdoc-sys",
  "smallvec",
  "winapi 0.3.9",
 ]
@@ -590,12 +584,20 @@ dependencies = [
 [[package]]
 name = "gfx-hal"
 version = "0.8.0"
-source = "git+https://github.com/gfx-rs/gfx?rev=27a1dae3796d33d23812f2bb8c7e3b5aea18b521#27a1dae3796d33d23812f2bb8c7e3b5aea18b521"
 dependencies = [
  "bitflags",
  "naga",
  "raw-window-handle",
  "thiserror",
+]
+
+[[package]]
+name = "gfx-renderdoc"
+version = "0.1.0"
+dependencies = [
+ "libloading 0.7.0",
+ "log",
+ "renderdoc-sys",
 ]
 
 [[package]]
@@ -1169,7 +1171,6 @@ dependencies = [
 [[package]]
 name = "range-alloc"
 version = "0.1.2"
-source = "git+https://github.com/gfx-rs/gfx?rev=27a1dae3796d33d23812f2bb8c7e3b5aea18b521#27a1dae3796d33d23812f2bb8c7e3b5aea18b521"
 
 [[package]]
 name = "raw-window-handle"
@@ -1619,6 +1620,7 @@ name = "wgpu-core"
 version = "0.8.0"
 dependencies = [
  "arrayvec",
+ "ash",
  "bitflags",
  "cfg_aliases",
  "copyless",

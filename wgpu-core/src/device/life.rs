@@ -448,6 +448,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                                 raw
                             }
                             resource::TextureViewInner::SwapChain { .. } => unreachable!(),
+                            resource::TextureViewInner::Raw { .. } => unreachable!(),
                         };
 
                         let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);

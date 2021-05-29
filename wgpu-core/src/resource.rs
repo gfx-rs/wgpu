@@ -323,6 +323,9 @@ pub(crate) enum TextureViewInner<B: hal::Backend> {
         image: <B::Surface as hal::window::PresentationSurface<B>>::SwapchainImage,
         source_id: Stored<SwapChainId>,
     },
+    Raw {
+        raw: B::ImageView,
+    }
 }
 
 #[derive(Debug)]

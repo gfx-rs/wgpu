@@ -64,6 +64,34 @@ impl Instance {
         }
     }
 
+    pub unsafe fn required_vulkan_extensions(entry: &ash::Entry) -> Vec<&'static std::ffi::CStr> {
+        gfx_backend_vulkan::Instance::required_extensions(
+            &entry,
+            gfx_backend_vulkan::Version::V1_1,
+        ).unwrap()
+    }
+
+    pub unsafe fn new_raw_vulkan(
+        entry: ash::Entry,
+        instance: ash::Instance,
+        extensions: Vec<&'static std::ffi::CStr>,
+    ) -> Self {
+        Self {
+            #[cfg(vulkan)]
+            vulkan: gfx_backend_vulkan::Instance::from_raw(
+                entry, instance, gfx_backend_vulkan::Version::V1_1, extensions
+            ).ok(),
+            #[cfg(metal)]
+            metal: None,
+            #[cfg(dx12)]
+            dx12: None,
+            #[cfg(dx11)]
+            dx11: None,
+            #[cfg(gl)]
+            gl: None,
+        }
+    }
+
     pub(crate) fn destroy_surface(&self, surface: Surface) {
         backends_map! {
             let map = |(surface_backend, self_backend)| {
@@ -432,6 +460,33 @@ impl<B: GfxBackend> Adapter<B> {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Device<B>, RequestDeviceError> {
+        self.verify(desc)?;
+
+        let phd = &self.raw.physical_device;
+        let enabled_features = Self::get_features(phd, desc);
+
+        let family = self
+            .raw
+            .queue_families
+            .iter()
+            .find(|family| family.queue_type().supports_graphics())
+            .ok_or(RequestDeviceError::NoGraphicsQueue)?;
+
+        let gpu =
+            unsafe { phd.open(&[(family, &[1.0])], enabled_features) }.map_err(|err| {
+                use hal::device::CreationError::*;
+                match err {
+                    DeviceLost => RequestDeviceError::DeviceLost,
+                    InitializationFailed => RequestDeviceError::Internal,
+                    OutOfMemory(_) => RequestDeviceError::OutOfMemory,
+                    _ => panic!("failed to create `gfx-hal` device: {}", err),
+                }
+            })?;
+
+        self.device_from_gpu(self_id, gpu, desc, trace_path)
+    }
+
+    fn verify(&self, desc: &DeviceDescriptor) -> Result<(), RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.features.contains(desc.features) {
             return Err(RequestDeviceError::UnsupportedFeature(
@@ -452,7 +507,10 @@ impl<B: GfxBackend> Adapter<B> {
             log::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
         }
 
-        let phd = &self.raw.physical_device;
+        Ok(())
+    }
+
+    fn get_features(phd: &B::PhysicalDevice, desc: &DeviceDescriptor) -> hal::Features {
         let available_features = phd.features();
 
         // Check features that are always needed
@@ -476,23 +534,17 @@ impl<B: GfxBackend> Adapter<B> {
             enabled_features.set(lo, desc.features.contains(hi));
         }
 
-        let family = self
-            .raw
-            .queue_families
-            .iter()
-            .find(|family| family.queue_type().supports_graphics())
-            .ok_or(RequestDeviceError::NoGraphicsQueue)?;
+        enabled_features
+    }
 
-        let mut gpu =
-            unsafe { phd.open(&[(family, &[1.0])], enabled_features) }.map_err(|err| {
-                use hal::device::CreationError::*;
-                match err {
-                    DeviceLost => RequestDeviceError::DeviceLost,
-                    InitializationFailed => RequestDeviceError::Internal,
-                    OutOfMemory(_) => RequestDeviceError::OutOfMemory,
-                    _ => panic!("failed to create `gfx-hal` device: {}", err),
-                }
-            })?;
+    fn device_from_gpu(
+        &self,
+        self_id: AdapterId,
+        mut gpu: hal::adapter::Gpu<B>,
+        desc: &DeviceDescriptor,
+        trace_path: Option<&std::path::Path>,
+    ) -> Result<Device<B>, RequestDeviceError> {
+        let phd = &self.raw.physical_device;
 
         if let Some(_) = desc.label {
             //TODO
@@ -530,6 +582,43 @@ impl<B: GfxBackend> Adapter<B> {
             trace_path,
         )
         .or(Err(RequestDeviceError::OutOfMemory))
+    }
+}
+
+impl Adapter<backend::Vulkan> {
+    fn required_vulkan_device_extensions(
+        &self,
+        desc: &DeviceDescriptor,
+    ) -> Vec<&'static std::ffi::CStr> {
+        let phd = &self.raw.physical_device;
+        let features = Self::get_features(phd, desc);
+        phd.enabled_extensions(features).unwrap()
+    }
+
+    unsafe fn device_from_raw_vulkan(
+        &self,
+        self_id: AdapterId,
+        device: ash::Device,
+        queue_family_index: u32,
+        desc: &DeviceDescriptor,
+        trace_path: Option<&std::path::Path>,
+    ) -> Device<backend::Vulkan> {
+        self.verify(desc).unwrap();
+
+        let family = self
+            .raw
+            .queue_families
+            .get(queue_family_index as usize)
+            .ok_or(RequestDeviceError::NoGraphicsQueue)
+            .unwrap();
+
+        // TODO: Verify family supports graphics
+
+        let phd = &self.raw.physical_device;
+        let enabled_features = Self::get_features(phd, desc);
+        let gpu = phd.gpu_from_raw(device, &[(family, &[1.0])], enabled_features).unwrap();
+
+        self.device_from_gpu(self_id, gpu, desc, trace_path).unwrap()
     }
 }
 
@@ -708,6 +797,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         adapters
+    }
+
+    pub unsafe fn adapter_from_raw_vulkan(
+        &self,
+        physical_device: ash::vk::PhysicalDevice,
+        id_in: Input<G, AdapterId>,
+    ) -> AdapterId {
+        let vulkan = self.instance.vulkan.as_ref().unwrap();
+
+        let raw = vulkan.adapter_from_raw(physical_device);
+        let adapter = Adapter::new(raw);
+        log::info!("Adapter Vulkan {:?}", adapter.raw.info);
+
+        let mut token = Token::root();
+        let id = backend::Vulkan::hub(self).adapters
+            .prepare(id_in)
+            .assign(adapter, &mut token);
+
+        id.0
     }
 
     pub fn request_adapter(
@@ -980,5 +1088,43 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
+    }
+
+    pub fn adapter_required_vulkan_device_extensions(
+        &self,
+        adapter_id: AdapterId,
+        desc: &DeviceDescriptor,
+    ) -> Vec<&'static std::ffi::CStr> {
+        let hub = backend::Vulkan::hub(self);
+        let mut token = Token::root();
+
+        let (adapter_guard, _token) = hub.adapters.read(&mut token);
+        let adapter = adapter_guard.get(adapter_id).unwrap();
+        adapter.required_vulkan_device_extensions(desc)
+    }
+
+    pub unsafe fn adapter_device_from_raw_vulkan(
+        &self,
+        adapter_id: AdapterId,
+        device: ash::Device,
+        queue_family_index: u32,
+        desc: &DeviceDescriptor,
+        trace_path: Option<&std::path::Path>,
+        id_in: Input<G, DeviceId>,
+    ) -> DeviceId {
+        let hub = backend::Vulkan::hub(self);
+        let mut token = Token::root();
+        let fid = hub.devices.prepare(id_in);
+
+        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+        let adapter = adapter_guard.get(adapter_id).unwrap();
+        let device = adapter.device_from_raw_vulkan(
+            adapter_id,
+            device,
+            queue_family_index,
+            desc,
+            trace_path,
+        );
+        fid.assign(device, &mut token).0
     }
 }

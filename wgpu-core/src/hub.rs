@@ -615,6 +615,7 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
                             }
                         }
                         TextureViewInner::SwapChain { .. } => {} //TODO
+                        TextureViewInner::Raw { .. } => {} //TODO
                     }
                 }
             }
@@ -768,6 +769,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("new", "Global");
         Self {
             instance: Instance::new(name, 1, backends),
+            surfaces: Registry::without_backend(&factory, "Surface"),
+            hubs: Hubs::new(&factory),
+        }
+    }
+
+    pub unsafe fn required_vulkan_extensions(entry: &ash::Entry) -> Vec<&'static std::ffi::CStr> {
+        Instance::required_vulkan_extensions(entry)
+    }
+
+    pub unsafe fn new_raw_vulkan(
+        entry: ash::Entry,
+        instance: ash::Instance,
+        extensions: Vec<&'static std::ffi::CStr>,
+        factory: G,
+    ) -> Self {
+        profiling::scope!("new_raw_vulkan", "Global");
+        Self {
+            instance: Instance::new_raw_vulkan(entry, instance, extensions),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
         }
