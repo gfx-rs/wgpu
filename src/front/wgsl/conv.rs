@@ -3,6 +3,7 @@ use super::Error;
 pub fn map_storage_class(word: &str) -> Result<crate::StorageClass, Error<'_>> {
     match word {
         "private" => Ok(crate::StorageClass::Private),
+        "workgroup" => Ok(crate::StorageClass::WorkGroup),
         "uniform" => Ok(crate::StorageClass::Uniform),
         "storage" => Ok(crate::StorageClass::Storage),
         "push_constant" => Ok(crate::StorageClass::PushConstant),
