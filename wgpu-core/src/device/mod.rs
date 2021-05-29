@@ -318,9 +318,8 @@ impl<B: GfxBackend> Device<B> {
         let mem_allocator = alloc::MemoryAllocator::new(mem_props, hal_limits);
         let descriptors = descriptor::DescriptorAllocator::new();
         #[cfg(not(feature = "trace"))]
-        match trace_path {
-            Some(_) => log::error!("Feature 'trace' is not enabled"),
-            None => (),
+        if let Some(_) = trace_path {
+            log::error!("Feature 'trace' is not enabled");
         }
 
         let spv_options = {

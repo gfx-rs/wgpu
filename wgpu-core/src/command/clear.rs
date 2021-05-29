@@ -19,7 +19,9 @@ use crate::{
 
 use hal::command::CommandBuffer as _;
 use thiserror::Error;
-use wgt::{BufferAddress, BufferUsage, ImageSubresourceRange, TextureAspect, TextureUsage};
+use wgt::{
+    BufferAddress, BufferSize, BufferUsage, ImageSubresourceRange, TextureAspect, TextureUsage,
+};
 
 /// Error encountered while attempting a clear.
 #[derive(Clone, Debug, Error)]
@@ -33,7 +35,7 @@ pub enum ClearError {
     #[error("texture {0:?} is invalid or destroyed")]
     InvalidTexture(TextureId),
     #[error("buffer clear size {0:?} is not a multiple of 4")]
-    UnalignedFillSize(BufferAddress),
+    UnalignedFillSize(BufferSize),
     #[error("buffer offset {0:?} is not a multiple of 4")]
     UnalignedBufferOffset(BufferAddress),
     #[error("clear of {start_offset}..{end_offset} would end up overrunning the bounds of the buffer of size {buffer_size}")]
@@ -71,7 +73,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         command_encoder_id: CommandEncoderId,
         dst: BufferId,
         offset: BufferAddress,
-        size: Option<BufferAddress>,
+        size: Option<BufferSize>,
     ) -> Result<(), ClearError> {
         profiling::scope!("CommandEncoder::fill_buffer");
 
@@ -101,29 +103,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(ClearError::InvalidBuffer(dst))?;
         if !dst_buffer.usage.contains(BufferUsage::COPY_DST) {
-            return Err(ClearError::MissingCopyDstUsageFlag(Some(dst), None).into());
+            return Err(ClearError::MissingCopyDstUsageFlag(Some(dst), None));
         }
 
         // Check if offset & size are valid.
         if offset % 4 != 0 {
-            return Err(ClearError::UnalignedBufferOffset(offset).into());
+            return Err(ClearError::UnalignedBufferOffset(offset));
         }
         if let Some(size) = size {
-            if size % 4 != 0 {
-                return Err(ClearError::UnalignedFillSize(size).into());
+            if size.get() % 4 != 0 {
+                return Err(ClearError::UnalignedFillSize(size));
             }
-            let destination_end_offset = offset + size;
+            let destination_end_offset = offset + size.get();
             if destination_end_offset > dst_buffer.size {
                 return Err(ClearError::BufferOverrun {
                     start_offset: offset,
                     end_offset: destination_end_offset,
                     buffer_size: dst_buffer.size,
-                }
-                .into());
+                });
             }
         }
 
-        let num_bytes_filled = size.unwrap_or(dst_buffer.size - offset);
+        let num_bytes_filled = size.map_or(dst_buffer.size - offset, |s| s.get());
         if num_bytes_filled == 0 {
             log::trace!("Ignoring fill_buffer of size 0");
             return Ok(());
@@ -152,7 +153,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::memory::Dependencies::empty(),
                 dst_barrier.into_iter(),
             );
-            cmd_buf_raw.fill_buffer(dst_raw, hal::buffer::SubRange { offset, size }, 0);
+            cmd_buf_raw.fill_buffer(
+                dst_raw,
+                hal::buffer::SubRange {
+                    offset,
+                    size: size.map(|s| s.get()),
+                },
+                0,
+            );
         }
         Ok(())
     }
@@ -251,7 +259,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(ClearError::InvalidTexture(dst))?;
         if !dst_texture.usage.contains(TextureUsage::COPY_DST) {
-            return Err(ClearError::MissingCopyDstUsageFlag(None, Some(dst)).into());
+            return Err(ClearError::MissingCopyDstUsageFlag(None, Some(dst)));
         }
 
         // actual hal barrier & operation

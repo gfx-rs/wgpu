@@ -145,7 +145,7 @@ pub enum Command {
     ClearBuffer {
         dst: id::BufferId,
         offset: wgt::BufferAddress,
-        size: Option<wgt::BufferAddress>,
+        size: Option<wgt::BufferSize>,
     },
     ClearImage {
         dst: id::TextureId,
