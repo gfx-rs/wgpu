@@ -58,3 +58,17 @@ fn queries() -> [[builtin(position)]] vec4<f32> {
         num_levels_2d + num_levels_2d_array + num_levels_3d + num_levels_cube + num_levels_cube_array;
     return vec4<f32>(f32(sum));
 }
+
+[[group(1), binding(0)]]
+var sampler_cmp: sampler_comparison;
+[[group(1), binding(1)]]
+var image_2d_depth: texture_depth_2d;
+
+[[stage(fragment)]]
+fn sample_comparison() -> [[location(0)]] f32 {
+    let tc = vec2<f32>(0.5);
+    let dref = 0.5;
+    let s2d_depth = textureSampleCompare(image_2d_depth, sampler_cmp, tc, dref);
+    let s2d_depth_level = textureSampleCompareLevel(image_2d_depth, sampler_cmp, tc, dref);
+    return s2d_depth + s2d_depth_level;
+}

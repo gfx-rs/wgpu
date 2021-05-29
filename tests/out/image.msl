@@ -30,3 +30,17 @@ vertex queriesOutput queries(
 ) {
     return queriesOutput { metal::float4(static_cast<float>((((((((((((((((((int(image_1d.get_width()) + int2(image_2d.get_width(), image_2d.get_height()).y) + int2(image_2d.get_width(1), image_2d.get_height(1)).y) + int2(image_2d_array.get_width(), image_2d_array.get_height()).y) + int2(image_2d_array.get_width(1), image_2d_array.get_height(1)).y) + int(image_2d_array.get_array_size())) + int3(image_cube.get_width()).y) + int3(image_cube.get_width(1)).y) + int3(image_cube_array.get_width()).y) + int3(image_cube_array.get_width(1)).y) + int(image_cube_array.get_array_size())) + int3(image_3d.get_width(), image_3d.get_height(), image_3d.get_depth()).z) + int3(image_3d.get_width(1), image_3d.get_height(1), image_3d.get_depth(1)).z) + int(image_aa.get_num_samples())) + int(image_2d.get_num_mip_levels())) + int(image_2d_array.get_num_mip_levels())) + int(image_3d.get_num_mip_levels())) + int(image_cube.get_num_mip_levels())) + int(image_cube_array.get_num_mip_levels()))) };
 }
+
+
+struct sample_comparisonOutput {
+    float member2 [[color(0)]];
+};
+fragment sample_comparisonOutput sample_comparison(
+  metal::sampler sampler_cmp [[user(fake0)]]
+, metal::depth2d<float, metal::access::sample> image_2d_depth [[user(fake0)]]
+) {
+    metal::float2 _e12 = metal::float2(0.5);
+    float _e14 = image_2d_depth.sample_compare(sampler_cmp, _e12, 0.5);
+    float _e15 = image_2d_depth.sample_compare(sampler_cmp, _e12, 0.5);
+    return sample_comparisonOutput { _e14 + _e15 };
+}
