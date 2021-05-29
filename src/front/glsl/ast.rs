@@ -7,8 +7,8 @@ use super::{
 use crate::{
     proc::ResolveContext, Arena, BinaryOperator, Binding, Block, Constant, Expression, FastHashMap,
     Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable, Module,
-    RelationalFunction, ResourceBinding, Sampling, ShaderStage, Statement, StorageClass, Type,
-    TypeInner, UnaryOperator,
+    RelationalFunction, ResourceBinding, Sampling, ScalarKind, ShaderStage, Statement,
+    StorageClass, Type, TypeInner, UnaryOperator,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -398,8 +398,12 @@ impl<'function> Context<'function> {
                 self.add_expression(Expression::Constant(constant), body)
             }
             HirExprKind::Binary { left, op, right } if !lhs => {
-                let (left, left_meta) = self.lower_expect(program, left, false, body)?;
-                let (right, right_meta) = self.lower_expect(program, right, false, body)?;
+                let (mut left, left_meta) = self.lower_expect(program, left, false, body)?;
+                let (mut right, right_meta) = self.lower_expect(program, right, false, body)?;
+
+                self.binary_implicit_conversion(
+                    program, &mut left, left_meta, &mut right, right_meta,
+                )?;
 
                 if let BinaryOperator::Equal | BinaryOperator::NotEqual = op {
                     let equals = op == BinaryOperator::Equal;
@@ -466,8 +470,16 @@ impl<'function> Context<'function> {
                 reject,
             } if !lhs => {
                 let condition = self.lower_expect(program, condition, false, body)?.0;
-                let accept = self.lower_expect(program, accept, false, body)?.0;
-                let reject = self.lower_expect(program, reject, false, body)?.0;
+                let (mut accept, accept_meta) = self.lower_expect(program, accept, false, body)?;
+                let (mut reject, reject_meta) = self.lower_expect(program, reject, false, body)?;
+
+                self.binary_implicit_conversion(
+                    program,
+                    &mut accept,
+                    accept_meta,
+                    &mut reject,
+                    reject_meta,
+                )?;
 
                 self.add_expression(
                     Expression::Select {
@@ -479,8 +491,19 @@ impl<'function> Context<'function> {
                 )
             }
             HirExprKind::Assign { tgt, value } if !lhs => {
-                let pointer = self.lower_expect(program, tgt, true, body)?.0;
-                let value = self.lower_expect(program, value, false, body)?.0;
+                let (pointer, ptr_meta) = self.lower_expect(program, tgt, true, body)?;
+                let (mut value, value_meta) = self.lower_expect(program, value, false, body)?;
+
+                let ptr_kind = match *program.resolve_type(self, pointer, ptr_meta)? {
+                    TypeInner::Pointer { base, .. } => {
+                        program.module.types[base].inner.scalar_kind()
+                    }
+                    ref ty => ty.scalar_kind(),
+                };
+
+                if let Some(kind) = ptr_kind {
+                    self.implicit_conversion(program, &mut value, value_meta, kind)?;
+                }
 
                 self.emit_flush(body);
                 self.emit_start();
@@ -499,6 +522,94 @@ impl<'function> Context<'function> {
 
         Ok((Some(handle), meta))
     }
+
+    pub fn expr_scalar_kind(
+        &mut self,
+        program: &mut Program,
+        expr: Handle<Expression>,
+        meta: SourceMetadata,
+    ) -> Result<Option<ScalarKind>, ErrorKind> {
+        Ok(program.resolve_type(self, expr, meta)?.scalar_kind())
+    }
+
+    pub fn expr_power(
+        &mut self,
+        program: &mut Program,
+        expr: Handle<Expression>,
+        meta: SourceMetadata,
+    ) -> Result<Option<u32>, ErrorKind> {
+        Ok(self
+            .expr_scalar_kind(program, expr, meta)?
+            .and_then(type_power))
+    }
+
+    pub fn implicit_conversion(
+        &mut self,
+        program: &mut Program,
+        expr: &mut Handle<Expression>,
+        meta: SourceMetadata,
+        kind: ScalarKind,
+    ) -> Result<(), ErrorKind> {
+        if let (Some(tgt_power), Some(expr_power)) =
+            (type_power(kind), self.expr_power(program, *expr, meta)?)
+        {
+            if tgt_power > expr_power {
+                *expr = self.expressions.append(Expression::As {
+                    expr: *expr,
+                    kind,
+                    convert: None,
+                })
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn binary_implicit_conversion(
+        &mut self,
+        program: &mut Program,
+        left: &mut Handle<Expression>,
+        left_meta: SourceMetadata,
+        right: &mut Handle<Expression>,
+        right_meta: SourceMetadata,
+    ) -> Result<(), ErrorKind> {
+        let left_kind = self.expr_scalar_kind(program, *left, left_meta)?;
+        let right_kind = self.expr_scalar_kind(program, *right, right_meta)?;
+
+        if let (Some((left_power, left_kind)), Some((right_power, right_kind))) = (
+            left_kind.and_then(|kind| Some((type_power(kind)?, kind))),
+            right_kind.and_then(|kind| Some((type_power(kind)?, kind))),
+        ) {
+            match left_power.cmp(&right_power) {
+                std::cmp::Ordering::Less => {
+                    *left = self.expressions.append(Expression::As {
+                        expr: *left,
+                        kind: right_kind,
+                        convert: None,
+                    })
+                }
+                std::cmp::Ordering::Equal => {}
+                std::cmp::Ordering::Greater => {
+                    *right = self.expressions.append(Expression::As {
+                        expr: *right,
+                        kind: left_kind,
+                        convert: None,
+                    })
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+fn type_power(kind: ScalarKind) -> Option<u32> {
+    Some(match kind {
+        ScalarKind::Sint => 0,
+        ScalarKind::Uint => 1,
+        ScalarKind::Float => 2,
+        ScalarKind::Bool => return None,
+    })
 }
 
 #[derive(Debug, Clone)]

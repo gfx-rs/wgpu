@@ -1200,6 +1200,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         None
                     }
                     _ => {
+                        // TODO: Implicit conversions
                         let expr = self.parse_expression(ctx, body)?;
                         self.expect(TokenValue::Semicolon)?;
                         Some(ctx.lower_expect(self.program, expr, false, body)?.0)
@@ -1247,6 +1248,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 self.bump()?;
 
                 self.expect(TokenValue::LeftParen)?;
+                // TODO: Implicit conversions
                 let selector = {
                     let expr = self.parse_expression(ctx, body)?;
                     ctx.lower_expect(self.program, expr, false, body)?.0

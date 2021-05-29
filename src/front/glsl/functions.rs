@@ -1,8 +1,8 @@
 use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Binding, Block, BuiltIn, EntryPoint,
     Expression, Function, FunctionArgument, FunctionResult, Handle, MathFunction,
-    RelationalFunction, SampleLevel, ShaderStage, Statement, StructMember, SwizzleComponent, Type,
-    TypeInner,
+    RelationalFunction, SampleLevel, ScalarKind, ShaderStage, Statement, StructMember,
+    SwizzleComponent, Type, TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind, SourceMetadata};
@@ -30,13 +30,12 @@ impl Program<'_> {
                     };
 
                     match self.module.types[ty].inner {
-                        TypeInner::Vector { size, .. } if !is_vec => ctx.add_expression(
-                            Expression::Splat {
-                                size,
-                                value: args[0].0,
-                            },
-                            body,
-                        ),
+                        TypeInner::Vector { size, kind, .. } if !is_vec => {
+                            let (mut value, meta) = args[0];
+                            ctx.implicit_conversion(self, &mut value, meta, kind)?;
+
+                            ctx.add_expression(Expression::Splat { size, value }, body)
+                        }
                         TypeInner::Scalar { kind, width } => ctx.add_expression(
                             Expression::As {
                                 kind,
@@ -74,21 +73,18 @@ impl Program<'_> {
                             // `Expression::As` doesn't support matrix width
                             // casts so we need to do some extra work for casts
 
+                            let (mut value, meta) = args[0];
+                            ctx.implicit_conversion(self, &mut value, meta, ScalarKind::Float)?;
                             let column = match *self.resolve_type(ctx, args[0].0, args[0].1)? {
-                                TypeInner::Scalar { .. } => ctx.add_expression(
-                                    Expression::Splat {
-                                        size: rows,
-                                        value: args[0].0,
-                                    },
-                                    body,
-                                ),
+                                TypeInner::Scalar { .. } => ctx
+                                    .add_expression(Expression::Splat { size: rows, value }, body),
                                 TypeInner::Matrix { .. } => {
                                     let mut components = Vec::new();
 
                                     for n in 0..columns as u32 {
                                         let vector = ctx.add_expression(
                                             Expression::AccessIndex {
-                                                base: args[0].0,
+                                                base: value,
                                                 index: n,
                                             },
                                             body,
@@ -118,7 +114,7 @@ impl Program<'_> {
 
                                     return Ok(Some(h));
                                 }
-                                _ => args[0].0,
+                                _ => value,
                             };
 
                             let columns =
@@ -135,13 +131,16 @@ impl Program<'_> {
                         _ => return Err(ErrorKind::SemanticError(meta, "Bad cast".into())),
                     }
                 } else {
-                    ctx.add_expression(
-                        Expression::Compose {
-                            ty,
-                            components: args.iter().map(|e| e.0).collect(),
-                        },
-                        body,
-                    )
+                    let mut components = Vec::with_capacity(args.len());
+
+                    for (mut arg, meta) in args.iter().copied() {
+                        if let Some(kind) = self.module.types[ty].inner.scalar_kind() {
+                            ctx.implicit_conversion(self, &mut arg, meta, kind)?;
+                        }
+                        components.push(arg)
+                    }
+
+                    ctx.add_expression(Expression::Compose { ty, components }, body)
                 };
 
                 Ok(Some(h))
