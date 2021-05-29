@@ -907,6 +907,38 @@ impl Parser {
                         coordinate,
                         array_index,
                         offset,
+                        level: crate::SampleLevel::Auto,
+                        depth_ref: Some(reference),
+                    }
+                }
+                "textureSampleCompareLevel" => {
+                    lexer.open_arguments()?;
+                    let (image_name, image_span) = lexer.next_ident_with_span()?;
+                    lexer.expect(Token::Separator(','))?;
+                    let (sampler_name, sampler_span) = lexer.next_ident_with_span()?;
+                    lexer.expect(Token::Separator(','))?;
+                    let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let sc = ctx.prepare_sampling(image_name, image_span)?;
+                    let array_index = if sc.arrayed {
+                        lexer.expect(Token::Separator(','))?;
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
+                    };
+                    lexer.expect(Token::Separator(','))?;
+                    let reference = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let offset = if lexer.skip(Token::Separator(',')) {
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
+                    } else {
+                        None
+                    };
+                    lexer.close_arguments()?;
+                    crate::Expression::ImageSample {
+                        image: sc.image,
+                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?,
+                        coordinate,
+                        array_index,
+                        offset,
                         level: crate::SampleLevel::Zero,
                         depth_ref: Some(reference),
                     }
