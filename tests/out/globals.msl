@@ -3,10 +3,12 @@
 
 constexpr constant bool Foo = true;
 struct type2 {
-    float inner[10];
+    float inner[10u];
 };
 
 kernel void main1(
+  threadgroup type2& wg
 ) {
+    wg.inner[3] = 1.0;
     return;
 }

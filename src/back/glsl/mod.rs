@@ -564,6 +564,27 @@ impl<'a, W: Write> Writer<'a, W> {
         self.collect_reflection_info()
     }
 
+    fn write_array_size(&mut self, size: ArraySize) -> BackendResult {
+        write!(self.out, "[")?;
+
+        // Write the array size
+        // Writes nothing if `ArraySize::Dynamic`
+        // Panics if `ArraySize::Constant` has a constant that isn't an uint
+        match size {
+            ArraySize::Constant(const_handle) => match self.module.constants[const_handle].inner {
+                ConstantInner::Scalar {
+                    width: _,
+                    value: ScalarValue::Uint(size),
+                } => write!(self.out, "{}", size)?,
+                _ => unreachable!(),
+            },
+            ArraySize::Dynamic => (),
+        }
+
+        write!(self.out, "]")?;
+        Ok(())
+    }
+
     /// Helper method used to write value types
     ///
     /// # Notes
@@ -615,27 +636,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // GLSL arrays are written as `type name[size]`
             // Current code is written arrays only as `[size]`
             // Base `type` and `name` should be written outside
-            TypeInner::Array { base: _, size, .. } => {
-                write!(self.out, "[")?;
-
-                // Write the array size
-                // Writes nothing if `ArraySize::Dynamic`
-                // Panics if `ArraySize::Constant` has a constant that isn't an uint
-                match size {
-                    ArraySize::Constant(const_handle) => {
-                        match self.module.constants[const_handle].inner {
-                            ConstantInner::Scalar {
-                                width: _,
-                                value: ScalarValue::Uint(size),
-                            } => write!(self.out, "{}", size)?,
-                            _ => unreachable!(),
-                        }
-                    }
-                    ArraySize::Dynamic => (),
-                }
-
-                write!(self.out, "]")?
-            }
+            TypeInner::Array { size, .. } => self.write_array_size(size)?,
             // Panic if either Image, Sampler, Pointer, or a Struct is being written
             //
             // Write all variants instead of `_` so that if new variants are added a
@@ -674,6 +675,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, "{}", name)?;
                 Ok(())
             }
+            // glsl array has the size separated from the base type
+            TypeInner::Array { base, .. } => self.write_type(base),
             ref other => self.write_value_type(other),
         }
     }
@@ -756,14 +759,14 @@ impl<'a, W: Write> Writer<'a, W> {
         // Finally write the global name and end the global with a `;` and a newline
         // Leading space is important
         let global_name = self.get_global_name(handle, global);
-        let global_str =
-            if let Some(default_value) = zero_init_value_str(&self.module.types[global.ty].inner) {
-                format!("{} = {}", global_name, default_value)
-            } else {
-                global_name
-            };
-        writeln!(self.out, " {};", global_str)?;
-        writeln!(self.out)?;
+        write!(self.out, " {}", global_name)?;
+        if let TypeInner::Array { size, .. } = self.module.types[global.ty].inner {
+            self.write_array_size(size)?;
+        }
+        if let Some(default_value) = zero_init_value_str(&self.module.types[global.ty].inner) {
+            write!(self.out, " = {}", default_value)?;
+        };
+        writeln!(self.out, ";")?;
 
         Ok(())
     }
@@ -1117,7 +1120,11 @@ impl<'a, W: Write> Writer<'a, W> {
             write!(self.out, "{}", INDENT)?;
 
             match self.module.types[member.ty].inner {
-                TypeInner::Array { base, .. } => {
+                TypeInner::Array {
+                    base,
+                    size,
+                    stride: _,
+                } => {
                     // GLSL arrays are written as `type name[size]`
                     let ty_name = match self.module.types[base].inner {
                         // Write scalar type by backend so as not to depend on the front-end implementation
@@ -1134,7 +1141,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         &self.names[&NameKey::StructMember(handle, idx as u32)]
                     )?;
                     // Write [size]
-                    self.write_type(member.ty)?;
+                    self.write_array_size(size)?;
                     // Newline is important
                     writeln!(self.out, ";")?;
                 }

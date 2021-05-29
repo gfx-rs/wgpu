@@ -11,18 +11,14 @@ struct type10 {
 };
 
 vec2 v_uv = vec2(0, 0);
-
 vec2 a_uv = vec2(0, 0);
-
 struct gen_gl_PerVertex_block_0 {
     vec4 gen_gl_Position;
     float gen_gl_PointSize;
     float gen_gl_ClipDistance[1];
     float gen_gl_CullDistance[1];
 } perVertexStruct;
-
 vec2 a_pos = vec2(0, 0);
-
 layout(location = 1) in vec2 _p2vs_location1;
 layout(location = 0) in vec2 _p2vs_location0;
 smooth layout(location = 0) out vec2 _vs2fs_location0;

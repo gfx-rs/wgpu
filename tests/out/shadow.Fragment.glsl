@@ -11,11 +11,9 @@ struct Light {
 uniform Globals_block_0 {
     uvec4 num_lights;
 } _group_0_binding_0;
-
 readonly buffer Lights_block_1 {
     Light data[];
 } _group_0_binding_1;
-
 uniform highp sampler2DArrayShadow _group_0_binding_2;
 
 smooth layout(location = 0) in vec3 _vs2fs_location0;

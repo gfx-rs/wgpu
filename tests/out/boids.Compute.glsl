@@ -18,15 +18,12 @@ uniform SimParams_block_0 {
     float rule2Scale;
     float rule3Scale;
 } _group_0_binding_0;
-
 readonly buffer Particles_block_1 {
     Particle particles[];
 } _group_0_binding_1;
-
 buffer Particles_block_2 {
     Particle particles[];
 } _group_0_binding_2;
-
 
 void main() {
     uvec3 global_invocation_id = gl_GlobalInvocationID;
