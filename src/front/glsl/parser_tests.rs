@@ -449,3 +449,22 @@ fn constants() {
 
     assert!(constants.next().is_none());
 }
+
+#[test]
+fn implicit_conversions() {
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Vertex);
+
+    parse_program(
+        r#"
+        #  version 450
+        void main() {
+            mat4 a = mat4(1);
+            float b = 1u;
+            float c = 1 + 2.0;
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+}
