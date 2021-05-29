@@ -1,0 +1,12 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+constexpr constant bool Foo = true;
+struct type2 {
+    float inner[10];
+};
+
+kernel void main1(
+) {
+    return;
+}

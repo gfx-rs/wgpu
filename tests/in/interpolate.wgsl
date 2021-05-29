@@ -1,3 +1,5 @@
+//TODO: mere with "interface"?
+
 struct FragmentInput {
   [[builtin(position)]] position: vec4<f32>;
   [[location(0), interpolate(flat)]] flat : u32;

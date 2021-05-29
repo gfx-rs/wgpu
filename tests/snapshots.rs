@@ -293,6 +293,10 @@ fn convert_wgsl() {
         ),
         //TODO: GLSL https://github.com/gfx-rs/naga/issues/874
         ("interface", Targets::SPIRV | Targets::METAL | Targets::WGSL),
+        (
+            "globals",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

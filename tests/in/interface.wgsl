@@ -1,4 +1,4 @@
-// Testing various parts of the pipeline interface: locations, built-ins, bindings, and entry points
+// Testing various parts of the pipeline interface: locations, built-ins, and entry points
 
 struct VertexOutput {
     [[builtin(position)]] position: vec4<f32>;
