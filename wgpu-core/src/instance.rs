@@ -217,7 +217,8 @@ impl<B: GfxBackend> Adapter<B> {
         let mut features = wgt::Features::default()
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
             | wgt::Features::PUSH_CONSTANTS
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgt::Features::CLEAR_COMMANDS;
         for &(hi, lo) in FEATURE_MAP.iter() {
             features.set(hi, adapter_features.contains(lo));
         }

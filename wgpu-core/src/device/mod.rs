@@ -318,9 +318,8 @@ impl<B: GfxBackend> Device<B> {
         let mem_allocator = alloc::MemoryAllocator::new(mem_props, hal_limits);
         let descriptors = descriptor::DescriptorAllocator::new();
         #[cfg(not(feature = "trace"))]
-        match trace_path {
-            Some(_) => log::error!("Feature 'trace' is not enabled"),
-            None => (),
+        if let Some(_) = trace_path {
+            log::error!("Feature 'trace' is not enabled");
         }
 
         let spv_options = {
@@ -793,7 +792,7 @@ impl<B: GfxBackend> Device<B> {
                 None => match texture.kind {
                     hal::image::Kind::D1(..) => wgt::TextureViewDimension::D1,
                     hal::image::Kind::D2(_, _, depth, _)
-                        if depth > 1 && desc.array_layer_count.is_none() =>
+                        if depth > 1 && desc.range.array_layer_count.is_none() =>
                     {
                         wgt::TextureViewDimension::D2Array
                     }
@@ -803,9 +802,9 @@ impl<B: GfxBackend> Device<B> {
             };
 
         let required_level_count =
-            desc.base_mip_level + desc.mip_level_count.map_or(1, |count| count.get());
-        let required_layer_count =
-            desc.base_array_layer + desc.array_layer_count.map_or(1, |count| count.get());
+            desc.range.base_mip_level + desc.range.mip_level_count.map_or(1, |count| count.get());
+        let required_layer_count = desc.range.base_array_layer
+            + desc.range.array_layer_count.map_or(1, |count| count.get());
         let level_end = texture.full_range.levels.end;
         let layer_end = texture.full_range.layers.end;
         if required_level_count > level_end as u32 {
@@ -821,7 +820,7 @@ impl<B: GfxBackend> Device<B> {
             });
         };
 
-        let aspects = match desc.aspect {
+        let aspects = match desc.range.aspect {
             wgt::TextureAspect::All => texture.aspects,
             wgt::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
             wgt::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
@@ -834,14 +833,16 @@ impl<B: GfxBackend> Device<B> {
         }
 
         let end_level = desc
+            .range
             .mip_level_count
             .map_or(level_end, |_| required_level_count as u8);
         let end_layer = desc
+            .range
             .array_layer_count
             .map_or(layer_end, |_| required_layer_count as u16);
         let selector = TextureSelector {
-            levels: desc.base_mip_level as u8..end_level,
-            layers: desc.base_array_layer as u16..end_layer,
+            levels: desc.range.base_mip_level as u8..end_level,
+            layers: desc.range.base_array_layer as u16..end_layer,
         };
 
         let view_layer_count = (selector.layers.end - selector.layers.start) as u32;
@@ -863,12 +864,15 @@ impl<B: GfxBackend> Device<B> {
         let format = desc.format.unwrap_or(texture.format);
         let range = hal::image::SubresourceRange {
             aspects,
-            level_start: desc.base_mip_level as _,
-            level_count: desc.mip_level_count.map(|v| v.get() as _),
-            layer_start: desc.base_array_layer as _,
-            layer_count: desc.array_layer_count.map(|v| v.get() as _),
+            level_start: desc.range.base_mip_level as _,
+            level_count: desc.range.mip_level_count.map(|v| v.get() as _),
+            layer_start: desc.range.base_array_layer as _,
+            layer_count: desc.range.array_layer_count.map(|v| v.get() as _),
         };
-        let hal_extent = texture.kind.extent().at_level(desc.base_mip_level as _);
+        let hal_extent = texture
+            .kind
+            .extent()
+            .at_level(desc.range.base_mip_level as _);
 
         let raw = unsafe {
             self.raw
@@ -3872,6 +3876,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &device.raw,
                 device.limits.clone(),
                 device.downlevel,
+                device.features,
                 device.private_features,
                 &desc.label,
                 #[cfg(feature = "trace")]

@@ -142,6 +142,15 @@ pub enum Command {
         dst: crate::command::ImageCopyTexture,
         size: wgt::Extent3d,
     },
+    ClearBuffer {
+        dst: id::BufferId,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
+    },
+    ClearImage {
+        dst: id::TextureId,
+        subresource_range: wgt::ImageSubresourceRange,
+    },
     WriteTimestamp {
         query_set_id: id::QuerySetId,
         query_index: u32,

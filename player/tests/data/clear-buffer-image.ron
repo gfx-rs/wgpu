@@ -1,0 +1,98 @@
+(
+    features: (bits: 0x0000_0001_0000_0000),
+    expectations: [
+        (
+            name: "Quad",
+            buffer: (index: 0, epoch: 1),
+            offset: 0,
+            data: File("clear-image.bin", 16384),
+        ),
+        (
+            name: "buffer clear",
+            buffer: (index: 1, epoch: 1),
+            offset: 0,
+            data: Raw([
+                0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00,
+            ]),
+        )
+    ],
+    actions: [
+        CreateTexture(Id(0, 1, Empty), (
+            label: Some("Output Texture"),
+            size: (
+                width: 64,
+                height: 64,
+                depth_or_array_layers: 1,
+            ),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: D2,
+            format: Rgba8Unorm,
+            usage: (
+                bits: 27,
+            ),
+        )),
+        CreateBuffer(
+            Id(0, 1, Empty),
+            (
+                label: Some("Output Buffer"),
+                size: 16384,
+                usage: (
+                    bits: 9,
+                ),
+                mapped_at_creation: false,
+            ),
+        ),
+        CreateBuffer(
+            Id(1, 1, Empty),
+            (
+                label: Some("Buffer to be cleared"),
+                size: 16,
+                usage: (
+                    bits: 41,
+                ),
+                mapped_at_creation: false,
+            ),
+        ),
+        Submit(1, [
+            ClearImage(
+                dst: Id(0, 1, Empty),
+                subresource_range: ImageSubresourceRange(
+                    aspect: All,
+                    base_mip_level: 0,
+                    mip_level_count: None,
+                    base_array_layer: 0,
+                    array_layer_count: None,
+                ),
+            ),
+            CopyTextureToBuffer(
+                src: (
+                    texture: Id(0, 1, Empty),
+                    mip_level: 0,
+                    array_layer: 0,
+                ),
+                dst:  (
+                    buffer: Id(0, 1, Empty),
+                    layout: (
+                        offset: 0,
+                        bytes_per_row: Some(256),
+                        rows_per_image: None,
+                    ),
+                ),
+                size: (
+                    width: 64,
+                    height: 64,
+                    depth_or_array_layers: 1,
+                ),
+            ),
+            ClearBuffer(
+                dst: Id(1, 1, Empty),
+                offset: 4,
+                size: Some(8),
+            )
+        ]),
+    ],
+)

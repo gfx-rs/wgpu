@@ -5,6 +5,7 @@
 mod allocator;
 mod bind;
 mod bundle;
+mod clear;
 mod compute;
 mod draw;
 mod query;
@@ -50,6 +51,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     limits: wgt::Limits,
     downlevel: wgt::DownlevelProperties,
     private_features: PrivateFeatures,
+    support_fill_buffer_texture: bool,
     has_labels: bool,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<crate::device::trace::Command>>,

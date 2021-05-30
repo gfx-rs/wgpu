@@ -38,7 +38,7 @@ pub type DynamicOffset = u32;
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 /// Bound uniform/storage buffer offsets must be aligned to this number.
 pub const BIND_BUFFER_ALIGNMENT: BufferAddress = 256;
-/// Buffer to buffer copy offsets and sizes must be aligned to this number.
+/// Buffer to buffer copy as well as buffer clear offsets and sizes must be aligned to this number.
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
 /// Size to align mappings.
 pub const MAP_ALIGNMENT: BufferAddress = 8;
@@ -535,6 +535,14 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const VERTEX_WRITABLE_STORAGE = 0x0000_0020_0000_0000;
+        /// Enables clear to zero for buffers & images.
+        ///
+        /// Supported platforms:
+        /// - All
+        ///
+        /// This is a native only feature.
+        const CLEAR_COMMANDS = 0x0000_0001_0000_0000;
+
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).
@@ -2163,7 +2171,7 @@ bitflags::bitflags! {
         /// operation.
         const COPY_SRC = 4;
         /// Allow a buffer to be the destination buffer for a [`CommandEncoder::copy_buffer_to_buffer`], [`CommandEncoder::copy_texture_to_buffer`],
-        /// or [`Queue::write_buffer`] operation.
+        /// [`CommandEncoder::fill_buffer`] or [`Queue::write_buffer`] operation.
         const COPY_DST = 8;
         /// Allow a buffer to be the index buffer in a draw operation.
         const INDEX = 16;
@@ -2990,6 +2998,28 @@ pub struct ImageCopyTexture<T> {
     /// The base texel of the texture in the selected `mip_level`.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub origin: Origin3d,
+}
+
+/// Subresource range within an image
+#[repr(C)]
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct ImageSubresourceRange {
+    /// Aspect of the texture. Color textures must be [`TextureAspect::All`](wgt::TextureAspect::All).
+    pub aspect: TextureAspect,
+    /// Base mip level.
+    pub base_mip_level: u32,
+    /// Mip level count.
+    /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
+    /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
+    pub mip_level_count: Option<NonZeroU32>,
+    /// Base array layer.
+    pub base_array_layer: u32,
+    /// Layer count.
+    /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
+    /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
+    pub array_layer_count: Option<NonZeroU32>,
 }
 
 /// Color variation to use when sampler addressing mode is [`AddressMode::ClampToBorder`]
