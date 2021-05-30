@@ -34,9 +34,9 @@ pub enum ClearError {
     InvalidBuffer(BufferId),
     #[error("texture {0:?} is invalid or destroyed")]
     InvalidTexture(TextureId),
-    #[error("buffer clear size {0:?} is not a multiple of 4")]
+    #[error("buffer clear size {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
     UnalignedFillSize(BufferSize),
-    #[error("buffer offset {0:?} is not a multiple of 4")]
+    #[error("buffer offset {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
     #[error("clear of {start_offset}..{end_offset} would end up overrunning the bounds of the buffer of size {buffer_size}")]
     BufferOverrun {
@@ -107,11 +107,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // Check if offset & size are valid.
-        if offset % 4 != 0 {
+        if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(ClearError::UnalignedBufferOffset(offset));
         }
         if let Some(size) = size {
-            if size.get() % 4 != 0 {
+            if size.get() % wgt::COPY_BUFFER_ALIGNMENT != 0 {
                 return Err(ClearError::UnalignedFillSize(size));
             }
             let destination_end_offset = offset + size.get();
