@@ -576,7 +576,15 @@ impl super::Validator {
                 let left_inner = resolver.resolve(left)?;
                 let right_inner = resolver.resolve(right)?;
                 let good = match op {
-                    Bo::Add | Bo::Subtract | Bo::Divide | Bo::Modulo => match *left_inner {
+                    Bo::Add | Bo::Subtract => match *left_inner {
+                        Ti::Scalar { kind, .. } | Ti::Vector { kind, .. } => match kind {
+                            Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
+                            Sk::Bool => false,
+                        },
+                        Ti::Matrix { .. } => left_inner == right_inner,
+                        _ => false,
+                    },
+                    Bo::Divide | Bo::Modulo => match *left_inner {
                         Ti::Scalar { kind, .. } | Ti::Vector { kind, .. } => match kind {
                             Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
                             Sk::Bool => false,
