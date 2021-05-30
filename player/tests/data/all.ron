@@ -3,8 +3,7 @@
 	tests: [
 		"bind-group.ron",
 		"buffer-copy.ron",
-		"buffer-clear.ron",
-		"image-clear.ron",
+		"clear-buffer-image.ron",
 		"buffer-zero-init.ron",
 		"quad.ron",
 	],

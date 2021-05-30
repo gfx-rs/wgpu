@@ -5,7 +5,18 @@
             name: "Quad",
             buffer: (index: 0, epoch: 1),
             offset: 0,
-            data: File("image-clear.bin", 16384),
+            data: File("clear-image.bin", 16384),
+        ),
+        (
+            name: "buffer clear",
+            buffer: (index: 1, epoch: 1),
+            offset: 0,
+            data: Raw([
+                0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00,
+            ]),
         )
     ],
     actions: [
@@ -31,6 +42,17 @@
                 size: 16384,
                 usage: (
                     bits: 9,
+                ),
+                mapped_at_creation: false,
+            ),
+        ),
+        CreateBuffer(
+            Id(1, 1, Empty),
+            (
+                label: Some("Buffer to be cleared"),
+                size: 16,
+                usage: (
+                    bits: 41,
                 ),
                 mapped_at_creation: false,
             ),
@@ -66,6 +88,11 @@
                     depth_or_array_layers: 1,
                 ),
             ),
+            ClearBuffer(
+                dst: Id(1, 1, Empty),
+                offset: 4,
+                size: Some(8),
+            )
         ]),
     ],
 )
