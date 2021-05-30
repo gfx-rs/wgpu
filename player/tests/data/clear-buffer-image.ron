@@ -61,11 +61,11 @@
             ClearImage(
                 dst: Id(0, 1, Empty),
                 subresource_range: ImageSubresourceRange(
-                    aspects: All,
-                    level_start: 0,
-                    level_count: None,
-                    layer_start: 0,
-                    layer_count: None,
+                    aspect: All,
+                    base_mip_level: 0,
+                    mip_level_count: None,
+                    base_array_layer: 0,
+                    array_layer_count: None,
                 ),
             ),
             CopyTextureToBuffer(

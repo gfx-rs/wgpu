@@ -3000,28 +3000,26 @@ pub struct ImageCopyTexture<T> {
     pub origin: Origin3d,
 }
 
-/// Subresource range within an image, used for clear_image
+/// Subresource range within an image
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageSubresourceRange {
-    /// Included aspects: color/depth/stencil
-    pub aspects: TextureAspect,
-    /// First mipmap level in this subresource
-    pub level_start: u8,
-    /// Number of sequential levels in this subresource.
-    ///
-    /// A value of `None` indicates the subresource contains
-    /// all of the remaining levels.
-    pub level_count: Option<u8>,
-    /// First layer in this subresource
-    pub layer_start: u16,
-    /// Number of sequential layers in this subresource.
-    ///
-    /// A value of `None` indicates the subresource contains
-    /// all of the remaining layers.
-    pub layer_count: Option<u16>,
+    /// Aspect of the texture. Color textures must be [`TextureAspect::All`](wgt::TextureAspect::All).
+    pub aspect: TextureAspect,
+    /// Base mip level.
+    pub base_mip_level: u32,
+    /// Mip level count.
+    /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
+    /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
+    pub mip_level_count: Option<NonZeroU32>,
+    /// Base array layer.
+    pub base_array_layer: u32,
+    /// Layer count.
+    /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
+    /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
+    pub array_layer_count: Option<NonZeroU32>,
 }
 
 /// Color variation to use when sampler addressing mode is [`AddressMode::ClampToBorder`]

@@ -14,12 +14,7 @@ use crate::{
 
 use thiserror::Error;
 
-use std::{
-    borrow::Borrow,
-    num::{NonZeroU32, NonZeroU8},
-    ops::Range,
-    ptr::NonNull,
-};
+use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
 
 bitflags::bitflags! {
     /// The internal enum mirrored from `BufferUsage`. The values don't have to match!
@@ -297,20 +292,8 @@ pub struct TextureViewDescriptor<'a> {
     /// The dimension of the texture view. For 1D textures, this must be `1D`. For 2D textures it must be one of
     /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `3D`
     pub dimension: Option<wgt::TextureViewDimension>,
-    /// Aspect of the texture. Color textures must be [`TextureAspect::All`](wgt::TextureAspect::All).
-    pub aspect: wgt::TextureAspect,
-    /// Base mip level.
-    pub base_mip_level: u32,
-    /// Mip level count.
-    /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
-    /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
-    pub mip_level_count: Option<NonZeroU32>,
-    /// Base array layer.
-    pub base_array_layer: u32,
-    /// Layer count.
-    /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
-    /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
-    pub array_layer_count: Option<NonZeroU32>,
+    /// Range within the texture that is accessible via this view.
+    pub range: wgt::ImageSubresourceRange,
 }
 
 #[derive(Debug)]

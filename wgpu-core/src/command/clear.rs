@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use std::ops::Range;
+use std::{num::NonZeroU32, ops::Range};
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
@@ -52,18 +52,18 @@ pub enum ClearError {
         subresource_range_aspects: TextureAspect,
     },
     #[error("image subresource level range is outside of the texture's level range. texture range is {texture_level_range:?},  \
-whereas subesource range specified start {subresource_level_start} and count {subresource_level_count:?}")]
+whereas subesource range specified start {subresource_base_mip_level} and count {subresource_mip_level_count:?}")]
     InvalidTextureLevelRange {
         texture_level_range: Range<hal::image::Level>,
-        subresource_level_start: hal::image::Level,
-        subresource_level_count: Option<hal::image::Level>,
+        subresource_base_mip_level: u32,
+        subresource_mip_level_count: Option<NonZeroU32>,
     },
     #[error("image subresource layer range is outside of the texture's layer range. texture range is {texture_layer_range:?},  \
-whereas subesource range specified start {subresource_layer_start} and count {subresource_layer_count:?}")]
+whereas subesource range specified start {subresource_base_array_layer} and count {subresource_array_layer_count:?}")]
     InvalidTextureLayerRange {
         texture_layer_range: Range<hal::image::Layer>,
-        subresource_layer_start: hal::image::Layer,
-        subresource_layer_count: Option<hal::image::Layer>,
+        subresource_base_array_layer: u32,
+        subresource_array_layer_count: Option<NonZeroU32>,
     },
 }
 
@@ -198,7 +198,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| ClearError::InvalidTexture(dst))?;
 
         // Check if subresource aspects are valid.
-        let aspects = match subresource_range.aspects {
+        let aspects = match subresource_range.aspect {
             wgt::TextureAspect::All => dst_texture.aspects,
             wgt::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
             wgt::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
@@ -206,37 +206,37 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !dst_texture.aspects.contains(aspects) {
             return Err(ClearError::MissingTextureAspect {
                 texture_aspects: dst_texture.aspects,
-                subresource_range_aspects: subresource_range.aspects,
+                subresource_range_aspects: subresource_range.aspect,
             });
         };
         // Check if subresource level range is valid
-        let subresource_level_end = if let Some(count) = subresource_range.level_count {
-            subresource_range.level_start + count
+        let subresource_level_end = if let Some(count) = subresource_range.mip_level_count {
+            (subresource_range.base_mip_level + count.get()) as u8
         } else {
             dst_texture.full_range.levels.end
         };
-        if dst_texture.full_range.levels.start > subresource_range.level_start
+        if dst_texture.full_range.levels.start > subresource_range.base_mip_level as u8
             || dst_texture.full_range.levels.end < subresource_level_end
         {
             return Err(ClearError::InvalidTextureLevelRange {
                 texture_level_range: dst_texture.full_range.levels.clone(),
-                subresource_level_start: subresource_range.level_start,
-                subresource_level_count: subresource_range.level_count,
+                subresource_base_mip_level: subresource_range.base_mip_level,
+                subresource_mip_level_count: subresource_range.mip_level_count,
             });
         }
         // Check if subresource layer range is valid
-        let subresource_layer_end = if let Some(count) = subresource_range.layer_count {
-            subresource_range.layer_start + count
+        let subresource_layer_end = if let Some(count) = subresource_range.array_layer_count {
+            (subresource_range.base_array_layer + count.get()) as u16
         } else {
             dst_texture.full_range.layers.end
         };
-        if dst_texture.full_range.layers.start > subresource_range.layer_start
+        if dst_texture.full_range.layers.start > subresource_range.base_array_layer as u16
             || dst_texture.full_range.layers.end < subresource_layer_end
         {
             return Err(ClearError::InvalidTextureLayerRange {
                 texture_layer_range: dst_texture.full_range.layers.clone(),
-                subresource_layer_start: subresource_range.layer_start,
-                subresource_layer_count: subresource_range.layer_count,
+                subresource_base_array_layer: subresource_range.base_array_layer,
+                subresource_array_layer_count: subresource_range.array_layer_count,
             });
         }
 
@@ -248,8 +248,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &*texture_guard,
                 dst,
                 TextureSelector {
-                    levels: subresource_range.level_start..subresource_level_end,
-                    layers: subresource_range.layer_start..subresource_layer_end,
+                    levels: subresource_range.base_mip_level as u8..subresource_level_end,
+                    layers: subresource_range.base_array_layer as u16..subresource_layer_end,
                 },
                 TextureUse::COPY_DST,
             )
@@ -283,10 +283,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 },
                 std::iter::once(hal::image::SubresourceRange {
                     aspects,
-                    level_start: subresource_range.level_start,
-                    level_count: subresource_range.level_count,
-                    layer_start: subresource_range.layer_start,
-                    layer_count: subresource_range.layer_count,
+                    level_start: subresource_range.base_mip_level as u8,
+                    level_count: subresource_range.mip_level_count.map(|c| c.get() as u8),
+                    layer_start: subresource_range.base_array_layer as u16,
+                    layer_count: subresource_range.array_layer_count.map(|c| c.get() as u16),
                 }),
             );
         }
