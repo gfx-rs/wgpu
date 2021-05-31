@@ -569,7 +569,11 @@ impl FunctionInfo {
                 S::Break | S::Continue => FunctionUniformity::new(),
                 S::Kill => FunctionUniformity {
                     result: Uniformity::new(),
-                    exit: ExitFlags::MAY_KILL,
+                    exit: if disruptor.is_some() {
+                        ExitFlags::MAY_KILL
+                    } else {
+                        ExitFlags::empty()
+                    },
                 },
                 S::Barrier(_) => FunctionUniformity {
                     result: Uniformity {
@@ -633,8 +637,11 @@ impl FunctionInfo {
                         non_uniform_result: value.and_then(|expr| self.add_ref(expr)),
                         requirements: UniformityRequirements::empty(),
                     },
-                    //TODO: if we are in the uniform control flow, should this still be an exit flag?
-                    exit: ExitFlags::MAY_RETURN,
+                    exit: if disruptor.is_some() {
+                        ExitFlags::MAY_RETURN
+                    } else {
+                        ExitFlags::empty()
+                    },
                 },
                 // Here and below, the used expressions are already emitted,
                 // and their results do not affect the function return value,
