@@ -10,6 +10,7 @@ use crate::{
     LabelHelpers, LifeGuard, PrivateFeatures, Stored, DOWNLEVEL_WARNING_MESSAGE, MAX_BIND_GROUPS,
 };
 
+use std::{any::Any, sync::Arc};
 use wgt::{Backend, BackendBit, PowerPreference, BIND_BUFFER_ALIGNMENT};
 
 use hal::{
@@ -483,7 +484,7 @@ impl<B: GfxBackend> Adapter<B> {
                 }
             })?;
 
-        self.device_from_gpu(self_id, gpu, desc, trace_path)
+        self.device_from_gpu(self_id, gpu, desc, trace_path, None)
     }
 
     fn verify(&self, desc: &DeviceDescriptor) -> Result<(), RequestDeviceError> {
@@ -543,6 +544,7 @@ impl<B: GfxBackend> Adapter<B> {
         mut gpu: hal::adapter::Gpu<B>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
+        guard: Option<Arc<dyn Any + Send + Sync>>,
     ) -> Result<Device<B>, RequestDeviceError> {
         let phd = &self.raw.physical_device;
 
@@ -580,6 +582,7 @@ impl<B: GfxBackend> Adapter<B> {
             self.downlevel,
             desc,
             trace_path,
+            guard,
         )
         .or(Err(RequestDeviceError::OutOfMemory))
     }
@@ -602,6 +605,7 @@ impl Adapter<backend::Vulkan> {
         queue_family_index: u32,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
+        guard: Arc<dyn Any + Send + Sync>,
     ) -> Device<backend::Vulkan> {
         self.verify(desc).unwrap();
 
@@ -618,7 +622,7 @@ impl Adapter<backend::Vulkan> {
         let enabled_features = Self::get_features(phd, desc);
         let gpu = phd.gpu_from_raw(device, &[(family, &[1.0])], enabled_features).unwrap();
 
-        self.device_from_gpu(self_id, gpu, desc, trace_path).unwrap()
+        self.device_from_gpu(self_id, gpu, desc, trace_path, Some(guard)).unwrap()
     }
 }
 
@@ -1110,6 +1114,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_family_index: u32,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
+        guard: Arc<dyn Any + Send + Sync>,
         id_in: Input<G, DeviceId>,
     ) -> DeviceId {
         let hub = backend::Vulkan::hub(self);
@@ -1124,6 +1129,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             queue_family_index,
             desc,
             trace_path,
+            guard,
         );
         fid.assign(device, &mut token).0
     }

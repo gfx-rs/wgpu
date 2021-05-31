@@ -29,6 +29,7 @@ use thiserror::Error;
 use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat, TextureViewDimension};
 
 use std::{
+    any::Any,
     borrow::Cow,
     collections::{hash_map::Entry, BTreeMap},
     iter,
@@ -36,7 +37,7 @@ use std::{
     mem,
     ops::Range,
     ptr,
-    sync::atomic::Ordering,
+    sync::{atomic::Ordering, Arc},
 };
 
 pub mod alloc;
@@ -291,6 +292,7 @@ pub struct Device<B: hal::Backend> {
     pending_writes: queue::PendingWrites<B>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<trace::Trace>>,
+    guard: Option<Arc<dyn Any + Send + Sync>>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -311,6 +313,7 @@ impl<B: GfxBackend> Device<B> {
         downlevel: wgt::DownlevelProperties,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
+        guard: Option<Arc<dyn Any + Send + Sync>>,
     ) -> Result<Self, CreateDeviceError> {
         let cmd_allocator = command::CommandAllocator::new(queue_group.family, &raw)
             .or(Err(CreateDeviceError::OutOfMemory))?;
@@ -389,6 +392,7 @@ impl<B: GfxBackend> Device<B> {
             downlevel,
             spv_options,
             pending_writes: queue::PendingWrites::new(),
+            guard,
         })
     }
 
