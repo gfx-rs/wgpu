@@ -19,7 +19,7 @@ use crate::{
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     pipeline::PipelineFlags,
     resource::{BufferUse, Texture, TextureUse, TextureView, TextureViewInner},
-    track::{TextureSelector, TrackerSet, UsageConflict},
+    track::{StatefulTrackerSubset, TextureSelector, UsageConflict},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
     },
@@ -504,7 +504,7 @@ struct RenderAttachment<'a> {
 
 struct RenderPassInfo<'a, B: hal::Backend> {
     context: RenderPassContext,
-    trackers: TrackerSet,
+    trackers: StatefulTrackerSubset,
     render_attachments: AttachmentDataVec<RenderAttachment<'a>>,
     used_swap_chain: Option<Stored<id::SwapChainId>>,
     is_ds_read_only: bool,
@@ -517,7 +517,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         raw: &mut B::CommandBuffer,
         color_attachments: &[RenderPassColorAttachment],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
-        cmd_buf: &CommandBuffer<B>,
+        cmd_buf: &mut CommandBuffer<B>,
         device: &Device<B>,
         view_guard: &'a Storage<TextureView<B>, id::TextureViewId>,
     ) -> Result<Self, RenderPassErrorInner> {
@@ -536,7 +536,6 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         let mut sample_count = 0;
         let mut depth_stencil_aspects = hal::format::Aspects::empty();
         let mut used_swap_chain = None::<Stored<id::SwapChainId>>;
-        let mut trackers = TrackerSet::new(B::VARIANT);
 
         let mut add_view = |view: &TextureView<B>, type_name| {
             if let Some(ex) = extent {
@@ -564,7 +563,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         let rp_key = {
             let depth_stencil = match depth_stencil_attachment {
                 Some(at) => {
-                    let view = trackers
+                    let view = cmd_buf
+                        .trackers
                         .views
                         .use_extend(&*view_guard, at.view, (), ())
                         .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
@@ -627,7 +627,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             let mut resolves = ArrayVec::new();
 
             for at in color_attachments {
-                let view = trackers
+                let view = cmd_buf
+                    .trackers
                     .views
                     .use_extend(&*view_guard, at.view, (), ())
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
@@ -690,7 +691,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             }
 
             for resolve_target in color_attachments.iter().flat_map(|at| at.resolve_target) {
-                let view = trackers
+                let view = cmd_buf
+                    .trackers
                     .views
                     .use_extend(&*view_guard, resolve_target, (), ())
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))?;
@@ -961,7 +963,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
 
         Ok(Self {
             context,
-            trackers,
+            trackers: StatefulTrackerSubset::new(B::VARIANT),
             render_attachments,
             used_swap_chain,
             is_ds_read_only,
@@ -973,7 +975,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
     fn finish(
         mut self,
         texture_guard: &Storage<Texture<B>, id::TextureId>,
-    ) -> Result<(TrackerSet, Option<Stored<id::SwapChainId>>), RenderPassErrorInner> {
+    ) -> Result<(StatefulTrackerSubset, Option<Stored<id::SwapChainId>>), RenderPassErrorInner>
+    {
         profiling::scope!("finish", "RenderPassInfo");
 
         for ra in self.render_attachments {
@@ -1122,7 +1125,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                         dynamic_offset_count += num_dynamic_offsets as usize;
 
-                        let bind_group = info
+                        let bind_group = cmd_buf
                             .trackers
                             .bind_groups
                             .use_extend(&*bind_group_guard, bind_group_id, (), ())
@@ -1132,9 +1135,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .validate_dynamic_bindings(&temp_offsets)
                             .map_pass_err(scope)?;
 
+                        // merge the resource tracker in
                         info.trackers
                             .merge_extend(&bind_group.used)
                             .map_pass_err(scope)?;
+                        cmd_buf.trackers.merge_extend_stateless(&bind_group.used);
 
                         cmd_buf.buffer_memory_init_actions.extend(
                             bind_group.used_buffer_ranges.iter().filter_map(|action| {
@@ -1184,7 +1189,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             continue;
                         }
 
-                        let pipeline = info
+                        let pipeline = cmd_buf
                             .trackers
                             .render_pipes
                             .use_extend(&*pipeline_guard, pipeline_id, (), ())
@@ -1826,7 +1831,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let scope = PassErrorScope::WriteTimestamp;
 
-                        let query_set = info
+                        let query_set = cmd_buf
                             .trackers
                             .query_sets
                             .use_extend(&*query_set_guard, query_set_id, (), ())
@@ -1853,7 +1858,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                        let query_set = info
+                        let query_set = cmd_buf
                             .trackers
                             .query_sets
                             .use_extend(&*query_set_guard, query_set_id, (), ())
@@ -1887,7 +1892,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::ExecuteBundle(bundle_id) => {
                         let scope = PassErrorScope::ExecuteBundle;
-                        let bundle = info
+                        let bundle = cmd_buf
                             .trackers
                             .bundles
                             .use_extend(&*bundle_guard, bundle_id, (), ())
@@ -1984,7 +1989,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         super::CommandBuffer::insert_barriers(
             last_cmd_buf,
             &mut cmd_buf.trackers,
-            &trackers,
+            &trackers.buffers,
+            &trackers.textures,
             &*buffer_guard,
             &*texture_guard,
         );

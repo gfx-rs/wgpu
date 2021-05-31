@@ -12,7 +12,7 @@ use crate::{
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, BufferUse, Texture},
-    track::{TrackerSet, UsageConflict},
+    track::{StatefulTrackerSubset, TrackerSet, UsageConflict},
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label, DOWNLEVEL_ERROR_WARNING_MESSAGE,
 };
@@ -193,7 +193,7 @@ where
 struct State {
     binder: Binder,
     pipeline: StateChange<id::ComputePipelineId>,
-    trackers: TrackerSet,
+    trackers: StatefulTrackerSubset,
     debug_scope_depth: u32,
 }
 
@@ -223,6 +223,7 @@ impl State {
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
             self.trackers.merge_extend(&bind_group_guard[id].used)?;
+            base_trackers.merge_extend_stateless(&bind_group_guard[id].used);
         }
 
         log::trace!("Encoding dispatch barriers");
@@ -230,7 +231,8 @@ impl State {
         CommandBuffer::insert_barriers(
             raw_cmd_buf,
             base_trackers,
-            &self.trackers,
+            &self.trackers.buffers,
+            &self.trackers.textures,
             buffer_guard,
             texture_guard,
         );
@@ -303,7 +305,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut state = State {
             binder: Binder::new(),
             pipeline: StateChange::new(),
-            trackers: TrackerSet::new(B::VARIANT),
+            trackers: StatefulTrackerSubset::new(B::VARIANT),
             debug_scope_depth: 0,
         };
         let mut temp_offsets = Vec::new();

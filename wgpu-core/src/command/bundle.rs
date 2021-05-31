@@ -214,7 +214,7 @@ impl RenderBundleEncoder {
                     state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
                     state
                         .trackers
-                        .merge_extend(&bind_group.used)
+                        .merge_extend_all(&bind_group.used)
                         .map_pass_err(scope)?;
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
