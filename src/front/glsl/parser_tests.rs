@@ -4,6 +4,7 @@ use super::lex::Lexer;
 use super::parser;
 use super::{ast::Profile, error::ErrorKind};
 use super::{ast::Program, SourceMetadata};
+use crate::front::glsl::error::ExpectedToken;
 use crate::{
     front::glsl::{token::TokenValue, Token},
     ShaderStage,
@@ -50,10 +51,13 @@ fn version() {
         parse_program("#version 450\nvoid f(){} #version 450", &entry_points)
             .err()
             .unwrap(),
-        ErrorKind::InvalidToken(Token {
-            value: TokenValue::Unknown(PreprocessorError::UnexpectedHash),
-            meta: SourceMetadata { start: 24, end: 25 }
-        })
+        ErrorKind::InvalidToken(
+            Token {
+                value: TokenValue::Unknown(PreprocessorError::UnexpectedHash),
+                meta: SourceMetadata { start: 24, end: 25 }
+            },
+            vec![ExpectedToken::EOF]
+        )
     );
 
     // valid versions

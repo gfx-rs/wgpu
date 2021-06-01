@@ -11,9 +11,9 @@ use super::{
     Program,
 };
 use crate::{
-    arena::Handle, Arena, ArraySize, BinaryOperator, Block, Constant, ConstantInner, Expression,
-    Function, FunctionResult, ResourceBinding, ScalarValue, Statement, StorageClass, StructMember,
-    SwitchCase, Type, TypeInner, UnaryOperator,
+    arena::Handle, front::glsl::error::ExpectedToken, Arena, ArraySize, BinaryOperator, Block,
+    Constant, ConstantInner, Expression, Function, FunctionResult, ResourceBinding, ScalarValue,
+    Statement, StorageClass, StructMember, SwitchCase, Type, TypeInner, UnaryOperator,
 };
 use core::convert::TryFrom;
 use std::{iter::Peekable, mem};
@@ -38,7 +38,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
         match token.value {
             TokenValue::Identifier(name) => Ok((name, token.meta)),
-            _ => Err(ErrorKind::InvalidToken(token)),
+            _ => Err(ErrorKind::InvalidToken(
+                token,
+                vec![ExpectedToken::Identifier],
+            )),
         }
     }
 
@@ -46,7 +49,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let token = self.bump()?;
 
         if token.value != value {
-            Err(ErrorKind::InvalidToken(token))
+            Err(ErrorKind::InvalidToken(token, vec![value.into()]))
         } else {
             Ok(token)
         }
@@ -90,7 +93,12 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 440 | 450 | 460 => self.program.version = i.value as u16,
                 _ => return Err(ErrorKind::InvalidVersion(version.meta, i.value)),
             },
-            _ => return Err(ErrorKind::InvalidToken(version)),
+            _ => {
+                return Err(ErrorKind::InvalidToken(
+                    version,
+                    vec![ExpectedToken::IntLiteral],
+                ))
+            }
         }
 
         let profile = self.lexer.peek();
@@ -155,7 +163,16 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 Some(ty) => Some(*ty),
                 None => return Err(ErrorKind::UnknownType(token.meta, ident)),
             },
-            _ => return Err(ErrorKind::InvalidToken(token)),
+            _ => {
+                return Err(ErrorKind::InvalidToken(
+                    token,
+                    vec![
+                        TokenValue::Void.into(),
+                        TokenValue::Struct.into(),
+                        ExpectedToken::TypeName,
+                    ],
+                ))
+            }
         };
 
         let size = self.parse_array_specifier()?;
@@ -363,7 +380,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 Ok(())
             }
             // TODO: handle Shared?
-            _ => Err(ErrorKind::InvalidToken(token)),
+            _ => Err(ErrorKind::InvalidToken(
+                token,
+                vec![ExpectedToken::Identifier],
+            )),
         }
     }
 
@@ -405,7 +425,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             let token = self.bump()?;
             match token.value {
                 TokenValue::Semicolon if self.program.version == 460 => Ok(()),
-                _ => Err(ErrorKind::InvalidToken(token)),
+                _ => {
+                    let expected = match self.program.version {
+                        460 => vec![TokenValue::Semicolon.into(), ExpectedToken::EOF],
+                        _ => vec![ExpectedToken::EOF],
+                    };
+                    Err(ErrorKind::InvalidToken(token, expected))
+                }
             }
         } else {
             Ok(())
@@ -479,7 +505,12 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         meta = meta.union(&token.meta);
                         break;
                     }
-                    _ => return Err(ErrorKind::InvalidToken(token)),
+                    _ => {
+                        return Err(ErrorKind::InvalidToken(
+                            token,
+                            vec![TokenValue::Comma.into(), TokenValue::RightBrace.into()],
+                        ))
+                    }
                 }
             }
 
@@ -534,7 +565,12 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             let name = match token.value {
                 TokenValue::Semicolon => break,
                 TokenValue::Identifier(name) => name,
-                _ => return Err(ErrorKind::InvalidToken(token)),
+                _ => {
+                    return Err(ErrorKind::InvalidToken(
+                        token,
+                        vec![ExpectedToken::Identifier, TokenValue::Semicolon.into()],
+                    ))
+                }
             };
             let mut meta = token.meta;
 
@@ -581,7 +617,12 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             match token.value {
                 TokenValue::Semicolon => break,
                 TokenValue::Comma => {}
-                _ => return Err(ErrorKind::InvalidToken(token)),
+                _ => {
+                    return Err(ErrorKind::InvalidToken(
+                        token,
+                        vec![TokenValue::Comma.into(), TokenValue::Semicolon.into()],
+                    ))
+                }
             }
         }
 
@@ -697,7 +738,17 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                                     Ok(true)
                                 }
-                                _ => Err(ErrorKind::InvalidToken(token)),
+                                _ if external => Err(ErrorKind::InvalidToken(
+                                    token,
+                                    vec![
+                                        TokenValue::LeftBrace.into(),
+                                        TokenValue::Semicolon.into(),
+                                    ],
+                                )),
+                                _ => Err(ErrorKind::InvalidToken(
+                                    token,
+                                    vec![TokenValue::Semicolon.into()],
+                                )),
                             };
                         }
                         // Pass the token to the init_declator_list parser
@@ -772,7 +823,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                         Ok(true)
                     }
-                    _ => Err(ErrorKind::InvalidToken(token)),
+                    _ => Err(ErrorKind::InvalidToken(
+                        token,
+                        vec![ExpectedToken::Identifier, TokenValue::Semicolon.into()],
+                    )),
                 }
             }
         } else {
@@ -820,7 +874,12 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                 Some(name)
             }
-            _ => return Err(ErrorKind::InvalidToken(token)),
+            _ => {
+                return Err(ErrorKind::InvalidToken(
+                    token,
+                    vec![ExpectedToken::Identifier, TokenValue::Semicolon.into()],
+                ))
+            }
         };
         meta = meta.union(&token.meta);
 
@@ -914,7 +973,17 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                 return Ok(expr);
             }
-            _ => return Err(ErrorKind::InvalidToken(token)),
+            _ => {
+                return Err(ErrorKind::InvalidToken(
+                    token,
+                    vec![
+                        TokenValue::LeftParen.into(),
+                        ExpectedToken::IntLiteral,
+                        ExpectedToken::FloatLiteral,
+                        ExpectedToken::BoolLiteral,
+                    ],
+                ))
+            }
         };
 
         let handle = self.program.module.constants.append(Constant {
@@ -949,7 +1018,12 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         *meta = meta.union(&token.meta);
                         break;
                     }
-                    _ => return Err(ErrorKind::InvalidToken(token)),
+                    _ => {
+                        return Err(ErrorKind::InvalidToken(
+                            token,
+                            vec![TokenValue::Comma.into(), TokenValue::RightParen.into()],
+                        ))
+                    }
                 }
             }
         }
@@ -1420,7 +1494,16 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             self.bump()?;
                             break;
                         }
-                        _ => return Err(ErrorKind::InvalidToken(self.bump()?)),
+                        _ => {
+                            return Err(ErrorKind::InvalidToken(
+                                self.bump()?,
+                                vec![
+                                    TokenValue::Case.into(),
+                                    TokenValue::Default.into(),
+                                    TokenValue::RightBrace.into(),
+                                ],
+                            ))
+                        }
                     }
                 }
 

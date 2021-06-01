@@ -1,9 +1,51 @@
 use super::{
     constants::ConstantSolvingError,
-    token::{SourceMetadata, Token},
+    token::{SourceMetadata, Token, TokenValue},
 };
 use std::borrow::Cow;
 use thiserror::Error;
+
+fn join_with_comma(list: &[ExpectedToken]) -> String {
+    let mut string = "".to_string();
+    for (i, val) in list.iter().enumerate() {
+        string.push_str(&val.to_string());
+        match i {
+            i if i == list.len() - 1 => {}
+            i if i == list.len() - 2 => string.push_str(" or "),
+            _ => string.push_str(", "),
+        }
+    }
+    string
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ExpectedToken {
+    Token(TokenValue),
+    TypeName,
+    Identifier,
+    IntLiteral,
+    FloatLiteral,
+    BoolLiteral,
+    EOF,
+}
+impl From<TokenValue> for ExpectedToken {
+    fn from(token: TokenValue) -> Self {
+        ExpectedToken::Token(token)
+    }
+}
+impl std::fmt::Display for ExpectedToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            ExpectedToken::Token(ref token) => write!(f, "{:?}", token),
+            ExpectedToken::TypeName => write!(f, "a type"),
+            ExpectedToken::Identifier => write!(f, "identifier"),
+            ExpectedToken::IntLiteral => write!(f, "integer literal"),
+            ExpectedToken::FloatLiteral => write!(f, "float literal"),
+            ExpectedToken::BoolLiteral => write!(f, "bool literal"),
+            ExpectedToken::EOF => write!(f, "end of file"),
+        }
+    }
+}
 
 #[derive(Debug, Error)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -14,8 +56,8 @@ pub enum ErrorKind {
     InvalidProfile(SourceMetadata, String),
     #[error("Invalid version: {1}")]
     InvalidVersion(SourceMetadata, u64),
-    #[error("Unexpected token: {0}")]
-    InvalidToken(Token),
+    #[error("Expected {}, found {0}", join_with_comma(.1))]
+    InvalidToken(Token, Vec<ExpectedToken>),
     #[error("Not implemented {0}")]
     NotImplemented(&'static str),
     #[error("Unknown variable: {1}")]
@@ -43,7 +85,7 @@ impl ErrorKind {
             | ErrorKind::UnknownLayoutQualifier(metadata, _)
             | ErrorKind::SemanticError(metadata, _)
             | ErrorKind::UnknownField(metadata, _) => Some(metadata),
-            ErrorKind::InvalidToken(ref token) => Some(token.meta),
+            ErrorKind::InvalidToken(ref token, _) => Some(token.meta),
             _ => None,
         }
     }
