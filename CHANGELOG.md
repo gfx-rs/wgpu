@@ -14,6 +14,7 @@
       - Renamed the `attachment` member to `view`
     - Renamed `VertexFormat` values
       - Examples: `Float3` -> `Float32x3`, `Ushort2` -> `Uint16x2`
+    - Renamed the `depth` value of `Extent3d` to `depth_or_array_layers`
     - Updated blending options in `ColorTargetState`:
       - Renamed `BlendState` to `BlendComponent`
       - Added `BlendState` struct to hold color and alpha blend state
@@ -24,8 +25,9 @@
     - Updated copy view structs:
       - Renamed `TextureCopyView` to `ImageCopyTexture`
       - Renamed `TextureDataLayout` to `ImageDataLayout`
-      - The `bytes_per_row` and `rows_per_image` members of `ImageDataLayout` are now of type `NonZeroU32` <!-- wgpu-rs only -->
-    - Renamed the `depth` value of `Extent3d` to `depth_or_array_layers`
+      - Changed `bytes_per_row` and `rows_per_image` members of `ImageDataLayout` from `u32` to `Option<NonZeroU32>` <!-- wgpu-rs only -->
+    - Changed `BindingResource::Binding` from containing fields directly to containing a `BufferBinding`
+    - Added `BindingResource::BufferArray`
   - Infrastructure:
     - switch from `tracing` to `profiling`
     - more concrete and detailed errors
