@@ -204,8 +204,6 @@ impl<'function> Context<'function> {
             emitter: Emitter::default(),
         };
 
-        this.emit_start();
-
         for &(ref name, handle) in program.constants.iter() {
             let expr = this.expressions.append(Expression::Constant(handle));
             let var = VariableReference {
@@ -218,23 +216,31 @@ impl<'function> Context<'function> {
             this.lookup_global_var_exps.insert(name.into(), var);
         }
 
+        this.emit_start();
+
         for &(ref name, lookup) in program.global_variables.iter() {
             this.emit_flush(body);
             let GlobalLookup { kind, entry_arg } = lookup;
             let (expr, load) = match kind {
-                GlobalLookupKind::Variable(v) => (
-                    Expression::GlobalVariable(v),
-                    program.module.global_variables[v].class != StorageClass::Handle,
-                ),
+                GlobalLookupKind::Variable(v) => {
+                    let res = (
+                        this.expressions.append(Expression::GlobalVariable(v)),
+                        program.module.global_variables[v].class != StorageClass::Handle,
+                    );
+                    this.emit_start();
+
+                    res
+                }
                 GlobalLookupKind::BlockSelect(handle, index) => {
                     let base = this.expressions.append(Expression::GlobalVariable(handle));
+                    this.emit_start();
+                    let expr = this
+                        .expressions
+                        .append(Expression::AccessIndex { base, index });
 
-                    (Expression::AccessIndex { base, index }, true)
+                    (expr, true)
                 }
             };
-
-            let expr = this.expressions.append(expr);
-            this.emit_start();
 
             let var = VariableReference {
                 expr,
