@@ -753,7 +753,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     log::trace!("Device after submission {}: {:#?}", submit_index, trackers);
                     drop(trackers);
                     if !required_buffer_inits.map.is_empty() {
-                        device.initialize_buffer_memory(required_buffer_inits, &mut *buffer_guard)?;
+                        device
+                            .initialize_buffer_memory(required_buffer_inits, &mut *buffer_guard)?;
                     }
                 }
 

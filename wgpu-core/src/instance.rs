@@ -323,6 +323,10 @@ impl<B: GfxBackend> Adapter<B> {
             properties.downlevel.non_power_of_two_mipmapped_textures,
         );
         downlevel_flags.set(
+            wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
+            adapter_features.contains(hal::Features::IMAGE_CUBE_ARRAY),
+        );
+        downlevel_flags.set(
             wgt::DownlevelFlags::ANISOTROPIC_FILTERING,
             private_features.anisotropic_filtering,
         );

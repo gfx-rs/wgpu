@@ -693,8 +693,10 @@ bitflags::bitflags! {
         const DEVICE_LOCAL_IMAGE_COPIES = 0x0000_0008;
         /// Supports textures with mipmaps which have a non power of two size.
         const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0010;
+        /// Supports textures that are cube arrays.
+        const CUBE_ARRAY_TEXTURES = 0x0000_0020;
         /// Supports samplers with anisotropic filtering
-        const ANISOTROPIC_FILTERING = 0x0000_0020;
+        const ANISOTROPIC_FILTERING = 0x0001_0000;
         /// All flags are in their compliant state.
         const COMPLIANT = 0x0000_003F;
     }
