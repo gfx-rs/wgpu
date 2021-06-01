@@ -38,7 +38,6 @@ struct Example {
 }
 
 impl framework::Example for Example {
-    /// constructs initial instance of Example struct
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
         _adapter: &wgpu::Adapter,
@@ -132,7 +131,7 @@ impl framework::Example for Example {
         });
 
         let texture = {
-            let img_data = include_bytes!("icon.png");
+            let img_data = include_bytes!("../../logo.png");
             let decoder = png::Decoder::new(std::io::Cursor::new(img_data));
             let (info, mut reader) = decoder.read_info().unwrap();
             let mut buf = vec![0; info.buffer_size()];
@@ -247,7 +246,6 @@ impl framework::Example for Example {
         }
     }
 
-    /// update is called for any WindowEvent not handled by the framework
     fn update(&mut self, event: winit::event::WindowEvent) {
         if let winit::event::WindowEvent::KeyboardInput {
             input:
@@ -278,7 +276,6 @@ impl framework::Example for Example {
         }
     }
 
-    /// resize is called on WindowEvent::Resized events
     fn resize(
         &mut self,
         _sc_desc: &wgpu::SwapChainDescriptor,
@@ -288,8 +285,6 @@ impl framework::Example for Example {
         //empty
     }
 
-    /// render is called each frame, dispatching compute groups proportional
-    ///   a TriangleList draw call for all NUM_PARTICLES at 3 vertices each
     fn render(
         &mut self,
         frame: &wgpu::SwapChainTexture,

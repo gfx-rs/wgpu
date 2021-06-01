@@ -1080,7 +1080,7 @@ impl crate::Context for Context {
         }
     }
 
-    fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> wgt::DownlevelProperties {
+    fn adapter_downlevel_properties(&self, _adapter: &Self::AdapterId) -> wgt::DownlevelProperties {
         // WebGPU is assumed to be fully compliant
         wgt::DownlevelProperties::default()
     }
