@@ -8,11 +8,26 @@
     - conservative rasterization (native-only)
     - buffer resource indexing (native-only)
   - API adjustments to the spec:
-    - vertex formats are renamed
-    - blend factors are renamed, blend color is changed to blend constant
-    - depth clamping is moved to `PrimitiveState`
-    - render pass attachments contain `view` members
-    - copy views are renamed
+    - Renamed `RenderPassDepthStencilAttachmentDescriptor` to `RenderPassDepthStencilAttachment`:
+      - Renamed the `attachment` member to `view`
+    - Renamed `RenderPassDepthStencilAttachmentDescriptor` to `RenderPassDepthStencilAttachment`:
+      - Renamed the `attachment` member to `view`
+    - Renamed `VertexFormat` values
+      - Examples: `Float3` -> `Float32x3`, `Ushort2` -> `Uint16x2`
+    - Renamed the `depth` value of `Extent3d` to `depth_or_array_layers`
+    - Updated blending options in `ColorTargetState`:
+      - Renamed `BlendState` to `BlendComponent`
+      - Added `BlendState` struct to hold color and alpha blend state
+      - Moved `color_blend` and `alpha_blend` members into `blend` member
+    - Moved `clamp_depth` from `RastizerState` to `PrimitiveState`
+    - Updated `PrimitiveState`:
+      - Added `conservative` member for enabling conservative rasterization
+    - Updated copy view structs:
+      - Renamed `TextureCopyView` to `ImageCopyTexture`
+      - Renamed `TextureDataLayout` to `ImageDataLayout`
+      - Changed `bytes_per_row` and `rows_per_image` members of `ImageDataLayout` from `u32` to `Option<NonZeroU32>` <!-- wgpu-rs only -->
+    - Changed `BindingResource::Binding` from containing fields directly to containing a `BufferBinding`
+    - Added `BindingResource::BufferArray`
   - Infrastructure:
     - switch from `tracing` to `profiling`
     - more concrete and detailed errors
