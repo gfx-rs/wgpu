@@ -11,7 +11,7 @@ uniform Data_block_0 {
     mat4x4 proj_inv;
     mat4x4 view;
 } _group_0_binding_0;
-smooth layout(location = 0) out vec3 _vs2fs_location0;
+smooth out vec3 _vs2fs_location0;
 
 void main() {
     uint vertex_index = uint(gl_VertexID);

@@ -21,7 +21,7 @@ struct gen_gl_PerVertex_block_0 {
 vec2 a_pos = vec2(0, 0);
 layout(location = 1) in vec2 _p2vs_location1;
 layout(location = 0) in vec2 _p2vs_location0;
-smooth layout(location = 0) out vec2 _vs2fs_location0;
+smooth out vec2 _vs2fs_location0;
 
 void main1() {
     v_uv = a_uv;

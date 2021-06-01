@@ -106,7 +106,7 @@ impl Version {
 
     /// Checks if the version supports explicit `layout(location=)` qualifiers.
     fn supports_explicit_locations(&self) -> bool {
-        *self >= Version::Embedded(310) || *self >= Version::Desktop(410)
+        *self >= Version::Embedded(300) || *self >= Version::Desktop(410)
     }
 }
 
@@ -825,7 +825,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
 
                 // Write the storage class
-                if self.options.version.supports_explicit_locations() {
+                if !emit_interpolation_and_auxiliary
+                    && self.options.version.supports_explicit_locations()
+                {
                     write!(self.out, "layout(location = {}) ", location)?;
                 }
 
