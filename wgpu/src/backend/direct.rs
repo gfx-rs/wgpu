@@ -1412,11 +1412,13 @@ impl crate::Context for Context {
             label: desc.label.map(Borrowed),
             format: desc.format,
             dimension: desc.dimension,
-            aspect: desc.aspect,
-            base_mip_level: desc.base_mip_level,
-            mip_level_count: desc.mip_level_count,
-            base_array_layer: desc.base_array_layer,
-            array_layer_count: desc.array_layer_count,
+            range: wgt::ImageSubresourceRange {
+                aspect: desc.aspect,
+                base_mip_level: desc.base_mip_level,
+                mip_level_count: desc.mip_level_count,
+                base_array_layer: desc.base_array_layer,
+                array_layer_count: desc.array_layer_count,
+            },
         };
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(
