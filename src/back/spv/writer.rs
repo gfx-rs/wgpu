@@ -671,7 +671,9 @@ impl Writer {
         use spirv::Decoration;
 
         let instruction = match ty.inner {
-            crate::TypeInner::Scalar { kind, width } => self.make_scalar(id, kind, width),
+            crate::TypeInner::Scalar { kind, width } | crate::TypeInner::Atomic { kind, width } => {
+                self.make_scalar(id, kind, width)
+            }
             crate::TypeInner::Vector { size, kind, width } => {
                 let scalar_id = self.get_type_id(LookupType::Local(LocalType::Value {
                     vector_size: None,

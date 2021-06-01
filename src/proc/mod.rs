@@ -95,7 +95,7 @@ impl super::TypeInner {
 
     pub fn span(&self, constants: &super::Arena<super::Constant>) -> u32 {
         match *self {
-            Self::Scalar { kind: _, width } => width as u32,
+            Self::Scalar { kind: _, width } | Self::Atomic { kind: _, width } => width as u32,
             Self::Vector {
                 size,
                 kind: _,

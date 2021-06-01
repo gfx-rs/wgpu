@@ -72,7 +72,7 @@ impl Layouter {
         for (ty_handle, ty) in types.iter().skip(self.layouts.len()) {
             let size = ty.inner.span(constants);
             let layout = match ty.inner {
-                Ti::Scalar { width, .. } => TypeLayout {
+                Ti::Scalar { width, .. } | Ti::Atomic { width, .. } => TypeLayout {
                     size,
                     alignment: Alignment::new(width as u32).unwrap(),
                 },

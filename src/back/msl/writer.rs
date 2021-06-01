@@ -47,14 +47,15 @@ impl<'a> Display for TypeContext<'a> {
 
         match ty.inner {
             // work around Metal toolchain bug with `uint` typedef
-            crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Uint,
-                ..
-            } => {
-                write!(out, "metal::uint")
-            }
             crate::TypeInner::Scalar { kind, .. } => {
-                write!(out, "{}", scalar_kind_string(kind))
+                let kind_str = match kind {
+                    crate::ScalarKind::Uint => "metal::uint",
+                    _ => scalar_kind_string(kind),
+                };
+                write!(out, "{}", kind_str)
+            }
+            crate::TypeInner::Atomic { kind, .. } => {
+                write!(out, "atomic_{}", scalar_kind_string(kind))
             }
             crate::TypeInner::Vector { size, kind, .. } => {
                 write!(
@@ -409,6 +410,7 @@ impl crate::Type {
             Ti::Scalar { .. }
             | Ti::Vector { .. }
             | Ti::Matrix { .. }
+            | Ti::Atomic { .. }
             | Ti::Pointer { .. }
             | Ti::ValuePointer { .. } => self.name.is_some(),
             // composite types are better to be aliased, regardless of the name

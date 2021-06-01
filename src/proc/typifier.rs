@@ -350,7 +350,10 @@ impl<'a> ResolveContext<'a> {
                 })
             }
             crate::Expression::Load { pointer } => match *past(pointer).inner_with(types) {
-                Ti::Pointer { base, class: _ } => TypeResolution::Handle(base),
+                Ti::Pointer { base, class: _ } => match types[base].inner {
+                    Ti::Atomic { kind, width } => TypeResolution::Value(Ti::Scalar { kind, width }),
+                    _ => TypeResolution::Handle(base),
+                },
                 Ti::ValuePointer {
                     size,
                     kind,

@@ -347,7 +347,7 @@ impl<'a> Error<'a> {
 }
 
 impl crate::StorageFormat {
-    pub fn to_wgsl(self) -> &'static str {
+    fn to_wgsl(self) -> &'static str {
         use crate::StorageFormat as Sf;
         match self {
             Sf::R8Unorm => "r8unorm",
@@ -392,17 +392,15 @@ impl crate::TypeInner {
     /// For example `vec3<f32>`.
     ///
     /// Note: The names of a `TypeInner::Struct` is not known. Therefore this method will simply return "struct" for them.
-    pub fn to_wgsl(
-        &self,
-        types: &Arena<crate::Type>,
-        constants: &Arena<crate::Constant>,
-    ) -> String {
+    fn to_wgsl(&self, types: &Arena<crate::Type>, constants: &Arena<crate::Constant>) -> String {
+        use crate::TypeInner as Ti;
+
         match *self {
-            crate::TypeInner::Scalar { kind, width } => kind.to_wgsl(width),
-            crate::TypeInner::Vector { size, kind, width } => {
+            Ti::Scalar { kind, width } => kind.to_wgsl(width),
+            Ti::Vector { size, kind, width } => {
                 format!("vec{}<{}>", size as u32, kind.to_wgsl(width))
             }
-            crate::TypeInner::Matrix {
+            Ti::Matrix {
                 columns,
                 rows,
                 width,
@@ -414,15 +412,18 @@ impl crate::TypeInner {
                     crate::ScalarKind::Float.to_wgsl(width),
                 )
             }
-            crate::TypeInner::Pointer { base, .. } => {
+            Ti::Atomic { kind, width } => {
+                format!("atomic<{}>", kind.to_wgsl(width))
+            }
+            Ti::Pointer { base, .. } => {
                 let base = &types[base];
                 let name = base.name.as_deref().unwrap_or("unknown");
-                format!("*{}", name)
+                format!("ptr<{}>", name)
             }
-            crate::TypeInner::ValuePointer { kind, width, .. } => {
-                format!("*{}", kind.to_wgsl(width))
+            Ti::ValuePointer { kind, width, .. } => {
+                format!("ptr<{}>", kind.to_wgsl(width))
             }
-            crate::TypeInner::Array { base, size, .. } => {
+            Ti::Array { base, size, .. } => {
                 let member_type = &types[base];
                 let base = member_type.name.as_deref().unwrap_or("unknown");
                 match size {
@@ -433,11 +434,11 @@ impl crate::TypeInner {
                     crate::ArraySize::Dynamic => format!("{}[]", base),
                 }
             }
-            crate::TypeInner::Struct { .. } => {
+            Ti::Struct { .. } => {
                 // TODO: Actually output the struct?
                 "struct".to_string()
             }
-            crate::TypeInner::Image {
+            Ti::Image {
                 dim,
                 arrayed,
                 class,
@@ -481,7 +482,7 @@ impl crate::TypeInner {
                     class_suffix, dim_suffix, array_suffix, type_in_brackets
                 )
             }
-            crate::TypeInner::Sampler { .. } => "sampler".to_string(),
+            Ti::Sampler { .. } => "sampler".to_string(),
         }
     }
 }
@@ -537,7 +538,7 @@ mod type_inner_tests {
                 access: crate::StorageAccess::default(),
             },
         };
-        assert_eq!(ptr.to_wgsl(&types, &constants), "*MyType2");
+        assert_eq!(ptr.to_wgsl(&types, &constants), "ptr<MyType2>");
 
         let img1 = crate::TypeInner::Image {
             dim: crate::ImageDimension::D2,

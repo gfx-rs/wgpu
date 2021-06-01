@@ -653,6 +653,7 @@ impl<'a, W: Write> Writer<'a, W> {
         match *inner {
             // Scalars are simple we just get the full name from `glsl_scalar`
             TypeInner::Scalar { kind, width }
+            | TypeInner::Atomic { kind, width } //TODO?
             | TypeInner::ValuePointer {
                 size: None,
                 kind,

@@ -167,6 +167,7 @@ impl crate::TypeInner {
                 size: crate::ArraySize::Constant(_),
                 ..
             }
+            | Self::Atomic { .. }
             | Self::Pointer { .. }
             | Self::ValuePointer { .. }
             | Self::Struct { .. } => true,
