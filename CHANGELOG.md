@@ -8,14 +8,20 @@
     - conservative rasterization (native-only)
     - buffer resource indexing (native-only)
   - API adjustments to the spec:
-    - vertex formats are renamed
-    - blend factors are renamed, blend color is changed to blend constant
-    - depth clamping is moved to `PrimitiveState`
     - render pass attachments contain `view` members
+    - Renamed `VertexFormat` values
+      - Examples: `Float3` -> `Float32x3`, `Ushort2` -> `Uint16x2`
+    - Updated blending options in `ColorTargetState`:
+      - Renamed `BlendState` to `BlendComponent`
+      - Added `BlendState` struct to hold color and alpha blend state
+      - Moved `color_blend` and `alpha_blend` members into `blend` member
+    - Moved `clamp_depth` from `RastizerState` to `PrimitiveState`
+    - Updated `PrimitiveState`:
+      - Added `conservative` member for enabling conservative rasterization
     - Updated copy view structs:
       - Renamed `TextureCopyView` to `ImageCopyView`
       - Renamed `TextureDataLayout` to `ImageDataLayout`
-      - The `bytes_per_row` member of `ImageDataLayout` is now a `NonZeroU32`
+      - The `bytes_per_row` member of `ImageDataLayout` is now a `NonZeroU32` <!-- wgpu-rs only -->
     - Renamed the `depth` value of `Extent3d` to `depth_or_array_layers`
   - Infrastructure:
     - switch from `tracing` to `profiling`
