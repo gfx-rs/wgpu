@@ -348,15 +348,13 @@ fn convert_spv_shadow() {
 }
 
 #[cfg(feature = "glsl-in")]
-// TODO: Reenable tests later
-#[allow(dead_code)]
 fn convert_glsl(
     name: &str,
     entry_points: naga::FastHashMap<String, naga::ShaderStage>,
-    _targets: Targets,
+    targets: Targets,
 ) {
     let root = env!("CARGO_MANIFEST_DIR");
-    let _module = naga::front::glsl::parse_str(
+    let module = naga::front::glsl::parse_str(
         &fs::read_to_string(format!("{}/{}/{}.glsl", root, DIR_IN, name))
             .expect("Couldn't find glsl file"),
         &naga::front::glsl::Options {
@@ -365,16 +363,16 @@ fn convert_glsl(
         },
     )
     .unwrap();
-    //TODO
-    //check_targets(&module, name, targets);
+    println!("{:#?}", module);
+
+    check_targets(&module, name, targets);
 }
 
 #[cfg(feature = "glsl-in")]
 #[test]
 fn convert_glsl_quad() {
-    // TODO: Reenable tests later
-    // let mut entry_points = naga::FastHashMap::default();
-    // entry_points.insert("vert_main".to_string(), naga::ShaderStage::Vertex);
-    // entry_points.insert("frag_main".to_string(), naga::ShaderStage::Fragment);
-    // convert_glsl("quad-glsl", entry_points, Targets::SPIRV | Targets::IR);
+    let mut entry_points = naga::FastHashMap::default();
+    entry_points.insert("vert_main".to_string(), naga::ShaderStage::Vertex);
+    entry_points.insert("frag_main".to_string(), naga::ShaderStage::Fragment);
+    convert_glsl("quad-glsl", entry_points, Targets::SPIRV | Targets::IR);
 }
