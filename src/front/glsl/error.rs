@@ -69,8 +69,8 @@ pub enum ErrorKind {
     #[error("Unknown layout qualifier: {1}")]
     UnknownLayoutQualifier(SourceMetadata, String),
     #[cfg(feature = "glsl-validate")]
-    #[error("Variable already declared: {0}")]
-    VariableAlreadyDeclared(String),
+    #[error("Variable already declared: {1}")]
+    VariableAlreadyDeclared(SourceMetadata, String),
     #[error("{1}")]
     SemanticError(SourceMetadata, Cow<'static, str>),
 }
@@ -85,6 +85,8 @@ impl ErrorKind {
             | ErrorKind::UnknownLayoutQualifier(metadata, _)
             | ErrorKind::SemanticError(metadata, _)
             | ErrorKind::UnknownField(metadata, _) => Some(metadata),
+            #[cfg(feature = "glsl-validate")]
+            ErrorKind::VariableAlreadyDeclared(metadata, _) => Some(metadata),
             ErrorKind::InvalidToken(ref token, _) => Some(token.meta),
             _ => None,
         }

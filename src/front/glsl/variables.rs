@@ -510,18 +510,19 @@ impl Program<'_> {
         &mut self,
         ctx: &mut Context,
         body: &mut Block,
+        #[cfg_attr(not(feature = "glsl-validate"), allow(unused_variables))]
         VarDeclaration {
             qualifiers,
             ty,
             name,
             init,
-            ..
+            meta,
         }: VarDeclaration,
     ) -> Result<Handle<Expression>, ErrorKind> {
         #[cfg(feature = "glsl-validate")]
         if let Some(ref name) = name {
             if ctx.lookup_local_var_current_scope(name).is_some() {
-                return Err(ErrorKind::VariableAlreadyDeclared(name.clone()));
+                return Err(ErrorKind::VariableAlreadyDeclared(meta, name.clone()));
             }
         }
 
