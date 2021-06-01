@@ -27,7 +27,7 @@ use crate::{
     id,
     memory_init_tracker::MemoryInitTrackerAction,
     resource::{Buffer, Texture},
-    track::TrackerSet,
+    track::{BufferState, ResourceTracker, TextureState, TrackerSet},
     Label, PrivateFeatures, Stored,
 };
 
@@ -91,7 +91,8 @@ impl<B: GfxBackend> CommandBuffer<B> {
     pub(crate) fn insert_barriers(
         raw: &mut B::CommandBuffer,
         base: &mut TrackerSet,
-        head: &TrackerSet,
+        head_buffers: &ResourceTracker<BufferState>,
+        head_textures: &ResourceTracker<TextureState>,
         buffer_guard: &Storage<Buffer<B>, id::BufferId>,
         texture_guard: &Storage<Texture<B>, id::TextureId>,
     ) {
@@ -99,25 +100,17 @@ impl<B: GfxBackend> CommandBuffer<B> {
 
         profiling::scope!("insert_barriers");
         debug_assert_eq!(B::VARIANT, base.backend());
-        debug_assert_eq!(B::VARIANT, head.backend());
 
-        let buffer_barriers = base.buffers.merge_replace(&head.buffers).map(|pending| {
+        let buffer_barriers = base.buffers.merge_replace(head_buffers).map(|pending| {
             let buf = &buffer_guard[pending.id];
             pending.into_hal(buf)
         });
-        let texture_barriers = base.textures.merge_replace(&head.textures).map(|pending| {
+        let texture_barriers = base.textures.merge_replace(head_textures).map(|pending| {
             let tex = &texture_guard[pending.id];
             pending.into_hal(tex)
         });
-        base.views.merge_extend(&head.views).unwrap();
-        base.bind_groups.merge_extend(&head.bind_groups).unwrap();
-        base.samplers.merge_extend(&head.samplers).unwrap();
-        base.compute_pipes
-            .merge_extend(&head.compute_pipes)
-            .unwrap();
-        base.render_pipes.merge_extend(&head.render_pipes).unwrap();
-        base.bundles.merge_extend(&head.bundles).unwrap();
 
+        //TODO: be more deliberate about the stages
         let stages = all_buffer_stages() | all_image_stages();
         unsafe {
             raw.pipeline_barrier(

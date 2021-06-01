@@ -735,10 +735,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
                         }
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
+                        trackers.merge_extend_stateless(&cmdbuf.trackers);
                         CommandBuffer::insert_barriers(
                             &mut transit,
                             &mut *trackers,
-                            &cmdbuf.trackers,
+                            &cmdbuf.trackers.buffers,
+                            &cmdbuf.trackers.textures,
                             &*buffer_guard,
                             &*texture_guard,
                         );
