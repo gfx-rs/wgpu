@@ -681,7 +681,14 @@ impl<B: GfxBackend> Device<B> {
         let mut view_caps = hal::image::ViewCapabilities::empty();
         // 2D textures with array layer counts that are multiples of 6 could be cubemaps
         // Following gpuweb/gpuweb#68 always add the hint in that case
-        if desc.dimension == TextureDimension::D2 && desc.size.depth_or_array_layers % 6 == 0 {
+        if desc.dimension == TextureDimension::D2
+            && desc.size.depth_or_array_layers % 6 == 0
+            && (desc.size.depth_or_array_layers == 6
+                || self
+                    .downlevel
+                    .flags
+                    .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES))
+        {
             view_caps |= hal::image::ViewCapabilities::KIND_CUBE;
         };
 
