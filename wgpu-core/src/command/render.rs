@@ -6,8 +6,9 @@ use crate::{
     binding_model::BindError,
     command::{
         bind::Binder, end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer,
-        CommandEncoderError, DrawError, ExecutionError, MapPassErr, PassErrorScope, QueryResetMap,
-        QueryUseError, RenderCommand, RenderCommandError, StateChange,
+        CommandEncoderError, CommandEncoderStatus, DrawError, ExecutionError, MapPassErr,
+        PassErrorScope, QueryResetMap, QueryUseError, RenderCommand, RenderCommandError,
+        StateChange,
     },
     conv,
     device::{
@@ -1042,17 +1043,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (cmd_buf_raw, trackers, used_swapchain, query_reset_state) = {
+        let (cmd_buf_raw, trackers, query_reset_state) = {
             // read-only lock guard
             let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
             let cmd_buf =
                 CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
+            // will be reset to true if recording is done without errors
+            cmd_buf.status = CommandEncoderStatus::Error;
+            cmd_buf.has_labels |= base.label.is_some();
+            #[cfg(feature = "trace")]
+            if let Some(ref mut list) = cmd_buf.commands {
+                list.push(crate::device::trace::Command::RunRenderPass {
+                    base: BasePass::from_ref(base),
+                    target_colors: color_attachments.to_vec(),
+                    target_depth_stencil: depth_stencil_attachment.cloned(),
+                });
+            }
+
             let device = &device_guard[cmd_buf.device_id.value];
             let mut raw = device.cmd_allocator.extend(cmd_buf);
             unsafe {
                 if let Some(ref label) = base.label {
-                    // cmd_buf.has_labels = true; this is done later
                     device.raw.set_command_buffer_name(&mut raw, label);
                 }
                 raw.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
@@ -1949,27 +1961,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let (trackers, used_swapchain) = info.finish(&*texture_guard).map_pass_err(scope)?;
-            (raw, trackers, used_swapchain, query_reset_state)
+            cmd_buf.status = CommandEncoderStatus::Recording;
+            cmd_buf.used_swap_chains.extend(used_swapchain);
+            (raw, trackers, query_reset_state)
         };
 
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
         let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
+
         let cmd_buf =
             CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
-        cmd_buf.has_labels |= base.label.is_some();
-        cmd_buf.used_swap_chains.extend(used_swapchain);
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.commands {
-            list.push(crate::device::trace::Command::RunRenderPass {
-                base: BasePass::from_ref(base),
-                target_colors: color_attachments.to_vec(),
-                target_depth_stencil: depth_stencil_attachment.cloned(),
-            });
-        }
-
         let last_cmd_buf = cmd_buf.raw.last_mut().unwrap();
 
         query_reset_state

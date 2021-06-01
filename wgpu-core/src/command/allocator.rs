@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use super::CommandBuffer;
+use super::{CommandBuffer, CommandEncoderStatus};
 use crate::{
     device::DeviceError, hub::GfxBackend, id::DeviceId, track::TrackerSet, FastHashMap,
     PrivateFeatures, Stored, SubmissionIndex,
@@ -127,7 +127,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
 
         Ok(CommandBuffer {
             raw: vec![pool.allocate()],
-            is_recording: true,
+            status: CommandEncoderStatus::Recording,
             recorded_thread_id: thread_id,
             device_id,
             trackers: TrackerSet::new(B::VARIANT),
