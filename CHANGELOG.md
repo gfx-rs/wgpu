@@ -19,7 +19,7 @@
     - Updated `PrimitiveState`:
       - Added `conservative` member for enabling conservative rasterization
     - Updated copy view structs:
-      - Renamed `TextureCopyView` to `ImageCopyView`
+      - Renamed `TextureCopyView` to `ImageCopyTexture`
       - Renamed `TextureDataLayout` to `ImageDataLayout`
       - The `bytes_per_row` and `rows_per_image` members of `ImageDataLayout` are now of type `NonZeroU32` <!-- wgpu-rs only -->
     - Renamed the `depth` value of `Extent3d` to `depth_or_array_layers`
