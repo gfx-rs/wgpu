@@ -8,7 +8,10 @@
     - conservative rasterization (native-only)
     - buffer resource indexing (native-only)
   - API adjustments to the spec:
-    - render pass attachments contain `view` members
+    - Renamed `RenderPassDepthStencilAttachmentDescriptor` to `RenderPassDepthStencilAttachment`:
+      - Renamed the `attachment` member to `view`
+    - Renamed `RenderPassDepthStencilAttachmentDescriptor` to `RenderPassDepthStencilAttachment`:
+      - Renamed the `attachment` member to `view`
     - Renamed `VertexFormat` values
       - Examples: `Float3` -> `Float32x3`, `Ushort2` -> `Uint16x2`
     - Updated blending options in `ColorTargetState`:
