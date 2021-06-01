@@ -12,7 +12,11 @@
     - blend factors are renamed, blend color is changed to blend constant
     - depth clamping is moved to `PrimitiveState`
     - render pass attachments contain `view` members
-    - copy views are renamed
+    - Updated copy view structs:
+      - Renamed `TextureCopyView` to `ImageCopyView`
+      - Renamed `TextureDataLayout` to `ImageDataLayout`
+      - The `bytes_per_row` member of `ImageDataLayout` is now a `NonZeroU32`
+    - Renamed the `depth` value of `Extent3d` to `depth_or_array_layers`
   - Infrastructure:
     - switch from `tracing` to `profiling`
     - more concrete and detailed errors
