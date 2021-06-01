@@ -12,9 +12,15 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy)]
-pub enum GlobalLookup {
+pub enum GlobalLookupKind {
     Variable(Handle<GlobalVariable>),
     BlockSelect(Handle<GlobalVariable>, u32),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct GlobalLookup {
+    pub kind: GlobalLookupKind,
+    pub entry_arg: Option<usize>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -33,6 +39,13 @@ pub struct FunctionDeclaration {
     pub void: bool,
 }
 
+bitflags::bitflags! {
+    pub struct EntryArgUse: u32 {
+        const READ = 0x1;
+        const WRITE = 0x2;
+    }
+}
+
 #[derive(Debug)]
 pub struct Program<'a> {
     pub version: u16,
@@ -45,8 +58,10 @@ pub struct Program<'a> {
     pub global_variables: Vec<(String, GlobalLookup)>,
     pub constants: Vec<(String, Handle<Constant>)>,
 
-    pub entry_args: Vec<(Binding, bool, Handle<GlobalVariable>)>,
+    pub entry_args: Vec<(Binding, Handle<GlobalVariable>)>,
     pub entries: Vec<(String, ShaderStage, Handle<Function>)>,
+    // TODO: More efficient representation
+    pub function_arg_use: Vec<Vec<EntryArgUse>>,
 
     pub module: Module,
 }
@@ -65,6 +80,7 @@ impl<'a> Program<'a> {
 
             entry_args: Vec::new(),
             entries: Vec::new(),
+            function_arg_use: Vec::new(),
 
             module: Module::default(),
         }
@@ -150,6 +166,7 @@ pub struct Context<'function> {
     expressions: &'function mut Arena<Expression>,
     pub locals: &'function mut Arena<LocalVariable>,
     pub arguments: &'function mut Vec<FunctionArgument>,
+    pub arg_use: Vec<EntryArgUse>,
 
     //TODO: Find less allocation heavy representation
     pub scopes: Vec<FastHashMap<String, VariableReference>>,
@@ -173,6 +190,7 @@ impl<'function> Context<'function> {
             expressions,
             locals,
             arguments,
+            arg_use: vec![EntryArgUse::empty(); program.entry_args.len()],
 
             scopes: vec![FastHashMap::default()],
             lookup_global_var_exps: FastHashMap::with_capacity_and_hasher(
@@ -194,6 +212,7 @@ impl<'function> Context<'function> {
                 expr,
                 load: None,
                 mutable: false,
+                entry_arg: None,
             };
 
             this.lookup_global_var_exps.insert(name.into(), var);
@@ -201,12 +220,13 @@ impl<'function> Context<'function> {
 
         for &(ref name, lookup) in program.global_variables.iter() {
             this.emit_flush(body);
-            let (expr, load) = match lookup {
-                GlobalLookup::Variable(v) => (
+            let GlobalLookup { kind, entry_arg } = lookup;
+            let (expr, load) = match kind {
+                GlobalLookupKind::Variable(v) => (
                     Expression::GlobalVariable(v),
                     program.module.global_variables[v].class != StorageClass::Handle,
                 ),
-                GlobalLookup::BlockSelect(handle, index) => {
+                GlobalLookupKind::BlockSelect(handle, index) => {
                     let base = this.expressions.append(Expression::GlobalVariable(handle));
 
                     (Expression::AccessIndex { base, index }, true)
@@ -225,6 +245,7 @@ impl<'function> Context<'function> {
                 },
                 // TODO: respect constant qualifier
                 mutable: true,
+                entry_arg,
             };
 
             this.lookup_global_var_exps.insert(name.into(), var);
@@ -285,6 +306,7 @@ impl<'function> Context<'function> {
                     expr,
                     load: Some(load),
                     mutable,
+                    entry_arg: None,
                 },
             );
         }
@@ -336,6 +358,7 @@ impl<'function> Context<'function> {
                         expr,
                         load,
                         mutable,
+                        entry_arg: None,
                     },
                 );
             }
@@ -455,8 +478,16 @@ impl<'function> Context<'function> {
                         ));
                     }
 
+                    if let Some(idx) = var.entry_arg {
+                        self.arg_use[idx] |= EntryArgUse::WRITE
+                    }
+
                     var.expr
                 } else {
+                    if let Some(idx) = var.entry_arg {
+                        self.arg_use[idx] |= EntryArgUse::READ
+                    }
+
                     var.load.unwrap_or(var.expr)
                 }
             }
@@ -617,6 +648,7 @@ pub struct VariableReference {
     pub expr: Handle<Expression>,
     pub load: Option<Handle<Expression>>,
     pub mutable: bool,
+    pub entry_arg: Option<usize>,
 }
 
 #[derive(Debug, Clone)]

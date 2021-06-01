@@ -1,8 +1,7 @@
 use crate::{
-    proc::ensure_block_returns, Arena, BinaryOperator, Binding, Block, BuiltIn, EntryPoint,
-    Expression, Function, FunctionArgument, FunctionResult, Handle, MathFunction,
-    RelationalFunction, SampleLevel, ScalarKind, ShaderStage, Statement, StructMember,
-    SwizzleComponent, Type, TypeInner,
+    proc::ensure_block_returns, Arena, BinaryOperator, Block, EntryPoint, Expression, Function,
+    FunctionArgument, FunctionResult, Handle, MathFunction, RelationalFunction, SampleLevel,
+    ScalarKind, Statement, StructMember, SwizzleComponent, Type, TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind, SourceMetadata};
@@ -392,13 +391,15 @@ impl Program<'_> {
         sig: FunctionSignature,
         qualifiers: Vec<ParameterQualifier>,
         meta: SourceMetadata,
-    ) -> Result<(), ErrorKind> {
+    ) -> Result<Handle<Function>, ErrorKind> {
         ensure_block_returns(&mut function.body);
         let stage = self.entry_points.get(&sig.name);
 
-        if let Some(&stage) = stage {
+        Ok(if let Some(&stage) = stage {
             let handle = self.module.functions.append(function);
             self.entries.push((sig.name, stage, handle));
+            self.function_arg_use.push(Vec::new());
+            handle
         } else {
             let void = function.result.is_none();
 
@@ -412,7 +413,9 @@ impl Program<'_> {
 
                 decl.defined = true;
                 *self.module.functions.get_mut(decl.handle) = function;
+                decl.handle
             } else {
+                self.function_arg_use.push(Vec::new());
                 let handle = self.module.functions.append(function);
                 self.lookup_function.insert(
                     sig,
@@ -423,10 +426,9 @@ impl Program<'_> {
                         void,
                     },
                 );
+                handle
             }
-        }
-
-        Ok(())
+        })
     }
 
     pub fn add_prototype(
@@ -438,6 +440,7 @@ impl Program<'_> {
     ) -> Result<(), ErrorKind> {
         let void = function.result.is_none();
 
+        self.function_arg_use.push(Vec::new());
         let handle = self.module.functions.append(function);
 
         if self
@@ -462,17 +465,86 @@ impl Program<'_> {
         Ok(())
     }
 
+    fn check_call_global(
+        &self,
+        caller: Handle<Function>,
+        function_arg_use: &mut [Vec<EntryArgUse>],
+        stmt: &Statement,
+    ) {
+        match *stmt {
+            Statement::Block(ref block) => {
+                for stmt in block {
+                    self.check_call_global(caller, function_arg_use, stmt)
+                }
+            }
+            Statement::If {
+                ref accept,
+                ref reject,
+                ..
+            } => {
+                for stmt in accept.iter().chain(reject.iter()) {
+                    self.check_call_global(caller, function_arg_use, stmt)
+                }
+            }
+            Statement::Switch {
+                ref cases,
+                ref default,
+                ..
+            } => {
+                for stmt in cases
+                    .iter()
+                    .flat_map(|c| c.body.iter())
+                    .chain(default.iter())
+                {
+                    self.check_call_global(caller, function_arg_use, stmt)
+                }
+            }
+            Statement::Loop {
+                ref body,
+                ref continuing,
+            } => {
+                for stmt in body.iter().chain(continuing.iter()) {
+                    self.check_call_global(caller, function_arg_use, stmt)
+                }
+            }
+            Statement::Call { function, .. } => {
+                let callee_len = function_arg_use[function.index()].len();
+                let caller_len = function_arg_use[caller.index()].len();
+                function_arg_use[caller.index()].extend(
+                    std::iter::repeat(EntryArgUse::empty())
+                        .take(callee_len.saturating_sub(caller_len)),
+                );
+
+                for i in 0..callee_len.max(caller_len) {
+                    let callee_use = function_arg_use[function.index()][i];
+                    function_arg_use[caller.index()][i] |= callee_use
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn add_entry_points(&mut self) {
+        let mut function_arg_use = Vec::new();
+        std::mem::swap(&mut self.function_arg_use, &mut function_arg_use);
+
+        for (handle, function) in self.module.functions.iter() {
+            for stmt in function.body.iter() {
+                self.check_call_global(handle, &mut function_arg_use, stmt)
+            }
+        }
+
         for (name, stage, function) in self.entries.iter().cloned() {
             let mut arguments = Vec::new();
             let mut expressions = Arena::new();
             let mut body = Vec::new();
 
-            for (binding, input, handle) in self.entry_args.iter().cloned() {
-                match binding {
-                    Binding::Location { .. } if !input => continue,
-                    Binding::BuiltIn(builtin) if !should_read(builtin, stage) => continue,
-                    _ => {}
+            for (i, (binding, handle)) in self.entry_args.iter().cloned().enumerate() {
+                if function_arg_use[function.index()]
+                    .get(i)
+                    .map_or(true, |u| !u.contains(EntryArgUse::READ))
+                {
+                    continue;
                 }
 
                 let ty = self.module.global_variables[handle].ty;
@@ -500,11 +572,12 @@ impl Program<'_> {
             let mut members = Vec::new();
             let mut components = Vec::new();
 
-            for (binding, input, handle) in self.entry_args.iter().cloned() {
-                match binding {
-                    Binding::Location { .. } if input => continue,
-                    Binding::BuiltIn(builtin) if !should_write(builtin, stage) => continue,
-                    _ => {}
+            for (i, (binding, handle)) in self.entry_args.iter().cloned().enumerate() {
+                if function_arg_use[function.index()]
+                    .get(i)
+                    .map_or(true, |u| !u.contains(EntryArgUse::WRITE))
+                {
+                    continue;
                 }
 
                 let ty = self.module.global_variables[handle].ty;
@@ -554,42 +627,5 @@ impl Program<'_> {
                 },
             });
         }
-    }
-}
-
-// FIXME: Both of the functions below should be removed they are a temporary solution
-//
-// The fix should analyze the entry point and children function calls
-// (recursively) and store something like `GlobalUse` and then later only read
-// or store the globals that need to be read or written in that stage
-
-fn should_read(built_in: BuiltIn, stage: ShaderStage) -> bool {
-    match (built_in, stage) {
-        (BuiltIn::Position, ShaderStage::Fragment)
-        | (BuiltIn::BaseInstance, ShaderStage::Vertex)
-        | (BuiltIn::BaseVertex, ShaderStage::Vertex)
-        | (BuiltIn::ClipDistance, ShaderStage::Fragment)
-        | (BuiltIn::InstanceIndex, ShaderStage::Vertex)
-        | (BuiltIn::VertexIndex, ShaderStage::Vertex)
-        | (BuiltIn::FrontFacing, ShaderStage::Fragment)
-        | (BuiltIn::SampleIndex, ShaderStage::Fragment)
-        | (BuiltIn::SampleMask, ShaderStage::Fragment)
-        | (BuiltIn::GlobalInvocationId, ShaderStage::Compute)
-        | (BuiltIn::LocalInvocationId, ShaderStage::Compute)
-        | (BuiltIn::LocalInvocationIndex, ShaderStage::Compute)
-        | (BuiltIn::WorkGroupId, ShaderStage::Compute)
-        | (BuiltIn::WorkGroupSize, ShaderStage::Compute) => true,
-        _ => false,
-    }
-}
-
-fn should_write(built_in: BuiltIn, stage: ShaderStage) -> bool {
-    match (built_in, stage) {
-        (BuiltIn::Position, ShaderStage::Vertex)
-        | (BuiltIn::ClipDistance, ShaderStage::Vertex)
-        | (BuiltIn::PointSize, ShaderStage::Vertex)
-        | (BuiltIn::FragDepth, ShaderStage::Fragment)
-        | (BuiltIn::SampleMask, ShaderStage::Fragment) => true,
-        _ => false,
     }
 }

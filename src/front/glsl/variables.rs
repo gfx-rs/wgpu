@@ -45,11 +45,17 @@ impl Program<'_> {
                 storage_access: StorageAccess::empty(),
             });
 
-            self.entry_args
-                .push((Binding::BuiltIn(builtin), true, handle));
+            let idx = self.entry_args.len();
+            self.entry_args.push((Binding::BuiltIn(builtin), handle));
 
-            self.global_variables
-                .push((name.into(), GlobalLookup::Variable(handle)));
+            self.global_variables.push((
+                name.into(),
+                GlobalLookup {
+                    kind: GlobalLookupKind::Variable(handle),
+                    entry_arg: Some(idx),
+                },
+            ));
+            ctx.arg_use.push(EntryArgUse::empty());
 
             let expr = ctx.add_expression(Expression::GlobalVariable(handle), body);
             let load = ctx.add_expression(Expression::Load { pointer: expr }, body);
@@ -59,6 +65,7 @@ impl Program<'_> {
                     expr,
                     load: Some(load),
                     mutable,
+                    entry_arg: Some(idx),
                 },
             );
 
@@ -297,7 +304,6 @@ impl Program<'_> {
         }
 
         if let Some(location) = location {
-            let input = StorageQualifier::Input == storage;
             let interpolation = self.module.types[ty].inner.scalar_kind().map(|kind| {
                 if let ScalarKind::Float = kind {
                     Interpolation::Perspective
@@ -315,18 +321,23 @@ impl Program<'_> {
                 storage_access: StorageAccess::empty(),
             });
 
+            let idx = self.entry_args.len();
             self.entry_args.push((
                 Binding::Location {
                     location,
                     interpolation,
                     sampling,
                 },
-                input,
                 handle,
             ));
 
-            self.global_variables
-                .push((name, GlobalLookup::Variable(handle)));
+            self.global_variables.push((
+                name,
+                GlobalLookup {
+                    kind: GlobalLookupKind::Variable(handle),
+                    entry_arg: Some(idx),
+                },
+            ));
 
             return Ok(ctx.add_expression(Expression::GlobalVariable(handle), body));
         } else if let StorageQualifier::Const = storage {
@@ -369,8 +380,13 @@ impl Program<'_> {
             storage_access,
         });
 
-        self.global_variables
-            .push((name, GlobalLookup::Variable(handle)));
+        self.global_variables.push((
+            name,
+            GlobalLookup {
+                kind: GlobalLookupKind::Variable(handle),
+                entry_arg: None,
+            },
+        ));
 
         Ok(ctx.add_expression(Expression::GlobalVariable(handle), body))
     }

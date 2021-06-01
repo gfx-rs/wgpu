@@ -1,7 +1,8 @@
 use super::{
     ast::{
-        Context, FunctionCall, FunctionCallKind, FunctionSignature, GlobalLookup, HirExpr,
-        HirExprKind, ParameterQualifier, Profile, StorageQualifier, StructLayout, TypeQualifier,
+        Context, FunctionCall, FunctionCallKind, FunctionSignature, GlobalLookup, GlobalLookupKind,
+        HirExpr, HirExprKind, ParameterQualifier, Profile, StorageQualifier, StructLayout,
+        TypeQualifier,
     },
     error::ErrorKind,
     lex::Lexer,
@@ -623,7 +624,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                     // parse the body
                                     self.parse_compound_statement(&mut context, &mut body)?;
 
-                                    self.program.add_function(
+                                    let Context { arg_use, .. } = context;
+                                    let handle = self.program.add_function(
                                         Function {
                                             name: Some(name),
                                             result,
@@ -636,6 +638,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                         parameters,
                                         meta,
                                     )?;
+
+                                    self.program.function_arg_use[handle.index()] = arg_use;
 
                                     Ok(true)
                                 }
@@ -800,9 +804,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         });
 
         if let Some(k) = name {
-            self.program
-                .global_variables
-                .push((k, GlobalLookup::Variable(handle)));
+            self.program.global_variables.push((
+                k,
+                GlobalLookup {
+                    kind: GlobalLookupKind::Variable(handle),
+                    entry_arg: None,
+                },
+            ));
         }
 
         for (i, k) in members
@@ -810,9 +818,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             .enumerate()
             .filter_map(|(i, m)| m.name.map(|s| (i as u32, s)))
         {
-            self.program
-                .global_variables
-                .push((k, GlobalLookup::BlockSelect(handle, i)));
+            self.program.global_variables.push((
+                k,
+                GlobalLookup {
+                    kind: GlobalLookupKind::BlockSelect(handle, i),
+                    entry_arg: None,
+                },
+            ));
         }
 
         Ok(true)
