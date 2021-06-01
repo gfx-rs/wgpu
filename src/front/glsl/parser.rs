@@ -1491,7 +1491,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     ctx.emit_flush(&mut block);
                     ctx.emit_start();
 
-                    body.push(Statement::If {
+                    block.push(Statement::If {
                         condition,
                         accept: vec![Statement::Break],
                         reject: Block::new(),
