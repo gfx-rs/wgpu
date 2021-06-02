@@ -277,6 +277,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let image = match view.inner {
             resource::TextureViewInner::Native { .. } => unreachable!(),
             resource::TextureViewInner::SwapChain { image, .. } => image,
+            resource::TextureViewInner::Raw { .. } => unreachable!(),
         };
 
         let sem = if sc.active_submission_index > device.last_completed_submission_index() {

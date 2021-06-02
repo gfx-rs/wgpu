@@ -497,7 +497,7 @@ fn check_device_features(
 }
 
 struct RenderAttachment<'a> {
-    texture_id: &'a Stored<id::TextureId>,
+    texture_id: Option<&'a Stored<id::TextureId>>,
     selector: &'a TextureSelector,
     previous_use: Option<TextureUse>,
     new_use: TextureUse,
@@ -583,6 +583,9 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         TextureViewInner::SwapChain { .. } => {
                             return Err(RenderPassErrorInner::SwapChainImageAsDepthStencil);
                         }
+                        TextureViewInner::Raw { .. } => {
+                            return Err(RenderPassErrorInner::SwapChainImageAsDepthStencil);
+                        }
                     };
 
                     // Using render pass for transition.
@@ -597,7 +600,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         TextureUse::ATTACHMENT_WRITE
                     };
                     render_attachments.push(RenderAttachment {
-                        texture_id: source_id,
+                        texture_id: Some(source_id),
                         selector: &view.selector,
                         previous_use,
                         new_use,
@@ -649,7 +652,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                             .query(source_id.value, view.selector.clone());
                         let new_use = TextureUse::ATTACHMENT_WRITE;
                         render_attachments.push(RenderAttachment {
-                            texture_id: source_id,
+                            texture_id: Some(source_id),
                             selector: &view.selector,
                             previous_use,
                             new_use,
@@ -675,6 +678,31 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                             LoadOp::Load => end,
                         };
                         start..end
+                    }
+                    TextureViewInner::Raw { .. } => {
+                        /* TODO:
+                        let previous_use = cmd_buf
+                            .trackers
+                            .textures
+                            .query(source_id.value, view.selector.clone());*/
+                        let previous_use = None;
+                        let new_use = TextureUse::ATTACHMENT_WRITE;
+                        render_attachments.push(RenderAttachment {
+                            texture_id: None,
+                            selector: &view.selector,
+                            previous_use,
+                            new_use,
+                        });
+
+                        let new_layout =
+                            conv::map_texture_state(new_use, hal::format::Aspects::COLOR).1;
+                        let old_layout = match previous_use {
+                            Some(usage) => {
+                                conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
+                            }
+                            None => new_layout,
+                        };
+                        old_layout..new_layout
                     }
                 };
 
@@ -718,7 +746,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                             .query(source_id.value, view.selector.clone());
                         let new_use = TextureUse::ATTACHMENT_WRITE;
                         render_attachments.push(RenderAttachment {
-                            texture_id: source_id,
+                            texture_id: Some(source_id),
                             selector: &view.selector,
                             previous_use,
                             new_use,
@@ -738,6 +766,10 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         assert!(used_swap_chain.is_none());
                         used_swap_chain = Some(source_id.clone());
                         hal::image::Layout::Undefined..hal::image::Layout::Present
+                    }
+                    TextureViewInner::Raw { .. } => {
+                        // TODO: This is only valid for OpenXR
+                        hal::image::Layout::ColorAttachmentOptimal..hal::image::Layout::ColorAttachmentOptimal
                     }
                 };
 
@@ -883,6 +915,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         let raw_views = view_data.map(|view| match view.inner {
             TextureViewInner::Native { ref raw, .. } => raw,
             TextureViewInner::SwapChain { ref image, .. } => Borrow::borrow(image),
+            TextureViewInner::Raw { ref raw } => raw,
         });
 
         //Note: the order of iteration has to match `AttachmentData::all()`
@@ -981,15 +1014,17 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         profiling::scope!("finish", "RenderPassInfo");
 
         for ra in self.render_attachments {
-            let texture = &texture_guard[ra.texture_id.value];
+            let texture_id = if let Some(id) = ra.texture_id { id } else { continue };
+
+            let texture = &texture_guard[texture_id.value];
             check_texture_usage(texture.usage, TextureUsage::RENDER_ATTACHMENT)?;
 
             // the tracker set of the pass is always in "extend" mode
             self.trackers
                 .textures
                 .change_extend(
-                    ra.texture_id.value,
-                    &ra.texture_id.ref_count,
+                    texture_id.value,
+                    &texture_id.ref_count,
                     ra.selector.clone(),
                     ra.new_use,
                 )
@@ -1002,8 +1037,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 self.trackers
                     .textures
                     .prepend(
-                        ra.texture_id.value,
-                        &ra.texture_id.ref_count,
+                        texture_id.value,
+                        &texture_id.ref_count,
                         ra.selector.clone(),
                         usage,
                     )

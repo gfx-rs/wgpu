@@ -29,6 +29,7 @@ use thiserror::Error;
 use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat, TextureViewDimension};
 
 use std::{
+    any::Any,
     borrow::Cow,
     collections::{hash_map::Entry, BTreeMap},
     iter,
@@ -36,7 +37,7 @@ use std::{
     mem,
     ops::Range,
     ptr,
-    sync::atomic::Ordering,
+    sync::{atomic::Ordering, Arc},
 };
 
 pub mod alloc;
@@ -291,6 +292,7 @@ pub struct Device<B: hal::Backend> {
     pending_writes: queue::PendingWrites<B>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<trace::Trace>>,
+    guard: Option<Arc<dyn Any + Send + Sync>>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -311,6 +313,7 @@ impl<B: GfxBackend> Device<B> {
         downlevel: wgt::DownlevelProperties,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
+        guard: Option<Arc<dyn Any + Send + Sync>>,
     ) -> Result<Self, CreateDeviceError> {
         let cmd_allocator = command::CommandAllocator::new(queue_group.family, &raw)
             .or(Err(CreateDeviceError::OutOfMemory))?;
@@ -388,6 +391,7 @@ impl<B: GfxBackend> Device<B> {
             downlevel,
             spv_options,
             pending_writes: queue::PendingWrites::new(),
+            guard,
         })
     }
 
@@ -1706,6 +1710,9 @@ impl<B: GfxBackend> Device<B> {
                         resource::TextureViewInner::SwapChain { .. } => {
                             return Err(Error::SwapChainImage);
                         }
+                        resource::TextureViewInner::Raw { .. } => {
+                            return Err(Error::SwapChainImage);
+                        }
                     }
                 }
                 Br::TextureViewArray(ref bindings_array) => {
@@ -1763,6 +1770,9 @@ impl<B: GfxBackend> Device<B> {
                                     Ok(hal::pso::Descriptor::Image(raw, image_layout))
                                 }
                                 resource::TextureViewInner::SwapChain { .. } => {
+                                    Err(Error::SwapChainImage)
+                                }
+                                resource::TextureViewInner::Raw { .. } => {
                                     Err(Error::SwapChainImage)
                                 }
                             }
@@ -2637,6 +2647,66 @@ impl<B: GfxBackend> Device<B> {
     }
 }
 
+impl Device<crate::backend::Vulkan> {
+    unsafe fn create_raw_vulkan_texture_view(
+        &self,
+        adapter: &crate::instance::Adapter<crate::backend::Vulkan>,
+        raw_image: ash::vk::Image,
+        view_type: ash::vk::ImageViewType,
+        desc: &resource::TextureViewDescriptor,
+        extent: wgt::Extent3d,
+    ) -> resource::TextureView<crate::backend::Vulkan> {
+        let format = desc.format.unwrap();
+        let raw_format = conv::map_texture_format(format, self.private_features);
+        let format_features = adapter.get_texture_format_features(format);
+
+        let aspects = raw_format.surface_desc().aspects;
+        let range = hal::image::SubresourceRange {
+            aspects,
+            level_start: desc.base_mip_level as _,
+            level_count: desc.mip_level_count.map(|v| v.get() as _),
+            layer_start: desc.base_array_layer as _,
+            layer_count: desc.array_layer_count.map(|v| v.get() as _),
+        };
+
+        let view_dim = desc.dimension.unwrap();
+
+        let level_end = desc.mip_level_count.unwrap().get() as u8;
+        let layer_end = desc.array_layer_count.unwrap().get() as u16;
+        let selector = TextureSelector {
+            levels: desc.base_mip_level as u8..level_end,
+            layers: desc.base_array_layer as u16..layer_end,
+        };
+
+        let raw = self.raw.image_view_from_raw(
+            raw_image,
+            view_type,
+            raw_format,
+            hal::format::Swizzle::NO,
+            hal::image::Usage::COLOR_ATTACHMENT,
+            range,
+        ).unwrap();
+
+        resource::TextureView {
+            inner: resource::TextureViewInner::Raw { raw },
+            aspects,
+            format,
+            format_features,
+            dimension: view_dim,
+            extent,
+            samples: 1,
+            framebuffer_attachment: hal::image::FramebufferAttachment {
+                usage: hal::image::Usage::COLOR_ATTACHMENT,
+                view_caps: hal::image::ViewCapabilities::empty(),
+                format: raw_format,
+            },
+            sampled_internal_use: resource::TextureUse::SAMPLED,
+            selector,
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+        }
+    }
+}
+
 impl<B: hal::Backend> Device<B> {
     pub(crate) fn destroy_bind_group(&self, bind_group: binding_model::BindGroup<B>) {
         self.desc_allocator
@@ -3210,6 +3280,46 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
+    pub unsafe fn device_create_raw_vulkan_texture_view(
+        &self,
+        device_id: id::DeviceId,
+        raw_image: ash::vk::Image,
+        view_type: ash::vk::ImageViewType,
+        desc: &resource::TextureViewDescriptor,
+        extent: wgt::Extent3d,
+        id_in: Input<G, id::TextureViewId>,
+    ) -> id::TextureViewId {
+        profiling::scope!("create_raw_vulkan_texture_view", "Device");
+
+        let hub = crate::backend::Vulkan::hub(self);
+        let mut token = Token::root();
+        let fid = hub.texture_views.prepare(id_in);
+
+        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+
+        let device = device_guard.get(device_id).unwrap();
+        let adapter = &adapter_guard[device.adapter_id.value];
+
+        let view = device.create_raw_vulkan_texture_view(
+            adapter,
+            raw_image,
+            view_type,
+            desc,
+            extent,
+        );
+        let ref_count = view.life_guard.add_ref();
+        let id = fid.assign(view, &mut token);
+
+        device
+            .trackers
+            .lock()
+            .views
+            .init(id, ref_count, PhantomData)
+            .unwrap();
+        return id.0;
+    }
+
     pub fn texture_label<B: GfxBackend>(&self, id: id::TextureId) -> String {
         B::hub(self).textures.label_for_resource(id)
     }
@@ -3386,6 +3496,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             texture_guard[source_id.value].device_id.value
                         }
                         resource::TextureViewInner::SwapChain { .. } => {
+                            return Err(resource::TextureViewDestroyError::SwapChainImage)
+                        }
+                        resource::TextureViewInner::Raw { .. } => {
                             return Err(resource::TextureViewDestroyError::SwapChainImage)
                         }
                     };

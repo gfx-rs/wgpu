@@ -26,7 +26,7 @@ use crate::id::QuerySetId;
 use crate::resource::QuerySet;
 #[cfg(debug_assertions)]
 use std::cell::Cell;
-use std::{fmt::Debug, marker::PhantomData, ops};
+use std::{any::Any, sync::Arc, fmt::Debug, marker::PhantomData, ops};
 
 /// A simple structure to manage identities of objects.
 #[derive(Debug)]
@@ -615,6 +615,7 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
                             }
                         }
                         TextureViewInner::SwapChain { .. } => {} //TODO
+                        TextureViewInner::Raw { .. } => {} //TODO
                     }
                 }
             }
@@ -756,11 +757,20 @@ impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
     }
 }
 
+struct NoDebug<T>(T);
+
+impl<T> Debug for NoDebug<T> {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Result::Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct Global<G: GlobalIdentityHandlerFactory> {
     pub instance: Instance,
     pub surfaces: Registry<Surface, SurfaceId, G>,
     hubs: Hubs<G>,
+    guard: NoDebug<Option<Arc<dyn Any + Send + Sync>>>,
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -770,6 +780,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             instance: Instance::new(name, 1, backends),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
+            guard: NoDebug(None),
+        }
+    }
+
+    pub unsafe fn required_vulkan_extensions(entry: &ash::Entry) -> Vec<&'static std::ffi::CStr> {
+        Instance::required_vulkan_extensions(entry)
+    }
+
+    pub unsafe fn new_raw_vulkan(
+        entry: ash::Entry,
+        instance: ash::Instance,
+        extensions: Vec<&'static std::ffi::CStr>,
+        parent_context: Arc<dyn Any + Send + Sync>,
+        factory: G,
+    ) -> Self {
+        profiling::scope!("new_raw_vulkan", "Global");
+        Self {
+            instance: Instance::new_raw_vulkan(entry, instance, extensions),
+            surfaces: Registry::without_backend(&factory, "Surface"),
+            hubs: Hubs::new(&factory),
+            guard: NoDebug(Some(parent_context)),
         }
     }
 
