@@ -31,6 +31,7 @@ use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat, Texture
 use std::{
     borrow::Cow,
     collections::{hash_map::Entry, BTreeMap},
+    error::Error,
     iter,
     marker::PhantomData,
     mem,
