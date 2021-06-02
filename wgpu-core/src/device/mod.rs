@@ -1040,12 +1040,16 @@ impl<B: GfxBackend> Device<B> {
             }
             pipeline::ShaderModuleSource::Wgsl(code) => {
                 profiling::scope!("naga::wgsl::parse_str");
-                // TODO: refactor the corresponding Naga error to be owned, and then
-                // display it instead of unwrapping
                 match naga::front::wgsl::parse_str(&code) {
                     Ok(module) => (None, Some(module)),
                     Err(err) => {
                         log::error!("Failed to parse WGSL code for {:?}: {}", desc.label, err);
+                        log::error!("{}:", err);
+                        let mut e = err.source();
+                        while let Some(source) = e {
+                            log::error!("\t{}", source);
+                            e = source.source();
+                        }
                         return Err(pipeline::CreateShaderModuleError::Parsing);
                     }
                 }
