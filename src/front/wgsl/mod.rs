@@ -2245,6 +2245,10 @@ impl Parser {
                     width,
                 }
             }
+            "atomic" => {
+                let (kind, width) = lexer.next_scalar_generic()?;
+                crate::TypeInner::Atomic { kind, width }
+            }
             "ptr" => {
                 lexer.expect_generic_paren('<')?;
                 let (ident, span) = lexer.next_ident_with_span()?;

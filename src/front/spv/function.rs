@@ -65,6 +65,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
     pub(super) fn parse_function(&mut self, module: &mut crate::Module) -> Result<(), Error> {
         self.lookup_expression.clear();
         self.lookup_load_override.clear();
+        self.lookup_sampled_image.clear();
 
         let result_type_id = self.next()?;
         let fun_id = self.next()?;
@@ -391,8 +392,6 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         module.apply_common_default_interpolation();
 
-        self.lookup_expression.clear();
-        self.lookup_sampled_image.clear();
         Ok(())
     }
 }
