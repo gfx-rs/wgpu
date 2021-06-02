@@ -4,11 +4,10 @@ use crate::{
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
     Arena, ArraySize, Binding, Constant, ConstantInner, Expression, FastHashMap, Function,
-    GlobalVariable, Handle, ImageClass, ImageDimension, Interpolation, Module, SampleLevel,
-    Sampling, ScalarKind, ScalarValue, ShaderStage, Statement, StorageClass, StorageFormat,
-    StructMember, Type, TypeInner,
+    GlobalVariable, Handle, ImageClass, ImageDimension, Interpolation, LocalVariable, Module,
+    SampleLevel, Sampling, ScalarKind, ScalarValue, ShaderStage, Statement, StorageClass,
+    StorageFormat, StructMember, Type, TypeInner,
 };
-use bit_set::BitSet;
 use std::fmt::Write;
 
 const INDENT: &str = "    ";
@@ -53,13 +52,25 @@ struct FunctionCtx<'a> {
     info: &'a FunctionInfo,
     /// The expression arena of the current function being written
     expressions: &'a Arena<Expression>,
+    /// Map of expressions that have associated variable names
+    named_expressions: &'a crate::NamedExpressions,
+}
+
+impl<'a> FunctionCtx<'_> {
+    /// Helper method that generates a [`NameKey`](crate::proc::NameKey) for a local in the current function
+    fn name_key(&self, local: Handle<LocalVariable>) -> NameKey {
+        match self.ty {
+            FunctionType::Function(handle) => NameKey::FunctionLocal(handle, local),
+            FunctionType::EntryPoint(idx) => NameKey::EntryPointLocal(idx, local),
+        }
+    }
 }
 
 pub struct Writer<W> {
     out: W,
     names: FastHashMap<NameKey, String>,
     namer: Namer,
-    named_expressions: BitSet,
+    named_expressions: crate::NamedExpressions,
     ep_results: Vec<(ShaderStage, Handle<Type>)>,
 }
 
@@ -69,7 +80,7 @@ impl<W: Write> Writer<W> {
             out,
             names: FastHashMap::default(),
             namer: Namer::default(),
-            named_expressions: BitSet::new(),
+            named_expressions: crate::NamedExpressions::default(),
             ep_results: vec![],
         }
     }
@@ -78,6 +89,7 @@ impl<W: Write> Writer<W> {
         self.names.clear();
         self.namer.reset(module, RESERVED, &[], &mut self.names);
         self.named_expressions.clear();
+        self.ep_results.clear();
     }
 
     pub fn write(&mut self, module: &Module, info: &ModuleInfo) -> BackendResult {
@@ -128,6 +140,7 @@ impl<W: Write> Writer<W> {
                 ty: FunctionType::Function(handle),
                 info: fun_info,
                 expressions: &function.expressions,
+                named_expressions: &function.named_expressions,
             };
 
             // Write the function
@@ -154,6 +167,7 @@ impl<W: Write> Writer<W> {
                 ty: FunctionType::EntryPoint(index as u16),
                 info: &info.get_entry_point(index),
                 expressions: &ep.function.expressions,
+                named_expressions: &ep.function.named_expressions,
             };
             self.write_function(&module, &ep.function, &func_ctx)?;
 
@@ -271,11 +285,7 @@ impl<W: Write> Writer<W> {
 
             // Write the local name
             // The leading space is important
-            let name_key = match func_ctx.ty {
-                FunctionType::Function(func_handle) => NameKey::FunctionLocal(func_handle, handle),
-                FunctionType::EntryPoint(idx) => NameKey::EntryPointLocal(idx, handle),
-            };
-            write!(self.out, "var {}: ", self.names[&name_key])?;
+            write!(self.out, "var {}: ", self.names[&func_ctx.name_key(handle)])?;
 
             // Write the local type
             self.write_type(&module, local.ty)?;
@@ -570,6 +580,21 @@ impl<W: Write> Writer<W> {
         match *stmt {
             Statement::Emit(ref range) => {
                 for handle in range.clone() {
+                    if let Some(name) = func_ctx.named_expressions.get(&handle) {
+                        write!(self.out, "{}", INDENT.repeat(indent))?;
+                        let sanitized_name = self.namer.call_unique(name);
+                        self.start_named_expr(module, handle, &func_ctx, &sanitized_name)?;
+                        self.write_expr(module, handle, &func_ctx)?;
+                        writeln!(self.out, ";")?;
+
+                        // Front end provides names for all variables at the start of writing.
+                        // But we write them to step by step. We need to recache them.
+                        // Otherwise, we could accidentally write variable name instead of full expression.
+                        // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
+                        self.named_expressions.insert(handle, sanitized_name);
+                        continue;
+                    }
+
                     let expr = &func_ctx.expressions[handle];
                     let min_ref_count = expr.bake_ref_count();
                     // Forcefully creating baking expressions in some cases to help with readability
@@ -581,10 +606,8 @@ impl<W: Write> Writer<W> {
                     };
                     if min_ref_count <= func_ctx.info[handle].ref_count || required_baking_expr {
                         write!(self.out, "{}", INDENT.repeat(indent))?;
-                        self.start_baking_expr(module, handle, &func_ctx)?;
-                        self.write_expr(module, handle, &func_ctx)?;
+                        self.write_baking_expr(module, handle, &func_ctx)?;
                         writeln!(self.out, ";")?;
-                        self.named_expressions.insert(handle.index());
                     }
                 }
             }
@@ -654,8 +677,7 @@ impl<W: Write> Writer<W> {
             } => {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
                 if let Some(expr) = result {
-                    self.start_baking_expr(module, expr, &func_ctx)?;
-                    self.named_expressions.insert(expr.index());
+                    self.write_baking_expr(module, expr, &func_ctx)?;
                 }
                 let func_name = &self.names[&NameKey::Function(function)];
                 write!(self.out, "{}(", func_name)?;
@@ -793,37 +815,41 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn start_baking_expr(
+    fn start_named_expr(
         &mut self,
         module: &Module,
         handle: Handle<Expression>,
-        context: &FunctionCtx,
+        func_ctx: &FunctionCtx,
+        name: &str,
     ) -> BackendResult {
         // Write variable name
-        write!(self.out, "let {}{}: ", BAKE_PREFIX, handle.index())?;
-        let ty = &context.info[handle].ty;
+        write!(self.out, "let {}: ", name)?;
+        let ty = &func_ctx.info[handle].ty;
         // Write variable type
         match *ty {
-            TypeResolution::Handle(ty_handle) => {
-                self.write_type(module, ty_handle)?;
+            TypeResolution::Handle(handle) => {
+                self.write_type(module, handle)?;
             }
-            TypeResolution::Value(crate::TypeInner::Scalar { kind, .. }) => {
-                write!(self.out, "{}", scalar_kind_str(kind))?;
-            }
-            TypeResolution::Value(crate::TypeInner::Vector { size, kind, .. }) => {
-                write!(
-                    self.out,
-                    "vec{}<{}>",
-                    vector_size_str(size),
-                    scalar_kind_str(kind),
-                )?;
-            }
-            _ => {
-                return Err(Error::Unimplemented(format!("start_baking_expr {:?}", ty)));
+            TypeResolution::Value(ref inner) => {
+                self.write_value_type(module, inner)?;
             }
         }
 
         write!(self.out, " = ")?;
+        Ok(())
+    }
+
+    fn write_baking_expr(
+        &mut self,
+        module: &Module,
+        handle: Handle<Expression>,
+        func_ctx: &FunctionCtx,
+    ) -> BackendResult {
+        let name = format!("{}{}", BAKE_PREFIX, handle.index());
+        self.start_named_expr(module, handle, func_ctx, &name)?;
+        self.write_expr(module, handle, func_ctx)?;
+        self.named_expressions.insert(handle, name);
+
         Ok(())
     }
 
@@ -837,12 +863,12 @@ impl<W: Write> Writer<W> {
         expr: Handle<Expression>,
         func_ctx: &FunctionCtx<'_>,
     ) -> BackendResult {
-        let expression = &func_ctx.expressions[expr];
-
-        if self.named_expressions.contains(expr.index()) {
-            write!(self.out, "{}{}", BAKE_PREFIX, expr.index())?;
+        if let Some(name) = self.named_expressions.get(&expr) {
+            write!(self.out, "{}", name)?;
             return Ok(());
         }
+
+        let expression = &func_ctx.expressions[expr];
 
         match *expression {
             Expression::Constant(constant) => self.write_constant(module, constant)?,
@@ -1110,13 +1136,7 @@ impl<W: Write> Writer<W> {
             }
             Expression::Load { pointer } => self.write_expr(module, pointer, func_ctx)?,
             Expression::LocalVariable(handle) => {
-                let name_key = match func_ctx.ty {
-                    FunctionType::Function(func_handle) => {
-                        NameKey::FunctionLocal(func_handle, handle)
-                    }
-                    FunctionType::EntryPoint(idx) => NameKey::EntryPointLocal(idx, handle),
-                };
-                write!(self.out, "{}", self.names[&name_key])?
+                write!(self.out, "{}", self.names[&func_ctx.name_key(handle)])?
             }
             Expression::ArrayLength(expr) => {
                 write!(self.out, "arrayLength(")?;
@@ -1273,10 +1293,8 @@ impl<W: Write> Writer<W> {
 
                 write!(self.out, ")")?
             }
-            Expression::Call(function) => {
-                let func_name = &self.names[&NameKey::Function(function)];
-                write!(self.out, "{}(", func_name)?
-            }
+            // Nothing to do here, since call expression already cached
+            Expression::Call(_) => {}
         }
 
         Ok(())

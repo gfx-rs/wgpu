@@ -48,6 +48,22 @@ impl Namer {
         base
     }
 
+    /// Helper function that return unique name without cache update.
+    /// This function should be used **after** [`Namer`](crate::proc::Namer) initialization by [`reset`](Self::reset()) function.
+    pub fn call_unique(&mut self, string: &str) -> String {
+        let base = self.sanitize(string);
+        match self.unique.entry(base) {
+            Entry::Occupied(mut e) => {
+                *e.get_mut() += 1;
+                format!("{}{}", e.key(), e.get())
+            }
+            Entry::Vacant(e) => {
+                let name = e.key().to_string();
+                name
+            }
+        }
+    }
+
     pub fn call(&mut self, label_raw: &str) -> String {
         let base = self.sanitize(label_raw);
         match self.unique.entry(base) {

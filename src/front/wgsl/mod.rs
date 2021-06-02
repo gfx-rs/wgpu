@@ -589,6 +589,7 @@ struct StatementContext<'input, 'temp, 'out> {
     typifier: &'temp mut super::Typifier,
     variables: &'out mut Arena<crate::LocalVariable>,
     expressions: &'out mut Arena<crate::Expression>,
+    named_expressions: &'out mut FastHashMap<Handle<crate::Expression>, String>,
     types: &'out mut Arena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
     global_vars: &'out Arena<crate::GlobalVariable>,
@@ -603,6 +604,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             typifier: self.typifier,
             variables: self.variables,
             expressions: self.expressions,
+            named_expressions: self.named_expressions,
             types: self.types,
             constants: self.constants,
             global_vars: self.global_vars,
@@ -2563,6 +2565,9 @@ impl Parser {
                 }
                 block.extend(emitter.finish(context.expressions));
                 context.lookup_ident.insert(name, expr_id);
+                context
+                    .named_expressions
+                    .insert(expr_id, String::from(name));
             }
             "var" => {
                 enum Init {
@@ -2985,11 +2990,13 @@ impl Parser {
             result,
             local_variables: Arena::new(),
             expressions,
+            named_expressions: crate::NamedExpressions::default(),
             body: Vec::new(),
         };
 
         // read body
         let mut typifier = super::Typifier::new();
+        let mut named_expressions = crate::FastHashMap::default();
         fun.body = self.parse_block(
             lexer,
             StatementContext {
@@ -2997,6 +3004,7 @@ impl Parser {
                 typifier: &mut typifier,
                 variables: &mut fun.local_variables,
                 expressions: &mut fun.expressions,
+                named_expressions: &mut named_expressions,
                 types: &mut module.types,
                 constants: &mut module.constants,
                 global_vars: &module.global_variables,
@@ -3009,6 +3017,9 @@ impl Parser {
         ensure_block_returns(&mut fun.body);
         // done
         self.scopes.pop();
+
+        // Set named expressions after block parsing ends
+        fun.named_expressions = named_expressions;
 
         Ok((fun, fun_name))
     }

@@ -181,6 +181,7 @@
                     pointer: 5,
                 ),
             ],
+            named_expressions: {},
             body: [
                 Store(
                     pointer: 3,
@@ -320,6 +321,7 @@
                     ),
                     Call(1),
                 ],
+                named_expressions: {},
                 body: [
                     Emit((
                         start: 2,

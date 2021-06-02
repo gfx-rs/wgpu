@@ -37,11 +37,12 @@ void main() {
     vec2 pos1;
     vec2 vel1;
     uint i = 0u;
-    if((global_invocation_id.x >= 1500u)) {
+    uint index = global_invocation_id.x;
+    if((index >= 1500u)) {
         return;
     }
-    vPos = _group_0_binding_1.particles[global_invocation_id.x].pos;
-    vVel = _group_0_binding_1.particles[global_invocation_id.x].vel;
+    vPos = _group_0_binding_1.particles[index].pos;
+    vVel = _group_0_binding_1.particles[index].vel;
     cMass = vec2(0.0, 0.0);
     cVel = vec2(0.0, 0.0);
     colVel = vec2(0.0, 0.0);
@@ -49,7 +50,7 @@ void main() {
         if((i >= 1500u)) {
             break;
         }
-        if((i == global_invocation_id.x)) {
+        if((i == index)) {
             continue;
         }
         pos1 = _group_0_binding_1.particles[i].pos;
@@ -88,8 +89,8 @@ void main() {
     if((vPos.y > 1.0)) {
         vPos.y = -1.0;
     }
-    _group_0_binding_2.particles[global_invocation_id.x].pos = vPos;
-    _group_0_binding_2.particles[global_invocation_id.x].vel = vVel;
+    _group_0_binding_2.particles[index].pos = vPos;
+    _group_0_binding_2.particles[index].vel = vVel;
     return;
 }
 

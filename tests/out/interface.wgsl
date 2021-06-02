@@ -11,12 +11,15 @@ struct FragmentOutput {
 
 [[stage(vertex)]]
 fn vertex([[builtin(vertex_index)]] vertex_index: u32, [[builtin(instance_index)]] instance_index: u32, [[location(10)]] color1: u32) -> VertexOutput {
-    return VertexOutput(vec4<f32>(1.0), f32(((vertex_index + instance_index) + color1)));
+    let tmp: u32 = ((vertex_index + instance_index) + color1);
+    return VertexOutput(vec4<f32>(1.0), f32(tmp));
 }
 
 [[stage(fragment)]]
 fn fragment(in: VertexOutput, [[builtin(front_facing)]] front_facing: bool, [[builtin(sample_index)]] sample_index: u32, [[builtin(sample_mask)]] sample_mask1: u32) -> FragmentOutput {
-    return FragmentOutput(in.varying, (sample_mask1 & (1u << sample_index)), select(0.0, 1.0, front_facing));
+    let mask: u32 = (sample_mask1 & (1u << sample_index));
+    let color2: f32 = select(0.0, 1.0, front_facing);
+    return FragmentOutput(in.varying, mask, color2);
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]

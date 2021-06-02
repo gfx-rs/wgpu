@@ -1054,6 +1054,7 @@
                     depth_ref: Some(69),
                 ),
             ],
+            named_expressions: {},
             body: [
                 Emit((
                     start: 48,
@@ -1443,6 +1444,7 @@
                     ],
                 ),
             ],
+            named_expressions: {},
             body: [
                 Loop(
                     body: [
@@ -1550,6 +1552,7 @@
                         pointer: 5,
                     ),
                 ],
+                named_expressions: {},
                 body: [
                     Store(
                         pointer: 2,

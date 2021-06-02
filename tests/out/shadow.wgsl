@@ -30,7 +30,9 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
     if ((homogeneous_coords.w <= 0.0)) {
         return 1.0;
     }
-    let _e26: f32 = textureSampleCompareLevel(t_shadow, sampler_shadow, (((homogeneous_coords.xy * vec2<f32>(0.5, -0.5)) / vec2<f32>(homogeneous_coords.w)) + vec2<f32>(0.5, 0.5)), i32(light_id), (homogeneous_coords.z / homogeneous_coords.w));
+    let flip_correction: vec2<f32> = vec2<f32>(0.5, -0.5);
+    let light_local: vec2<f32> = (((homogeneous_coords.xy * flip_correction) / vec2<f32>(homogeneous_coords.w)) + vec2<f32>(0.5, 0.5));
+    let _e26: f32 = textureSampleCompareLevel(t_shadow, sampler_shadow, light_local, i32(light_id), (homogeneous_coords.z / homogeneous_coords.w));
     return _e26;
 }
 
@@ -39,13 +41,16 @@ fn fs_main([[location(0), interpolate(perspective)]] raw_normal: vec3<f32>, [[lo
     var color1: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
     var i: u32 = 0u;
 
+    let normal: vec3<f32> = normalize(raw_normal);
     loop {
         if ((i >= min(u_globals.num_lights.x, c_max_lights))) {
             break;
         }
-        let _e21: Light = s_lights.data[i];
-        let _e25: f32 = fetch_shadow(i, (_e21.proj * position));
-        color1 = (color1 + ((_e25 * max(0.0, dot(normalize(raw_normal), normalize((_e21.pos.xyz - position.xyz))))) * _e21.color.xyz));
+        let light: Light = s_lights.data[i];
+        let _e25: f32 = fetch_shadow(i, (light.proj * position));
+        let light_dir: vec3<f32> = normalize((light.pos.xyz - position.xyz));
+        let diffuse: f32 = max(0.0, dot(normal, light_dir));
+        color1 = (color1 + ((_e25 * diffuse) * light.color.xyz));
         continuing {
             i = (i + 1u);
         }

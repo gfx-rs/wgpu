@@ -151,6 +151,9 @@ pub type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>
 /// Hash set that is faster but not resilient to DoS attacks.
 pub type FastHashSet<K> = HashSet<K, BuildHasherDefault<fxhash::FxHasher>>;
 
+/// Map of expressions that have associated variable names
+pub(crate) type NamedExpressions = FastHashMap<Handle<Expression>, String>;
+
 /// Early fragment tests. In a standard situation if a driver determines that it is possible to
 /// switch on early depth test it will. Typical situations when early depth test is switched off:
 ///   - Calling ```discard``` in a shader.
@@ -1043,6 +1046,8 @@ pub struct Function {
     pub local_variables: Arena<LocalVariable>,
     /// Expressions used inside this function.
     pub expressions: Arena<Expression>,
+    /// Map of expressions that have associated variable names
+    pub named_expressions: NamedExpressions,
     /// Block of instructions comprising the body of the function.
     pub body: Block,
 }

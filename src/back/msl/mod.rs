@@ -77,7 +77,7 @@ pub struct PerStageResources {
 
     /// The slot of a buffer that contains an array of `u32`,
     /// one for the size of each bound buffer that contains a runtime array,
-    /// in order of [`GlobalVariable`] declarations.
+    /// in order of [`crate::GlobalVariable`] declarations.
     #[cfg_attr(feature = "deserialize", serde(default))]
     pub sizes_buffer: Option<Slot>,
 }

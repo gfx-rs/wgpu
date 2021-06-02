@@ -28,7 +28,7 @@ pub enum Terminator {
     ///
     /// switch(SELECTOR) {
     ///  case TARGET_LITERAL#: {
-    ///    TARGET_BLOCK#  
+    ///    TARGET_BLOCK#
     ///  }
     ///  default: {
     ///    DEFAULT
@@ -90,6 +90,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 },
                 local_variables: Arena::new(),
                 expressions: self.make_expression_storage(),
+                named_expressions: crate::FastHashMap::default(),
                 body: Vec::new(),
             }
         };
@@ -194,6 +195,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 result: None,
                 local_variables: Arena::new(),
                 expressions: Arena::new(),
+                named_expressions: crate::FastHashMap::default(),
                 body: Vec::new(),
             };
 

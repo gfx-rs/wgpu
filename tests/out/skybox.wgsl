@@ -23,8 +23,10 @@ fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
 
     tmp1_ = (i32(vertex_index) / 2);
     tmp2_ = (i32(vertex_index) & 1);
-    let _e24: vec4<f32> = vec4<f32>(((f32(tmp1_) * 4.0) - 1.0), ((f32(tmp2_) * 4.0) - 1.0), 0.0, 1.0);
-    return VertexOutput(_e24, (transpose(mat3x3<f32>(r_data.view[0].xyz, r_data.view[1].xyz, r_data.view[2].xyz)) * (r_data.proj_inv * _e24).xyz));
+    let pos: vec4<f32> = vec4<f32>(((f32(tmp1_) * 4.0) - 1.0), ((f32(tmp2_) * 4.0) - 1.0), 0.0, 1.0);
+    let inv_model_view: mat3x3<f32> = transpose(mat3x3<f32>(r_data.view[0].xyz, r_data.view[1].xyz, r_data.view[2].xyz));
+    let unprojected: vec4<f32> = (r_data.proj_inv * pos);
+    return VertexOutput(pos, (inv_model_view * unprojected.xyz));
 }
 
 [[stage(fragment)]]

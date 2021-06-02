@@ -630,6 +630,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                             name: Some(name),
                                             result,
                                             expressions,
+                                            named_expressions: crate::FastHashMap::default(),
                                             local_variables,
                                             arguments,
                                             body,

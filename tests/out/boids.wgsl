@@ -41,11 +41,12 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
     var vel1: vec2<f32>;
     var i: u32 = 0u;
 
-    if ((global_invocation_id.x >= NUM_PARTICLES)) {
+    let index: u32 = global_invocation_id.x;
+    if ((index >= NUM_PARTICLES)) {
         return;
     }
-    vPos = particlesSrc.particles[global_invocation_id.x].pos;
-    vVel = particlesSrc.particles[global_invocation_id.x].vel;
+    vPos = particlesSrc.particles[index].pos;
+    vVel = particlesSrc.particles[index].vel;
     cMass = vec2<f32>(0.0, 0.0);
     cVel = vec2<f32>(0.0, 0.0);
     colVel = vec2<f32>(0.0, 0.0);
@@ -53,7 +54,7 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
         if ((i >= NUM_PARTICLES)) {
             break;
         }
-        if ((i == global_invocation_id.x)) {
+        if ((i == index)) {
             continue;
         }
         pos1 = particlesSrc.particles[i].pos;
@@ -94,7 +95,7 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
     if ((vPos.y > 1.0)) {
         vPos.y = -1.0;
     }
-    particlesDst.particles[global_invocation_id.x].pos = vPos;
-    particlesDst.particles[global_invocation_id.x].vel = vVel;
+    particlesDst.particles[index].pos = vPos;
+    particlesDst.particles[index].vel = vVel;
     return;
 }
