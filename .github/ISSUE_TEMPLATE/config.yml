@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Issue or enhancement in wgpu-core
+    url: https://github.com/gfx-rs/wgpu/issues/new/choose
+    about: Issues with or enhancements for the core logic, validation, or the backends should go here.
+  - name: Question about wgpu
+    url: https://github.com/gfx-rs/wgpu-rs/discussions/new
+    about: Any questions about how to use wgpu should go here.

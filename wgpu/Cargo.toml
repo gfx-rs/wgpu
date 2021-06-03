@@ -1,0 +1,247 @@
+[package]
+name = "wgpu"
+version = "0.8.0"
+authors = ["wgpu developers"]
+edition = "2018"
+description = "Rusty WebGPU API wrapper"
+homepage = "https://github.com/gfx-rs/wgpu-rs"
+repository = "https://github.com/gfx-rs/wgpu-rs"
+keywords = ["graphics"]
+license = "MPL-2.0"
+exclude = ["etc/**/*", "examples/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lib]
+
+[features]
+default = []
+trace = ["serde", "wgc/trace"]
+replay = ["serde", "wgc/replay"]
+webgl = ["wgc"]
+# Enable SPIRV-Cross
+cross = ["wgc/cross"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
+package = "wgpu-core"
+git = "https://github.com/gfx-rs/wgpu"
+rev = "eadaa1b7d8f585761e28445904fe619b180aca0d"
+features = ["raw-window-handle"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
+package = "wgpu-core"
+git = "https://github.com/gfx-rs/wgpu"
+rev = "eadaa1b7d8f585761e28445904fe619b180aca0d"
+features = ["raw-window-handle"]
+optional = true
+
+[dependencies.wgt]
+package = "wgpu-types"
+git = "https://github.com/gfx-rs/wgpu"
+rev = "eadaa1b7d8f585761e28445904fe619b180aca0d"
+
+[dependencies]
+arrayvec = "0.5"
+log = "0.4"
+parking_lot = "0.11"
+raw-window-handle = "0.3"
+serde = { version = "1", features = ["derive"], optional = true }
+smallvec = "1"
+
+[dev-dependencies]
+bytemuck = { version = "1.4", features = ["derive"] }
+cgmath = "0.18"
+ddsfile = "0.4"
+log = "0.4"
+noise = "0.7"
+obj = "0.10"
+png = "0.16"
+rand = { version = "0.7.2", features = ["wasm-bindgen"] }
+winit = { version = "0.24", features = ["web-sys"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+async-executor = "1.0"
+pollster = "0.2"
+env_logger = "0.8"
+
+# used to test all the example shaders
+[dev-dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-25"
+features = ["wgsl-in"]
+
+# used to generate SPIR-V for the Web target
+[target.'cfg(target_arch = "wasm32")'.dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-25"
+features = ["wgsl-in", "spv-out"]
+
+[[example]]
+name="hello-compute"
+path="examples/hello-compute/main.rs"
+test = true
+
+[patch."https://github.com/gfx-rs/wgpu"]
+#wgpu-types = { path = "../wgpu/wgpu-types" }
+#wgpu-core = { path = "../wgpu/wgpu-core" }
+
+[patch."https://github.com/gfx-rs/subscriber"]
+#wgpu-subscriber = { version = "0.1", path = "../subscriber" }
+
+[patch."https://github.com/gfx-rs/naga"]
+#naga = { path = "../naga" }
+
+[patch."https://github.com/zakarumych/gpu-descriptor"]
+#gpu-descriptor = { path = "../gpu-descriptor/gpu-descriptor" }
+
+[patch."https://github.com/zakarumych/gpu-alloc"]
+#gpu-alloc = { path = "../gpu-alloc/gpu-alloc" }
+
+[patch."https://github.com/gfx-rs/gfx"]
+#gfx-hal = { path = "../gfx/src/hal" }
+#gfx-backend-empty = { path = "../gfx/src/backend/empty" }
+#gfx-backend-vulkan = { path = "../gfx/src/backend/vulkan" }
+#gfx-backend-gl = { path = "../gfx/src/backend/gl" }
+#gfx-backend-dx12 = { path = "../gfx/src/backend/dx12" }
+#gfx-backend-dx11 = { path = "../gfx/src/backend/dx11" }
+#gfx-backend-metal = { path = "../gfx/src/backend/metal" }
+
+[patch.crates-io]
+#web-sys = { path = "../wasm-bindgen/crates/web-sys" }
+#js-sys = { path = "../wasm-bindgen/crates/js-sys" }
+#wasm-bindgen = { path = "../wasm-bindgen" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2.73" # remember to change version in wiki as well
+web-sys = { version = "=0.3.50", features = [
+    "Document",
+    "Navigator",
+    "Node",
+    "NodeList",
+    "Gpu",
+    "GpuAdapter",
+    "GpuAdapterFeatures",
+    "GpuAdapterLimits",
+    "GpuAddressMode",
+    "GpuBindGroup",
+    "GpuBindGroupDescriptor",
+    "GpuBindGroupEntry",
+    "GpuBindGroupLayout",
+    "GpuBindGroupLayoutDescriptor",
+    "GpuBindGroupLayoutEntry",
+    "GpuBlendComponent",
+    "GpuBlendFactor",
+    "GpuBlendOperation",
+    "GpuBlendState",
+    "GpuBuffer",
+    "GpuBufferBinding",
+    "GpuBufferBindingLayout",
+    "GpuBufferBindingType",
+    "GpuBufferDescriptor",
+    "GpuBufferUsage",
+    "GpuCanvasContext",
+    "GpuColorDict",
+    "GpuColorTargetState",
+    "GpuColorWrite",
+    "GpuCommandBuffer",
+    "GpuCommandBufferDescriptor",
+    "GpuCommandEncoder",
+    "GpuCommandEncoderDescriptor",
+    "GpuCompareFunction",
+    "GpuCompilationInfo",
+    "GpuCompilationMessage",
+    "GpuCompilationMessageType",
+    "GpuComputePassDescriptor",
+    "GpuComputePassEncoder",
+    "GpuComputePipeline",
+    "GpuComputePipelineDescriptor",
+    "GpuCullMode",
+    "GpuDepthStencilState",
+    "GpuDevice",
+    "GpuDeviceDescriptor",
+    "GpuDeviceLostInfo",
+    "GpuDeviceLostReason",
+    "GpuErrorFilter",
+    "GpuExtent3dDict",
+    "GpuFeatureName",
+    "GpuFilterMode",
+    "GpuFragmentState",
+    "GpuFrontFace",
+    "GpuImageCopyBuffer",
+    "GpuImageCopyImageBitmap",
+    "GpuImageCopyTexture",
+    "GpuImageDataLayout",
+    "GpuIndexFormat",
+    "GpuInputStepMode",
+    "GpuLoadOp",
+    "GpuMapMode",
+    "GpuMultisampleState",
+    "GpuObjectDescriptorBase",
+    "GpuOrigin2dDict",
+    "GpuOrigin3dDict",
+    "GpuOutOfMemoryError",
+    "GpuPipelineDescriptorBase",
+    "GpuPipelineLayout",
+    "GpuPipelineLayoutDescriptor",
+    "GpuPipelineStatisticName",
+    "GpuPowerPreference",
+    "GpuPrimitiveState",
+    "GpuPrimitiveTopology",
+    "GpuProgrammableStage",
+    "GpuQuerySet",
+    "GpuQuerySetDescriptor",
+    "GpuQueryType",
+    "GpuQueue",
+    "GpuRenderBundle",
+    "GpuRenderBundleDescriptor",
+    "GpuRenderBundleEncoder",
+    "GpuRenderBundleEncoderDescriptor",
+    "GpuRenderPassColorAttachment",
+    "GpuRenderPassDepthStencilAttachment",
+    "GpuRenderPassDescriptor",
+    "GpuRenderPassEncoder",
+    "GpuRenderPipeline",
+    "GpuRenderPipelineDescriptor",
+    "GpuRequestAdapterOptions",
+    "GpuSampler",
+    "GpuSamplerBindingLayout",
+    "GpuSamplerBindingType",
+    "GpuSamplerDescriptor",
+    "GpuShaderModule",
+    "GpuShaderModuleDescriptor",
+    "GpuShaderStage",
+    "GpuStencilFaceState",
+    "GpuStencilOperation",
+    "GpuStorageTextureAccess",
+    "GpuStorageTextureBindingLayout",
+    "GpuStoreOp",
+    "GpuSwapChain",
+    "GpuSwapChainDescriptor",
+    "GpuTexture",
+    "GpuTextureAspect",
+    "GpuTextureBindingLayout",
+    "GpuTextureDescriptor",
+    "GpuTextureDimension",
+    "GpuTextureFormat",
+    "GpuTextureSampleType",
+    "GpuTextureUsage",
+    "GpuTextureView",
+    "GpuTextureViewDescriptor",
+    "GpuTextureViewDimension",
+    "GpuUncapturedErrorEvent",
+    "GpuUncapturedErrorEventInit",
+    "GpuValidationError",
+    "GpuVertexAttribute",
+    "GpuVertexBufferLayout",
+    "GpuVertexFormat",
+    "GpuVertexState",
+    "HtmlCanvasElement",
+    "Window",
+]}
+js-sys = "0.3.50"
+wasm-bindgen-futures = "0.4.23"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+console_error_panic_hook = "0.1.6"
+console_log = "0.1.2"
