@@ -1,14 +1,5 @@
 <img align="right" width="25%" src="logo.png">
 
-# wgpu-rs
-
-[![Build Status](https://github.com/gfx-rs/wgpu-rs/workflows/CI/badge.svg?branch=master)](https://github.com/gfx-rs/wgpu-rs/actions)
-[![Crates.io](https://img.shields.io/crates/v/wgpu.svg)](https://crates.io/crates/wgpu)
-[![Docs.rs](https://docs.rs/wgpu/badge.svg)](https://docs.rs/wgpu)
-
-[![Matrix](https://img.shields.io/badge/Dev_Matrix-%23wgpu%3Amatrix.org-blueviolet.svg)](https://matrix.to/#/#wgpu:matrix.org)
-[![Matrix](https://img.shields.io/badge/User_Matrix-%23wgpu--users%3Amatrix.org-blueviolet.svg)](https://matrix.to/#/#wgpu-users:matrix.org)
-
 wgpu-rs is an idiomatic Rust wrapper over [wgpu-core](https://github.com/gfx-rs/wgpu). It's designed to be suitable for general purpose graphics and computation needs of Rust community.
 
 wgpu-rs can target both the natively supported backends and WASM directly.
@@ -51,42 +42,6 @@ The following environment variables can be used to configure how the framework e
 #### Run Examples on the Web (`wasm32-unknown-unknown`)
 
 See [wiki article](https://github.com/gfx-rs/wgpu-rs/wiki/Running-on-the-Web-with-WebGPU-and-WebGL).
-
-## Logging
-
-`wgpu-core` uses `tracing` for logging and `wgpu-rs` uses `log` for logging.
-
-### Simple Setup
-
-If you just want log messages to show up and to use the chrome tracing infrastructure,
-take a dependency on the `wgpu-subscriber` crate then call `initialize_default_subscriber`. It will
-set up logging to stdout/stderr based on the `RUST_LOG` environment variable.
-
-### Manual Conversion
-
-`tracing` also has tools available to convert all `tracing` events into `log` events and vise versa.
-
-#### `log` events -> `tracing` events
-
-The `tracing_log` crate has a `log` logger to translate all events into `tracing` events. Call:
-
-```rust
-tracing_log::LogTracer::init().unwrap()
-```
-
-#### `tracing` events -> `log` events
-
-The `tracing` crate has a `log` feature which will automatically use `log` if no subscriber is added:
-
-```toml
-tracing = { version = "0.1", features = ["log"] }
-```
-
-If you want events to be handled both by `tracing` and `log`, enable the `log-always` feature of `tracing`:
-
-```toml
-tracing = { version = "0.1", features = ["log-always"] }
-```
 
 ## Development
 

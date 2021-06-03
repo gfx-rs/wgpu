@@ -1,8 +1,5 @@
 <img align="right" width="25%" src="logo.png">
 
-This github project is mirrored in "gfx/wgpu" of [Mozilla-central](https://hg.mozilla.org/mozilla-central/file/tip/gfx/wgpu).
-Issues and pull requests are welcome, but some bidirectional synchronization may be involved.
-
 # wgpu
 
 [![Matrix](https://img.shields.io/badge/Dev_Matrix-%23wgpu%3Amatrix.org-blueviolet.svg)](https://matrix.to/#/#wgpu:matrix.org) [![Matrix](https://img.shields.io/badge/User_Matrix-%23wgpu--users%3Amatrix.org-blueviolet.svg)](https://matrix.to/#/#wgpu-users:matrix.org)
@@ -13,12 +10,13 @@ This is the core logic of an experimental [WebGPU](https://www.w3.org/community/
 
 The implementation consists of the following parts:
 
+  - [![Crates.io](https://img.shields.io/crates/v/wgpu.svg)](https://crates.io/crates/wgpu) [![docs.rs](https://docs.rs/wgpu/badge.svg)](https://docs.rs/wgpu/) - public Rust API
   - [![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core) [![docs.rs](https://docs.rs/wgpu-core/badge.svg)](https://docs.rs/wgpu-core/) - internal Rust API for WebGPU implementations to use
   - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between `wgpu-core` and `wgpu-rs`
   - `player` - standalone application for replaying the API traces, uses `winit`
 
-This repository contains the core of `wgpu`, and is not usable directly by applications.
-If you are looking for the user-facing Rust API, you need [wgpu-rs](https://github.com/gfx-rs/wgpu-rs).
+Rust examples can be found at `wgpu/examples`. `wgpu` is a default member, so you can run the examples directly from the root, e.g. `cargo run --example boids`.
+
 If you are looking for the native implementation or bindings to the API in other languages, you need [wgpu-native](https://github.com/gfx-rs/wgpu-native).
 
 ## Supported Platforms
