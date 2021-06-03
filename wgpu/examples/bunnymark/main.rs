@@ -131,7 +131,7 @@ impl framework::Example for Example {
         });
 
         let texture = {
-            let img_data = include_bytes!("../../logo.png");
+            let img_data = include_bytes!("../../../logo.png");
             let decoder = png::Decoder::new(std::io::Cursor::new(img_data));
             let (info, mut reader) = decoder.read_info().unwrap();
             let mut buf = vec![0; info.buffer_size()];

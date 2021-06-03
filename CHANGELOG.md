@@ -1,6 +1,6 @@
 # Change Log
 
-TBD
+TBD:
   - Merged wgpu-rs and wgpu back into a single repository
 
 ## v0.8 (2021-04-29)

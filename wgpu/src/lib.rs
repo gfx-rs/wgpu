@@ -2,7 +2,7 @@
 //!
 //! To start using the API, create an [`Instance`].
 
-#![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu-rs/master/logo.png")]
+#![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/master/logo.png")]
 #![warn(missing_docs)]
 
 mod backend;
