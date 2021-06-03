@@ -116,7 +116,11 @@ impl Program<'_> {
         name: &str,
         meta: SourceMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
-        match *self.resolve_type(ctx, expression, meta)? {
+        let ty = match *self.resolve_type(ctx, expression, meta)? {
+            TypeInner::Pointer { base, .. } => &self.module.types[base].inner,
+            ref ty => ty,
+        };
+        match *ty {
             TypeInner::Struct { ref members, .. } => {
                 let index = members
                     .iter()
