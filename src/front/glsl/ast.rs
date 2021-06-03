@@ -46,6 +46,31 @@ bitflags::bitflags! {
     }
 }
 
+bitflags::bitflags! {
+    pub struct PrologueStage: u32 {
+        const VERTEX = 0x1;
+        const FRAGMENT = 0x2;
+        const COMPUTE = 0x4;
+    }
+}
+
+impl From<ShaderStage> for PrologueStage {
+    fn from(stage: ShaderStage) -> Self {
+        match stage {
+            ShaderStage::Vertex => PrologueStage::VERTEX,
+            ShaderStage::Fragment => PrologueStage::FRAGMENT,
+            ShaderStage::Compute => PrologueStage::COMPUTE,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct EntryArg {
+    pub binding: Binding,
+    pub handle: Handle<GlobalVariable>,
+    pub prologue: PrologueStage,
+}
+
 #[derive(Debug)]
 pub struct Program<'a> {
     pub version: u16,
@@ -58,7 +83,7 @@ pub struct Program<'a> {
     pub global_variables: Vec<(String, GlobalLookup)>,
     pub constants: Vec<(String, Handle<Constant>)>,
 
-    pub entry_args: Vec<(Binding, Handle<GlobalVariable>)>,
+    pub entry_args: Vec<EntryArg>,
     pub entries: Vec<(String, ShaderStage, Handle<Function>)>,
     // TODO: More efficient representation
     pub function_arg_use: Vec<Vec<EntryArgUse>>,

@@ -30,7 +30,7 @@ impl Program<'_> {
             return Ok(Some(global_var));
         }
 
-        let mut add_builtin = |inner, builtin, mutable| {
+        let mut add_builtin = |inner, builtin, mutable, prologue| {
             let ty = self
                 .module
                 .types
@@ -46,7 +46,11 @@ impl Program<'_> {
             });
 
             let idx = self.entry_args.len();
-            self.entry_args.push((Binding::BuiltIn(builtin), handle));
+            self.entry_args.push(EntryArg {
+                binding: Binding::BuiltIn(builtin),
+                handle,
+                prologue,
+            });
 
             self.global_variables.push((
                 name.into(),
@@ -80,6 +84,7 @@ impl Program<'_> {
                 },
                 BuiltIn::Position,
                 true,
+                PrologueStage::FRAGMENT,
             ),
             "gl_VertexIndex" => add_builtin(
                 TypeInner::Scalar {
@@ -88,6 +93,7 @@ impl Program<'_> {
                 },
                 BuiltIn::VertexIndex,
                 false,
+                PrologueStage::VERTEX,
             ),
             "gl_InstanceIndex" => add_builtin(
                 TypeInner::Scalar {
@@ -96,6 +102,7 @@ impl Program<'_> {
                 },
                 BuiltIn::InstanceIndex,
                 false,
+                PrologueStage::VERTEX,
             ),
             _ => Ok(None),
         }
@@ -304,6 +311,11 @@ impl Program<'_> {
         }
 
         if let Some(location) = location {
+            let prologue = if let StorageQualifier::Input = storage {
+                PrologueStage::all()
+            } else {
+                PrologueStage::empty()
+            };
             let interpolation = self.module.types[ty].inner.scalar_kind().map(|kind| {
                 if let ScalarKind::Float = kind {
                     Interpolation::Perspective
@@ -322,14 +334,15 @@ impl Program<'_> {
             });
 
             let idx = self.entry_args.len();
-            self.entry_args.push((
-                Binding::Location {
+            self.entry_args.push(EntryArg {
+                binding: Binding::Location {
                     location,
                     interpolation,
                     sampling,
                 },
                 handle,
-            ));
+                prologue,
+            });
 
             self.global_variables.push((
                 name,

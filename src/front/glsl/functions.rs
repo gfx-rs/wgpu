@@ -539,25 +539,26 @@ impl Program<'_> {
             let mut expressions = Arena::new();
             let mut body = Vec::new();
 
-            for (i, (binding, handle)) in self.entry_args.iter().cloned().enumerate() {
+            for (i, arg) in self.entry_args.iter().enumerate() {
                 if function_arg_use[function.index()]
                     .get(i)
                     .map_or(true, |u| !u.contains(EntryArgUse::READ))
+                    || !arg.prologue.contains(stage.into())
                 {
                     continue;
                 }
 
-                let ty = self.module.global_variables[handle].ty;
-                let arg = arguments.len() as u32;
+                let ty = self.module.global_variables[arg.handle].ty;
+                let idx = arguments.len() as u32;
 
                 arguments.push(FunctionArgument {
                     name: None,
                     ty,
-                    binding: Some(binding),
+                    binding: Some(arg.binding.clone()),
                 });
 
-                let pointer = expressions.append(Expression::GlobalVariable(handle));
-                let value = expressions.append(Expression::FunctionArgument(arg));
+                let pointer = expressions.append(Expression::GlobalVariable(arg.handle));
+                let value = expressions.append(Expression::FunctionArgument(idx));
 
                 body.push(Statement::Store { pointer, value });
             }
@@ -572,7 +573,7 @@ impl Program<'_> {
             let mut members = Vec::new();
             let mut components = Vec::new();
 
-            for (i, (binding, handle)) in self.entry_args.iter().cloned().enumerate() {
+            for (i, arg) in self.entry_args.iter().enumerate() {
                 if function_arg_use[function.index()]
                     .get(i)
                     .map_or(true, |u| !u.contains(EntryArgUse::WRITE))
@@ -580,18 +581,18 @@ impl Program<'_> {
                     continue;
                 }
 
-                let ty = self.module.global_variables[handle].ty;
+                let ty = self.module.global_variables[arg.handle].ty;
 
                 members.push(StructMember {
                     name: None,
                     ty,
-                    binding: Some(binding),
+                    binding: Some(arg.binding.clone()),
                     offset: span,
                 });
 
                 span += self.module.types[ty].inner.span(&self.module.constants);
 
-                let pointer = expressions.append(Expression::GlobalVariable(handle));
+                let pointer = expressions.append(Expression::GlobalVariable(arg.handle));
                 let len = expressions.len();
                 let load = expressions.append(Expression::Load { pointer });
                 body.push(Statement::Emit(expressions.range_from(len)));
