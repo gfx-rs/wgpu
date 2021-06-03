@@ -16,7 +16,7 @@ async fn run() {
             .collect()
     };
 
-    let steps = execute_gpu(numbers).await;
+    let steps = execute_gpu(&numbers).await.unwrap();
 
     let disp_steps: Vec<String> = steps
         .iter()
@@ -31,15 +31,14 @@ async fn run() {
     log::info!("Steps: [{}]", disp_steps.join(", "));
 }
 
-async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
+async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
     // Instantiates instance of WebGPU
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions::default())
-        .await
-        .unwrap();
+        .await?;
 
     // `request_device` instantiates the feature specific connection to the GPU, defining some parameters,
     //  `features` being the available features.
@@ -56,17 +55,16 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         .unwrap();
 
     // Loads the shader from the SPIR-V file.arrayvec
-    let mut flags = wgpu::ShaderFlags::VALIDATION;
-    match adapter.get_info().backend {
-        wgpu::Backend::Vulkan | wgpu::Backend::Metal | wgpu::Backend::Gl => {
-            flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION;
-        }
-        _ => {}
+    let info = adapter.get_info();
+    // skip this on LavaPipe temporarily
+    if info.vendor == 0x10005 {
+        return None;
     }
+
     let cs_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        flags,
+        flags: wgpu::ShaderFlags::all(),
     });
 
     // Gets the size in bytes of the buffer.
@@ -91,7 +89,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     //   The source of a copy.
     let storage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Storage Buffer"),
-        contents: bytemuck::cast_slice(&numbers),
+        contents: bytemuck::cast_slice(numbers),
         usage: wgpu::BufferUsage::STORAGE
             | wgpu::BufferUsage::COPY_DST
             | wgpu::BufferUsage::COPY_SRC,
@@ -170,7 +168,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
                                 // It effectively frees the memory
 
         // Returns data from buffer
-        result
+        Some(result)
     } else {
         panic!("failed to run compute on gpu!")
     }
@@ -196,23 +194,20 @@ mod tests {
 
     #[test]
     fn test_compute_1() {
-        let input = vec![1, 2, 3, 4];
-        pollster::block_on(assert_execute_gpu(input, vec![0, 1, 7, 2]));
+        let input = &[1, 2, 3, 4];
+        pollster::block_on(assert_execute_gpu(input, &[0, 1, 7, 2]));
     }
 
     #[test]
     fn test_compute_2() {
-        let input = vec![5, 23, 10, 9];
-        pollster::block_on(assert_execute_gpu(input, vec![5, 15, 6, 19]));
+        let input = &[5, 23, 10, 9];
+        pollster::block_on(assert_execute_gpu(input, &[5, 15, 6, 19]));
     }
 
     #[test]
     fn test_compute_overflow() {
-        let input = vec![77031, 837799, 8400511, 63728127];
-        pollster::block_on(assert_execute_gpu(
-            input,
-            vec![350, 524, OVERFLOW, OVERFLOW],
-        ));
+        let input = &[77031, 837799, 8400511, 63728127];
+        pollster::block_on(assert_execute_gpu(input, &[350, 524, OVERFLOW, OVERFLOW]));
     }
 
     #[test]
@@ -225,8 +220,8 @@ mod tests {
         for _ in 0..thread_count {
             let tx = tx.clone();
             thread::spawn(move || {
-                let input = vec![100, 100, 100];
-                pollster::block_on(assert_execute_gpu(input, vec![25, 25, 25]));
+                let input = &[100, 100, 100];
+                pollster::block_on(assert_execute_gpu(input, &[25, 25, 25]));
                 tx.send(true).unwrap();
             });
         }
@@ -237,7 +232,9 @@ mod tests {
         }
     }
 
-    async fn assert_execute_gpu(input: Vec<u32>, expected: Vec<u32>) {
-        assert_eq!(execute_gpu(input).await, expected);
+    async fn assert_execute_gpu(input: &[u32], expected: &[u32]) {
+        if let Some(produced) = execute_gpu(input).await {
+            assert_eq!(produced, expected);
+        }
     }
 }
