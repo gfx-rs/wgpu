@@ -369,6 +369,53 @@ fn convert_glsl(
 }
 
 #[cfg(feature = "glsl-in")]
+#[allow(unused_variables)]
+#[test]
+fn convert_glsl_folder() {
+    let root = env!("CARGO_MANIFEST_DIR");
+
+    for entry in std::fs::read_dir(format!("{}/{}/glsl", root, DIR_IN)).unwrap() {
+        let entry = entry.unwrap();
+        let file_name = entry.file_name().into_string().unwrap();
+
+        println!("Processing {}", file_name);
+
+        let mut entry_points = naga::FastHashMap::default();
+        let stage = match entry.path().extension().and_then(|s| s.to_str()).unwrap() {
+            "vert" => naga::ShaderStage::Vertex,
+            "frag" => naga::ShaderStage::Fragment,
+            "comp" => naga::ShaderStage::Compute,
+            ext => panic!("Unknown extension for glsl file {}", ext),
+        };
+        entry_points.insert("main".to_string(), stage);
+
+        let module = naga::front::glsl::parse_str(
+            &fs::read_to_string(entry.path()).expect("Couldn't find glsl file"),
+            &naga::front::glsl::Options {
+                entry_points,
+                defines: Default::default(),
+            },
+        )
+        .unwrap();
+
+        let info = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        )
+        .validate(&module)
+        .unwrap();
+
+        let dest = PathBuf::from(root)
+            .join(DIR_OUT)
+            .join(&file_name.replace(".", "-"));
+
+        // FIXME: https://github.com/gfx-rs/naga/issues/945
+        // #[cfg(feature = "wgsl-out")]
+        // check_output_wgsl(&module, &info, &dest);
+    }
+}
+
+#[cfg(feature = "glsl-in")]
 #[test]
 fn convert_glsl_quad() {
     let mut entry_points = naga::FastHashMap::default();
