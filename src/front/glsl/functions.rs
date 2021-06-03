@@ -599,19 +599,26 @@ impl Program<'_> {
                 components.push(load)
             }
 
-            let ty = self.module.types.append(Type {
-                name: None,
-                inner: TypeInner::Struct {
-                    top_level: false,
-                    members,
-                    span,
-                },
-            });
+            let (ty, value) = if !components.is_empty() {
+                let ty = self.module.types.append(Type {
+                    name: None,
+                    inner: TypeInner::Struct {
+                        top_level: false,
+                        members,
+                        span,
+                    },
+                });
 
-            let len = expressions.len();
-            let res = expressions.append(Expression::Compose { ty, components });
-            body.push(Statement::Emit(expressions.range_from(len)));
-            body.push(Statement::Return { value: Some(res) });
+                let len = expressions.len();
+                let res = expressions.append(Expression::Compose { ty, components });
+                body.push(Statement::Emit(expressions.range_from(len)));
+
+                (Some(ty), Some(res))
+            } else {
+                (None, None)
+            };
+
+            body.push(Statement::Return { value });
 
             self.module.entry_points.push(EntryPoint {
                 name,
@@ -623,7 +630,7 @@ impl Program<'_> {
                     arguments,
                     expressions,
                     body,
-                    result: Some(FunctionResult { ty, binding: None }),
+                    result: ty.map(|ty| FunctionResult { ty, binding: None }),
                     ..Default::default()
                 },
             });
