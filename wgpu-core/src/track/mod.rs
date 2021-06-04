@@ -625,10 +625,17 @@ impl TrackerSet {
     }
 
     /// Merge all the trackers of another instance by extending
-    /// the usage. Panics on a conflict.
-    pub fn merge_extend(&mut self, other: &Self) -> Result<(), UsageConflict> {
+    /// the usage. Panics on a stateless conflict, returns a conflict otherwise.
+    pub fn merge_extend_all(&mut self, other: &Self) -> Result<(), UsageConflict> {
         self.buffers.merge_extend(&other.buffers)?;
         self.textures.merge_extend(&other.textures)?;
+        self.merge_extend_stateless(other);
+        Ok(())
+    }
+
+    /// Merge all the stateless trackers of another instance by extending
+    /// the usage. Panics on a conflict.
+    pub fn merge_extend_stateless(&mut self, other: &Self) {
         self.views.merge_extend(&other.views).unwrap();
         self.bind_groups.merge_extend(&other.bind_groups).unwrap();
         self.samplers.merge_extend(&other.samplers).unwrap();
@@ -638,10 +645,38 @@ impl TrackerSet {
         self.render_pipes.merge_extend(&other.render_pipes).unwrap();
         self.bundles.merge_extend(&other.bundles).unwrap();
         self.query_sets.merge_extend(&other.query_sets).unwrap();
-        Ok(())
     }
 
     pub fn backend(&self) -> wgt::Backend {
         self.buffers.backend
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct StatefulTrackerSubset {
+    pub buffers: ResourceTracker<BufferState>,
+    pub textures: ResourceTracker<TextureState>,
+}
+
+impl StatefulTrackerSubset {
+    /// Create an empty set.
+    pub fn new(backend: wgt::Backend) -> Self {
+        Self {
+            buffers: ResourceTracker::new(backend),
+            textures: ResourceTracker::new(backend),
+        }
+    }
+
+    /// Clear all the trackers.
+    pub fn clear(&mut self) {
+        self.buffers.clear();
+        self.textures.clear();
+    }
+
+    /// Merge all the trackers of another tracker the usage.
+    pub fn merge_extend(&mut self, other: &TrackerSet) -> Result<(), UsageConflict> {
+        self.buffers.merge_extend(&other.buffers)?;
+        self.textures.merge_extend(&other.textures)?;
+        Ok(())
     }
 }

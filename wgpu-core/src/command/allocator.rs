@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use super::CommandBuffer;
+use super::{CommandBuffer, CommandEncoderStatus};
 use crate::{
     device::DeviceError, hub::GfxBackend, id::DeviceId, track::TrackerSet, FastHashMap,
     PrivateFeatures, Stored, SubmissionIndex,
@@ -91,6 +91,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
         device: &B::Device,
         limits: wgt::Limits,
         downlevel: wgt::DownlevelProperties,
+        features: wgt::Features,
         private_features: PrivateFeatures,
         label: &crate::Label,
         #[cfg(feature = "trace")] enable_tracing: bool,
@@ -126,7 +127,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
 
         Ok(CommandBuffer {
             raw: vec![pool.allocate()],
-            is_recording: true,
+            status: CommandEncoderStatus::Recording,
             recorded_thread_id: thread_id,
             device_id,
             trackers: TrackerSet::new(B::VARIANT),
@@ -135,6 +136,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
             limits,
             downlevel,
             private_features,
+            support_fill_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
             has_labels: label.is_some(),
             #[cfg(feature = "trace")]
             commands: if enable_tracing {
@@ -243,6 +245,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
     }
 
     pub fn maintain(&self, device: &B::Device, last_done_index: SubmissionIndex) {
+        profiling::scope!("maintain", "CommandAllocator");
         let mut inner = self.inner.lock();
         let mut remove_threads = Vec::new();
         for (&thread_id, pool) in inner.pools.iter_mut() {

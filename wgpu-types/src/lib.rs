@@ -38,7 +38,7 @@ pub type DynamicOffset = u32;
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 /// Bound uniform/storage buffer offsets must be aligned to this number.
 pub const BIND_BUFFER_ALIGNMENT: BufferAddress = 256;
-/// Buffer to buffer copy offsets and sizes must be aligned to this number.
+/// Buffer to buffer copy as well as buffer clear offsets and sizes must be aligned to this number.
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
 /// Size to align mappings.
 pub const MAP_ALIGNMENT: BufferAddress = 8;
@@ -79,7 +79,7 @@ pub enum Backend {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum PowerPreference {
-    /// Adapter that uses the least possible power. This is often an integerated GPU.
+    /// Adapter that uses the least possible power. This is often an integrated GPU.
     LowPower = 0,
     /// Adapter that has the highest performance. This is often a discrete GPU.
     HighPerformance = 1,
@@ -435,6 +435,114 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const CONSERVATIVE_RASTERIZATION = 0x0000_0000_8000_0000;
+        /// Allows the user to create arrays of buffers in shaders:
+        ///
+        /// eg. `uniform myBuffer { .... } buffer_array[10]`.
+        ///
+        /// This capability allows them to exist and to be indexed by compile time constant
+        /// values.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const BUFFER_BINDING_ARRAY = 0x0000_0001_0000_0000;
+        /// Allows shaders to index uniform buffer arrays with dynamically uniform values:
+        ///
+        /// eg. `buffer_array[uniform_value]`
+        ///
+        /// This capability means the hardware will also support BUFFER_BINDING_ARRAY.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan's shaderUniformBufferArrayDynamicIndexing feature
+        ///
+        /// This is a native only feature.
+        const UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING = 0x0000_0002_0000_0000;
+        /// Allows shaders to index uniform buffer arrays with dynamically non-uniform values:
+        ///
+        /// eg. `buffer_array[vertex_data]`
+        ///
+        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
+        ///
+        /// `#extension GL_EXT_nonuniform_qualifier : require`
+        ///
+        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
+        ///
+        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        ///
+        /// or as `nonuniformEXT` constructor:
+        ///
+        /// eg. `buffer_array[nonuniformEXT(vertex_data)]`
+        ///
+        /// HLSL does not need any extension.
+        ///
+        /// This capability means the hardware will also support UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING
+        /// and BUFFER_BINDING_ARRAY.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderUniformBufferArrayNonUniformIndexing feature)
+        ///
+        /// This is a native only feature.
+        const UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0004_0000_0000;
+        /// Allows shaders to index storage buffer arrays with dynamically uniform values:
+        ///
+        /// eg. `buffer_array[uniform_value]`
+        ///
+        /// This capability means the hardware will also support BUFFER_BINDING_ARRAY.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan's shaderStorageBufferArrayDynamicIndexing feature
+        ///
+        /// This is a native only feature.
+        const STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING = 0x0000_0008_0000_0000;
+        /// Allows shaders to index storage buffer arrays with dynamically non-uniform values:
+        ///
+        /// eg. `buffer_array[vertex_data]`
+        ///
+        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
+        ///
+        /// `#extension GL_EXT_nonuniform_qualifier : require`
+        ///
+        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
+        ///
+        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        ///
+        /// or as `nonuniformEXT` constructor:
+        ///
+        /// eg. `buffer_array[nonuniformEXT(vertex_data)]`
+        ///
+        /// HLSL does not need any extension.
+        ///
+        /// This capability means the hardware will also support STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING
+        /// and BUFFER_BINDING_ARRAY.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderStorageBufferArrayNonUniformIndexing feature)
+        ///
+        /// This is a native only feature.
+        const STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0010_0000_0000;
+        /// Enables bindings of writable storage buffers and textures visible to vertex shaders.
+        ///
+        /// Note: some (tiled-based) platforms do not support vertex shaders with any side-effects.
+        ///
+        /// Supported Platforms:
+        /// - All
+        ///
+        /// This is a native-only feature.
+        const VERTEX_WRITABLE_STORAGE = 0x0000_0020_0000_0000;
+        /// Enables clear to zero for buffers & images.
+        ///
+        /// Supported platforms:
+        /// - All
+        ///
+        /// This is a native only feature.
+        const CLEAR_COMMANDS = 0x0000_0001_0000_0000;
+
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).
@@ -585,8 +693,10 @@ bitflags::bitflags! {
         const DEVICE_LOCAL_IMAGE_COPIES = 0x0000_0008;
         /// Supports textures with mipmaps which have a non power of two size.
         const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0010;
+        /// Supports textures that are cube arrays.
+        const CUBE_ARRAY_TEXTURES = 0x0000_0020;
         /// Supports samplers with anisotropic filtering
-        const ANISOTROPIC_FILTERING = 0x0000_0020;
+        const ANISOTROPIC_FILTERING = 0x0001_0000;
         /// All flags are in their compliant state.
         const COMPLIANT = 0x0000_003F;
     }
@@ -1714,7 +1824,7 @@ impl StencilState {
     }
     /// Returns true if the stencil state uses the reference value for testing.
     pub fn needs_ref_value(&self) -> bool {
-        self.front.compare.needs_ref_value() || self.back.compare.needs_ref_value()
+        self.front.needs_ref_value() || self.back.needs_ref_value()
     }
 }
 
@@ -1844,6 +1954,14 @@ impl StencilFaceState {
         depth_fail_op: StencilOperation::Keep,
         pass_op: StencilOperation::Keep,
     };
+
+    /// Returns true if the face state uses the reference value for testing or operation.
+    pub fn needs_ref_value(&self) -> bool {
+        self.compare.needs_ref_value()
+            || self.fail_op == StencilOperation::Replace
+            || self.depth_fail_op == StencilOperation::Replace
+            || self.pass_op == StencilOperation::Replace
+    }
 }
 
 impl Default for StencilFaceState {
@@ -2055,7 +2173,7 @@ bitflags::bitflags! {
         /// operation.
         const COPY_SRC = 4;
         /// Allow a buffer to be the destination buffer for a [`CommandEncoder::copy_buffer_to_buffer`], [`CommandEncoder::copy_texture_to_buffer`],
-        /// or [`Queue::write_buffer`] operation.
+        /// [`CommandEncoder::fill_buffer`] or [`Queue::write_buffer`] operation.
         const COPY_DST = 8;
         /// Allow a buffer to be the index buffer in a draw operation.
         const INDEX = 16;
@@ -2882,6 +3000,28 @@ pub struct ImageCopyTexture<T> {
     /// The base texel of the texture in the selected `mip_level`.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub origin: Origin3d,
+}
+
+/// Subresource range within an image
+#[repr(C)]
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct ImageSubresourceRange {
+    /// Aspect of the texture. Color textures must be [`TextureAspect::All`](wgt::TextureAspect::All).
+    pub aspect: TextureAspect,
+    /// Base mip level.
+    pub base_mip_level: u32,
+    /// Mip level count.
+    /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
+    /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
+    pub mip_level_count: Option<NonZeroU32>,
+    /// Base array layer.
+    pub base_array_layer: u32,
+    /// Layer count.
+    /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
+    /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
+    pub array_layer_count: Option<NonZeroU32>,
 }
 
 /// Color variation to use when sampler addressing mode is [`AddressMode::ClampToBorder`]

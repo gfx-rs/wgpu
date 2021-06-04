@@ -19,11 +19,6 @@ fn main() {
 
     env_logger::init();
 
-    #[cfg(feature = "renderdoc")]
-    #[cfg_attr(feature = "winit", allow(unused))]
-    let mut rd = renderdoc::RenderDoc::<renderdoc::V110>::new()
-        .expect("Failed to connect to RenderDoc: are you running without it?");
-
     //TODO: setting for the backend bits
     //TODO: setting for the target frame, or controls
 
@@ -100,15 +95,13 @@ fn main() {
     log::info!("Executing actions");
     #[cfg(not(feature = "winit"))]
     {
-        #[cfg(feature = "renderdoc")]
-        rd.start_frame_capture(std::ptr::null(), std::ptr::null());
+        gfx_select!(device => global.device_start_capture(device));
 
         while let Some(action) = actions.pop() {
             gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
         }
 
-        #[cfg(feature = "renderdoc")]
-        rd.end_frame_capture(std::ptr::null(), std::ptr::null());
+        gfx_select!(device => global.device_stop_capture(device));
         gfx_select!(device => global.device_poll(device, true)).unwrap();
     }
     #[cfg(feature = "winit")]
@@ -120,6 +113,7 @@ fn main() {
 
         let mut resize_desc = None;
         let mut frame_count = 0;
+        let mut done = false;
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
             match event {
@@ -156,7 +150,13 @@ fn main() {
                         Some(action) => {
                             gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
                         }
-                        None => break,
+                        None => {
+                            if !done {
+                                println!("Finished the end at frame {}", frame_count);
+                                done = true;
+                            }
+                            break;
+                        }
                     }
                 },
                 Event::WindowEvent { event, .. } => match event {

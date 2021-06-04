@@ -4,7 +4,7 @@
 
 use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
-    device::{DeviceError, RenderPassContext},
+    device::{DeviceError, MissingFeatures, RenderPassContext},
     hub::Resource,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation, Label, LifeGuard, Stored, DOWNLEVEL_ERROR_WARNING_MESSAGE,
@@ -56,12 +56,14 @@ impl<B: hal::Backend> Resource for ShaderModule<B> {
 pub enum CreateShaderModuleError {
     #[error("Failed to parse WGSL")]
     Parsing,
+    #[error("Failed to generate the backend-specific code")]
+    Generation,
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
     Validation(#[from] naga::valid::ValidationError),
-    #[error("missing required device features {0:?}")]
-    MissingFeature(wgt::Features),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
 }
 
 /// Describes a programmable pipeline stage.
@@ -244,8 +246,8 @@ pub enum CreateRenderPipelineError {
     },
     #[error("Conservative Rasterization is only supported for wgt::PolygonMode::Fill")]
     ConservativeRasterizationNonFillPolygonMode,
-    #[error("missing required device features {0:?}")]
-    MissingFeature(wgt::Features),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
     #[error("error matching {stage:?} shader requirements against the pipeline")]
     Stage {
         stage: wgt::ShaderStage,

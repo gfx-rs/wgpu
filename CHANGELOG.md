@@ -1,5 +1,49 @@
 # Change Log
 
+## v0.8 (2021-04-29)
+  - Naga is used by default to translate shaders, SPIRV-Cross is optional behind `cross` feature
+  - Features:
+    - buffers are zero-initialized
+    - downlevel limits for DX11/OpenGL support
+    - conservative rasterization (native-only)
+    - buffer resource indexing (native-only)
+  - API adjustments to the spec:
+    - Renamed `RenderPassDepthStencilAttachmentDescriptor` to `RenderPassDepthStencilAttachment`:
+      - Renamed the `attachment` member to `view`
+    - Renamed `RenderPassDepthStencilAttachmentDescriptor` to `RenderPassDepthStencilAttachment`:
+      - Renamed the `attachment` member to `view`
+    - Renamed `VertexFormat` values
+      - Examples: `Float3` -> `Float32x3`, `Ushort2` -> `Uint16x2`
+    - Renamed the `depth` value of `Extent3d` to `depth_or_array_layers`
+    - Updated blending options in `ColorTargetState`:
+      - Renamed `BlendState` to `BlendComponent`
+      - Added `BlendState` struct to hold color and alpha blend state
+      - Moved `color_blend` and `alpha_blend` members into `blend` member
+    - Moved `clamp_depth` from `RastizerState` to `PrimitiveState`
+    - Updated `PrimitiveState`:
+      - Added `conservative` member for enabling conservative rasterization
+    - Updated copy view structs:
+      - Renamed `TextureCopyView` to `ImageCopyTexture`
+      - Renamed `TextureDataLayout` to `ImageDataLayout`
+      - Changed `bytes_per_row` and `rows_per_image` members of `ImageDataLayout` from `u32` to `Option<NonZeroU32>` <!-- wgpu-rs only -->
+    - Changed `BindingResource::Binding` from containing fields directly to containing a `BufferBinding`
+    - Added `BindingResource::BufferArray`
+  - Infrastructure:
+    - switch from `tracing` to `profiling`
+    - more concrete and detailed errors
+    - API traces include the command that crashed/panicked
+    - Vulkan Portability support is removed from Apple platforms
+  - Validation:
+    - texture bindings
+    - filtering of textures by samplers
+    - interpolation qualifiers
+    - allow vertex components to be underspecified
+
+## v0.7.1 (2021-02-25)
+  - expose `wgc::device::queue` sub-module in public
+  - fix the indexed buffer check
+  - fix command allocator race condition
+
 ## v0.7 (2021-01-31)
   - Major API changes:
     - `RenderPipelineDescriptor`

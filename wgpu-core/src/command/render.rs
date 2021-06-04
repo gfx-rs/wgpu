@@ -6,8 +6,9 @@ use crate::{
     binding_model::BindError,
     command::{
         bind::Binder, end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer,
-        CommandEncoderError, DrawError, ExecutionError, MapPassErr, PassErrorScope, QueryResetMap,
-        QueryUseError, RenderCommand, RenderCommandError, StateChange,
+        CommandEncoderError, CommandEncoderStatus, DrawError, ExecutionError, MapPassErr,
+        PassErrorScope, QueryResetMap, QueryUseError, RenderCommand, RenderCommandError,
+        StateChange,
     },
     conv,
     device::{
@@ -19,7 +20,7 @@ use crate::{
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     pipeline::PipelineFlags,
     resource::{BufferUse, Texture, TextureUse, TextureView, TextureViewInner},
-    track::{TextureSelector, TrackerSet, UsageConflict},
+    track::{StatefulTrackerSubset, TextureSelector, UsageConflict},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
     },
@@ -186,7 +187,6 @@ impl RenderPass {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        profiling::scope!("RenderPass::set_index_buffer");
         self.base.commands.push(RenderCommand::SetIndexBuffer {
             buffer_id,
             index_format,
@@ -392,6 +392,10 @@ pub enum RenderPassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("attachment texture view {0:?} is invalid")]
     InvalidAttachment(id::TextureViewId),
+    #[error("attachment format {0:?} is not a color format")]
+    InvalidColorAttachmentFormat(wgt::TextureFormat),
+    #[error("attachment format {0:?} is not a depth-stencil format")]
+    InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
     #[error("necessary attachments are missing")]
     MissingAttachments,
     #[error("attachments have differing sizes: {previous:?} is followed by {mismatch:?}")]
@@ -501,7 +505,7 @@ struct RenderAttachment<'a> {
 
 struct RenderPassInfo<'a, B: hal::Backend> {
     context: RenderPassContext,
-    trackers: TrackerSet,
+    trackers: StatefulTrackerSubset,
     render_attachments: AttachmentDataVec<RenderAttachment<'a>>,
     used_swap_chain: Option<Stored<id::SwapChainId>>,
     is_ds_read_only: bool,
@@ -514,10 +518,11 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         raw: &mut B::CommandBuffer,
         color_attachments: &[RenderPassColorAttachment],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
-        cmd_buf: &CommandBuffer<B>,
+        cmd_buf: &mut CommandBuffer<B>,
         device: &Device<B>,
         view_guard: &'a Storage<TextureView<B>, id::TextureViewId>,
     ) -> Result<Self, RenderPassErrorInner> {
+        profiling::scope!("start", "RenderPassInfo");
         let sample_count_limit = device.hal_limits.framebuffer_color_sample_counts;
 
         // We default to false intentionally, even if depth-stencil isn't used at all.
@@ -532,7 +537,6 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         let mut sample_count = 0;
         let mut depth_stencil_aspects = hal::format::Aspects::empty();
         let mut used_swap_chain = None::<Stored<id::SwapChainId>>;
-        let mut trackers = TrackerSet::new(B::VARIANT);
 
         let mut add_view = |view: &TextureView<B>, type_name| {
             if let Some(ex) = extent {
@@ -560,13 +564,19 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         let rp_key = {
             let depth_stencil = match depth_stencil_attachment {
                 Some(at) => {
-                    let view = trackers
+                    let view = cmd_buf
+                        .trackers
                         .views
                         .use_extend(&*view_guard, at.view, (), ())
                         .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
                     add_view(view, "depth")?;
 
                     depth_stencil_aspects = view.aspects;
+                    if view.aspects.contains(hal::format::Aspects::COLOR) {
+                        return Err(RenderPassErrorInner::InvalidDepthStencilAttachmentFormat(
+                            view.format,
+                        ));
+                    }
 
                     let source_id = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => source_id,
@@ -618,11 +628,18 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             let mut resolves = ArrayVec::new();
 
             for at in color_attachments {
-                let view = trackers
+                let view = cmd_buf
+                    .trackers
                     .views
                     .use_extend(&*view_guard, at.view, (), ())
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
                 add_view(view, "color")?;
+
+                if !view.aspects.contains(hal::format::Aspects::COLOR) {
+                    return Err(RenderPassErrorInner::InvalidColorAttachmentFormat(
+                        view.format,
+                    ));
+                }
 
                 let layouts = match view.inner {
                     TextureViewInner::Native { ref source_id, .. } => {
@@ -675,7 +692,8 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
             }
 
             for resolve_target in color_attachments.iter().flat_map(|at| at.resolve_target) {
-                let view = trackers
+                let view = cmd_buf
+                    .trackers
                     .views
                     .use_extend(&*view_guard, resolve_target, (), ())
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))?;
@@ -946,7 +964,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
 
         Ok(Self {
             context,
-            trackers,
+            trackers: StatefulTrackerSubset::new(B::VARIANT),
             render_attachments,
             used_swap_chain,
             is_ds_read_only,
@@ -958,7 +976,10 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
     fn finish(
         mut self,
         texture_guard: &Storage<Texture<B>, id::TextureId>,
-    ) -> Result<(TrackerSet, Option<Stored<id::SwapChainId>>), RenderPassErrorInner> {
+    ) -> Result<(StatefulTrackerSubset, Option<Stored<id::SwapChainId>>), RenderPassErrorInner>
+    {
+        profiling::scope!("finish", "RenderPassInfo");
+
         for ra in self.render_attachments {
             let texture = &texture_guard[ra.texture_id.value];
             check_texture_usage(texture.usage, TextureUsage::RENDER_ATTACHMENT)?;
@@ -1017,7 +1038,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         color_attachments: &[RenderPassColorAttachment],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
     ) -> Result<(), RenderPassError> {
-        profiling::scope!("CommandEncoder::run_render_pass");
+        profiling::scope!("run_render_pass", "CommandEncoder");
         let scope = PassErrorScope::Pass(encoder_id);
 
         let hub = B::hub(self);
@@ -1025,17 +1046,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (cmd_buf_raw, trackers, used_swapchain, query_reset_state) = {
+        let (cmd_buf_raw, trackers, query_reset_state) = {
             // read-only lock guard
             let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
             let cmd_buf =
                 CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
+            // will be reset to true if recording is done without errors
+            cmd_buf.status = CommandEncoderStatus::Error;
+            cmd_buf.has_labels |= base.label.is_some();
+            #[cfg(feature = "trace")]
+            if let Some(ref mut list) = cmd_buf.commands {
+                list.push(crate::device::trace::Command::RunRenderPass {
+                    base: BasePass::from_ref(base),
+                    target_colors: color_attachments.to_vec(),
+                    target_depth_stencil: depth_stencil_attachment.cloned(),
+                });
+            }
+
             let device = &device_guard[cmd_buf.device_id.value];
             let mut raw = device.cmd_allocator.extend(cmd_buf);
             unsafe {
                 if let Some(ref label) = base.label {
-                    // cmd_buf.has_labels = true; this is done later
                     device.raw.set_command_buffer_name(&mut raw, label);
                 }
                 raw.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
@@ -1105,7 +1137,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                         dynamic_offset_count += num_dynamic_offsets as usize;
 
-                        let bind_group = info
+                        let bind_group = cmd_buf
                             .trackers
                             .bind_groups
                             .use_extend(&*bind_group_guard, bind_group_id, (), ())
@@ -1115,9 +1147,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .validate_dynamic_bindings(&temp_offsets)
                             .map_pass_err(scope)?;
 
+                        // merge the resource tracker in
                         info.trackers
                             .merge_extend(&bind_group.used)
                             .map_pass_err(scope)?;
+                        cmd_buf.trackers.merge_extend_stateless(&bind_group.used);
 
                         cmd_buf.buffer_memory_init_actions.extend(
                             bind_group.used_buffer_ranges.iter().filter_map(|action| {
@@ -1167,7 +1201,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             continue;
                         }
 
-                        let pipeline = info
+                        let pipeline = cmd_buf
                             .trackers
                             .render_pipes
                             .use_extend(&*pipeline_guard, pipeline_id, (), ())
@@ -1809,7 +1843,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let scope = PassErrorScope::WriteTimestamp;
 
-                        let query_set = info
+                        let query_set = cmd_buf
                             .trackers
                             .query_sets
                             .use_extend(&*query_set_guard, query_set_id, (), ())
@@ -1836,7 +1870,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                        let query_set = info
+                        let query_set = cmd_buf
                             .trackers
                             .query_sets
                             .use_extend(&*query_set_guard, query_set_id, (), ())
@@ -1870,7 +1904,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::ExecuteBundle(bundle_id) => {
                         let scope = PassErrorScope::ExecuteBundle;
-                        let bundle = info
+                        let bundle = cmd_buf
                             .trackers
                             .bundles
                             .use_extend(&*bundle_guard, bundle_id, (), ())
@@ -1932,27 +1966,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let (trackers, used_swapchain) = info.finish(&*texture_guard).map_pass_err(scope)?;
-            (raw, trackers, used_swapchain, query_reset_state)
+            cmd_buf.status = CommandEncoderStatus::Recording;
+            cmd_buf.used_swap_chains.extend(used_swapchain);
+            (raw, trackers, query_reset_state)
         };
 
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
         let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
+
         let cmd_buf =
             CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
-        cmd_buf.has_labels |= base.label.is_some();
-        cmd_buf.used_swap_chains.extend(used_swapchain);
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.commands {
-            list.push(crate::device::trace::Command::RunRenderPass {
-                base: BasePass::from_ref(base),
-                target_colors: color_attachments.to_vec(),
-                target_depth_stencil: depth_stencil_attachment.cloned(),
-            });
-        }
-
         let last_cmd_buf = cmd_buf.raw.last_mut().unwrap();
 
         query_reset_state
@@ -1967,7 +1992,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         super::CommandBuffer::insert_barriers(
             last_cmd_buf,
             &mut cmd_buf.trackers,
-            &trackers,
+            &trackers.buffers,
+            &trackers.textures,
             &*buffer_guard,
             &*texture_guard,
         );

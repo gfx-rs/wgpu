@@ -81,6 +81,15 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 trace::Command::CopyTextureToTexture { src, dst, size } => self
                     .command_encoder_copy_texture_to_texture::<B>(encoder, &src, &dst, &size)
                     .unwrap(),
+                trace::Command::ClearBuffer { dst, offset, size } => self
+                    .command_encoder_clear_buffer::<B>(encoder, dst, offset, size)
+                    .unwrap(),
+                trace::Command::ClearImage {
+                    dst,
+                    subresource_range,
+                } => self
+                    .command_encoder_clear_image::<B>(encoder, dst, subresource_range)
+                    .unwrap(),
                 trace::Command::WriteTimestamp {
                     query_set_id,
                     query_index,

@@ -91,7 +91,6 @@ impl RenderBundleEncoder {
         parent_id: id::DeviceId,
         base: Option<BasePass<RenderCommand>>,
     ) -> Result<Self, CreateRenderBundleError> {
-        profiling::scope!("RenderBundleEncoder::new");
         Ok(Self {
             base: base.unwrap_or_else(|| BasePass::new(&desc.label)),
             parent_id,
@@ -215,7 +214,7 @@ impl RenderBundleEncoder {
                     state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
                     state
                         .trackers
-                        .merge_extend(&bind_group.used)
+                        .merge_extend_all(&bind_group.used)
                         .map_pass_err(scope)?;
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
@@ -511,7 +510,6 @@ impl RenderBundleEncoder {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        profiling::scope!("RenderBundle::set_index_buffer");
         self.base.commands.push(RenderCommand::SetIndexBuffer {
             buffer_id,
             index_format,

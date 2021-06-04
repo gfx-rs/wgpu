@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::{alloc::MemoryBlock, DeviceError, HostMap},
+    device::{alloc::MemoryBlock, DeviceError, HostMap, MissingFeatures},
     hub::Resource,
     id::{DeviceId, SwapChainId, TextureId},
     memory_init_tracker::MemoryInitTracker,
@@ -14,12 +14,7 @@ use crate::{
 
 use thiserror::Error;
 
-use std::{
-    borrow::Borrow,
-    num::{NonZeroU32, NonZeroU8},
-    ops::Range,
-    ptr::NonNull,
-};
+use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
 
 bitflags::bitflags! {
     /// The internal enum mirrored from `BufferUsage`. The values don't have to match!
@@ -266,8 +261,8 @@ pub enum CreateTextureError {
     InvalidMipLevelCount(u32),
     #[error("The texture usages {0:?} are not allowed on a texture of type {1:?}")]
     InvalidUsages(wgt::TextureUsage, wgt::TextureFormat),
-    #[error("Feature {0:?} must be enabled to create a texture of type {1:?}")]
-    MissingFeature(wgt::Features, wgt::TextureFormat),
+    #[error("Texture format {0:?} can't be used")]
+    MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
 }
 
 impl<B: hal::Backend> Resource for Texture<B> {
@@ -297,20 +292,8 @@ pub struct TextureViewDescriptor<'a> {
     /// The dimension of the texture view. For 1D textures, this must be `1D`. For 2D textures it must be one of
     /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `3D`
     pub dimension: Option<wgt::TextureViewDimension>,
-    /// Aspect of the texture. Color textures must be [`TextureAspect::All`](wgt::TextureAspect::All).
-    pub aspect: wgt::TextureAspect,
-    /// Base mip level.
-    pub base_mip_level: u32,
-    /// Mip level count.
-    /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
-    /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
-    pub mip_level_count: Option<NonZeroU32>,
-    /// Base array layer.
-    pub base_array_layer: u32,
-    /// Layer count.
-    /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
-    /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
-    pub array_layer_count: Option<NonZeroU32>,
+    /// Range within the texture that is accessible via this view.
+    pub range: wgt::ImageSubresourceRange,
 }
 
 #[derive(Debug)]
@@ -458,9 +441,9 @@ pub enum CreateSamplerError {
     InvalidClamp(u8),
     #[error("cannot create any more samplers")]
     TooManyObjects,
-    /// AddressMode::ClampToBorder requires feature ADDRESS_MODE_CLAMP_TO_BORDER
-    #[error("Feature {0:?} must be enabled")]
-    MissingFeature(wgt::Features),
+    /// AddressMode::ClampToBorder requires feature ADDRESS_MODE_CLAMP_TO_BORDER.
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
 }
 
 impl<B: hal::Backend> Resource for Sampler<B> {
@@ -484,8 +467,8 @@ pub enum CreateQuerySetError {
     ZeroCount,
     #[error("{count} is too many queries for a single QuerySet. QuerySets cannot be made more than {maximum} queries.")]
     TooManyQueries { count: u32, maximum: u32 },
-    #[error("Feature {0:?} must be enabled")]
-    MissingFeature(wgt::Features),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
 }
 
 #[derive(Debug)]

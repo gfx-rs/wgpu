@@ -5,7 +5,7 @@
 use crate::{
     device::{
         descriptor::{DescriptorSet, DescriptorTotalCount},
-        DeviceError, SHADER_STAGE_COUNT,
+        DeviceError, MissingFeatures, SHADER_STAGE_COUNT,
     },
     hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
@@ -30,15 +30,25 @@ use std::{
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
+pub enum BindGroupLayoutEntryError {
+    #[error("arrays of bindings unsupported for this type of binding")]
+    ArrayUnsupported,
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+}
+
+#[derive(Clone, Debug, Error)]
 pub enum CreateBindGroupLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("arrays of bindings unsupported for this type of binding")]
-    ArrayUnsupported,
     #[error("conflicting binding at index {0}")]
     ConflictBinding(u32),
-    #[error("required device feature is missing: {0:?}")]
-    MissingFeature(wgt::Features),
+    #[error("binding {binding} entry is invalid")]
+    Entry {
+        binding: u32,
+        #[source]
+        error: BindGroupLayoutEntryError,
+    },
     #[error(transparent)]
     TooManyBindings(BindingTypeMaxCountError),
 }
@@ -83,8 +93,6 @@ pub enum CreateBindGroupError {
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error(transparent)]
     MissingTextureUsage(#[from] MissingTextureUsageError),
-    #[error("required device features not enabled: {0:?}")]
-    MissingFeatures(wgt::Features),
     #[error("binding declared as a single item, but bind group is using it as an array")]
     SingleBindingExpected,
     #[error("unable to create a bind group with a swap chain image")]
@@ -419,8 +427,8 @@ pub enum CreatePipelineLayoutError {
         wgt::PUSH_CONSTANT_ALIGNMENT
     )]
     MisalignedPushConstantRange { index: usize, bound: u32 },
-    #[error("device does not have required feature: {0:?}")]
-    MissingFeature(wgt::Features),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
     #[error("push constant range (index {index}) provides for stage(s) {provided:?} but there exists another range that provides stage(s) {intersected:?}. Each stage may only be provided by one range")]
     MoreThanOnePushConstantRangePerStage {
         index: usize,
@@ -603,6 +611,7 @@ pub struct BufferBinding {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum BindingResource<'a> {
     Buffer(BufferBinding),
+    BufferArray(Cow<'a, [BufferBinding]>),
     Sampler(SamplerId),
     TextureView(TextureViewId),
     TextureViewArray(Cow<'a, [TextureViewId]>),

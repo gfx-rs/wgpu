@@ -128,7 +128,7 @@ impl Test<'_> {
             println!("\t\t\tChecking {}", expect.name);
             let buffer = wgc::id::TypedId::zip(expect.buffer.index, expect.buffer.epoch, backend);
             let (ptr, size) =
-                wgc::gfx_select!(device => global.buffer_get_mapped_range(buffer, expect.offset, wgt::BufferSize::new(expect.data.len() as wgt::BufferAddress)))
+                wgc::gfx_select!(device => global.buffer_get_mapped_range(buffer, expect.offset, Some(expect.data.len() as wgt::BufferAddress)))
                     .unwrap();
             let contents = unsafe { slice::from_raw_parts(ptr, size as usize) };
             let expected_data = match expect.data {

@@ -116,6 +116,87 @@ impl crate::hub::Resource for Surface {
     }
 }
 
+const FEATURE_MAP: &[(wgt::Features, hal::Features)] = &[
+    (wgt::Features::DEPTH_CLAMPING, hal::Features::DEPTH_CLAMP),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_BC,
+        hal::Features::FORMAT_BC,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ETC2,
+        hal::Features::FORMAT_ETC2,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+        hal::Features::FORMAT_ASTC_LDR,
+    ),
+    (
+        wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
+        hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
+    ),
+    (
+        wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING,
+        hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
+    ),
+    (
+        wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
+    ),
+    (
+        wgt::Features::UNSIZED_BINDING_ARRAY,
+        hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
+    ),
+    (
+        wgt::Features::MULTI_DRAW_INDIRECT,
+        hal::Features::MULTI_DRAW_INDIRECT,
+    ),
+    (
+        wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
+        hal::Features::DRAW_INDIRECT_COUNT,
+    ),
+    (
+        wgt::Features::NON_FILL_POLYGON_MODE,
+        hal::Features::NON_FILL_POLYGON_MODE,
+    ),
+    (
+        wgt::Features::PIPELINE_STATISTICS_QUERY,
+        hal::Features::PIPELINE_STATISTICS_QUERY,
+    ),
+    (wgt::Features::SHADER_FLOAT64, hal::Features::SHADER_FLOAT64),
+    (
+        wgt::Features::CONSERVATIVE_RASTERIZATION,
+        hal::Features::CONSERVATIVE_RASTERIZATION,
+    ),
+    (
+        wgt::Features::BUFFER_BINDING_ARRAY,
+        hal::Features::BUFFER_DESCRIPTOR_ARRAY,
+    ),
+    (
+        wgt::Features::UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING,
+        hal::Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING,
+    ),
+    (
+        wgt::Features::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        hal::Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING,
+    ),
+    (
+        wgt::Features::STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING,
+        hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING,
+    ),
+    (
+        wgt::Features::STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        hal::Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING,
+    ),
+    (
+        wgt::Features::VERTEX_WRITABLE_STORAGE,
+        hal::Features::VERTEX_STORES_AND_ATOMICS,
+    ),
+    (
+        wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+        hal::Features::SAMPLER_BORDER_COLOR,
+    ),
+];
+
 #[derive(Debug)]
 pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
@@ -128,7 +209,7 @@ pub struct Adapter<B: hal::Backend> {
 
 impl<B: GfxBackend> Adapter<B> {
     fn new(raw: hal::adapter::Adapter<B>) -> Self {
-        profiling::scope!("Adapter::new");
+        profiling::scope!("new", "Adapter");
 
         let adapter_features = raw.physical_device.features();
         let properties = raw.physical_device.properties();
@@ -136,70 +217,15 @@ impl<B: GfxBackend> Adapter<B> {
         let mut features = wgt::Features::default()
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
             | wgt::Features::PUSH_CONSTANTS
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-        features.set(
-            wgt::Features::DEPTH_CLAMPING,
-            adapter_features.contains(hal::Features::DEPTH_CLAMP),
-        );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_BC,
-            adapter_features.contains(hal::Features::FORMAT_BC),
-        );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_ETC2,
-            adapter_features.contains(hal::Features::FORMAT_ETC2),
-        );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
-            adapter_features.contains(hal::Features::FORMAT_ASTC_LDR),
-        );
-        features.set(
-            wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
-            adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
-        );
-        features.set(
-            wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING,
-            adapter_features.contains(hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING),
-        );
-        features.set(
-            wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-            adapter_features.contains(hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING),
-        );
-        features.set(
-            wgt::Features::UNSIZED_BINDING_ARRAY,
-            adapter_features.contains(hal::Features::UNSIZED_DESCRIPTOR_ARRAY),
-        );
-        features.set(
-            wgt::Features::MULTI_DRAW_INDIRECT,
-            adapter_features.contains(hal::Features::MULTI_DRAW_INDIRECT),
-        );
-        features.set(
-            wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
-            adapter_features.contains(hal::Features::DRAW_INDIRECT_COUNT),
-        );
-        features.set(
-            wgt::Features::NON_FILL_POLYGON_MODE,
-            adapter_features.contains(hal::Features::NON_FILL_POLYGON_MODE),
-        );
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgt::Features::CLEAR_COMMANDS;
+        for &(hi, lo) in FEATURE_MAP.iter() {
+            features.set(hi, adapter_features.contains(lo));
+        }
         features.set(
             wgt::Features::TIMESTAMP_QUERY,
             properties.limits.timestamp_compute_and_graphics,
         );
-        features.set(
-            wgt::Features::PIPELINE_STATISTICS_QUERY,
-            adapter_features.contains(hal::Features::PIPELINE_STATISTICS_QUERY),
-        );
-        features.set(
-            wgt::Features::SHADER_FLOAT64,
-            adapter_features.contains(hal::Features::SHADER_FLOAT64),
-        );
-        features.set(
-            wgt::Features::CONSERVATIVE_RASTERIZATION,
-            adapter_features.contains(hal::Features::CONSERVATIVE_RASTERIZATION),
-        );
-        #[cfg(not(target_os = "ios"))]
-        //TODO: https://github.com/gfx-rs/gfx/issues/3346
-        features.set(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER, true);
 
         let private_features = PrivateFeatures {
             anisotropic_filtering: adapter_features.contains(hal::Features::SAMPLER_ANISOTROPY),
@@ -297,6 +323,10 @@ impl<B: GfxBackend> Adapter<B> {
             properties.downlevel.non_power_of_two_mipmapped_textures,
         );
         downlevel_flags.set(
+            wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
+            adapter_features.contains(hal::Features::IMAGE_CUBE_ARRAY),
+        );
+        downlevel_flags.set(
             wgt::DownlevelFlags::ANISOTROPIC_FILTERING,
             private_features.anisotropic_filtering,
         );
@@ -324,8 +354,6 @@ impl<B: GfxBackend> Adapter<B> {
         &self,
         surface: &mut Surface,
     ) -> Result<wgt::TextureFormat, GetSwapChainPreferredFormatError> {
-        profiling::scope!("Adapter::get_swap_chain_preferred_format");
-
         let formats = {
             let surface = B::get_surface_mut(surface);
             let queue_family = &self.raw.queue_families[0];
@@ -434,12 +462,12 @@ impl<B: GfxBackend> Adapter<B> {
 
         // Check features that are always needed
         let wishful_features = hal::Features::ROBUST_BUFFER_ACCESS
-            | hal::Features::VERTEX_STORES_AND_ATOMICS
             | hal::Features::FRAGMENT_STORES_AND_ATOMICS
             | hal::Features::NDC_Y_UP
             | hal::Features::INDEPENDENT_BLENDING
             | hal::Features::SAMPLER_ANISOTROPY
-            | hal::Features::IMAGE_CUBE_ARRAY;
+            | hal::Features::IMAGE_CUBE_ARRAY
+            | hal::Features::SAMPLE_RATE_SHADING;
         let mut enabled_features = available_features & wishful_features;
         if enabled_features != wishful_features {
             log::warn!(
@@ -448,72 +476,10 @@ impl<B: GfxBackend> Adapter<B> {
             );
         }
 
-        // Features
-        enabled_features.set(
-            hal::Features::DEPTH_CLAMP,
-            desc.features.contains(wgt::Features::DEPTH_CLAMPING),
-        );
-        enabled_features.set(
-            hal::Features::FORMAT_BC,
-            desc.features
-                .contains(wgt::Features::TEXTURE_COMPRESSION_BC),
-        );
-        enabled_features.set(
-            hal::Features::FORMAT_ETC2,
-            desc.features
-                .contains(wgt::Features::TEXTURE_COMPRESSION_ETC2),
-        );
-        enabled_features.set(
-            hal::Features::FORMAT_ASTC_LDR,
-            desc.features
-                .contains(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR),
-        );
-        enabled_features.set(
-            hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
-            desc.features
-                .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
-        );
-        enabled_features.set(
-            hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
-            desc.features
-                .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
-        );
-        enabled_features.set(
-            hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
-            desc.features
-                .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
-        );
-        enabled_features.set(
-            hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
-            desc.features.contains(wgt::Features::UNSIZED_BINDING_ARRAY),
-        );
-        enabled_features.set(
-            hal::Features::MULTI_DRAW_INDIRECT,
-            desc.features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
-        );
-        enabled_features.set(
-            hal::Features::DRAW_INDIRECT_COUNT,
-            desc.features
-                .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT),
-        );
-        enabled_features.set(
-            hal::Features::NON_FILL_POLYGON_MODE,
-            desc.features.contains(wgt::Features::NON_FILL_POLYGON_MODE),
-        );
-        enabled_features.set(
-            hal::Features::PIPELINE_STATISTICS_QUERY,
-            desc.features
-                .contains(wgt::Features::PIPELINE_STATISTICS_QUERY),
-        );
-        enabled_features.set(
-            hal::Features::SHADER_FLOAT64,
-            desc.features.contains(wgt::Features::SHADER_FLOAT64),
-        );
-        enabled_features.set(
-            hal::Features::CONSERVATIVE_RASTERIZATION,
-            desc.features
-                .contains(wgt::Features::CONSERVATIVE_RASTERIZATION),
-        );
+        // Enable low-level features
+        for &(hi, lo) in FEATURE_MAP.iter() {
+            enabled_features.set(lo, desc.features.contains(hi));
+        }
 
         let family = self
             .raw
@@ -650,7 +616,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         handle: &impl raw_window_handle::HasRawWindowHandle,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        profiling::scope!("Instance::create_surface");
+        profiling::scope!("create_surface", "Instance");
 
         let surface = unsafe {
             backends_map! {
@@ -688,11 +654,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         layer: *mut std::ffi::c_void,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        profiling::scope!("Instance::instance_create_surface_metal");
+        profiling::scope!("create_surface_metal", "Instance");
 
         let surface = Surface {
-            #[cfg(feature = "gfx-backend-vulkan")]
-            vulkan: None, //TODO: create_surface_from_layer ?
             metal: self.instance.metal.as_ref().map(|inst| {
                 // we don't want to link to metal-rs for this
                 #[allow(clippy::transmute_ptr_to_ref)]
@@ -706,14 +670,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn surface_drop(&self, id: SurfaceId) {
-        profiling::scope!("Surface::drop");
+        profiling::scope!("drop", "Surface");
         let mut token = Token::root();
         let (surface, _) = self.surfaces.unregister(id, &mut token);
         self.instance.destroy_surface(surface.unwrap());
     }
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
-        profiling::scope!("Instance::enumerate_adapters");
+        profiling::scope!("enumerate_adapters", "Instance");
 
         let instance = &self.instance;
         let mut token = Token::root();
@@ -756,7 +720,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &RequestAdapterOptions,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Result<AdapterId, RequestAdapterError> {
-        profiling::scope!("Instance::pick_adapter");
+        profiling::scope!("pick_adapter", "Instance");
 
         let instance = &self.instance;
         let mut token = Token::root();
@@ -911,8 +875,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::AdapterInfo, InvalidAdapter> {
-        profiling::scope!("Adapter::get_info");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
@@ -927,8 +889,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: AdapterId,
         format: wgt::TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
-        profiling::scope!("Adapter::get_texture_format_features");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
@@ -942,8 +902,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::Features, InvalidAdapter> {
-        profiling::scope!("Adapter::features");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
@@ -957,8 +915,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::Limits, InvalidAdapter> {
-        profiling::scope!("Adapter::limits");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
@@ -972,8 +928,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::DownlevelProperties, InvalidAdapter> {
-        profiling::scope!("Adapter::downlevel_properties");
-
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
@@ -984,7 +938,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn adapter_drop<B: GfxBackend>(&self, adapter_id: AdapterId) {
-        profiling::scope!("Adapter::drop");
+        profiling::scope!("drop", "Adapter");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1009,7 +963,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
     ) -> (DeviceId, Option<RequestDeviceError>) {
-        profiling::scope!("Adapter::request_device");
+        profiling::scope!("request_device", "Adapter");
 
         let hub = B::hub(self);
         let mut token = Token::root();

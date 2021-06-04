@@ -534,11 +534,13 @@ pub extern "C" fn wgpu_client_create_texture_view(
         label: cow_label(&desc.label),
         format: desc.format.cloned(),
         dimension: desc.dimension.cloned(),
-        aspect: desc.aspect,
-        base_mip_level: desc.base_mip_level,
-        mip_level_count: desc.mip_level_count,
-        base_array_layer: desc.base_array_layer,
-        array_layer_count: desc.array_layer_count,
+        range: wgt::ImageSubresourceRange {
+            aspect: desc.aspect,
+            base_mip_level: desc.base_mip_level,
+            mip_level_count: desc.mip_level_count,
+            base_array_layer: desc.base_array_layer,
+            array_layer_count: desc.array_layer_count,
+        },
     };
 
     let action = TextureAction::CreateView(id, wgpu_desc);

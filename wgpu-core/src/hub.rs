@@ -26,7 +26,7 @@ use crate::id::QuerySetId;
 use crate::resource::QuerySet;
 #[cfg(debug_assertions)]
 use std::cell::Cell;
-use std::{fmt::Debug, marker::PhantomData, ops, thread};
+use std::{fmt::Debug, marker::PhantomData, ops};
 
 /// A simple structure to manage identities of objects.
 #[derive(Debug)]
@@ -765,7 +765,7 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn new(name: &str, factory: G, backends: wgt::BackendBit) -> Self {
-        profiling::scope!("Global::new");
+        profiling::scope!("new", "Global");
         Self {
             instance: Instance::new(name, 1, backends),
             surfaces: Registry::without_backend(&factory, "Surface"),
@@ -783,37 +783,36 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
-        if !thread::panicking() {
-            log::info!("Dropping Global");
-            let mut surface_guard = self.surfaces.data.write();
+        profiling::scope!("drop", "Global");
+        log::info!("Dropping Global");
+        let mut surface_guard = self.surfaces.data.write();
 
-            // destroy hubs
-            #[cfg(vulkan)]
-            {
-                self.hubs.vulkan.clear(&mut *surface_guard, true);
-            }
-            #[cfg(metal)]
-            {
-                self.hubs.metal.clear(&mut *surface_guard, true);
-            }
-            #[cfg(dx12)]
-            {
-                self.hubs.dx12.clear(&mut *surface_guard, true);
-            }
-            #[cfg(dx11)]
-            {
-                self.hubs.dx11.clear(&mut *surface_guard, true);
-            }
-            #[cfg(gl)]
-            {
-                self.hubs.gl.clear(&mut *surface_guard, true);
-            }
+        // destroy hubs before the instance gets dropped
+        #[cfg(vulkan)]
+        {
+            self.hubs.vulkan.clear(&mut *surface_guard, true);
+        }
+        #[cfg(metal)]
+        {
+            self.hubs.metal.clear(&mut *surface_guard, true);
+        }
+        #[cfg(dx12)]
+        {
+            self.hubs.dx12.clear(&mut *surface_guard, true);
+        }
+        #[cfg(dx11)]
+        {
+            self.hubs.dx11.clear(&mut *surface_guard, true);
+        }
+        #[cfg(gl)]
+        {
+            self.hubs.gl.clear(&mut *surface_guard, true);
+        }
 
-            // destroy surfaces
-            for element in surface_guard.map.drain(..) {
-                if let Element::Occupied(surface, _) = element {
-                    self.instance.destroy_surface(surface);
-                }
+        // destroy surfaces
+        for element in surface_guard.map.drain(..) {
+            if let Element::Occupied(surface, _) = element {
+                self.instance.destroy_surface(surface);
             }
         }
     }

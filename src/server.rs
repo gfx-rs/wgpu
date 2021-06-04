@@ -208,12 +208,12 @@ pub unsafe extern "C" fn wgpu_server_buffer_get_mapped_range(
     global: &Global,
     buffer_id: id::BufferId,
     start: wgt::BufferAddress,
-    size: Option<wgt::BufferSize>,
+    size: wgt::BufferAddress,
 ) -> *mut u8 {
     gfx_select!(buffer_id => global.buffer_get_mapped_range(
         buffer_id,
         start,
-        size
+        Some(size)
     ))
     .unwrap()
     .0
@@ -450,6 +450,20 @@ impl GlobalExt for Global {
                     &target_colors,
                     target_depth_stencil.as_ref(),
                 ) {
+                    error_buf.init(err);
+                }
+            }
+            CommandEncoderAction::ClearBuffer { dst, offset, size } => {
+                if let Err(err) = self
+                    .command_encoder_clear_buffer::<B>(self_id, dst, offset, size)
+                {
+                    error_buf.init(err);
+                }
+            }
+            CommandEncoderAction::ClearImage { dst, subresource_range } => {
+                if let Err(err) = self
+                    .command_encoder_clear_image::<B>(self_id, dst, subresource_range)
+                {
                     error_buf.init(err);
                 }
             }

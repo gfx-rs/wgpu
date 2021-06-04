@@ -19,7 +19,6 @@ cross = ["wgc/cross"]
 env_logger = "0.8"
 log = "0.4"
 raw-window-handle = "0.3"
-renderdoc = { version = "0.10", optional = true, default_features = false }
 ron = "0.6"
 winit = { version = "0.24", optional = true }
 

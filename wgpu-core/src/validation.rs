@@ -168,6 +168,11 @@ pub enum BindingError {
     },
     #[error("type on the shader side does not match the pipeline binding")]
     WrongType,
+    #[error("storage class {binding:?} doesn't match the shader {shader:?}")]
+    WrongStorageClass {
+        binding: naga::StorageClass,
+        shader: naga::StorageClass,
+    },
     #[error("buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
     WrongBufferSize(wgt::BufferSize),
     #[error("view dimension {dim:?} (is array: {is_array}) doesn't match the binding {binding:?}")]
@@ -312,13 +317,22 @@ impl Resource {
                         has_dynamic_offset: _,
                         min_binding_size,
                     } => {
-                        let global_use = match ty {
-                            wgt::BufferBindingType::Uniform
-                            | wgt::BufferBindingType::Storage { read_only: true } => {
-                                GlobalUse::READ | GlobalUse::QUERY
+                        let (class, global_use) = match ty {
+                            wgt::BufferBindingType::Uniform => {
+                                (naga::StorageClass::Uniform, GlobalUse::READ)
                             }
-                            wgt::BufferBindingType::Storage { read_only: _ } => GlobalUse::all(),
+                            wgt::BufferBindingType::Storage { read_only } => {
+                                let mut global_use = GlobalUse::READ | GlobalUse::QUERY;
+                                global_use.set(GlobalUse::WRITE, !read_only);
+                                (naga::StorageClass::Storage, global_use)
+                            }
                         };
+                        if self.class != class {
+                            return Err(BindingError::WrongStorageClass {
+                                binding: class,
+                                shader: self.class,
+                            });
+                        }
                         (global_use, min_binding_size)
                     }
                     _ => return Err(BindingError::WrongType),

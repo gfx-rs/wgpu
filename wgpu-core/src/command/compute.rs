@@ -6,13 +6,14 @@ use crate::{
     binding_model::{BindError, BindGroup, PushConstantUploadError},
     command::{
         bind::Binder, end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer,
-        CommandEncoderError, MapPassErr, PassErrorScope, QueryUseError, StateChange,
+        CommandEncoderError, CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError,
+        StateChange,
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, BufferUse, Texture},
-    track::{TrackerSet, UsageConflict},
+    track::{StatefulTrackerSubset, TrackerSet, UsageConflict},
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label, DOWNLEVEL_ERROR_WARNING_MESSAGE,
 };
@@ -193,7 +194,7 @@ where
 struct State {
     binder: Binder,
     pipeline: StateChange<id::ComputePipelineId>,
-    trackers: TrackerSet,
+    trackers: StatefulTrackerSubset,
     debug_scope_depth: u32,
 }
 
@@ -223,6 +224,7 @@ impl State {
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
             self.trackers.merge_extend(&bind_group_guard[id].used)?;
+            base_trackers.merge_extend_stateless(&bind_group_guard[id].used);
         }
 
         log::trace!("Encoding dispatch barriers");
@@ -230,7 +232,8 @@ impl State {
         CommandBuffer::insert_barriers(
             raw_cmd_buf,
             base_trackers,
-            &self.trackers,
+            &self.trackers.buffers,
+            &self.trackers.textures,
             buffer_guard,
             texture_guard,
         );
@@ -257,7 +260,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<ComputeCommand>,
     ) -> Result<(), ComputePassError> {
-        profiling::scope!("CommandEncoder::run_compute_pass");
+        profiling::scope!("run_compute_pass", "CommandEncoder");
         let scope = PassErrorScope::Pass(encoder_id);
 
         let hub = B::hub(self);
@@ -266,6 +269,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf =
             CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id).map_pass_err(scope)?;
+        // will be reset to true if recording is done without errors
+        cmd_buf.status = CommandEncoderStatus::Error;
         let raw = cmd_buf.raw.last_mut().unwrap();
 
         #[cfg(feature = "trace")]
@@ -303,7 +308,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut state = State {
             binder: Binder::new(),
             pipeline: StateChange::new(),
-            trackers: TrackerSet::new(B::VARIANT),
+            trackers: StatefulTrackerSubset::new(B::VARIANT),
             debug_scope_depth: 0,
         };
         let mut temp_offsets = Vec::new();
@@ -657,6 +662,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 raw.end_debug_marker();
             }
         }
+        cmd_buf.status = CommandEncoderStatus::Recording;
 
         Ok(())
     }

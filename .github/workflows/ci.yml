@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches-ignore: [staging.tmp]
+    branches: [master, staging]
+    tags: [v0.*]
   pull_request:
     branches-ignore: [staging.tmp]
 
@@ -72,9 +73,11 @@ jobs:
             os: ubuntu-18.04
             channel: nightly
             prepare_command: |
-              sudo apt-get update -y -qq
               echo "Installing Vulkan"
-              sudo apt-get install -y -qq mesa-vulkan-drivers
+              sudo apt-get update -y -qq
+              sudo add-apt-repository ppa:kisak/kisak-mesa -y
+              sudo apt-get update
+              sudo apt install -y libxcb-xfixes0-dev mesa-vulkan-drivers
             additional_core_features: serial-pass
             additional_player_features: winit
           - name: Windows Stable
@@ -82,7 +85,7 @@ jobs:
             channel: stable
             prepare_command: rustup default stable-msvc
             additional_core_features: trace,serial-pass
-            additional_player_features: renderdoc
+            additional_player_features:
           - name: Windows Nightly
             os: windows-2019
             channel: nightly
