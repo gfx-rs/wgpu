@@ -173,6 +173,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             | TokenValue::In
             | TokenValue::Out
             | TokenValue::Uniform
+            | TokenValue::Buffer
             | TokenValue::Layout => true,
             _ => false,
         })
@@ -198,6 +199,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     TokenValue::Out => TypeQualifier::StorageQualifier(StorageQualifier::Output),
                     TokenValue::Uniform => TypeQualifier::StorageQualifier(
                         StorageQualifier::StorageClass(StorageClass::Uniform),
+                    ),
+                    TokenValue::Buffer => TypeQualifier::StorageQualifier(
+                        StorageQualifier::StorageClass(StorageClass::Storage),
                     ),
                     TokenValue::Sampling(s) => TypeQualifier::Sampling(s),
 

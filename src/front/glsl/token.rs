@@ -53,6 +53,7 @@ pub enum TokenValue {
     Out,
     InOut,
     Uniform,
+    Buffer,
     Const,
     Interpolation(Interpolation),
     Sampling(Sampling),
