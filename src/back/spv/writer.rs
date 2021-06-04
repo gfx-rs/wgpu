@@ -1318,6 +1318,15 @@ impl Writer {
         })
     }
 
+    /// Decide whether to put off emitting instructions for `expr_handle`.
+    ///
+    /// We would like to gather together chains of `Access` and `AccessIndex`
+    /// Naga expressions into a single `OpAccessChain` SPIR-V instruction. To do
+    /// this, we don't generate instructions for these exprs when we first
+    /// encounter them. Their ids in `self.cached.ids` are left as zero. Then,
+    /// once we encounter a `Load` or `Store` expression that actually needs the
+    /// chain's value, we call `write_expression_pointer` to handle the whole
+    /// thing in one fell swoop.
     fn is_intermediate(
         &self,
         expr_handle: Handle<crate::Expression>,
@@ -1335,6 +1344,9 @@ impl Writer {
                     _ => false,
                 }
             }
+
+            // The chain rule: if this `Access...`'s `base` operand was
+            // previously omitted, then omit this one, too.
             _ => self.cached.ids[expr_handle.index()] == 0,
         }
     }
@@ -1355,6 +1367,8 @@ impl Writer {
             crate::Expression::Access { base, index: _ }
                 if self.is_intermediate(base, ir_function, &ir_module.types) =>
             {
+                // See `is_intermediate`; we'll handle this later in
+                // `write_expression_pointer`.
                 0
             }
             crate::Expression::Access { base, index } => {
@@ -1389,6 +1403,8 @@ impl Writer {
             crate::Expression::AccessIndex { base, index: _ }
                 if self.is_intermediate(base, ir_function, &ir_module.types) =>
             {
+                // See `is_intermediate`; we'll handle this later in
+                // `write_expression_pointer`.
                 0
             }
             crate::Expression::AccessIndex { base, index } => {
