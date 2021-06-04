@@ -4,7 +4,7 @@
 
 use super::{CommandBuffer, CommandEncoderStatus};
 use crate::{
-    device::DeviceError, hub::GfxBackend, id::DeviceId, track::TrackerSet, FastHashMap,
+    device::DeviceError, hub::HalApi, id::DeviceId, track::TrackerSet, FastHashMap,
     PrivateFeatures, Stored, SubmissionIndex,
 };
 
@@ -20,14 +20,14 @@ use std::thread;
 const GROW_AMOUNT: usize = 20;
 
 #[derive(Debug)]
-struct CommandPool<B: hal::Backend> {
+struct CommandPool<A: hal::Api> {
     raw: B::CommandPool,
     total: usize,
     available: Vec<B::CommandBuffer>,
     pending: Vec<(B::CommandBuffer, SubmissionIndex)>,
 }
 
-impl<B: hal::Backend> CommandPool<B> {
+impl<A: hal::Api> CommandPool<A> {
     fn maintain(&mut self, last_done_index: SubmissionIndex) {
         for i in (0..self.pending.len()).rev() {
             if self.pending[i].1 <= last_done_index {
@@ -72,31 +72,31 @@ impl<B: hal::Backend> CommandPool<B> {
 }
 
 #[derive(Debug)]
-struct Inner<B: hal::Backend> {
-    pools: FastHashMap<thread::ThreadId, CommandPool<B>>,
+struct Inner<A: hal::Api> {
+    pools: FastHashMap<thread::ThreadId, CommandPool<A>>,
 }
 
 #[derive(Debug)]
-pub struct CommandAllocator<B: hal::Backend> {
+pub struct CommandAllocator<A: hal::Api> {
     queue_family: hal::queue::QueueFamilyId,
     internal_thread_id: thread::ThreadId,
-    inner: Mutex<Inner<B>>,
+    inner: Mutex<Inner<A>>,
 }
 
-impl<B: GfxBackend> CommandAllocator<B> {
+impl<A: HalApi> CommandAllocator<A> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn allocate(
         &self,
         device_id: Stored<DeviceId>,
         device: &B::Device,
         limits: wgt::Limits,
-        downlevel: wgt::DownlevelProperties,
+        downlevel: wgt::DownlevelCapabilities,
         features: wgt::Features,
         private_features: PrivateFeatures,
         label: &crate::Label,
         #[cfg(feature = "trace")] enable_tracing: bool,
-    ) -> Result<CommandBuffer<B>, CommandAllocatorError> {
-        //debug_assert_eq!(device_id.backend(), B::VARIANT);
+    ) -> Result<CommandBuffer<A>, CommandAllocatorError> {
+        //debug_assert_eq!(device_id.backend(), A::VARIANT);
         let thread_id = thread::current().id();
         let mut inner = self.inner.lock();
 
@@ -130,7 +130,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
             status: CommandEncoderStatus::Recording,
             recorded_thread_id: thread_id,
             device_id,
-            trackers: TrackerSet::new(B::VARIANT),
+            trackers: TrackerSet::new(A::VARIANT),
             used_swap_chains: Default::default(),
             buffer_memory_init_actions: Default::default(),
             limits,
@@ -150,7 +150,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
     }
 }
 
-impl<B: hal::Backend> CommandAllocator<B> {
+impl<A: hal::Api> CommandAllocator<A> {
     pub fn new(
         queue_family: hal::queue::QueueFamilyId,
         device: &B::Device,
@@ -190,7 +190,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
         self.allocate_for_thread_id(self.internal_thread_id)
     }
 
-    pub fn extend(&self, cmd_buf: &CommandBuffer<B>) -> B::CommandBuffer {
+    pub fn extend(&self, cmd_buf: &CommandBuffer<A>) -> B::CommandBuffer {
         self.allocate_for_thread_id(cmd_buf.recorded_thread_id)
     }
 
@@ -203,7 +203,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
             .recycle(raw);
     }
 
-    pub fn discard(&self, mut cmd_buf: CommandBuffer<B>) {
+    pub fn discard(&self, mut cmd_buf: CommandBuffer<A>) {
         cmd_buf.trackers.clear();
         let mut inner = self.inner.lock();
         let pool = inner.pools.get_mut(&cmd_buf.recorded_thread_id).unwrap();
@@ -224,7 +224,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
 
     pub fn after_submit(
         &self,
-        cmd_buf: CommandBuffer<B>,
+        cmd_buf: CommandBuffer<A>,
         device: &B::Device,
         submit_index: SubmissionIndex,
     ) {

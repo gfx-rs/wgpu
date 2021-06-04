@@ -12,7 +12,7 @@ use crate::{
     memory_init_tracker::MemoryInitTrackerAction,
     track::{TrackerSet, UsageConflict, DUMMY_SELECTOR},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
-    FastHashMap, Label, LifeGuard, MultiRefCount, Stored, MAX_BIND_GROUPS,
+    FastHashMap, Label, LifeGuard, MultiRefCount, Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -389,7 +389,7 @@ pub struct BindGroupLayoutDescriptor<'a> {
 pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 
 #[derive(Debug)]
-pub struct BindGroupLayout<B: hal::Backend> {
+pub struct BindGroupLayout<A: hal::Api> {
     pub(crate) raw: B::DescriptorSetLayout,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) multi_ref_count: MultiRefCount,
@@ -401,7 +401,7 @@ pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) label: String,
 }
 
-impl<B: hal::Backend> Resource for BindGroupLayout<B> {
+impl<A: hal::Api> Resource for BindGroupLayout<A> {
     const TYPE: &'static str = "BindGroupLayout";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -498,15 +498,15 @@ pub struct PipelineLayoutDescriptor<'a> {
 }
 
 #[derive(Debug)]
-pub struct PipelineLayout<B: hal::Backend> {
+pub struct PipelineLayout<A: hal::Api> {
     pub(crate) raw: B::PipelineLayout,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) bind_group_layout_ids: ArrayVec<[Valid<BindGroupLayoutId>; MAX_BIND_GROUPS]>,
+    pub(crate) bind_group_layout_ids: ArrayVec<[Valid<BindGroupLayoutId>; hal::MAX_BIND_GROUPS]>,
     pub(crate) push_constant_ranges: ArrayVec<[wgt::PushConstantRange; SHADER_STAGE_COUNT]>,
 }
 
-impl<B: hal::Backend> PipelineLayout<B> {
+impl<A: hal::Api> PipelineLayout<A> {
     /// Validate push constants match up with expected ranges.
     pub(crate) fn validate_push_constant_ranges(
         &self,
@@ -586,7 +586,7 @@ impl<B: hal::Backend> PipelineLayout<B> {
     }
 }
 
-impl<B: hal::Backend> Resource for PipelineLayout<B> {
+impl<A: hal::Api> Resource for PipelineLayout<A> {
     const TYPE: &'static str = "PipelineLayout";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -636,8 +636,8 @@ pub struct BindGroupDynamicBindingData {
 }
 
 #[derive(Debug)]
-pub struct BindGroup<B: hal::Backend> {
-    pub(crate) raw: DescriptorSet<B>,
+pub struct BindGroup<A: hal::Api> {
+    pub(crate) raw: DescriptorSet<A>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) layout_id: Valid<BindGroupLayoutId>,
     pub(crate) life_guard: LifeGuard,
@@ -646,7 +646,7 @@ pub struct BindGroup<B: hal::Backend> {
     pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,
 }
 
-impl<B: hal::Backend> BindGroup<B> {
+impl<A: hal::Api> BindGroup<A> {
     pub(crate) fn validate_dynamic_bindings(
         &self,
         offsets: &[wgt::DynamicOffset],
@@ -681,13 +681,13 @@ impl<B: hal::Backend> BindGroup<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<()> for BindGroup<B> {
+impl<A: hal::Api> Borrow<()> for BindGroup<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
 }
 
-impl<B: hal::Backend> Resource for BindGroup<B> {
+impl<A: hal::Api> Resource for BindGroup<A> {
     const TYPE: &'static str = "BindGroup";
 
     fn life_guard(&self) -> &LifeGuard {

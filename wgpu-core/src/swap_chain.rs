@@ -37,14 +37,14 @@ use crate::device::trace::Action;
 use crate::{
     conv,
     device::DeviceError,
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
     id::{DeviceId, SwapChainId, TextureViewId, Valid},
     resource,
     track::TextureSelector,
-    LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
+    LifeGuard, Stored, SubmissionIndex,
 };
 
-use hal::{queue::Queue as _, window::PresentationSurface as _};
+use hal::{Queue as _, Surface as _};
 use thiserror::Error;
 use wgt::{SwapChainDescriptor, SwapChainStatus};
 
@@ -52,7 +52,7 @@ const FRAME_TIMEOUT_MS: u64 = 1000;
 pub const DESIRED_NUM_FRAMES: u32 = 3;
 
 #[derive(Debug)]
-pub struct SwapChain<B: hal::Backend> {
+pub struct SwapChain<A: hal::Api> {
     pub(crate) life_guard: LifeGuard,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) desc: SwapChainDescriptor,
@@ -63,7 +63,7 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
 }
 
-impl<B: hal::Backend> crate::hub::Resource for SwapChain<B> {
+impl<A: hal::Api> crate::hub::Resource for SwapChain<A> {
     const TYPE: &'static str = "SwapChain";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -116,7 +116,7 @@ pub(crate) fn swap_chain_descriptor_to_hal(
         num_frames,
     );
     //TODO: check for supported
-    config.image_usage = conv::map_texture_usage(desc.usage, hal::format::Aspects::COLOR);
+    config.image_usage = conv::map_texture_usage(desc.usage, hal::FormatAspect::COLOR);
     config.composite_alpha_mode = hal::window::CompositeAlphaMode::OPAQUE;
     config.present_mode = match desc.present_mode {
         wgt::PresentMode::Immediate => hal::window::PresentMode::IMMEDIATE,
@@ -134,14 +134,14 @@ pub struct SwapChainOutput {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn swap_chain_get_current_texture_view<B: GfxBackend>(
+    pub fn swap_chain_get_current_texture_view<A: HalApi>(
         &self,
         swap_chain_id: SwapChainId,
         view_id_in: Input<G, TextureViewId>,
     ) -> Result<SwapChainOutput, SwapChainError> {
         profiling::scope!("get_next_texture", "SwapChain");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let fid = hub.texture_views.prepare(view_id_in);
 
@@ -195,7 +195,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ref_count: sc.life_guard.add_ref(),
                         },
                     },
-                    aspects: hal::format::Aspects::COLOR,
+                    aspects: hal::FormatAspect::COLOR,
                     format: sc.desc.format,
                     format_features: wgt::TextureFormatFeatures {
                         allowed_usages: wgt::TextureUsage::RENDER_ATTACHMENT,
@@ -238,13 +238,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(SwapChainOutput { status, view_id })
     }
 
-    pub fn swap_chain_present<B: GfxBackend>(
+    pub fn swap_chain_present<A: HalApi>(
         &self,
         swap_chain_id: SwapChainId,
     ) -> Result<SwapChainStatus, SwapChainError> {
         profiling::scope!("present", "SwapChain");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut surface_guard, mut token) = self.surfaces.write(&mut token);

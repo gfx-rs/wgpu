@@ -27,8 +27,8 @@
 mod macros;
 
 pub mod backend {
-    pub use gfx_backend_empty::Backend as Empty;
-
+    pub use hal::empty::Api as Empty;
+    /*
     #[cfg(dx11)]
     pub use gfx_backend_dx11::Backend as Dx11;
     #[cfg(dx12)]
@@ -39,6 +39,7 @@ pub mod backend {
     pub use gfx_backend_metal::Backend as Metal;
     #[cfg(vulkan)]
     pub use gfx_backend_vulkan::Backend as Vulkan;
+    */
 }
 
 pub mod binding_model;
@@ -63,8 +64,6 @@ use std::sync::atomic;
 use atomic::{AtomicUsize, Ordering};
 
 use std::{borrow::Cow, os::raw::c_char, ptr};
-
-pub const MAX_BIND_GROUPS: usize = 8;
 
 type SubmissionIndex = usize;
 type Index = u32;
@@ -230,13 +229,6 @@ struct Stored<T> {
     ref_count: RefCount,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct PrivateFeatures {
-    anisotropic_filtering: bool,
-    texture_d24: bool,
-    texture_d24_s8: bool,
-}
-
 const DOWNLEVEL_WARNING_MESSAGE: &str = "The underlying API or device in use does not \
 support enough features to be a fully compliant implementation of WebGPU. A subset of the features can still be used. \
 If you are running this program on native and not in a browser and wish to limit the features you use to the supported subset, \
@@ -254,6 +246,7 @@ macro_rules! gfx_select {
         // Note: For some reason the cfg aliases defined in build.rs don't succesfully apply in this
         // macro so we must specify their equivalents manually
         match $id.backend() {
+            /*
             #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")))]
             wgt::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),* ),
             #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
@@ -264,7 +257,9 @@ macro_rules! gfx_select {
             wgt::Backend::Dx11 => $global.$method::<$crate::backend::Dx11>( $($param),* ),
             #[cfg(any(target_arch = "wasm32", all(unix, not(any(target_os = "ios", target_os = "macos")))))]
             wgt::Backend::Gl => $global.$method::<$crate::backend::Gl>( $($param),+ ),
+            */
             other => panic!("Unexpected backend {:?}", other),
+
         }
     };
 }
@@ -274,9 +269,3 @@ type FastHashMap<K, V> =
     std::collections::HashMap<K, V, std::hash::BuildHasherDefault<fxhash::FxHasher>>;
 /// Fast hash set used internally.
 type FastHashSet<K> = std::collections::HashSet<K, std::hash::BuildHasherDefault<fxhash::FxHasher>>;
-
-#[test]
-fn test_default_limits() {
-    let limits = wgt::Limits::default();
-    assert!(limits.max_bind_groups <= MAX_BIND_GROUPS as u32);
-}

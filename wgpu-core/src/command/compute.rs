@@ -9,7 +9,7 @@ use crate::{
         CommandEncoderError, CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError,
         StateChange,
     },
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, BufferUse, Texture},
@@ -214,13 +214,13 @@ impl State {
         Ok(())
     }
 
-    fn flush_states<B: GfxBackend>(
+    fn flush_states<A: HalApi>(
         &mut self,
         raw_cmd_buf: &mut B::CommandBuffer,
         base_trackers: &mut TrackerSet,
-        bind_group_guard: &Storage<BindGroup<B>, id::BindGroupId>,
-        buffer_guard: &Storage<Buffer<B>, id::BufferId>,
-        texture_guard: &Storage<Texture<B>, id::TextureId>,
+        bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
+        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
+        texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
             self.trackers.merge_extend(&bind_group_guard[id].used)?;
@@ -246,16 +246,16 @@ impl State {
 // Common routines between render/compute
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_run_compute_pass<B: GfxBackend>(
+    pub fn command_encoder_run_compute_pass<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         pass: &ComputePass,
     ) -> Result<(), ComputePassError> {
-        self.command_encoder_run_compute_pass_impl::<B>(encoder_id, pass.base.as_ref())
+        self.command_encoder_run_compute_pass_impl::<A>(encoder_id, pass.base.as_ref())
     }
 
     #[doc(hidden)]
-    pub fn command_encoder_run_compute_pass_impl<B: GfxBackend>(
+    pub fn command_encoder_run_compute_pass_impl<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<ComputeCommand>,
@@ -263,7 +263,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("run_compute_pass", "CommandEncoder");
         let scope = PassErrorScope::Pass(encoder_id);
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -308,7 +308,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut state = State {
             binder: Binder::new(),
             pipeline: StateChange::new(),
-            trackers: StatefulTrackerSubset::new(B::VARIANT),
+            trackers: StatefulTrackerSubset::new(A::VARIANT),
             debug_scope_depth: 0,
         };
         let mut temp_offsets = Vec::new();

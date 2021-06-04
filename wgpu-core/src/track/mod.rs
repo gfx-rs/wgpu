@@ -126,9 +126,9 @@ pub(crate) struct PendingTransition<S: ResourceState> {
 
 impl PendingTransition<BufferState> {
     /// Produce the gfx-hal barrier corresponding to the transition.
-    pub fn into_hal<'a, B: hal::Backend>(
+    pub fn into_hal<'a, A: hal::Api>(
         self,
-        buf: &'a resource::Buffer<B>,
+        buf: &'a resource::Buffer<A>,
     ) -> hal::memory::Barrier<'a, B> {
         log::trace!("\tbuffer -> {:?}", self);
         let &(ref target, _) = buf.raw.as_ref().expect("Buffer is destroyed");
@@ -153,9 +153,9 @@ impl From<PendingTransition<BufferState>> for UsageConflict {
 
 impl PendingTransition<TextureState> {
     /// Produce the gfx-hal barrier corresponding to the transition.
-    pub fn into_hal<'a, B: hal::Backend>(
+    pub fn into_hal<'a, A: hal::Api>(
         self,
-        tex: &'a resource::Texture<B>,
+        tex: &'a resource::Texture<A>,
     ) -> hal::memory::Barrier<'a, B> {
         log::trace!("\ttexture -> {:?}", self);
         let &(ref target, _) = tex.raw.as_ref().expect("Texture is destroyed");

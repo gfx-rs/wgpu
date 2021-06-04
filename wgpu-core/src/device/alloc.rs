@@ -7,12 +7,12 @@ use hal::device::Device as _;
 use std::{borrow::Cow, iter, ptr::NonNull};
 
 #[derive(Debug)]
-pub struct MemoryAllocator<B: hal::Backend>(gpu_alloc::GpuAllocator<B::Memory>);
+pub struct MemoryAllocator<A: hal::Api>(gpu_alloc::GpuAllocator<B::Memory>);
 #[derive(Debug)]
-pub struct MemoryBlock<B: hal::Backend>(gpu_alloc::MemoryBlock<B::Memory>);
-struct MemoryDevice<'a, B: hal::Backend>(&'a B::Device);
+pub struct MemoryBlock<A: hal::Api>(gpu_alloc::MemoryBlock<B::Memory>);
+struct MemoryDevice<'a, A: hal::Api>(&'a B::Device);
 
-impl<B: hal::Backend> MemoryAllocator<B> {
+impl<A: hal::Api> MemoryAllocator<A> {
     pub fn new(mem_props: hal::adapter::MemoryProperties, limits: hal::Limits) -> Self {
         let mem_config = gpu_alloc::Config {
             dedicated_threshold: 32 << 20,
@@ -60,7 +60,7 @@ impl<B: hal::Backend> MemoryAllocator<B> {
         device: &B::Device,
         requirements: hal::memory::Requirements,
         usage: gpu_alloc::UsageFlags,
-    ) -> Result<MemoryBlock<B>, DeviceError> {
+    ) -> Result<MemoryBlock<A>, DeviceError> {
         assert!(requirements.alignment.is_power_of_two());
         let request = gpu_alloc::Request {
             size: requirements.size,
@@ -69,7 +69,7 @@ impl<B: hal::Backend> MemoryAllocator<B> {
             usage,
         };
 
-        unsafe { self.0.alloc(&MemoryDevice::<B>(device), request) }
+        unsafe { self.0.alloc(&MemoryDevice::<A>(device), request) }
             .map(MemoryBlock)
             .map_err(|err| match err {
                 gpu_alloc::AllocationError::OutOfHostMemory
@@ -78,16 +78,16 @@ impl<B: hal::Backend> MemoryAllocator<B> {
             })
     }
 
-    pub fn free(&mut self, device: &B::Device, block: MemoryBlock<B>) {
-        unsafe { self.0.dealloc(&MemoryDevice::<B>(device), block.0) }
+    pub fn free(&mut self, device: &B::Device, block: MemoryBlock<A>) {
+        unsafe { self.0.dealloc(&MemoryDevice::<A>(device), block.0) }
     }
 
     pub fn clear(&mut self, device: &B::Device) {
-        unsafe { self.0.cleanup(&MemoryDevice::<B>(device)) }
+        unsafe { self.0.cleanup(&MemoryDevice::<A>(device)) }
     }
 }
 
-impl<B: hal::Backend> MemoryBlock<B> {
+impl<A: hal::Api> MemoryBlock<A> {
     pub fn bind_buffer(
         &self,
         device: &B::Device,
@@ -125,13 +125,13 @@ impl<B: hal::Backend> MemoryBlock<B> {
         let offset = inner_offset;
         unsafe {
             self.0
-                .map(&MemoryDevice::<B>(device), offset, size as usize)
+                .map(&MemoryDevice::<A>(device), offset, size as usize)
                 .map_err(DeviceError::from)
         }
     }
 
     pub fn unmap(&mut self, device: &B::Device) {
-        unsafe { self.0.unmap(&MemoryDevice::<B>(device)) };
+        unsafe { self.0.unmap(&MemoryDevice::<A>(device)) };
     }
 
     pub fn write_bytes(
@@ -144,7 +144,7 @@ impl<B: hal::Backend> MemoryBlock<B> {
         let offset = inner_offset;
         unsafe {
             self.0
-                .write_bytes(&MemoryDevice::<B>(device), offset, data)
+                .write_bytes(&MemoryDevice::<A>(device), offset, data)
                 .map_err(DeviceError::from)
         }
     }
@@ -159,7 +159,7 @@ impl<B: hal::Backend> MemoryBlock<B> {
         let offset = inner_offset;
         unsafe {
             self.0
-                .read_bytes(&MemoryDevice::<B>(device), offset, data)
+                .read_bytes(&MemoryDevice::<A>(device), offset, data)
                 .map_err(DeviceError::from)
         }
     }
@@ -206,7 +206,7 @@ impl<B: hal::Backend> MemoryBlock<B> {
     }
 }
 
-impl<B: hal::Backend> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B> {
+impl<A: hal::Api> gpu_alloc::MemoryDevice<B::Memory> for MemoryDevice<'_, B> {
     unsafe fn allocate_memory(
         &self,
         size: u64,

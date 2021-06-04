@@ -5,25 +5,18 @@
 use crate::{
     binding_model, command, conv,
     device::life::WaitIdleError,
-    hub::{
-        GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, InvalidId, Storage, Token,
-    },
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input, InvalidId, Storage, Token},
     id, instance,
     memory_init_tracker::{MemoryInitKind, MemoryInitTracker, MemoryInitTrackerAction},
     pipeline, resource, swap_chain,
     track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
-    FastHashMap, Label, LabelHelpers, LifeGuard, MultiRefCount, PrivateFeatures, Stored,
-    SubmissionIndex, MAX_BIND_GROUPS,
+    FastHashMap, Label, LabelHelpers, LifeGuard, MultiRefCount, Stored, SubmissionIndex,
 };
 
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
-use hal::{
-    command::CommandBuffer as _,
-    device::Device as _,
-    window::{PresentationSurface as _, Surface as _},
-};
+use hal::{CommandBuffer as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
 use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat, TextureViewDimension};
@@ -51,33 +44,11 @@ use smallvec::SmallVec;
 pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_MIP_LEVELS: u32 = 16;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
-pub const MAX_ANISOTROPY: u8 = 16;
 pub const SHADER_STAGE_COUNT: usize = 3;
 
 const IMPLICIT_FAILURE: &str = "failed implicit";
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
-
-pub fn all_buffer_stages() -> hal::pso::PipelineStage {
-    use hal::pso::PipelineStage as Ps;
-    Ps::DRAW_INDIRECT
-        | Ps::VERTEX_INPUT
-        | Ps::VERTEX_SHADER
-        | Ps::FRAGMENT_SHADER
-        | Ps::COMPUTE_SHADER
-        | Ps::TRANSFER
-        | Ps::HOST
-}
-pub fn all_image_stages() -> hal::pso::PipelineStage {
-    use hal::pso::PipelineStage as Ps;
-    Ps::EARLY_FRAGMENT_TESTS
-        | Ps::LATE_FRAGMENT_TESTS
-        | Ps::COLOR_ATTACHMENT_OUTPUT
-        | Ps::VERTEX_SHADER
-        | Ps::FRAGMENT_SHADER
-        | Ps::COMPUTE_SHADER
-        | Ps::TRANSFER
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -111,15 +82,6 @@ impl<T> AttachmentData<T> {
             depth_stencil: self.depth_stencil.as_ref().map(&fun),
         }
     }
-}
-
-pub(crate) type AttachmentDataVec<T> = ArrayVec<[T; MAX_COLOR_TARGETS + MAX_COLOR_TARGETS + 1]>;
-pub(crate) type RenderPassKey = AttachmentData<(hal::pass::Attachment, hal::image::Layout)>;
-#[derive(Debug, Eq, Hash, PartialEq)]
-pub(crate) struct FramebufferKey {
-    pub(crate) attachments: AttachmentData<hal::image::FramebufferAttachment>,
-    pub(crate) extent: wgt::Extent3d,
-    pub(crate) samples: hal::image::NumSamples,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq)]
@@ -173,28 +135,23 @@ impl RenderPassContext {
 
 type BufferMapPendingCallback = (resource::BufferMapOperation, resource::BufferMapAsyncStatus);
 
-fn map_buffer<B: hal::Backend>(
-    raw: &B::Device,
-    buffer: &mut resource::Buffer<B>,
-    offset: hal::buffer::Offset,
+fn map_buffer<A: hal::Api>(
+    raw: &A::Device,
+    buffer: &mut resource::Buffer<A>,
+    offset: BufferAddress,
     size: BufferAddress,
     kind: HostMap,
 ) -> Result<ptr::NonNull<u8>, resource::BufferAccessError> {
-    let &mut (_, ref mut block) = buffer
-        .raw
-        .as_mut()
-        .ok_or(resource::BufferAccessError::Destroyed)?;
-    let ptr = block.map(raw, offset, size).map_err(DeviceError::from)?;
+    let ptr = raw
+        .map_buffer(&buffer.raw, offset, offset + size)
+        .map_err(DeviceError::from)?;
 
     buffer.sync_mapped_writes = match kind {
-        HostMap::Read if !block.is_coherent() => {
-            block.invalidate_range(raw, offset, Some(size))?;
+        HostMap::Read if !buffer.is_coherent => {
+            raw.invalidate_memory_ranges(&buffer.raw, iter::once(offset..offset + size));
             None
         }
-        HostMap::Write if !block.is_coherent() => Some(hal::memory::Segment {
-            offset,
-            size: Some(size),
-        }),
+        HostMap::Write if !buffer.is_coherent => Some(offset..offset + size),
         _ => None,
     };
 
@@ -206,7 +163,7 @@ fn map_buffer<B: hal::Backend>(
     // we instead just initialize the memory here and make sure it is GPU visible, so this happens at max only once for every buffer region.
     //
     // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
-    let zero_init_needs_flush_now = !block.is_coherent() && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
+    let zero_init_needs_flush_now = !buffer.is_coherent && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
     for uninitialized_range in buffer.initialization_status.drain(offset..(size + offset)) {
         let num_bytes = uninitialized_range.end - uninitialized_range.start;
         unsafe {
@@ -217,26 +174,14 @@ fn map_buffer<B: hal::Backend>(
             )
         };
         if zero_init_needs_flush_now {
-            block.flush_range(raw, uninitialized_range.start, Some(num_bytes))?;
+            raw.flush_memory_ranges(
+                &buffer.raw,
+                iter::once(uninitialized_range.start..uninitialized_range.start + num_bytes),
+            );
         }
     }
 
     Ok(ptr)
-}
-
-fn unmap_buffer<B: hal::Backend>(
-    raw: &B::Device,
-    buffer: &mut resource::Buffer<B>,
-) -> Result<(), resource::BufferAccessError> {
-    let &mut (_, ref mut block) = buffer
-        .raw
-        .as_mut()
-        .ok_or(resource::BufferAccessError::Destroyed)?;
-    if let Some(segment) = buffer.sync_mapped_writes.take() {
-        block.flush_range(raw, segment.offset, segment.size)?;
-    }
-    block.unmap(raw);
-    Ok(())
 }
 
 //Note: this logic is specifically moved out of `handle_mapping()` in order to
@@ -245,12 +190,6 @@ fn fire_map_callbacks<I: IntoIterator<Item = BufferMapPendingCallback>>(callback
     for (operation, status) in callbacks {
         unsafe { (operation.callback)(status, operation.user_data) }
     }
-}
-
-#[derive(Debug)]
-pub(crate) struct RenderPassLock<B: hal::Backend> {
-    pub(crate) render_passes: FastHashMap<RenderPassKey, B::RenderPass>,
-    pub(crate) framebuffers: FastHashMap<FramebufferKey, B::Framebuffer>,
 }
 
 /// Structure describing a logical device. Some members are internally mutable,
@@ -264,31 +203,29 @@ pub(crate) struct RenderPassLock<B: hal::Backend> {
 /// 1. `self.trackers` is locked last (unenforced)
 /// 1. `self.trace` is locked last (unenforced)
 #[derive(Debug)]
-pub struct Device<B: hal::Backend> {
-    pub(crate) raw: B::Device,
+pub struct Device<A: hal::Api> {
+    pub(crate) raw: A::Device,
     pub(crate) adapter_id: Stored<id::AdapterId>,
-    pub(crate) queue_group: hal::queue::QueueGroup<B>,
-    pub(crate) cmd_allocator: command::CommandAllocator<B>,
-    mem_allocator: Mutex<alloc::MemoryAllocator<B>>,
-    desc_allocator: Mutex<descriptor::DescriptorAllocator<B>>,
+    pub(crate) queue: A::Queue,
+    //pub(crate) cmd_allocator: command::CommandAllocator<A>,
+    //mem_allocator: Mutex<alloc::MemoryAllocator<A>>,
+    //desc_allocator: Mutex<descriptor::DescriptorAllocator<A>>,
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) life_guard: LifeGuard,
     pub(crate) active_submission_index: SubmissionIndex,
     /// Has to be locked temporarily only (locked last)
     pub(crate) trackers: Mutex<TrackerSet>,
-    pub(crate) render_passes: Mutex<RenderPassLock<B>>,
     // Life tracker should be locked right after the device and before anything else.
-    life_tracker: Mutex<life::LifetimeTracker<B>>,
+    life_tracker: Mutex<life::LifetimeTracker<A>>,
     temp_suspected: life::SuspectedResources,
-    pub(crate) hal_limits: hal::Limits,
-    pub(crate) private_features: PrivateFeatures,
+    pub(crate) alignments: hal::Alignments,
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
-    pub(crate) downlevel: wgt::DownlevelProperties,
+    pub(crate) downlevel: wgt::DownlevelCapabilities,
     spv_options: naga::back::spv::Options,
     //TODO: move this behind another mutex. This would allow several methods to switch
     // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
-    pending_writes: queue::PendingWrites<B>,
+    pending_writes: queue::PendingWrites<A>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<trace::Trace>>,
 }
@@ -299,24 +236,16 @@ pub enum CreateDeviceError {
     OutOfMemory,
 }
 
-impl<B: GfxBackend> Device<B> {
+impl<A: HalApi> Device<A> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        raw: B::Device,
+        device: hal::OpenDevice<A>,
         adapter_id: Stored<id::AdapterId>,
-        queue_group: hal::queue::QueueGroup<B>,
-        mem_props: hal::adapter::MemoryProperties,
-        hal_limits: hal::Limits,
-        private_features: PrivateFeatures,
-        downlevel: wgt::DownlevelProperties,
+        alignments: hal::Alignments,
+        downlevel: wgt::DownlevelCapabilities,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Self, CreateDeviceError> {
-        let cmd_allocator = command::CommandAllocator::new(queue_group.family, &raw)
-            .or(Err(CreateDeviceError::OutOfMemory))?;
-
-        let mem_allocator = alloc::MemoryAllocator::new(mem_props, hal_limits);
-        let descriptors = descriptor::DescriptorAllocator::new();
         #[cfg(not(feature = "trace"))]
         if let Some(_) = trace_path {
             log::error!("Feature 'trace' is not enabled");
@@ -352,19 +281,12 @@ impl<B: GfxBackend> Device<B> {
         };
 
         Ok(Self {
-            raw,
+            raw: device.device,
             adapter_id,
-            cmd_allocator,
-            mem_allocator: Mutex::new(mem_allocator),
-            desc_allocator: Mutex::new(descriptors),
-            queue_group,
+            queue: device.queue,
             life_guard: LifeGuard::new("<device>"),
             active_submission_index: 0,
-            trackers: Mutex::new(TrackerSet::new(B::VARIANT)),
-            render_passes: Mutex::new(RenderPassLock {
-                render_passes: FastHashMap::default(),
-                framebuffers: FastHashMap::default(),
-            }),
+            trackers: Mutex::new(TrackerSet::new(A::VARIANT)),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: life::SuspectedResources::default(),
             #[cfg(feature = "trace")]
@@ -372,7 +294,7 @@ impl<B: GfxBackend> Device<B> {
                 Ok(mut trace) => {
                     trace.add(trace::Action::Init {
                         desc: desc.clone(),
-                        backend: B::VARIANT,
+                        backend: A::VARIANT,
                     });
                     Some(Mutex::new(trace))
                 }
@@ -381,8 +303,7 @@ impl<B: GfxBackend> Device<B> {
                     None
                 }
             }),
-            hal_limits,
-            private_features,
+            alignments,
             limits: desc.limits.clone(),
             features: desc.features,
             downlevel,
@@ -404,9 +325,9 @@ impl<B: GfxBackend> Device<B> {
     }
 
     fn lock_life_internal<'this, 'token: 'this>(
-        tracker: &'this Mutex<life::LifetimeTracker<B>>,
+        tracker: &'this Mutex<life::LifetimeTracker<A>>,
         _token: &mut Token<'token, Self>,
-    ) -> MutexGuard<'this, life::LifetimeTracker<B>> {
+    ) -> MutexGuard<'this, life::LifetimeTracker<A>> {
         tracker.lock()
     }
 
@@ -414,13 +335,13 @@ impl<B: GfxBackend> Device<B> {
         &'this self,
         //TODO: fix this - the token has to be borrowed for the lock
         token: &mut Token<'token, Self>,
-    ) -> MutexGuard<'this, life::LifetimeTracker<B>> {
+    ) -> MutexGuard<'this, life::LifetimeTracker<A>> {
         Self::lock_life_internal(&self.life_tracker, token)
     }
 
     fn maintain<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
         &'this self,
-        hub: &Hub<B, G>,
+        hub: &Hub<A, G>,
         force_wait: bool,
         token: &mut Token<'token, Self>,
     ) -> Result<Vec<BufferMapPendingCallback>, WaitIdleError> {
@@ -448,7 +369,7 @@ impl<B: GfxBackend> Device<B> {
 
     fn untrack<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
         &'this mut self,
-        hub: &Hub<B, G>,
+        hub: &Hub<A, G>,
         trackers: &TrackerSet,
         mut token: &mut Token<'token, Self>,
     ) {
@@ -517,89 +438,37 @@ impl<B: GfxBackend> Device<B> {
         self_id: id::DeviceId,
         desc: &resource::BufferDescriptor,
         transient: bool,
-    ) -> Result<resource::Buffer<B>, resource::CreateBufferError> {
-        debug_assert_eq!(self_id.backend(), B::VARIANT);
-        let (mut usage, _memory_properties) = conv::map_buffer_usage(desc.usage);
+    ) -> Result<resource::Buffer<A>, resource::CreateBufferError> {
+        debug_assert_eq!(self_id.backend(), A::VARIANT);
+        let mut usage = desc.usage;
         if desc.mapped_at_creation {
             if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
                 return Err(resource::CreateBufferError::UnalignedSize);
             }
             if !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
                 // we are going to be copying into it, internally
-                usage |= hal::buffer::Usage::TRANSFER_DST;
+                usage |= wgt::BufferUsage::COPY_DST;
             }
         } else {
             // We are required to zero out (initialize) all memory.
             // This is done on demand using fill_buffer which requires write transfer usage!
-            usage |= hal::buffer::Usage::TRANSFER_DST;
+            usage |= wgt::BufferUsage::TRANSFER_DST;
         }
 
         if desc.usage.is_empty() {
             return Err(resource::CreateBufferError::EmptyUsage);
         }
 
-        let mem_usage = {
-            use gpu_alloc::UsageFlags as Uf;
-            use wgt::BufferUsage as Bu;
-
-            let mut flags = Uf::empty();
-            let map_flags = desc.usage & (Bu::MAP_READ | Bu::MAP_WRITE);
-            let map_copy_flags =
-                desc.usage & (Bu::MAP_READ | Bu::MAP_WRITE | Bu::COPY_SRC | Bu::COPY_DST);
-            if map_flags.is_empty() || !(desc.usage - map_copy_flags).is_empty() {
-                flags |= Uf::FAST_DEVICE_ACCESS;
-            }
-            if transient {
-                flags |= Uf::TRANSIENT;
-            }
-
-            if !map_flags.is_empty() {
-                let upload_usage = Bu::MAP_WRITE | Bu::COPY_SRC;
-                let download_usage = Bu::MAP_READ | Bu::COPY_DST;
-
-                flags |= Uf::HOST_ACCESS;
-                if desc.usage.contains(upload_usage) {
-                    flags |= Uf::UPLOAD;
-                }
-                if desc.usage.contains(download_usage) {
-                    flags |= Uf::DOWNLOAD;
-                }
-
-                let is_native_only = self
-                    .features
-                    .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS);
-                if !is_native_only
-                    && !upload_usage.contains(desc.usage)
-                    && !download_usage.contains(desc.usage)
-                {
-                    return Err(resource::CreateBufferError::UsageMismatch(desc.usage));
-                }
-            }
-
-            flags
-        };
-
-        let mut buffer = unsafe {
-            self.raw
-                .create_buffer(desc.size.max(1), usage, hal::memory::SparseFlags::empty())
+        let buffer = unsafe {
+            self.raw.create_buffer(&resource::BufferDescriptor {
+                usage,
+                ..desc.clone()
+            })
         }
-        .map_err(|err| match err {
-            hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
-            _ => panic!("failed to create buffer: {}", err),
-        })?;
-        if let Some(ref label) = desc.label {
-            unsafe { self.raw.set_buffer_name(&mut buffer, label) };
-        }
-
-        let requirements = unsafe { self.raw.get_buffer_requirements(&buffer) };
-        let block = self
-            .mem_allocator
-            .lock()
-            .allocate(&self.raw, requirements, mem_usage)?;
-        block.bind_buffer(&self.raw, &mut buffer)?;
+        .map_err(DeviceError::from)?;
 
         Ok(resource::Buffer {
-            raw: Some((buffer, block)),
+            raw: Some(buffer),
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
@@ -616,10 +485,10 @@ impl<B: GfxBackend> Device<B> {
     fn create_texture(
         &self,
         self_id: id::DeviceId,
-        adapter: &crate::instance::Adapter<B>,
+        adapter: &crate::instance::Adapter<A>,
         desc: &resource::TextureDescriptor,
-    ) -> Result<resource::Texture<B>, resource::CreateTextureError> {
-        debug_assert_eq!(self_id.backend(), B::VARIANT);
+    ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
+        debug_assert_eq!(self_id.backend(), A::VARIANT);
 
         let format_desc = desc.format.describe();
         self.require_features(format_desc.required_features)
@@ -659,91 +528,31 @@ impl<B: GfxBackend> Device<B> {
             ));
         }
 
-        let kind = conv::map_texture_dimension_size(
+        conv::check_texture_dimension_size(
             desc.dimension,
             desc.size,
             desc.sample_count,
             &self.limits,
         )?;
-        let format = conv::map_texture_format(desc.format, self.private_features);
-        let aspects = format.surface_desc().aspects;
-        let usage = conv::map_texture_usage(desc.usage, aspects);
 
-        let mip_level_count = desc.mip_level_count;
-        if mip_level_count == 0
-            || mip_level_count > MAX_MIP_LEVELS
-            || mip_level_count > kind.compute_num_levels() as u32
-        {
-            return Err(resource::CreateTextureError::InvalidMipLevelCount(
-                mip_level_count,
-            ));
+        let mips = desc.mip_level_count;
+        if mips == 0 || mips > MAX_MIP_LEVELS || mips > desc.extent.max_mips() as u32 {
+            return Err(resource::CreateTextureError::InvalidMipLevelCount(mips));
         }
-        let mut view_caps = hal::image::ViewCapabilities::empty();
-        // 2D textures with array layer counts that are multiples of 6 could be cubemaps
-        // Following gpuweb/gpuweb#68 always add the hint in that case
-        if desc.dimension == TextureDimension::D2
-            && desc.size.depth_or_array_layers % 6 == 0
-            && (desc.size.depth_or_array_layers == 6
-                || self
-                    .downlevel
-                    .flags
-                    .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES))
-        {
-            view_caps |= hal::image::ViewCapabilities::KIND_CUBE;
-        };
 
-        // TODO: 2D arrays, cubemap arrays
-
-        let mut image = unsafe {
-            let mut image = self
-                .raw
-                .create_image(
-                    kind,
-                    desc.mip_level_count as hal::image::Level,
-                    format,
-                    hal::image::Tiling::Optimal,
-                    usage,
-                    hal::memory::SparseFlags::empty(),
-                    view_caps,
-                )
-                .map_err(|err| match err {
-                    hal::image::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    _ => panic!("failed to create texture: {}", err),
-                })?;
-            if let Some(ref label) = desc.label {
-                self.raw.set_image_name(&mut image, label);
-            }
-            image
-        };
-
-        let requirements = unsafe { self.raw.get_image_requirements(&image) };
-        let block = self.mem_allocator.lock().allocate(
-            &self.raw,
-            requirements,
-            gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
-        )?;
-        block.bind_image(&self.raw, &mut image)?;
+        let mut image = unsafe { self.raw.create_image(desc).map_err(DeviceError::from)? };
 
         Ok(resource::Texture {
-            raw: Some((image, block)),
+            raw: Some(image),
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
             },
-            usage: desc.usage,
-            aspects,
-            dimension: desc.dimension,
-            kind,
-            format: desc.format,
+            desc: desc.map_label(|_| ()),
             format_features,
-            framebuffer_attachment: hal::image::FramebufferAttachment {
-                usage,
-                view_caps,
-                format,
-            },
             full_range: TextureSelector {
-                levels: 0..desc.mip_level_count as hal::image::Level,
-                layers: 0..kind.num_layers(),
+                levels: 0..desc.mip_level_count as hal::MipLevel,
+                layers: 0..desc.array_layer_count as hal::ArrayLayer,
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
@@ -751,10 +560,10 @@ impl<B: GfxBackend> Device<B> {
 
     fn create_texture_view(
         &self,
-        texture: &resource::Texture<B>,
+        texture: &resource::Texture<A>,
         texture_id: id::TextureId,
         desc: &resource::TextureViewDescriptor,
-    ) -> Result<resource::TextureView<B>, resource::CreateTextureViewError> {
+    ) -> Result<resource::TextureView<A>, resource::CreateTextureViewError> {
         let &(ref texture_raw, _) = texture
             .raw
             .as_ref()
@@ -763,8 +572,6 @@ impl<B: GfxBackend> Device<B> {
         let view_dim =
             match desc.dimension {
                 Some(dim) => {
-                    use hal::image::Kind;
-
                     let required_tex_dim = dim.compatible_texture_dimension();
 
                     if required_tex_dim != texture.dimension {
@@ -796,15 +603,16 @@ impl<B: GfxBackend> Device<B> {
 
                     dim
                 }
-                None => match texture.kind {
-                    hal::image::Kind::D1(..) => wgt::TextureViewDimension::D1,
-                    hal::image::Kind::D2(_, _, depth, _)
-                        if depth > 1 && desc.range.array_layer_count.is_none() =>
+                None => match texture.desc.dimension {
+                    wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
+                    wgt::TextureDimension::D2
+                        if texture.desc.array_layer_count > 1
+                            && desc.range.array_layer_count.is_none() =>
                     {
                         wgt::TextureViewDimension::D2Array
                     }
-                    hal::image::Kind::D2(..) => wgt::TextureViewDimension::D2,
-                    hal::image::Kind::D3(..) => wgt::TextureViewDimension::D3,
+                    wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
+                    wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
                 },
             };
 
@@ -827,15 +635,16 @@ impl<B: GfxBackend> Device<B> {
             });
         };
 
-        let aspects = match desc.range.aspect {
-            wgt::TextureAspect::All => texture.aspects,
-            wgt::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
-            wgt::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
+        let full_aspect = hal::FormatAspect::from(texture.desc.format);
+        let aspect = match desc.range.aspect {
+            wgt::TextureAspect::All => full_aspect,
+            wgt::TextureAspect::DepthOnly => hal::FormatAspect::DEPTH,
+            wgt::TextureAspect::StencilOnly => hal::FormatAspect::STENCIL,
         };
-        if !texture.aspects.contains(aspects) {
+        if !full_aspect.contains(aspect) {
             return Err(resource::CreateTextureViewError::InvalidAspect {
-                requested: aspects,
-                total: texture.aspects,
+                requested: aspect,
+                total: full_aspect,
             });
         }
 
@@ -868,31 +677,22 @@ impl<B: GfxBackend> Device<B> {
             });
         }
 
-        let format = desc.format.unwrap_or(texture.format);
-        let range = hal::image::SubresourceRange {
-            aspects,
-            level_start: desc.range.base_mip_level as _,
-            level_count: desc.range.mip_level_count.map(|v| v.get() as _),
-            layer_start: desc.range.base_array_layer as _,
-            layer_count: desc.range.array_layer_count.map(|v| v.get() as _),
+        let mut extent = texture.desc.extent.at_level(desc.range.base_mip_level as _);
+        if view_dim != wgt::TextureViewDimension::D3 {
+            extent.depth_or_array_layers = view_layer_count;
+        }
+
+        let hal_desc = hal::TextureViewDescriptor {
+            label: desc.label,
+            format: desc.format.unwrap_or(texture.format),
+            dimension: view_dim,
+            range: desc.range.clone(),
         };
-        let hal_extent = texture
-            .kind
-            .extent()
-            .at_level(desc.range.base_mip_level as _);
 
         let raw = unsafe {
             self.raw
-                .create_image_view(
-                    texture_raw,
-                    conv::map_texture_view_dimension(view_dim),
-                    conv::map_texture_format(format, self.private_features),
-                    hal::format::Swizzle::NO,
-                    // conservatively assume the same usage
-                    conv::map_texture_usage(texture.usage, aspects),
-                    range,
-                )
-                .or(Err(resource::CreateTextureViewError::OutOfMemory))?
+                .create_image_view(texture_raw, &hal_desc)
+                .map_err(DeviceError::from)?
         };
 
         Ok(resource::TextureView {
@@ -903,17 +703,10 @@ impl<B: GfxBackend> Device<B> {
                     ref_count: texture.life_guard.add_ref(),
                 },
             },
-            aspects,
-            format: texture.format,
+            desc: hal_desc.map_label(|_| ()),
             format_features: texture.format_features,
-            dimension: view_dim,
-            extent: wgt::Extent3d {
-                width: hal_extent.width,
-                height: hal_extent.height,
-                depth_or_array_layers: view_layer_count,
-            },
+            extent,
             samples: texture.kind.num_samples(),
-            framebuffer_attachment: texture.framebuffer_attachment.clone(),
             // once a storage - forever a storage
             sampled_internal_use: if texture.usage.contains(wgt::TextureUsage::STORAGE) {
                 resource::TextureUse::SAMPLED | resource::TextureUse::STORAGE_LOAD
@@ -929,7 +722,7 @@ impl<B: GfxBackend> Device<B> {
         &self,
         self_id: id::DeviceId,
         desc: &resource::SamplerDescriptor,
-    ) -> Result<resource::Sampler<B>, resource::CreateSamplerError> {
+    ) -> Result<resource::Sampler<A>, resource::CreateSamplerError> {
         if desc
             .address_modes
             .iter()
@@ -938,13 +731,19 @@ impl<B: GfxBackend> Device<B> {
             self.require_features(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER)?;
         }
 
-        let actual_clamp = if let Some(clamp) = desc.anisotropy_clamp {
+        let lod_clamp = if desc.lod_min_clamp > 0.0 || desc.load_max_clamp < 32.0 {
+            Some(desc.lod_min_clamp..desc.lod_max_clamp)
+        } else {
+            None
+        };
+
+        let anisotropy_clamp = if let Some(clamp) = desc.anisotropy_clamp {
             let clamp = clamp.get();
-            let valid_clamp = clamp <= MAX_ANISOTROPY && conv::is_power_of_two(clamp as u32);
+            let valid_clamp = clamp <= hal::MAX_ANISOTROPY && conv::is_power_of_two(clamp as u32);
             if !valid_clamp {
                 return Err(resource::CreateSamplerError::InvalidClamp(clamp));
             }
-            if self.private_features.anisotropic_filtering {
+            if self.downlevel.anisotropic_filtering {
                 Some(clamp)
             } else {
                 None
@@ -953,45 +752,19 @@ impl<B: GfxBackend> Device<B> {
             None
         };
 
-        let border = match desc.border_color {
-            None | Some(wgt::SamplerBorderColor::TransparentBlack) => {
-                hal::image::BorderColor::TransparentBlack
-            }
-            Some(wgt::SamplerBorderColor::OpaqueBlack) => hal::image::BorderColor::OpaqueBlack,
-            Some(wgt::SamplerBorderColor::OpaqueWhite) => hal::image::BorderColor::OpaqueWhite,
+        let hal_desc = hal::SamplerDescriptor {
+            label: desc.label,
+            address_modes: desc.address_modes,
+            mag_filter: desc.mag_filter,
+            min_filter: desc.min_filter,
+            mipmap_filter: desc.mipmap_filter,
+            lod_clamp,
+            compare: desc.compare,
+            anisotropy_clamp,
+            border_color: desc.border_color,
         };
 
-        let filtering = [desc.min_filter, desc.mag_filter, desc.mipmap_filter]
-            .contains(&wgt::FilterMode::Linear);
-
-        let info = hal::image::SamplerDesc {
-            min_filter: conv::map_filter(desc.min_filter),
-            mag_filter: conv::map_filter(desc.mag_filter),
-            mip_filter: conv::map_filter(desc.mipmap_filter),
-            reduction_mode: hal::image::ReductionMode::WeightedAverage,
-            wrap_mode: (
-                conv::map_wrap(desc.address_modes[0]),
-                conv::map_wrap(desc.address_modes[1]),
-                conv::map_wrap(desc.address_modes[2]),
-            ),
-            lod_bias: hal::image::Lod(0.0),
-            lod_range: hal::image::Lod(desc.lod_min_clamp)..hal::image::Lod(desc.lod_max_clamp),
-            comparison: desc.compare.map(conv::map_compare_function),
-            border,
-            normalized: true,
-            anisotropy_clamp: actual_clamp,
-        };
-
-        let raw = unsafe {
-            self.raw.create_sampler(&info).map_err(|err| match err {
-                hal::device::AllocationError::OutOfMemory(_) => {
-                    resource::CreateSamplerError::Device(DeviceError::OutOfMemory)
-                }
-                hal::device::AllocationError::TooManyObjects => {
-                    resource::CreateSamplerError::TooManyObjects
-                }
-            })?
-        };
+        let raw = unsafe { self.raw.create_sampler(desc).map_err(DeviceError::from)? };
         Ok(resource::Sampler {
             raw,
             device_id: Stored {
@@ -999,8 +772,9 @@ impl<B: GfxBackend> Device<B> {
                 ref_count: self.life_guard.add_ref(),
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
-            comparison: info.comparison.is_some(),
-            filtering,
+            comparison: desc.compare.is_some(),
+            filtering: desc.min_filter == wgt::FilterMode::Linear
+                || desc.mag_filter == wgt::FilterMode::Linear,
         })
     }
 
@@ -1009,7 +783,7 @@ impl<B: GfxBackend> Device<B> {
         self_id: id::DeviceId,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: pipeline::ShaderModuleSource<'a>,
-    ) -> Result<pipeline::ShaderModule<B>, pipeline::CreateShaderModuleError> {
+    ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
         // First, try to produce a Naga module.
         let (spv, module) = match source {
             pipeline::ShaderModuleSource::SpirV(spv) => {
@@ -1177,7 +951,7 @@ impl<B: GfxBackend> Device<B> {
     fn deduplicate_bind_group_layout(
         self_id: id::DeviceId,
         entry_map: &binding_model::BindEntryMap,
-        guard: &Storage<binding_model::BindGroupLayout<B>, id::BindGroupLayoutId>,
+        guard: &Storage<binding_model::BindGroupLayout<A>, id::BindGroupLayoutId>,
     ) -> Option<id::BindGroupLayoutId> {
         guard
             .iter(self_id.backend())
@@ -1189,9 +963,9 @@ impl<B: GfxBackend> Device<B> {
     }
 
     fn get_introspection_bind_group_layouts<'a>(
-        pipeline_layout: &binding_model::PipelineLayout<B>,
-        bgl_guard: &'a Storage<binding_model::BindGroupLayout<B>, id::BindGroupLayoutId>,
-    ) -> ArrayVec<[&'a binding_model::BindEntryMap; MAX_BIND_GROUPS]> {
+        pipeline_layout: &binding_model::PipelineLayout<A>,
+        bgl_guard: &'a Storage<binding_model::BindGroupLayout<A>, id::BindGroupLayoutId>,
+    ) -> ArrayVec<[&'a binding_model::BindEntryMap; hal::MAX_BIND_GROUPS]> {
         pipeline_layout
             .bind_group_layout_ids
             .iter()
@@ -1204,7 +978,7 @@ impl<B: GfxBackend> Device<B> {
         self_id: id::DeviceId,
         label: Option<&str>,
         entry_map: binding_model::BindEntryMap,
-    ) -> Result<binding_model::BindGroupLayout<B>, binding_model::CreateBindGroupLayoutError> {
+    ) -> Result<binding_model::BindGroupLayout<A>, binding_model::CreateBindGroupLayoutError> {
         let mut desc_count = descriptor::DescriptorTotalCount::default();
         for entry in entry_map.values() {
             use wgt::BindingType as Bt;
@@ -1348,7 +1122,7 @@ impl<B: GfxBackend> Device<B> {
         used_buffer_ranges: &mut Vec<MemoryInitTrackerAction<id::BufferId>>,
         dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
         used: &mut TrackerSet,
-        storage: &'a Storage<resource::Buffer<B>, id::BufferId>,
+        storage: &'a Storage<resource::Buffer<A>, id::BufferId>,
         limits: &wgt::Limits,
     ) -> Result<hal::pso::Descriptor<'a, B>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
@@ -1457,11 +1231,11 @@ impl<B: GfxBackend> Device<B> {
     fn create_bind_group<G: GlobalIdentityHandlerFactory>(
         &self,
         self_id: id::DeviceId,
-        layout: &binding_model::BindGroupLayout<B>,
+        layout: &binding_model::BindGroupLayout<A>,
         desc: &binding_model::BindGroupDescriptor,
-        hub: &Hub<B, G>,
-        token: &mut Token<binding_model::BindGroupLayout<B>>,
-    ) -> Result<binding_model::BindGroup<B>, binding_model::CreateBindGroupError> {
+        hub: &Hub<A, G>,
+        token: &mut Token<binding_model::BindGroupLayout<A>>,
+    ) -> Result<binding_model::BindGroup<A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::{BindingResource as Br, CreateBindGroupError as Error};
         {
             // Check that the number of entries in the descriptor matches
@@ -1477,7 +1251,7 @@ impl<B: GfxBackend> Device<B> {
         // Record binding info for dynamic offset validation
         let mut dynamic_binding_info = Vec::new();
         // fill out the descriptors
-        let mut used = TrackerSet::new(B::VARIANT);
+        let mut used = TrackerSet::new(A::VARIANT);
 
         let (buffer_guard, mut token) = hub.buffers.read(token);
         let (texture_guard, mut token) = hub.textures.read(&mut token); //skip token
@@ -1678,7 +1452,7 @@ impl<B: GfxBackend> Device<B> {
                     };
                     if view
                         .aspects
-                        .contains(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL)
+                        .contains(hal::FormatAspect::DEPTH | hal::FormatAspect::STENCIL)
                     {
                         return Err(Error::DepthStencilAspect);
                     }
@@ -1819,8 +1593,8 @@ impl<B: GfxBackend> Device<B> {
         &self,
         self_id: id::DeviceId,
         desc: &binding_model::PipelineLayoutDescriptor,
-        bgl_guard: &Storage<binding_model::BindGroupLayout<B>, id::BindGroupLayoutId>,
-    ) -> Result<binding_model::PipelineLayout<B>, binding_model::CreatePipelineLayoutError> {
+        bgl_guard: &Storage<binding_model::BindGroupLayout<A>, id::BindGroupLayoutId>,
+    ) -> Result<binding_model::PipelineLayout<A>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
 
         let bind_group_layouts_count = desc.bind_group_layouts.len();
@@ -1929,9 +1703,9 @@ impl<B: GfxBackend> Device<B> {
         &self,
         self_id: id::DeviceId,
         implicit_context: Option<ImplicitPipelineContext>,
-        mut derived_group_layouts: ArrayVec<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>,
-        bgl_guard: &mut Storage<binding_model::BindGroupLayout<B>, id::BindGroupLayoutId>,
-        pipeline_layout_guard: &mut Storage<binding_model::PipelineLayout<B>, id::PipelineLayoutId>,
+        mut derived_group_layouts: ArrayVec<[binding_model::BindEntryMap; hal::MAX_BIND_GROUPS]>,
+        bgl_guard: &mut Storage<binding_model::BindGroupLayout<A>, id::BindGroupLayoutId>,
+        pipeline_layout_guard: &mut Storage<binding_model::PipelineLayout<A>, id::PipelineLayoutId>,
     ) -> Result<id::PipelineLayoutId, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
@@ -1977,9 +1751,9 @@ impl<B: GfxBackend> Device<B> {
         self_id: id::DeviceId,
         desc: &pipeline::ComputePipelineDescriptor,
         implicit_context: Option<ImplicitPipelineContext>,
-        hub: &Hub<B, G>,
+        hub: &Hub<A, G>,
         token: &mut Token<Self>,
-    ) -> Result<pipeline::ComputePipeline<B>, pipeline::CreateComputePipelineError> {
+    ) -> Result<pipeline::ComputePipeline<A>, pipeline::CreateComputePipelineError> {
         //TODO: only lock mutable if the layout is derived
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
         let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
@@ -2002,7 +1776,7 @@ impl<B: GfxBackend> Device<B> {
         }
 
         let mut derived_group_layouts =
-            ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
+            ArrayVec::<[binding_model::BindEntryMap; hal::MAX_BIND_GROUPS]>::new();
 
         let io = validation::StageIo::default();
         let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
@@ -2039,7 +1813,7 @@ impl<B: GfxBackend> Device<B> {
             return Err(pipeline::ImplicitLayoutError::ReflectionError(flag).into());
         }
 
-        let shader = hal::pso::EntryPoint::<B> {
+        let shader = hal::pso::EntryPoint::<A> {
             entry: &entry_point_name, // TODO
             module: &shader_module.raw,
             specialization: hal::pso::Specialization::EMPTY,
@@ -2108,9 +1882,9 @@ impl<B: GfxBackend> Device<B> {
         self_id: id::DeviceId,
         desc: &pipeline::RenderPipelineDescriptor,
         implicit_context: Option<ImplicitPipelineContext>,
-        hub: &Hub<B, G>,
+        hub: &Hub<A, G>,
         token: &mut Token<Self>,
-    ) -> Result<pipeline::RenderPipeline<B>, pipeline::CreateRenderPipelineError> {
+    ) -> Result<pipeline::RenderPipeline<A>, pipeline::CreateRenderPipelineError> {
         //TODO: only lock mutable if the layout is derived
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
         let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
@@ -2125,7 +1899,7 @@ impl<B: GfxBackend> Device<B> {
         }
 
         let mut derived_group_layouts =
-            ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
+            ArrayVec::<[binding_model::BindEntryMap; hal::MAX_BIND_GROUPS]>::new();
 
         let color_states = desc
             .fragment
@@ -2426,7 +2200,7 @@ impl<B: GfxBackend> Device<B> {
                 validated_stages |= flag;
             }
 
-            hal::pso::EntryPoint::<B> {
+            hal::pso::EntryPoint::<A> {
                 entry: &stage.entry_point,
                 module: &shader_module.raw,
                 specialization: hal::pso::Specialization::EMPTY,
@@ -2474,7 +2248,7 @@ impl<B: GfxBackend> Device<B> {
                     }
                 }
 
-                Some(hal::pso::EntryPoint::<B> {
+                Some(hal::pso::EntryPoint::<A> {
                     entry: &entry_point_name,
                     module: &shader_module.raw,
                     specialization: hal::pso::Specialization::EMPTY,
@@ -2656,7 +2430,7 @@ impl<B: GfxBackend> Device<B> {
         &self,
         self_id: id::DeviceId,
         desc: &wgt::QuerySetDescriptor,
-    ) -> Result<resource::QuerySet<B>, resource::CreateQuerySetError> {
+    ) -> Result<resource::QuerySet<A>, resource::CreateQuerySetError> {
         use resource::CreateQuerySetError as Error;
 
         match desc.ty {
@@ -2694,14 +2468,14 @@ impl<B: GfxBackend> Device<B> {
     }
 }
 
-impl<B: hal::Backend> Device<B> {
-    pub(crate) fn destroy_bind_group(&self, bind_group: binding_model::BindGroup<B>) {
+impl<A: hal::Api> Device<A> {
+    pub(crate) fn destroy_bind_group(&self, bind_group: binding_model::BindGroup<A>) {
         self.desc_allocator
             .lock()
             .free(&self.raw, iter::once(bind_group.raw));
     }
 
-    pub(crate) fn destroy_buffer(&self, buffer: resource::Buffer<B>) {
+    pub(crate) fn destroy_buffer(&self, buffer: resource::Buffer<A>) {
         if let Some((raw, memory)) = buffer.raw {
             unsafe {
                 self.mem_allocator.lock().free(&self.raw, memory);
@@ -2710,7 +2484,7 @@ impl<B: hal::Backend> Device<B> {
         }
     }
 
-    pub(crate) fn destroy_texture(&self, texture: resource::Texture<B>) {
+    pub(crate) fn destroy_texture(&self, texture: resource::Texture<A>) {
         if let Some((raw, memory)) = texture.raw {
             unsafe {
                 self.mem_allocator.lock().free(&self.raw, memory);
@@ -2748,7 +2522,7 @@ impl<B: hal::Backend> Device<B> {
     }
 }
 
-impl<B: hal::Backend> crate::hub::Resource for Device<B> {
+impl<A: hal::Api> crate::hub::Resource for Device<A> {
     const TYPE: &'static str = "Device";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -2808,7 +2582,7 @@ pub struct MissingFeatures(pub wgt::Features);
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImplicitPipelineContext {
     pub root_id: id::PipelineLayoutId,
-    pub group_ids: ArrayVec<[id::BindGroupLayoutId; MAX_BIND_GROUPS]>,
+    pub group_ids: ArrayVec<[id::BindGroupLayoutId; hal::MAX_BIND_GROUPS]>,
 }
 
 pub struct ImplicitPipelineIds<'a, G: GlobalIdentityHandlerFactory> {
@@ -2817,7 +2591,7 @@ pub struct ImplicitPipelineIds<'a, G: GlobalIdentityHandlerFactory> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> ImplicitPipelineIds<'_, G> {
-    fn prepare<B: hal::Backend>(self, hub: &Hub<B, G>) -> ImplicitPipelineContext {
+    fn prepare<A: hal::Api>(self, hub: &Hub<A, G>) -> ImplicitPipelineContext {
         ImplicitPipelineContext {
             root_id: hub.pipeline_layouts.prepare(self.root_id).into_id(),
             group_ids: self
@@ -2830,12 +2604,12 @@ impl<G: GlobalIdentityHandlerFactory> ImplicitPipelineIds<'_, G> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn adapter_get_swap_chain_preferred_format<B: GfxBackend>(
+    pub fn adapter_get_swap_chain_preferred_format<A: HalApi>(
         &self,
         adapter_id: id::AdapterId,
         surface_id: id::SurfaceId,
     ) -> Result<TextureFormat, instance::GetSwapChainPreferredFormatError> {
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
@@ -2850,11 +2624,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter.get_swap_chain_preferred_format(surface)
     }
 
-    pub fn device_features<B: GfxBackend>(
+    pub fn device_features<A: HalApi>(
         &self,
         device_id: id::DeviceId,
     ) -> Result<wgt::Features, InvalidDevice> {
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
@@ -2862,11 +2636,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(device.features)
     }
 
-    pub fn device_limits<B: GfxBackend>(
+    pub fn device_limits<A: HalApi>(
         &self,
         device_id: id::DeviceId,
     ) -> Result<wgt::Limits, InvalidDevice> {
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
@@ -2874,11 +2648,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(device.limits.clone())
     }
 
-    pub fn device_downlevel_properties<B: GfxBackend>(
+    pub fn device_downlevel_properties<A: HalApi>(
         &self,
         device_id: id::DeviceId,
-    ) -> Result<wgt::DownlevelProperties, InvalidDevice> {
-        let hub = B::hub(self);
+    ) -> Result<wgt::DownlevelCapabilities, InvalidDevice> {
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
@@ -2886,7 +2660,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(device.downlevel)
     }
 
-    pub fn device_create_buffer<B: GfxBackend>(
+    pub fn device_create_buffer<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         desc: &resource::BufferDescriptor,
@@ -2894,7 +2668,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> (id::BufferId, Option<resource::CreateBufferError>) {
         profiling::scope!("create_buffer", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let fid = hub.buffers.prepare(id_in);
 
@@ -3017,12 +2791,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     #[cfg(feature = "replay")]
-    pub fn device_wait_for_buffer<B: GfxBackend>(
+    pub fn device_wait_for_buffer<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         buffer_id: id::BufferId,
     ) -> Result<(), WaitIdleError> {
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let last_submission = {
@@ -3039,7 +2813,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .wait_for_submit(last_submission, &mut token)
     }
 
-    pub fn device_set_buffer_sub_data<B: GfxBackend>(
+    pub fn device_set_buffer_sub_data<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         buffer_id: id::BufferId,
@@ -3048,7 +2822,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), resource::BufferAccessError> {
         profiling::scope!("set_buffer_sub_data", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -3084,7 +2858,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn device_get_buffer_sub_data<B: GfxBackend>(
+    pub fn device_get_buffer_sub_data<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         buffer_id: id::BufferId,
@@ -3093,7 +2867,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), resource::BufferAccessError> {
         profiling::scope!("get_buffer_sub_data", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -3117,17 +2891,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn buffer_label<B: GfxBackend>(&self, id: id::BufferId) -> String {
-        B::hub(self).buffers.label_for_resource(id)
+    pub fn buffer_label<A: HalApi>(&self, id: id::BufferId) -> String {
+        A::hub(self).buffers.label_for_resource(id)
     }
 
-    pub fn buffer_destroy<B: GfxBackend>(
+    pub fn buffer_destroy<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
     ) -> Result<(), resource::DestroyError> {
         profiling::scope!("destroy", "Buffer");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         //TODO: lock pending writes separately, keep the device read-only
@@ -3167,10 +2941,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn buffer_drop<B: GfxBackend>(&self, buffer_id: id::BufferId, wait: bool) {
+    pub fn buffer_drop<A: HalApi>(&self, buffer_id: id::BufferId, wait: bool) {
         profiling::scope!("drop", "Buffer");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         log::info!("Buffer {:?} is dropped", buffer_id);
@@ -3216,7 +2990,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    pub fn device_create_texture<B: GfxBackend>(
+    pub fn device_create_texture<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         desc: &resource::TextureDescriptor,
@@ -3224,7 +2998,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         profiling::scope!("create_texture", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let fid = hub.textures.prepare(id_in);
 
@@ -3267,17 +3041,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    pub fn texture_label<B: GfxBackend>(&self, id: id::TextureId) -> String {
-        B::hub(self).textures.label_for_resource(id)
+    pub fn texture_label<A: HalApi>(&self, id: id::TextureId) -> String {
+        A::hub(self).textures.label_for_resource(id)
     }
 
-    pub fn texture_destroy<B: GfxBackend>(
+    pub fn texture_destroy<A: HalApi>(
         &self,
         texture_id: id::TextureId,
     ) -> Result<(), resource::DestroyError> {
         profiling::scope!("destroy", "Texture");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         //TODO: lock pending writes separately, keep the device read-only
@@ -3317,10 +3091,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn texture_drop<B: GfxBackend>(&self, texture_id: id::TextureId, wait: bool) {
+    pub fn texture_drop<A: HalApi>(&self, texture_id: id::TextureId, wait: bool) {
         profiling::scope!("drop", "Texture");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (ref_count, last_submit_index, device_id) = {
@@ -3366,7 +3140,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    pub fn texture_create_view<B: GfxBackend>(
+    pub fn texture_create_view<A: HalApi>(
         &self,
         texture_id: id::TextureId,
         desc: &resource::TextureViewDescriptor,
@@ -3374,7 +3148,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
         profiling::scope!("create_view", "Texture");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let fid = hub.texture_views.prepare(id_in);
 
@@ -3415,18 +3189,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    pub fn texture_view_label<B: GfxBackend>(&self, id: id::TextureViewId) -> String {
-        B::hub(self).texture_views.label_for_resource(id)
+    pub fn texture_view_label<A: HalApi>(&self, id: id::TextureViewId) -> String {
+        A::hub(self).texture_views.label_for_resource(id)
     }
 
-    pub fn texture_view_drop<B: GfxBackend>(
+    pub fn texture_view_drop<A: HalApi>(
         &self,
         texture_view_id: id::TextureViewId,
         wait: bool,
     ) -> Result<(), resource::TextureViewDestroyError> {
         profiling::scope!("drop", "TextureView");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (last_submit_index, device_id) = {
@@ -3477,7 +3251,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn device_create_sampler<B: GfxBackend>(
+    pub fn device_create_sampler<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         desc: &resource::SamplerDescriptor,
@@ -3485,7 +3259,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
         profiling::scope!("create_sampler", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let fid = hub.samplers.prepare(id_in);
 
@@ -3522,14 +3296,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    pub fn sampler_label<B: GfxBackend>(&self, id: id::SamplerId) -> String {
-        B::hub(self).samplers.label_for_resource(id)
+    pub fn sampler_label<A: HalApi>(&self, id: id::SamplerId) -> String {
+        A::hub(self).samplers.label_for_resource(id)
     }
 
-    pub fn sampler_drop<B: GfxBackend>(&self, sampler_id: id::SamplerId) {
+    pub fn sampler_drop<A: HalApi>(&self, sampler_id: id::SamplerId) {
         profiling::scope!("drop", "Sampler");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let device_id = {
@@ -3555,7 +3329,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .push(id::Valid(sampler_id));
     }
 
-    pub fn device_create_bind_group_layout<B: GfxBackend>(
+    pub fn device_create_bind_group_layout<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         desc: &binding_model::BindGroupLayoutDescriptor,
@@ -3567,7 +3341,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("create_bind_group_layout", "Device");
 
         let mut token = Token::root();
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let fid = hub.bind_group_layouts.prepare(id_in);
 
         let error = 'outer: loop {
@@ -3621,17 +3395,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    pub fn bind_group_layout_label<B: GfxBackend>(&self, id: id::BindGroupLayoutId) -> String {
-        B::hub(self).bind_group_layouts.label_for_resource(id)
+    pub fn bind_group_layout_label<A: HalApi>(&self, id: id::BindGroupLayoutId) -> String {
+        A::hub(self).bind_group_layouts.label_for_resource(id)
     }
 
-    pub fn bind_group_layout_drop<B: GfxBackend>(
-        &self,
-        bind_group_layout_id: id::BindGroupLayoutId,
-    ) {
+    pub fn bind_group_layout_drop<A: HalApi>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
         profiling::scope!("drop", "BindGroupLayout");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let device_id = {
             let (mut bind_group_layout_guard, _) = hub.bind_group_layouts.write(&mut token);
@@ -3653,7 +3424,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .push(id::Valid(bind_group_layout_id));
     }
 
-    pub fn device_create_pipeline_layout<B: GfxBackend>(
+    pub fn device_create_pipeline_layout<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         desc: &binding_model::PipelineLayoutDescriptor,
@@ -3664,7 +3435,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) {
         profiling::scope!("create_pipeline_layout", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let fid = hub.pipeline_layouts.prepare(id_in);
 
@@ -3697,14 +3468,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    pub fn pipeline_layout_label<B: GfxBackend>(&self, id: id::PipelineLayoutId) -> String {
-        B::hub(self).pipeline_layouts.label_for_resource(id)
+    pub fn pipeline_layout_label<A: HalApi>(&self, id: id::PipelineLayoutId) -> String {
+        A::hub(self).pipeline_layouts.label_for_resource(id)
     }
 
-    pub fn pipeline_layout_drop<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {
+    pub fn pipeline_layout_drop<A: HalApi>(&self, pipeline_layout_id: id::PipelineLayoutId) {
         profiling::scope!("drop", "PipelineLayout");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_id, ref_count) = {
             let (mut pipeline_layout_guard, _) = hub.pipeline_layouts.write(&mut token);
@@ -3732,7 +3503,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
     }
 
-    pub fn device_create_bind_group<B: GfxBackend>(
+    pub fn device_create_bind_group<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         desc: &binding_model::BindGroupDescriptor,
@@ -3740,7 +3511,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
         profiling::scope!("create_bind_group", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let fid = hub.bind_groups.prepare(id_in);
 
@@ -3795,14 +3566,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    pub fn bind_group_label<B: GfxBackend>(&self, id: id::BindGroupId) -> String {
-        B::hub(self).bind_groups.label_for_resource(id)
+    pub fn bind_group_label<A: HalApi>(&self, id: id::BindGroupId) -> String {
+        A::hub(self).bind_groups.label_for_resource(id)
     }
 
-    pub fn bind_group_drop<B: GfxBackend>(&self, bind_group_id: id::BindGroupId) {
+    pub fn bind_group_drop<A: HalApi>(&self, bind_group_id: id::BindGroupId) {
         profiling::scope!("drop", "BindGroup");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let device_id = {
@@ -3828,7 +3599,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .push(id::Valid(bind_group_id));
     }
 
-    pub fn device_create_shader_module<B: GfxBackend>(
+    pub fn device_create_shader_module<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         desc: &pipeline::ShaderModuleDescriptor,
@@ -3840,7 +3611,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) {
         profiling::scope!("create_shader_module", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let fid = hub.shader_modules.prepare(id_in);
 
@@ -3886,14 +3657,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    pub fn shader_module_label<B: GfxBackend>(&self, id: id::ShaderModuleId) -> String {
-        B::hub(self).shader_modules.label_for_resource(id)
+    pub fn shader_module_label<A: HalApi>(&self, id: id::ShaderModuleId) -> String {
+        A::hub(self).shader_modules.label_for_resource(id)
     }
 
-    pub fn shader_module_drop<B: GfxBackend>(&self, shader_module_id: id::ShaderModuleId) {
+    pub fn shader_module_drop<A: HalApi>(&self, shader_module_id: id::ShaderModuleId) {
         profiling::scope!("drop", "ShaderModule");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (module, _) = hub.shader_modules.unregister(shader_module_id, &mut token);
@@ -3911,7 +3682,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    pub fn device_create_command_encoder<B: GfxBackend>(
+    pub fn device_create_command_encoder<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         desc: &wgt::CommandEncoderDescriptor<Label>,
@@ -3919,7 +3690,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> (id::CommandEncoderId, Option<command::CommandAllocatorError>) {
         profiling::scope!("create_command_encoder", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let fid = hub.command_buffers.prepare(id_in);
 
@@ -3966,14 +3737,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    pub fn command_buffer_label<B: GfxBackend>(&self, id: id::CommandBufferId) -> String {
-        B::hub(self).command_buffers.label_for_resource(id)
+    pub fn command_buffer_label<A: HalApi>(&self, id: id::CommandBufferId) -> String {
+        A::hub(self).command_buffers.label_for_resource(id)
     }
 
-    pub fn command_encoder_drop<B: GfxBackend>(&self, command_encoder_id: id::CommandEncoderId) {
+    pub fn command_encoder_drop<A: HalApi>(&self, command_encoder_id: id::CommandEncoderId) {
         profiling::scope!("drop", "CommandEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
@@ -3987,9 +3758,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    pub fn command_buffer_drop<B: GfxBackend>(&self, command_buffer_id: id::CommandBufferId) {
+    pub fn command_buffer_drop<A: HalApi>(&self, command_buffer_id: id::CommandBufferId) {
         profiling::scope!("drop", "CommandBuffer");
-        self.command_encoder_drop::<B>(command_buffer_id)
+        self.command_encoder_drop::<A>(command_buffer_id)
     }
 
     pub fn device_create_render_bundle_encoder(
@@ -4008,7 +3779,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (Box::into_raw(Box::new(encoder)), error)
     }
 
-    pub fn render_bundle_encoder_finish<B: GfxBackend>(
+    pub fn render_bundle_encoder_finish<A: HalApi>(
         &self,
         bundle_encoder: command::RenderBundleEncoder,
         desc: &command::RenderBundleDescriptor,
@@ -4016,7 +3787,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
         profiling::scope!("finish", "RenderBundleEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let fid = hub.render_bundles.prepare(id_in);
 
@@ -4060,13 +3831,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    pub fn render_bundle_label<B: GfxBackend>(&self, id: id::RenderBundleId) -> String {
-        B::hub(self).render_bundles.label_for_resource(id)
+    pub fn render_bundle_label<A: HalApi>(&self, id: id::RenderBundleId) -> String {
+        A::hub(self).render_bundles.label_for_resource(id)
     }
 
-    pub fn render_bundle_drop<B: GfxBackend>(&self, render_bundle_id: id::RenderBundleId) {
+    pub fn render_bundle_drop<A: HalApi>(&self, render_bundle_id: id::RenderBundleId) {
         profiling::scope!("drop", "RenderBundle");
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -4092,7 +3863,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .push(id::Valid(render_bundle_id));
     }
 
-    pub fn device_create_query_set<B: GfxBackend>(
+    pub fn device_create_query_set<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         desc: &wgt::QuerySetDescriptor,
@@ -4100,7 +3871,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
         profiling::scope!("create_query_set", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let fid = hub.query_sets.prepare(id_in);
 
@@ -4140,10 +3911,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    pub fn query_set_drop<B: GfxBackend>(&self, query_set_id: id::QuerySetId) {
+    pub fn query_set_drop<A: HalApi>(&self, query_set_id: id::QuerySetId) {
         profiling::scope!("drop", "QuerySet");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let device_id = {
@@ -4170,7 +3941,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .push(id::Valid(query_set_id));
     }
 
-    pub fn device_create_render_pipeline<B: GfxBackend>(
+    pub fn device_create_render_pipeline<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         desc: &pipeline::RenderPipelineDescriptor,
@@ -4182,7 +3953,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) {
         profiling::scope!("create_render_pipeline", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let fid = hub.render_pipelines.prepare(id_in);
@@ -4224,7 +3995,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
     /// which needs to be released by calling `bind_group_layout_drop`.
-    pub fn render_pipeline_get_bind_group_layout<B: GfxBackend>(
+    pub fn render_pipeline_get_bind_group_layout<A: HalApi>(
         &self,
         pipeline_id: id::RenderPipelineId,
         index: u32,
@@ -4233,7 +4004,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::BindGroupLayoutId,
         Option<binding_model::GetBindGroupLayoutError>,
     ) {
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
 
@@ -4265,13 +4036,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    pub fn render_pipeline_label<B: GfxBackend>(&self, id: id::RenderPipelineId) -> String {
-        B::hub(self).render_pipelines.label_for_resource(id)
+    pub fn render_pipeline_label<A: HalApi>(&self, id: id::RenderPipelineId) -> String {
+        A::hub(self).render_pipelines.label_for_resource(id)
     }
 
-    pub fn render_pipeline_drop<B: GfxBackend>(&self, render_pipeline_id: id::RenderPipelineId) {
+    pub fn render_pipeline_drop<A: HalApi>(&self, render_pipeline_id: id::RenderPipelineId) {
         profiling::scope!("drop", "RenderPipeline");
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
@@ -4301,7 +4072,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .push(layout_id);
     }
 
-    pub fn device_create_compute_pipeline<B: GfxBackend>(
+    pub fn device_create_compute_pipeline<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         desc: &pipeline::ComputePipelineDescriptor,
@@ -4313,7 +4084,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) {
         profiling::scope!("create_compute_pipeline", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let fid = hub.compute_pipelines.prepare(id_in);
@@ -4355,7 +4126,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
     /// which needs to be released by calling `bind_group_layout_drop`.
-    pub fn compute_pipeline_get_bind_group_layout<B: GfxBackend>(
+    pub fn compute_pipeline_get_bind_group_layout<A: HalApi>(
         &self,
         pipeline_id: id::ComputePipelineId,
         index: u32,
@@ -4364,7 +4135,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::BindGroupLayoutId,
         Option<binding_model::GetBindGroupLayoutError>,
     ) {
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
 
@@ -4396,13 +4167,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    pub fn compute_pipeline_label<B: GfxBackend>(&self, id: id::ComputePipelineId) -> String {
-        B::hub(self).compute_pipelines.label_for_resource(id)
+    pub fn compute_pipeline_label<A: HalApi>(&self, id: id::ComputePipelineId) -> String {
+        A::hub(self).compute_pipelines.label_for_resource(id)
     }
 
-    pub fn compute_pipeline_drop<B: GfxBackend>(&self, compute_pipeline_id: id::ComputePipelineId) {
+    pub fn compute_pipeline_drop<A: HalApi>(&self, compute_pipeline_id: id::ComputePipelineId) {
         profiling::scope!("drop", "ComputePipeline");
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
@@ -4432,7 +4203,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .push(layout_id);
     }
 
-    pub fn device_create_swap_chain<B: GfxBackend>(
+    pub fn device_create_swap_chain<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         surface_id: id::SurfaceId,
@@ -4473,8 +4244,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         log::info!("creating swap chain {:?}", desc);
-        let sc_id = surface_id.to_swap_chain_id(B::VARIANT);
-        let hub = B::hub(self);
+        let sc_id = surface_id.to_swap_chain_id(A::VARIANT);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
@@ -4578,11 +4349,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     #[cfg(feature = "replay")]
     /// Only triange suspected resource IDs. This helps us to avoid ID collisions
     /// upon creating new resources when re-playing a trace.
-    pub fn device_maintain_ids<B: GfxBackend>(
+    pub fn device_maintain_ids<A: HalApi>(
         &self,
         device_id: id::DeviceId,
     ) -> Result<(), InvalidDevice> {
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
@@ -4596,12 +4367,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn device_poll<B: GfxBackend>(
+    pub fn device_poll<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         force_wait: bool,
     ) -> Result<(), WaitIdleError> {
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let callbacks = {
             let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -4614,17 +4385,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    fn poll_devices<B: GfxBackend>(
+    fn poll_devices<A: HalApi>(
         &self,
         force_wait: bool,
         callbacks: &mut Vec<BufferMapPendingCallback>,
     ) -> Result<(), WaitIdleError> {
         profiling::scope!("poll_devices");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        for (_, device) in device_guard.iter(B::VARIANT) {
+        for (_, device) in device_guard.iter(A::VARIANT) {
             let cbs = device.maintain(&hub, force_wait, &mut token)?;
             callbacks.extend(cbs);
         }
@@ -4635,6 +4406,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         use crate::backend;
         let mut callbacks = Vec::new();
 
+        /*
         #[cfg(vulkan)]
         {
             self.poll_devices::<backend::Vulkan>(force_wait, &mut callbacks)?;
@@ -4651,18 +4423,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         {
             self.poll_devices::<backend::Dx11>(force_wait, &mut callbacks)?;
         }
+        */
 
         fire_map_callbacks(callbacks);
 
         Ok(())
     }
 
-    pub fn device_label<B: GfxBackend>(&self, id: id::DeviceId) -> String {
-        B::hub(self).devices.label_for_resource(id)
+    pub fn device_label<A: HalApi>(&self, id: id::DeviceId) -> String {
+        A::hub(self).devices.label_for_resource(id)
     }
 
-    pub fn device_start_capture<B: GfxBackend>(&self, id: id::DeviceId) {
-        let hub = B::hub(self);
+    pub fn device_start_capture<A: HalApi>(&self, id: id::DeviceId) {
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         if let Ok(device) = device_guard.get(id) {
@@ -4670,8 +4443,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    pub fn device_stop_capture<B: GfxBackend>(&self, id: id::DeviceId) {
-        let hub = B::hub(self);
+    pub fn device_stop_capture<A: HalApi>(&self, id: id::DeviceId) {
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         if let Ok(device) = device_guard.get(id) {
@@ -4679,10 +4452,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    pub fn device_drop<B: GfxBackend>(&self, device_id: id::DeviceId) {
+    pub fn device_drop<A: HalApi>(&self, device_id: id::DeviceId) {
         profiling::scope!("drop", "Device");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device, _) = hub.devices.unregister(device_id, &mut token);
         if let Some(mut device) = device {
@@ -4700,7 +4473,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    pub fn buffer_map_async<B: GfxBackend>(
+    pub fn buffer_map_async<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
         range: Range<BufferAddress>,
@@ -4708,7 +4481,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), resource::BufferAccessError> {
         profiling::scope!("map_async", "Buffer");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (pub_usage, internal_use) = match op.host {
@@ -4763,7 +4536,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn buffer_get_mapped_range<B: GfxBackend>(
+    pub fn buffer_get_mapped_range<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
         offset: BufferAddress,
@@ -4771,7 +4544,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(*mut u8, u64), resource::BufferAccessError> {
         profiling::scope!("get_mapped_range", "Buffer");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (buffer_guard, _) = hub.buffers.read(&mut token);
         let buffer = buffer_guard
@@ -4831,13 +4604,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    fn buffer_unmap_inner<B: GfxBackend>(
+    fn buffer_unmap_inner<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
     ) -> Result<Option<BufferMapPendingCallback>, resource::BufferAccessError> {
         profiling::scope!("unmap", "Buffer");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
@@ -4941,17 +4714,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     let _ = (ptr, sub_range);
                 }
-                unmap_buffer(&device.raw, buffer)?;
+                device.raw.unmap_buffer(&buffer.raw)?;
             }
         }
         Ok(None)
     }
 
-    pub fn buffer_unmap<B: GfxBackend>(
+    pub fn buffer_unmap<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
     ) -> Result<(), resource::BufferAccessError> {
-        self.buffer_unmap_inner::<B>(buffer_id)
+        self.buffer_unmap_inner::<A>(buffer_id)
             //Note: outside inner function so no locks are held when calling the callback
             .map(|pending_callback| fire_map_callbacks(pending_callback.into_iter()))
     }

@@ -28,8 +28,8 @@ pub use wgt::{
     AdapterInfo, AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType,
     BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, BufferBindingType,
     BufferSize, BufferUsage, Color, ColorTargetState, ColorWrite, CommandBufferDescriptor,
-    CompareFunction, DepthBiasState, DepthStencilState, DeviceType, DownlevelFlags,
-    DownlevelProperties, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
+    CompareFunction, DepthBiasState, DepthStencilState, DeviceType, DownlevelCapabilities,
+    DownlevelFlags, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
     ImageDataLayout, IndexFormat, InputStepMode, Limits, MultisampleState, Origin3d,
     PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
     PrimitiveTopology, PushConstantRange, QuerySetDescriptor, QueryType, SamplerBorderColor,
@@ -206,7 +206,7 @@ trait Context: Debug + Send + Sized + Sync {
     ) -> Option<TextureFormat>;
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features;
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
-    fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> DownlevelProperties;
+    fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> DownlevelCapabilities;
     fn adapter_get_info(&self, adapter: &Self::AdapterId) -> AdapterInfo;
     fn adapter_get_texture_format_features(
         &self,
@@ -216,7 +216,7 @@ trait Context: Debug + Send + Sized + Sync {
 
     fn device_features(&self, device: &Self::DeviceId) -> Features;
     fn device_limits(&self, device: &Self::DeviceId) -> Limits;
-    fn device_downlevel_properties(&self, device: &Self::DeviceId) -> DownlevelProperties;
+    fn device_downlevel_properties(&self, device: &Self::DeviceId) -> DownlevelCapabilities;
     fn device_create_swap_chain(
         &self,
         device: &Self::DeviceId,

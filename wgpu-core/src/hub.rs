@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    backend,
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, RenderBundle},
     device::Device,
@@ -226,7 +225,7 @@ impl<T, I: TypedId> Storage<T, I> {
 }
 
 /// Type system for enforcing the lock order on shared HUB structures.
-/// If type A implements `Access<B>`, that means we are allowed to proceed
+/// If type A implements `Access<A>`, that means we are allowed to proceed
 /// with locking resource `B` after we lock `A`.
 ///
 /// The implenentations basically describe the edges in a directed graph
@@ -234,66 +233,66 @@ impl<T, I: TypedId> Storage<T, I> {
 /// multiple concurrent paths on this graph (from multiple threads) without
 /// deadlocks, i.e. there is always a path whose next resource is not locked
 /// by some other path, at any time.
-pub trait Access<B> {}
+pub trait Access<A> {}
 
 pub enum Root {}
 //TODO: establish an order instead of declaring all the pairs.
 impl Access<Instance> for Root {}
 impl Access<Surface> for Root {}
 impl Access<Surface> for Instance {}
-impl<B: hal::Backend> Access<Adapter<B>> for Root {}
-impl<B: hal::Backend> Access<Adapter<B>> for Surface {}
-impl<B: hal::Backend> Access<Device<B>> for Root {}
-impl<B: hal::Backend> Access<Device<B>> for Surface {}
-impl<B: hal::Backend> Access<Device<B>> for Adapter<B> {}
-impl<B: hal::Backend> Access<SwapChain<B>> for Root {}
-impl<B: hal::Backend> Access<SwapChain<B>> for Device<B> {}
-impl<B: hal::Backend> Access<PipelineLayout<B>> for Root {}
-impl<B: hal::Backend> Access<PipelineLayout<B>> for Device<B> {}
-impl<B: hal::Backend> Access<PipelineLayout<B>> for RenderBundle {}
-impl<B: hal::Backend> Access<BindGroupLayout<B>> for Root {}
-impl<B: hal::Backend> Access<BindGroupLayout<B>> for Device<B> {}
-impl<B: hal::Backend> Access<BindGroupLayout<B>> for PipelineLayout<B> {}
-impl<B: hal::Backend> Access<BindGroup<B>> for Root {}
-impl<B: hal::Backend> Access<BindGroup<B>> for Device<B> {}
-impl<B: hal::Backend> Access<BindGroup<B>> for BindGroupLayout<B> {}
-impl<B: hal::Backend> Access<BindGroup<B>> for PipelineLayout<B> {}
-impl<B: hal::Backend> Access<BindGroup<B>> for CommandBuffer<B> {}
-impl<B: hal::Backend> Access<CommandBuffer<B>> for Root {}
-impl<B: hal::Backend> Access<CommandBuffer<B>> for Device<B> {}
-impl<B: hal::Backend> Access<CommandBuffer<B>> for SwapChain<B> {}
-impl<B: hal::Backend> Access<RenderBundle> for Device<B> {}
-impl<B: hal::Backend> Access<RenderBundle> for CommandBuffer<B> {}
-impl<B: hal::Backend> Access<ComputePipeline<B>> for Device<B> {}
-impl<B: hal::Backend> Access<ComputePipeline<B>> for BindGroup<B> {}
-impl<B: hal::Backend> Access<RenderPipeline<B>> for Device<B> {}
-impl<B: hal::Backend> Access<RenderPipeline<B>> for BindGroup<B> {}
-impl<B: hal::Backend> Access<RenderPipeline<B>> for ComputePipeline<B> {}
-impl<B: hal::Backend> Access<QuerySet<B>> for Root {}
-impl<B: hal::Backend> Access<QuerySet<B>> for Device<B> {}
-impl<B: hal::Backend> Access<QuerySet<B>> for CommandBuffer<B> {}
-impl<B: hal::Backend> Access<QuerySet<B>> for RenderPipeline<B> {}
-impl<B: hal::Backend> Access<QuerySet<B>> for ComputePipeline<B> {}
-impl<B: hal::Backend> Access<ShaderModule<B>> for Device<B> {}
-impl<B: hal::Backend> Access<ShaderModule<B>> for BindGroupLayout<B> {}
-impl<B: hal::Backend> Access<Buffer<B>> for Root {}
-impl<B: hal::Backend> Access<Buffer<B>> for Device<B> {}
-impl<B: hal::Backend> Access<Buffer<B>> for BindGroupLayout<B> {}
-impl<B: hal::Backend> Access<Buffer<B>> for BindGroup<B> {}
-impl<B: hal::Backend> Access<Buffer<B>> for CommandBuffer<B> {}
-impl<B: hal::Backend> Access<Buffer<B>> for ComputePipeline<B> {}
-impl<B: hal::Backend> Access<Buffer<B>> for RenderPipeline<B> {}
-impl<B: hal::Backend> Access<Buffer<B>> for QuerySet<B> {}
-impl<B: hal::Backend> Access<Texture<B>> for Root {}
-impl<B: hal::Backend> Access<Texture<B>> for Device<B> {}
-impl<B: hal::Backend> Access<Texture<B>> for Buffer<B> {}
-impl<B: hal::Backend> Access<TextureView<B>> for Root {}
-impl<B: hal::Backend> Access<TextureView<B>> for SwapChain<B> {}
-impl<B: hal::Backend> Access<TextureView<B>> for Device<B> {}
-impl<B: hal::Backend> Access<TextureView<B>> for Texture<B> {}
-impl<B: hal::Backend> Access<Sampler<B>> for Root {}
-impl<B: hal::Backend> Access<Sampler<B>> for Device<B> {}
-impl<B: hal::Backend> Access<Sampler<B>> for TextureView<B> {}
+impl<A: hal::Api> Access<Adapter<A>> for Root {}
+impl<A: hal::Api> Access<Adapter<A>> for Surface {}
+impl<A: hal::Api> Access<Device<A>> for Root {}
+impl<A: hal::Api> Access<Device<A>> for Surface {}
+impl<A: hal::Api> Access<Device<A>> for Adapter<A> {}
+impl<A: hal::Api> Access<SwapChain<A>> for Root {}
+impl<A: hal::Api> Access<SwapChain<A>> for Device<A> {}
+impl<A: hal::Api> Access<PipelineLayout<A>> for Root {}
+impl<A: hal::Api> Access<PipelineLayout<A>> for Device<A> {}
+impl<A: hal::Api> Access<PipelineLayout<A>> for RenderBundle {}
+impl<A: hal::Api> Access<BindGroupLayout<A>> for Root {}
+impl<A: hal::Api> Access<BindGroupLayout<A>> for Device<A> {}
+impl<A: hal::Api> Access<BindGroupLayout<A>> for PipelineLayout<A> {}
+impl<A: hal::Api> Access<BindGroup<A>> for Root {}
+impl<A: hal::Api> Access<BindGroup<A>> for Device<A> {}
+impl<A: hal::Api> Access<BindGroup<A>> for BindGroupLayout<A> {}
+impl<A: hal::Api> Access<BindGroup<A>> for PipelineLayout<A> {}
+impl<A: hal::Api> Access<BindGroup<A>> for CommandBuffer<A> {}
+impl<A: hal::Api> Access<CommandBuffer<A>> for Root {}
+impl<A: hal::Api> Access<CommandBuffer<A>> for Device<A> {}
+impl<A: hal::Api> Access<CommandBuffer<A>> for SwapChain<A> {}
+impl<A: hal::Api> Access<RenderBundle> for Device<A> {}
+impl<A: hal::Api> Access<RenderBundle> for CommandBuffer<A> {}
+impl<A: hal::Api> Access<ComputePipeline<A>> for Device<A> {}
+impl<A: hal::Api> Access<ComputePipeline<A>> for BindGroup<A> {}
+impl<A: hal::Api> Access<RenderPipeline<A>> for Device<A> {}
+impl<A: hal::Api> Access<RenderPipeline<A>> for BindGroup<A> {}
+impl<A: hal::Api> Access<RenderPipeline<A>> for ComputePipeline<A> {}
+impl<A: hal::Api> Access<QuerySet<A>> for Root {}
+impl<A: hal::Api> Access<QuerySet<A>> for Device<A> {}
+impl<A: hal::Api> Access<QuerySet<A>> for CommandBuffer<A> {}
+impl<A: hal::Api> Access<QuerySet<A>> for RenderPipeline<A> {}
+impl<A: hal::Api> Access<QuerySet<A>> for ComputePipeline<A> {}
+impl<A: hal::Api> Access<ShaderModule<A>> for Device<A> {}
+impl<A: hal::Api> Access<ShaderModule<A>> for BindGroupLayout<A> {}
+impl<A: hal::Api> Access<Buffer<A>> for Root {}
+impl<A: hal::Api> Access<Buffer<A>> for Device<A> {}
+impl<A: hal::Api> Access<Buffer<A>> for BindGroupLayout<A> {}
+impl<A: hal::Api> Access<Buffer<A>> for BindGroup<A> {}
+impl<A: hal::Api> Access<Buffer<A>> for CommandBuffer<A> {}
+impl<A: hal::Api> Access<Buffer<A>> for ComputePipeline<A> {}
+impl<A: hal::Api> Access<Buffer<A>> for RenderPipeline<A> {}
+impl<A: hal::Api> Access<Buffer<A>> for QuerySet<A> {}
+impl<A: hal::Api> Access<Texture<A>> for Root {}
+impl<A: hal::Api> Access<Texture<A>> for Device<A> {}
+impl<A: hal::Api> Access<Texture<A>> for Buffer<A> {}
+impl<A: hal::Api> Access<TextureView<A>> for Root {}
+impl<A: hal::Api> Access<TextureView<A>> for SwapChain<A> {}
+impl<A: hal::Api> Access<TextureView<A>> for Device<A> {}
+impl<A: hal::Api> Access<TextureView<A>> for Texture<A> {}
+impl<A: hal::Api> Access<Sampler<A>> for Root {}
+impl<A: hal::Api> Access<Sampler<A>> for Device<A> {}
+impl<A: hal::Api> Access<Sampler<A>> for TextureView<A> {}
 
 #[cfg(debug_assertions)]
 thread_local! {
@@ -537,55 +536,55 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
 }
 
 #[derive(Debug)]
-pub struct Hub<B: hal::Backend, F: GlobalIdentityHandlerFactory> {
-    pub adapters: Registry<Adapter<B>, AdapterId, F>,
-    pub devices: Registry<Device<B>, DeviceId, F>,
-    pub swap_chains: Registry<SwapChain<B>, SwapChainId, F>,
-    pub pipeline_layouts: Registry<PipelineLayout<B>, PipelineLayoutId, F>,
-    pub shader_modules: Registry<ShaderModule<B>, ShaderModuleId, F>,
-    pub bind_group_layouts: Registry<BindGroupLayout<B>, BindGroupLayoutId, F>,
-    pub bind_groups: Registry<BindGroup<B>, BindGroupId, F>,
-    pub command_buffers: Registry<CommandBuffer<B>, CommandBufferId, F>,
+pub struct Hub<A: hal::Api, F: GlobalIdentityHandlerFactory> {
+    pub adapters: Registry<Adapter<A>, AdapterId, F>,
+    pub devices: Registry<Device<A>, DeviceId, F>,
+    pub swap_chains: Registry<SwapChain<A>, SwapChainId, F>,
+    pub pipeline_layouts: Registry<PipelineLayout<A>, PipelineLayoutId, F>,
+    pub shader_modules: Registry<ShaderModule<A>, ShaderModuleId, F>,
+    pub bind_group_layouts: Registry<BindGroupLayout<A>, BindGroupLayoutId, F>,
+    pub bind_groups: Registry<BindGroup<A>, BindGroupId, F>,
+    pub command_buffers: Registry<CommandBuffer<A>, CommandBufferId, F>,
     pub render_bundles: Registry<RenderBundle, RenderBundleId, F>,
-    pub render_pipelines: Registry<RenderPipeline<B>, RenderPipelineId, F>,
-    pub compute_pipelines: Registry<ComputePipeline<B>, ComputePipelineId, F>,
-    pub query_sets: Registry<QuerySet<B>, QuerySetId, F>,
-    pub buffers: Registry<Buffer<B>, BufferId, F>,
-    pub textures: Registry<Texture<B>, TextureId, F>,
-    pub texture_views: Registry<TextureView<B>, TextureViewId, F>,
-    pub samplers: Registry<Sampler<B>, SamplerId, F>,
+    pub render_pipelines: Registry<RenderPipeline<A>, RenderPipelineId, F>,
+    pub compute_pipelines: Registry<ComputePipeline<A>, ComputePipelineId, F>,
+    pub query_sets: Registry<QuerySet<A>, QuerySetId, F>,
+    pub buffers: Registry<Buffer<A>, BufferId, F>,
+    pub textures: Registry<Texture<A>, TextureId, F>,
+    pub texture_views: Registry<TextureView<A>, TextureViewId, F>,
+    pub samplers: Registry<Sampler<A>, SamplerId, F>,
 }
 
-impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
+impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<B, F> {
     fn new(factory: &F) -> Self {
         Self {
-            adapters: Registry::new(B::VARIANT, factory),
-            devices: Registry::new(B::VARIANT, factory),
-            swap_chains: Registry::new(B::VARIANT, factory),
-            pipeline_layouts: Registry::new(B::VARIANT, factory),
-            shader_modules: Registry::new(B::VARIANT, factory),
-            bind_group_layouts: Registry::new(B::VARIANT, factory),
-            bind_groups: Registry::new(B::VARIANT, factory),
-            command_buffers: Registry::new(B::VARIANT, factory),
-            render_bundles: Registry::new(B::VARIANT, factory),
-            render_pipelines: Registry::new(B::VARIANT, factory),
-            compute_pipelines: Registry::new(B::VARIANT, factory),
-            query_sets: Registry::new(B::VARIANT, factory),
-            buffers: Registry::new(B::VARIANT, factory),
-            textures: Registry::new(B::VARIANT, factory),
-            texture_views: Registry::new(B::VARIANT, factory),
-            samplers: Registry::new(B::VARIANT, factory),
+            adapters: Registry::new(A::VARIANT, factory),
+            devices: Registry::new(A::VARIANT, factory),
+            swap_chains: Registry::new(A::VARIANT, factory),
+            pipeline_layouts: Registry::new(A::VARIANT, factory),
+            shader_modules: Registry::new(A::VARIANT, factory),
+            bind_group_layouts: Registry::new(A::VARIANT, factory),
+            bind_groups: Registry::new(A::VARIANT, factory),
+            command_buffers: Registry::new(A::VARIANT, factory),
+            render_bundles: Registry::new(A::VARIANT, factory),
+            render_pipelines: Registry::new(A::VARIANT, factory),
+            compute_pipelines: Registry::new(A::VARIANT, factory),
+            query_sets: Registry::new(A::VARIANT, factory),
+            buffers: Registry::new(A::VARIANT, factory),
+            textures: Registry::new(A::VARIANT, factory),
+            texture_views: Registry::new(A::VARIANT, factory),
+            samplers: Registry::new(A::VARIANT, factory),
         }
     }
 }
 
-impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
+impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<B, F> {
     //TODO: instead of having a hacky `with_adapters` parameter,
     // we should have `clear_device(device_id)` that specifically destroys
     // everything related to a logical device.
     fn clear(&self, surface_guard: &mut Storage<Surface, SurfaceId>, with_adapters: bool) {
         use crate::resource::TextureViewInner;
-        use hal::{device::Device as _, window::PresentationSurface as _};
+        use hal::Device as _;
 
         let mut devices = self.devices.data.write();
         for element in devices.map.iter_mut() {
@@ -693,7 +692,7 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
                 unsafe {
                     device.raw.destroy_semaphore(swap_chain.semaphore);
                 }
-                let suf_id = TypedId::zip(index as Index, epoch, B::VARIANT);
+                let suf_id = TypedId::zip(index as Index, epoch, A::VARIANT);
                 //TODO: hold the surface alive by the swapchain
                 if surface_guard.contains(suf_id) {
                     let surface = surface_guard.get_mut(suf_id).unwrap();
@@ -727,21 +726,22 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
 
 #[derive(Debug)]
 pub struct Hubs<F: GlobalIdentityHandlerFactory> {
-    #[cfg(vulkan)]
-    vulkan: Hub<backend::Vulkan, F>,
-    #[cfg(metal)]
-    metal: Hub<backend::Metal, F>,
-    #[cfg(dx12)]
-    dx12: Hub<backend::Dx12, F>,
-    #[cfg(dx11)]
-    dx11: Hub<backend::Dx11, F>,
-    #[cfg(gl)]
-    gl: Hub<backend::Gl, F>,
-}
+    /*
+#[cfg(vulkan)]
+vulkan: Hub<backend::Vulkan, F>,
+#[cfg(metal)]
+metal: Hub<backend::Metal, F>,
+#[cfg(dx12)]
+dx12: Hub<backend::Dx12, F>,
+#[cfg(dx11)]
+dx11: Hub<backend::Dx11, F>,
+#[cfg(gl)]
+gl: Hub<backend::Gl, F>,*/}
 
 impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
     fn new(factory: &F) -> Self {
         Self {
+            /*
             #[cfg(vulkan)]
             vulkan: Hub::new(factory),
             #[cfg(metal)]
@@ -752,6 +752,7 @@ impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
             dx11: Hub::new(factory),
             #[cfg(gl)]
             gl: Hub::new(factory),
+            */
         }
     }
 }
@@ -773,9 +774,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    pub fn clear_backend<B: GfxBackend>(&self, _dummy: ()) {
+    pub fn clear_backend<A: HalApi>(&self, _dummy: ()) {
         let mut surface_guard = self.surfaces.data.write();
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         // this is used for tests, which keep the adapter
         hub.clear(&mut *surface_guard, false);
     }
@@ -788,6 +789,7 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         let mut surface_guard = self.surfaces.data.write();
 
         // destroy hubs before the instance gets dropped
+        /*
         #[cfg(vulkan)]
         {
             self.hubs.vulkan.clear(&mut *surface_guard, true);
@@ -808,6 +810,7 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         {
             self.hubs.gl.clear(&mut *surface_guard, true);
         }
+        */
 
         // destroy surfaces
         for element in surface_guard.map.drain(..) {
@@ -818,14 +821,15 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     }
 }
 
-pub trait GfxBackend: hal::Backend {
+pub trait HalApi: hal::Api {
     const VARIANT: Backend;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G>;
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
 }
 
+/*
 #[cfg(vulkan)]
-impl GfxBackend for backend::Vulkan {
+impl HalApi for backend::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.vulkan
@@ -836,7 +840,7 @@ impl GfxBackend for backend::Vulkan {
 }
 
 #[cfg(metal)]
-impl GfxBackend for backend::Metal {
+impl HalApi for backend::Metal {
     const VARIANT: Backend = Backend::Metal;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.metal
@@ -847,7 +851,7 @@ impl GfxBackend for backend::Metal {
 }
 
 #[cfg(dx12)]
-impl GfxBackend for backend::Dx12 {
+impl HalApi for backend::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx12
@@ -858,7 +862,7 @@ impl GfxBackend for backend::Dx12 {
 }
 
 #[cfg(dx11)]
-impl GfxBackend for backend::Dx11 {
+impl HalApi for backend::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx11
@@ -869,7 +873,7 @@ impl GfxBackend for backend::Dx11 {
 }
 
 #[cfg(gl)]
-impl GfxBackend for backend::Gl {
+impl HalApi for backend::Gl {
     const VARIANT: Backend = Backend::Gl;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.gl
@@ -877,7 +881,7 @@ impl GfxBackend for backend::Gl {
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         surface.gl.as_mut().unwrap()
     }
-}
+}*/
 
 #[cfg(test)]
 fn _test_send_sync(global: &Global<IdentityManagerFactory>) {

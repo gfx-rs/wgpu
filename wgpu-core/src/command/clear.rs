@@ -10,7 +10,7 @@ use crate::{
     command::CommandBuffer,
     conv,
     device::all_buffer_stages,
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id::{BufferId, CommandEncoderId, TextureId},
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{BufferUse, TextureUse},
@@ -48,7 +48,7 @@ pub enum ClearError {
     MissingCopyDstUsageFlag(Option<BufferId>, Option<TextureId>),
     #[error("texture lacks the aspects that were specified in the image subresource range. Texture has {texture_aspects:?}, specified was {subresource_range_aspects:?}")]
     MissingTextureAspect {
-        texture_aspects: hal::format::Aspects,
+        texture_aspects: hal::FormatAspect,
         subresource_range_aspects: TextureAspect,
     },
     #[error("image subresource level range is outside of the texture's level range. texture range is {texture_level_range:?},  \
@@ -68,7 +68,7 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_clear_buffer<B: GfxBackend>(
+    pub fn command_encoder_clear_buffer<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,
         dst: BufferId,
@@ -77,7 +77,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), ClearError> {
         profiling::scope!("CommandEncoder::fill_buffer");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)
@@ -165,7 +165,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn command_encoder_clear_image<B: GfxBackend>(
+    pub fn command_encoder_clear_image<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,
         dst: TextureId,
@@ -173,7 +173,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), ClearError> {
         profiling::scope!("CommandEncoder::clear_image");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)
@@ -200,8 +200,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Check if subresource aspects are valid.
         let aspects = match subresource_range.aspect {
             wgt::TextureAspect::All => dst_texture.aspects,
-            wgt::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
-            wgt::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
+            wgt::TextureAspect::DepthOnly => hal::FormatAspect::DEPTH,
+            wgt::TextureAspect::StencilOnly => hal::FormatAspect::STENCIL,
         };
         if !dst_texture.aspects.contains(aspects) {
             return Err(ClearError::MissingTextureAspect {

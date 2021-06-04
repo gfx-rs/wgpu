@@ -29,7 +29,7 @@ pub struct ShaderModuleDescriptor<'a> {
 }
 
 #[derive(Debug)]
-pub struct ShaderModule<B: hal::Backend> {
+pub struct ShaderModule<A: hal::Api> {
     pub(crate) raw: B::ShaderModule,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) interface: Option<validation::Interface>,
@@ -37,7 +37,7 @@ pub struct ShaderModule<B: hal::Backend> {
     pub(crate) label: String,
 }
 
-impl<B: hal::Backend> Resource for ShaderModule<B> {
+impl<A: hal::Api> Resource for ShaderModule<A> {
     const TYPE: &'static str = "ShaderModule";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -125,14 +125,14 @@ pub enum CreateComputePipelineError {
 }
 
 #[derive(Debug)]
-pub struct ComputePipeline<B: hal::Backend> {
+pub struct ComputePipeline<A: hal::Api> {
     pub(crate) raw: B::ComputePipeline,
     pub(crate) layout_id: Stored<PipelineLayoutId>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
 }
 
-impl<B: hal::Backend> Resource for ComputePipeline<B> {
+impl<A: hal::Api> Resource for ComputePipeline<A> {
     const TYPE: &'static str = "ComputePipeline";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -289,7 +289,7 @@ bitflags::bitflags! {
 }
 
 #[derive(Debug)]
-pub struct RenderPipeline<B: hal::Backend> {
+pub struct RenderPipeline<A: hal::Api> {
     pub(crate) raw: B::GraphicsPipeline,
     pub(crate) layout_id: Stored<PipelineLayoutId>,
     pub(crate) device_id: Stored<DeviceId>,
@@ -300,7 +300,7 @@ pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
-impl<B: hal::Backend> Resource for RenderPipeline<B> {
+impl<A: hal::Api> Resource for RenderPipeline<A> {
     const TYPE: &'static str = "RenderPipeline";
 
     fn life_guard(&self) -> &LifeGuard {

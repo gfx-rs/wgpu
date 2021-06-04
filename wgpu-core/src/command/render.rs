@@ -15,7 +15,7 @@ use crate::{
         AttachmentData, AttachmentDataVec, Device, FramebufferKey, RenderPassCompatibilityError,
         RenderPassContext, RenderPassKey, RenderPassLock, MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS,
     },
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     pipeline::PipelineFlags,
@@ -122,14 +122,14 @@ pub struct RenderPassDepthStencilAttachment {
 }
 
 impl RenderPassDepthStencilAttachment {
-    fn is_read_only(&self, aspects: hal::format::Aspects) -> Result<bool, RenderPassErrorInner> {
-        if aspects.contains(hal::format::Aspects::DEPTH) && !self.depth.read_only {
+    fn is_read_only(&self, aspects: hal::FormatAspect) -> Result<bool, RenderPassErrorInner> {
+        if aspects.contains(hal::FormatAspect::DEPTH) && !self.depth.read_only {
             return Ok(false);
         }
         if (self.depth.load_op, self.depth.store_op) != (LoadOp::Load, StoreOp::Store) {
             return Err(RenderPassErrorInner::InvalidDepthOps);
         }
-        if aspects.contains(hal::format::Aspects::STENCIL) && !self.stencil.read_only {
+        if aspects.contains(hal::FormatAspect::STENCIL) && !self.stencil.read_only {
             return Ok(false);
         }
         if (self.stencil.load_op, self.stencil.store_op) != (LoadOp::Load, StoreOp::Store) {
@@ -503,24 +503,26 @@ struct RenderAttachment<'a> {
     new_use: TextureUse,
 }
 
-struct RenderPassInfo<'a, B: hal::Backend> {
+type AttachmentDataVec<T> = ArrayVec<[T; MAX_COLOR_TARGETS + MAX_COLOR_TARGETS + 1]>;
+
+struct RenderPassInfo<'a, A: hal::Api> {
     context: RenderPassContext,
     trackers: StatefulTrackerSubset,
     render_attachments: AttachmentDataVec<RenderAttachment<'a>>,
     used_swap_chain: Option<Stored<id::SwapChainId>>,
     is_ds_read_only: bool,
     extent: wgt::Extent3d,
-    _phantom: PhantomData<B>,
+    _phantom: PhantomData<A>,
 }
 
-impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
+impl<'a, A: HalApi> RenderPassInfo<'a, A> {
     fn start(
-        raw: &mut B::CommandBuffer,
+        raw: &mut A::CommandBuffer,
         color_attachments: &[RenderPassColorAttachment],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
-        cmd_buf: &mut CommandBuffer<B>,
-        device: &Device<B>,
-        view_guard: &'a Storage<TextureView<B>, id::TextureViewId>,
+        cmd_buf: &mut CommandBuffer<A>,
+        device: &Device<A>,
+        view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("start", "RenderPassInfo");
         let sample_count_limit = device.hal_limits.framebuffer_color_sample_counts;
@@ -535,10 +537,10 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
         let mut attachment_type_name = "";
         let mut extent = None;
         let mut sample_count = 0;
-        let mut depth_stencil_aspects = hal::format::Aspects::empty();
+        let mut depth_stencil_aspects = hal::FormatAspect::empty();
         let mut used_swap_chain = None::<Stored<id::SwapChainId>>;
 
-        let mut add_view = |view: &TextureView<B>, type_name| {
+        let mut add_view = |view: &TextureView<A>, type_name| {
             if let Some(ex) = extent {
                 if ex != view.extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
@@ -572,7 +574,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     add_view(view, "depth")?;
 
                     depth_stencil_aspects = view.aspects;
-                    if view.aspects.contains(hal::format::Aspects::COLOR) {
+                    if view.aspects.contains(hal::FormatAspect::COLOR) {
                         return Err(RenderPassErrorInner::InvalidDepthStencilAttachmentFormat(
                             view.format,
                         ));
@@ -635,7 +637,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
                 add_view(view, "color")?;
 
-                if !view.aspects.contains(hal::format::Aspects::COLOR) {
+                if !view.aspects.contains(hal::FormatAspect::COLOR) {
                     return Err(RenderPassErrorInner::InvalidColorAttachmentFormat(
                         view.format,
                     ));
@@ -656,10 +658,10 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         });
 
                         let new_layout =
-                            conv::map_texture_state(new_use, hal::format::Aspects::COLOR).1;
+                            conv::map_texture_state(new_use, hal::FormatAspect::COLOR).1;
                         let old_layout = match previous_use {
                             Some(usage) => {
-                                conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
+                                conv::map_texture_state(usage, hal::FormatAspect::COLOR).1
                             }
                             None => new_layout,
                         };
@@ -725,10 +727,10 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                         });
 
                         let new_layout =
-                            conv::map_texture_state(new_use, hal::format::Aspects::COLOR).1;
+                            conv::map_texture_state(new_use, hal::FormatAspect::COLOR).1;
                         let old_layout = match previous_use {
                             Some(usage) => {
-                                conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
+                                conv::map_texture_state(usage, hal::FormatAspect::COLOR).1
                             }
                             None => new_layout,
                         };
@@ -964,7 +966,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
 
         Ok(Self {
             context,
-            trackers: StatefulTrackerSubset::new(B::VARIANT),
+            trackers: StatefulTrackerSubset::new(A::VARIANT),
             render_attachments,
             used_swap_chain,
             is_ds_read_only,
@@ -975,7 +977,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
 
     fn finish(
         mut self,
-        texture_guard: &Storage<Texture<B>, id::TextureId>,
+        texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) -> Result<(StatefulTrackerSubset, Option<Stored<id::SwapChainId>>), RenderPassErrorInner>
     {
         profiling::scope!("finish", "RenderPassInfo");
@@ -1017,12 +1019,12 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
 // Common routines between render/compute
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_run_render_pass<B: GfxBackend>(
+    pub fn command_encoder_run_render_pass<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         pass: &RenderPass,
     ) -> Result<(), RenderPassError> {
-        self.command_encoder_run_render_pass_impl::<B>(
+        self.command_encoder_run_render_pass_impl::<A>(
             encoder_id,
             pass.base.as_ref(),
             &pass.color_targets,
@@ -1031,7 +1033,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     #[doc(hidden)]
-    pub fn command_encoder_run_render_pass_impl<B: GfxBackend>(
+    pub fn command_encoder_run_render_pass_impl<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<RenderCommand>,
@@ -1041,7 +1043,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("run_render_pass", "CommandEncoder");
         let scope = PassErrorScope::Pass(encoder_id);
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);

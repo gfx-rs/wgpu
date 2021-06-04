@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::{alloc::MemoryBlock, DeviceError, HostMap, MissingFeatures},
+    device::{DeviceError, HostMap, MissingFeatures},
     hub::Resource,
     id::{DeviceId, SwapChainId, TextureId},
     memory_init_tracker::MemoryInitTracker,
@@ -77,12 +77,11 @@ pub enum BufferMapAsyncStatus {
 }
 
 #[derive(Debug)]
-pub(crate) enum BufferMapState<B: hal::Backend> {
+pub(crate) enum BufferMapState<A: hal::Api> {
     /// Mapped at creation.
     Init {
         ptr: NonNull<u8>,
-        stage_buffer: B::Buffer,
-        stage_memory: MemoryBlock<B>,
+        stage_buffer: A::Buffer,
         needs_flush: bool,
     },
     /// Waiting for GPU to be done before mapping
@@ -90,15 +89,15 @@ pub(crate) enum BufferMapState<B: hal::Backend> {
     /// Mapped
     Active {
         ptr: NonNull<u8>,
-        sub_range: hal::buffer::SubRange,
+        range: hal::MemoryRange,
         host: HostMap,
     },
     /// Not mapped
     Idle,
 }
 
-unsafe impl<B: hal::Backend> Send for BufferMapState<B> {}
-unsafe impl<B: hal::Backend> Sync for BufferMapState<B> {}
+unsafe impl<A: hal::Api> Send for BufferMapState<A> {}
+unsafe impl<A: hal::Api> Sync for BufferMapState<A> {}
 
 pub type BufferMapCallback = unsafe extern "C" fn(status: BufferMapAsyncStatus, userdata: *mut u8);
 
@@ -170,15 +169,16 @@ pub(crate) struct BufferPendingMapping {
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 #[derive(Debug)]
-pub struct Buffer<B: hal::Backend> {
-    pub(crate) raw: Option<(B::Buffer, MemoryBlock<B>)>,
+pub struct Buffer<A: hal::Api> {
+    pub(crate) raw: Option<A::Buffer>,
     pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) is_coherent: bool,
     pub(crate) usage: wgt::BufferUsage,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) initialization_status: MemoryInitTracker,
-    pub(crate) sync_mapped_writes: Option<hal::memory::Segment>,
+    pub(crate) sync_mapped_writes: Option<hal::MemoryRange>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) map_state: BufferMapState<B>,
+    pub(crate) map_state: BufferMapState<A>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -195,7 +195,7 @@ pub enum CreateBufferError {
     UsageMismatch(wgt::BufferUsage),
 }
 
-impl<B: hal::Backend> Resource for Buffer<B> {
+impl<A: hal::Api> Resource for Buffer<A> {
     const TYPE: &'static str = "Buffer";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -203,7 +203,7 @@ impl<B: hal::Backend> Resource for Buffer<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<()> for Buffer<B> {
+impl<A: hal::Api> Borrow<()> for Buffer<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
@@ -212,16 +212,11 @@ impl<B: hal::Backend> Borrow<()> for Buffer<B> {
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 
 #[derive(Debug)]
-pub struct Texture<B: hal::Backend> {
-    pub(crate) raw: Option<(B::Image, MemoryBlock<B>)>,
+pub struct Texture<A: hal::Api> {
+    pub(crate) raw: Option<A::Image>,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) usage: wgt::TextureUsage,
-    pub(crate) aspects: hal::format::Aspects,
-    pub(crate) dimension: wgt::TextureDimension,
-    pub(crate) kind: hal::image::Kind,
-    pub(crate) format: wgt::TextureFormat,
+    pub(crate) desc: wgt::TextureDescriptor<()>,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }
@@ -265,7 +260,7 @@ pub enum CreateTextureError {
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
 }
 
-impl<B: hal::Backend> Resource for Texture<B> {
+impl<A: hal::Api> Resource for Texture<A> {
     const TYPE: &'static str = "Texture";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -273,7 +268,7 @@ impl<B: hal::Backend> Resource for Texture<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<TextureSelector> for Texture<B> {
+impl<A: hal::Api> Borrow<TextureSelector> for Texture<A> {
     fn borrow(&self) -> &TextureSelector {
         &self.full_range
     }
@@ -297,28 +292,25 @@ pub struct TextureViewDescriptor<'a> {
 }
 
 #[derive(Debug)]
-pub(crate) enum TextureViewInner<B: hal::Backend> {
+pub(crate) enum TextureViewInner<A: hal::Api> {
     Native {
-        raw: B::ImageView,
+        raw: A::ImageView,
         source_id: Stored<TextureId>,
     },
     SwapChain {
-        image: <B::Surface as hal::window::PresentationSurface<B>>::SwapchainImage,
+        raw: A::SwapChainTexture,
         source_id: Stored<SwapChainId>,
     },
 }
 
 #[derive(Debug)]
-pub struct TextureView<B: hal::Backend> {
-    pub(crate) inner: TextureViewInner<B>,
+pub struct TextureView<A: hal::Api> {
+    pub(crate) inner: TextureViewInner<A>,
     //TODO: store device_id for quick access?
-    pub(crate) aspects: hal::format::Aspects,
-    pub(crate) format: wgt::TextureFormat,
+    pub(crate) desc: hal::TextureViewDescriptor<()>,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    pub(crate) dimension: wgt::TextureViewDimension,
     pub(crate) extent: wgt::Extent3d,
-    pub(crate) samples: hal::image::NumSamples,
-    pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
+    pub(crate) samples: u32,
     /// Internal use of this texture view when used as `BindingType::Texture`.
     pub(crate) sampled_internal_use: TextureUse,
     pub(crate) selector: TextureSelector,
@@ -353,8 +345,8 @@ pub enum CreateTextureViewError {
     },
     #[error("Aspect {requested:?} is not in the source texture ({total:?})")]
     InvalidAspect {
-        requested: hal::format::Aspects,
-        total: hal::format::Aspects,
+        requested: hal::FormatAspect,
+        total: hal::FormatAspect,
     },
 }
 
@@ -364,7 +356,7 @@ pub enum TextureViewDestroyError {
     SwapChainImage,
 }
 
-impl<B: hal::Backend> Resource for TextureView<B> {
+impl<A: hal::Api> Resource for TextureView<A> {
     const TYPE: &'static str = "TextureView";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -372,7 +364,7 @@ impl<B: hal::Backend> Resource for TextureView<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<()> for TextureView<B> {
+impl<A: hal::Api> Borrow<()> for TextureView<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
@@ -423,8 +415,8 @@ impl Default for SamplerDescriptor<'_> {
 }
 
 #[derive(Debug)]
-pub struct Sampler<B: hal::Backend> {
-    pub(crate) raw: B::Sampler,
+pub struct Sampler<A: hal::Api> {
+    pub(crate) raw: A::Sampler,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
     /// `true` if this is a comparison sampler
@@ -446,7 +438,7 @@ pub enum CreateSamplerError {
     MissingFeatures(#[from] MissingFeatures),
 }
 
-impl<B: hal::Backend> Resource for Sampler<B> {
+impl<A: hal::Api> Resource for Sampler<A> {
     const TYPE: &'static str = "Sampler";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -454,7 +446,7 @@ impl<B: hal::Backend> Resource for Sampler<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<()> for Sampler<B> {
+impl<A: hal::Api> Borrow<()> for Sampler<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
@@ -472,8 +464,8 @@ pub enum CreateQuerySetError {
 }
 
 #[derive(Debug)]
-pub struct QuerySet<B: hal::Backend> {
-    pub(crate) raw: B::QueryPool,
+pub struct QuerySet<A: hal::Api> {
+    pub(crate) raw: A::QuerySet,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
     /// Amount of queries in the query set.
@@ -482,7 +474,7 @@ pub struct QuerySet<B: hal::Backend> {
     pub(crate) elements: u32,
 }
 
-impl<B: hal::Backend> Resource for QuerySet<B> {
+impl<A: hal::Api> Resource for QuerySet<A> {
     const TYPE: &'static str = "QuerySet";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -490,7 +482,7 @@ impl<B: hal::Backend> Resource for QuerySet<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<()> for QuerySet<B> {
+impl<A: hal::Api> Borrow<()> for QuerySet<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }

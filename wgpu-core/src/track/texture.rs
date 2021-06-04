@@ -13,14 +13,13 @@ use arrayvec::ArrayVec;
 
 use std::{iter, ops::Range};
 
-//TODO: store `hal::image::State` here to avoid extra conversions
-type PlaneStates = RangedStates<hal::image::Layer, Unit<TextureUse>>;
+type PlaneStates = RangedStates<hal::ArrayLayer, Unit<TextureUse>>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TextureSelector {
-    //pub aspects: hal::format::Aspects,
-    pub levels: Range<hal::image::Level>,
-    pub layers: Range<hal::image::Layer>,
+    //pub aspects: hal::FormatAspect,
+    pub levels: Range<hal::MipLevel>,
+    pub layers: Range<hal::ArrayLayer>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -44,7 +43,7 @@ impl PendingTransition<TextureState> {
 }
 
 impl TextureState {
-    pub fn new(mip_level_count: hal::image::Level, array_layer_count: hal::image::Layer) -> Self {
+    pub fn new(mip_level_count: hal::MipLevel, array_layer_count: hal::ArrayLayer) -> Self {
         Self {
             mips: iter::repeat_with(|| {
                 PlaneStates::from_range(0..array_layer_count, Unit::new(TextureUse::UNINITIALIZED))
@@ -104,7 +103,7 @@ impl ResourceState for TextureState {
             .iter_mut()
             .enumerate()
         {
-            let level = selector.levels.start + mip_id as hal::image::Level;
+            let level = selector.levels.start + mip_id as hal::MipLevel;
             let layers = mip.isolate(&selector.layers, Unit::new(usage));
             for &mut (ref range, ref mut unit) in layers {
                 if unit.last == usage && TextureUse::ORDERED.contains(usage) {
@@ -154,7 +153,7 @@ impl ResourceState for TextureState {
             .iter_mut()
             .enumerate()
         {
-            let level = selector.levels.start + mip_id as hal::image::Level;
+            let level = selector.levels.start + mip_id as hal::MipLevel;
             let layers = mip.isolate(&selector.layers, Unit::new(usage));
             for &mut (ref range, ref mut unit) in layers {
                 match unit.first {
@@ -193,7 +192,7 @@ impl ResourceState for TextureState {
         }
 
         for (mip_id, (mip_self, mip_other)) in self.mips.iter_mut().zip(&other.mips).enumerate() {
-            let level = mip_id as hal::image::Level;
+            let level = mip_id as hal::MipLevel;
             temp.extend(mip_self.merge(mip_other, 0));
             mip_self.clear();
 

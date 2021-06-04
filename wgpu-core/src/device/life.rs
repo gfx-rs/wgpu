@@ -11,7 +11,7 @@ use crate::{
         queue::TempResource,
         DeviceError,
     },
-    hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Token},
+    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Token},
     id, resource,
     track::TrackerSet,
     RefCount, Stored, SubmissionIndex,
@@ -90,15 +90,15 @@ impl SuspectedResources {
 
 /// A struct that keeps lists of resources that are no longer needed.
 #[derive(Debug)]
-struct NonReferencedResources<B: hal::Backend> {
-    buffers: Vec<(B::Buffer, alloc::MemoryBlock<B>)>,
-    images: Vec<(B::Image, alloc::MemoryBlock<B>)>,
+struct NonReferencedResources<A: hal::Api> {
+    buffers: Vec<(B::Buffer, alloc::MemoryBlock<A>)>,
+    images: Vec<(B::Image, alloc::MemoryBlock<A>)>,
     // Note: we keep the associated ID here in order to be able to check
     // at any point what resources are used in a submission.
     image_views: Vec<(id::Valid<id::TextureViewId>, B::ImageView)>,
     samplers: Vec<B::Sampler>,
     framebuffers: Vec<B::Framebuffer>,
-    desc_sets: Vec<DescriptorSet<B>>,
+    desc_sets: Vec<DescriptorSet<A>>,
     compute_pipes: Vec<B::ComputePipeline>,
     graphics_pipes: Vec<B::GraphicsPipeline>,
     descriptor_set_layouts: Vec<B::DescriptorSetLayout>,
@@ -106,7 +106,7 @@ struct NonReferencedResources<B: hal::Backend> {
     query_sets: Vec<B::QueryPool>,
 }
 
-impl<B: hal::Backend> NonReferencedResources<B> {
+impl<A: hal::Api> NonReferencedResources<A> {
     fn new() -> Self {
         Self {
             buffers: Vec::new(),
@@ -140,8 +140,8 @@ impl<B: hal::Backend> NonReferencedResources<B> {
     unsafe fn clean(
         &mut self,
         device: &B::Device,
-        memory_allocator_mutex: &Mutex<alloc::MemoryAllocator<B>>,
-        descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
+        memory_allocator_mutex: &Mutex<alloc::MemoryAllocator<A>>,
+        descriptor_allocator_mutex: &Mutex<DescriptorAllocator<A>>,
     ) {
         if !self.buffers.is_empty() || !self.images.is_empty() {
             let mut allocator = memory_allocator_mutex.lock();
@@ -192,10 +192,10 @@ impl<B: hal::Backend> NonReferencedResources<B> {
 }
 
 #[derive(Debug)]
-struct ActiveSubmission<B: hal::Backend> {
+struct ActiveSubmission<A: hal::Api> {
     index: SubmissionIndex,
     fence: B::Fence,
-    last_resources: NonReferencedResources<B>,
+    last_resources: NonReferencedResources<A>,
     mapped: Vec<id::Valid<id::BufferId>>,
 }
 
@@ -216,7 +216,7 @@ pub enum WaitIdleError {
 ///   3. When `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
 ///   4. Finally, `handle_mapping` issues all the callbacks.
 #[derive(Debug)]
-pub(super) struct LifetimeTracker<B: hal::Backend> {
+pub(super) struct LifetimeTracker<A: hal::Api> {
     /// Resources that the user has requested be mapped, but are still in use.
     mapped: Vec<Stored<id::BufferId>>,
     /// Buffers can be used in a submission that is yet to be made, by the
@@ -229,14 +229,14 @@ pub(super) struct LifetimeTracker<B: hal::Backend> {
     /// Resources that are not referenced any more but still used by GPU.
     /// Grouped by submissions associated with a fence and a submission index.
     /// The active submissions have to be stored in FIFO order: oldest come first.
-    active: Vec<ActiveSubmission<B>>,
+    active: Vec<ActiveSubmission<A>>,
     /// Resources that are neither referenced or used, just life_tracker
     /// actual deletion.
-    free_resources: NonReferencedResources<B>,
+    free_resources: NonReferencedResources<A>,
     ready_to_map: Vec<id::Valid<id::BufferId>>,
 }
 
-impl<B: hal::Backend> LifetimeTracker<B> {
+impl<A: hal::Api> LifetimeTracker<A> {
     pub fn new() -> Self {
         Self {
             mapped: Vec::new(),
@@ -254,7 +254,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         index: SubmissionIndex,
         fence: B::Fence,
         new_suspects: &SuspectedResources,
-        temp_resources: impl Iterator<Item = (TempResource<B>, alloc::MemoryBlock<B>)>,
+        temp_resources: impl Iterator<Item = (TempResource<A>, alloc::MemoryBlock<A>)>,
     ) {
         let mut last_resources = NonReferencedResources::new();
         for (res, memory) in temp_resources {
@@ -347,8 +347,8 @@ impl<B: hal::Backend> LifetimeTracker<B> {
     pub fn cleanup(
         &mut self,
         device: &B::Device,
-        memory_allocator_mutex: &Mutex<alloc::MemoryAllocator<B>>,
-        descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
+        memory_allocator_mutex: &Mutex<alloc::MemoryAllocator<A>>,
+        descriptor_allocator_mutex: &Mutex<DescriptorAllocator<A>>,
     ) {
         profiling::scope!("cleanup");
         unsafe {
@@ -360,8 +360,8 @@ impl<B: hal::Backend> LifetimeTracker<B> {
 
     pub fn schedule_resource_destruction(
         &mut self,
-        temp_resource: TempResource<B>,
-        memory: alloc::MemoryBlock<B>,
+        temp_resource: TempResource<A>,
+        memory: alloc::MemoryBlock<A>,
         last_submit_index: SubmissionIndex,
     ) {
         let resources = self
@@ -376,13 +376,13 @@ impl<B: hal::Backend> LifetimeTracker<B> {
     }
 }
 
-impl<B: GfxBackend> LifetimeTracker<B> {
+impl<A: HalApi> LifetimeTracker<A> {
     pub(super) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        hub: &Hub<B, G>,
+        hub: &Hub<A, G>,
         trackers: &Mutex<TrackerSet>,
         #[cfg(feature = "trace")] trace: Option<&Mutex<trace::Trace>>,
-        token: &mut Token<super::Device<B>>,
+        token: &mut Token<super::Device<A>>,
     ) {
         profiling::scope!("triage_suspected");
 
@@ -662,8 +662,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
     pub(super) fn triage_mapped<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        hub: &Hub<B, G>,
-        token: &mut Token<super::Device<B>>,
+        hub: &Hub<A, G>,
+        token: &mut Token<super::Device<A>>,
     ) {
         if self.mapped.is_empty() {
             return;
@@ -692,10 +692,10 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
     pub(super) fn handle_mapping<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        hub: &Hub<B, G>,
+        hub: &Hub<A, G>,
         raw: &B::Device,
         trackers: &Mutex<TrackerSet>,
-        token: &mut Token<super::Device<B>>,
+        token: &mut Token<super::Device<A>>,
     ) -> Vec<super::BufferMapPendingCallback> {
         if self.ready_to_map.is_empty() {
             return Vec::new();

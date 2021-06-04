@@ -4,6 +4,7 @@ members = [
     "player",
     "wgpu",
     "wgpu-core",
+    "wgpu-hal",
     "wgpu-types",
 ]
 default-members = ["wgpu"]

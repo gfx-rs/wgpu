@@ -11,7 +11,7 @@ use crate::{
     },
     conv,
     device::{alloc, DeviceError, WaitIdleError},
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, BufferAccessError, BufferMapState, BufferUse, TextureUse},
@@ -23,27 +23,27 @@ use smallvec::SmallVec;
 use std::{iter, ops::Range, ptr};
 use thiserror::Error;
 
-struct StagingData<B: hal::Backend> {
+struct StagingData<A: hal::Api> {
     buffer: B::Buffer,
-    memory: alloc::MemoryBlock<B>,
+    memory: alloc::MemoryBlock<A>,
     cmdbuf: B::CommandBuffer,
 }
 
 #[derive(Debug)]
-pub enum TempResource<B: hal::Backend> {
+pub enum TempResource<A: hal::Api> {
     Buffer(B::Buffer),
     Image(B::Image),
 }
 
 #[derive(Debug)]
-pub(crate) struct PendingWrites<B: hal::Backend> {
+pub(crate) struct PendingWrites<A: hal::Api> {
     pub command_buffer: Option<B::CommandBuffer>,
-    pub temp_resources: Vec<(TempResource<B>, alloc::MemoryBlock<B>)>,
+    pub temp_resources: Vec<(TempResource<A>, alloc::MemoryBlock<A>)>,
     pub dst_buffers: FastHashSet<id::BufferId>,
     pub dst_textures: FastHashSet<id::TextureId>,
 }
 
-impl<B: hal::Backend> PendingWrites<B> {
+impl<A: hal::Api> PendingWrites<A> {
     pub fn new() -> Self {
         Self {
             command_buffer: None,
@@ -56,8 +56,8 @@ impl<B: hal::Backend> PendingWrites<B> {
     pub fn dispose(
         self,
         device: &B::Device,
-        cmd_allocator: &CommandAllocator<B>,
-        mem_allocator: &mut alloc::MemoryAllocator<B>,
+        cmd_allocator: &CommandAllocator<A>,
+        mem_allocator: &mut alloc::MemoryAllocator<A>,
     ) {
         if let Some(raw) = self.command_buffer {
             cmd_allocator.discard_internal(raw);
@@ -75,11 +75,11 @@ impl<B: hal::Backend> PendingWrites<B> {
         }
     }
 
-    pub fn consume_temp(&mut self, resource: TempResource<B>, memory: alloc::MemoryBlock<B>) {
+    pub fn consume_temp(&mut self, resource: TempResource<A>, memory: alloc::MemoryBlock<A>) {
         self.temp_resources.push((resource, memory));
     }
 
-    fn consume(&mut self, stage: StagingData<B>) {
+    fn consume(&mut self, stage: StagingData<A>) {
         self.temp_resources
             .push((TempResource::Buffer(stage.buffer), stage.memory));
         self.command_buffer = Some(stage.cmdbuf);
@@ -95,7 +95,7 @@ impl<B: hal::Backend> PendingWrites<B> {
         })
     }
 
-    fn borrow_cmd_buf(&mut self, cmd_allocator: &CommandAllocator<B>) -> &mut B::CommandBuffer {
+    fn borrow_cmd_buf(&mut self, cmd_allocator: &CommandAllocator<A>) -> &mut B::CommandBuffer {
         if self.command_buffer.is_none() {
             let mut cmdbuf = cmd_allocator.allocate_internal();
             unsafe {
@@ -113,10 +113,10 @@ struct RequiredBufferInits {
 }
 
 impl RequiredBufferInits {
-    fn add<B: hal::Backend>(
+    fn add<A: hal::Api>(
         &mut self,
         buffer_memory_init_actions: &[MemoryInitTrackerAction<id::BufferId>],
-        buffer_guard: &mut Storage<Buffer<B>, id::BufferId>,
+        buffer_guard: &mut Storage<Buffer<A>, id::BufferId>,
     ) -> Result<(), QueueSubmitError> {
         for buffer_use in buffer_memory_init_actions.iter() {
             let buffer = buffer_guard
@@ -140,12 +140,12 @@ impl RequiredBufferInits {
     }
 }
 
-impl<B: hal::Backend> super::Device<B> {
+impl<A: hal::Api> super::Device<A> {
     pub fn borrow_pending_writes(&mut self) -> &mut B::CommandBuffer {
         self.pending_writes.borrow_cmd_buf(&self.cmd_allocator)
     }
 
-    fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<B>, DeviceError> {
+    fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<A>, DeviceError> {
         profiling::scope!("prepare_stage");
         let mut buffer = unsafe {
             self.raw
@@ -192,7 +192,7 @@ impl<B: hal::Backend> super::Device<B> {
     fn initialize_buffer_memory(
         &mut self,
         mut required_buffer_inits: RequiredBufferInits,
-        buffer_guard: &mut Storage<Buffer<B>, id::BufferId>,
+        buffer_guard: &mut Storage<Buffer<A>, id::BufferId>,
     ) -> Result<(), QueueSubmitError> {
         self.pending_writes
             .dst_buffers
@@ -285,7 +285,7 @@ pub enum QueueSubmitError {
 //TODO: move out common parts of write_xxx.
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn queue_write_buffer<B: GfxBackend>(
+    pub fn queue_write_buffer<A: HalApi>(
         &self,
         queue_id: id::QueueId,
         buffer_id: id::BufferId,
@@ -294,7 +294,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("write_buffer", "Queue");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let device = device_guard
@@ -391,7 +391,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn queue_write_texture<B: GfxBackend>(
+    pub fn queue_write_texture<A: HalApi>(
         &self,
         queue_id: id::QueueId,
         destination: &ImageCopyTexture,
@@ -401,7 +401,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("write_texture", "Queue");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let device = device_guard
@@ -586,14 +586,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn queue_submit<B: GfxBackend>(
+    pub fn queue_submit<A: HalApi>(
         &self,
         queue_id: id::QueueId,
         command_buffer_ids: &[id::CommandBufferId],
     ) -> Result<(), QueueSubmitError> {
         profiling::scope!("submit", "Queue");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let callbacks = {
@@ -676,7 +676,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             if !buffer.life_guard.use_at(submit_index) {
                                 if let BufferMapState::Active { .. } = buffer.map_state {
                                     log::warn!("Dropped buffer has a pending mapping.");
-                                    super::unmap_buffer(&device.raw, buffer)?;
+                                    unsafe { device.raw.unmap_buffer(buffer)? };
                                 }
                                 device.temp_suspected.buffers.push(id);
                             } else {
@@ -828,11 +828,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn queue_get_timestamp_period<B: GfxBackend>(
+    pub fn queue_get_timestamp_period<A: HalApi>(
         &self,
         queue_id: id::QueueId,
     ) -> Result<f32, InvalidQueue> {
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         match device_guard.get(queue_id) {

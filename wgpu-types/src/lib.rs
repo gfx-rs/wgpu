@@ -650,16 +650,14 @@ impl Default for Limits {
 
 /// Lists various ways the underlying platform does not conform to the WebGPU standard.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct DownlevelProperties {
+pub struct DownlevelCapabilities {
     /// Combined boolean flags.
     pub flags: DownlevelFlags,
     /// Which collections of features shaders support. Defined in terms of D3D's shader models.
     pub shader_model: ShaderModel,
 }
 
-impl Default for DownlevelProperties {
-    // Note, this defaults to all on, as that is the default assumption in wgpu.
-    // gfx-hal's equivalent structure defaults to all off.
+impl Default for DownlevelCapabilities {
     fn default() -> Self {
         Self {
             flags: DownlevelFlags::COMPLIANT,
@@ -668,7 +666,7 @@ impl Default for DownlevelProperties {
     }
 }
 
-impl DownlevelProperties {
+impl DownlevelCapabilities {
     /// Returns true if the underlying platform offers complete support of the baseline WebGPU standard.
     ///
     /// If this returns false, some parts of the API will result in validation errors where they would not normally.

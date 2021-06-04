@@ -1,0 +1,18 @@
+[package]
+name = "wgpu-hal"
+version = "0.1.0"
+authors = ["wgpu developers"]
+edition = "2018"
+description = "WebGPU hardware abstraction layer"
+homepage = "https://github.com/gfx-rs/wgpu"
+repository = "https://github.com/gfx-rs/wgpu"
+keywords = ["graphics"]
+license = "MPL-2.0"
+
+[lib]
+
+[features]
+
+[dependencies]
+bitflags = "1.0"
+wgt = { package = "wgpu-types", path = "../wgpu-types" }

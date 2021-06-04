@@ -7,15 +7,15 @@ use arrayvec::ArrayVec;
 
 pub use gpu_descriptor::DescriptorTotalCount;
 
-pub type DescriptorSet<B> = gpu_descriptor::DescriptorSet<<B as hal::Backend>::DescriptorSet>;
+pub type DescriptorSet<A> = gpu_descriptor::DescriptorSet<<B as hal::Backend>::DescriptorSet>;
 
 #[derive(Debug)]
-pub struct DescriptorAllocator<B: hal::Backend>(
+pub struct DescriptorAllocator<A: hal::Api>(
     gpu_descriptor::DescriptorAllocator<B::DescriptorPool, B::DescriptorSet>,
 );
-struct DescriptorDevice<'a, B: hal::Backend>(&'a B::Device);
+struct DescriptorDevice<'a, A: hal::Api>(&'a B::Device);
 
-impl<B: hal::Backend> DescriptorAllocator<B> {
+impl<A: hal::Api> DescriptorAllocator<A> {
     pub fn new() -> Self {
         DescriptorAllocator(gpu_descriptor::DescriptorAllocator::new(0))
     }
@@ -26,10 +26,10 @@ impl<B: hal::Backend> DescriptorAllocator<B> {
         layout: &B::DescriptorSetLayout,
         layout_descriptor_count: &DescriptorTotalCount,
         count: u32,
-    ) -> Result<Vec<DescriptorSet<B>>, DeviceError> {
+    ) -> Result<Vec<DescriptorSet<A>>, DeviceError> {
         unsafe {
             self.0.allocate(
-                &DescriptorDevice::<B>(device),
+                &DescriptorDevice::<A>(device),
                 layout,
                 gpu_descriptor::DescriptorSetLayoutCreateFlags::empty(),
                 layout_descriptor_count,
@@ -42,16 +42,16 @@ impl<B: hal::Backend> DescriptorAllocator<B> {
         })
     }
 
-    pub fn free(&mut self, device: &B::Device, sets: impl IntoIterator<Item = DescriptorSet<B>>) {
-        unsafe { self.0.free(&DescriptorDevice::<B>(device), sets) }
+    pub fn free(&mut self, device: &B::Device, sets: impl IntoIterator<Item = DescriptorSet<A>>) {
+        unsafe { self.0.free(&DescriptorDevice::<A>(device), sets) }
     }
 
     pub fn cleanup(&mut self, device: &B::Device) {
-        unsafe { self.0.cleanup(&DescriptorDevice::<B>(device)) }
+        unsafe { self.0.cleanup(&DescriptorDevice::<A>(device)) }
     }
 }
 
-impl<B: hal::Backend>
+impl<A: hal::Api>
     gpu_descriptor::DescriptorDevice<B::DescriptorSetLayout, B::DescriptorPool, B::DescriptorSet>
     for DescriptorDevice<'_, B>
 {

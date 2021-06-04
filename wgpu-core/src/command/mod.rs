@@ -23,7 +23,7 @@ pub use self::transfer::*;
 
 use crate::{
     device::{all_buffer_stages, all_image_stages},
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::MemoryInitTrackerAction,
     resource::{Buffer, Texture},
@@ -47,7 +47,7 @@ enum CommandEncoderStatus {
 }
 
 #[derive(Debug)]
-pub struct CommandBuffer<B: hal::Backend> {
+pub struct CommandBuffer<A: hal::Api> {
     pub(crate) raw: Vec<B::CommandBuffer>,
     status: CommandEncoderStatus,
     recorded_thread_id: ThreadId,
@@ -56,7 +56,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) used_swap_chains: SmallVec<[Stored<id::SwapChainId>; 1]>,
     pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     limits: wgt::Limits,
-    downlevel: wgt::DownlevelProperties,
+    downlevel: wgt::DownlevelCapabilities,
     private_features: PrivateFeatures,
     support_fill_buffer_texture: bool,
     has_labels: bool,
@@ -66,7 +66,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) label: String,
 }
 
-impl<B: GfxBackend> CommandBuffer<B> {
+impl<A: HalApi> CommandBuffer<A> {
     fn get_encoder_mut(
         storage: &mut Storage<Self, id::CommandEncoderId>,
         id: id::CommandEncoderId,
@@ -93,13 +93,13 @@ impl<B: GfxBackend> CommandBuffer<B> {
         base: &mut TrackerSet,
         head_buffers: &ResourceTracker<BufferState>,
         head_textures: &ResourceTracker<TextureState>,
-        buffer_guard: &Storage<Buffer<B>, id::BufferId>,
-        texture_guard: &Storage<Texture<B>, id::TextureId>,
+        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
+        texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) {
         use hal::command::CommandBuffer as _;
 
         profiling::scope!("insert_barriers");
-        debug_assert_eq!(B::VARIANT, base.backend());
+        debug_assert_eq!(A::VARIANT, base.backend());
 
         let buffer_barriers = base.buffers.merge_replace(head_buffers).map(|pending| {
             let buf = &buffer_guard[pending.id];
@@ -122,7 +122,7 @@ impl<B: GfxBackend> CommandBuffer<B> {
     }
 }
 
-impl<B: hal::Backend> crate::hub::Resource for CommandBuffer<B> {
+impl<A: hal::Api> crate::hub::Resource for CommandBuffer<A> {
     const TYPE: &'static str = "CommandBuffer";
 
     fn life_guard(&self) -> &crate::LifeGuard {
@@ -206,14 +206,14 @@ pub enum CommandEncoderError {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_finish<B: GfxBackend>(
+    pub fn command_encoder_finish<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor<Label>,
     ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
         profiling::scope!("finish", "CommandEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
         //TODO: actually close the last recorded command buffer
@@ -239,14 +239,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (encoder_id, error)
     }
 
-    pub fn command_encoder_push_debug_group<B: GfxBackend>(
+    pub fn command_encoder_push_debug_group<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("push_debug_group", "CommandEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
@@ -259,14 +259,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn command_encoder_insert_debug_marker<B: GfxBackend>(
+    pub fn command_encoder_insert_debug_marker<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("insert_debug_marker", "CommandEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
@@ -279,13 +279,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn command_encoder_pop_debug_group<B: GfxBackend>(
+    pub fn command_encoder_pop_debug_group<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("pop_debug_marker", "CommandEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);

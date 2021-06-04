@@ -2,7 +2,7 @@ use crate::{
     backend::{error::ContextError, native_gpu_future},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DownlevelProperties, Features, Label, Limits, LoadOp, MapMode, Operations,
+    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderSource, SwapChainStatus, TextureDescriptor,
     TextureFormat, TextureViewDescriptor,
@@ -731,7 +731,7 @@ impl crate::Context for Context {
         }
     }
 
-    fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> DownlevelProperties {
+    fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> DownlevelCapabilities {
         let global = &self.0;
         match wgc::gfx_select!(*adapter => global.adapter_downlevel_properties(*adapter)) {
             Ok(downlevel) => downlevel,
@@ -776,7 +776,7 @@ impl crate::Context for Context {
         }
     }
 
-    fn device_downlevel_properties(&self, device: &Self::DeviceId) -> DownlevelProperties {
+    fn device_downlevel_properties(&self, device: &Self::DeviceId) -> DownlevelCapabilities {
         let global = &self.0;
         match wgc::gfx_select!(device.id => global.device_downlevel_properties(device.id)) {
             Ok(limits) => limits,

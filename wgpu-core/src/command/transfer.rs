@@ -8,7 +8,7 @@ use crate::{
     command::{CommandBuffer, CommandEncoderError},
     conv,
     device::{all_buffer_stages, all_image_stages},
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId},
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{BufferUse, Texture, TextureErrorDimension, TextureUse},
@@ -105,10 +105,10 @@ pub enum CopyError {
 
 //TODO: we currently access each texture twice for a transfer,
 // once only to get the aspect flags, which is unfortunate.
-pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
+pub(crate) fn texture_copy_view_to_hal<A: hal::Api>(
     view: &ImageCopyTexture,
     size: &Extent3d,
-    texture_guard: &Storage<Texture<B>, TextureId>,
+    texture_guard: &Storage<Texture<A>, TextureId>,
 ) -> Result<
     (
         hal::image::SubresourceLayers,
@@ -325,7 +325,7 @@ pub(crate) fn validate_texture_copy_range(
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_copy_buffer_to_buffer<B: GfxBackend>(
+    pub fn command_encoder_copy_buffer_to_buffer<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,
         source: BufferId,
@@ -339,7 +339,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if source == destination {
             return Err(TransferError::SameSourceDestinationBuffer.into());
         }
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -465,7 +465,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
+    pub fn command_encoder_copy_buffer_to_texture<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,
         source: &ImageCopyBuffer,
@@ -474,7 +474,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), CopyError> {
         profiling::scope!("copy_buffer_to_texture", "CommandEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
@@ -615,7 +615,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn command_encoder_copy_texture_to_buffer<B: GfxBackend>(
+    pub fn command_encoder_copy_texture_to_buffer<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,
         source: &ImageCopyTexture,
@@ -624,7 +624,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), CopyError> {
         profiling::scope!("copy_texture_to_buffer", "CommandEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
@@ -768,7 +768,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn command_encoder_copy_texture_to_texture<B: GfxBackend>(
+    pub fn command_encoder_copy_texture_to_texture<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,
         source: &ImageCopyTexture,
@@ -777,7 +777,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), CopyError> {
         profiling::scope!("copy_texture_to_texture", "CommandEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);

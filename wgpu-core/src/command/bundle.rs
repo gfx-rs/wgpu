@@ -47,7 +47,7 @@ use crate::{
         AttachmentData, Device, DeviceError, RenderPassContext, MAX_VERTEX_BUFFERS,
         SHADER_STAGE_COUNT,
     },
-    hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Resource, Storage, Token},
+    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::BufferUse,
@@ -135,12 +135,12 @@ impl RenderBundleEncoder {
         self.parent_id
     }
 
-    pub(crate) fn finish<B: hal::Backend, G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn finish<A: hal::Api, G: GlobalIdentityHandlerFactory>(
         self,
         desc: &RenderBundleDescriptor,
-        device: &Device<B>,
-        hub: &Hub<B, G>,
-        token: &mut Token<Device<B>>,
+        device: &Device<A>,
+        hub: &Hub<A, G>,
+        token: &mut Token<Device<A>>,
     ) -> Result<RenderBundle, RenderBundleError> {
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
@@ -565,16 +565,16 @@ impl RenderBundle {
     /// Note that the function isn't expected to fail, generally.
     /// All the validation has already been done by this point.
     /// The only failure condition is if some of the used buffers are destroyed.
-    pub(crate) unsafe fn execute<B: GfxBackend>(
+    pub(crate) unsafe fn execute<A: HalApi>(
         &self,
         cmd_buf: &mut B::CommandBuffer,
         pipeline_layout_guard: &Storage<
-            crate::binding_model::PipelineLayout<B>,
+            crate::binding_model::PipelineLayout<A>,
             id::PipelineLayoutId,
         >,
-        bind_group_guard: &Storage<crate::binding_model::BindGroup<B>, id::BindGroupId>,
-        pipeline_guard: &Storage<crate::pipeline::RenderPipeline<B>, id::RenderPipelineId>,
-        buffer_guard: &Storage<crate::resource::Buffer<B>, id::BufferId>,
+        bind_group_guard: &Storage<crate::binding_model::BindGroup<A>, id::BindGroupId>,
+        pipeline_guard: &Storage<crate::pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+        buffer_guard: &Storage<crate::resource::Buffer<A>, id::BufferId>,
     ) -> Result<(), ExecutionError> {
         use hal::command::CommandBuffer as _;
 
