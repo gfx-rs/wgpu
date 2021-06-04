@@ -178,7 +178,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         })
     }
 
-    fn parse_type_qualifiers(&mut self) -> Result<Vec<TypeQualifier>> {
+    fn parse_type_qualifiers(&mut self) -> Result<Vec<(TypeQualifier, SourceMetadata)>> {
         let mut qualifiers = Vec::new();
 
         while self.peek_type_qualifier() {
@@ -190,18 +190,21 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 continue;
             }
 
-            qualifiers.push(match token.value {
-                TokenValue::Interpolation(i) => TypeQualifier::Interpolation(i),
-                TokenValue::Const => TypeQualifier::StorageQualifier(StorageQualifier::Const),
-                TokenValue::In => TypeQualifier::StorageQualifier(StorageQualifier::Input),
-                TokenValue::Out => TypeQualifier::StorageQualifier(StorageQualifier::Output),
-                TokenValue::Uniform => TypeQualifier::StorageQualifier(
-                    StorageQualifier::StorageClass(StorageClass::Uniform),
-                ),
-                TokenValue::Sampling(s) => TypeQualifier::Sampling(s),
+            qualifiers.push((
+                match token.value {
+                    TokenValue::Interpolation(i) => TypeQualifier::Interpolation(i),
+                    TokenValue::Const => TypeQualifier::StorageQualifier(StorageQualifier::Const),
+                    TokenValue::In => TypeQualifier::StorageQualifier(StorageQualifier::Input),
+                    TokenValue::Out => TypeQualifier::StorageQualifier(StorageQualifier::Output),
+                    TokenValue::Uniform => TypeQualifier::StorageQualifier(
+                        StorageQualifier::StorageClass(StorageClass::Uniform),
+                    ),
+                    TokenValue::Sampling(s) => TypeQualifier::Sampling(s),
 
-                _ => unreachable!(),
-            })
+                    _ => unreachable!(),
+                },
+                token.meta,
+            ))
         }
 
         Ok(qualifiers)
@@ -209,7 +212,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
     fn parse_layout_qualifier_id_list(
         &mut self,
-        qualifiers: &mut Vec<TypeQualifier>,
+        qualifiers: &mut Vec<(TypeQualifier, SourceMetadata)>,
     ) -> Result<()> {
         // We need both of these to produce a ResourceBinding
         let mut group = None;
@@ -228,12 +231,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         self.expect(TokenValue::RightParen)?;
 
         match (group, binding) {
-            (Some((group, _)), Some((binding, _))) => {
-                qualifiers.push(TypeQualifier::ResourceBinding(ResourceBinding {
-                    group,
-                    binding,
-                }))
-            }
+            (Some((group, group_meta)), Some((binding, binding_meta))) => qualifiers.push((
+                TypeQualifier::ResourceBinding(ResourceBinding { group, binding }),
+                group_meta.union(&binding_meta),
+            )),
             // Produce an error if we have one of group or binding but not the other
             (Some((_, meta)), None) => {
                 return Err(ErrorKind::SemanticError(
@@ -278,7 +279,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
     fn parse_layout_qualifier_id(
         &mut self,
-        qualifiers: &mut Vec<TypeQualifier>,
+        qualifiers: &mut Vec<(TypeQualifier, SourceMetadata)>,
         group: &mut Option<(u32, SourceMetadata)>,
         binding: &mut Option<(u32, SourceMetadata)>,
     ) -> Result<()> {
@@ -293,24 +294,42 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     let (value, end_meta) = self.parse_uint_constant()?;
                     token.meta = token.meta.union(&end_meta);
 
-                    match name.as_str() {
-                        "location" => qualifiers.push(TypeQualifier::Location(value)),
-                        "set" => *group = Some((value, end_meta)),
-                        "binding" => *binding = Some((value, end_meta)),
-                        _ => return Err(ErrorKind::UnknownLayoutQualifier(token.meta, name)),
-                    }
+                    qualifiers.push((
+                        match name.as_str() {
+                            "location" => TypeQualifier::Location(value),
+                            "set" => {
+                                *group = Some((value, end_meta));
+                                return Ok(());
+                            }
+                            "binding" => {
+                                *binding = Some((value, end_meta));
+                                return Ok(());
+                            }
+                            "local_size_x" => TypeQualifier::WorkGroupSize(0, value),
+                            "local_size_y" => TypeQualifier::WorkGroupSize(1, value),
+                            "local_size_z" => TypeQualifier::WorkGroupSize(2, value),
+                            _ => return Err(ErrorKind::UnknownLayoutQualifier(token.meta, name)),
+                        },
+                        token.meta,
+                    ))
                 } else {
                     match name.as_str() {
                         "push_constant" => {
-                            qualifiers.push(TypeQualifier::StorageQualifier(
-                                StorageQualifier::StorageClass(StorageClass::PushConstant),
+                            qualifiers.push((
+                                TypeQualifier::StorageQualifier(StorageQualifier::StorageClass(
+                                    StorageClass::PushConstant,
+                                )),
+                                token.meta,
                             ));
-                            qualifiers.push(TypeQualifier::Layout(StructLayout::Std430));
+                            qualifiers
+                                .push((TypeQualifier::Layout(StructLayout::Std430), token.meta));
                         }
-                        "std140" => qualifiers.push(TypeQualifier::Layout(StructLayout::Std140)),
-                        "std430" => qualifiers.push(TypeQualifier::Layout(StructLayout::Std430)),
+                        "std140" => qualifiers
+                            .push((TypeQualifier::Layout(StructLayout::Std140), token.meta)),
+                        "std430" => qualifiers
+                            .push((TypeQualifier::Layout(StructLayout::Std430), token.meta)),
                         "early_fragment_tests" => {
-                            qualifiers.push(TypeQualifier::EarlyFragmentTests)
+                            qualifiers.push((TypeQualifier::EarlyFragmentTests, token.meta))
                         }
                         _ => return Err(ErrorKind::UnknownLayoutQualifier(token.meta, name)),
                     }
@@ -685,7 +704,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 match token.value {
                     TokenValue::Identifier(ty_name) => {
                         if self.bump_if(TokenValue::LeftBrace).is_some() {
-                            self.parse_block_declaration(&qualifiers, ty_name, token.meta)
+                            self.parse_block_declaration(&qualifiers, ty_name)
                         } else {
                             //TODO: declaration
                             // type_qualifier IDENTIFIER SEMICOLON
@@ -693,7 +712,31 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             todo!()
                         }
                     }
-                    TokenValue::Semicolon => Ok(true),
+                    TokenValue::Semicolon => {
+                        for &(ref qualifier, meta) in qualifiers.iter() {
+                            match *qualifier {
+                                TypeQualifier::WorkGroupSize(i, value) => {
+                                    self.program.workgroup_size[i] = value
+                                }
+                                TypeQualifier::EarlyFragmentTests => {
+                                    self.program.early_fragment_tests = true;
+                                }
+                                TypeQualifier::StorageQualifier(_) => {
+                                    // TODO: Maybe add some checks here
+                                    // This is needed because of cases like
+                                    // layout(early_fragment_tests) in;
+                                }
+                                _ => {
+                                    return Err(ErrorKind::SemanticError(
+                                        meta,
+                                        "Qualifier not supported as standalone".into(),
+                                    ));
+                                }
+                            }
+                        }
+
+                        Ok(true)
+                    }
                     _ => Err(ErrorKind::InvalidToken(token)),
                 }
             }
@@ -705,15 +748,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
     fn parse_block_declaration(
         &mut self,
-        qualifiers: &[TypeQualifier],
+        qualifiers: &[(TypeQualifier, SourceMetadata)],
         ty_name: String,
-        meta: SourceMetadata,
     ) -> Result<bool> {
         let mut class = StorageClass::Private;
         let mut binding = None;
         let mut layout = None;
 
-        for qualifier in qualifiers {
+        for &(ref qualifier, meta) in qualifiers {
             match *qualifier {
                 TypeQualifier::StorageQualifier(StorageQualifier::StorageClass(c)) => {
                     if StorageClass::PushConstant == class && c == StorageClass::Uniform {
@@ -1627,7 +1669,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 }
 
 struct DeclarationContext<'ctx, 'fun> {
-    qualifiers: Vec<TypeQualifier>,
+    qualifiers: Vec<(TypeQualifier, SourceMetadata)>,
     external: bool,
 
     ctx: &'ctx mut Context<'fun>,

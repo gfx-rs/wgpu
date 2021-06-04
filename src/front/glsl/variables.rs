@@ -9,7 +9,7 @@ use super::error::ErrorKind;
 use super::token::SourceMetadata;
 
 pub struct VarDeclaration<'a> {
-    pub qualifiers: &'a [TypeQualifier],
+    pub qualifiers: &'a [(TypeQualifier, SourceMetadata)],
     pub ty: Handle<Type>,
     pub name: String,
     pub init: Option<Handle<Constant>>,
@@ -229,7 +229,7 @@ impl Program<'_> {
         let mut sampling = None;
         let mut layout = None;
 
-        for qualifier in qualifiers {
+        for &(ref qualifier, meta) in qualifiers {
             match *qualifier {
                 TypeQualifier::StorageQualifier(s) => {
                     if StorageQualifier::StorageClass(StorageClass::Private) != storage {
@@ -291,10 +291,10 @@ impl Program<'_> {
 
                     layout = Some(l);
                 }
-                TypeQualifier::EarlyFragmentTests => {
+                _ => {
                     return Err(ErrorKind::SemanticError(
                         meta,
-                        "Cannot set early fragment tests on a declaration".into(),
+                        "Qualifier not supported in globals".into(),
                     ));
                 }
             }
@@ -417,7 +417,7 @@ impl Program<'_> {
             ty,
             name,
             init,
-            meta,
+            ..
         }: VarDeclaration,
     ) -> Result<Handle<Expression>, ErrorKind> {
         #[cfg(feature = "glsl-validate")]
@@ -427,7 +427,7 @@ impl Program<'_> {
 
         let mut mutable = true;
 
-        for qualifier in qualifiers {
+        for &(ref qualifier, meta) in qualifiers {
             match *qualifier {
                 TypeQualifier::StorageQualifier(StorageQualifier::Const) => {
                     if !mutable {

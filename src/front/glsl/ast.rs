@@ -77,6 +77,9 @@ pub struct Program<'a> {
     pub profile: Profile,
     pub entry_points: &'a FastHashMap<String, ShaderStage>,
 
+    pub workgroup_size: [u32; 3],
+    pub early_fragment_tests: bool,
+
     pub lookup_function: FastHashMap<FunctionSignature, FunctionDeclaration>,
     pub lookup_type: FastHashMap<String, Handle<Type>>,
 
@@ -97,6 +100,9 @@ impl<'a> Program<'a> {
             version: 0,
             profile: Profile::Core,
             entry_points,
+
+            workgroup_size: [1; 3],
+            early_fragment_tests: false,
 
             lookup_function: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
@@ -727,6 +733,7 @@ pub enum TypeQualifier {
     Interpolation(Interpolation),
     ResourceBinding(ResourceBinding),
     Location(u32),
+    WorkGroupSize(usize, u32),
     Sampling(Sampling),
     Layout(StructLayout),
     EarlyFragmentTests,

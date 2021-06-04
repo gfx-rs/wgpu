@@ -623,9 +623,13 @@ impl Program<'_> {
             self.module.entry_points.push(EntryPoint {
                 name,
                 stage,
-                // TODO
-                early_depth_test: None,
-                workgroup_size: [0; 3],
+                early_depth_test: Some(crate::EarlyDepthTest { conservative: None })
+                    .filter(|_| self.early_fragment_tests && stage == crate::ShaderStage::Fragment),
+                workgroup_size: if let crate::ShaderStage::Compute = stage {
+                    self.workgroup_size
+                } else {
+                    [0; 3]
+                },
                 function: Function {
                     arguments,
                     expressions,
