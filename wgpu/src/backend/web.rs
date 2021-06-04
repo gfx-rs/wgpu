@@ -1899,6 +1899,23 @@ impl crate::Context for Context {
         })
     }
 
+    fn command_encoder_clear_image(
+        &self,
+        _encoder: &Self::CommandEncoderId,
+        _texture: &crate::Texture,
+        _subresource_range: &wgt::ImageSubresourceRange,
+    ) {
+    }
+
+    fn command_encoder_clear_buffer(
+        &self,
+        _encoder: &Self::CommandEncoderId,
+        _buffer: &crate::Buffer,
+        _offset: wgt::BufferAddress,
+        _size: Option<wgt::BufferSize>,
+    ) {
+    }
+
     fn command_encoder_insert_debug_marker(&self, _encoder: &Self::CommandEncoderId, _label: &str) {
         // Not available in gecko yet
         // encoder.insert_debug_marker(label);
@@ -1920,7 +1937,7 @@ impl crate::Context for Context {
         _query_set: &Self::QuerySetId,
         _query_index: u32,
     ) {
-        // Not available in gecko yet
+        unimplemented!();
     }
 
     fn command_encoder_resolve_query_set(
@@ -1932,7 +1949,7 @@ impl crate::Context for Context {
         _destination: &Self::BufferId,
         _destination_offset: wgt::BufferAddress,
     ) {
-        // Not available in gecko yet
+        unimplemented!();
     }
 
     fn render_bundle_encoder_finish(
