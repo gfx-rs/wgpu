@@ -128,7 +128,15 @@ impl<'a> ResolveContext<'a> {
         let types = self.types;
         Ok(match *expr {
             crate::Expression::Access { base, .. } => match *past(base).inner_with(types) {
+                // Arrays and matrices can only be indexed dynamically behind a
+                // pointer, but that's a validation error, not a type error, so
+                // go ahead provide a type here.
                 Ti::Array { base, .. } => TypeResolution::Handle(base),
+                Ti::Matrix { rows, width, .. } => TypeResolution::Value(Ti::Vector {
+                    size: rows,
+                    kind: crate::ScalarKind::Float,
+                    width,
+                }),
                 Ti::Vector {
                     size: _,
                     kind,

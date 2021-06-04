@@ -183,6 +183,28 @@ impl crate::Expression {
             _ => false,
         }
     }
+
+    /// Return true if this expression is a dynamic array index, for [`Access`].
+    ///
+    /// This method returns true if this expression is a dynamically computed
+    /// index, and as such can only be used to index matrices and arrays when
+    /// they appear behind a pointer. See the documentation for [`Access`] for
+    /// details.
+    ///
+    /// Note, this does not check the _type_ of the given expression. It's up to
+    /// the caller to establish that the `Access` expression is well-typed
+    /// through other means, like [`ResolveContext`].
+    ///
+    /// [`Access`]: crate::Expression::Access
+    /// [`ResolveContext`]: crate::proc::ResolveContext
+    pub fn is_dynamic_index(&self, module: &crate::Module) -> bool {
+        if let Self::Constant(handle) = *self {
+            let constant = &module.constants[handle];
+            constant.specialization.is_some()
+        } else {
+            true
+        }
+    }
 }
 
 impl crate::SampleLevel {

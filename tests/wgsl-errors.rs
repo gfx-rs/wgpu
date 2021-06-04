@@ -314,3 +314,46 @@ fn missing_bindings() {
         })
     }
 }
+
+#[test]
+fn invalid_access() {
+    check_validation_error! {
+        "
+        fn array_by_value(a: array<i32, 5>, i: i32) -> i32 {
+            return a[i];
+        }
+        ",
+        "
+        fn matrix_by_value(m: mat4x4<f32>, i: i32) -> vec4<f32> {
+            return m[i];
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            error: naga::valid::FunctionError::Expression {
+                error: naga::valid::ExpressionError::IndexMustBeConstant(_),
+                ..
+            },
+            ..
+        })
+    }
+}
+
+#[test]
+fn valid_access() {
+    check_validation_error! {
+        "
+        fn vector_by_value(v: vec4<i32>, i: i32) -> i32 {
+            return v[i];
+        }
+        ",
+        "
+        fn matrix_dynamic(m: mat4x4<f32>, i: i32, j: i32) -> f32 {
+            var temp: mat4x4<f32> = m;
+            // Dynamically indexing the column vector applies
+            // `Access` to a `ValuePointer`.
+            return temp[i][j];
+        }
+        ":
+        Ok(_)
+    }
+}

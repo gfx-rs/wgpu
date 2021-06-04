@@ -72,7 +72,6 @@ struct Function {
     signature: Option<Instruction>,
     parameters: Vec<Instruction>,
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
-    internal_variables: Vec<LocalVariable>,
     blocks: Vec<Block>,
     entry_point_context: Option<EntryPointContext>,
 }
@@ -88,9 +87,6 @@ impl Function {
             if index == 0 {
                 for local_var in self.variables.values() {
                     local_var.instruction.to_words(sink);
-                }
-                for internal_var in self.internal_variables.iter() {
-                    internal_var.instruction.to_words(sink);
                 }
             }
             for instruction in block.body.iter() {
@@ -1324,62 +1320,6 @@ impl Writer {
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn promote_access_expression_to_variable(
-        &mut self,
-        ir_types: &Arena<crate::Type>,
-        result_type_id: Word,
-        container_id: Word,
-        container_resolution: &TypeResolution,
-        index_id: Word,
-        element_ty: Handle<crate::Type>,
-        block: &mut Block,
-    ) -> Result<(Word, LocalVariable), Error> {
-        let container_type_id = self.get_expression_type_id(container_resolution)?;
-        let pointer_type_id = self.id_gen.next();
-        Instruction::type_pointer(
-            pointer_type_id,
-            spirv::StorageClass::Function,
-            container_type_id,
-        )
-        .to_words(&mut self.logical_layout.declarations);
-
-        let variable = {
-            let id = self.id_gen.next();
-            LocalVariable {
-                id,
-                instruction: Instruction::variable(
-                    pointer_type_id,
-                    id,
-                    spirv::StorageClass::Function,
-                    None,
-                ),
-            }
-        };
-        block
-            .body
-            .push(Instruction::store(variable.id, container_id, None));
-
-        let element_pointer_id = self.id_gen.next();
-        let element_pointer_type_id =
-            self.get_pointer_id(ir_types, element_ty, spirv::StorageClass::Function)?;
-        block.body.push(Instruction::access_chain(
-            element_pointer_type_id,
-            element_pointer_id,
-            variable.id,
-            &[index_id],
-        ));
-        let id = self.id_gen.next();
-        block.body.push(Instruction::load(
-            result_type_id,
-            id,
-            element_pointer_id,
-            None,
-        ));
-
-        Ok((id, variable))
-    }
-
     fn is_intermediate(
         &self,
         expr_handle: Handle<crate::Expression>,
@@ -1433,20 +1373,10 @@ impl Writer {
                         ));
                         id
                     }
-                    crate::TypeInner::Array {
-                        base: ty_element, ..
-                    } => {
-                        let (id, variable) = self.promote_access_expression_to_variable(
-                            &ir_module.types,
-                            result_type_id,
-                            base_id,
-                            &fun_info[base].ty,
-                            index_id,
-                            ty_element,
-                            block,
-                        )?;
-                        function.internal_variables.push(variable);
-                        id
+                    crate::TypeInner::Array { .. } => {
+                        return Err(Error::Validation(
+                            "dynamic indexing of arrays not permitted",
+                        ));
                     }
                     ref other => {
                         log::error!(

@@ -9,9 +9,11 @@ var<storage> bar: [[access(read_write)]] Bar;
 
 [[stage(vertex)]]
 fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
+    var c: array<i32,5>;
+
     let b: f32 = bar.matrix[3u].x;
     let a: i32 = bar.data[(arrayLength(&bar.data) - 1u)];
-    let array: array<i32,5> = array<i32,5>(a, i32(b), 3, 4, 5);
-    let value: i32 = array[vi];
+    c = array<i32,5>(a, i32(b), 3, 4, 5);
+    let value: i32 = c[vi];
     return vec4<f32>(vec4<i32>(value));
 }

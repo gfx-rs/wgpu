@@ -795,9 +795,58 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Expression {
     /// Array access with a computed index.
+    ///
+    /// ## Typing rules
+    ///
+    /// The `base` operand must be some composite type: [`Vector`], [`Matrix`],
+    /// [`Array`], a [`Pointer`] to one of those, or a [`ValuePointer`] with a
+    /// `size`.
+    ///
+    /// The `index` operand must be an integer, signed or unsigned.
+    ///
+    /// Indexing a [`Vector`] or [`Array`] produces a value of its element type.
+    /// Indexing a [`Matrix`] produces a [`Vector`].
+    ///
+    /// Indexing a [`Pointer`] to an [`Array`] produces a [`Pointer`] to its
+    /// `base` type, taking on the `Pointer`'s storage class.
+    ///
+    /// Indexing a [`Pointer`] to a [`Vector`] produces a [`ValuePointer`] whose
+    /// size is `None`, taking on the [`Vector`]'s scalar kind and width and the
+    /// [`Pointer`]'s storage class.
+    ///
+    /// Indexing a [`Pointer`] to a [`Matrix`] produces a [`ValuePointer`] for a
+    /// column of the matrix: its size is the matrix's height, its `kind` is
+    /// [`Float`], and it inherits the [`Matrix`]'s width and the [`Pointer`]'s
+    /// storage class.
+    ///
+    /// ## Dynamic indexing restrictions
+    ///
+    /// To accommodate restrictions in some of the shader languages that Naga
+    /// targets, it is not permitted to subscript a matrix or array with a
+    /// dynamically computed index unless that matrix or array appears behind a
+    /// pointer. In other words, if the inner type of `base` is [`Array`] or
+    /// [`Matrix`], then `index` must be a constant. But if the type of `base`
+    /// is a [`Pointer`] to an array or matrix or a [`ValuePointer`] with a
+    /// `size`, then the index may be any expression of integer type.
+    ///
+    /// You can use the [`Expression::is_dynamic_index`] method to determine
+    /// whether a given index expression requires matrix or array base operands
+    /// to be behind a pointer.
+    ///
+    /// (It would be simpler to always require the use of `AccessIndex` when
+    /// subscripting arrays and matrices that are not behind pointers, but to
+    /// accommodate existing front ends, Naga also permits `Access`, with a
+    /// restricted `index`.)
+    ///
+    /// [`Vector`]: TypeInner::Vector
+    /// [`Matrix`]: TypeInner::Matrix
+    /// [`Array`]: TypeInner::Array
+    /// [`Pointer`]: TypeInner::Pointer
+    /// [`ValuePointer`]: TypeInner::ValuePointer
+    /// [`Float`]: ScalarKind::Float
     Access {
         base: Handle<Expression>,
-        index: Handle<Expression>, //int
+        index: Handle<Expression>,
     },
     /// Array access with a known index.
     AccessIndex {

@@ -19,6 +19,8 @@ pub enum ExpressionError {
     InvalidIndexType(Handle<crate::Expression>),
     #[error("Accessing index {1} is out of {0:?} bounds")]
     IndexOutOfBounds(Handle<crate::Expression>, u32),
+    #[error("The expression {0:?} may only be indexed by a constant")]
+    IndexMustBeConstant(Handle<crate::Expression>),
     #[error("Function argument {0:?} doesn't exist")]
     FunctionArgumentDoesntExist(u32),
     #[error("Constant {0:?} doesn't exist")]
@@ -142,17 +144,16 @@ impl super::Validator {
 
         let stages = match *expression {
             E::Access { base, index } => {
-                match *resolver.resolve(base)? {
-                    Ti::Vector { .. }
-                    | Ti::Matrix { .. }
-                    | Ti::Array { .. }
-                    | Ti::Pointer { .. }
-                    | Ti::ValuePointer { size: Some(_), .. } => {}
+                // See the documentation for `Expression::Access`.
+                let dynamic_indexing_restricted = match *resolver.resolve(base)? {
+                    Ti::Vector { .. } => false,
+                    Ti::Matrix { .. } | Ti::Array { .. } => true,
+                    Ti::Pointer { .. } | Ti::ValuePointer { size: Some(_), .. } => false,
                     ref other => {
                         log::error!("Indexing of {:?}", other);
                         return Err(ExpressionError::InvalidBaseType(base));
                     }
-                }
+                };
                 match *resolver.resolve(index)? {
                     //TODO: only allow one of these
                     Ti::Scalar {
@@ -167,6 +168,11 @@ impl super::Validator {
                         log::error!("Indexing by {:?}", other);
                         return Err(ExpressionError::InvalidIndexType(index));
                     }
+                }
+                if dynamic_indexing_restricted
+                    && function.expressions[index].is_dynamic_index(module)
+                {
+                    return Err(ExpressionError::IndexMustBeConstant(base));
                 }
                 ShaderStages::all()
             }
