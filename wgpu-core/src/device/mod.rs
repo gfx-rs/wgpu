@@ -2255,11 +2255,68 @@ impl<B: GfxBackend> Device<B> {
             targets: Vec::with_capacity(color_states.len()),
         };
         for (i, cs) in color_states.iter().enumerate() {
-            let bt = conv::map_color_target_state(cs)
-                .map_err(|error| pipeline::CreateRenderPipelineError::ColorState(i as u8, error))?;
-            blender.targets.push(bt);
+            let error = loop {
+                let format_desc = cs.format.describe();
+                self.require_features(format_desc.required_features)?;
+                if !format_desc
+                    .guaranteed_format_features
+                    .allowed_usages
+                    .contains(wgt::TextureUsage::RENDER_ATTACHMENT)
+                {
+                    break Some(pipeline::ColorStateError::FormatNotRenderable(cs.format));
+                }
+                if cs.blend.is_some() && !format_desc.guaranteed_format_features.filterable {
+                    break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
+                }
+                let hal_format = conv::map_texture_format(cs.format, self.private_features);
+                if !hal_format
+                    .surface_desc()
+                    .aspects
+                    .contains(hal::format::Aspects::COLOR)
+                {
+                    break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
+                }
+
+                match conv::map_color_target_state(cs) {
+                    Ok(bt) => blender.targets.push(bt),
+                    Err(e) => break Some(e),
+                }
+                break None;
+            };
+            if let Some(e) = error {
+                return Err(pipeline::CreateRenderPipelineError::ColorState(i as u8, e));
+            }
         }
 
+        if let Some(ds) = depth_stencil_state {
+            let error = loop {
+                let format_desc = ds.format.describe();
+                self.require_features(format_desc.required_features)?;
+                if !format_desc
+                    .guaranteed_format_features
+                    .allowed_usages
+                    .contains(wgt::TextureUsage::RENDER_ATTACHMENT)
+                {
+                    break Some(pipeline::DepthStencilStateError::FormatNotRenderable(
+                        ds.format,
+                    ));
+                }
+                let hal_format = conv::map_texture_format(ds.format, self.private_features);
+                let aspects = hal_format.surface_desc().aspects;
+                if ds.is_depth_enabled() && !aspects.contains(hal::format::Aspects::DEPTH) {
+                    break Some(pipeline::DepthStencilStateError::FormatNotDepth(ds.format));
+                }
+                if ds.stencil.is_enabled() && !aspects.contains(hal::format::Aspects::STENCIL) {
+                    break Some(pipeline::DepthStencilStateError::FormatNotStencil(
+                        ds.format,
+                    ));
+                }
+                break None;
+            };
+            if let Some(e) = error {
+                return Err(pipeline::CreateRenderPipelineError::DepthStencilState(e));
+            }
+        }
         let depth_stencil = depth_stencil_state
             .map(conv::map_depth_stencil_state)
             .unwrap_or_default();
