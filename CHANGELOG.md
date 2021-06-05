@@ -12,7 +12,7 @@ TBD:
     - conservative rasterization (native-only)
     - buffer resource indexing (native-only)
   - API adjustments to the spec:
-    - Renamed `RenderPassDepthStencilAttachmentDescriptor` to `RenderPassDepthStencilAttachment`:
+    - Renamed `RenderPassColorAttachmentDescriptor` to `RenderPassColorAttachment`:
       - Renamed the `attachment` member to `view`
     - Renamed `RenderPassDepthStencilAttachmentDescriptor` to `RenderPassDepthStencilAttachment`:
       - Renamed the `attachment` member to `view`
