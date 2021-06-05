@@ -421,5 +421,5 @@ fn convert_glsl_quad() {
     let mut entry_points = naga::FastHashMap::default();
     entry_points.insert("vert_main".to_string(), naga::ShaderStage::Vertex);
     entry_points.insert("frag_main".to_string(), naga::ShaderStage::Fragment);
-    convert_glsl("quad-glsl", entry_points, Targets::SPIRV | Targets::IR);
+    convert_glsl("quad-glsl", entry_points, Targets::WGSL);
 }
