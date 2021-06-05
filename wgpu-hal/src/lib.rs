@@ -3,6 +3,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*! This library describes the internal unsafe graphics abstraction API.
+ *  It follows WebGPU for the most part, re-using wgpu-types,
+ *  with the following deviations:
+ *  - Fully unsafe: zero overhead, zero validation.
+ *  - Compile-time backend selection via traits.
+ *  - Objects are passed by references and returned by value. No IDs.
+ *  - Mapping is persistent, with explicit synchronization.
+ *  - Resource transitions are explicit.
+ *  - All layouts are explicit.
  */
 
 #![allow(
