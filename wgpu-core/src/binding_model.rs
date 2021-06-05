@@ -3,10 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::{
-        descriptor::{DescriptorSet, DescriptorTotalCount},
-        DeviceError, MissingFeatures, SHADER_STAGE_COUNT,
-    },
+    device::{descriptor::DescriptorSet, DeviceError, MissingFeatures, SHADER_STAGE_COUNT},
     hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
     memory_init_tracker::MemoryInitTrackerAction,
@@ -390,11 +387,10 @@ pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 
 #[derive(Debug)]
 pub struct BindGroupLayout<A: hal::Api> {
-    pub(crate) raw: B::DescriptorSetLayout,
+    pub(crate) raw: A::BindGroupLayout,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) multi_ref_count: MultiRefCount,
     pub(crate) entries: BindEntryMap,
-    pub(crate) desc_count: DescriptorTotalCount,
     pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
     #[cfg(debug_assertions)]
@@ -499,7 +495,7 @@ pub struct PipelineLayoutDescriptor<'a> {
 
 #[derive(Debug)]
 pub struct PipelineLayout<A: hal::Api> {
-    pub(crate) raw: B::PipelineLayout,
+    pub(crate) raw: A::PipelineLayout,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) bind_group_layout_ids: ArrayVec<[Valid<BindGroupLayoutId>; hal::MAX_BIND_GROUPS]>,

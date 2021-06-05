@@ -7,7 +7,7 @@ mod range;
 mod texture;
 
 use crate::{
-    conv, hub,
+    hub,
     id::{self, TypedId, Valid},
     resource, Epoch, FastHashMap, Index, RefCount,
 };
@@ -124,54 +124,11 @@ pub(crate) struct PendingTransition<S: ResourceState> {
     pub usage: ops::Range<S::Usage>,
 }
 
-impl PendingTransition<BufferState> {
-    /// Produce the gfx-hal barrier corresponding to the transition.
-    pub fn into_hal<'a, A: hal::Api>(
-        self,
-        buf: &'a resource::Buffer<A>,
-    ) -> hal::memory::Barrier<'a, B> {
-        log::trace!("\tbuffer -> {:?}", self);
-        let &(ref target, _) = buf.raw.as_ref().expect("Buffer is destroyed");
-        hal::memory::Barrier::Buffer {
-            states: conv::map_buffer_state(self.usage.start)
-                ..conv::map_buffer_state(self.usage.end),
-            target,
-            range: hal::buffer::SubRange::WHOLE,
-            families: None,
-        }
-    }
-}
-
 impl From<PendingTransition<BufferState>> for UsageConflict {
     fn from(e: PendingTransition<BufferState>) -> Self {
         Self::Buffer {
             id: e.id.0,
             combined_use: e.usage.end,
-        }
-    }
-}
-
-impl PendingTransition<TextureState> {
-    /// Produce the gfx-hal barrier corresponding to the transition.
-    pub fn into_hal<'a, A: hal::Api>(
-        self,
-        tex: &'a resource::Texture<A>,
-    ) -> hal::memory::Barrier<'a, B> {
-        log::trace!("\ttexture -> {:?}", self);
-        let &(ref target, _) = tex.raw.as_ref().expect("Texture is destroyed");
-        let aspects = tex.aspects;
-        hal::memory::Barrier::Image {
-            states: conv::map_texture_state(self.usage.start, aspects)
-                ..conv::map_texture_state(self.usage.end, aspects),
-            target,
-            range: hal::image::SubresourceRange {
-                aspects,
-                level_start: self.selector.levels.start,
-                level_count: Some(self.selector.levels.end - self.selector.levels.start),
-                layer_start: self.selector.layers.start,
-                layer_count: Some(self.selector.layers.end - self.selector.layers.start),
-            },
-            families: None,
         }
     }
 }

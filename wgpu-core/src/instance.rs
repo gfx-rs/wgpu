@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    conv,
     device::{Device, DeviceDescriptor},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId, Valid},
@@ -85,21 +84,21 @@ impl Instance {
     }
 }
 
-type GfxSurface<A> = <B as hal::Api>::Surface;
+type HalSurface<A> = <A as hal::Api>::Surface;
 
 #[derive(Debug)]
 pub struct Surface {
     /*
 #[cfg(vulkan)]
-pub vulkan: Option<GfxSurface<backend::Vulkan>>,
+pub vulkan: Option<HalSurface<backend::Vulkan>>,
 #[cfg(metal)]
-pub metal: Option<GfxSurface<backend::Metal>>,
+pub metal: Option<HalSurface<backend::Metal>>,
 #[cfg(dx12)]
-pub dx12: Option<GfxSurface<backend::Dx12>>,
+pub dx12: Option<HalSurface<backend::Dx12>>,
 #[cfg(dx11)]
-pub dx11: Option<GfxSurface<backend::Dx11>>,
+pub dx11: Option<HalSurface<backend::Dx11>>,
 #[cfg(gl)]
-pub gl: Option<GfxSurface<backend::Gl>>,
+pub gl: Option<HalSurface<backend::Gl>>,
 */}
 
 impl crate::hub::Resource for Surface {
@@ -142,7 +141,7 @@ impl<A: HalApi> Adapter<A> {
             wgt::TextureFormat::Rgba8Unorm,
         ];
 
-        let formats = B::get_surface(surface).supported_formats(&self.raw.adapter);
+        let formats = A::get_surface(surface).supported_formats(&self.raw.adapter);
         preferred_formats
             .iter()
             .cloned()
@@ -487,35 +486,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             /*
             #[cfg(vulkan)]
             let adapters_vk = map((&instance.vulkan, &id_vulkan, {
-                fn surface_vulkan(surf: &Surface) -> Option<&GfxSurface<backend::Vulkan>> {
+                fn surface_vulkan(surf: &Surface) -> Option<&HalSurface<backend::Vulkan>> {
                     surf.vulkan.as_ref()
                 }
                 surface_vulkan
             }));
             #[cfg(metal)]
             let adapters_mtl = map((&instance.metal, &id_metal, {
-                fn surface_metal(surf: &Surface) -> Option<&GfxSurface<backend::Metal>> {
+                fn surface_metal(surf: &Surface) -> Option<&HalSurface<backend::Metal>> {
                     surf.metal.as_ref()
                 }
                 surface_metal
             }));
             #[cfg(dx12)]
             let adapters_dx12 = map((&instance.dx12, &id_dx12, {
-                fn surface_dx12(surf: &Surface) -> Option<&GfxSurface<backend::Dx12>> {
+                fn surface_dx12(surf: &Surface) -> Option<&HalSurface<backend::Dx12>> {
                     surf.dx12.as_ref()
                 }
                 surface_dx12
             }));
             #[cfg(dx11)]
             let adapters_dx11 = map((&instance.dx11, &id_dx11, {
-                fn surface_dx11(surf: &Surface) -> Option<&GfxSurface<backend::Dx11>> {
+                fn surface_dx11(surf: &Surface) -> Option<&HalSurface<backend::Dx11>> {
                     surf.dx11.as_ref()
                 }
                 surface_dx11
             }));
             #[cfg(gl)]
             let adapters_gl = map((&instance.gl, &id_gl, {
-                fn surface_gl(surf: &Surface) -> Option<&GfxSurface<backend::Gl>> {
+                fn surface_gl(surf: &Surface) -> Option<&HalSurface<backend::Gl>> {
                     surf.gl.as_ref()
                 }
                 surface_gl
@@ -604,7 +603,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| conv::map_adapter_info(adapter.raw.info.clone(), adapter_id.backend()))
+            .map(|adapter| adapter.raw.info.clone())
             .map_err(|_| InvalidAdapter)
     }
 

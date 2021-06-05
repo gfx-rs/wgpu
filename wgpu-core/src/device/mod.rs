@@ -569,52 +569,30 @@ impl<A: HalApi> Device<A> {
             .as_ref()
             .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
 
-        let view_dim =
-            match desc.dimension {
-                Some(dim) => {
-                    let required_tex_dim = dim.compatible_texture_dimension();
-
-                    if required_tex_dim != texture.dimension {
-                        return Err(
-                            resource::CreateTextureViewError::InvalidTextureViewDimension {
-                                view: dim,
-                                image: texture.dimension,
-                            },
-                        );
-                    }
-
-                    if let Kind::D2(_, _, depth, _) = texture.kind {
-                        match dim {
-                            TextureViewDimension::Cube if depth != 6 => {
-                                return Err(
-                                    resource::CreateTextureViewError::InvalidCubemapTextureDepth {
-                                        depth,
-                                    },
-                                )
-                            }
-                            TextureViewDimension::CubeArray if depth % 6 != 0 => return Err(
-                                resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {
-                                    depth,
-                                },
-                            ),
-                            _ => {}
-                        }
-                    }
-
-                    dim
+        let view_dim = match desc.dimension {
+            Some(dim) => {
+                if texture.dimension != dim.compatible_texture_dimension() {
+                    return Err(
+                        resource::CreateTextureViewError::InvalidTextureViewDimension {
+                            view: dim,
+                            image: texture.dimension,
+                        },
+                    );
                 }
-                None => match texture.desc.dimension {
-                    wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
-                    wgt::TextureDimension::D2
-                        if texture.desc.array_layer_count > 1
-                            && desc.range.array_layer_count.is_none() =>
-                    {
-                        wgt::TextureViewDimension::D2Array
-                    }
-                    wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
-                    wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
-                },
-            };
+                dim
+            }
+            None => match texture.desc.dimension {
+                wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
+                wgt::TextureDimension::D2
+                    if texture.desc.array_layer_count > 1
+                        && desc.range.array_layer_count.is_none() =>
+                {
+                    wgt::TextureViewDimension::D2Array
+                }
+                wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
+                wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
+            },
+        };
 
         let required_level_count =
             desc.range.base_mip_level + desc.range.mip_level_count.map_or(1, |count| count.get());
@@ -634,6 +612,24 @@ impl<A: HalApi> Device<A> {
                 total: layer_end,
             });
         };
+
+        match view_dim {
+            TextureViewDimension::Cube if required_layer_count != 6 => {
+                return Err(
+                    resource::CreateTextureViewError::InvalidCubemapTextureDepth {
+                        required_layer_count,
+                    },
+                )
+            }
+            TextureViewDimension::CubeArray if required_layer_count % 6 != 0 => {
+                return Err(
+                    resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {
+                        required_layer_count,
+                    },
+                )
+            }
+            _ => {}
+        }
 
         let full_aspect = hal::FormatAspect::from(texture.desc.format);
         let aspect = match desc.range.aspect {
@@ -845,20 +841,20 @@ impl<A: HalApi> Device<A> {
                 let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
                     .validate(&module)?;
                 let interface = validation::Interface::new(&module, &info);
-                let shader = hal::device::NagaShader { module, info };
+                let shader = hal::NagaShader { module, info };
 
                 let naga_result = if desc
                     .flags
                     .contains(wgt::ShaderFlags::EXPERIMENTAL_TRANSLATION)
                     || !cfg!(feature = "cross")
                 {
-                    match unsafe { self.raw.create_shader_module_from_naga(shader) } {
+                    let hal_desc = hal::ShaderModuleDescriptor { label: desc.label };
+                    match unsafe { self.raw.create_shader_module(&hal_desc, shader) } {
                         Ok(raw) => Ok(raw),
-                        Err((hal::device::ShaderError::CompilationFailed(msg), shader)) => {
-                            log::warn!("Shader module compilation failed: {}", msg);
+                        Err((error, shader)) => {
+                            log::warn!("Shader module compilation failed: {}", error);
                             Err(Some(shader))
                         }
-                        Err((_, shader)) => Err(Some(shader)),
                     }
                 } else {
                     Err(Some(shader))
@@ -884,10 +880,7 @@ impl<A: HalApi> Device<A> {
                 };
                 match spv {
                     Ok(data) => unsafe { self.raw.create_shader_module(&data) },
-                    Err(e) => Err(hal::device::ShaderError::CompilationFailed(format!(
-                        "{}",
-                        e
-                    ))),
+                    Err(e) => Err(hal::ShaderError::Compilation(format!("{}", e))),
                 }
             }
         };
@@ -895,11 +888,11 @@ impl<A: HalApi> Device<A> {
         Ok(pipeline::ShaderModule {
             raw: match spv_result {
                 Ok(raw) => raw,
-                Err(hal::device::ShaderError::OutOfMemory(_)) => {
-                    return Err(DeviceError::OutOfMemory.into());
+                Err(hal::ShaderError::Device(error)) => {
+                    return Err(DeviceError::from(error));
                 }
-                Err(error) => {
-                    log::error!("Shader error: {}", error);
+                Err(hal::ShaderError::Compilation(ref msg)) => {
+                    log::error!("Shader error: {}", msg);
                     return Err(pipeline::CreateShaderModuleError::Generation);
                 }
             },
@@ -911,41 +904,6 @@ impl<A: HalApi> Device<A> {
             #[cfg(debug_assertions)]
             label: desc.label.to_string_or_default(),
         })
-    }
-
-    /// Create a compatible render pass with a given key.
-    ///
-    /// This functions doesn't consider the following aspects for compatibility:
-    ///  - image layouts
-    ///  - resolve attachments
-    fn create_compatible_render_pass(
-        &self,
-        key: &RenderPassKey,
-    ) -> Result<B::RenderPass, hal::device::OutOfMemory> {
-        let mut color_ids = [(0, hal::image::Layout::ColorAttachmentOptimal); MAX_COLOR_TARGETS];
-        for (index, color) in color_ids[..key.colors.len()].iter_mut().enumerate() {
-            color.0 = index;
-        }
-        let depth_id = key.depth_stencil.as_ref().map(|_| {
-            (
-                key.colors.len(),
-                hal::image::Layout::DepthStencilAttachmentOptimal,
-            )
-        });
-
-        let subpass = hal::pass::SubpassDesc {
-            colors: &color_ids[..key.colors.len()],
-            depth_stencil: depth_id.as_ref(),
-            inputs: &[],
-            resolves: &[],
-            preserves: &[],
-        };
-        let all = key.all().map(|&(ref at, _)| at.clone());
-
-        unsafe {
-            self.raw
-                .create_render_pass(all, iter::once(subpass), iter::empty())
-        }
     }
 
     fn deduplicate_bind_group_layout(
@@ -1062,27 +1020,15 @@ impl<A: HalApi> Device<A> {
                 })?;
         }
 
-        let raw_bindings = entry_map
-            .values()
-            .map(|entry| hal::pso::DescriptorSetLayoutBinding {
-                binding: entry.binding,
-                ty: conv::map_binding_type(entry),
-                count: entry
-                    .count
-                    .map_or(1, |v| v.get() as hal::pso::DescriptorArrayIndex), //TODO: consolidate
-                stage_flags: conv::map_shader_stage_flags(entry.visibility),
-                immutable_samplers: false, // TODO
-            });
+        let hal_bindings = entry_map.values().collect::<Vec<_>>();
+        let hal_desc = hal::BindGroupLayoutDescriptor {
+            label,
+            entries: Cow::Owned(hal_bindings),
+        };
         let raw = unsafe {
-            let mut raw_layout = self
-                .raw
-                .create_descriptor_set_layout(raw_bindings, iter::empty())
-                .or(Err(DeviceError::OutOfMemory))?;
-            if let Some(label) = label {
-                self.raw
-                    .set_descriptor_set_layout_name(&mut raw_layout, label);
-            }
-            raw_layout
+            self.raw
+                .create_bind_group_layout(&hal_bindings)
+                .map_err(DeviceError::from)?
         };
 
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
@@ -1115,7 +1061,7 @@ impl<A: HalApi> Device<A> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn create_buffer_descriptor<'a>(
+    fn create_buffer_binding<'a>(
         bb: &binding_model::BufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
@@ -1124,7 +1070,7 @@ impl<A: HalApi> Device<A> {
         used: &mut TrackerSet,
         storage: &'a Storage<resource::Buffer<A>, id::BufferId>,
         limits: &wgt::Limits,
-    ) -> Result<hal::pso::Descriptor<'a, B>, binding_model::CreateBindGroupError> {
+    ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
         let (binding_ty, dynamic, min_size) = match decl.ty {
@@ -1167,7 +1113,7 @@ impl<A: HalApi> Device<A> {
             .use_extend(storage, bb.buffer_id, (), internal_use)
             .map_err(|_| Error::InvalidBuffer(bb.buffer_id))?;
         check_buffer_usage(buffer.usage, pub_usage)?;
-        let &(ref buffer_raw, _) = buffer
+        let &(ref raw_buffer, _) = buffer
             .raw
             .as_ref()
             .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
@@ -1221,11 +1167,11 @@ impl<A: HalApi> Device<A> {
             kind: MemoryInitKind::NeedsInitializedMemory,
         });
 
-        let sub_range = hal::buffer::SubRange {
+        Ok(hal::BufferBinding {
+            buffer: raw_buffer,
             offset: bb.offset,
-            size: Some(bind_size),
-        };
-        Ok(hal::pso::Descriptor::Buffer(buffer_raw, sub_range))
+            size: bb.size,
+        })
     }
 
     fn create_bind_group<G: GlobalIdentityHandlerFactory>(
@@ -1258,10 +1204,8 @@ impl<A: HalApi> Device<A> {
         let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
         let (sampler_guard, _) = hub.samplers.read(&mut token);
 
-        // `BTreeMap` has ordered bindings as keys, which allows us to coalesce
-        // the descriptor writes into a single transaction.
-        let mut write_map = BTreeMap::new();
         let mut used_buffer_ranges = Vec::new();
+        let mut hal_entries = Vec::with_capacity(desc.entries.len());
         for entry in desc.entries.iter() {
             let binding = entry.binding;
             // Find the corresponding declaration in the layout
@@ -1269,9 +1213,9 @@ impl<A: HalApi> Device<A> {
                 .entries
                 .get(&binding)
                 .ok_or(Error::MissingBindingDeclaration(binding))?;
-            let descriptors: SmallVec<[_; 1]> = match entry.resource {
+            let hal_resource = match entry.resource {
                 Br::Buffer(ref bb) => {
-                    let buffer_desc = Self::create_buffer_descriptor(
+                    let bb = Self::create_buffer_binding(
                         &bb,
                         binding,
                         &decl,
@@ -1281,7 +1225,7 @@ impl<A: HalApi> Device<A> {
                         &*buffer_guard,
                         &self.limits,
                     )?;
-                    SmallVec::from([buffer_desc])
+                    hal::BindingResource::Buffers([bb].into())
                 }
                 Br::BufferArray(ref bindings_array) => {
                     if let Some(count) = decl.count {
@@ -1297,21 +1241,21 @@ impl<A: HalApi> Device<A> {
                         return Err(Error::SingleBindingExpected);
                     }
 
-                    bindings_array
-                        .iter()
-                        .map(|bb| {
-                            Self::create_buffer_descriptor(
-                                &bb,
-                                binding,
-                                &decl,
-                                &mut used_buffer_ranges,
-                                &mut dynamic_binding_info,
-                                &mut used,
-                                &*buffer_guard,
-                                &self.limits,
-                            )
-                        })
-                        .collect::<Result<_, _>>()?
+                    let mut hal_bindings = SmallVec::with_capacity(bindings_array.len());
+                    for bb in bindings_array {
+                        let bb = Self::create_buffer_binding(
+                            bb,
+                            binding,
+                            &decl,
+                            &mut used_buffer_ranges,
+                            &mut dynamic_binding_info,
+                            &mut used,
+                            &*buffer_guard,
+                            &self.limits,
+                        )?;
+                        hal_bindings.push(bb);
+                    }
+                    hal::BindingResource::Buffers(hal_bindings)
                 }
                 Br::Sampler(id) => {
                     match decl.ty {
@@ -1341,7 +1285,7 @@ impl<A: HalApi> Device<A> {
                                 });
                             }
 
-                            SmallVec::from([hal::pso::Descriptor::Sampler(&sampler.raw)])
+                            hal::BindingResource::Sampler(&sampler.raw)
                         }
                         _ => {
                             return Err(Error::WrongBindingType {
@@ -1387,11 +1331,11 @@ impl<A: HalApi> Device<A> {
                                 (Tst::Float { .. }, Tst::Depth, ..) => {}
                                 _ => {
                                     return Err(Error::InvalidTextureSampleType {
-                                    binding,
-                                    layout_sample_type: sample_type,
-                                    view_format: view.format,
-                                })
-                            },
+                                        binding,
+                                        layout_sample_type: sample_type,
+                                        view_format: view.format,
+                                    })
+                                }
                             }
                             if view_dimension != view.dimension {
                                 return Err(Error::InvalidTextureDimension {
@@ -1450,6 +1394,7 @@ impl<A: HalApi> Device<A> {
                                 "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
                         }),
                     };
+
                     if view
                         .aspects
                         .contains(hal::FormatAspect::DEPTH | hal::FormatAspect::STENCIL)
@@ -1473,9 +1418,7 @@ impl<A: HalApi> Device<A> {
                                 )
                                 .map_err(UsageConflict::from)?;
                             check_texture_usage(texture.usage, pub_usage)?;
-                            let image_layout =
-                                conv::map_texture_state(internal_use, view.aspects).1;
-                            SmallVec::from([hal::pso::Descriptor::Image(raw, image_layout)])
+                            hal::BindingResource::TextureViews([raw].into(), internal_use)
                         }
                         resource::TextureViewInner::SwapChain { .. } => {
                             return Err(Error::SwapChainImage);
@@ -1496,87 +1439,82 @@ impl<A: HalApi> Device<A> {
                         return Err(Error::SingleBindingExpected);
                     }
 
-                    bindings_array
-                        .iter()
-                        .map(|&id| {
-                            let view = used
-                                .views
-                                .use_extend(&*texture_view_guard, id, (), ())
-                                .map_err(|_| Error::InvalidTextureView(id))?;
-                            let (pub_usage, internal_use) = match decl.ty {
-                                wgt::BindingType::Texture { .. } => {
-                                    (wgt::TextureUsage::SAMPLED, view.sampled_internal_use)
-                                }
-                                _ => {
-                                    return Err(Error::WrongBindingType {
-                                        binding,
-                                        actual: decl.ty,
-                                        expected: "SampledTextureArray",
-                                    })
-                                }
-                            };
-                            match view.inner {
-                                resource::TextureViewInner::Native {
-                                    ref raw,
-                                    ref source_id,
-                                } => {
-                                    // Careful here: the texture may no longer have its own ref count,
-                                    // if it was deleted by the user.
-                                    let texture = &texture_guard[source_id.value];
-                                    used.textures
-                                        .change_extend(
-                                            source_id.value,
-                                            &source_id.ref_count,
-                                            view.selector.clone(),
-                                            internal_use,
-                                        )
-                                        .map_err(UsageConflict::from)?;
-                                    check_texture_usage(texture.usage, pub_usage)?;
-                                    let image_layout =
-                                        conv::map_texture_state(internal_use, view.aspects).1;
-                                    Ok(hal::pso::Descriptor::Image(raw, image_layout))
-                                }
-                                resource::TextureViewInner::SwapChain { .. } => {
-                                    Err(Error::SwapChainImage)
-                                }
+                    let mut hal_bindings = SmallVec::with_capacity(bindings_array.len());
+                    let mut common_internal_use = None;
+                    for &id in bindings_array {
+                        let view = used
+                            .views
+                            .use_extend(&*texture_view_guard, id, (), ())
+                            .map_err(|_| Error::InvalidTextureView(id))?;
+                        let (pub_usage, internal_use) = match decl.ty {
+                            wgt::BindingType::Texture { .. } => {
+                                (wgt::TextureUsage::SAMPLED, view.sampled_internal_use)
                             }
-                        })
-                        .collect::<Result<_, _>>()?
+                            _ => {
+                                return Err(Error::WrongBindingType {
+                                    binding,
+                                    actual: decl.ty,
+                                    expected: "SampledTextureArray",
+                                })
+                            }
+                        };
+                        //TODO: ensure these match across the whole array
+                        common_internal_use = Some(internal_use);
+
+                        match view.inner {
+                            resource::TextureViewInner::Native {
+                                ref raw,
+                                ref source_id,
+                            } => {
+                                // Careful here: the texture may no longer have its own ref count,
+                                // if it was deleted by the user.
+                                let texture = &texture_guard[source_id.value];
+                                used.textures
+                                    .change_extend(
+                                        source_id.value,
+                                        &source_id.ref_count,
+                                        view.selector.clone(),
+                                        internal_use,
+                                    )
+                                    .map_err(UsageConflict::from)?;
+                                check_texture_usage(texture.usage, pub_usage)?;
+                                hal_bindings.push(raw);
+                            }
+                            resource::TextureViewInner::SwapChain { .. } => {
+                                Err(Error::SwapChainImage)
+                            }
+                        }
+                    }
+
+                    hal::BindingResource::TextureViews(hal_bindings, common_internal_use.unwrap())
                 }
             };
-            if write_map.insert(binding, descriptors).is_some() {
-                return Err(Error::DuplicateBinding(binding));
+
+            hal_entries.push(hal::BindGroupEntry {
+                binding,
+                resource: hal_resource,
+            });
+        }
+
+        hal_entries.sort_by_key(|entry| entry.binding);
+        for (a, b) in hal_entries.iter().zip(hal_entries.iter().skip(1)) {
+            if a.binding == b.binding {
+                return Err(Error::DuplicateBinding(a.binding));
             }
         }
 
-        let mut desc_sets =
-            self.desc_allocator
-                .lock()
-                .allocate(&self.raw, &layout.raw, &layout.desc_count, 1)?;
-        let mut desc_set = desc_sets.pop().unwrap();
-
-        // Set the descriptor set's label for easier debugging.
-        if let Some(label) = desc.label.as_ref() {
-            unsafe {
-                self.raw.set_descriptor_set_name(desc_set.raw_mut(), &label);
-            }
-        }
-
-        if let Some(start_binding) = write_map.keys().next().cloned() {
-            let descriptors = write_map.into_iter().flat_map(|(_, list)| list);
-            unsafe {
-                let write = hal::pso::DescriptorSetWrite {
-                    set: desc_set.raw_mut(),
-                    binding: start_binding,
-                    array_offset: 0,
-                    descriptors,
-                };
-                self.raw.write_descriptor_set(write);
-            }
-        }
+        let hal_desc = hal::BindGroupDescriptor {
+            name: desc.name,
+            entries: hal_entries.into(),
+        };
+        let raw = unsafe {
+            self.raw
+                .create_bind_group(&hal_desc)
+                .map_err(DeviceError::from)?
+        };
 
         Ok(binding_model::BindGroup {
-            raw: desc_set,
+            raw,
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
@@ -1657,25 +1595,20 @@ impl<A: HalApi> Device<A> {
             .validate(&self.limits)
             .map_err(Error::TooManyBindings)?;
 
-        let descriptor_set_layouts = desc
-            .bind_group_layouts
-            .iter()
-            .map(|&id| &bgl_guard.get(id).unwrap().raw);
-        let push_constants = desc
-            .push_constant_ranges
-            .iter()
-            .map(|pc| (conv::map_shader_stage_flags(pc.stages), pc.range.clone()));
+        let hal_desc = hal::PipelineLayoutDescriptor {
+            label: desc.label,
+            bind_group_layouts: desc
+                .bind_group_layouts
+                .iter()
+                .map(|&id| &bgl_guard.get(id).unwrap().raw)
+                .collect(),
+            push_constant_ranges: desc.push_constant_ranges.as_ref(),
+        };
 
         let raw = unsafe {
-            let raw_layout = self
-                .raw
-                .create_pipeline_layout(descriptor_set_layouts, push_constants)
-                .or(Err(DeviceError::OutOfMemory))?;
-            if let Some(_) = desc.label {
-                //TODO-0.6: needs gfx changes published
-                //self.raw.set_pipeline_layout_name(&mut raw_layout, label);
-            }
-            raw_layout
+            self.raw
+                .create_pipeline_layout(&hal_desc)
+                .map_err(DeviceError::from)?
         };
 
         Ok(binding_model::PipelineLayout {
@@ -1813,17 +1746,6 @@ impl<A: HalApi> Device<A> {
             return Err(pipeline::ImplicitLayoutError::ReflectionError(flag).into());
         }
 
-        let shader = hal::pso::EntryPoint::<A> {
-            entry: &entry_point_name, // TODO
-            module: &shader_module.raw,
-            specialization: hal::pso::Specialization::EMPTY,
-        };
-
-        // TODO
-        let flags = hal::pso::PipelineCreationFlags::empty();
-        // TODO
-        let parent = hal::pso::BasePipeline::None;
-
         let pipeline_layout_id = match desc.layout {
             Some(id) => id,
             None => self.derive_pipeline_layout(
@@ -1838,29 +1760,26 @@ impl<A: HalApi> Device<A> {
             .get(pipeline_layout_id)
             .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
 
-        let pipeline_desc = hal::pso::ComputePipelineDesc {
-            label: desc.label.as_ref().map(AsRef::as_ref),
-            shader,
+        let pipeline_desc = hal::ComputePipelineDescriptor {
+            label: desc.label,
             layout: &layout.raw,
-            flags,
-            parent,
+            stage: hal::ProgrammableStage {
+                entry: &entry_point_name,
+                module: &shader_module.raw,
+            },
         };
 
         let raw =
-            unsafe { self.raw.create_compute_pipeline(&pipeline_desc, None) }.map_err(|err| {
-                match err {
-                    hal::pso::CreationError::OutOfMemory(_) => {
-                        pipeline::CreateComputePipelineError::Device(DeviceError::OutOfMemory)
+            unsafe { self.raw.create_compute_pipeline(&pipeline_desc) }.map_err(
+                |err| match err {
+                    hal::PipelineError::Device(error) => {
+                        pipeline::CreateComputePipelineError::Device(error.into())
                     }
-                    hal::pso::CreationError::ShaderCreationError(_, error) => {
-                        pipeline::CreateComputePipelineError::Internal(error)
+                    hal::PipelineError::Linkage(msg) => {
+                        pipeline::CreateComputePipelineError::Internal(msg)
                     }
-                    _ => {
-                        log::error!("failed to create compute pipeline: {}", err);
-                        pipeline::CreateComputePipelineError::Device(DeviceError::OutOfMemory)
-                    }
-                }
-            })?;
+                },
+            )?;
 
         let pipeline = pipeline::ComputePipeline {
             raw,
@@ -1901,22 +1820,19 @@ impl<A: HalApi> Device<A> {
         let mut derived_group_layouts =
             ArrayVec::<[binding_model::BindEntryMap; hal::MAX_BIND_GROUPS]>::new();
 
-        let color_states = desc
+        let color_targets = desc
             .fragment
             .as_ref()
             .map_or(&[][..], |fragment| &fragment.targets);
         let depth_stencil_state = desc.depth_stencil.as_ref();
-        let rasterizer =
-            conv::map_primitive_state_to_rasterizer(&desc.primitive, depth_stencil_state);
 
         let mut io = validation::StageIo::default();
         let mut validated_stages = wgt::ShaderStage::empty();
 
-        let desc_vbs = &desc.vertex.buffers;
-        let mut vertex_strides = Vec::with_capacity(desc_vbs.len());
-        let mut vertex_buffers = Vec::with_capacity(desc_vbs.len());
-        let mut attributes = Vec::new();
-        for (i, vb_state) in desc_vbs.iter().enumerate() {
+        let mut vertex_strides = Vec::with_capacity(desc.vertex.buffers.len());
+        let mut vertex_buffers = Vec::with_capacity(desc.vertex.buffers.len());
+        let mut total_attributes = 0;
+        for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
             vertex_strides
                 .alloc()
                 .init((vb_state.array_stride, vb_state.step_mode));
@@ -1936,16 +1852,13 @@ impl<A: HalApi> Device<A> {
                     stride: vb_state.array_stride,
                 });
             }
-            vertex_buffers.alloc().init(hal::pso::VertexBufferDesc {
-                binding: i as u32,
-                stride: vb_state.array_stride as u32,
-                rate: match vb_state.step_mode {
-                    InputStepMode::Vertex => hal::pso::VertexInputRate::Vertex,
-                    InputStepMode::Instance => hal::pso::VertexInputRate::Instance(1),
-                },
+            vertex_buffers.alloc().init(hal::VertexBufferLayout {
+                array_stride: vb_state.array_stride as u32,
+                step_mode: vb_state.state_mode,
+                attributs: Cow::Borrowed(vb_state.attributes.as_ref()),
             });
-            let desc_atts = &vb_state.attributes;
-            for attribute in desc_atts.iter() {
+
+            for attribute in vb_state.attributes.iter() {
                 if attribute.offset >= 0x10000000 {
                     return Err(
                         pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
@@ -1963,19 +1876,12 @@ impl<A: HalApi> Device<A> {
                     self.require_features(wgt::Features::VERTEX_ATTRIBUTE_64BIT)?;
                 }
 
-                attributes.alloc().init(hal::pso::AttributeDesc {
-                    location: attribute.shader_location,
-                    binding: i as u32,
-                    element: hal::pso::Element {
-                        format: conv::map_vertex_format(attribute.format),
-                        offset: attribute.offset as u32,
-                    },
-                });
                 io.insert(
                     attribute.shader_location,
                     validation::InterfaceVar::vertex_attribute(attribute.format),
                 );
             }
+            total_attributes += vb_state.attributes.len();
         }
 
         if vertex_buffers.len() > self.limits.max_vertex_buffers as usize {
@@ -1984,10 +1890,10 @@ impl<A: HalApi> Device<A> {
                 limit: self.limits.max_vertex_buffers,
             });
         }
-        if attributes.len() > self.limits.max_vertex_attributes as usize {
+        if total_attributes > self.limits.max_vertex_attributes as usize {
             return Err(
                 pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
-                    given: attributes.len() as u32,
+                    given: total_attributes as u32,
                     limit: self.limits.max_vertex_attributes,
                 },
             );
@@ -2022,13 +1928,7 @@ impl<A: HalApi> Device<A> {
             );
         }
 
-        let input_assembler = conv::map_primitive_state_to_input_assembler(&desc.primitive);
-
-        let mut blender = hal::pso::BlendDesc {
-            logic_op: None,
-            targets: Vec::with_capacity(color_states.len()),
-        };
-        for (i, cs) in color_states.iter().enumerate() {
+        for (i, cs) in color_targets.iter().enumerate() {
             let error = loop {
                 let format_desc = cs.format.describe();
                 self.require_features(format_desc.required_features)?;
@@ -2042,19 +1942,10 @@ impl<A: HalApi> Device<A> {
                 if cs.blend.is_some() && !format_desc.guaranteed_format_features.filterable {
                     break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
                 }
-                let hal_format = conv::map_texture_format(cs.format, self.private_features);
-                if !hal_format
-                    .surface_desc()
-                    .aspects
-                    .contains(hal::format::Aspects::COLOR)
-                {
+                if !hal::FormatAspect::from(cs.format).contains(hal::FormatAspect::COLOR) {
                     break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
                 }
 
-                match conv::map_color_target_state(cs) {
-                    Ok(bt) => blender.targets.push(bt),
-                    Err(e) => break Some(e),
-                }
                 break None;
             };
             if let Some(e) = error {
@@ -2075,12 +1966,11 @@ impl<A: HalApi> Device<A> {
                         ds.format,
                     ));
                 }
-                let hal_format = conv::map_texture_format(ds.format, self.private_features);
-                let aspects = hal_format.surface_desc().aspects;
-                if ds.is_depth_enabled() && !aspects.contains(hal::format::Aspects::DEPTH) {
+                let aspect = hal::FormatAspect::from(ds.format);
+                if ds.is_depth_enabled() && !aspect.contains(hal::FormatAspect::DEPTH) {
                     break Some(pipeline::DepthStencilStateError::FormatNotDepth(ds.format));
                 }
-                if ds.stencil.is_enabled() && !aspects.contains(hal::format::Aspects::STENCIL) {
+                if ds.stencil.is_enabled() && !aspect.contains(hal::FormatAspect::STENCIL) {
                     break Some(pipeline::DepthStencilStateError::FormatNotStencil(
                         ds.format,
                     ));
@@ -2091,16 +1981,6 @@ impl<A: HalApi> Device<A> {
                 return Err(pipeline::CreateRenderPipelineError::DepthStencilState(e));
             }
         }
-        let depth_stencil = depth_stencil_state
-            .map(conv::map_depth_stencil_state)
-            .unwrap_or_default();
-
-        let baked_states = hal::pso::BakedStates {
-            viewport: None,
-            scissor: None,
-            blend_constants: None,
-            depth_bounds: None,
-        };
 
         if desc.layout.is_none() {
             for _ in 0..self.limits.max_bind_groups {
@@ -2115,52 +1995,10 @@ impl<A: HalApi> Device<A> {
             }
             sc as u8
         };
-        let multisampling = if samples == 1 {
-            None
-        } else {
-            Some(conv::map_multisample_state(&desc.multisample))
-        };
-
-        let rp_key = RenderPassKey {
-            colors: color_states
-                .iter()
-                .map(|state| {
-                    let at = hal::pass::Attachment {
-                        format: Some(conv::map_texture_format(
-                            state.format,
-                            self.private_features,
-                        )),
-                        samples,
-                        ops: hal::pass::AttachmentOps::PRESERVE,
-                        stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
-                        layouts: hal::image::Layout::General..hal::image::Layout::General,
-                    };
-                    (at, hal::image::Layout::ColorAttachmentOptimal)
-                })
-                .collect(),
-            // We can ignore the resolves as the vulkan specs says:
-            // As an additional special case, if two render passes have a single subpass,
-            // they are compatible even if they have different resolve attachment references
-            // or depth/stencil resolve modes but satisfy the other compatibility conditions.
-            resolves: ArrayVec::new(),
-            depth_stencil: depth_stencil_state.map(|state| {
-                let at = hal::pass::Attachment {
-                    format: Some(conv::map_texture_format(
-                        state.format,
-                        self.private_features,
-                    )),
-                    samples,
-                    ops: hal::pass::AttachmentOps::PRESERVE,
-                    stencil_ops: hal::pass::AttachmentOps::PRESERVE,
-                    layouts: hal::image::Layout::General..hal::image::Layout::General,
-                };
-                (at, hal::image::Layout::DepthStencilAttachmentOptimal)
-            }),
-        };
 
         let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
-        let vertex = {
+        let vertex_stage = {
             let stage = &desc.vertex.stage;
             let flag = wgt::ShaderStage::VERTEX;
 
@@ -2200,14 +2038,13 @@ impl<A: HalApi> Device<A> {
                 validated_stages |= flag;
             }
 
-            hal::pso::EntryPoint::<A> {
-                entry: &stage.entry_point,
+            hal::ProgrammableStage {
                 module: &shader_module.raw,
-                specialization: hal::pso::Specialization::EMPTY,
+                entry_point: &stage.entry_point,
             }
         };
 
-        let fragment = match desc.fragment {
+        let fragment_stage = match desc.fragment {
             Some(ref fragment) => {
                 let entry_point_name = &fragment.stage.entry_point;
                 let flag = wgt::ShaderStage::FRAGMENT;
@@ -2248,17 +2085,16 @@ impl<A: HalApi> Device<A> {
                     }
                 }
 
-                Some(hal::pso::EntryPoint::<A> {
-                    entry: &entry_point_name,
+                Some(hal::ProgrammableStage {
                     module: &shader_module.raw,
-                    specialization: hal::pso::Specialization::EMPTY,
+                    entry_point: &entry_point_name,
                 })
             }
             None => None,
         };
 
         if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
-            for (i, state) in color_states.iter().enumerate() {
+            for (i, state) in color_targets.iter().enumerate() {
                 match io.get(&(i as wgt::ShaderLocation)) {
                     Some(ref output) => {
                         validation::check_texture_format(state.format, &output.ty).map_err(
@@ -2292,20 +2128,6 @@ impl<A: HalApi> Device<A> {
             return Err(pipeline::ImplicitLayoutError::ReflectionError(last_stage).into());
         }
 
-        let primitive_assembler = hal::pso::PrimitiveAssemblerDesc::Vertex {
-            buffers: &vertex_buffers,
-            attributes: &attributes,
-            input_assembler,
-            vertex,
-            tessellation: None,
-            geometry: None,
-        };
-
-        // TODO
-        let flags = hal::pso::PipelineCreationFlags::empty();
-        // TODO
-        let parent = hal::pso::BasePipeline::None;
-
         let pipeline_layout_id = match desc.layout {
             Some(id) => id,
             None => self.derive_pipeline_layout(
@@ -2320,55 +2142,31 @@ impl<A: HalApi> Device<A> {
             .get(pipeline_layout_id)
             .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
 
-        let mut rp_lock = self.render_passes.lock();
-        let pipeline_desc = hal::pso::GraphicsPipelineDesc {
-            label: desc.label.as_ref().map(AsRef::as_ref),
-            primitive_assembler,
-            rasterizer,
-            fragment,
-            blender,
-            depth_stencil,
-            multisampling,
-            baked_states,
+        let pipeline_desc = hal::RenderPipelineDescriptor {
+            label: desc.label,
             layout: &layout.raw,
-            subpass: hal::pass::Subpass {
-                index: 0,
-                main_pass: match rp_lock.render_passes.entry(rp_key) {
-                    Entry::Occupied(e) => e.into_mut(),
-                    Entry::Vacant(e) => {
-                        let pass = self
-                            .create_compatible_render_pass(e.key())
-                            .or(Err(DeviceError::OutOfMemory))?;
-                        e.insert(pass)
+            vertex_buffers: vertex_buffers.into(),
+            vertex_stage,
+            fragment_stage,
+            color_targets,
+            depth_stencil: desc.depth_stencil,
+            multisample: desc.multisample,
+        };
+        let raw =
+            unsafe { self.raw.create_render_pipeline(&pipeline_desc) }.map_err(
+                |err| match err {
+                    hal::PipelineError::Device(error) => {
+                        pipeline::CreateRenderPipelineError::Device(error.into())
+                    }
+                    hal::PipelineError::Linkage(stage, msg) => {
+                        pipeline::CreateRenderPipelineError::Internal { stage, error: msg }
                     }
                 },
-            },
-            flags,
-            parent,
-        };
-        // TODO: cache
-        let raw =
-            unsafe { self.raw.create_graphics_pipeline(&pipeline_desc, None) }.map_err(|err| {
-                match err {
-                    hal::pso::CreationError::OutOfMemory(_) => {
-                        pipeline::CreateRenderPipelineError::Device(DeviceError::OutOfMemory)
-                    }
-                    hal::pso::CreationError::ShaderCreationError(stage, error) => {
-                        pipeline::CreateRenderPipelineError::Internal {
-                            stage: conv::map_hal_flags_to_shader_stage(stage),
-                            error,
-                        }
-                    }
-                    _ => {
-                        log::error!("failed to create graphics pipeline: {}", err);
-                        pipeline::CreateRenderPipelineError::Device(DeviceError::OutOfMemory)
-                    }
-                }
-            })?;
+            )?;
 
         let pass_context = RenderPassContext {
             attachments: AttachmentData {
-                colors: color_states.iter().map(|state| state.format).collect(),
+                colors: color_targets.iter().map(|state| state.format).collect(),
                 resolves: ArrayVec::new(),
                 depth_stencil: depth_stencil_state.as_ref().map(|state| state.format),
             },
@@ -2376,7 +2174,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let mut flags = pipeline::PipelineFlags::empty();
-        for state in color_states.iter() {
+        for state in color_targets.iter() {
             if let Some(ref bs) = state.blend {
                 if bs.color.uses_constant() | bs.alpha.uses_constant() {
                     flags |= pipeline::PipelineFlags::BLEND_CONSTANT;
@@ -2544,35 +2342,6 @@ pub enum DeviceError {
     OutOfMemory,
 }
 
-impl From<hal::device::WaitError> for DeviceError {
-    fn from(err: hal::device::WaitError) -> Self {
-        match err {
-            hal::device::WaitError::OutOfMemory(_) => Self::OutOfMemory,
-            hal::device::WaitError::DeviceLost(_) => Self::Lost,
-        }
-    }
-}
-
-impl From<gpu_alloc::MapError> for DeviceError {
-    fn from(err: gpu_alloc::MapError) -> Self {
-        match err {
-            gpu_alloc::MapError::OutOfDeviceMemory | gpu_alloc::MapError::OutOfHostMemory => {
-                DeviceError::OutOfMemory
-            }
-            _ => panic!("failed to map buffer: {}", err),
-        }
-    }
-}
-
-impl DeviceError {
-    fn from_bind(err: hal::device::BindError) -> Self {
-        match err {
-            hal::device::BindError::OutOfMemory(_) => Self::OutOfMemory,
-            _ => panic!("failed to bind memory: {}", err),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Error)]
 #[error("Features {0:?} are required but not enabled on the device")]
 pub struct MissingFeatures(pub wgt::Features);
@@ -2715,7 +2484,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
                 buffer.map_state = resource::BufferMapState::Active {
                     ptr,
-                    sub_range: hal::buffer::SubRange::WHOLE,
+                    range: 0..map_size,
                     host: HostMap::Write,
                 };
                 resource::BufferUse::MAP_WRITE
@@ -4271,7 +4040,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (caps, formats) = {
-                let surface = B::get_surface_mut(surface);
+                let surface = A::get_surface_mut(surface);
                 let adapter = &adapter_guard[device.adapter_id.value];
                 let queue_family = &adapter.raw.queue_families[0];
                 if !surface.supports_queue_family(queue_family) {
@@ -4303,14 +4072,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             let framebuffer_attachment = config.framebuffer_attachment();
 
-            match unsafe { B::get_surface_mut(surface).configure_swapchain(&device.raw, config) } {
-                Ok(()) => (),
-                Err(hal::window::SwapchainError::OutOfMemory(_)) => {
-                    break DeviceError::OutOfMemory.into()
-                }
-                Err(hal::window::SwapchainError::DeviceLost(_)) => break DeviceError::Lost.into(),
-                Err(err) => panic!("failed to configure swap chain on creation: {}", err),
-            }
+            unsafe { A::get_surface_mut(surface).configure_swapchain(&device.raw, config) }
+                .map_err(DeviceError::from)?;
 
             if let Some(sc) = swap_chain_guard.try_remove(sc_id) {
                 if sc.acquired_view_id.is_some() {

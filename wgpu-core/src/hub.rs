@@ -555,7 +555,7 @@ pub struct Hub<A: hal::Api, F: GlobalIdentityHandlerFactory> {
     pub samplers: Registry<Sampler<A>, SamplerId, F>,
 }
 
-impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<B, F> {
+impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     fn new(factory: &F) -> Self {
         Self {
             adapters: Registry::new(A::VARIANT, factory),
@@ -578,7 +578,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<B, F> {
     }
 }
 
-impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<B, F> {
+impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     //TODO: instead of having a hacky `with_adapters` parameter,
     // we should have `clear_device(device_id)` that specifically destroys
     // everything related to a logical device.
@@ -696,7 +696,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<B, F> {
                 //TODO: hold the surface alive by the swapchain
                 if surface_guard.contains(suf_id) {
                     let surface = surface_guard.get_mut(suf_id).unwrap();
-                    let suf = B::get_surface_mut(surface);
+                    let suf = A::get_surface_mut(surface);
                     unsafe {
                         suf.unconfigure_swapchain(&device.raw);
                     }

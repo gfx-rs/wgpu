@@ -15,4 +15,9 @@ license = "MPL-2.0"
 
 [dependencies]
 bitflags = "1.0"
+smallvec = "1"
 wgt = { package = "wgpu-types", path = "../wgpu-types" }
+
+[dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-25"

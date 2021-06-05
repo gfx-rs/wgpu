@@ -12,11 +12,10 @@ use crate::{
 use std::borrow::Cow;
 use thiserror::Error;
 
-#[derive(Debug)]
 pub enum ShaderModuleSource<'a> {
     SpirV(Cow<'a, [u32]>),
     Wgsl(Cow<'a, str>),
-    Naga(naga::Module),
+    Naga(&'a naga::Module),
 }
 
 #[derive(Clone, Debug)]
@@ -30,7 +29,7 @@ pub struct ShaderModuleDescriptor<'a> {
 
 #[derive(Debug)]
 pub struct ShaderModule<A: hal::Api> {
-    pub(crate) raw: B::ShaderModule,
+    pub(crate) raw: A::ShaderModule,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) interface: Option<validation::Interface>,
     #[cfg(debug_assertions)]
@@ -126,7 +125,7 @@ pub enum CreateComputePipelineError {
 
 #[derive(Debug)]
 pub struct ComputePipeline<A: hal::Api> {
-    pub(crate) raw: B::ComputePipeline,
+    pub(crate) raw: A::ComputePipeline,
     pub(crate) layout_id: Stored<PipelineLayoutId>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
@@ -290,7 +289,7 @@ bitflags::bitflags! {
 
 #[derive(Debug)]
 pub struct RenderPipeline<A: hal::Api> {
-    pub(crate) raw: B::GraphicsPipeline,
+    pub(crate) raw: A::RenderPipeline,
     pub(crate) layout_id: Stored<PipelineLayoutId>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) pass_context: RenderPassContext,
