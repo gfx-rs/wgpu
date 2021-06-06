@@ -18,7 +18,7 @@ use crate::{
     Label, DOWNLEVEL_ERROR_WARNING_MESSAGE,
 };
 
-use hal::command::CommandBuffer as _;
+use hal::CommandBuffer as _;
 use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, ShaderStage};
 
@@ -216,7 +216,7 @@ impl State {
 
     fn flush_states<A: HalApi>(
         &mut self,
-        raw_cmd_buf: &mut B::CommandBuffer,
+        raw_cmd_buf: &mut A::CommandBuffer,
         base_trackers: &mut TrackerSet,
         bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,

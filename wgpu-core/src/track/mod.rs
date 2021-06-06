@@ -124,11 +124,42 @@ pub(crate) struct PendingTransition<S: ResourceState> {
     pub usage: ops::Range<S::Usage>,
 }
 
+impl PendingTransition<BufferState> {
+    /// Produce the hal barrier corresponding to the transition.
+    pub fn into_hal<'a, A: hal::Api>(
+        self,
+        buf: &'a resource::Buffer<A>,
+    ) -> hal::BufferBarrier<'a, A> {
+        log::trace!("\tbuffer -> {:?}", self);
+        let &(ref buffer, _) = buf.raw.as_ref().expect("Buffer is destroyed");
+        hal::BufferBarrier {
+            buffer,
+            usage: self.usage,
+        }
+    }
+}
+
 impl From<PendingTransition<BufferState>> for UsageConflict {
     fn from(e: PendingTransition<BufferState>) -> Self {
         Self::Buffer {
             id: e.id.0,
             combined_use: e.usage.end,
+        }
+    }
+}
+
+impl PendingTransition<TextureState> {
+    /// Produce the hal barrier corresponding to the transition.
+    pub fn into_hal<'a, A: hal::Api>(
+        self,
+        tex: &'a resource::Texture<A>,
+    ) -> hal::TextureBarrier<'a, A> {
+        log::trace!("\ttexture -> {:?}", self);
+        let &(ref texture, _) = tex.raw.as_ref().expect("Texture is destroyed");
+        hal::TextureBarrier {
+            texture,
+            subresource: self.selector,
+            usage: self.usage,
         }
     }
 }
@@ -514,14 +545,14 @@ pub enum UsageConflict {
     )]
     Buffer {
         id: id::BufferId,
-        combined_use: resource::BufferUse,
+        combined_use: hal::BufferUse,
     },
     #[error("Attempted to use texture {id:?} mips {mip_levels:?} layers {array_layers:?} as a combination of {combined_use:?} within a usage scope.")]
     Texture {
         id: id::TextureId,
         mip_levels: ops::Range<u32>,
         array_layers: ops::Range<u32>,
-        combined_use: resource::TextureUse,
+        combined_use: hal::TextureUse,
     },
 }
 

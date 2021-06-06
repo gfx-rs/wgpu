@@ -7,38 +7,37 @@ use crate::device::trace::Action;
 use crate::{
     command::{
         texture_copy_view_to_hal, validate_linear_texture_data, validate_texture_copy_range,
-        CommandAllocator, CommandBuffer, CopySide, ImageCopyTexture, TransferError, BITS_PER_BYTE,
+        CommandBuffer, CopySide, ImageCopyTexture, TransferError, BITS_PER_BYTE,
     },
     conv,
-    device::{alloc, DeviceError, WaitIdleError},
+    device::{DeviceError, WaitIdleError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
-    resource::{Buffer, BufferAccessError, BufferMapState, BufferUse, TextureUse},
+    resource::{Buffer, BufferAccessError, BufferMapState},
     FastHashMap, FastHashSet,
 };
 
-use hal::{command::CommandBuffer as _, device::Device as _, queue::Queue as _};
+use hal::{CommandBuffer as _, Device as _, Queue as _};
 use smallvec::SmallVec;
 use std::{iter, ops::Range, ptr};
 use thiserror::Error;
 
 struct StagingData<A: hal::Api> {
-    buffer: B::Buffer,
-    memory: alloc::MemoryBlock<A>,
-    cmdbuf: B::CommandBuffer,
+    buffer: A::Buffer,
+    cmdbuf: A::CommandBuffer,
 }
 
 #[derive(Debug)]
 pub enum TempResource<A: hal::Api> {
-    Buffer(B::Buffer),
-    Image(B::Image),
+    Buffer(A::Buffer),
+    Texture(A::Texture),
 }
 
 #[derive(Debug)]
 pub(crate) struct PendingWrites<A: hal::Api> {
-    pub command_buffer: Option<B::CommandBuffer>,
-    pub temp_resources: Vec<(TempResource<A>, alloc::MemoryBlock<A>)>,
+    pub command_buffer: Option<A::CommandBuffer>,
+    pub temp_resources: Vec<TempResource<A>>,
     pub dst_buffers: FastHashSet<id::BufferId>,
     pub dst_textures: FastHashSet<id::TextureId>,
 }
@@ -53,40 +52,35 @@ impl<A: hal::Api> PendingWrites<A> {
         }
     }
 
-    pub fn dispose(
-        self,
-        device: &B::Device,
-        cmd_allocator: &CommandAllocator<A>,
-        mem_allocator: &mut alloc::MemoryAllocator<A>,
-    ) {
+    pub fn dispose(self, device: &A::Device) {
         if let Some(raw) = self.command_buffer {
-            cmd_allocator.discard_internal(raw);
+            unsafe {
+                device.destroy_command_buffer(raw);
+            }
         }
-        for (resource, memory) in self.temp_resources {
-            mem_allocator.free(device, memory);
+        for resource in self.temp_resources {
             match resource {
                 TempResource::Buffer(buffer) => unsafe {
                     device.destroy_buffer(buffer);
                 },
-                TempResource::Image(image) => unsafe {
-                    device.destroy_image(image);
+                TempResource::Texture(texture) => unsafe {
+                    device.destroy_image(texture);
                 },
             }
         }
     }
 
-    pub fn consume_temp(&mut self, resource: TempResource<A>, memory: alloc::MemoryBlock<A>) {
-        self.temp_resources.push((resource, memory));
+    pub fn consume_temp(&mut self, resource: TempResource<A>) {
+        self.temp_resources.push(resource);
     }
 
     fn consume(&mut self, stage: StagingData<A>) {
-        self.temp_resources
-            .push((TempResource::Buffer(stage.buffer), stage.memory));
+        self.temp_resources.push(TempResource::Buffer(stage.buffer));
         self.command_buffer = Some(stage.cmdbuf);
     }
 
     #[must_use]
-    fn finish(&mut self) -> Option<B::CommandBuffer> {
+    fn finish(&mut self) -> Option<A::CommandBuffer> {
         self.dst_buffers.clear();
         self.dst_textures.clear();
         self.command_buffer.take().map(|mut cmd_buf| unsafe {
@@ -95,13 +89,19 @@ impl<A: hal::Api> PendingWrites<A> {
         })
     }
 
-    fn borrow_cmd_buf(&mut self, cmd_allocator: &CommandAllocator<A>) -> &mut B::CommandBuffer {
+    fn create_cmd_buf(device: &A::Device) -> A::CommandBuffer {
+        unsafe {
+            let mut cmd_buf = device.create_command_buffer(&hal::CommandBufferDescriptor {
+                label: Some("_PendingWrites"),
+            });
+            cmd_buf.begin();
+            cmd_buf
+        }
+    }
+
+    fn borrow_cmd_buf(&mut self, device: &A::Device) -> &mut A::CommandBuffer {
         if self.command_buffer.is_none() {
-            let mut cmdbuf = cmd_allocator.allocate_internal();
-            unsafe {
-                cmdbuf.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
-            }
-            self.command_buffer = Some(cmdbuf);
+            self.command_buffer = Some(Self::create_cmd_buf(device));
         }
         self.command_buffer.as_mut().unwrap()
     }
@@ -141,52 +141,25 @@ impl RequiredBufferInits {
 }
 
 impl<A: hal::Api> super::Device<A> {
-    pub fn borrow_pending_writes(&mut self) -> &mut B::CommandBuffer {
-        self.pending_writes.borrow_cmd_buf(&self.cmd_allocator)
+    pub fn borrow_pending_writes(&mut self) -> &mut A::CommandBuffer {
+        self.pending_writes.borrow_cmd_buf(&self.raw)
     }
 
     fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<A>, DeviceError> {
         profiling::scope!("prepare_stage");
-        let mut buffer = unsafe {
-            self.raw
-                .create_buffer(
-                    size,
-                    hal::buffer::Usage::TRANSFER_SRC,
-                    hal::memory::SparseFlags::empty(),
-                )
-                .map_err(|err| match err {
-                    hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    _ => panic!("failed to create staging buffer: {}", err),
-                })?
+        let stage_desc = hal::BufferDescriptor {
+            label: Some("_Staging"),
+            size,
+            usage: hal::BufferUse::MAP_WRITE | hal::BufferUse::COPY_SRC,
+            memory_flags: hal::MemoryFlag::TRANSIENT,
         };
-        //TODO: do we need to transition into HOST_WRITE access first?
-        let requirements = unsafe {
-            self.raw.set_buffer_name(&mut buffer, "<write_buffer_temp>");
-            self.raw.get_buffer_requirements(&buffer)
-        };
-
-        let block = self.mem_allocator.lock().allocate(
-            &self.raw,
-            requirements,
-            gpu_alloc::UsageFlags::UPLOAD | gpu_alloc::UsageFlags::TRANSIENT,
-        )?;
-        block.bind_buffer(&self.raw, &mut buffer)?;
+        let mut buffer = unsafe { self.raw.create_buffer(&stage_desc)? };
 
         let cmdbuf = match self.pending_writes.command_buffer.take() {
             Some(cmdbuf) => cmdbuf,
-            None => {
-                let mut cmdbuf = self.cmd_allocator.allocate_internal();
-                unsafe {
-                    cmdbuf.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
-                }
-                cmdbuf
-            }
+            None => PendingWrites::create_cmd_buf(&self.raw),
         };
-        Ok(StagingData {
-            buffer,
-            memory: block,
-            cmdbuf,
-        })
+        Ok(StagingData { buffer, cmdbuf })
     }
 
     fn initialize_buffer_memory(
@@ -217,7 +190,7 @@ impl<A: hal::Api> super::Device<A> {
             let transition = trackers.buffers.change_replace_tracked(
                 id::Valid(buffer_id),
                 (),
-                BufferUse::COPY_DST,
+                hal::BufferUse::COPY_DST,
             );
             let buffer = buffer_guard.get(buffer_id).unwrap();
             let &(ref buffer_raw, _) = buffer
@@ -225,27 +198,15 @@ impl<A: hal::Api> super::Device<A> {
                 .as_ref()
                 .ok_or(QueueSubmitError::DestroyedBuffer(buffer_id))?;
             unsafe {
-                cmd_buf.pipeline_barrier(
-                    super::all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
-                    hal::memory::Dependencies::empty(),
-                    transition.map(|pending| pending.into_hal(buffer)),
-                );
+                cmd_buf.transition_buffers(transition.map(|pending| pending.into_hal(buffer)));
             }
-            for range in ranges {
-                let size = range.end - range.start;
 
+            for range in ranges {
                 assert!(range.start % 4 == 0, "Buffer {:?} has an uninitialized range with a start not aligned to 4 (start was {})", buffer, range.start);
-                assert!(size % 4 == 0, "Buffer {:?} has an uninitialized range with a size not aligned to 4 (size was {})", buffer, size);
+                assert!(range.end % 4 == 0, "Buffer {:?} has an uninitialized range with an end not aligned to 4 (end was {})", buffer, range.end);
 
                 unsafe {
-                    cmd_buf.fill_buffer(
-                        buffer_raw,
-                        hal::buffer::SubRange {
-                            offset: range.start,
-                            size: Some(size),
-                        },
-                        0,
-                    );
+                    cmd_buf.fill_buffer(buffer_raw, range, 0);
                 }
             }
         }
@@ -326,7 +287,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers
             .buffers
-            .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST)
+            .use_replace(&*buffer_guard, buffer_id, (), hal::BufferUse::COPY_DST)
             .map_err(TransferError::InvalidBuffer)?;
         let &(ref dst_raw, _) = dst
             .raw

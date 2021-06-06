@@ -6,8 +6,8 @@ use super::{range::RangedStates, PendingTransition, ResourceState, Unit};
 use crate::{
     device::MAX_MIP_LEVELS,
     id::{TextureId, Valid},
-    resource::TextureUse,
 };
+use hal::TextureUse;
 
 use arrayvec::ArrayVec;
 

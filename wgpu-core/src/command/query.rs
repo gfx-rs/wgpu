@@ -8,7 +8,6 @@ use hal::command::CommandBuffer as _;
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::{CommandBuffer, CommandEncoderError},
-    device::all_buffer_stages,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{self, Id, TypedId},
     resource::{BufferUse, QuerySet},

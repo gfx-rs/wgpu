@@ -10,7 +10,7 @@
  *  - Objects are passed by references and returned by value. No IDs.
  *  - Mapping is persistent, with explicit synchronization.
  *  - Resource transitions are explicit.
- *  - All layouts are explicit.
+ *  - All layouts are explicit. Binding model has compatibility.
  */
 
 #![allow(
@@ -107,9 +107,9 @@ pub trait Api: Clone + Sized {
     type RenderPass: RenderPass<Self>;
     type ComputePass: ComputePass<Self>;
 
-    type Buffer: fmt::Debug + Send + Sync;
+    type Buffer: fmt::Debug + Send + Sync + 'static;
     type QuerySet: fmt::Debug + Send + Sync;
-    type Texture: fmt::Debug + Send + Sync;
+    type Texture: fmt::Debug + Send + Sync + 'static;
     type SurfaceTexture: fmt::Debug + Send + Sync + Borrow<Self::Texture>;
     type TextureView: fmt::Debug + Send + Sync;
     type Sampler: fmt::Debug + Send + Sync;
@@ -158,10 +158,8 @@ pub trait Adapter<A: Api> {
 }
 
 pub trait Device<A: Api> {
-    unsafe fn create_buffer(
-        &self,
-        desc: &wgt::BufferDescriptor<Label>,
-    ) -> Result<A::Buffer, DeviceError>;
+    ///Note: `desc.mapped_at_creation` flag is ignored.
+    unsafe fn create_buffer(&self, desc: &BufferDescriptor) -> Result<A::Buffer, DeviceError>;
     unsafe fn destroy_buffer(&self, buffer: A::Buffer);
     unsafe fn map_buffer(
         &self,
@@ -180,10 +178,7 @@ pub trait Device<A: Api> {
         ranges: I,
     );
 
-    unsafe fn create_texture(
-        &self,
-        desc: &wgt::TextureDescriptor<Label>,
-    ) -> Result<A::Texture, DeviceError>;
+    unsafe fn create_texture(&self, desc: &TextureDescriptor) -> Result<A::Texture, DeviceError>;
     unsafe fn destroy_texture(&self, texture: A::Texture);
     unsafe fn create_texture_view(
         &self,
@@ -244,14 +239,117 @@ pub trait CommandBuffer<A: Api> {
     unsafe fn begin(&mut self);
     unsafe fn end(&mut self);
 
+    unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
+    where
+        T: Iterator<Item = BufferBarrier<'a, A>>;
+
+    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
+    where
+        T: Iterator<Item = TextureBarrier<'a, A>>;
+
+    unsafe fn fill_buffer(&mut self, buffer: &A::Buffer, range: MemoryRange, value: u8);
+
+    unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &A::Buffer, dst: &A::Buffer, regions: T)
+    where
+        T: Iterator<Item = BufferCopy>;
+
+    /// Note: `dst` current usage has to be `TextureUse::COPY_DST`.
+    unsafe fn copy_texture_to_texture<T>(
+        &mut self,
+        src: &A::Texture,
+        src_usage: TextureUse,
+        dst: &A::Texture,
+        regions: T,
+    ) where
+        T: Iterator<Item = TextureCopy>;
+
+    /// Note: `dst` current usage has to be `TextureUse::COPY_DST`.
+    unsafe fn copy_buffer_to_texture<T>(&mut self, src: &A::Buffer, dst: &A::Texture, regions: T)
+    where
+        T: Iterator<Item = BufferTextureCopy>;
+
+    unsafe fn copy_texture_to_buffer<T>(
+        &mut self,
+        src: &A::Texture,
+        src_usage: TextureUse,
+        dst: &A::Buffer,
+        regions: T,
+    ) where
+        T: Iterator<Item = BufferTextureCopy>;
+
     unsafe fn begin_render_pass(&mut self) -> A::RenderPass;
     unsafe fn end_render_pass(&mut self, pass: A::RenderPass);
     unsafe fn begin_compute_pass(&mut self) -> A::ComputePass;
     unsafe fn end_compute_pass(&mut self, pass: A::ComputePass);
 }
 
-pub trait RenderPass<A: Api> {}
-pub trait ComputePass<A: Api> {}
+pub trait RenderPass<A: Api> {
+    unsafe fn set_pipeline(&mut self, pipeline: &A::RenderPipeline);
+
+    /// Sets the bind group at `index` to `group`, assuming the layout
+    /// of all the preceeding groups to be taken from `layout`.
+    unsafe fn set_bind_group(
+        &mut self,
+        layout: &A::PipelineLayout,
+        index: u32,
+        group: &A::BindGroup,
+    );
+
+    unsafe fn set_index_buffer<'a>(
+        &mut self,
+        binding: BufferBinding<'a, A>,
+        format: wgt::IndexFormat,
+    );
+    unsafe fn set_vertex_buffer<'a>(&mut self, index: u32, binding: BufferBinding<'a, A>);
+    unsafe fn set_viewport(&mut self, rect: &Rect, depth_range: Range<f32>);
+    unsafe fn set_scissor_rect(&mut self, rect: &Rect);
+    unsafe fn set_stencil_reference(&mut self, value: u32);
+    unsafe fn set_blend_constants(&mut self, color: wgt::Color);
+
+    unsafe fn draw(
+        &mut self,
+        start_vertex: u32,
+        vertex_count: u32,
+        start_instance: u32,
+        instance_count: u32,
+    );
+    unsafe fn draw_indexed(
+        &mut self,
+        start_index: u32,
+        index_count: u32,
+        base_vertex: i32,
+        start_instance: u32,
+        instance_count: u32,
+    );
+    unsafe fn draw_indirect(
+        &mut self,
+        buffer: &A::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    );
+    unsafe fn draw_indexed_indirect(
+        &mut self,
+        buffer: &A::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    );
+}
+
+pub trait ComputePass<A: Api> {
+    unsafe fn set_pipeline(&mut self, pipeline: &A::ComputePipeline);
+
+    /// Sets the bind group at `index` to `group`, assuming the layout
+    /// of all the preceeding groups to be taken from `layout`.
+    unsafe fn set_bind_group(
+        &mut self,
+        layout: &A::PipelineLayout,
+        index: u32,
+        group: &A::BindGroup,
+    );
+
+    unsafe fn dispatch(&mut self, count: [u32; 3]);
+    unsafe fn dispatch_indirect(&mut self, buffer: &A::Buffer, offset: wgt::BufferAddress);
+}
 
 bitflags!(
     /// Texture format capability flags.
@@ -302,6 +400,12 @@ impl From<wgt::TextureFormat> for FormatAspect {
         }
     }
 }
+
+bitflags!(
+    pub struct MemoryFlag: u32 {
+        const TRANSIENT = 1;
+    }
+);
 
 bitflags::bitflags! {
     /// Similar to `wgt::BufferUsage` but for internal use.
@@ -421,6 +525,26 @@ pub struct SurfaceCapabilities {
 pub struct OpenDevice<A: Api> {
     pub device: A::Device,
     pub queue: A::Queue,
+}
+
+#[derive(Clone, Debug)]
+pub struct BufferDescriptor<'a> {
+    pub label: Label<'a>,
+    pub size: wgt::BufferAddress,
+    pub usage: BufferUse,
+    pub memory_flags: MemoryFlag,
+}
+
+#[derive(Clone, Debug)]
+pub struct TextureDescriptor<'a> {
+    pub label: Label<'a>,
+    pub size: wgt::Extent3d,
+    pub mip_level_count: u32,
+    pub sample_count: u32,
+    pub dimension: wgt::TextureDimension,
+    pub format: wgt::TextureFormat,
+    pub usage: TextureUse,
+    pub memory_flags: MemoryFlag,
 }
 
 #[derive(Clone, Debug)]
@@ -636,6 +760,51 @@ pub struct SurfaceConfiguration {
     pub extent: wgt::Extent3d,
     /// Allowed usage of surface textures,
     pub usage: TextureUse,
+}
+
+#[derive(Debug, Clone)]
+pub struct Rect {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct BufferBarrier<'a, A: Api> {
+    pub buffer: &'a A::Buffer,
+    pub usage: Range<BufferUse>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TextureBarrier<'a, A: Api> {
+    pub texture: &'a A::Texture,
+    pub subresource: wgt::ImageSubresourceRange,
+    pub usage: Range<TextureUse>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BufferCopy {
+    pub src: wgt::BufferAddress,
+    pub dst: wgt::BufferAddress,
+    pub size: wgt::BufferSize,
+}
+
+#[derive(Clone, Debug)]
+pub struct TextureCopy {
+    pub src_subresource: wgt::ImageSubresourceRange,
+    pub src_origin: wgt::Origin3d,
+    pub dst_subresource: wgt::ImageSubresourceRange,
+    pub dst_origin: wgt::Origin3d,
+    pub size: wgt::Extent3d,
+}
+
+#[derive(Clone, Debug)]
+pub struct BufferTextureCopy {
+    pub buffer_layout: wgt::ImageDataLayout,
+    pub texture_mip_level: u32,
+    pub texture_origin: wgt::Origin3d,
+    pub size: wgt::Extent3d,
 }
 
 #[test]

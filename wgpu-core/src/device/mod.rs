@@ -448,13 +448,13 @@ impl<A: HalApi> Device<A> {
             return Err(resource::CreateBufferError::EmptyUsage);
         }
 
-        let buffer = unsafe {
-            self.raw.create_buffer(&resource::BufferDescriptor {
-                usage,
-                ..desc.clone()
-            })
-        }
-        .map_err(DeviceError::from)?;
+        let hal_desc = hal::BufferDescriptor {
+            label: desc.label,
+            size: desc.size,
+            usage: conv::map_buffer_usage(usage),
+            memory_flags: hal::MemoryFlag::empty(),
+        };
+        let buffer = unsafe { self.raw.create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
 
         Ok(resource::Buffer {
             raw: Some(buffer),
@@ -529,10 +529,24 @@ impl<A: HalApi> Device<A> {
             return Err(resource::CreateTextureError::InvalidMipLevelCount(mips));
         }
 
-        let mut image = unsafe { self.raw.create_image(desc).map_err(DeviceError::from)? };
+        let hal_desc = hal::TextureDescriptor {
+            label: desc.label,
+            size: desc.size,
+            mip_level_count: desc.mip_level_count,
+            sample_count: desc.sample_count,
+            dimension: desc.dimension,
+            format: desc.format,
+            usage: conv::map_texture_usage(desc.usage, desc.format.into()),
+            memory_flags: hal::MemoryFlag::empty(),
+        };
+        let mut raw = unsafe {
+            self.raw
+                .create_texture(&hal_desc)
+                .map_err(DeviceError::from)?
+        };
 
         Ok(resource::Texture {
-            raw: Some(image),
+            raw: Some(raw),
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
@@ -698,9 +712,9 @@ impl<A: HalApi> Device<A> {
             samples: texture.kind.num_samples(),
             // once a storage - forever a storage
             sampled_internal_use: if texture.usage.contains(wgt::TextureUsage::STORAGE) {
-                resource::TextureUse::SAMPLED | resource::TextureUse::STORAGE_LOAD
+                hal::TextureUse::SAMPLED | hal::TextureUse::STORAGE_LOAD
             } else {
-                resource::TextureUse::SAMPLED
+                hal::TextureUse::SAMPLED
             },
             selector,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
@@ -1083,15 +1097,15 @@ impl<A: HalApi> Device<A> {
         let (pub_usage, internal_use, range_limit) = match binding_ty {
             wgt::BufferBindingType::Uniform => (
                 wgt::BufferUsage::UNIFORM,
-                resource::BufferUse::UNIFORM,
+                hal::BufferUse::UNIFORM,
                 limits.max_uniform_buffer_binding_size,
             ),
             wgt::BufferBindingType::Storage { read_only } => (
                 wgt::BufferUsage::STORAGE,
                 if read_only {
-                    resource::BufferUse::STORAGE_LOAD
+                    hal::BufferUse::STORAGE_LOAD
                 } else {
-                    resource::BufferUse::STORAGE_STORE
+                    hal::BufferUse::STORAGE_STORE
                 },
                 limits.max_storage_buffer_binding_size,
             ),
@@ -1360,10 +1374,10 @@ impl<A: HalApi> Device<A> {
                             }
                             let internal_use = match access {
                                 wgt::StorageTextureAccess::ReadOnly => {
-                                    resource::TextureUse::STORAGE_LOAD
+                                    hal::TextureUse::STORAGE_LOAD
                                 }
                                 wgt::StorageTextureAccess::WriteOnly => {
-                                    resource::TextureUse::STORAGE_STORE
+                                    hal::TextureUse::STORAGE_STORE
                                 }
                                 wgt::StorageTextureAccess::ReadWrite => {
                                     if !view.format_features.flags.contains(
@@ -1374,8 +1388,7 @@ impl<A: HalApi> Device<A> {
                                         ));
                                     }
 
-                                    resource::TextureUse::STORAGE_STORE
-                                        | resource::TextureUse::STORAGE_LOAD
+                                    hal::TextureUse::STORAGE_STORE | hal::TextureUse::STORAGE_LOAD
                                 }
                             };
                             (wgt::TextureUsage::STORAGE, internal_use)
@@ -2459,7 +2472,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = buffer.life_guard.add_ref();
 
             let buffer_use = if !desc.mapped_at_creation {
-                resource::BufferUse::EMPTY
+                hal::BufferUse::EMPTY
             } else if desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
                 // buffer is mappable, so we are just doing that at start
                 let map_size = buffer.size;
@@ -2480,7 +2493,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     range: 0..map_size,
                     host: HostMap::Write,
                 };
-                resource::BufferUse::MAP_WRITE
+                hal::BufferUse::MAP_WRITE
             } else {
                 // buffer needs staging area for initialization only
                 let stage_desc = wgt::BufferDescriptor {
@@ -2533,7 +2546,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     stage_buffer,
                     stage_memory,
                 };
-                resource::BufferUse::COPY_DST
+                hal::BufferUse::COPY_DST
             };
 
             let id = fid.assign(buffer, &mut token);
@@ -4236,8 +4249,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (pub_usage, internal_use) = match op.host {
-            HostMap::Read => (wgt::BufferUsage::MAP_READ, resource::BufferUse::MAP_READ),
-            HostMap::Write => (wgt::BufferUsage::MAP_WRITE, resource::BufferUse::MAP_WRITE),
+            HostMap::Read => (wgt::BufferUsage::MAP_READ, hal::BufferUse::MAP_READ),
+            HostMap::Write => (wgt::BufferUsage::MAP_WRITE, hal::BufferUse::MAP_WRITE),
         };
 
         if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0 {
@@ -4404,32 +4417,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .ok_or(resource::BufferAccessError::Destroyed)?;
 
                 buffer.life_guard.use_at(device.active_submission_index + 1);
-                let region = hal::command::BufferCopy {
+                let region = hal::BufferCopy {
                     src: 0,
                     dst: 0,
                     size: buffer.size,
                 };
-                let transition_src = hal::memory::Barrier::Buffer {
-                    states: hal::buffer::Access::HOST_WRITE..hal::buffer::Access::TRANSFER_READ,
-                    target: &stage_buffer,
-                    range: hal::buffer::SubRange::WHOLE,
-                    families: None,
+                let transition_src = hal::BufferBarrier {
+                    buffer: &stage_buffer,
+                    usage: hal::BufferUse::MAP_WRITE..hal::BufferUse::COPY_SRC,
                 };
-                let transition_dst = hal::memory::Barrier::Buffer {
-                    states: hal::buffer::Access::empty()..hal::buffer::Access::TRANSFER_WRITE,
-                    target: buf_raw,
-                    range: hal::buffer::SubRange::WHOLE,
-                    families: None,
+                let transition_dst = hal::BufferBarrier {
+                    buffer: buf_raw,
+                    usage: hal::BufferUse::empty()..hal::BufferUse::COPY_DST,
                 };
                 unsafe {
-                    let cmdbuf = device.borrow_pending_writes();
-                    cmdbuf.pipeline_barrier(
-                        hal::pso::PipelineStage::HOST..hal::pso::PipelineStage::TRANSFER,
-                        hal::memory::Dependencies::empty(),
+                    let cmd_buf = device.borrow_pending_writes();
+                    cmd_buf.transition_buffers(
                         iter::once(transition_src).chain(iter::once(transition_dst)),
                     );
                     if buffer.size > 0 {
-                        cmdbuf.copy_buffer(&stage_buffer, buf_raw, iter::once(region));
+                        cmd_buf.copy_buffer_to_buffer(&stage_buffer, buf_raw, iter::once(region));
                     }
                 }
                 device

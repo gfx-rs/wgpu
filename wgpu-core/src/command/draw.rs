@@ -7,8 +7,8 @@
 
 use crate::{
     binding_model::PushConstantUploadError,
+    hal::BufferUse,
     id,
-    resource::BufferUse,
     track::UseExtendError,
     validation::{MissingBufferUsageError, MissingTextureUsageError},
 };

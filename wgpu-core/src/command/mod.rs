@@ -114,15 +114,13 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 
     pub(crate) fn insert_barriers(
-        raw: &mut B::CommandBuffer,
+        raw: &mut A::CommandBuffer,
         base: &mut TrackerSet,
         head_buffers: &ResourceTracker<BufferState>,
         head_textures: &ResourceTracker<TextureState>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) {
-        use hal::command::CommandBuffer as _;
-
         profiling::scope!("insert_barriers");
         debug_assert_eq!(A::VARIANT, base.backend());
 
@@ -135,14 +133,9 @@ impl<A: HalApi> CommandBuffer<A> {
             pending.into_hal(tex)
         });
 
-        //TODO: be more deliberate about the stages
-        let stages = all_buffer_stages() | all_image_stages();
         unsafe {
-            raw.pipeline_barrier(
-                stages..stages,
-                hal::memory::Dependencies::empty(),
-                buffer_barriers.chain(texture_barriers),
-            );
+            raw.transition_buffers(buffer_barriers);
+            raw.transition_textures(texture_barriers);
         }
     }
 }

@@ -3,12 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::{PendingTransition, ResourceState, Unit};
-use crate::{
-    id::{BufferId, Valid},
-    resource::BufferUse,
-};
+use crate::id::{BufferId, Valid};
+use hal::BufferUse;
 
-//TODO: store `hal::buffer::State` here to avoid extra conversions
 pub(crate) type BufferState = Unit<BufferUse>;
 
 impl PendingTransition<BufferState> {

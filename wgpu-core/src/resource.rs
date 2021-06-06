@@ -16,9 +16,6 @@ use thiserror::Error;
 
 use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
 
-//TODO: remove the alias, just use it from `hal`
-pub(crate) use hal::{BufferUse, TextureUse};
-
 #[repr(C)]
 #[derive(Debug)]
 pub enum BufferMapAsyncStatus {
@@ -166,7 +163,7 @@ pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct Texture<A: hal::Api> {
-    pub(crate) raw: Option<A::Image>,
+    pub(crate) raw: Option<A::Texture>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) desc: wgt::TextureDescriptor<()>,
     pub(crate) format_features: wgt::TextureFormatFeatures,
@@ -272,7 +269,7 @@ pub struct TextureView<A: hal::Api> {
     pub(crate) extent: wgt::Extent3d,
     pub(crate) samples: u32,
     /// Internal use of this texture view when used as `BindingType::Texture`.
-    pub(crate) sampled_internal_use: TextureUse,
+    pub(crate) sampled_internal_use: hal::TextureUse,
     pub(crate) selector: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }

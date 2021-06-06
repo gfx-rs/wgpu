@@ -24,6 +24,77 @@ pub fn is_valid_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
     }
 }
 
+pub fn map_buffer_usage(usage: wgt::BufferUsage) -> hal::BufferUse {
+    let mut u = hal::BufferUse::empty();
+    u.set(
+        hal::BufferUse::MAP_READ,
+        usage.contains(wgt::BufferUsage::MAP_READ),
+    );
+    u.set(
+        hal::BufferUse::MAP_WRITE,
+        usage.contains(wgt::BufferUsage::MAP_WRITE),
+    );
+    u.set(
+        hal::BufferUse::COPY_SRC,
+        usage.contains(wgt::BufferUsage::COPY_SRC),
+    );
+    u.set(
+        hal::BufferUse::COPY_DST,
+        usage.contains(wgt::BufferUsage::COPY_DST),
+    );
+    u.set(
+        hal::BufferUse::INDEX,
+        usage.contains(wgt::BufferUsage::INDEX),
+    );
+    u.set(
+        hal::BufferUse::VERTEX,
+        usage.contains(wgt::BufferUsage::VERTEX),
+    );
+    u.set(
+        hal::BufferUse::UNIFORM,
+        usage.contains(wgt::BufferUsage::UNIFORM),
+    );
+    u.set(
+        hal::BufferUse::STORAGE,
+        usage.contains(wgt::BufferUsage::STORAGE),
+    );
+    u.set(
+        hal::BufferUse::INDIRECT,
+        usage.contains(wgt::BufferUsage::INDIRECT),
+    );
+    u
+}
+
+pub fn map_texture_usage(usage: wgt::TextureUsage, aspect: hal::FormatAspect) -> hal::TextureUse {
+    let mut u = hal::TextureUse::empty();
+    u.set(
+        hal::TextureUse::COPY_SRC,
+        usage.contains(wgt::TextureUsage::COPY_SRC),
+    );
+    u.set(
+        hal::TextureUse::COPY_DST,
+        usage.contains(wgt::TextureUsage::COPY_DST),
+    );
+    u.set(
+        hal::TextureUse::SAMPLED,
+        usage.contains(wgt::TextureUsage::SAMPLED),
+    );
+    u.set(
+        hal::TextureUse::STORAGE_LOAD | hal::TextureUse::STORAGE_STORE,
+        usage.contains(wgt::TextureUsage::STORAGE),
+    );
+    let is_color = aspect.contains(hal::FormatAspect::COLOR);
+    u.set(
+        hal::TextureUse::COLOR_TARGET,
+        usage.contains(wgt::TextureUsage::RENDER_ATTACHMENT) && is_color,
+    );
+    u.set(
+        hal::TextureUse::DEPTH_STENCIL_READ | hal::TextureUse::DEPTH_STENCIL_WRITE,
+        usage.contains(wgt::TextureUsage::RENDER_ATTACHMENT) && !is_color,
+    );
+    u
+}
+
 pub fn check_texture_dimension_size(
     dimension: wgt::TextureDimension,
     wgt::Extent3d {
