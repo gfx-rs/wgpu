@@ -104,6 +104,16 @@ impl Program<'_> {
                 false,
                 PrologueStage::VERTEX,
             ),
+            "gl_GlobalInvocationID" => add_builtin(
+                TypeInner::Vector {
+                    size: VectorSize::Tri,
+                    kind: ScalarKind::Uint,
+                    width: 4,
+                },
+                BuiltIn::GlobalInvocationId,
+                false,
+                PrologueStage::COMPUTE,
+            ),
             _ => Ok(None),
         }
     }
