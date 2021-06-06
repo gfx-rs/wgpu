@@ -401,6 +401,20 @@ trait Context: Debug + Send + Sized + Sync {
     );
     fn command_encoder_finish(&self, encoder: Self::CommandEncoderId) -> Self::CommandBufferId;
 
+    fn command_encoder_clear_image(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        texture: &Texture,
+        subresource_range: &wgt::ImageSubresourceRange,
+    );
+    fn command_encoder_clear_buffer(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        buffer: &Buffer,
+        offset: BufferAddress,
+        size: Option<BufferSize>,
+    );
+
     fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str);
     fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str);
     fn command_encoder_pop_debug_group(&self, encoder: &Self::CommandEncoderId);
@@ -2108,6 +2122,48 @@ impl CommandEncoder {
             source,
             destination,
             copy_size,
+        );
+    }
+
+    /// Clears texture to zero.
+    ///
+    /// # Panics
+    ///
+    /// - `CLEAR_COMMANDS` extension not enabled
+    /// - Texture does not have `COPY_DST` usage.
+    /// - Range it out of bounds
+    pub fn clear_texture(
+        &mut self,
+        texture: &Texture,
+        subresource_range: &wgt::ImageSubresourceRange,
+    ) {
+        Context::command_encoder_clear_image(
+            &*self.context,
+            self.id.as_ref().unwrap(),
+            texture,
+            subresource_range,
+        );
+    }
+
+    /// Clears buffer to zero.
+    ///
+    /// # Panics
+    ///
+    /// - `CLEAR_COMMANDS` extension not enabled
+    /// - Buffer does not have `COPY_DST` usage.
+    /// - Range it out of bounds
+    pub fn clear_buffer(
+        &mut self,
+        buffer: &Buffer,
+        offset: BufferAddress,
+        size: Option<BufferSize>,
+    ) {
+        Context::command_encoder_clear_buffer(
+            &*self.context,
+            self.id.as_ref().unwrap(),
+            buffer,
+            offset,
+            size,
         );
     }
 

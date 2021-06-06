@@ -1783,6 +1783,39 @@ impl crate::Context for Context {
         id
     }
 
+    fn command_encoder_clear_image(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        texture: &crate::Texture,
+        subresource_range: &wgt::ImageSubresourceRange,
+    ) {
+        let global = &self.0;
+        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_clear_image(
+            encoder.id,
+            texture.id.id,
+            subresource_range
+        )) {
+            self.handle_error_nolabel(&encoder.error_sink, cause, "CommandEncoder::clear_image");
+        }
+    }
+
+    fn command_encoder_clear_buffer(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        buffer: &crate::Buffer,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
+    ) {
+        let global = &self.0;
+        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_clear_buffer(
+            encoder.id,
+            buffer.id.id,
+            offset, size
+        )) {
+            self.handle_error_nolabel(&encoder.error_sink, cause, "CommandEncoder::clear_buffer");
+        }
+    }
+
     fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str) {
         let global = &self.0;
         if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_insert_debug_marker(encoder.id, &label))
