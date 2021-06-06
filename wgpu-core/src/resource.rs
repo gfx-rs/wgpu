@@ -247,20 +247,27 @@ pub struct TextureViewDescriptor<'a> {
 #[derive(Debug)]
 pub(crate) enum TextureViewInner<A: hal::Api> {
     Native {
-        raw: A::ImageView,
+        raw: A::TextureView,
         source_id: Stored<TextureId>,
     },
     SwapChain {
-        raw: A::SwapChainTexture,
+        raw: A::SurfaceTexture,
         source_id: Stored<SwapChainId>,
     },
+}
+
+#[derive(Debug)]
+pub(crate) struct HalTextureViewDescriptor {
+    pub format: wgt::TextureFormat,
+    pub dimension: wgt::TextureViewDimension,
+    pub range: wgt::ImageSubresourceRange,
 }
 
 #[derive(Debug)]
 pub struct TextureView<A: hal::Api> {
     pub(crate) inner: TextureViewInner<A>,
     //TODO: store device_id for quick access?
-    pub(crate) desc: hal::TextureViewDescriptor<()>,
+    pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) extent: wgt::Extent3d,
     pub(crate) samples: u32,

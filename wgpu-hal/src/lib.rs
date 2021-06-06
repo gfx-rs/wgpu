@@ -36,10 +36,17 @@
 
 pub mod empty;
 
-use std::{borrow::Cow, fmt, num::NonZeroU8, ops::Range, ptr::NonNull};
+use std::{
+    borrow::{Borrow, Cow},
+    fmt,
+    num::NonZeroU8,
+    ops::{Range, RangeInclusive},
+    ptr::NonNull,
+};
 
 use bitflags::bitflags;
 use smallvec::SmallVec;
+use thiserror::Error;
 
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const MAX_BIND_GROUPS: usize = 8;
@@ -49,69 +56,45 @@ pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type MipLevel = u8;
 pub type ArrayLayer = u16;
 
-#[derive(Debug)]
-pub enum Error {
+#[derive(Clone, Debug, PartialEq, Error)]
+pub enum DeviceError {
+    #[error("out of memory")]
     OutOfMemory,
-    DeviceLost,
+    #[error("device is lost")]
+    Lost,
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self::OutOfMemory => write!(f, "out of memory"),
-            Self::DeviceLost => write!(f, "device is lost"),
-        }
-    }
-}
-impl std::error::Error for Error {}
-
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Error)]
 pub enum ShaderError {
+    #[error("compilation failed: {0:?}")]
     Compilation(String),
-    Device(Error),
+    #[error(transparent)]
+    Device(#[from] DeviceError),
 }
 
-impl fmt::Display for ShaderError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self::Compilation(ref message) => write!(f, "compilation failed: {}", message),
-            Self::Device(_) => Ok(()),
-        }
-    }
-}
-impl std::error::Error for ShaderError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match *self {
-            Self::Compilation(..) => None,
-            Self::Device(ref parent) => Some(parent),
-        }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Error)]
 pub enum PipelineError {
+    #[error("linkage failed for stage {0:?}: {1}")]
     Linkage(wgt::ShaderStage, String),
-    Device(Error),
+    #[error(transparent)]
+    Device(#[from] DeviceError),
 }
 
-impl fmt::Display for PipelineError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self::Linkage(stage, ref message) => {
-                write!(f, "linkage failed for stage {:?}: {}", stage, message)
-            }
-            Self::Device(_) => Ok(()),
-        }
-    }
+#[derive(Clone, Debug, PartialEq, Error)]
+pub enum SurfaceError {
+    #[error("surface is lost")]
+    Lost,
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("other reason: {0}")]
+    Other(&'static str),
 }
-impl std::error::Error for PipelineError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match *self {
-            Self::Linkage(..) => None,
-            Self::Device(ref parent) => Some(parent),
-        }
-    }
-}
+
+/// Marker value returned if the presentation configuration no longer matches
+/// the surface properties exactly, but can still be used to present
+/// to the surface successfully.
+#[derive(Debug)]
+pub struct Suboptimal;
 
 pub trait Api: Clone + Sized {
     type Instance: Instance<Self>;
@@ -127,7 +110,7 @@ pub trait Api: Clone + Sized {
     type Buffer: fmt::Debug + Send + Sync;
     type QuerySet: fmt::Debug + Send + Sync;
     type Texture: fmt::Debug + Send + Sync;
-    type SwapChainTexture: fmt::Debug + Send + Sync;
+    type SurfaceTexture: fmt::Debug + Send + Sync + Borrow<Self::Texture>;
     type TextureView: fmt::Debug + Send + Sync;
     type Sampler: fmt::Debug + Send + Sync;
 
@@ -143,10 +126,23 @@ pub trait Instance<A: Api> {
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
 }
 
-pub trait Surface<A: Api> {}
+pub trait Surface<A: Api> {
+    unsafe fn configure(
+        &mut self,
+        device: &A::Device,
+        config: &SurfaceConfiguration,
+    ) -> Result<(), SurfaceError>;
+
+    unsafe fn unconfigure(&mut self, device: &A::Device);
+
+    unsafe fn acquire_texture(
+        &mut self,
+        timeout_ms: u32,
+    ) -> Result<(A::SurfaceTexture, Option<Suboptimal>), SurfaceError>;
+}
 
 pub trait Adapter<A: Api> {
-    unsafe fn open(&self, features: wgt::Features) -> Result<OpenDevice<A>, Error>;
+    unsafe fn open(&self, features: wgt::Features) -> Result<OpenDevice<A>, DeviceError>;
     unsafe fn close(&self, device: A::Device);
 
     /// Return the set of supported capabilities for a texture format.
@@ -154,19 +150,24 @@ pub trait Adapter<A: Api> {
         &self,
         format: wgt::TextureFormat,
     ) -> TextureFormatCapability;
-    /// Returns the list of surface formats supported for presentation, if any.
-    unsafe fn surface_formats(&self, surface: &A::Surface) -> Vec<wgt::TextureFormat>;
+
+    /// Returns the capabilities of working with a specified surface.
+    ///
+    /// `None` means presentation is not supported for it.
+    unsafe fn surface_capabilities(&self, surface: &A::Surface) -> Option<SurfaceCapabilities>;
 }
 
 pub trait Device<A: Api> {
-    unsafe fn create_buffer(&self, desc: &wgt::BufferDescriptor<Label>)
-        -> Result<A::Buffer, Error>;
+    unsafe fn create_buffer(
+        &self,
+        desc: &wgt::BufferDescriptor<Label>,
+    ) -> Result<A::Buffer, DeviceError>;
     unsafe fn destroy_buffer(&self, buffer: A::Buffer);
     unsafe fn map_buffer(
         &self,
         buffer: &A::Buffer,
         range: MemoryRange,
-    ) -> Result<NonNull<u8>, Error>;
+    ) -> Result<NonNull<u8>, DeviceError>;
     unsafe fn unmap_buffer(&self, buffer: &A::Buffer);
     unsafe fn flush_mapped_ranges<I: Iterator<Item = MemoryRange>>(
         &self,
@@ -182,34 +183,37 @@ pub trait Device<A: Api> {
     unsafe fn create_texture(
         &self,
         desc: &wgt::TextureDescriptor<Label>,
-    ) -> Result<A::Texture, Error>;
+    ) -> Result<A::Texture, DeviceError>;
     unsafe fn destroy_texture(&self, texture: A::Texture);
     unsafe fn create_texture_view(
         &self,
         texture: &A::Texture,
-        desc: &TextureViewDescriptor<Label>,
-    ) -> Result<A::TextureView, Error>;
+        desc: &TextureViewDescriptor,
+    ) -> Result<A::TextureView, DeviceError>;
     unsafe fn destroy_texture_view(&self, view: A::TextureView);
-    unsafe fn create_sampler(&self, desc: &SamplerDescriptor) -> Result<A::Sampler, Error>;
+    unsafe fn create_sampler(&self, desc: &SamplerDescriptor) -> Result<A::Sampler, DeviceError>;
     unsafe fn destroy_sampler(&self, sampler: A::Sampler);
 
-    unsafe fn create_command_buffer(&self) -> Result<A::CommandBuffer, Error>;
+    unsafe fn create_command_buffer(
+        &self,
+        desc: &CommandBufferDescriptor,
+    ) -> Result<A::CommandBuffer, DeviceError>;
     unsafe fn destroy_command_buffer(&self, cmd_buf: A::CommandBuffer);
 
     unsafe fn create_bind_group_layout(
         &self,
         desc: &BindGroupLayoutDescriptor,
-    ) -> Result<A::BindGroupLayout, Error>;
+    ) -> Result<A::BindGroupLayout, DeviceError>;
     unsafe fn destroy_bind_group_layout(&self, bg_layout: A::BindGroupLayout);
     unsafe fn create_pipeline_layout(
         &self,
         desc: &PipelineLayoutDescriptor<A>,
-    ) -> Result<A::PipelineLayout, Error>;
+    ) -> Result<A::PipelineLayout, DeviceError>;
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: A::PipelineLayout);
     unsafe fn create_bind_group(
         &self,
         desc: &BindGroupDescriptor<A>,
-    ) -> Result<A::BindGroup, Error>;
+    ) -> Result<A::BindGroup, DeviceError>;
     unsafe fn destroy_bind_group(&self, group: A::BindGroup);
 
     unsafe fn create_shader_module(
@@ -233,6 +237,8 @@ pub trait Device<A: Api> {
 pub trait Queue<A: Api> {
     unsafe fn submit<I: Iterator<Item = A::CommandBuffer>>(&mut self, command_buffers: I);
 }
+
+pub trait SwapChain<A: Api> {}
 
 pub trait CommandBuffer<A: Api> {
     unsafe fn begin(&mut self);
@@ -372,6 +378,45 @@ pub struct ExposedAdapter<A: Api> {
     pub capabilities: Capabilities,
 }
 
+/// Describes information about what a `Surface`'s presentation capabilities are.
+/// Fetch this with [Adapter::surface_capabilities].
+#[derive(Debug, Clone)]
+pub struct SurfaceCapabilities {
+    /// List of supported texture formats.
+    ///
+    /// Must be at least one.
+    pub texture_formats: Vec<wgt::TextureFormat>,
+
+    /// Range for the swap chain sizes.
+    ///
+    /// - `swap_chain_sizes.start` must be at least 1.
+    /// - `swap_chain_sizes.end` must be larger or equal to `swap_chain_sizes.start`.
+    pub swap_chain_sizes: RangeInclusive<u32>,
+
+    /// Current extent of the surface, if known.
+    pub current_extent: Option<wgt::Extent3d>,
+
+    /// Range of supported extents.
+    ///
+    /// `current_extent` must be inside this range.
+    pub extents: RangeInclusive<wgt::Extent3d>,
+
+    /// Supported texture usage flags.
+    ///
+    /// Must have at least `TextureUse::COLOR_TARGET`
+    pub texture_uses: TextureUse,
+
+    /// List of supported V-sync modes.
+    ///
+    /// Must be at least one.
+    pub vsync_modes: Vec<VsyncMode>,
+
+    /// List of supported alpha composition modes.
+    ///
+    /// Must be at least one.
+    pub composite_alpha_modes: Vec<CompositeAlphaMode>,
+}
+
 #[derive(Debug)]
 pub struct OpenDevice<A: Api> {
     pub device: A::Device,
@@ -379,23 +424,11 @@ pub struct OpenDevice<A: Api> {
 }
 
 #[derive(Clone, Debug)]
-pub struct TextureViewDescriptor<L> {
-    pub label: L,
+pub struct TextureViewDescriptor<'a> {
+    pub label: Label<'a>,
     pub format: wgt::TextureFormat,
     pub dimension: wgt::TextureViewDimension,
     pub range: wgt::ImageSubresourceRange,
-}
-
-impl<L> TextureViewDescriptor<L> {
-    ///
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureViewDescriptor<K> {
-        TextureViewDescriptor {
-            label: fun(&self.label),
-            format: self.format,
-            dimension: self.dimension,
-            range: self.range.clone(),
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -473,6 +506,11 @@ pub struct BindGroupDescriptor<'a, A: Api> {
     pub entries: Cow<'a, [BindGroupEntry<'a, A>]>,
 }
 
+#[derive(Clone, Debug)]
+pub struct CommandBufferDescriptor<'a> {
+    pub label: Label<'a>,
+}
+
 /// Naga shader module.
 pub struct NagaShader {
     /// Shader module IR.
@@ -546,6 +584,58 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     pub fragment_stage: ProgrammableStage<'a, A>,
     /// The effect of draw calls on the color aspect of the output target.
     pub color_targets: Cow<'a, [wgt::ColorTargetState]>,
+}
+
+/// Specifies the mode regulating how a surface presents frames.
+#[derive(Debug, Clone)]
+pub enum VsyncMode {
+    /// Don't ever wait for v-sync.
+    Immediate,
+    /// Wait for v-sync, overwrite the last rendered frame.
+    Mailbox,
+    /// Present frames in the same order they are rendered.
+    Fifo,
+    /// Don't wait for the next v-sync if we just missed it.
+    Relaxed,
+}
+
+/// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
+/// compositing.
+#[derive(Debug, Clone)]
+pub enum CompositeAlphaMode {
+    /// The alpha channel, if it exists, of the textures is ignored in the
+    /// compositing process. Instead, the textures is treated as if it has a
+    /// constant alpha of 1.0.
+    Opaque,
+    /// The alpha channel, if it exists, of the textures is respected in the
+    /// compositing process. The non-alpha channels of the textures are not
+    /// expected to already be multiplied by the alpha channel by the
+    /// application; instead, the compositor will multiply the non-alpha
+    /// channels of the texture by the alpha channel during compositing.
+    Alpha,
+    /// The alpha channel, if it exists, of the textures is respected in the
+    /// compositing process. The non-alpha channels of the textures are
+    /// expected to already be multiplied by the alpha channel by the
+    /// application.
+    PremultipliedAlpha,
+}
+
+#[derive(Debug, Clone)]
+pub struct SurfaceConfiguration {
+    /// Number of textures in the swap chain. Must be in
+    /// `SurfaceCapabilities::swap_chain_size` range.
+    pub swap_chain_size: u32,
+    /// Vertical synchronization mode.
+    pub vsync_mode: VsyncMode,
+    /// Alpha composition mode.
+    pub composite_alpha_mode: CompositeAlphaMode,
+    /// Format of the surface textures.
+    pub format: wgt::TextureFormat,
+    /// Requested texture extent. Must be in
+    /// `SurfaceCapabilities::extents` range.
+    pub extent: wgt::Extent3d,
+    /// Allowed usage of surface textures,
+    pub usage: TextureUse,
 }
 
 #[test]

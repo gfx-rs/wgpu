@@ -5,6 +5,8 @@ pub struct Encoder;
 #[derive(Debug)]
 pub struct Resource;
 
+type DeviceResult<T> = Result<T, crate::DeviceError>;
+
 impl crate::Api for Api {
     type Instance = Context;
     type Surface = Context;
@@ -19,7 +21,7 @@ impl crate::Api for Api {
     type Buffer = Resource;
     type QuerySet = Resource;
     type Texture = Resource;
-    type SwapChainTexture = Resource;
+    type SurfaceTexture = Resource;
     type TextureView = Resource;
     type Sampler = Resource;
 
@@ -37,14 +39,28 @@ impl crate::Instance<Api> for Context {
     }
 }
 
-impl crate::Surface<Api> for Context {}
+impl crate::Surface<Api> for Context {
+    unsafe fn configure(
+        &mut self,
+        _device: &Context,
+        _config: &crate::SurfaceConfiguration,
+    ) -> Result<(), crate::SurfaceError> {
+        Ok(())
+    }
+
+    unsafe fn unconfigure(&mut self, _device: &Context) {}
+
+    unsafe fn acquire_texture(
+        &mut self,
+        _timeout_ms: u32,
+    ) -> Result<(Resource, Option<crate::Suboptimal>), crate::SurfaceError> {
+        Ok((Resource, None))
+    }
+}
 
 impl crate::Adapter<Api> for Context {
-    unsafe fn open(
-        &self,
-        _features: wgt::Features,
-    ) -> Result<crate::OpenDevice<Api>, crate::Error> {
-        Err(crate::Error::DeviceLost)
+    unsafe fn open(&self, _features: wgt::Features) -> DeviceResult<crate::OpenDevice<Api>> {
+        Err(crate::DeviceError::Lost)
     }
     unsafe fn close(&self, _device: Context) {}
     unsafe fn texture_format_capabilities(
@@ -53,8 +69,11 @@ impl crate::Adapter<Api> for Context {
     ) -> crate::TextureFormatCapability {
         crate::TextureFormatCapability::empty()
     }
-    unsafe fn surface_formats(&self, _surface: &Context) -> Vec<wgt::TextureFormat> {
-        Vec::new()
+    unsafe fn surface_capabilities(
+        &self,
+        _surface: &Context,
+    ) -> Option<crate::SurfaceCapabilities> {
+        None
     }
 }
 
@@ -66,7 +85,7 @@ impl crate::Device<Api> for Context {
     unsafe fn create_buffer(
         &self,
         _desc: &wgt::BufferDescriptor<crate::Label>,
-    ) -> Result<Resource, crate::Error> {
+    ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
     unsafe fn destroy_buffer(&self, _buffer: Resource) {}
@@ -74,8 +93,8 @@ impl crate::Device<Api> for Context {
         &self,
         _buffer: &Resource,
         _range: crate::MemoryRange,
-    ) -> Result<std::ptr::NonNull<u8>, crate::Error> {
-        Err(crate::Error::DeviceLost)
+    ) -> DeviceResult<std::ptr::NonNull<u8>> {
+        Err(crate::DeviceError::Lost)
     }
     unsafe fn unmap_buffer(&self, _buffer: &Resource) {}
     unsafe fn flush_mapped_ranges<I: Iterator<Item = crate::MemoryRange>>(
@@ -94,27 +113,27 @@ impl crate::Device<Api> for Context {
     unsafe fn create_texture(
         &self,
         _desc: &wgt::TextureDescriptor<crate::Label>,
-    ) -> Result<Resource, crate::Error> {
+    ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
     unsafe fn destroy_texture(&self, _texture: Resource) {}
     unsafe fn create_texture_view(
         &self,
         _texture: &Resource,
-        _desc: &crate::TextureViewDescriptor<crate::Label>,
-    ) -> Result<Resource, crate::Error> {
+        _desc: &crate::TextureViewDescriptor,
+    ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
     unsafe fn destroy_texture_view(&self, _view: Resource) {}
-    unsafe fn create_sampler(
-        &self,
-        _desc: &crate::SamplerDescriptor,
-    ) -> Result<Resource, crate::Error> {
+    unsafe fn create_sampler(&self, _desc: &crate::SamplerDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
     }
     unsafe fn destroy_sampler(&self, _sampler: Resource) {}
 
-    unsafe fn create_command_buffer(&self) -> Result<Encoder, crate::Error> {
+    unsafe fn create_command_buffer(
+        &self,
+        _desc: &crate::CommandBufferDescriptor,
+    ) -> DeviceResult<Encoder> {
         Ok(Encoder)
     }
     unsafe fn destroy_command_buffer(&self, _cmd_buf: Encoder) {}
@@ -122,21 +141,21 @@ impl crate::Device<Api> for Context {
     unsafe fn create_bind_group_layout(
         &self,
         _desc: &crate::BindGroupLayoutDescriptor,
-    ) -> Result<Resource, crate::Error> {
+    ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
     unsafe fn destroy_bind_group_layout(&self, _bg_layout: Resource) {}
     unsafe fn create_pipeline_layout(
         &self,
         _desc: &crate::PipelineLayoutDescriptor<Api>,
-    ) -> Result<Resource, crate::Error> {
+    ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
     unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: Resource) {}
     unsafe fn create_bind_group(
         &self,
         _desc: &crate::BindGroupDescriptor<Api>,
-    ) -> Result<Resource, crate::Error> {
+    ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
     unsafe fn destroy_bind_group(&self, _group: Resource) {}

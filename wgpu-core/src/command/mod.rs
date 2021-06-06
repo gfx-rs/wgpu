@@ -2,7 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-mod allocator;
 mod bind;
 mod bundle;
 mod clear;
@@ -12,8 +11,6 @@ mod query;
 mod render;
 mod transfer;
 
-pub(crate) use self::allocator::CommandAllocator;
-pub use self::allocator::CommandAllocatorError;
 pub use self::bundle::*;
 pub use self::compute::*;
 pub use self::draw::*;
@@ -22,20 +19,19 @@ pub use self::render::*;
 pub use self::transfer::*;
 
 use crate::{
-    device::{all_buffer_stages, all_image_stages},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::MemoryInitTrackerAction,
     resource::{Buffer, Texture},
     track::{BufferState, ResourceTracker, TextureState, TrackerSet},
-    Label, PrivateFeatures, Stored,
+    Label, Stored,
 };
 
-use hal::command::CommandBuffer as _;
+use hal::CommandBuffer as _;
 use smallvec::SmallVec;
 use thiserror::Error;
 
-use std::thread::ThreadId;
+use std::thread;
 
 const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
 
@@ -48,18 +44,16 @@ enum CommandEncoderStatus {
 
 #[derive(Debug)]
 pub struct CommandBuffer<A: hal::Api> {
-    pub(crate) raw: Vec<B::CommandBuffer>,
+    pub(crate) raw: Vec<A::CommandBuffer>,
     status: CommandEncoderStatus,
-    recorded_thread_id: ThreadId,
+    recorded_thread_id: thread::ThreadId,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
     pub(crate) used_swap_chains: SmallVec<[Stored<id::SwapChainId>; 1]>,
     pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     limits: wgt::Limits,
     downlevel: wgt::DownlevelCapabilities,
-    private_features: PrivateFeatures,
     support_fill_buffer_texture: bool,
-    has_labels: bool,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
     #[cfg(debug_assertions)]
@@ -67,6 +61,37 @@ pub struct CommandBuffer<A: hal::Api> {
 }
 
 impl<A: HalApi> CommandBuffer<A> {
+    pub(crate) fn new(
+        raw: A::CommandBuffer,
+        device_id: Stored<id::DeviceId>,
+        limits: wgt::Limits,
+        downlevel: wgt::DownlevelCapabilities,
+        features: wgt::Features,
+        #[cfg(feature = "trace")] enable_tracing: bool,
+        #[cfg(debug_assertions)] label: &Label,
+    ) -> Self {
+        CommandBuffer {
+            raw: vec![raw],
+            status: CommandEncoderStatus::Recording,
+            recorded_thread_id: thread::current.id(),
+            device_id,
+            trackers: TrackerSet::new(A::VARIANT),
+            used_swap_chains: Default::default(),
+            buffer_memory_init_actions: Default::default(),
+            limits,
+            downlevel,
+            support_fill_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
+            #[cfg(feature = "trace")]
+            commands: if enable_tracing {
+                Some(Vec::new())
+            } else {
+                None
+            },
+            #[cfg(debug_assertions)]
+            label: label.to_string_or_default(),
+        }
+    }
+
     fn get_encoder_mut(
         storage: &mut Storage<Self, id::CommandEncoderId>,
         id: id::CommandEncoderId,

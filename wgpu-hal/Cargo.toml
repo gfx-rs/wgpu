@@ -16,6 +16,7 @@ license = "MPL-2.0"
 [dependencies]
 bitflags = "1.0"
 smallvec = "1"
+thiserror = "1"
 wgt = { package = "wgpu-types", path = "../wgpu-types" }
 
 [dependencies.naga]

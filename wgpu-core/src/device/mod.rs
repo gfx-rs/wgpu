@@ -19,21 +19,10 @@ use copyless::VecHelper as _;
 use hal::{CommandBuffer as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
-use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat, TextureViewDimension};
+use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
 
-use std::{
-    borrow::Cow,
-    collections::{hash_map::Entry, BTreeMap},
-    iter,
-    marker::PhantomData,
-    mem,
-    ops::Range,
-    ptr,
-    sync::atomic::Ordering,
-};
+use std::{borrow::Cow, iter, marker::PhantomData, mem, ops::Range, ptr, sync::atomic::Ordering};
 
-pub mod alloc;
-pub mod descriptor;
 mod life;
 pub mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
@@ -699,7 +688,11 @@ impl<A: HalApi> Device<A> {
                     ref_count: texture.life_guard.add_ref(),
                 },
             },
-            desc: hal_desc.map_label(|_| ()),
+            desc: resource::HalTextureViewDescriptor {
+                format: hal_desc.format,
+                dimension: hal_desc.dimension,
+                range: hal_desc.range,
+            },
             format_features: texture.format_features,
             extent,
             samples: texture.kind.num_samples(),
@@ -3456,7 +3449,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Input<G, id::CommandEncoderId>,
-    ) -> (id::CommandEncoderId, Option<command::CommandAllocatorError>) {
+    ) -> (id::CommandEncoderId, Option<DeviceError>) {
         profiling::scope!("create_command_encoder", "Device");
 
         let hub = A::hub(self);
@@ -3475,28 +3468,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ref_count: device.life_guard.add_ref(),
             };
 
-            let mut command_buffer = match device.cmd_allocator.allocate(
-                dev_stored,
-                &device.raw,
+            let mut raw = unsafe {
+                self.raw
+                    .create_command_buffer(&hal::CommandBufferDescriptor { label: desc.label })?
+            };
+            unsafe {
+                raw.begin();
+            }
+
+            let command_buffer = command::CommandBuffer::new(
+                raw,
+                device_id,
                 device.limits.clone(),
                 device.downlevel,
                 device.features,
-                device.private_features,
-                &desc.label,
                 #[cfg(feature = "trace")]
                 device.trace.is_some(),
-            ) {
-                Ok(cmd_buf) => cmd_buf,
-                Err(e) => break e,
-            };
-
-            let mut raw = command_buffer.raw.first_mut().unwrap();
-            unsafe {
-                if let Some(ref label) = desc.label {
-                    device.raw.set_command_buffer_name(&mut raw, label);
-                }
-                raw.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
-            }
+            );
 
             let id = fid.assign(command_buffer, &mut token);
             return (id.0, None);
@@ -3981,8 +3969,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("create_swap_chain", "Device");
 
         fn validate_swap_chain_descriptor(
-            config: &mut hal::window::SwapchainConfig,
-            caps: &hal::window::SurfaceCapabilities,
+            config: &mut hal::SurfaceConfiguration,
+            caps: &hal::SurfaceCapabilities,
         ) -> Result<(), swap_chain::CreateSwapChainError> {
             let width = config.extent.width;
             let height = config.extent.height;
@@ -3998,13 +3986,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     caps.extents
                 );
             }
-            if !caps.present_modes.contains(config.present_mode) {
+            if !caps.vsync_modes.contains(&config.vsync_mode) {
                 log::warn!(
                     "Surface does not support present mode: {:?}, falling back to {:?}",
                     config.present_mode,
-                    hal::window::PresentMode::FIFO
+                    hal::VsyncMode::FIFO
                 );
-                config.present_mode = hal::window::PresentMode::FIFO;
+                config.vsync_mode = hal::VsyncMode::Fifo;
             }
             if width == 0 || height == 0 {
                 return Err(swap_chain::CreateSwapChainError::ZeroArea);
@@ -4166,7 +4154,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn poll_all_devices(&self, force_wait: bool) -> Result<(), WaitIdleError> {
-        use crate::backend;
+        //use crate::backend;
         let mut callbacks = Vec::new();
 
         /*

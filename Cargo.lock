@@ -1892,6 +1892,7 @@ dependencies = [
  "bitflags",
  "naga",
  "smallvec",
+ "thiserror",
  "wgpu-types",
 ]
 
