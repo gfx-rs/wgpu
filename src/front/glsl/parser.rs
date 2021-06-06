@@ -1025,8 +1025,11 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             _ => self.parse_primary(ctx, body)?,
         };
 
-        // TODO: postfix inc/dec
-        while let TokenValue::LeftBracket | TokenValue::Dot = self.expect_peek()?.value {
+        while let TokenValue::LeftBracket
+        | TokenValue::Dot
+        | TokenValue::Increment
+        | TokenValue::Decrement = self.expect_peek()?.value
+        {
             let Token { value, meta } = self.bump()?;
 
             match value {
@@ -1045,6 +1048,26 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     base = ctx.hir_exprs.append(HirExpr {
                         kind: HirExprKind::Select { base, field },
                         meta: meta.union(&end_meta),
+                    })
+                }
+                TokenValue::Increment => {
+                    base = ctx.hir_exprs.append(HirExpr {
+                        kind: HirExprKind::IncDec {
+                            increment: true,
+                            postfix: true,
+                            expr: base,
+                        },
+                        meta,
+                    })
+                }
+                TokenValue::Decrement => {
+                    base = ctx.hir_exprs.append(HirExpr {
+                        kind: HirExprKind::IncDec {
+                            increment: false,
+                            postfix: true,
+                            expr: base,
+                        },
+                        meta,
                     })
                 }
                 _ => unreachable!(),
@@ -1078,6 +1101,24 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 ctx.hir_exprs.append(HirExpr {
                     kind,
                     meta: meta.union(&end_meta),
+                })
+            }
+            TokenValue::Increment | TokenValue::Decrement => {
+                let Token { value, meta } = self.bump()?;
+
+                let expr = self.parse_unary(ctx, body)?;
+
+                ctx.hir_exprs.append(HirExpr {
+                    kind: HirExprKind::IncDec {
+                        increment: match value {
+                            TokenValue::Increment => true,
+                            TokenValue::Decrement => false,
+                            _ => unreachable!(),
+                        },
+                        postfix: false,
+                        expr,
+                    },
+                    meta,
                 })
             }
             _ => self.parse_postfix(ctx, body)?,

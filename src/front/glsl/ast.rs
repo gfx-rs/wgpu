@@ -580,6 +580,95 @@ impl<'function> Context<'function> {
 
                 value
             }
+            HirExprKind::IncDec {
+                increment,
+                postfix,
+                expr,
+            } => {
+                let op = match increment {
+                    true => BinaryOperator::Add,
+                    false => BinaryOperator::Subtract,
+                };
+
+                let pointer = self.lower_expect(program, expr, true, body)?.0;
+                let left = self.add_expression(Expression::Load { pointer }, body);
+
+                let uint = if let Some(kind) = program.resolve_type(self, left, meta)?.scalar_kind()
+                {
+                    match kind {
+                        ScalarKind::Sint => false,
+                        ScalarKind::Uint => true,
+                        _ => {
+                            return Err(ErrorKind::SemanticError(
+                                meta,
+                                "Increment/decrement operations must operate in integers".into(),
+                            ))
+                        }
+                    }
+                } else {
+                    return Err(ErrorKind::SemanticError(
+                        meta,
+                        "Increment/decrement operations must operate in integers".into(),
+                    ));
+                };
+
+                let one = program.module.constants.append(Constant {
+                    name: None,
+                    specialization: None,
+                    inner: crate::ConstantInner::Scalar {
+                        width: 4,
+                        value: match uint {
+                            true => crate::ScalarValue::Uint(1),
+                            false => crate::ScalarValue::Sint(1),
+                        },
+                    },
+                });
+                let right = self.add_expression(Expression::Constant(one), body);
+
+                let value = self.add_expression(Expression::Binary { op, left, right }, body);
+
+                if postfix {
+                    let local = self.locals.append(LocalVariable {
+                        name: None,
+                        ty: program.module.types.fetch_or_append(Type {
+                            name: None,
+                            inner: TypeInner::Scalar {
+                                kind: match uint {
+                                    true => ScalarKind::Uint,
+                                    false => ScalarKind::Sint,
+                                },
+                                width: 4,
+                            },
+                        }),
+                        init: None,
+                    });
+
+                    let expr = self.add_expression(Expression::LocalVariable(local), body);
+                    let load = self.add_expression(Expression::Load { pointer: expr }, body);
+
+                    self.emit_flush(body);
+                    self.emit_start();
+
+                    body.push(Statement::Store {
+                        pointer: expr,
+                        value: left,
+                    });
+
+                    self.emit_flush(body);
+                    self.emit_start();
+
+                    body.push(Statement::Store { pointer, value });
+
+                    load
+                } else {
+                    self.emit_flush(body);
+                    self.emit_start();
+
+                    body.push(Statement::Store { pointer, value });
+
+                    left
+                }
+            }
             _ => {
                 return Err(ErrorKind::SemanticError(
                     meta,
@@ -724,6 +813,11 @@ pub enum HirExprKind {
     Assign {
         tgt: Handle<HirExpr>,
         value: Handle<HirExpr>,
+    },
+    IncDec {
+        increment: bool,
+        postfix: bool,
+        expr: Handle<HirExpr>,
     },
 }
 
