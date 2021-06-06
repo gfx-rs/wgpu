@@ -21,6 +21,7 @@ pub enum GlobalLookupKind {
 pub struct GlobalLookup {
     pub kind: GlobalLookupKind,
     pub entry_arg: Option<usize>,
+    pub mutable: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -84,7 +85,6 @@ pub struct Program<'a> {
     pub lookup_type: FastHashMap<String, Handle<Type>>,
 
     pub global_variables: Vec<(String, GlobalLookup)>,
-    pub constants: Vec<(String, Handle<Constant>)>,
 
     pub entry_args: Vec<EntryArg>,
     pub entries: Vec<(String, ShaderStage, Handle<Function>)>,
@@ -107,7 +107,6 @@ impl<'a> Program<'a> {
             lookup_function: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
             global_variables: Vec::new(),
-            constants: Vec::new(),
 
             entry_args: Vec::new(),
             entries: Vec::new(),
@@ -225,7 +224,7 @@ impl<'function> Context<'function> {
 
             scopes: vec![FastHashMap::default()],
             lookup_global_var_exps: FastHashMap::with_capacity_and_hasher(
-                program.constants.len() + program.global_variables.len(),
+                program.global_variables.len(),
                 Default::default(),
             ),
             typifier: Typifier::new(),
@@ -235,23 +234,15 @@ impl<'function> Context<'function> {
             emitter: Emitter::default(),
         };
 
-        for &(ref name, handle) in program.constants.iter() {
-            let expr = this.expressions.append(Expression::Constant(handle));
-            let var = VariableReference {
-                expr,
-                load: None,
-                mutable: false,
-                entry_arg: None,
-            };
-
-            this.lookup_global_var_exps.insert(name.into(), var);
-        }
-
         this.emit_start();
 
         for &(ref name, lookup) in program.global_variables.iter() {
             this.emit_flush(body);
-            let GlobalLookup { kind, entry_arg } = lookup;
+            let GlobalLookup {
+                kind,
+                entry_arg,
+                mutable,
+            } = lookup;
             let (expr, load) = match kind {
                 GlobalLookupKind::Variable(v) => {
                     let res = (
@@ -280,8 +271,7 @@ impl<'function> Context<'function> {
                 } else {
                     None
                 },
-                // TODO: respect constant qualifier
-                mutable: true,
+                mutable,
                 entry_arg,
             };
 

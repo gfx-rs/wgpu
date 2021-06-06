@@ -12,8 +12,8 @@ use super::{
 };
 use crate::{
     arena::Handle, Arena, ArraySize, BinaryOperator, Block, Constant, ConstantInner, Expression,
-    Function, FunctionResult, GlobalVariable, ResourceBinding, ScalarValue, Statement,
-    StorageAccess, StorageClass, StructMember, SwitchCase, Type, TypeInner, UnaryOperator,
+    Function, FunctionResult, ResourceBinding, ScalarValue, Statement, StorageClass, StructMember,
+    SwitchCase, Type, TypeInner, UnaryOperator,
 };
 use core::convert::TryFrom;
 use std::{iter::Peekable, mem};
@@ -715,7 +715,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 match token.value {
                     TokenValue::Identifier(ty_name) => {
                         if self.bump_if(TokenValue::LeftBrace).is_some() {
-                            self.parse_block_declaration(&qualifiers, ty_name)
+                            self.parse_block_declaration(&qualifiers, ty_name, token.meta)
                         } else {
                             //TODO: declaration
                             // type_qualifier IDENTIFIER SEMICOLON
@@ -761,55 +761,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         &mut self,
         qualifiers: &[(TypeQualifier, SourceMetadata)],
         ty_name: String,
+        mut meta: SourceMetadata,
     ) -> Result<bool> {
-        let mut class = StorageClass::Private;
-        let mut binding = None;
-        let mut layout = None;
-
-        for &(ref qualifier, meta) in qualifiers {
-            match *qualifier {
-                TypeQualifier::StorageQualifier(StorageQualifier::StorageClass(c)) => {
-                    if StorageClass::PushConstant == class && c == StorageClass::Uniform {
-                        // Ignore the Uniform qualifier if the class was already set to PushConstant
-                        continue;
-                    } else if StorageClass::Private != class {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one storage qualifier per declaration".into(),
-                        ));
-                    }
-
-                    class = c;
-                }
-                TypeQualifier::ResourceBinding(ref r) => {
-                    if binding.is_some() {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one storage qualifier per declaration".into(),
-                        ));
-                    }
-
-                    binding = Some(r.clone());
-                }
-                TypeQualifier::Layout(ref l) => {
-                    if layout.is_some() {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one storage qualifier per declaration".into(),
-                        ));
-                    }
-
-                    layout = Some(l);
-                }
-                _ => {
-                    return Err(ErrorKind::SemanticError(
-                        meta,
-                        "Qualifier not supported in block declarations".into(),
-                    ));
-                }
-            }
-        }
-
         let mut members = Vec::new();
         let span = self.parse_struct_declaration_list(&mut members)?;
         self.expect(TokenValue::RightBrace)?;
@@ -828,7 +781,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             TokenValue::Semicolon => None,
             TokenValue::Identifier(name) => {
                 if let Some(size) = self.parse_array_specifier()? {
-                    ty = self.program.module.types.append(Type {
+                    ty = self.program.module.types.fetch_or_append(Type {
                         name: None,
                         inner: TypeInner::Array {
                             base: ty,
@@ -846,25 +799,15 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             }
             _ => return Err(ErrorKind::InvalidToken(token)),
         };
+        meta = meta.union(&token.meta);
 
-        let handle = self.program.module.global_variables.append(GlobalVariable {
-            name: name.clone(),
-            class,
-            binding,
+        let handle = self.program.add_global_var(VarDeclaration {
+            qualifiers,
             ty,
+            name,
             init: None,
-            storage_access: StorageAccess::empty(),
-        });
-
-        if let Some(k) = name {
-            self.program.global_variables.push((
-                k,
-                GlobalLookup {
-                    kind: GlobalLookupKind::Variable(handle),
-                    entry_arg: None,
-                },
-            ));
-        }
+            meta,
+        })?;
 
         for (i, k) in members
             .into_iter()
@@ -876,6 +819,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 GlobalLookup {
                     kind: GlobalLookupKind::BlockSelect(handle, i),
                     entry_arg: None,
+                    mutable: true,
                 },
             ));
         }
@@ -1556,7 +1500,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         let decl = VarDeclaration {
                             qualifiers: &qualifiers,
                             ty,
-                            name,
+                            name: Some(name),
                             init: None,
                             meta: meta.union(&end_meta),
                         };
@@ -1740,13 +1684,18 @@ impl<'ctx, 'fun> DeclarationContext<'ctx, 'fun> {
         let decl = VarDeclaration {
             qualifiers: &self.qualifiers,
             ty,
-            name,
+            name: Some(name),
             init,
             meta,
         };
 
         match self.external {
-            true => program.add_global_var(self.ctx, self.body, decl),
+            true => {
+                let handle = program.add_global_var(decl)?;
+                Ok(self
+                    .ctx
+                    .add_expression(Expression::GlobalVariable(handle), self.body))
+            }
             false => program.add_local_var(self.ctx, self.body, decl),
         }
     }

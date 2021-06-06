@@ -11,7 +11,7 @@ use super::token::SourceMetadata;
 pub struct VarDeclaration<'a> {
     pub qualifiers: &'a [(TypeQualifier, SourceMetadata)],
     pub ty: Handle<Type>,
-    pub name: String,
+    pub name: Option<String>,
     pub init: Option<Handle<Constant>>,
     pub meta: SourceMetadata,
 }
@@ -57,6 +57,7 @@ impl Program<'_> {
                 GlobalLookup {
                     kind: GlobalLookupKind::Variable(handle),
                     entry_arg: Some(idx),
+                    mutable,
                 },
             ));
             ctx.arg_use.push(EntryArgUse::empty());
@@ -222,8 +223,6 @@ impl Program<'_> {
 
     pub fn add_global_var(
         &mut self,
-        ctx: &mut Context,
-        body: &mut Block,
         VarDeclaration {
             qualifiers,
             ty,
@@ -231,7 +230,7 @@ impl Program<'_> {
             init,
             meta,
         }: VarDeclaration,
-    ) -> Result<Handle<Expression>, ErrorKind> {
+    ) -> Result<Handle<GlobalVariable>, ErrorKind> {
         let mut storage = StorageQualifier::StorageClass(StorageClass::Private);
         let mut interpolation = None;
         let mut binding = None;
@@ -242,7 +241,12 @@ impl Program<'_> {
         for &(ref qualifier, meta) in qualifiers {
             match *qualifier {
                 TypeQualifier::StorageQualifier(s) => {
-                    if StorageQualifier::StorageClass(StorageClass::Private) != storage {
+                    if StorageQualifier::StorageClass(StorageClass::PushConstant) == storage
+                        && s == StorageQualifier::StorageClass(StorageClass::Uniform)
+                    {
+                        // Ignore the Uniform qualifier if the class was already set to PushConstant
+                        continue;
+                    } else if StorageQualifier::StorageClass(StorageClass::Private) != storage {
                         return Err(ErrorKind::SemanticError(
                             meta,
                             "Cannot use more than one storage qualifier per declaration".into(),
@@ -255,7 +259,8 @@ impl Program<'_> {
                     if interpolation.is_some() {
                         return Err(ErrorKind::SemanticError(
                             meta,
-                            "Cannot use more than one storage qualifier per declaration".into(),
+                            "Cannot use more than one interpolation qualifier per declaration"
+                                .into(),
                         ));
                     }
 
@@ -265,7 +270,7 @@ impl Program<'_> {
                     if binding.is_some() {
                         return Err(ErrorKind::SemanticError(
                             meta,
-                            "Cannot use more than one storage qualifier per declaration".into(),
+                            "Cannot use more than one binding per declaration".into(),
                         ));
                     }
 
@@ -275,7 +280,7 @@ impl Program<'_> {
                     if location.is_some() {
                         return Err(ErrorKind::SemanticError(
                             meta,
-                            "Cannot use more than one storage qualifier per declaration".into(),
+                            "Cannot use more than one binding per declaration".into(),
                         ));
                     }
 
@@ -285,7 +290,7 @@ impl Program<'_> {
                     if sampling.is_some() {
                         return Err(ErrorKind::SemanticError(
                             meta,
-                            "Cannot use more than one storage qualifier per declaration".into(),
+                            "Cannot use more than one sampling qualifier per declaration".into(),
                         ));
                     }
 
@@ -295,7 +300,7 @@ impl Program<'_> {
                     if layout.is_some() {
                         return Err(ErrorKind::SemanticError(
                             meta,
-                            "Cannot use more than one storage qualifier per declaration".into(),
+                            "Cannot use more than one layout qualifier per declaration".into(),
                         ));
                     }
 
@@ -311,10 +316,17 @@ impl Program<'_> {
         }
 
         if binding.is_some() && storage != StorageQualifier::StorageClass(StorageClass::Uniform) {
-            return Err(ErrorKind::SemanticError(
-                meta,
-                "binding requires uniform or buffer storage qualifier".into(),
-            ));
+            match storage {
+                StorageQualifier::StorageClass(StorageClass::PushConstant)
+                | StorageQualifier::StorageClass(StorageClass::Uniform)
+                | StorageQualifier::StorageClass(StorageClass::Storage) => {}
+                _ => {
+                    return Err(ErrorKind::SemanticError(
+                        meta,
+                        "binding requires uniform or buffer storage qualifier".into(),
+                    ))
+                }
+            }
         }
 
         if (sampling.is_some() || interpolation.is_some()) && location.is_none() {
@@ -325,7 +337,8 @@ impl Program<'_> {
         }
 
         if let Some(location) = location {
-            let prologue = if let StorageQualifier::Input = storage {
+            let input = storage == StorageQualifier::Input;
+            let prologue = if input {
                 PrologueStage::all()
             } else {
                 PrologueStage::empty()
@@ -339,7 +352,7 @@ impl Program<'_> {
             });
 
             let handle = self.module.global_variables.append(GlobalVariable {
-                name: Some(name.clone()),
+                name: name.clone(),
                 class: StorageClass::Private,
                 binding: None,
                 ty,
@@ -358,23 +371,40 @@ impl Program<'_> {
                 prologue,
             });
 
-            self.global_variables.push((
-                name,
-                GlobalLookup {
-                    kind: GlobalLookupKind::Variable(handle),
-                    entry_arg: Some(idx),
-                },
-            ));
+            if let Some(name) = name {
+                self.global_variables.push((
+                    name,
+                    GlobalLookup {
+                        kind: GlobalLookupKind::Variable(handle),
+                        entry_arg: Some(idx),
+                        mutable: !input,
+                    },
+                ));
+            }
 
-            return Ok(ctx.add_expression(Expression::GlobalVariable(handle), body));
+            return Ok(handle);
         } else if let StorageQualifier::Const = storage {
-            let handle = init.ok_or_else(|| {
-                ErrorKind::SemanticError(meta, "Constant must have a initializer".into())
-            })?;
+            let handle = self.module.global_variables.append(GlobalVariable {
+                name: name.clone(),
+                class: StorageClass::Private,
+                binding: None,
+                ty,
+                init,
+                storage_access: StorageAccess::empty(),
+            });
 
-            self.constants.push((name, handle));
+            if let Some(name) = name {
+                self.global_variables.push((
+                    name,
+                    GlobalLookup {
+                        kind: GlobalLookupKind::Variable(handle),
+                        entry_arg: None,
+                        mutable: false,
+                    },
+                ));
+            }
 
-            return Ok(ctx.add_expression(Expression::Constant(handle), body));
+            return Ok(handle);
         }
 
         let (class, storage_access) = match self.module.types[ty].inner {
@@ -389,17 +419,23 @@ impl Program<'_> {
                 },
             ),
             TypeInner::Sampler { .. } => (StorageClass::Handle, StorageAccess::empty()),
-            _ => (
-                match storage {
-                    StorageQualifier::StorageClass(class) => class,
-                    _ => StorageClass::Private,
-                },
-                StorageAccess::empty(),
-            ),
+            _ => {
+                if let StorageQualifier::StorageClass(StorageClass::Storage) = storage {
+                    (StorageClass::Storage, StorageAccess::all())
+                } else {
+                    (
+                        match storage {
+                            StorageQualifier::StorageClass(class) => class,
+                            _ => StorageClass::Private,
+                        },
+                        StorageAccess::empty(),
+                    )
+                }
+            }
         };
 
         let handle = self.module.global_variables.append(GlobalVariable {
-            name: Some(name.clone()),
+            name: name.clone(),
             class,
             binding,
             ty,
@@ -407,15 +443,18 @@ impl Program<'_> {
             storage_access,
         });
 
-        self.global_variables.push((
-            name,
-            GlobalLookup {
-                kind: GlobalLookupKind::Variable(handle),
-                entry_arg: None,
-            },
-        ));
+        if let Some(name) = name {
+            self.global_variables.push((
+                name,
+                GlobalLookup {
+                    kind: GlobalLookupKind::Variable(handle),
+                    entry_arg: None,
+                    mutable: true,
+                },
+            ));
+        }
 
-        Ok(ctx.add_expression(Expression::GlobalVariable(handle), body))
+        Ok(handle)
     }
 
     pub fn add_local_var(
@@ -431,8 +470,10 @@ impl Program<'_> {
         }: VarDeclaration,
     ) -> Result<Handle<Expression>, ErrorKind> {
         #[cfg(feature = "glsl-validate")]
-        if ctx.lookup_local_var_current_scope(&name).is_some() {
-            return Err(ErrorKind::VariableAlreadyDeclared(name));
+        if let Some(ref name) = name {
+            if ctx.lookup_local_var_current_scope(name).is_some() {
+                return Err(ErrorKind::VariableAlreadyDeclared(name.clone()));
+            }
         }
 
         let mut mutable = true;
@@ -459,13 +500,15 @@ impl Program<'_> {
         }
 
         let handle = ctx.locals.append(LocalVariable {
-            name: Some(name.clone()),
+            name: name.clone(),
             ty,
             init,
         });
         let expr = ctx.add_expression(Expression::LocalVariable(handle), body);
 
-        ctx.add_local_var(name, expr, mutable);
+        if let Some(name) = name {
+            ctx.add_local_var(name, expr, mutable);
+        }
 
         Ok(expr)
     }
