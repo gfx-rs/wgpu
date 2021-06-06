@@ -619,17 +619,47 @@ impl FlowGraph {
                     accept_stop_nodes.insert(merge_node_index);
                     accept_stop_nodes.insert(intended_merge);
                     accept_stop_nodes.insert(then_end_index);
+
                     let mut reject_stop_nodes = stop_nodes.clone();
                     reject_stop_nodes.insert(merge_node_index);
                     reject_stop_nodes.insert(intended_merge);
                     reject_stop_nodes.insert(else_end_index);
 
+                    let mut accept =
+                        self.convert_to_naga_traverse(true_node_index, accept_stop_nodes)?;
+                    let mut reject =
+                        self.convert_to_naga_traverse(false_node_index, reject_stop_nodes)?;
+
+                    // If the true/false block of a header is breaking from switch or loop we add a break statement after its statements
+                    for &mut (target_index, ref mut statements) in [
+                        (true_node_index, &mut accept),
+                        (false_node_index, &mut reject),
+                    ]
+                    .iter_mut()
+                    {
+                        if let Some(ControlFlowNodeType::Break) = self.flow[target_index].ty {
+                            let edge = *self
+                                .flow
+                                .edges_directed(target_index, Direction::Outgoing)
+                                .next()
+                                .unwrap()
+                                .weight();
+                            if edge == ControlFlowEdgeType::SwitchBreak
+                                || edge == ControlFlowEdgeType::LoopBreak
+                            {
+                                // Do not add break if already has one as the last statement
+                                if let Some(&crate::Statement::Break) = statements.last() {
+                                } else {
+                                    statements.push(crate::Statement::Break);
+                                }
+                            }
+                        }
+                    }
+
                     result.push(crate::Statement::If {
                         condition,
-                        accept: self
-                            .convert_to_naga_traverse(true_node_index, accept_stop_nodes)?,
-                        reject: self
-                            .convert_to_naga_traverse(false_node_index, reject_stop_nodes)?,
+                        accept,
+                        reject,
                     });
 
                     result.extend(self.convert_to_naga_traverse(merge_node_index, stop_nodes)?);
@@ -852,21 +882,32 @@ impl FlowGraph {
 
         for node_index in self.flow.node_indices() {
             let node = &self.flow[node_index];
-            let shape = if self.constructs[node.construct].ty == ConstructType::Case
-                && node.ty != Some(ControlFlowNodeType::Header)
-            {
-                "point"
-            } else {
-                "ellipse"
+
+            let node_name = match node.ty {
+                Some(ControlFlowNodeType::Header) => {
+                    if self.constructs[node.construct].ty == ConstructType::Case {
+                        "Switch"
+                    } else {
+                        "If"
+                    }
+                }
+                Some(ControlFlowNodeType::Loop) => "Loop",
+                Some(ControlFlowNodeType::Merge) => "",
+                Some(ControlFlowNodeType::Break) => "Break",
+                Some(ControlFlowNodeType::Continue) => "Continue",
+                Some(ControlFlowNodeType::Back) => "Back",
+                Some(ControlFlowNodeType::Kill) => "Kill",
+                Some(ControlFlowNodeType::Return) => "Return",
+                None => "Unlabeled",
             };
+
             writeln!(
                 output,
-                "{} [ label = \"%{}({}) {:?}\" shape={} ]",
+                "{} [ label = \"%{}({}) {}\" shape=ellipse ]",
                 node_index.index(),
                 node.id,
                 node_index.index(),
-                node.ty,
-                shape
+                node_name,
             )?;
         }
 
