@@ -395,7 +395,41 @@ impl<'function> Context<'function> {
                 None
             };
 
-            if let Some(current) = self.scopes.last_mut() {
+            if mutable && load.is_none() {
+                let handle = self.locals.append(LocalVariable {
+                    name: Some(name.clone()),
+                    ty,
+                    init: None,
+                });
+                let local_expr = self.add_expression(Expression::LocalVariable(handle), body);
+
+                self.emit_flush(body);
+                self.emit_start();
+
+                body.push(Statement::Store {
+                    pointer: local_expr,
+                    value: expr,
+                });
+
+                let local_load = self.add_expression(
+                    Expression::Load {
+                        pointer: local_expr,
+                    },
+                    body,
+                );
+
+                if let Some(current) = self.scopes.last_mut() {
+                    (*current).insert(
+                        name,
+                        VariableReference {
+                            expr: local_expr,
+                            load: Some(local_load),
+                            mutable,
+                            entry_arg: None,
+                        },
+                    );
+                }
+            } else if let Some(current) = self.scopes.last_mut() {
                 (*current).insert(
                     name,
                     VariableReference {
