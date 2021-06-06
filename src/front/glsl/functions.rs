@@ -244,20 +244,27 @@ impl Program<'_> {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
 
+                        let (mut left, left_meta) = args[0];
+                        let (mut right, right_meta) = args[1];
+
+                        ctx.binary_implicit_conversion(
+                            self, &mut left, left_meta, &mut right, right_meta,
+                        )?;
+
                         let expr = if let Some(ScalarKind::Float) =
                             self.resolve_type(ctx, args[0].0, args[1].1)?.scalar_kind()
                         {
                             Expression::Math {
                                 fun: MathFunction::Modf,
-                                arg: args[0].0,
-                                arg1: Some(args[1].0),
+                                arg: left,
+                                arg1: Some(right),
                                 arg2: None,
                             }
                         } else {
                             Expression::Binary {
                                 op: BinaryOperator::Modulo,
-                                left: args[0].0,
-                                right: args[1].0,
+                                left,
+                                right,
                             }
                         };
 
