@@ -539,7 +539,7 @@ impl Program<'_> {
                         .take(callee_len.saturating_sub(caller_len)),
                 );
 
-                for i in 0..callee_len.max(caller_len) {
+                for i in 0..callee_len.min(caller_len) {
                     let callee_use = function_arg_use[function.index()][i];
                     function_arg_use[caller.index()][i] |= callee_use
                 }
