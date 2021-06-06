@@ -527,8 +527,15 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             let init = self
                 .bump_if(TokenValue::Assign)
                 .map::<Result<_>, _>(|_| {
-                    let (expr, init_meta) = self.parse_initializer(ty, ctx.ctx, ctx.body)?;
+                    let (mut expr, init_meta) = self.parse_initializer(ty, ctx.ctx, ctx.body)?;
+
+                    if let Some(kind) = self.program.module.types[ty].inner.scalar_kind() {
+                        ctx.ctx
+                            .implicit_conversion(self.program, &mut expr, init_meta, kind)?;
+                    }
+
                     meta = meta.union(&init_meta);
+
                     Ok((expr, init_meta))
                 })
                 .transpose()?;
@@ -541,7 +548,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
             let pointer = ctx.add_var(self.program, ty, name, maybe_constant, meta)?;
 
-            if let Some((value, _)) = init {
+            if let Some((value, _)) = init.filter(|_| maybe_constant.is_none()) {
                 ctx.flush_expressions();
                 ctx.body.push(Statement::Store { pointer, value });
             }
