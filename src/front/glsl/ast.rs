@@ -260,7 +260,24 @@ impl<'function> Context<'function> {
                         .expressions
                         .append(Expression::AccessIndex { base, index });
 
-                    (expr, true)
+                    (expr, {
+                        let ty = program.module.global_variables[handle].ty;
+
+                        match program.module.types[ty].inner {
+                            TypeInner::Struct { ref members, .. } => {
+                                if let TypeInner::Array {
+                                    size: crate::ArraySize::Dynamic,
+                                    ..
+                                } = program.module.types[members[index as usize].ty].inner
+                                {
+                                    false
+                                } else {
+                                    true
+                                }
+                            }
+                            _ => true,
+                        }
+                    })
                 }
             };
 
@@ -437,7 +454,18 @@ impl<'function> Context<'function> {
                 let base = self.lower_expect(program, base, lhs, body)?.0;
                 let index = self.lower_expect(program, index, false, body)?.0;
 
-                self.add_expression(Expression::Access { base, index }, body)
+                let pointer = self.add_expression(Expression::Access { base, index }, body);
+
+                if let TypeInner::Pointer { .. } = *program.resolve_type(self, pointer, meta)? {
+                    if !lhs {
+                        return Ok((
+                            Some(self.add_expression(Expression::Load { pointer }, body)),
+                            meta,
+                        ));
+                    }
+                }
+
+                pointer
             }
             HirExprKind::Select { base, field } => {
                 let base = self.lower_expect(program, base, lhs, body)?.0;
