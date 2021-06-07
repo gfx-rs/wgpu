@@ -1085,6 +1085,13 @@ impl Writer {
         Ok(())
     }
 
+    fn write_constant_null(&mut self, type_id: Word) -> Word {
+        let null_id = self.id_gen.next();
+        Instruction::constant_null(type_id, null_id)
+            .to_words(&mut self.logical_layout.declarations);
+        null_id
+    }
+
     fn write_varying(
         &mut self,
         ir_module: &crate::Module,
@@ -2788,11 +2795,8 @@ impl Writer {
                 // Or it may be the end of the function.
                 None => match ir_function.result {
                     Some(ref result) if function.entry_point_context.is_none() => {
-                        // create a Null and return it
-                        let null_id = self.id_gen.next();
                         let type_id = self.get_type_id(LookupType::Handle(result.ty))?;
-                        Instruction::constant_null(type_id, null_id)
-                            .to_words(&mut self.logical_layout.declarations);
+                        let null_id = self.write_constant_null(type_id);
                         Instruction::return_value(null_id)
                     }
                     _ => Instruction::return_void(),
