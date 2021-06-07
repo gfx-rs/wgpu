@@ -1,5 +1,8 @@
 # Change Log
 
+## wgpu-types-0.8.1 (2021-06-08)
+  - fix dynamic stencil reference for Replace ops
+
 ## v0.8.1 (2021-05-06)
   - fix SPIR-V generation from WGSL, which was broken due to "Kernel" capability
   - validate buffer storage classes
