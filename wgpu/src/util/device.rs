@@ -83,25 +83,17 @@ impl DeviceExt for crate::Device {
 
         let format_info = desc.format.describe();
 
-        let (layer_iterations, mip_extent) = if desc.dimension == crate::TextureDimension::D3 {
-            (1, desc.size)
-        } else {
-            (
-                desc.size.depth_or_array_layers,
-                crate::Extent3d {
-                    depth_or_array_layers: 1,
-                    ..desc.size
-                },
-            )
+        let layer_iterations = match desc.dimension {
+            crate::TextureDimension::D1 | crate::TextureDimension::D2 => {
+                desc.size.depth_or_array_layers
+            }
+            crate::TextureDimension::D3 => 1,
         };
-
-        let mip_level_count =
-            u8::try_from(desc.mip_level_count).expect("mip level count overflows a u8");
 
         let mut binary_offset = 0;
         for layer in 0..layer_iterations {
-            for mip in 0..mip_level_count {
-                let mip_size = mip_extent.at_mip_level(mip).unwrap();
+            for mip in 0..desc.mip_level_count {
+                let mip_size = desc.mip_level_size(mip).unwrap();
 
                 // When uploading mips of compressed textures and the mip is supposed to be
                 // a size that isn't a multiple of the block size, the mip needs to be uploaded

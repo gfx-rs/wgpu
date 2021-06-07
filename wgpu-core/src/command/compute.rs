@@ -12,7 +12,7 @@ use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
-    resource::{Buffer, BufferUse, Texture},
+    resource::{Buffer, Texture},
     track::{StatefulTrackerSubset, TrackerSet, UsageConflict},
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label, DOWNLEVEL_ERROR_WARNING_MESSAGE,
@@ -521,7 +521,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let indirect_buffer = state
                         .trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
+                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUse::INDIRECT)
                         .map_err(|_| ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
                         .map_pass_err(scope)?;
                     check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)

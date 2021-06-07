@@ -2502,40 +2502,6 @@ impl Extent3d {
 
         max_levels as u8
     }
-
-    /// Calculates the extent at a given mip level.
-    ///
-    /// If the given mip level is larger than possible, returns None.
-    ///
-    /// Treats the depth as part of the mipmaps. If calculating
-    /// for a 2DArray texture, which does not mipmap depth, set depth to 1.
-    ///
-    /// ```rust
-    /// # use wgpu_types as wgpu;
-    /// let extent = wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 };
-    ///
-    /// assert_eq!(extent.at_mip_level(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(1), Some(wgpu::Extent3d { width: 50, height: 30, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(2), Some(wgpu::Extent3d { width: 25, height: 15, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(3), Some(wgpu::Extent3d { width: 12, height: 7, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(4), Some(wgpu::Extent3d { width: 6, height: 3, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(5), Some(wgpu::Extent3d { width: 3, height: 1, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(6), Some(wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(7), None);
-    /// ```
-    pub fn at_mip_level(&self, level: u8) -> Option<Self> {
-        let mip_count = self.max_mips();
-
-        if level >= mip_count {
-            return None;
-        }
-
-        Some(Self {
-            width: u32::max(1, self.width >> level as u32),
-            height: u32::max(1, self.height >> level as u32),
-            depth_or_array_layers: u32::max(1, self.depth_or_array_layers >> level as u32),
-        })
-    }
 }
 
 /// Describes a [`Texture`].
@@ -2573,6 +2539,49 @@ impl<L> TextureDescriptor<L> {
             format: self.format,
             usage: self.usage,
         }
+    }
+
+    /// Calculates the extent at a given mip level.
+    ///
+    /// If the given mip level is larger than possible, returns None.
+    ///
+    /// Treats the depth as part of the mipmaps. If calculating
+    /// for a 2DArray texture, which does not mipmap depth, set depth to 1.
+    ///
+    /// ```rust
+    /// # use wgpu_types as wgpu;
+    /// let desc = wgpu::TextureDescriptor {
+    ///   label: (),
+    ///   size: Extent3d { width: 100, height: 60, depth_or_array_layers: 2 },
+    ///   mip_level_count: 7,
+    ///   sample_count: 1,
+    ///   dimension: wgpu::TextureDimension::D3,
+    ///   format: wgpu::TextureFormat::Rgba8Sint,
+    ///   usage: wgpu::TextureUsage::empty(),
+    /// };
+    ///
+    /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(1), Some(wgpu::Extent3d { width: 50, height: 30, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(2), Some(wgpu::Extent3d { width: 25, height: 15, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(3), Some(wgpu::Extent3d { width: 12, height: 7, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(4), Some(wgpu::Extent3d { width: 6, height: 3, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(5), Some(wgpu::Extent3d { width: 3, height: 1, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(6), Some(wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(7), None);
+    /// ```
+    pub fn mip_level_size(&self, level: u32) -> Option<Extent3d> {
+        if level >= self.mip_level_count {
+            return None;
+        }
+
+        Some(Extent3d {
+            width: u32::max(1, self.size.width >> level),
+            height: u32::max(1, self.size.height >> level),
+            depth_or_array_layers: match self.dimension {
+                TextureDimension::D1 | TextureDimension::D2 => self.size.depth_or_array_layers,
+                TextureDimension::D3 => u32::max(1, self.size.depth_or_array_layers >> level),
+            },
+        })
     }
 }
 
@@ -2998,6 +3007,9 @@ pub struct ImageCopyTexture<T> {
     /// The base texel of the texture in the selected `mip_level`.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub origin: Origin3d,
+    /// The copy aspect.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    pub aspect: TextureAspect,
 }
 
 /// Subresource range within an image

@@ -158,7 +158,9 @@ pub trait Adapter<A: Api> {
 }
 
 pub trait Device<A: Api> {
-    ///Note: `desc.mapped_at_creation` flag is ignored.
+    /// Creates a new buffer.
+    ///
+    /// The initial usage is `BufferUse::empty()`.
     unsafe fn create_buffer(&self, desc: &BufferDescriptor) -> Result<A::Buffer, DeviceError>;
     unsafe fn destroy_buffer(&self, buffer: A::Buffer);
     unsafe fn map_buffer(
@@ -178,6 +180,9 @@ pub trait Device<A: Api> {
         ranges: I,
     );
 
+    /// Creates a new texture.
+    ///
+    /// The initial usage for all subresources is `TextureUse::UNINITIALIZED`.
     unsafe fn create_texture(&self, desc: &TextureDescriptor) -> Result<A::Texture, DeviceError>;
     unsafe fn destroy_texture(&self, texture: A::Texture);
     unsafe fn create_texture_view(
@@ -189,6 +194,7 @@ pub trait Device<A: Api> {
     unsafe fn create_sampler(&self, desc: &SamplerDescriptor) -> Result<A::Sampler, DeviceError>;
     unsafe fn destroy_sampler(&self, sampler: A::Sampler);
 
+    //TODO: consider making DX12-style command pools
     unsafe fn create_command_buffer(
         &self,
         desc: &CommandBufferDescriptor,
@@ -390,6 +396,16 @@ bitflags!(
         const STENCIL = 4;
     }
 );
+
+impl From<wgt::TextureAspect> for FormatAspect {
+    fn from(aspect: wgt::TextureAspect) -> Self {
+        match aspect {
+            wgt::TextureAspect::All => Self::all(),
+            wgt::TextureAspect::DepthOnly => Self::DEPTH,
+            wgt::TextureAspect::StencilOnly => Self::STENCIL,
+        }
+    }
+}
 
 impl From<wgt::TextureFormat> for FormatAspect {
     fn from(format: wgt::TextureFormat) -> Self {
@@ -785,8 +801,8 @@ pub struct TextureBarrier<'a, A: Api> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct BufferCopy {
-    pub src: wgt::BufferAddress,
-    pub dst: wgt::BufferAddress,
+    pub src_offset: wgt::BufferAddress,
+    pub dst_offset: wgt::BufferAddress,
     pub size: wgt::BufferSize,
 }
 

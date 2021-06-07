@@ -6,8 +6,8 @@
 use crate::device::trace::Action;
 use crate::{
     command::{
-        texture_copy_view_to_hal, validate_linear_texture_data, validate_texture_copy_range,
-        CommandBuffer, CopySide, ImageCopyTexture, TransferError, BITS_PER_BYTE,
+        extract_image_range, validate_linear_texture_data, validate_texture_copy_range,
+        CommandBuffer, CopySide, ImageCopyTexture, TransferError,
     },
     conv,
     device::{DeviceError, WaitIdleError},
@@ -20,7 +20,7 @@ use crate::{
 
 use hal::{CommandBuffer as _, Device as _, Queue as _};
 use smallvec::SmallVec;
-use std::{iter, ops::Range, ptr};
+use std::{iter, num::NonZeroU32, ops::Range, ptr};
 use thiserror::Error;
 
 struct StagingData<A: hal::Api> {
@@ -314,26 +314,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into());
         }
 
-        let region = hal::command::BufferCopy {
-            src: 0,
-            dst: buffer_offset,
+        let region = hal::BufferCopy {
+            src_offset: 0,
+            dst_offset: buffer_offset,
             size: data.len() as _,
         };
+        let barriers = iter::once(hal::BufferBarrier {
+            buffer: &stage.buffer,
+            usage: hal::BufferUse::MAP_WRITE..hal::BufferUse::COPY_SRC,
+        })
+        .chain(transition.map(|pending| pending.into_hal(dst)));
         unsafe {
-            stage.cmdbuf.pipeline_barrier(
-                super::all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
-                hal::memory::Dependencies::empty(),
-                iter::once(hal::memory::Barrier::Buffer {
-                    states: hal::buffer::Access::HOST_WRITE..hal::buffer::Access::TRANSFER_READ,
-                    target: &stage.buffer,
-                    range: hal::buffer::SubRange::WHOLE,
-                    families: None,
-                })
-                .chain(transition.map(|pending| pending.into_hal(dst))),
-            );
+            stage.cmdbuf.transition_buffers(barriers);
             stage
                 .cmdbuf
-                .copy_buffer(&stage.buffer, dst_raw, iter::once(region));
+                .copy_buffer_to_buffer(&stage.buffer, dst_raw, iter::once(region));
         }
 
         device.pending_writes.consume(stage);
@@ -368,9 +363,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard
             .get_mut(queue_id)
             .map_err(|_| DeviceError::Invalid)?;
-        let (texture_guard, _) = hub.textures.read(&mut token);
-        let (image_layers, image_range, image_offset) =
-            texture_copy_view_to_hal(destination, size, &*texture_guard)?;
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -389,22 +381,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        let texture_format = texture_guard.get(destination.texture).unwrap().format;
-        let bytes_per_block = conv::map_texture_format(texture_format, device.private_features)
-            .surface_desc()
-            .bits as u32
-            / BITS_PER_BYTE;
+        let (texture_guard, _) = hub.textures.read(&mut token);
+        let (image_range, texture_format) =
+            extract_image_range(destination, size, &*texture_guard)?;
+        let format_desc = texture_format.describe();
         validate_linear_texture_data(
             data_layout,
             texture_format,
             data.len() as wgt::BufferAddress,
             CopySide::Source,
-            bytes_per_block as wgt::BufferAddress,
+            format_desc.block_size as wgt::BufferAddress,
             size,
             false,
         )?;
 
-        let (block_width, block_height) = texture_format.describe().block_dimensions;
+        let (block_width, block_height) = format_desc.block_dimensions;
         let block_width = block_width as u32;
         let block_height = block_height as u32;
 
@@ -424,9 +415,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let bytes_per_row_alignment = get_lowest_common_denom(
             device.hal_limits.optimal_buffer_copy_pitch_alignment as u32,
-            bytes_per_block,
+            format_desc.block_size,
         );
-        let stage_bytes_per_row = align_to(bytes_per_block * width_blocks, bytes_per_row_alignment);
+        let stage_bytes_per_row = align_to(
+            format_desc.block_size * width_blocks,
+            bytes_per_row_alignment,
+        );
 
         let block_rows_in_copy =
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
@@ -440,7 +434,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &*texture_guard,
                 destination.texture,
                 image_range,
-                TextureUse::COPY_DST,
+                hal::TextureUse::COPY_DST,
             )
             .unwrap();
         let &(ref dst_raw, _) = dst
@@ -453,7 +447,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
             );
         }
-        validate_texture_copy_range(
+        let max_image_extent = validate_texture_copy_range(
             destination,
             dst.format,
             dst.kind,
@@ -465,7 +459,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let bytes_per_row = if let Some(bytes_per_row) = data_layout.bytes_per_row {
             bytes_per_row.get()
         } else {
-            width_blocks * bytes_per_block
+            width_blocks * format_desc.block_size
         };
 
         let ptr = stage.memory.map(&device.raw, 0, stage_size)?;
@@ -502,38 +496,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // the virtual size. We have passed validation, so it's safe to use the
         // image extent data directly. We want the provided copy size to be no larger than
         // the virtual size.
-        let max_image_extent = dst.kind.level_extent(destination.mip_level as _);
-        let image_extent = wgt::Extent3d {
-            width: size.width.min(max_image_extent.width),
-            height: size.height.min(max_image_extent.height),
-            depth_or_array_layers: size.depth_or_array_layers,
+        let region = hal::BufferTextureCopy {
+            buffer_layout: wgt::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: stage_bytes_per_row,
+                rows_per_image: texel_rows_per_image,
+            },
+            texture_mip_level: destination.mip_level,
+            texture_origin: destination.origin,
+            size: wgt::Extent3d {
+                width: size.width.min(max_image_extent.width),
+                height: size.height.min(max_image_extent.height),
+                depth_or_array_layers: size.depth_or_array_layers,
+            },
         };
 
-        let region = hal::command::BufferImageCopy {
-            buffer_offset: 0,
-            buffer_width: (stage_bytes_per_row / bytes_per_block) * block_width,
-            buffer_height: texel_rows_per_image,
-            image_layers,
-            image_offset,
-            image_extent: conv::map_extent(&image_extent, dst.dimension),
+        let barrier = hal::BufferBarrier {
+            buffer: &stage.buffer,
+            usage: hal::BufferUse::MAP_WRITE..hal::BufferUse::COPY_SRC,
         };
         unsafe {
-            stage.cmdbuf.pipeline_barrier(
-                super::all_image_stages() | hal::pso::PipelineStage::HOST
-                    ..hal::pso::PipelineStage::TRANSFER,
-                hal::memory::Dependencies::empty(),
-                iter::once(hal::memory::Barrier::Buffer {
-                    states: hal::buffer::Access::HOST_WRITE..hal::buffer::Access::TRANSFER_READ,
-                    target: &stage.buffer,
-                    range: hal::buffer::SubRange::WHOLE,
-                    families: None,
-                })
-                .chain(transition.map(|pending| pending.into_hal(dst))),
-            );
+            stage.cmdbuf.transition_buffers(iter::once(barrier));
+            stage
+                .cmdbuf
+                .transition_textures(transition.map(|pending| pending.into_hal(dst)));
             stage.cmdbuf.copy_buffer_to_image(
                 &stage.buffer,
                 dst_raw,
-                hal::image::Layout::TransferDstOptimal,
+                hal::TextureUse::COPY_DST,
                 iter::once(region),
             );
         }
@@ -688,12 +678,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         // execute resource transitions
-                        let mut transit = device.cmd_allocator.extend(cmdbuf);
+                        let mut transit =
+                            device
+                                .raw
+                                .create_command_buffer(&hal::CommandBufferDescriptor {
+                                    label: Some("_Transit"),
+                                });
                         unsafe {
                             // the last buffer was open, closing now
-                            cmdbuf.raw.last_mut().unwrap().finish();
-                            transit
-                                .begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+                            cmdbuf.raw.last_mut().unwrap().end();
+                            transit.begin();
                         }
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
                         trackers.merge_extend_stateless(&cmdbuf.trackers);
@@ -706,7 +700,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &*texture_guard,
                         );
                         unsafe {
-                            transit.finish();
+                            transit.end();
                         }
                         cmdbuf.raw.insert(0, transit);
                     }

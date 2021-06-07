@@ -944,51 +944,29 @@ impl<A: HalApi> Device<A> {
         label: Option<&str>,
         entry_map: binding_model::BindEntryMap,
     ) -> Result<binding_model::BindGroupLayout<A>, binding_model::CreateBindGroupLayoutError> {
-        let mut desc_count = descriptor::DescriptorTotalCount::default();
         for entry in entry_map.values() {
             use wgt::BindingType as Bt;
 
             let mut required_features = wgt::Features::empty();
-            let (counter, array_feature, is_writable_storage) = match entry.ty {
+            let (array_feature, is_writable_storage) = match entry.ty {
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: _,
-                } => (
-                    &mut desc_count.uniform_buffer,
-                    Some(wgt::Features::BUFFER_BINDING_ARRAY),
-                    false,
-                ),
+                } => (Some(wgt::Features::BUFFER_BINDING_ARRAY), false),
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Uniform,
                     has_dynamic_offset: true,
                     min_binding_size: _,
-                } => (
-                    &mut desc_count.uniform_buffer_dynamic,
-                    Some(wgt::Features::BUFFER_BINDING_ARRAY),
-                    false,
-                ),
+                } => (Some(wgt::Features::BUFFER_BINDING_ARRAY), false),
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Storage { read_only },
                     has_dynamic_offset,
                     min_binding_size: _,
-                } => (
-                    if has_dynamic_offset {
-                        &mut desc_count.storage_buffer_dynamic
-                    } else {
-                        &mut desc_count.storage_buffer
-                    },
-                    Some(wgt::Features::BUFFER_BINDING_ARRAY),
-                    !read_only,
-                ),
+                } => (Some(wgt::Features::BUFFER_BINDING_ARRAY), !read_only),
                 Bt::Sampler { .. } => (&mut desc_count.sampler, None, false),
-                Bt::Texture { .. } => (
-                    &mut desc_count.sampled_image,
-                    Some(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
-                    false,
-                ),
+                Bt::Texture { .. } => (Some(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY), false),
                 Bt::StorageTexture { access, .. } => (
-                    &mut desc_count.storage_image,
                     None,
                     match access {
                         wgt::StorageTextureAccess::ReadOnly => false,
@@ -1002,19 +980,15 @@ impl<A: HalApi> Device<A> {
                 ),
             };
 
-            *counter += match entry.count {
-                // Validate the count parameter
-                Some(count) => {
-                    required_features |= array_feature
-                        .ok_or(binding_model::BindGroupLayoutEntryError::ArrayUnsupported)
-                        .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
-                            binding: entry.binding,
-                            error,
-                        })?;
-                    count.get()
-                }
-                None => 1,
-            };
+            // Validate the count parameter
+            if let Some(count) = entry.count {
+                required_features |= array_feature
+                    .ok_or(binding_model::BindGroupLayoutEntryError::ArrayUnsupported)
+                    .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
+                        binding: entry.binding,
+                        error,
+                    })?;
+            }
             if is_writable_storage && entry.visibility.contains(wgt::ShaderStage::VERTEX) {
                 required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
             }
@@ -1055,7 +1029,6 @@ impl<A: HalApi> Device<A> {
                 ref_count: self.life_guard.add_ref(),
             },
             multi_ref_count: MultiRefCount::new(),
-            desc_count,
             dynamic_count: entry_map
                 .values()
                 .filter(|b| b.ty.has_dynamic_offset())
