@@ -47,7 +47,7 @@ pub mod api {
 }
 
 use std::{
-    borrow::{Borrow, Cow},
+    borrow::Borrow,
     fmt,
     num::NonZeroU8,
     ops::{Range, RangeInclusive},
@@ -688,14 +688,14 @@ pub struct SamplerDescriptor<'a> {
 #[derive(Clone, Debug)]
 pub struct BindGroupLayoutDescriptor<'a> {
     pub label: Label<'a>,
-    pub entries: Cow<'a, [wgt::BindGroupLayoutEntry]>,
+    pub entries: &'a [wgt::BindGroupLayoutEntry],
 }
 
 #[derive(Clone, Debug)]
 pub struct PipelineLayoutDescriptor<'a, A: Api> {
     pub label: Label<'a>,
-    pub bind_group_layouts: Cow<'a, [&'a A::BindGroupLayout]>,
-    pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
+    pub bind_group_layouts: &'a [&'a A::BindGroupLayout],
+    pub push_constant_ranges: &'a [wgt::PushConstantRange],
 }
 
 #[derive(Debug)]
@@ -744,7 +744,7 @@ pub struct BindGroupEntry<'a, A: Api> {
 pub struct BindGroupDescriptor<'a, A: Api> {
     pub label: Label<'a>,
     pub layout: &'a A::BindGroupLayout,
-    pub entries: Cow<'a, [BindGroupEntry<'a, A>]>,
+    pub entries: &'a [BindGroupEntry<'a, A>],
 }
 
 #[derive(Clone, Debug)]
@@ -771,7 +771,7 @@ pub struct ProgrammableStage<'a, A: Api> {
     pub module: &'a A::ShaderModule,
     /// The name of the entry point in the compiled shader. There must be a function that returns
     /// void with this name in the shader.
-    pub entry_point: Cow<'a, str>,
+    pub entry_point: &'a str,
 }
 
 // Rust gets confused about the impl requirements for `A`
@@ -802,7 +802,7 @@ pub struct VertexBufferLayout<'a> {
     /// How often this vertex buffer is "stepped" forward.
     pub step_mode: wgt::InputStepMode,
     /// The list of attributes which comprise a single vertex.
-    pub attributes: Cow<'a, [wgt::VertexAttribute]>,
+    pub attributes: &'a [wgt::VertexAttribute],
 }
 
 /// Describes a render (graphics) pipeline.
@@ -812,7 +812,7 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     /// The layout of bind groups for this pipeline.
     pub layout: &'a A::PipelineLayout,
     /// The format of any vertex buffers used with this pipeline.
-    pub vertex_buffers: Cow<'a, [VertexBufferLayout<'a>]>,
+    pub vertex_buffers: &'a [VertexBufferLayout<'a>],
     /// The vertex stage for this pipeline.
     pub vertex_stage: ProgrammableStage<'a, A>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.
@@ -824,7 +824,7 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     /// The fragment stage for this pipeline.
     pub fragment_stage: Option<ProgrammableStage<'a, A>>,
     /// The effect of draw calls on the color aspect of the output target.
-    pub color_targets: Cow<'a, [wgt::ColorTargetState]>,
+    pub color_targets: &'a [wgt::ColorTargetState],
 }
 
 /// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
@@ -969,7 +969,7 @@ pub struct DepthStencilAttachment<'a, A: Api> {
 #[derive(Clone, Debug)]
 pub struct RenderPassDescriptor<'a, A: Api> {
     pub label: Label<'a>,
-    pub color_attachments: Cow<'a, [ColorAttachment<'a, A>]>,
+    pub color_attachments: &'a [ColorAttachment<'a, A>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
 }
 

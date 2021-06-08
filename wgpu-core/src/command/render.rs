@@ -750,7 +750,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
         let hal_desc = hal::RenderPassDescriptor {
             label,
-            color_attachments: colors.iter().cloned().collect(),
+            color_attachments: &colors,
             depth_stencil_attachment: depth_stencil,
         };
         unsafe {

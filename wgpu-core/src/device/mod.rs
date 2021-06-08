@@ -11,8 +11,7 @@ use crate::{
     pipeline, resource, swap_chain,
     track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
-    CowHelpers as _, FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, Stored,
-    SubmissionIndex,
+    FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, Stored, SubmissionIndex,
 };
 
 use arrayvec::ArrayVec;
@@ -957,7 +956,7 @@ impl<A: HalApi> Device<A> {
         let hal_bindings = entry_map.values().cloned().collect::<Vec<_>>();
         let hal_desc = hal::BindGroupLayoutDescriptor {
             label,
-            entries: Cow::Owned(hal_bindings),
+            entries: &hal_bindings,
         };
         let raw = unsafe {
             self.raw
@@ -1432,7 +1431,7 @@ impl<A: HalApi> Device<A> {
         let hal_desc = hal::BindGroupDescriptor {
             label: desc.label.borrow_option(),
             layout: &layout.raw,
-            entries: hal_entries.into(),
+            entries: &hal_entries,
         };
         let raw = unsafe {
             self.raw
@@ -1522,14 +1521,15 @@ impl<A: HalApi> Device<A> {
             .validate(&self.limits)
             .map_err(Error::TooManyBindings)?;
 
+        let bgl_vec = desc
+            .bind_group_layouts
+            .iter()
+            .map(|&id| &bgl_guard.get(id).unwrap().raw)
+            .collect::<Vec<_>>();
         let hal_desc = hal::PipelineLayoutDescriptor {
             label: desc.label.borrow_option(),
-            bind_group_layouts: desc
-                .bind_group_layouts
-                .iter()
-                .map(|&id| &bgl_guard.get(id).unwrap().raw)
-                .collect(),
-            push_constant_ranges: desc.push_constant_ranges.reborrow(),
+            bind_group_layouts: &bgl_vec,
+            push_constant_ranges: desc.push_constant_ranges.as_ref(),
         };
 
         let raw = unsafe {
@@ -1688,7 +1688,7 @@ impl<A: HalApi> Device<A> {
             label: desc.label.borrow_option(),
             layout: &layout.raw,
             stage: hal::ProgrammableStage {
-                entry_point: desc.stage.entry_point.reborrow(),
+                entry_point: desc.stage.entry_point.as_ref(),
                 module: &shader_module.raw,
             },
         };
@@ -1779,7 +1779,7 @@ impl<A: HalApi> Device<A> {
             vertex_buffers.alloc().init(hal::VertexBufferLayout {
                 array_stride: vb_state.array_stride,
                 step_mode: vb_state.step_mode,
-                attributes: Cow::Borrowed(vb_state.attributes.as_ref()),
+                attributes: vb_state.attributes.as_ref(),
             });
 
             for attribute in vb_state.attributes.iter() {
@@ -1960,7 +1960,7 @@ impl<A: HalApi> Device<A> {
 
             hal::ProgrammableStage {
                 module: &shader_module.raw,
-                entry_point: stage.entry_point.reborrow(),
+                entry_point: stage.entry_point.as_ref(),
             }
         };
 
@@ -2005,7 +2005,7 @@ impl<A: HalApi> Device<A> {
 
                 Some(hal::ProgrammableStage {
                     module: &shader_module.raw,
-                    entry_point: fragment.stage.entry_point.reborrow(),
+                    entry_point: fragment.stage.entry_point.as_ref(),
                 })
             }
             None => None,
@@ -2063,13 +2063,13 @@ impl<A: HalApi> Device<A> {
         let pipeline_desc = hal::RenderPipelineDescriptor {
             label: desc.label.borrow_option(),
             layout: &layout.raw,
-            vertex_buffers: vertex_buffers.into(),
+            vertex_buffers: &vertex_buffers,
             vertex_stage,
             primitive: desc.primitive,
             depth_stencil: desc.depth_stencil.clone(),
             multisample: desc.multisample,
             fragment_stage,
-            color_targets: Cow::Borrowed(color_targets),
+            color_targets: color_targets,
         };
         let raw =
             unsafe { self.raw.create_render_pipeline(&pipeline_desc) }.map_err(

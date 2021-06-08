@@ -76,15 +76,6 @@ impl<'a> LabelHelpers<'a> for Label<'a> {
     }
 }
 
-trait CowHelpers<'a> {
-    fn reborrow(&'a self) -> Self;
-}
-impl<'a, T: ToOwned + ?Sized> CowHelpers<'a> for Cow<'a, T> {
-    fn reborrow(&'a self) -> Self {
-        Cow::Borrowed(self.as_ref())
-    }
-}
-
 /// Reference count object that is 1:1 with each reference.
 #[derive(Debug)]
 struct RefCount(ptr::NonNull<AtomicUsize>);

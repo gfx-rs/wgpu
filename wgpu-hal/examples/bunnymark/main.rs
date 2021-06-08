@@ -2,13 +2,7 @@ extern crate wgpu_hal as hal;
 
 use hal::{Adapter as _, CommandBuffer as _, Device as _, Instance as _, Queue as _, Surface as _};
 
-use std::{
-    borrow::{Borrow, Cow},
-    iter, mem,
-    num::NonZeroU32,
-    ptr,
-    time::Instant,
-};
+use std::{borrow::Borrow, iter, mem, num::NonZeroU32, ptr, time::Instant};
 
 const MAX_BUNNIES: usize = 1 << 20;
 const BUNNY_SIZE: f32 = 0.15 * 256.0;
@@ -104,7 +98,7 @@ impl<A: hal::Api> Example<A> {
 
         let global_bgl_desc = hal::BindGroupLayoutDescriptor {
             label: None,
-            entries: Cow::Borrowed(&[
+            entries: &[
                 wgt::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgt::ShaderStage::VERTEX,
@@ -134,14 +128,14 @@ impl<A: hal::Api> Example<A> {
                     },
                     count: None,
                 },
-            ]),
+            ],
         };
 
         let global_bind_group_layout =
             unsafe { device.create_bind_group_layout(&global_bgl_desc).unwrap() };
 
         let local_bgl_desc = hal::BindGroupLayoutDescriptor {
-            entries: Cow::Borrowed(&[wgt::BindGroupLayoutEntry {
+            entries: &[wgt::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgt::ShaderStage::VERTEX,
                 ty: wgt::BindingType::Buffer {
@@ -150,7 +144,7 @@ impl<A: hal::Api> Example<A> {
                     min_binding_size: wgt::BufferSize::new(mem::size_of::<Locals>() as _),
                 },
                 count: None,
-            }]),
+            }],
             label: None,
         };
         let local_bind_group_layout =
@@ -158,11 +152,8 @@ impl<A: hal::Api> Example<A> {
 
         let pipeline_layout_desc = hal::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: Cow::Borrowed(&[
-                &global_bind_group_layout,
-                &local_bind_group_layout,
-            ]),
-            push_constant_ranges: Cow::Borrowed(&[]),
+            bind_group_layouts: &[&global_bind_group_layout, &local_bind_group_layout],
+            push_constant_ranges: &[],
         };
         let pipeline_layout = unsafe {
             device
@@ -175,12 +166,12 @@ impl<A: hal::Api> Example<A> {
             layout: &pipeline_layout,
             vertex_stage: hal::ProgrammableStage {
                 module: &shader,
-                entry_point: Cow::Borrowed("vs_main"),
+                entry_point: "vs_main",
             },
-            vertex_buffers: Cow::Borrowed(&[]),
+            vertex_buffers: &[],
             fragment_stage: Some(hal::ProgrammableStage {
                 module: &shader,
-                entry_point: Cow::Borrowed("fs_main"),
+                entry_point: "fs_main",
             }),
             primitive: wgt::PrimitiveState {
                 topology: wgt::PrimitiveTopology::TriangleStrip,
@@ -188,11 +179,11 @@ impl<A: hal::Api> Example<A> {
             },
             depth_stencil: None,
             multisample: wgt::MultisampleState::default(),
-            color_targets: Cow::Borrowed(&[wgt::ColorTargetState {
+            color_targets: &[wgt::ColorTargetState {
                 format: surface_config.format,
                 blend: Some(wgt::BlendState::ALPHA_BLENDING),
                 write_mask: wgt::ColorWrite::default(),
-            }]),
+            }],
         };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
 
@@ -341,7 +332,7 @@ impl<A: hal::Api> Example<A> {
             let global_group_desc = hal::BindGroupDescriptor {
                 label: Some("global"),
                 layout: &global_bind_group_layout,
-                entries: Cow::Borrowed(&[
+                entries: &[
                     hal::BindGroupEntry {
                         binding: 0,
                         resource: hal::BindingResource::Buffers(
@@ -359,7 +350,7 @@ impl<A: hal::Api> Example<A> {
                         binding: 2,
                         resource: hal::BindingResource::Sampler(&sampler),
                     },
-                ]),
+                ],
             };
             unsafe { device.create_bind_group(&global_group_desc).unwrap() }
         };
@@ -373,12 +364,12 @@ impl<A: hal::Api> Example<A> {
             let local_group_desc = hal::BindGroupDescriptor {
                 label: Some("local"),
                 layout: &local_bind_group_layout,
-                entries: Cow::Borrowed(&[hal::BindGroupEntry {
+                entries: &[hal::BindGroupEntry {
                     binding: 0,
                     resource: hal::BindingResource::Buffers(
                         iter::once(local_buffer_binding).collect(),
                     ),
-                }]),
+                }],
             };
             unsafe { device.create_bind_group(&local_group_desc).unwrap() }
         };
@@ -493,7 +484,7 @@ impl<A: hal::Api> Example<A> {
         };
         let pass_desc = hal::RenderPassDescriptor {
             label: None,
-            color_attachments: Cow::Borrowed(&[hal::ColorAttachment {
+            color_attachments: &[hal::ColorAttachment {
                 target: hal::Attachment {
                     view: &surface_tex_view,
                     usage: hal::TextureUse::COLOR_TARGET,
@@ -507,7 +498,7 @@ impl<A: hal::Api> Example<A> {
                     b: 0.3,
                     a: 1.0,
                 },
-            }]),
+            }],
             depth_stencil_attachment: None,
         };
         unsafe {
