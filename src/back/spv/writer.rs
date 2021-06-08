@@ -270,8 +270,6 @@ struct GlobalVariable {
     /// prelude block (and reset before every function) as `OpLoad` of the variable.
     /// It is then used for all the global ops, such as `OpImageSample`.
     handle_id: Word,
-    /// SPIR-V storage class.
-    class: spirv::StorageClass,
 }
 
 pub struct Writer {
@@ -1180,7 +1178,7 @@ impl Writer {
         &mut self,
         ir_module: &crate::Module,
         global_variable: &crate::GlobalVariable,
-    ) -> Result<(Instruction, Word, spirv::StorageClass), Error> {
+    ) -> Result<(Instruction, Word), Error> {
         let id = self.id_gen.next();
 
         let class = map_storage_class(global_variable.class);
@@ -1215,7 +1213,7 @@ impl Writer {
         }
 
         // TODO Initializer is optional and not (yet) included in the IR
-        Ok((instruction, id, class))
+        Ok((instruction, id))
     }
 
     fn get_function_type(&mut self, lookup_function_type: LookupFunctionType) -> Word {
@@ -1768,7 +1766,7 @@ impl Writer {
             }
             crate::Expression::LocalVariable(variable) => function.variables[&variable].id,
             crate::Expression::Load { pointer } => {
-                let (pointer_id, _) =
+                let pointer_id =
                     self.write_expression_pointer(ir_function, fun_info, pointer, block, function)?;
 
                 let id = self.id_gen.next();
@@ -2275,7 +2273,7 @@ impl Writer {
         mut expr_handle: Handle<crate::Expression>,
         block: &mut Block,
         function: &mut Function,
-    ) -> Result<(Word, spirv::StorageClass), Error> {
+    ) -> Result<Word, Error> {
         let result_lookup_ty = match fun_info[expr_handle].ty {
             TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
             TypeResolution::Value(ref inner) => {
@@ -2285,7 +2283,7 @@ impl Writer {
         let result_type_id = self.get_type_id(result_lookup_ty)?;
 
         self.temp_list.clear();
-        let (root_id, class) = loop {
+        let root_id = loop {
             expr_handle = match ir_function.expressions[expr_handle] {
                 crate::Expression::Access { base, index } => {
                     let index_id = self.cached[index];
@@ -2299,15 +2297,15 @@ impl Writer {
                 }
                 crate::Expression::GlobalVariable(handle) => {
                     let gv = &self.global_variables[handle.index()];
-                    break (gv.id, gv.class);
+                    break gv.id;
                 }
                 crate::Expression::LocalVariable(variable) => {
                     let local_var = &function.variables[&variable];
-                    break (local_var.id, spirv::StorageClass::Function);
+                    break local_var.id;
                 }
                 crate::Expression::FunctionArgument(index) => {
                     let id = function.parameters[index as usize].result_id.unwrap();
-                    break (id, spirv::StorageClass::Function);
+                    break id;
                 }
                 ref other => unimplemented!("Unexpected pointer expression {:?}", other),
             }
@@ -2326,7 +2324,7 @@ impl Writer {
             ));
             id
         };
-        Ok((id, class))
+        Ok(id)
     }
 
     fn get_expression_global(
@@ -2690,7 +2688,7 @@ impl Writer {
                     ));
                 }
                 crate::Statement::Store { pointer, value } => {
-                    let (pointer_id, _) = self.write_expression_pointer(
+                    let pointer_id = self.write_expression_pointer(
                         ir_function,
                         fun_info,
                         pointer,
@@ -2854,13 +2852,10 @@ impl Writer {
         // now write all globals
         self.global_variables.clear();
         for (_, var) in ir_module.global_variables.iter() {
-            let (instruction, id, class) = self.write_global_variable(ir_module, var)?;
+            let (instruction, id) = self.write_global_variable(ir_module, var)?;
             instruction.to_words(&mut self.logical_layout.declarations);
-            self.global_variables.push(GlobalVariable {
-                id,
-                handle_id: 0,
-                class,
-            });
+            self.global_variables
+                .push(GlobalVariable { id, handle_id: 0 });
         }
 
         // all functions
