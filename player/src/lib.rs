@@ -39,12 +39,12 @@ impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandlerFactory<I>
 impl wgc::hub::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
 
 pub trait GlobalPlay {
-    fn encode_commands<B: wgc::hub::HalApi>(
+    fn encode_commands<A: wgc::hub::HalApi>(
         &self,
         encoder: wgc::id::CommandEncoderId,
         commands: Vec<trace::Command>,
     ) -> wgc::id::CommandBufferId;
-    fn process<B: wgc::hub::HalApi>(
+    fn process<A: wgc::hub::HalApi>(
         &self,
         device: wgc::id::DeviceId,
         action: trace::Action,
@@ -54,7 +54,7 @@ pub trait GlobalPlay {
 }
 
 impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
-    fn encode_commands<B: wgc::hub::HalApi>(
+    fn encode_commands<A: wgc::hub::HalApi>(
         &self,
         encoder: wgc::id::CommandEncoderId,
         commands: Vec<trace::Command>,
@@ -139,48 +139,50 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
         cmd_buf
     }
 
-    fn process<B: wgc::hub::HalApi>(
+    fn process<A: wgc::hub::HalApi>(
         &self,
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
         comb_manager: &mut wgc::hub::IdentityManager,
     ) {
-        use wgc::device::trace::Action as A;
+        use wgc::device::trace::Action;
         log::info!("action {:?}", action);
         //TODO: find a way to force ID perishing without excessive `maintain()` calls.
         match action {
-            A::Init { .. } => panic!("Unexpected Action::Init: has to be the first action only"),
-            A::CreateSwapChain { .. } | A::PresentSwapChain(_) => {
+            Action::Init { .. } => {
+                panic!("Unexpected Action::Init: has to be the first action only")
+            }
+            Action::CreateSwapChain { .. } | Action::PresentSwapChain(_) => {
                 panic!("Unexpected SwapChain action: winit feature is not enabled")
             }
-            A::CreateBuffer(id, desc) => {
+            Action::CreateBuffer(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_buffer::<A>(device, &desc, id);
                 if let Some(e) = error {
                     panic!("{:?}", e);
                 }
             }
-            A::FreeBuffer(id) => {
+            Action::FreeBuffer(id) => {
                 self.buffer_destroy::<A>(id).unwrap();
             }
-            A::DestroyBuffer(id) => {
+            Action::DestroyBuffer(id) => {
                 self.buffer_drop::<A>(id, true);
             }
-            A::CreateTexture(id, desc) => {
+            Action::CreateTexture(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_texture::<A>(device, &desc, id);
                 if let Some(e) = error {
                     panic!("{:?}", e);
                 }
             }
-            A::FreeTexture(id) => {
+            Action::FreeTexture(id) => {
                 self.texture_destroy::<A>(id).unwrap();
             }
-            A::DestroyTexture(id) => {
+            Action::DestroyTexture(id) => {
                 self.texture_drop::<A>(id, true);
             }
-            A::CreateTextureView {
+            Action::CreateTextureView {
                 id,
                 parent_id,
                 desc,
@@ -191,56 +193,56 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     panic!("{:?}", e);
                 }
             }
-            A::DestroyTextureView(id) => {
+            Action::DestroyTextureView(id) => {
                 self.texture_view_drop::<A>(id, true).unwrap();
             }
-            A::CreateSampler(id, desc) => {
+            Action::CreateSampler(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_sampler::<A>(device, &desc, id);
                 if let Some(e) = error {
                     panic!("{:?}", e);
                 }
             }
-            A::DestroySampler(id) => {
+            Action::DestroySampler(id) => {
                 self.sampler_drop::<A>(id);
             }
-            A::GetSwapChainTexture { id, parent_id } => {
+            Action::GetSwapChainTexture { id, parent_id } => {
                 self.device_maintain_ids::<A>(device).unwrap();
                 self.swap_chain_get_current_texture_view::<A>(parent_id, id)
                     .unwrap()
                     .view_id
                     .unwrap();
             }
-            A::CreateBindGroupLayout(id, desc) => {
+            Action::CreateBindGroupLayout(id, desc) => {
                 let (_, error) = self.device_create_bind_group_layout::<A>(device, &desc, id);
                 if let Some(e) = error {
                     panic!("{:?}", e);
                 }
             }
-            A::DestroyBindGroupLayout(id) => {
+            Action::DestroyBindGroupLayout(id) => {
                 self.bind_group_layout_drop::<A>(id);
             }
-            A::CreatePipelineLayout(id, desc) => {
+            Action::CreatePipelineLayout(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_pipeline_layout::<A>(device, &desc, id);
                 if let Some(e) = error {
                     panic!("{:?}", e);
                 }
             }
-            A::DestroyPipelineLayout(id) => {
+            Action::DestroyPipelineLayout(id) => {
                 self.pipeline_layout_drop::<A>(id);
             }
-            A::CreateBindGroup(id, desc) => {
+            Action::CreateBindGroup(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_bind_group::<A>(device, &desc, id);
                 if let Some(e) = error {
                     panic!("{:?}", e);
                 }
             }
-            A::DestroyBindGroup(id) => {
+            Action::DestroyBindGroup(id) => {
                 self.bind_group_drop::<A>(id);
             }
-            A::CreateShaderModule { id, desc, data } => {
+            Action::CreateShaderModule { id, desc, data } => {
                 let source = if data.ends_with(".wgsl") {
                     let code = fs::read_to_string(dir.join(data)).unwrap();
                     wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code))
@@ -258,10 +260,10 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     panic!("{:?}", e);
                 }
             }
-            A::DestroyShaderModule(id) => {
+            Action::DestroyShaderModule(id) => {
                 self.shader_module_drop::<A>(id);
             }
-            A::CreateComputePipeline {
+            Action::CreateComputePipeline {
                 id,
                 desc,
                 implicit_context,
@@ -280,10 +282,10 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     panic!("{:?}", e);
                 }
             }
-            A::DestroyComputePipeline(id) => {
+            Action::DestroyComputePipeline(id) => {
                 self.compute_pipeline_drop::<A>(id);
             }
-            A::CreateRenderPipeline {
+            Action::CreateRenderPipeline {
                 id,
                 desc,
                 implicit_context,
@@ -302,10 +304,10 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     panic!("{:?}", e);
                 }
             }
-            A::DestroyRenderPipeline(id) => {
+            Action::DestroyRenderPipeline(id) => {
                 self.render_pipeline_drop::<A>(id);
             }
-            A::CreateRenderBundle { id, desc, base } => {
+            Action::CreateRenderBundle { id, desc, base } => {
                 let bundle =
                     wgc::command::RenderBundleEncoder::new(&desc, device, Some(base)).unwrap();
                 let (_, error) = self.render_bundle_encoder_finish::<A>(
@@ -317,20 +319,20 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     panic!("{:?}", e);
                 }
             }
-            A::DestroyRenderBundle(id) => {
+            Action::DestroyRenderBundle(id) => {
                 self.render_bundle_drop::<A>(id);
             }
-            A::CreateQuerySet { id, desc } => {
+            Action::CreateQuerySet { id, desc } => {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_query_set::<A>(device, &desc, id);
                 if let Some(e) = error {
                     panic!("{:?}", e);
                 }
             }
-            A::DestroyQuerySet(id) => {
+            Action::DestroyQuerySet(id) => {
                 self.query_set_drop::<A>(id);
             }
-            A::WriteBuffer {
+            Action::WriteBuffer {
                 id,
                 data,
                 range,
@@ -347,7 +349,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                         .unwrap();
                 }
             }
-            A::WriteTexture {
+            Action::WriteTexture {
                 to,
                 data,
                 layout,
@@ -357,10 +359,10 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.queue_write_texture::<A>(device, &to, &bin, &layout, &size)
                     .unwrap();
             }
-            A::Submit(_index, ref commands) if commands.is_empty() => {
+            Action::Submit(_index, ref commands) if commands.is_empty() => {
                 self.queue_submit::<A>(device, &[]).unwrap();
             }
-            A::Submit(_index, commands) => {
+            Action::Submit(_index, commands) => {
                 let (encoder, error) = self.device_create_command_encoder::<A>(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },

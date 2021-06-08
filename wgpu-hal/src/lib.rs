@@ -37,6 +37,14 @@
 )]
 
 pub mod empty;
+#[cfg(feature = "metal")]
+mod metal;
+
+pub mod api {
+    pub use super::empty::Api as Empty;
+    #[cfg(feature = "metal")]
+    pub use super::metal::Api as Metal;
+}
 
 use std::{
     borrow::{Borrow, Cow},
@@ -97,8 +105,8 @@ pub enum SurfaceError {
 }
 
 #[derive(Clone, Debug, PartialEq, Error)]
-#[error("Window handle is not supported")]
-pub struct UnsupportedWindow;
+#[error("Not supported")]
+pub struct InstanceError;
 
 pub trait Api: Clone + Sized {
     type Instance: Instance<Self>;
@@ -124,11 +132,13 @@ pub trait Api: Clone + Sized {
     type ComputePipeline;
 }
 
-pub trait Instance<A: Api> {
+pub trait Instance<A: Api>: Sized {
+    unsafe fn init() -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
         rwh: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Result<A::Surface, UnsupportedWindow>;
+    ) -> Result<A::Surface, InstanceError>;
+    unsafe fn destroy_surface(&self, surface: A::Surface);
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
 }
 

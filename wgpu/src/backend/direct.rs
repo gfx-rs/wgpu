@@ -50,6 +50,7 @@ impl Context {
             }))
     }
 
+    /*TODO: raw surface
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub unsafe fn create_surface_from_core_animation_layer(
         self: &Arc<Self>,
@@ -60,7 +61,7 @@ impl Context {
             context: Arc::clone(self),
             id,
         }
-    }
+    }*/
 
     fn handle_error(
         &self,
@@ -540,6 +541,7 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> wgc::command::ImageCo
         texture: view.texture.id.id,
         mip_level: view.mip_level,
         origin: view.origin,
+        aspect: view.aspect,
     }
 }
 
@@ -806,7 +808,6 @@ impl crate::Context for Context {
         let global = &self.0;
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
             label: desc.label.map(Borrowed),
-            flags: desc.flags,
         };
         let source = match desc.source {
             ShaderSource::SpirV(ref spv) => wgc::pipeline::ShaderModuleSource::SpirV(Borrowed(spv)),
@@ -951,20 +952,20 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &PipelineLayoutDescriptor,
     ) -> Self::PipelineLayoutId {
-        // Limit is always less or equal to wgc::MAX_BIND_GROUPS, so this is always right
+        // Limit is always less or equal to hal::MAX_BIND_GROUPS, so this is always right
         // Guards following ArrayVec
         assert!(
-            desc.bind_group_layouts.len() <= wgc::MAX_BIND_GROUPS,
+            desc.bind_group_layouts.len() <= hal::MAX_BIND_GROUPS,
             "Bind group layout count {} exceeds device bind group limit {}",
             desc.bind_group_layouts.len(),
-            wgc::MAX_BIND_GROUPS
+            hal::MAX_BIND_GROUPS
         );
 
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
             .map(|bgl| bgl.id)
-            .collect::<ArrayVec<[_; wgc::MAX_BIND_GROUPS]>>();
+            .collect::<ArrayVec<[_; hal::MAX_BIND_GROUPS]>>();
         let descriptor = wgc::binding_model::PipelineLayoutDescriptor {
             label: desc.label.map(Borrowed),
             bind_group_layouts: Borrowed(&temp_layouts),
@@ -996,7 +997,7 @@ impl crate::Context for Context {
     ) -> Self::RenderPipelineId {
         use wgc::pipeline as pipe;
 
-        let vertex_buffers: ArrayVec<[_; wgc::device::MAX_VERTEX_BUFFERS]> = desc
+        let vertex_buffers: ArrayVec<[_; hal::MAX_VERTEX_BUFFERS]> = desc
             .vertex
             .buffers
             .iter()
@@ -1011,7 +1012,7 @@ impl crate::Context for Context {
             Some(_) => None,
             None => Some(wgc::device::ImplicitPipelineIds {
                 root_id: PhantomData,
-                group_ids: &[PhantomData; wgc::MAX_BIND_GROUPS],
+                group_ids: &[PhantomData; hal::MAX_BIND_GROUPS],
             }),
         };
         let descriptor = pipe::RenderPipelineDescriptor {
@@ -1071,7 +1072,7 @@ impl crate::Context for Context {
             Some(_) => None,
             None => Some(wgc::device::ImplicitPipelineIds {
                 root_id: PhantomData,
-                group_ids: &[PhantomData; wgc::MAX_BIND_GROUPS],
+                group_ids: &[PhantomData; hal::MAX_BIND_GROUPS],
             }),
         };
         let descriptor = pipe::ComputePipelineDescriptor {
@@ -1731,7 +1732,7 @@ impl crate::Context for Context {
                 resolve_target: ca.resolve_target.map(|rt| rt.id),
                 channel: map_pass_channel(Some(&ca.ops)),
             })
-            .collect::<ArrayVec<[_; wgc::device::MAX_COLOR_TARGETS]>>();
+            .collect::<ArrayVec<[_; hal::MAX_COLOR_TARGETS]>>();
 
         let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
             wgc::command::RenderPassDepthStencilAttachment {

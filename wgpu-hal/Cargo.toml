@@ -7,11 +7,12 @@ description = "WebGPU hardware abstraction layer"
 homepage = "https://github.com/gfx-rs/wgpu"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
-license = "MPL-2.0"
+license = "MIT OR Apache-2.0"
 
 [lib]
 
 [features]
+metal = ["mtl"]
 
 [dependencies]
 bitflags = "1.0"
@@ -19,6 +20,9 @@ raw-window-handle = "0.3"
 smallvec = "1"
 thiserror = "1"
 wgt = { package = "wgpu-types", path = "../wgpu-types" }
+
+# backends
+mtl = { package = "metal", version = "0.22", optional = true }
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"

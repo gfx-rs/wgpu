@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, num::NonZeroU32};
+use std::num::NonZeroU32;
 
 /// Describes a [Buffer](crate::Buffer) when allocating.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -106,7 +106,7 @@ impl DeviceExt for crate::Device {
                 let height_blocks = mip_physical.height / format_info.block_dimensions.1 as u32;
 
                 let bytes_per_row = width_blocks * format_info.block_size as u32;
-                let data_size = bytes_per_row * height_blocks * mip_extent.depth_or_array_layers;
+                let data_size = bytes_per_row * height_blocks * mip_size.depth_or_array_layers;
 
                 let end_offset = binary_offset + data_size as usize;
 
@@ -119,6 +119,7 @@ impl DeviceExt for crate::Device {
                             y: 0,
                             z: layer,
                         },
+                        aspect: wgt::TextureAspect::All,
                     },
                     &data[binary_offset..end_offset],
                     crate::ImageDataLayout {

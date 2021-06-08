@@ -4103,27 +4103,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn poll_all_devices(&self, force_wait: bool) -> Result<(), WaitIdleError> {
-        //use crate::backend;
         let mut callbacks = Vec::new();
 
-        /*
         #[cfg(vulkan)]
         {
-            self.poll_devices::<backend::Vulkan>(force_wait, &mut callbacks)?;
+            self.poll_devices::<hal::api::Vulkan>(force_wait, &mut callbacks)?;
         }
         #[cfg(metal)]
         {
-            self.poll_devices::<backend::Metal>(force_wait, &mut callbacks)?;
+            self.poll_devices::<hal::api::Metal>(force_wait, &mut callbacks)?;
         }
         #[cfg(dx12)]
         {
-            self.poll_devices::<backend::Dx12>(force_wait, &mut callbacks)?;
+            self.poll_devices::<hal::api::Dx12>(force_wait, &mut callbacks)?;
         }
         #[cfg(dx11)]
         {
-            self.poll_devices::<backend::Dx11>(force_wait, &mut callbacks)?;
+            self.poll_devices::<hal::api::Dx11>(force_wait, &mut callbacks)?;
         }
-        */
 
         fire_map_callbacks(callbacks);
 

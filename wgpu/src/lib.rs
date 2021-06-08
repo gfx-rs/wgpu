@@ -33,12 +33,12 @@ pub use wgt::{
     ImageDataLayout, IndexFormat, InputStepMode, Limits, MultisampleState, Origin3d,
     PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
     PrimitiveTopology, PushConstantRange, QuerySetDescriptor, QueryType, SamplerBorderColor,
-    ShaderFlags, ShaderLocation, ShaderModel, ShaderStage, StencilFaceState, StencilOperation,
-    StencilState, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus, TextureAspect,
-    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
-    TextureSampleType, TextureUsage, TextureViewDimension, VertexAttribute, VertexFormat,
-    BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    ShaderLocation, ShaderModel, ShaderStage, StencilFaceState, StencilOperation, StencilState,
+    StorageTextureAccess, SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureDimension,
+    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
+    TextureUsage, TextureViewDimension, VertexAttribute, VertexFormat, BIND_BUFFER_ALIGNMENT,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C};
@@ -750,8 +750,6 @@ pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
     /// Source code for the shader.
     pub source: ShaderSource<'a>,
-    /// Shader handling flags.
-    pub flags: ShaderFlags,
 }
 
 /// Handle to a pipeline layout.
@@ -1420,6 +1418,7 @@ impl Instance {
         }
     }
 
+    /*TODO: raw CAL surface
     /// Creates a surface from `CoreAnimationLayer`.
     ///
     /// # Safety
@@ -1431,7 +1430,7 @@ impl Instance {
         layer: *mut std::ffi::c_void,
     ) -> Surface {
         self.context.create_surface_from_core_animation_layer(layer)
-    }
+    }*/
 
     /// Polls all devices.
     /// If `force_wait` is true and this is not running on the web,

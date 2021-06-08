@@ -36,6 +36,10 @@ optional = true
 package = "wgpu-types"
 path = "../wgpu-types"
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.hal]
+package = "wgpu-hal"
+path = "../wgpu-hal"
+
 [dependencies]
 arrayvec = "0.5"
 log = "0.4"

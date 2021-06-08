@@ -8,7 +8,7 @@ use wgt::Backend;
 
 const BACKEND_BITS: usize = 3;
 const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
-type Dummy = crate::backend::Empty;
+type Dummy = hal::api::Empty;
 
 #[repr(transparent)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize), serde(into = "SerialId"))]

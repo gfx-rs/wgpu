@@ -31,22 +31,6 @@
 #[macro_use]
 mod macros;
 
-pub mod backend {
-    pub use hal::empty::Api as Empty;
-    /*
-    #[cfg(dx11)]
-    pub use gfx_backend_dx11::Backend as Dx11;
-    #[cfg(dx12)]
-    pub use gfx_backend_dx12::Backend as Dx12;
-    #[cfg(gl)]
-    pub use gfx_backend_gl::Backend as Gl;
-    #[cfg(metal)]
-    pub use gfx_backend_metal::Backend as Metal;
-    #[cfg(vulkan)]
-    pub use gfx_backend_vulkan::Backend as Vulkan;
-    */
-}
-
 pub mod binding_model;
 pub mod command;
 mod conv;
@@ -60,6 +44,8 @@ pub mod resource;
 pub mod swap_chain;
 mod track;
 mod validation;
+
+pub use hal::api;
 
 #[cfg(test)]
 use loom::sync::atomic;
@@ -257,11 +243,11 @@ macro_rules! gfx_select {
         // Note: For some reason the cfg aliases defined in build.rs don't succesfully apply in this
         // macro so we must specify their equivalents manually
         match $id.backend() {
-            /*
-            #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")))]
-            wgt::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),* ),
+            //#[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")))]
+            //wgt::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),* ),
             #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
-            wgt::Backend::Metal => $global.$method::<$crate::backend::Metal>( $($param),* ),
+            wgt::Backend::Metal => $global.$method::<$crate::api::Metal>( $($param),* ),
+            /*
             #[cfg(all(not(target_arch = "wasm32"), windows))]
             wgt::Backend::Dx12 => $global.$method::<$crate::backend::Dx12>( $($param),* ),
             #[cfg(all(not(target_arch = "wasm32"), windows))]

@@ -49,6 +49,10 @@ path = "../wgpu-hal"
 package = "wgpu-hal"
 version = "0.1"
 
+[target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
+hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["metal"] }
+#Note: could also enable "vulkan" for Vulkan Portability
+
 [dev-dependencies]
 loom = "0.3"
 

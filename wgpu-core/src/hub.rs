@@ -718,26 +718,22 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     }
 }
 
-#[derive(Debug)]
 pub struct Hubs<F: GlobalIdentityHandlerFactory> {
-    /*
     #[cfg(vulkan)]
     vulkan: Hub<backend::Vulkan, F>,
     #[cfg(metal)]
-    metal: Hub<backend::Metal, F>,
+    metal: Hub<hal::api::Metal, F>,
     #[cfg(dx12)]
     dx12: Hub<backend::Dx12, F>,
     #[cfg(dx11)]
     dx11: Hub<backend::Dx11, F>,
     #[cfg(gl)]
-    gl: Hub<backend::Gl, F>,*/
-    marker: PhantomData<F>,
+    gl: Hub<backend::Gl, F>,
 }
 
 impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
     fn new(factory: &F) -> Self {
         Self {
-            /*
             #[cfg(vulkan)]
             vulkan: Hub::new(factory),
             #[cfg(metal)]
@@ -748,13 +744,10 @@ impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
             dx11: Hub::new(factory),
             #[cfg(gl)]
             gl: Hub::new(factory),
-            */
-            marker: PhantomData,
         }
     }
 }
 
-#[derive(Debug)]
 pub struct Global<G: GlobalIdentityHandlerFactory> {
     pub instance: Instance,
     pub surfaces: Registry<Surface, id::SurfaceId, G>,
@@ -765,7 +758,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn new(name: &str, factory: G, backends: wgt::BackendBit) -> Self {
         profiling::scope!("new", "Global");
         Self {
-            instance: Instance::new(name, 1, backends),
+            instance: Instance::new(name, backends),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
         }
@@ -786,7 +779,6 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         let mut surface_guard = self.surfaces.data.write();
 
         // destroy hubs before the instance gets dropped
-        /*
         #[cfg(vulkan)]
         {
             self.hubs.vulkan.clear(&mut *surface_guard, true);
@@ -807,7 +799,6 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         {
             self.hubs.gl.clear(&mut *surface_guard, true);
         }
-        */
 
         // destroy surfaces
         for element in surface_guard.map.drain(..) {
@@ -834,10 +825,10 @@ impl HalApi for backend::Vulkan {
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         surface.vulkan.as_mut().unwrap()
     }
-}
+}*/
 
 #[cfg(metal)]
-impl HalApi for backend::Metal {
+impl HalApi for hal::api::Metal {
     const VARIANT: Backend = Backend::Metal;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.metal
@@ -847,6 +838,7 @@ impl HalApi for backend::Metal {
     }
 }
 
+/*
 #[cfg(dx12)]
 impl HalApi for backend::Dx12 {
     const VARIANT: Backend = Backend::Dx12;

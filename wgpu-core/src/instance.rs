@@ -11,50 +11,49 @@ use crate::{
 
 use wgt::{Backend, BackendBit, PowerPreference, BIND_BUFFER_ALIGNMENT};
 
-use hal::Adapter as _;
+use hal::{Adapter as _, Instance as _};
 use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
+type HalInstance<A> = <A as hal::Api>::Instance;
+type HalSurface<A> = <A as hal::Api>::Surface;
 
-#[derive(Debug)]
 pub struct Instance {
-    /*
-#[cfg(vulkan)]
-pub vulkan: Option<gfx_backend_vulkan::Instance>,
-#[cfg(metal)]
-pub metal: Option<gfx_backend_metal::Instance>,
-#[cfg(dx12)]
-pub dx12: Option<gfx_backend_dx12::Instance>,
-#[cfg(dx11)]
-pub dx11: Option<gfx_backend_dx11::Instance>,
-#[cfg(gl)]
-pub gl: Option<gfx_backend_gl::Instance>,
-*/}
+    #[allow(dead_code)]
+    name: String,
+    #[cfg(vulkan)]
+    pub vulkan: Option<gfx_backend_vulkan::Instance>,
+    #[cfg(metal)]
+    pub metal: Option<HalInstance<hal::api::Metal>>,
+    #[cfg(dx12)]
+    pub dx12: Option<gfx_backend_dx12::Instance>,
+    #[cfg(dx11)]
+    pub dx11: Option<gfx_backend_dx11::Instance>,
+    #[cfg(gl)]
+    pub gl: Option<gfx_backend_gl::Instance>,
+}
 
 impl Instance {
-    pub fn new(name: &str, version: u32, backends: BackendBit) -> Self {
-        backends_map! {
-            let map = |(backend, backend_create)| {
-                if backends.contains(backend.into()) {
-                    backend_create(name, version).ok()
-                } else {
-                    None
-                }
-            };
-            Self {
-                /*
-                #[cfg(vulkan)]
-                vulkan: map((Backend::Vulkan, gfx_backend_vulkan::Instance::create)),
-                #[cfg(metal)]
-                metal: map((Backend::Metal, gfx_backend_metal::Instance::create)),
-                #[cfg(dx12)]
-                dx12: map((Backend::Dx12, gfx_backend_dx12::Instance::create)),
-                #[cfg(dx11)]
-                dx11: map((Backend::Dx11, gfx_backend_dx11::Instance::create)),
-                #[cfg(gl)]
-                gl: map((Backend::Gl, gfx_backend_gl::Instance::create)),
-                */
+    pub fn new(name: &str, backends: BackendBit) -> Self {
+        let map = |backend: Backend| unsafe {
+            if backends.contains(backend.into()) {
+                hal::Instance::init().ok()
+            } else {
+                None
             }
+        };
+        Self {
+            name: name.to_string(),
+            #[cfg(vulkan)]
+            vulkan: map((Backend::Vulkan)),
+            #[cfg(metal)]
+            metal: map(Backend::Metal),
+            #[cfg(dx12)]
+            dx12: map((Backend::Dx12)),
+            #[cfg(dx11)]
+            dx11: map((Backend::Dx11)),
+            #[cfg(gl)]
+            gl: map((Backend::Gl)),
         }
     }
 
@@ -68,7 +67,6 @@ impl Instance {
                 }
             };
 
-            /*
             #[cfg(vulkan)]
             map((surface.vulkan, &self.vulkan)),
             #[cfg(metal)]
@@ -79,27 +77,22 @@ impl Instance {
             map((surface.dx11, &self.dx11)),
             #[cfg(gl)]
             map((surface.gl, &self.gl)),
-            */
         }
     }
 }
 
-type HalSurface<A> = <A as hal::Api>::Surface;
-
-#[derive(Debug)]
 pub struct Surface {
-    /*
-#[cfg(vulkan)]
-pub vulkan: Option<HalSurface<backend::Vulkan>>,
-#[cfg(metal)]
-pub metal: Option<HalSurface<backend::Metal>>,
-#[cfg(dx12)]
-pub dx12: Option<HalSurface<backend::Dx12>>,
-#[cfg(dx11)]
-pub dx11: Option<HalSurface<backend::Dx11>>,
-#[cfg(gl)]
-pub gl: Option<HalSurface<backend::Gl>>,
-*/}
+    #[cfg(vulkan)]
+    pub vulkan: Option<HalSurface<hal::api::Vulkan>>,
+    #[cfg(metal)]
+    pub metal: Option<HalSurface<hal::api::Metal>>,
+    #[cfg(dx12)]
+    pub dx12: Option<HalSurface<hal::api::Dx12>>,
+    #[cfg(dx11)]
+    pub dx11: Option<HalSurface<hal::api::Dx11>>,
+    #[cfg(gl)]
+    pub gl: Option<HalSurface<hal::api::Gl>>,
+}
 
 impl crate::hub::Resource for Surface {
     const TYPE: &'static str = "Surface";
@@ -352,7 +345,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
 
                 Surface {
-                    /*
                     #[cfg(vulkan)]
                     vulkan: map(&self.instance.vulkan),
                     #[cfg(metal)]
@@ -363,7 +355,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     dx11: map(&self.instance.dx11),
                     #[cfg(gl)]
                     gl: map(&self.instance.gl),
-                    */
                 }
             }
         };
@@ -373,6 +364,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
+    /*TODO: raw CALayer handling
     #[cfg(metal)]
     pub fn instance_create_surface_metal(
         &self,
@@ -382,18 +374,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("create_surface_metal", "Instance");
 
         let surface = Surface {
-            /*
             metal: self.instance.metal.as_ref().map(|inst| {
                 // we don't want to link to metal-rs for this
                 #[allow(clippy::transmute_ptr_to_ref)]
                 inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
-            }),*/
+            }),
         };
 
         let mut token = Token::root();
         let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
         id.0
-    }
+    }*/
 
     pub fn surface_drop(&self, id: SurfaceId) {
         profiling::scope!("drop", "Surface");
@@ -410,11 +401,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut adapters = Vec::new();
 
         backends_map! {
-            let map = |(instance_field, backend, backend_info, backend_hub)| {
+            let map = |(instance_field, backend, backend_info)| {
                 if let Some(ref inst) = *instance_field {
-                    let hub = backend_hub(self);
+                    let hub = HalApi::hub(self);
                     if let Some(id_backend) = inputs.find(backend) {
-                        for raw in inst.enumerate_adapters() {
+                        for raw in unsafe {inst.enumerate_adapters()} {
                             let adapter = Adapter::new(raw);
                             log::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
                             let id = hub.adapters
@@ -426,18 +417,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
-            /*
             #[cfg(vulkan)]
-            map((&instance.vulkan, Backend::Vulkan, "Vulkan", backend::Vulkan::hub)),
+            map((&instance.vulkan, Backend::Vulkan, "Vulkan")),
             #[cfg(metal)]
-            map((&instance.metal, Backend::Metal, "Metal", backend::Metal::hub)),
+            map((&instance.metal, Backend::Metal, "Metal")),
             #[cfg(dx12)]
-            map((&instance.dx12, Backend::Dx12, "Dx12", backend::Dx12::hub)),
+            map((&instance.dx12, Backend::Dx12, "Dx12")),
             #[cfg(dx11)]
-            map((&instance.dx11, Backend::Dx11, "Dx11", backend::Dx11::hub)),
+            map((&instance.dx11, Backend::Dx11, "Dx11")),
             #[cfg(gl)]
-            map((&instance.gl, Backend::Gl, "GL", backend::Gl::hub)),
-            */
+            map((&instance.gl, Backend::Gl, "GL")),
         }
 
         adapters
@@ -473,13 +462,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let map = |(instance_backend, id_backend, surface_backend)| {
                 match *instance_backend {
                     Some(ref inst) if id_backend.is_some() => {
-                        let mut adapters = inst.enumerate_adapters();
+                        let mut adapters = unsafe { inst.enumerate_adapters() };
                         if let Some(surface_backend) = compatible_surface.and_then(surface_backend) {
-                            adapters.retain(|a| {
-                                a.queue_families
-                                    .iter()
-                                    .find(|qf| qf.queue_type().supports_graphics())
-                                    .map_or(false, |qf| surface_backend.supports_queue_family(qf))
+                            adapters.retain(|exposed| unsafe {
+                                exposed.adapter.surface_capabilities(surface_backend).is_some()
                             });
                         }
                         device_types.extend(adapters.iter().map(|ad| ad.info.device_type));
@@ -491,7 +477,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // NB: The internal function definitions are a workaround for Rust
             // being weird with lifetimes for closure literals...
-            /*
             #[cfg(vulkan)]
             let adapters_vk = map((&instance.vulkan, &id_vulkan, {
                 fn surface_vulkan(surf: &Surface) -> Option<&HalSurface<backend::Vulkan>> {
@@ -501,7 +486,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }));
             #[cfg(metal)]
             let adapters_mtl = map((&instance.metal, &id_metal, {
-                fn surface_metal(surf: &Surface) -> Option<&HalSurface<backend::Metal>> {
+                fn surface_metal(surf: &Surface) -> Option<&HalSurface<hal::api::Metal>> {
                     surf.metal.as_ref()
                 }
                 surface_metal
@@ -526,7 +511,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     surf.gl.as_ref()
                 }
                 surface_gl
-            }));*/
+            }));
         }
 
         if device_types.is_empty() {
@@ -564,11 +549,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut selected = preferred_gpu.unwrap_or(0);
 
         backends_map! {
-            let map = |(info_adapter, id_backend, mut adapters_backend, backend_hub)| {
+            let map = |(info_adapter, id_backend, mut adapters_backend)| {
                 if selected < adapters_backend.len() {
                     let adapter = Adapter::new(adapters_backend.swap_remove(selected));
                     log::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
-                    let id = backend_hub(self).adapters
+                    let id = HalApi::hub(self).adapters
                         .prepare(id_backend.take().unwrap())
                         .assign(adapter, &mut token);
                     return Ok(id.0);
@@ -576,18 +561,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 selected -= adapters_backend.len();
             };
 
-            /*
             #[cfg(vulkan)]
-            map(("Vulkan", &mut id_vulkan, adapters_vk, backend::Vulkan::hub)),
+            map(("Vulkan", &mut id_vulkan, adapters_vk)),
             #[cfg(metal)]
-            map(("Metal", &mut id_metal, adapters_mtl, backend::Metal::hub)),
+            map(("Metal", &mut id_metal, adapters_mtl)),
             #[cfg(dx12)]
-            map(("Dx12", &mut id_dx12, adapters_dx12, backend::Dx12::hub)),
+            map(("Dx12", &mut id_dx12, adapters_dx12)),
             #[cfg(dx11)]
-            map(("Dx11", &mut id_dx11, adapters_dx11, backend::Dx11::hub)),
+            map(("Dx11", &mut id_dx11, adapters_dx11)),
             #[cfg(gl)]
-            map(("GL", &mut id_gl, adapters_gl, backend::Gl::hub)),
-            */
+            map(("GL", &mut id_gl, adapters_gl)),
         }
 
         let _ = (
