@@ -1341,6 +1341,13 @@ impl<W: Write> Writer<W> {
         }
         // Write global type
         self.write_type(module, global.ty)?;
+
+        // Write initializer
+        if let Some(init) = global.init {
+            write!(self.out, " = ")?;
+            self.write_constant(module, init)?;
+        }
+
         // End with semicolon
         writeln!(self.out, ";")?;
 
@@ -1368,8 +1375,25 @@ impl<W: Write> Writer<W> {
                 self.write_type(module, ty)?;
                 write!(self.out, "(")?;
 
+                let members = match module.types[ty].inner {
+                    TypeInner::Struct { ref members, .. } => Some(members),
+                    _ => None,
+                };
+
                 // Write the comma separated constants
                 for (index, constant) in components.iter().enumerate() {
+                    if let Some(&Binding::BuiltIn(builtin)) =
+                        members.and_then(|members| members.get(index)?.binding.as_ref())
+                    {
+                        if builtin_str(builtin).is_none() {
+                            log::warn!(
+                                "Skip constant for struct member with unsupported builtin {:?}",
+                                builtin
+                            );
+                            continue;
+                        }
+                    }
+
                     self.write_constant(module, *constant)?;
                     // Only write a comma if isn't the last element
                     if index != components.len().saturating_sub(1) {

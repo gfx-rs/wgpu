@@ -10,7 +10,7 @@ struct VertexOutput {
 
 var<private> v_uv: vec2<f32>;
 var<private> a_uv: vec2<f32>;
-var<private> perVertexStruct: gl_PerVertex;
+var<private> perVertexStruct: gl_PerVertex = gl_PerVertex(vec4<f32>(0.0, 0.0, 0.0, 1.0), );
 var<private> a_pos: vec2<f32>;
 
 fn main() {
