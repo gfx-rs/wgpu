@@ -236,7 +236,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::TextureUse::COPY_DST,
             )
             .map_err(ClearError::InvalidTexture)?;
-        let dst_raw = dst_texture
+        let _dst_raw = dst_texture
             .raw
             .as_ref()
             .ok_or(ClearError::InvalidTexture(dst))?;

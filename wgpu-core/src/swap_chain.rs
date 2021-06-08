@@ -162,6 +162,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         return Err(DeviceError::from(err).into());
                     }
                     hal::SurfaceError::Outdated => Status::Outdated,
+                    hal::SurfaceError::Other(msg) => {
+                        log::error!("acquire error: {}", msg);
+                        Status::Lost
+                    }
                 },
             ),
         };
@@ -175,10 +179,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let view_id = match texture {
             Some(suf_texture) => {
-                let raw = device
-                    .raw
-                    .create_texture_view(suf_texture.borrow(), &hal_desc)
-                    .map_err(DeviceError::from)?;
+                let raw = unsafe {
+                    device
+                        .raw
+                        .create_texture_view(suf_texture.borrow(), &hal_desc)
+                        .map_err(DeviceError::from)?
+                };
                 let view = resource::TextureView {
                     raw,
                     source: resource::TextureViewSource::SwapChain(Stored {
@@ -284,6 +290,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::SurfaceError::Lost => Ok(Status::Lost),
                 hal::SurfaceError::Device(err) => Err(SwapChainError::from(DeviceError::from(err))),
                 hal::SurfaceError::Outdated => Ok(Status::Outdated),
+                hal::SurfaceError::Other(msg) => {
+                    log::error!("acquire error: {}", msg);
+                    Err(SwapChainError::InvalidSurface)
+                }
             },
         }
     }

@@ -140,11 +140,12 @@ impl<A: HalApi> Adapter<A> {
             wgt::TextureFormat::Rgba8Unorm,
         ];
 
-        let caps = self
-            .raw
-            .adapter
-            .surface_capabilities(A::get_surface_mut(surface))
-            .ok_or(GetSwapChainPreferredFormatError::UnsupportedQueueFamily)?;
+        let caps = unsafe {
+            self.raw
+                .adapter
+                .surface_capabilities(A::get_surface_mut(surface))
+                .ok_or(GetSwapChainPreferredFormatError::UnsupportedQueueFamily)?
+        };
 
         preferred_formats
             .iter()
@@ -157,7 +158,7 @@ impl<A: HalApi> Adapter<A> {
         &self,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
-        let caps = self.raw.adapter.texture_format_capabilities(format);
+        let caps = unsafe { self.raw.adapter.texture_format_capabilities(format) };
 
         let mut allowed_usages = format.describe().guaranteed_format_features.allowed_usages;
         allowed_usages.set(
@@ -351,6 +352,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
 
                 Surface {
+                    /*
                     #[cfg(vulkan)]
                     vulkan: map(&self.instance.vulkan),
                     #[cfg(metal)]
@@ -361,6 +363,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     dx11: map(&self.instance.dx11),
                     #[cfg(gl)]
                     gl: map(&self.instance.gl),
+                    */
                 }
             }
         };

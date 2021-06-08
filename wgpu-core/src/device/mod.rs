@@ -11,7 +11,8 @@ use crate::{
     pipeline, resource, swap_chain,
     track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
-    FastHashMap, Label, LabelHelpers, LifeGuard, MultiRefCount, Stored, SubmissionIndex,
+    CowHelpers as _, FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, Stored,
+    SubmissionIndex,
 };
 
 use arrayvec::ArrayVec;
@@ -31,6 +32,7 @@ pub mod trace;
 use smallvec::SmallVec;
 
 pub const SHADER_STAGE_COUNT: usize = 3;
+const CLEANUP_WAIT_MS: u32 = 5000;
 
 const IMPLICIT_FAILURE: &str = "failed implicit";
 
@@ -54,13 +56,6 @@ pub(crate) struct AttachmentData<T> {
 }
 impl<T: PartialEq> Eq for AttachmentData<T> {}
 impl<T> AttachmentData<T> {
-    pub(crate) fn all(&self) -> impl Iterator<Item = &T> {
-        self.colors
-            .iter()
-            .chain(&self.resolves)
-            .chain(&self.depth_stencil)
-    }
-
     pub(crate) fn map<U, F: Fn(&T) -> U>(&self, fun: F) -> AttachmentData<U> {
         AttachmentData {
             colors: self.colors.iter().map(&fun).collect(),
@@ -128,18 +123,19 @@ fn map_buffer<A: hal::Api>(
     size: BufferAddress,
     kind: HostMap,
 ) -> Result<ptr::NonNull<u8>, resource::BufferAccessError> {
-    let ptr = raw
-        .map_buffer(buffer.raw.as_ref().unwrap(), offset..offset + size)
-        .map_err(DeviceError::from)?;
+    let ptr = unsafe {
+        raw.map_buffer(buffer.raw.as_ref().unwrap(), offset..offset + size)
+            .map_err(DeviceError::from)?
+    };
 
     buffer.sync_mapped_writes = match kind {
-        HostMap::Read if !buffer.is_coherent => {
+        HostMap::Read if !buffer.is_coherent => unsafe {
             raw.invalidate_mapped_ranges(
                 buffer.raw.as_ref().unwrap(),
                 iter::once(offset..offset + size),
             );
             None
-        }
+        },
         HostMap::Write if !buffer.is_coherent => Some(offset..offset + size),
         _ => None,
     };
@@ -163,10 +159,12 @@ fn map_buffer<A: hal::Api>(
             )
         };
         if zero_init_needs_flush_now {
-            raw.flush_mapped_ranges(
-                buffer.raw.as_ref().unwrap(),
-                iter::once(uninitialized_range.start..uninitialized_range.start + num_bytes),
-            );
+            unsafe {
+                raw.flush_mapped_ranges(
+                    buffer.raw.as_ref().unwrap(),
+                    iter::once(uninitialized_range.start..uninitialized_range.start + num_bytes),
+                )
+            };
         }
     }
 
@@ -201,6 +199,7 @@ pub struct Device<A: hal::Api> {
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) life_guard: LifeGuard,
     pub(crate) active_submission_index: SubmissionIndex,
+    fence: A::Fence,
     /// Has to be locked temporarily only (locked last)
     pub(crate) trackers: Mutex<TrackerSet>,
     // Life tracker should be locked right after the device and before anything else.
@@ -226,7 +225,7 @@ pub enum CreateDeviceError {
 impl<A: HalApi> Device<A> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        device: hal::OpenDevice<A>,
+        open: hal::OpenDevice<A>,
         adapter_id: Stored<id::AdapterId>,
         alignments: hal::Alignments,
         downlevel: wgt::DownlevelCapabilities,
@@ -237,13 +236,16 @@ impl<A: HalApi> Device<A> {
         if let Some(_) = trace_path {
             log::error!("Feature 'trace' is not enabled");
         }
+        let fence =
+            unsafe { open.device.create_fence() }.map_err(|_| CreateDeviceError::OutOfMemory)?;
 
         Ok(Self {
-            raw: device.device,
+            raw: open.device,
             adapter_id,
-            queue: device.queue,
+            queue: open.queue,
             life_guard: LifeGuard::new("<device>"),
             active_submission_index: 0,
+            fence,
             trackers: Mutex::new(TrackerSet::new(A::VARIANT)),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: life::SuspectedResources::default(),
@@ -275,10 +277,6 @@ impl<A: HalApi> Device<A> {
         } else {
             Err(MissingFeatures(feature))
         }
-    }
-
-    pub(crate) fn last_completed_submission_index(&self) -> SubmissionIndex {
-        self.life_guard.submission_index.load(Ordering::Acquire)
     }
 
     fn lock_life_internal<'this, 'token: 'this>(
@@ -313,13 +311,27 @@ impl<A: HalApi> Device<A> {
             token,
         );
         life_tracker.triage_mapped(hub, token);
-        let last_done = life_tracker.triage_submissions(&self.raw, force_wait)?;
+
+        let last_done_index = if force_wait {
+            let current_index = self.active_submission_index;
+            unsafe {
+                self.raw
+                    .wait(&self.fence, current_index, CLEANUP_WAIT_MS)
+                    .map_err(DeviceError::from)?
+            };
+            current_index
+        } else {
+            unsafe {
+                self.raw
+                    .get_fence_value(&self.fence)
+                    .map_err(DeviceError::from)?
+            }
+        };
+
+        life_tracker.triage_submissions(last_done_index);
         let callbacks = life_tracker.handle_mapping(hub, &self.raw, &self.trackers, token);
         life_tracker.cleanup(&self.raw);
 
-        self.life_guard
-            .submission_index
-            .store(last_done, Ordering::Release);
         Ok(callbacks)
     }
 
@@ -416,11 +428,14 @@ impl<A: HalApi> Device<A> {
             usage |= hal::BufferUse::COPY_DST;
         }
 
+        let mut memory_flags = hal::MemoryFlag::empty();
+        memory_flags.set(hal::MemoryFlag::TRANSIENT, transient);
+
         let hal_desc = hal::BufferDescriptor {
-            label: desc.label.map(|cow| cow.as_ref()),
+            label: desc.label.borrow_option(),
             size: desc.size,
             usage,
-            memory_flags: hal::MemoryFlag::empty(),
+            memory_flags,
         };
         let buffer = unsafe { self.raw.create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
 
@@ -508,7 +523,7 @@ impl<A: HalApi> Device<A> {
             usage: conv::map_texture_usage(desc.usage, desc.format.into()),
             memory_flags: hal::MemoryFlag::empty(),
         };
-        let mut raw = unsafe {
+        let raw = unsafe {
             self.raw
                 .create_texture(&hal_desc)
                 .map_err(DeviceError::from)?
@@ -900,8 +915,7 @@ impl<A: HalApi> Device<A> {
                 } => (Some(wgt::Features::BUFFER_BINDING_ARRAY), false),
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Storage { read_only },
-                    has_dynamic_offset,
-                    min_binding_size: _,
+                    ..
                 } => (Some(wgt::Features::BUFFER_BINDING_ARRAY), !read_only),
                 Bt::Sampler { .. } => (None, false),
                 Bt::Texture { .. } => (Some(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY), false),
@@ -920,7 +934,7 @@ impl<A: HalApi> Device<A> {
             };
 
             // Validate the count parameter
-            if let Some(count) = entry.count {
+            if entry.count.is_some() {
                 required_features |= array_feature
                     .ok_or(binding_model::BindGroupLayoutEntryError::ArrayUnsupported)
                     .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
@@ -1515,7 +1529,7 @@ impl<A: HalApi> Device<A> {
                 .iter()
                 .map(|&id| &bgl_guard.get(id).unwrap().raw)
                 .collect(),
-            push_constant_ranges: desc.push_constant_ranges,
+            push_constant_ranges: desc.push_constant_ranges.reborrow(),
         };
 
         let raw = unsafe {
@@ -1631,28 +1645,30 @@ impl<A: HalApi> Device<A> {
             .get(desc.stage.module)
             .map_err(|_| validation::StageError::InvalidModule)?;
 
-        let flag = wgt::ShaderStage::COMPUTE;
-        let provided_layouts = match desc.layout {
-            Some(pipeline_layout_id) => Some(Device::get_introspection_bind_group_layouts(
-                pipeline_layout_guard
-                    .get(pipeline_layout_id)
-                    .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?,
-                &*bgl_guard,
-            )),
-            None => {
-                for _ in 0..self.limits.max_bind_groups {
-                    derived_group_layouts.push(binding_model::BindEntryMap::default());
+        {
+            let flag = wgt::ShaderStage::COMPUTE;
+            let provided_layouts = match desc.layout {
+                Some(pipeline_layout_id) => Some(Device::get_introspection_bind_group_layouts(
+                    pipeline_layout_guard
+                        .get(pipeline_layout_id)
+                        .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?,
+                    &*bgl_guard,
+                )),
+                None => {
+                    for _ in 0..self.limits.max_bind_groups {
+                        derived_group_layouts.push(binding_model::BindEntryMap::default());
+                    }
+                    None
                 }
-                None
-            }
-        };
-        let _ = shader_module.interface.check_stage(
-            provided_layouts.as_ref().map(|p| p.as_slice()),
-            &mut derived_group_layouts,
-            &desc.stage.entry_point,
-            flag,
-            io,
-        )?;
+            };
+            let _ = shader_module.interface.check_stage(
+                provided_layouts.as_ref().map(|p| p.as_slice()),
+                &mut derived_group_layouts,
+                &desc.stage.entry_point,
+                flag,
+                io,
+            )?;
+        }
 
         let pipeline_layout_id = match desc.layout {
             Some(id) => id,
@@ -1672,7 +1688,7 @@ impl<A: HalApi> Device<A> {
             label: desc.label.borrow_option(),
             layout: &layout.raw,
             stage: hal::ProgrammableStage {
-                entry_point: desc.stage.entry_point,
+                entry_point: desc.stage.entry_point.reborrow(),
                 module: &shader_module.raw,
             },
         };
@@ -1944,7 +1960,7 @@ impl<A: HalApi> Device<A> {
 
             hal::ProgrammableStage {
                 module: &shader_module.raw,
-                entry_point: stage.entry_point,
+                entry_point: stage.entry_point.reborrow(),
             }
         };
 
@@ -1989,7 +2005,7 @@ impl<A: HalApi> Device<A> {
 
                 Some(hal::ProgrammableStage {
                     module: &shader_module.raw,
-                    entry_point: fragment.stage.entry_point,
+                    entry_point: fragment.stage.entry_point.reborrow(),
                 })
             }
             None => None,
@@ -2050,7 +2066,7 @@ impl<A: HalApi> Device<A> {
             vertex_buffers: vertex_buffers.into(),
             vertex_stage,
             primitive: desc.primitive,
-            depth_stencil: desc.depth_stencil,
+            depth_stencil: desc.depth_stencil.clone(),
             multisample: desc.multisample,
             fragment_stage,
             color_targets: Cow::Borrowed(color_targets),
@@ -2117,14 +2133,21 @@ impl<A: HalApi> Device<A> {
         submission_index: SubmissionIndex,
         token: &mut Token<Self>,
     ) -> Result<(), WaitIdleError> {
-        if self.last_completed_submission_index() <= submission_index {
+        let last_done_index = unsafe {
+            self.raw
+                .get_fence_value(&self.fence)
+                .map_err(DeviceError::from)?
+        };
+        if last_done_index < submission_index {
             log::info!("Waiting for submission {:?}", submission_index);
-            self.lock_life(token)
-                .triage_submissions(&self.raw, true)
-                .map(|_| ())
-        } else {
-            Ok(())
+            unsafe {
+                self.raw
+                    .wait(&self.fence, submission_index, !0)
+                    .map_err(DeviceError::from)?
+            };
+            self.lock_life(token).triage_submissions(submission_index);
         }
+        Ok(())
     }
 
     fn create_query_set(
@@ -2186,13 +2209,18 @@ impl<A: hal::Api> Device<A> {
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&mut self) {
         let mut life_tracker = self.life_tracker.lock();
-        if let Err(error) = life_tracker.triage_submissions(&self.raw, true) {
-            log::error!("failed to triage submissions: {}", error);
+        let current_index = self.active_submission_index;
+        if let Err(error) = unsafe { self.raw.wait(&self.fence, current_index, CLEANUP_WAIT_MS) } {
+            log::error!("failed to wait for the device: {:?}", error);
         }
+        life_tracker.triage_submissions(current_index);
         life_tracker.cleanup(&self.raw);
     }
 
     pub(crate) fn dispose(self) {
+        unsafe {
+            self.raw.destroy_fence(self.fence);
+        }
         self.pending_writes.dispose(&self.raw);
     }
 }
@@ -2391,7 +2419,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 };
                 let stage_buffer = stage.raw.unwrap();
-                let ptr = match device.raw.map_buffer(&stage_buffer, 0..stage.size) {
+                let ptr = match unsafe { device.raw.map_buffer(&stage_buffer, 0..stage.size) } {
                     Ok(ptr) => ptr,
                     Err(e) => {
                         let raw = buffer.raw.unwrap();
@@ -2496,19 +2524,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let raw_buf = buffer.raw.as_ref().unwrap();
-        let ptr = device
-            .raw
-            .map_buffer(raw_buf, 0..data.len() as u64)
-            .map_err(DeviceError::from)?;
-        ptr::copy_nonoverlapping(
-            data.as_ptr(),
-            ptr.as_ptr().offset(offset as isize),
-            data.len(),
-        );
-        device
-            .raw
-            .unmap_buffer(raw_buf)
-            .map_err(DeviceError::from)?;
+        unsafe {
+            let ptr = device
+                .raw
+                .map_buffer(raw_buf, 0..data.len() as u64)
+                .map_err(DeviceError::from)?;
+            ptr::copy_nonoverlapping(
+                data.as_ptr(),
+                ptr.as_ptr().offset(offset as isize),
+                data.len(),
+            );
+            device
+                .raw
+                .unmap_buffer(raw_buf)
+                .map_err(DeviceError::from)?;
+        }
         //TODO: flush
 
         Ok(())
@@ -2540,19 +2570,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         //TODO: invalidate
         let raw_buf = buffer.raw.as_ref().unwrap();
-        let ptr = device
-            .raw
-            .map_buffer(raw_buf, 0..data.len() as u64)
-            .map_err(DeviceError::from)?;
-        ptr::copy_nonoverlapping(
-            ptr.as_ptr().offset(offset as isize),
-            data.as_mut_ptr(),
-            data.len(),
-        );
-        device
-            .raw
-            .unmap_buffer(raw_buf)
-            .map_err(DeviceError::from)?;
+        unsafe {
+            let ptr = device
+                .raw
+                .map_buffer(raw_buf, 0..data.len() as u64)
+                .map_err(DeviceError::from)?;
+            ptr::copy_nonoverlapping(
+                ptr.as_ptr().offset(offset as isize),
+                data.as_mut_ptr(),
+                data.len(),
+            );
+            device
+                .raw
+                .unmap_buffer(raw_buf)
+                .map_err(DeviceError::from)?;
+        }
 
         Ok(())
     }
@@ -3375,7 +3407,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         label: desc.label.borrow_option(),
                     })
             };
-            let mut raw = match cmd_buf_result {
+            let raw = match cmd_buf_result {
                 Ok(raw) => raw,
                 Err(error) => break DeviceError::from(error),
             };
@@ -3901,7 +3933,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if !caps.formats.contains(&config.format) {
                 return Err(swap_chain::CreateSwapChainError::UnsupportedFormat {
                     requested: config.format,
-                    available: caps.formats,
+                    available: caps.formats.clone(),
                 });
             }
             if !caps.usage.contains(config.usage) {
@@ -3940,7 +3972,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break swap_chain::CreateSwapChainError::InvalidSurface,
             };
 
-            let caps = {
+            let caps = unsafe {
                 let surface = A::get_surface_mut(surface);
                 let adapter = &adapter_guard[device.adapter_id.value];
                 match adapter.raw.adapter.surface_capabilities(surface) {
@@ -4303,6 +4335,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     });
                 }
                 let _ = ptr;
+                if needs_flush {
+                    unsafe {
+                        device
+                            .raw
+                            .flush_mapped_ranges(&stage_buffer, iter::once(0..buffer.size));
+                    }
+                }
 
                 let raw_buf = buffer
                     .raw
@@ -4361,10 +4400,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     let _ = (ptr, range);
                 }
-                device
-                    .raw
-                    .unmap_buffer(buffer.raw.as_ref().unwrap())
-                    .map_err(DeviceError::from)?;
+                unsafe {
+                    device
+                        .raw
+                        .unmap_buffer(buffer.raw.as_ref().unwrap())
+                        .map_err(DeviceError::from)?
+                };
             }
         }
         Ok(None)

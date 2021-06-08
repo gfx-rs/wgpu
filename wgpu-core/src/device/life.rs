@@ -19,8 +19,6 @@ use thiserror::Error;
 
 use std::sync::atomic::Ordering;
 
-const CLEANUP_WAIT_MS: u32 = 5000;
-
 /// A struct that keeps lists of resources that are no longer needed by the user.
 #[derive(Debug, Default)]
 pub(super) struct SuspectedResources {
@@ -165,7 +163,6 @@ impl<A: hal::Api> NonReferencedResources<A> {
 
 struct ActiveSubmission<A: hal::Api> {
     index: SubmissionIndex,
-    fence: A::Fence,
     last_resources: NonReferencedResources<A>,
     mapped: Vec<id::Valid<id::BufferId>>,
 }
@@ -222,7 +219,6 @@ impl<A: hal::Api> LifetimeTracker<A> {
     pub fn track_submission(
         &mut self,
         index: SubmissionIndex,
-        fence: A::Fence,
         new_suspects: &SuspectedResources,
         temp_resources: impl Iterator<Item = TempResource<A>>,
     ) {
@@ -248,7 +244,6 @@ impl<A: hal::Api> LifetimeTracker<A> {
 
         self.active.alloc().init(ActiveSubmission {
             index,
-            fence,
             last_resources,
             mapped: Vec::new(),
         });
@@ -258,65 +253,23 @@ impl<A: hal::Api> LifetimeTracker<A> {
         self.mapped.push(Stored { value, ref_count });
     }
 
-    fn wait_idle(&self, device: &A::Device) -> Result<(), WaitIdleError> {
-        if !self.active.is_empty() {
-            log::debug!("Waiting for IDLE...");
-            let mut status = true;
-            //TODO: change this to wait for the last fence value only
-            for a in self.active.iter() {
-                status &= unsafe {
-                    device
-                        .wait(
-                            &a.fence,
-                            a.index as u64, //TODO: check this
-                            CLEANUP_WAIT_MS,
-                        )
-                        .map_err(DeviceError::from)?
-                };
-            }
-            log::debug!("...Done");
-            if !status {
-                // We timed out while waiting for the fences
-                return Err(WaitIdleError::StuckGpu);
-            }
-        }
-        Ok(())
-    }
-
     /// Returns the last submission index that is done.
-    pub fn triage_submissions(
-        &mut self,
-        device: &A::Device,
-        force_wait: bool,
-    ) -> Result<SubmissionIndex, WaitIdleError> {
+    pub fn triage_submissions(&mut self, last_done: SubmissionIndex) {
         profiling::scope!("triage_submissions");
-        /* TODO: better sync
-        if force_wait {
-            self.wait_idle(device)?;
-        }
+
         //TODO: enable when `is_sorted_by_key` is stable
         //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
         let done_count = self
             .active
             .iter()
-            .position(|a| unsafe { device.get_fence_value(&a.fence).unwrap()  })
+            .position(|a| a.index > last_done)
             .unwrap_or_else(|| self.active.len());
-        let last_done = match done_count.checked_sub(1) {
-            Some(i) => self.active[i].index,
-            None => return Ok(0),
-        };
 
         for a in self.active.drain(..done_count) {
             log::trace!("Active submission {} is done", a.index);
             self.free_resources.extend(a.last_resources);
             self.ready_to_map.extend(a.mapped);
-            unsafe {
-                device.destroy_fence(a.fence);
-            }
-        }*/
-        let last_done = 0;
-
-        Ok(last_done)
+        }
     }
 
     pub fn cleanup(&mut self, device: &A::Device) {

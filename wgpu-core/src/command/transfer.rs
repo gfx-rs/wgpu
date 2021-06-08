@@ -538,7 +538,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }),
         );
 
-        let (block_width, _) = format_desc.block_dimensions;
         if !conv::is_valid_copy_dst_texture_format(dst_texture.desc.format) {
             return Err(
                 TransferError::CopyToForbiddenTextureFormat(dst_texture.desc.format).into(),
@@ -653,7 +652,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             true,
         )?;
 
-        let (block_width, _) = format_desc.block_dimensions;
         if !conv::is_valid_copy_src_texture_format(src_texture.desc.format) {
             return Err(
                 TransferError::CopyFromForbiddenTextureFormat(src_texture.desc.format).into(),

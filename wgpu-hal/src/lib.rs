@@ -96,6 +96,10 @@ pub enum SurfaceError {
     Other(&'static str),
 }
 
+#[derive(Clone, Debug, PartialEq, Error)]
+#[error("Window handle is not supported")]
+pub struct UnsupportedWindow;
+
 pub trait Api: Clone + Sized {
     type Instance: Instance<Self>;
     type Surface: Surface<Self>;
@@ -121,6 +125,10 @@ pub trait Api: Clone + Sized {
 }
 
 pub trait Instance<A: Api> {
+    unsafe fn create_surface(
+        &self,
+        rwh: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<A::Surface, UnsupportedWindow>;
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
 }
 

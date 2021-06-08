@@ -37,6 +37,12 @@ impl crate::Api for Api {
 }
 
 impl crate::Instance<Api> for Context {
+    unsafe fn create_surface(
+        &self,
+        rwh: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Context, crate::UnsupportedWindow> {
+        Ok(Context)
+    }
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
         Vec::new()
     }
@@ -266,10 +272,10 @@ impl crate::CommandBuffer<Api> for Encoder {
     ) {
     }
 
+    // render
+
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<Api>) {}
     unsafe fn end_render_pass(&mut self) {}
-    unsafe fn begin_compute_pass(&mut self) {}
-    unsafe fn end_compute_pass(&mut self) {}
 
     unsafe fn set_bind_group(
         &mut self,
@@ -356,6 +362,11 @@ impl crate::CommandBuffer<Api> for Encoder {
         max_count: u32,
     ) {
     }
+
+    // compute
+
+    unsafe fn begin_compute_pass(&mut self) {}
+    unsafe fn end_compute_pass(&mut self) {}
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}
 

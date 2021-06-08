@@ -599,7 +599,7 @@ impl TrackerSet {
     }
 
     /// Clear all the trackers.
-    pub fn clear(&mut self) {
+    pub fn _clear(&mut self) {
         self.buffers.clear();
         self.textures.clear();
         self.views.clear();

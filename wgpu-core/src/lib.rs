@@ -66,11 +66,11 @@ use loom::sync::atomic;
 #[cfg(not(test))]
 use std::sync::atomic;
 
-use atomic::{AtomicUsize, Ordering};
+use atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use std::{borrow::Cow, os::raw::c_char, ptr};
 
-type SubmissionIndex = usize;
+type SubmissionIndex = hal::FenceValue;
 type Index = u32;
 type Epoch = u32;
 
@@ -87,6 +87,15 @@ impl<'a> LabelHelpers<'a> for Label<'a> {
     }
     fn borrow_or_default(&'a self) -> &'a str {
         self.borrow_option().unwrap_or_default()
+    }
+}
+
+trait CowHelpers<'a> {
+    fn reborrow(&'a self) -> Self;
+}
+impl<'a, T: ToOwned + ?Sized> CowHelpers<'a> for Cow<'a, T> {
+    fn reborrow(&'a self) -> Self {
+        Cow::Borrowed(self.as_ref())
     }
 }
 
@@ -197,7 +206,7 @@ impl Drop for MultiRefCount {
 #[derive(Debug)]
 pub struct LifeGuard {
     ref_count: Option<RefCount>,
-    submission_index: AtomicUsize,
+    submission_index: AtomicU64,
     #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
@@ -208,7 +217,7 @@ impl LifeGuard {
         let bx = Box::new(AtomicUsize::new(1));
         Self {
             ref_count: ptr::NonNull::new(Box::into_raw(bx)).map(RefCount),
-            submission_index: AtomicUsize::new(0),
+            submission_index: AtomicU64::new(0),
             #[cfg(debug_assertions)]
             label: label.to_string(),
         }

@@ -168,7 +168,7 @@ impl<A: hal::Api> super::Device<A> {
             usage: hal::BufferUse::MAP_WRITE | hal::BufferUse::COPY_SRC,
             memory_flags: hal::MemoryFlag::TRANSIENT,
         };
-        let mut buffer = unsafe { self.raw.create_buffer(&stage_desc)? };
+        let buffer = unsafe { self.raw.create_buffer(&stage_desc)? };
 
         let cmdbuf = match self.pending_writes.command_buffer.take() {
             Some(cmdbuf) => cmdbuf,
@@ -501,14 +501,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
         }
-        device
-            .raw
-            .unmap_buffer(&stage.buffer)
-            .map_err(DeviceError::from)?;
-        if !stage.is_coherent {
+        unsafe {
             device
                 .raw
-                .flush_mapped_ranges(&stage.buffer, iter::once(0..stage_size));
+                .unmap_buffer(&stage.buffer)
+                .map_err(DeviceError::from)?;
+            if !stage.is_coherent {
+                device
+                    .raw
+                    .flush_mapped_ranges(&stage.buffer, iter::once(0..stage_size));
+            }
         }
 
         // WebGPU uses the physical size of the texture for copies whereas vulkan uses
@@ -572,7 +574,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device.active_submission_index += 1;
             let submit_index = device.active_submission_index;
 
-            let fence = {
+            {
                 let mut signal_swapchain_semaphores = SmallVec::<[_; 1]>::new();
                 let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
                 let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -701,12 +703,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             cmdbuf.raw.last_mut().unwrap().finish();
                         }
                         // execute resource transitions
-                        let mut transit = device
-                            .raw
-                            .create_command_buffer(&hal::CommandBufferDescriptor {
-                                label: Some("_Transit"),
-                            })
-                            .map_err(DeviceError::from)?;
+                        let mut transit = unsafe {
+                            device
+                                .raw
+                                .create_command_buffer(&hal::CommandBufferDescriptor {
+                                    label: Some("_Transit"),
+                                })
+                                .map_err(DeviceError::from)?
+                        };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
                         trackers.merge_extend_stateless(&cmdbuf.trackers);
                         CommandBuffer::insert_barriers(
@@ -731,13 +735,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
 
-                // now prepare the GPU submission
-                let mut fence = device.raw.create_fence().map_err(DeviceError::from)?;
                 //Note: we could technically avoid the heap Vec here
                 let mut command_buffers = Vec::new();
                 command_buffers.extend(pending_write_command_buffer);
                 for &cmd_buf_id in command_buffer_ids.iter() {
-                    match command_buffer_guard.get(cmd_buf_id) {
+                    match command_buffer_guard.get_mut(cmd_buf_id) {
                         Ok(cmd_buf) if cmd_buf.is_finished() => {
                             command_buffers.extend(cmd_buf.raw.drain(..));
                         }
@@ -745,14 +747,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
 
-                let fence_value = 1; //TODO
                 unsafe {
-                    device
-                        .queue
-                        .submit(command_buffers.into_iter(), Some((&mut fence, fence_value)));
+                    device.queue.submit(
+                        command_buffers.into_iter(),
+                        Some((&mut device.fence, submit_index)),
+                    );
                 }
-                fence
-            };
+            }
 
             let callbacks = match device.maintain(&hub, false, &mut token) {
                 Ok(callbacks) => callbacks,
@@ -763,7 +764,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             profiling::scope!("cleanup");
             super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
                 submit_index,
-                fence,
                 &device.temp_suspected,
                 device.pending_writes.temp_resources.drain(..),
             );

@@ -10,7 +10,7 @@ use crate::{
         PassErrorScope, QueryResetMap, QueryUseError, RenderCommand, RenderCommandError,
         StateChange,
     },
-    device::{AttachmentData, Device, RenderPassCompatibilityError, RenderPassContext},
+    device::{AttachmentData, RenderPassCompatibilityError, RenderPassContext},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
@@ -524,7 +524,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         color_attachments: &[RenderPassColorAttachment],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         cmd_buf: &mut CommandBuffer<A>,
-        device: &Device<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("start", "RenderPassInfo");
@@ -539,7 +538,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut attachment_type_name = "";
         let mut extent = None;
         let mut sample_count = 0;
-        let mut depth_stencil_aspects = hal::FormatAspect::empty();
         let mut used_swap_chain = None::<Stored<id::SwapChainId>>;
 
         let mut add_view = |view: &TextureView<A>, type_name| {
@@ -576,8 +574,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
             add_view(view, "depth")?;
 
-            depth_stencil_aspects = view.desc.aspects();
-            if depth_stencil_aspects.contains(hal::FormatAspect::COLOR) {
+            let ds_aspects = view.desc.aspects();
+            if ds_aspects.contains(hal::FormatAspect::COLOR) {
                 return Err(RenderPassErrorInner::InvalidDepthStencilAttachmentFormat(
                     view.desc.format,
                 ));
@@ -595,7 +593,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .trackers
                 .textures
                 .query(source_id.value, view.selector.clone());
-            let new_use = if at.is_read_only(depth_stencil_aspects)? {
+            let new_use = if at.is_read_only(ds_aspects)? {
                 is_ds_read_only = true;
                 hal::TextureUse::DEPTH_STENCIL_READ | hal::TextureUse::SAMPLED
             } else {
@@ -672,17 +670,17 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     .views
                     .use_extend(&*view_guard, resolve_target, (), ())
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))?;
-                if extent != Some(resolve_view.extent) {
+                if color_view.extent != resolve_view.extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
                         previous: (attachment_type_name, extent.unwrap_or_default()),
                         mismatch: ("resolve", resolve_view.extent),
                     });
                 }
+                if color_view.samples == 1 {
+                    return Err(RenderPassErrorInner::InvalidResolveSourceSampleCount);
+                }
                 if resolve_view.samples != 1 {
                     return Err(RenderPassErrorInner::InvalidResolveTargetSampleCount);
-                }
-                if sample_count == 1 {
-                    return Err(RenderPassErrorInner::InvalidResolveSourceSampleCount);
                 }
 
                 let boundary_usage = match resolve_view.source {
@@ -702,7 +700,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                         let old_use = previous_use.unwrap_or(new_use);
                         old_use..new_use
                     }
-                    TextureViewSource::SwapChain(source_id) => {
+                    TextureViewSource::SwapChain(ref source_id) => {
                         assert!(used_swap_chain.is_none());
                         used_swap_chain = Some(source_id.clone());
                         hal::TextureUse::UNINITIALIZED..hal::TextureUse::empty()
@@ -867,10 +865,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let device = &device_guard[cmd_buf.device_id.value];
-            let mut raw = device
-                .raw
-                .create_command_buffer(&hal::CommandBufferDescriptor { label: base.label })
-                .unwrap(); //TODO: handle this better
+            let mut raw = unsafe {
+                device
+                    .raw
+                    .create_command_buffer(&hal::CommandBufferDescriptor { label: base.label })
+                    .unwrap() //TODO: handle this better
+            };
 
             let (bundle_guard, mut token) = hub.render_bundles.read(&mut token);
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
@@ -892,7 +892,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 color_attachments,
                 depth_stencil_attachment,
                 cmd_buf,
-                device,
                 &*view_guard,
             )
             .map_pass_err(scope)?;

@@ -1891,6 +1891,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "naga",
+ "raw-window-handle",
  "smallvec",
  "thiserror",
  "wgpu-types",

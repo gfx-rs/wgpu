@@ -627,14 +627,18 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             if let Element::Occupied(command_buffer, _) = element {
                 let device = &devices[command_buffer.device_id.value];
                 for raw in command_buffer.raw {
-                    device.raw.destroy_command_buffer(raw);
+                    unsafe {
+                        device.raw.destroy_command_buffer(raw);
+                    }
                 }
             }
         }
         for element in self.bind_groups.data.write().map.drain(..) {
             if let Element::Occupied(bind_group, _) = element {
                 let device = &devices[bind_group.device_id.value];
-                device.raw.destroy_bind_group(bind_group.raw);
+                unsafe {
+                    device.raw.destroy_bind_group(bind_group.raw);
+                }
             }
         }
 
