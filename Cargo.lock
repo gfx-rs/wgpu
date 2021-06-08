@@ -1918,7 +1918,6 @@ dependencies = [
  "metal",
  "naga",
  "raw-window-handle",
- "smallvec",
  "thiserror",
  "wgpu-types",
  "winit",

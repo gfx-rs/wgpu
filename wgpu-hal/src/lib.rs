@@ -55,7 +55,6 @@ use std::{
 };
 
 use bitflags::bitflags;
-use smallvec::SmallVec;
 use thiserror::Error;
 
 pub const MAX_ANISOTROPY: u8 = 16;
@@ -717,34 +716,35 @@ impl<A: Api> Clone for BufferBinding<'_, A> {
 }
 
 #[derive(Debug)]
-pub enum BindingResource<'a, A: Api> {
-    Buffers(SmallVec<[BufferBinding<'a, A>; 1]>),
-    Sampler(&'a A::Sampler),
-    TextureViews(SmallVec<[&'a A::TextureView; 1]>, TextureUse),
+pub struct TextureBinding<'a, A: Api> {
+    pub view: &'a A::TextureView,
+    pub usage: TextureUse,
 }
 
 // Rust gets confused about the impl requirements for `A`
-impl<A: Api> Clone for BindingResource<'_, A> {
+impl<A: Api> Clone for TextureBinding<'_, A> {
     fn clone(&self) -> Self {
-        match *self {
-            Self::Buffers(ref slice) => Self::Buffers(slice.clone()),
-            Self::Sampler(sampler) => Self::Sampler(sampler),
-            Self::TextureViews(ref slice, usage) => Self::TextureViews(slice.clone(), usage),
+        Self {
+            view: self.view,
+            usage: self.usage,
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct BindGroupEntry<'a, A: Api> {
+pub struct BindGroupEntry {
     pub binding: u32,
-    pub resource: BindingResource<'a, A>,
+    pub resource_index: u32,
 }
 
 #[derive(Clone, Debug)]
 pub struct BindGroupDescriptor<'a, A: Api> {
     pub label: Label<'a>,
     pub layout: &'a A::BindGroupLayout,
-    pub entries: &'a [BindGroupEntry<'a, A>],
+    pub buffers: &'a [BufferBinding<'a, A>],
+    pub samplers: &'a [&'a A::Sampler],
+    pub textures: &'a [TextureBinding<'a, A>],
+    pub entries: &'a [BindGroupEntry],
 }
 
 #[derive(Clone, Debug)]

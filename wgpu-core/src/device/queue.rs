@@ -748,10 +748,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
 
                 unsafe {
-                    device.queue.submit(
-                        command_buffers.into_iter(),
-                        Some((&mut device.fence, submit_index)),
-                    );
+                    device
+                        .queue
+                        .submit(
+                            command_buffers.into_iter(),
+                            Some((&mut device.fence, submit_index)),
+                        )
+                        .map_err(DeviceError::from)?;
                 }
             }
 

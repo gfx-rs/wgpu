@@ -27,6 +27,7 @@ struct Locals {
 }
 
 struct Example<A: hal::Api> {
+    #[allow(dead_code)]
     instance: A::Instance,
     surface: A::Surface,
     surface_format: wgt::TextureFormat,
@@ -48,7 +49,7 @@ impl<A: hal::Api> Example<A> {
         let mut surface = unsafe { instance.create_surface(window).unwrap() };
         let hal::OpenDevice { device, mut queue } = unsafe {
             let adapters = instance.enumerate_adapters();
-            let exposed = &adapters[0];
+            let exposed = adapters.get(0).ok_or(hal::InstanceError)?;
             println!(
                 "Surface caps: {:?}",
                 exposed.adapter.surface_capabilities(&surface)
@@ -329,26 +330,28 @@ impl<A: hal::Api> Example<A> {
                 offset: 0,
                 size: None,
             };
+            let texture_binding = hal::TextureBinding {
+                view: &view,
+                usage: hal::TextureUse::SAMPLED,
+            };
             let global_group_desc = hal::BindGroupDescriptor {
                 label: Some("global"),
                 layout: &global_bind_group_layout,
+                buffers: &[global_buffer_binding],
+                samplers: &[&sampler],
+                textures: &[texture_binding],
                 entries: &[
                     hal::BindGroupEntry {
                         binding: 0,
-                        resource: hal::BindingResource::Buffers(
-                            iter::once(global_buffer_binding).collect(),
-                        ),
+                        resource_index: 0,
                     },
                     hal::BindGroupEntry {
                         binding: 1,
-                        resource: hal::BindingResource::TextureViews(
-                            iter::once(&view).collect(),
-                            hal::TextureUse::SAMPLED,
-                        ),
+                        resource_index: 0,
                     },
                     hal::BindGroupEntry {
                         binding: 2,
-                        resource: hal::BindingResource::Sampler(&sampler),
+                        resource_index: 0,
                     },
                 ],
             };
@@ -364,11 +367,12 @@ impl<A: hal::Api> Example<A> {
             let local_group_desc = hal::BindGroupDescriptor {
                 label: Some("local"),
                 layout: &local_bind_group_layout,
+                buffers: &[local_buffer_binding],
+                samplers: &[],
+                textures: &[],
                 entries: &[hal::BindGroupEntry {
                     binding: 0,
-                    resource: hal::BindingResource::Buffers(
-                        iter::once(local_buffer_binding).collect(),
-                    ),
+                    resource_index: 0,
                 }],
             };
             unsafe { device.create_bind_group(&local_group_desc).unwrap() }
@@ -532,5 +536,52 @@ fn main() {
         .unwrap();
 
     #[cfg(feature = "metal")]
-    let mut example = Example::init::<hal::api::Metal>(&window);
+    let example_result = Example::<hal::api::Metal>::init(&window);
+    #[cfg(not(any(feature = "metal")))]
+    let example_result = Example::<hal::api::Empty>::init(&window);
+    let mut example = example_result.expect("Selected backend is not supported");
+
+    let mut last_frame_inst = Instant::now();
+    let (mut frame_count, mut accum_time) = (0, 0.0);
+
+    event_loop.run(move |event, _, control_flow| {
+        let _ = &window; // force ownership by the closure
+        *control_flow = winit::event_loop::ControlFlow::Poll;
+        match event {
+            winit::event::Event::WindowEvent { event, .. } => match event {
+                winit::event::WindowEvent::KeyboardInput {
+                    input:
+                        winit::event::KeyboardInput {
+                            virtual_keycode: Some(winit::event::VirtualKeyCode::Escape),
+                            state: winit::event::ElementState::Pressed,
+                            ..
+                        },
+                    ..
+                }
+                | winit::event::WindowEvent::CloseRequested => {
+                    *control_flow = winit::event_loop::ControlFlow::Exit;
+                }
+                _ => {
+                    example.update(event);
+                }
+            },
+            winit::event::Event::RedrawRequested(_) => {
+                {
+                    accum_time += last_frame_inst.elapsed().as_secs_f32();
+                    last_frame_inst = Instant::now();
+                    frame_count += 1;
+                    if frame_count == 100 {
+                        println!(
+                            "Avg frame time {}ms",
+                            accum_time * 1000.0 / frame_count as f32
+                        );
+                        accum_time = 0.0;
+                        frame_count = 0;
+                    }
+                }
+                example.render();
+            }
+            _ => {}
+        }
+    });
 }

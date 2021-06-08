@@ -28,8 +28,6 @@ pub mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 
-use smallvec::SmallVec;
-
 pub const SHADER_STAGE_COUNT: usize = 3;
 const CLEANUP_WAIT_MS: u32 = 5000;
 
@@ -1138,6 +1136,9 @@ impl<A: HalApi> Device<A> {
 
         let mut used_buffer_ranges = Vec::new();
         let mut hal_entries = Vec::with_capacity(desc.entries.len());
+        let mut hal_buffers = Vec::new();
+        let mut hal_samplers = Vec::new();
+        let mut hal_textures = Vec::new();
         for entry in desc.entries.iter() {
             let binding = entry.binding;
             // Find the corresponding declaration in the layout
@@ -1145,7 +1146,7 @@ impl<A: HalApi> Device<A> {
                 .entries
                 .get(&binding)
                 .ok_or(Error::MissingBindingDeclaration(binding))?;
-            let hal_resource = match entry.resource {
+            let res_index = match entry.resource {
                 Br::Buffer(ref bb) => {
                     let bb = Self::create_buffer_binding(
                         &bb,
@@ -1157,7 +1158,10 @@ impl<A: HalApi> Device<A> {
                         &*buffer_guard,
                         &self.limits,
                     )?;
-                    hal::BindingResource::Buffers([bb].into())
+
+                    let res_index = hal_buffers.len();
+                    hal_buffers.push(bb);
+                    res_index
                 }
                 Br::BufferArray(ref bindings_array) => {
                     if let Some(count) = decl.count {
@@ -1173,7 +1177,7 @@ impl<A: HalApi> Device<A> {
                         return Err(Error::SingleBindingExpected);
                     }
 
-                    let mut hal_bindings = SmallVec::with_capacity(bindings_array.len());
+                    let res_index = hal_buffers.len();
                     for bb in bindings_array.iter() {
                         let bb = Self::create_buffer_binding(
                             bb,
@@ -1185,9 +1189,9 @@ impl<A: HalApi> Device<A> {
                             &*buffer_guard,
                             &self.limits,
                         )?;
-                        hal_bindings.push(bb);
+                        hal_buffers.push(bb);
                     }
-                    hal::BindingResource::Buffers(hal_bindings)
+                    res_index
                 }
                 Br::Sampler(id) => {
                     match decl.ty {
@@ -1217,7 +1221,9 @@ impl<A: HalApi> Device<A> {
                                 });
                             }
 
-                            hal::BindingResource::Sampler(&sampler.raw)
+                            let res_index = hal_samplers.len();
+                            hal_samplers.push(&sampler.raw);
+                            res_index
                         }
                         _ => {
                             return Err(Error::WrongBindingType {
@@ -1351,7 +1357,12 @@ impl<A: HalApi> Device<A> {
                         }
                     }
 
-                    hal::BindingResource::TextureViews([&view.raw].into(), internal_use)
+                    let res_index = hal_textures.len();
+                    hal_textures.push(hal::TextureBinding {
+                        view: &view.raw,
+                        usage: internal_use,
+                    });
+                    res_index
                 }
                 Br::TextureViewArray(ref bindings_array) => {
                     if let Some(count) = decl.count {
@@ -1367,8 +1378,7 @@ impl<A: HalApi> Device<A> {
                         return Err(Error::SingleBindingExpected);
                     }
 
-                    let mut hal_bindings = SmallVec::with_capacity(bindings_array.len());
-                    let mut common_internal_use = None;
+                    let res_index = hal_textures.len();
                     for &id in bindings_array.iter() {
                         let view = used
                             .views
@@ -1386,9 +1396,6 @@ impl<A: HalApi> Device<A> {
                                 })
                             }
                         };
-                        //TODO: ensure these match across the whole array
-                        common_internal_use = Some(internal_use);
-                        hal_bindings.push(&view.raw);
 
                         match view.source {
                             resource::TextureViewSource::Native(ref source_id) => {
@@ -1409,15 +1416,20 @@ impl<A: HalApi> Device<A> {
                                 return Err(Error::SwapChainImage);
                             }
                         }
+
+                        hal_textures.push(hal::TextureBinding {
+                            view: &view.raw,
+                            usage: internal_use,
+                        });
                     }
 
-                    hal::BindingResource::TextureViews(hal_bindings, common_internal_use.unwrap())
+                    res_index
                 }
             };
 
             hal_entries.push(hal::BindGroupEntry {
                 binding,
-                resource: hal_resource,
+                resource_index: res_index as u32,
             });
         }
 
@@ -1432,6 +1444,9 @@ impl<A: HalApi> Device<A> {
             label: desc.label.borrow_option(),
             layout: &layout.raw,
             entries: &hal_entries,
+            buffers: &hal_buffers,
+            samplers: &hal_samplers,
+            textures: &hal_textures,
         };
         let raw = unsafe {
             self.raw
