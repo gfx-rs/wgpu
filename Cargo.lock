@@ -1921,6 +1921,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "wgpu-types",
+ "winit",
 ]
 
 [[package]]

@@ -93,7 +93,8 @@ impl crate::Queue<Api> for Context {
         &mut self,
         command_buffers: I,
         signal_fence: Option<(&Resource, crate::FenceValue)>,
-    ) {
+    ) -> DeviceResult<()> {
+        Ok(())
     }
     unsafe fn present(
         &mut self,
@@ -286,7 +287,7 @@ impl crate::CommandBuffer<Api> for Encoder {
         layout: &Resource,
         index: u32,
         group: &Resource,
-        dynamic_offsets: &[u32],
+        dynamic_offsets: &[wgt::DynamicOffset],
     ) {
     }
     unsafe fn set_push_constants(

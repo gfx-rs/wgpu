@@ -27,3 +27,11 @@ mtl = { package = "metal", version = "0.22", optional = true }
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
 tag = "gfx-25"
+
+[dev-dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-25"
+features = ["wgsl-in"]
+
+[dev-dependencies]
+winit = "0.24"

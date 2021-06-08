@@ -276,7 +276,7 @@ pub trait Queue<A: Api> {
         &mut self,
         command_buffers: I,
         signal_fence: Option<(&A::Fence, FenceValue)>,
-    );
+    ) -> Result<(), DeviceError>;
     unsafe fn present(
         &mut self,
         surface: &mut A::Surface,
@@ -338,7 +338,7 @@ pub trait CommandBuffer<A: Api> {
         layout: &A::PipelineLayout,
         index: u32,
         group: &A::BindGroup,
-        dynamic_offsets: &[u32],
+        dynamic_offsets: &[wgt::DynamicOffset],
     );
 
     unsafe fn set_push_constants(

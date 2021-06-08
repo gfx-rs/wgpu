@@ -1978,6 +1978,16 @@ impl Texture {
     pub fn destroy(&self) {
         Context::texture_destroy(&*self.context, &self.id);
     }
+
+    /// Make an `ImageCopyTexture` representing the whole texture.
+    pub fn as_image_copy(&self) -> ImageCopyTexture {
+        ImageCopyTexture {
+            texture: self,
+            mip_level: 0,
+            origin: Origin3d::ZERO,
+            aspect: TextureAspect::All,
+        }
+    }
 }
 
 impl Drop for Texture {
