@@ -1959,14 +1959,20 @@ impl Writer {
 
                         inst
                     }
-                    crate::SampleLevel::Auto => Instruction::image_sample(
-                        sample_result_type_id,
-                        id,
-                        SampleLod::Implicit,
-                        sampled_image_id,
-                        coordinate_id,
-                        depth_id,
-                    ),
+                    crate::SampleLevel::Auto => {
+                        let mut inst = Instruction::image_sample(
+                            sample_result_type_id,
+                            id,
+                            SampleLod::Implicit,
+                            sampled_image_id,
+                            coordinate_id,
+                            depth_id,
+                        );
+                        if !mask.is_empty() {
+                            inst.add_operand(mask.bits());
+                        }
+                        inst
+                    }
                     crate::SampleLevel::Exact(lod_handle) => {
                         let mut inst = Instruction::image_sample(
                             sample_result_type_id,
@@ -1996,6 +2002,7 @@ impl Writer {
 
                         let bias_id = self.cached[bias_handle];
                         mask |= spirv::ImageOperands::BIAS;
+                        inst.add_operand(mask.bits());
                         inst.add_operand(bias_id);
 
                         inst
@@ -2013,6 +2020,7 @@ impl Writer {
                         let x_id = self.cached[x];
                         let y_id = self.cached[y];
                         mask |= spirv::ImageOperands::GRAD;
+                        inst.add_operand(mask.bits());
                         inst.add_operand(x_id);
                         inst.add_operand(y_id);
 

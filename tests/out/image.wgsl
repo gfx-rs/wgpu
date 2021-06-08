@@ -17,8 +17,10 @@ var image_3d: texture_3d<f32>;
 [[group(0), binding(6)]]
 var image_aa: texture_multisampled_2d<f32>;
 [[group(1), binding(0)]]
-var sampler_cmp: sampler_comparison;
+var sampler_reg: sampler;
 [[group(1), binding(1)]]
+var sampler_cmp: sampler_comparison;
+[[group(1), binding(2)]]
 var image_2d_depth: texture_depth_2d;
 
 [[stage(compute), workgroup_size(16, 1, 1)]]
@@ -53,6 +55,16 @@ fn queries() -> [[builtin(position)]] vec4<f32> {
     let num_samples_aa: i32 = textureNumSamples(image_aa);
     let sum: i32 = ((((((((((((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + num_layers_2d) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + num_layers_cube) + dim_3d.z) + dim_3d_lod.z) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array);
     return vec4<f32>(f32(sum));
+}
+
+[[stage(fragment)]]
+fn sample() -> [[location(0)]] vec4<f32> {
+    let tc: vec2<f32> = vec2<f32>(0.5);
+    let s2d: vec4<f32> = textureSample(image_2d, sampler_reg, tc);
+    let s2d_offset: vec4<f32> = textureSample(image_2d, sampler_reg, tc, vec2<i32>(3, 1));
+    let s2d_level: vec4<f32> = textureSampleLevel(image_2d, sampler_reg, tc, 2.3);
+    let s2d_level_offset: vec4<f32> = textureSampleLevel(image_2d, sampler_reg, tc, 2.3, vec2<i32>(3, 1));
+    return (((s2d + s2d_offset) + s2d_level) + s2d_level_offset);
 }
 
 [[stage(fragment)]]

@@ -1,6 +1,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+constant metal::int2 const_type3_ = {3, 1};
 
 struct main1Input {
 };
@@ -53,8 +54,24 @@ vertex queriesOutput queries(
 }
 
 
+struct sampleOutput {
+    metal::float4 member2 [[color(0)]];
+};
+fragment sampleOutput sample(
+  metal::texture2d<float, metal::access::sample> image_2d [[user(fake0)]]
+, metal::sampler sampler_reg [[user(fake0)]]
+) {
+    metal::float2 tc = metal::float2(0.5);
+    metal::float4 s2d = image_2d.sample(sampler_reg, tc);
+    metal::float4 s2d_offset = image_2d.sample(sampler_reg, tc, const_type3_);
+    metal::float4 s2d_level = image_2d.sample(sampler_reg, tc, metal::level(2.3));
+    metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.3), const_type3_);
+    return sampleOutput { ((s2d + s2d_offset) + s2d_level) + s2d_level_offset };
+}
+
+
 struct sample_comparisonOutput {
-    float member2 [[color(0)]];
+    float member3 [[color(0)]];
 };
 fragment sample_comparisonOutput sample_comparison(
   metal::sampler sampler_cmp [[user(fake0)]]

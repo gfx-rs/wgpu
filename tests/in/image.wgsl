@@ -60,8 +60,22 @@ fn queries() -> [[builtin(position)]] vec4<f32> {
 }
 
 [[group(1), binding(0)]]
-var sampler_cmp: sampler_comparison;
+var sampler_reg: sampler;
+
+[[stage(fragment)]]
+fn sample() -> [[location(0)]] vec4<f32> {
+    let tc = vec2<f32>(0.5);
+    let level = 2.3;
+    let s2d = textureSample(image_2d, sampler_reg, tc);
+    let s2d_offset = textureSample(image_2d, sampler_reg, tc, vec2<i32>(3, 1));
+    let s2d_level = textureSampleLevel(image_2d, sampler_reg, tc, level);
+    let s2d_level_offset = textureSampleLevel(image_2d, sampler_reg, tc, level, vec2<i32>(3, 1));
+    return s2d + s2d_offset + s2d_level + s2d_level_offset;
+}
+
 [[group(1), binding(1)]]
+var sampler_cmp: sampler_comparison;
+[[group(1), binding(2)]]
 var image_2d_depth: texture_depth_2d;
 
 [[stage(fragment)]]
