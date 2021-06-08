@@ -580,49 +580,51 @@ impl<W: Write> Writer<W> {
         match *stmt {
             Statement::Emit(ref range) => {
                 for handle in range.clone() {
-                    if let Some(name) = func_ctx.named_expressions.get(&handle) {
-                        write!(self.out, "{}", INDENT.repeat(indent))?;
-                        let sanitized_name = self.namer.call_unique(name);
-                        self.start_named_expr(module, handle, &func_ctx, &sanitized_name)?;
-                        self.write_expr(module, handle, &func_ctx)?;
-                        writeln!(self.out, ";")?;
-
+                    let expr_name = if let Some(name) = func_ctx.named_expressions.get(&handle) {
                         // Front end provides names for all variables at the start of writing.
-                        // But we write them to step by step. We need to recache them.
+                        // But we write them to step by step. We need to recache them
                         // Otherwise, we could accidentally write variable name instead of full expression.
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
-                        self.named_expressions.insert(handle, sanitized_name);
-                        continue;
-                    }
-
-                    let expr = &func_ctx.expressions[handle];
-                    let min_ref_count = expr.bake_ref_count();
-                    // Forcefully creating baking expressions in some cases to help with readability
-                    let required_baking_expr = match *expr {
-                        Expression::ImageLoad { .. }
-                        | Expression::ImageQuery { .. }
-                        | Expression::ImageSample { .. } => true,
-                        _ => false,
-                    };
-                    if min_ref_count <= func_ctx.info[handle].ref_count || required_baking_expr {
-                        // If expression contains unsupported builtin we should skip it
-                        if let Expression::Load { pointer } = func_ctx.expressions[handle] {
-                            if let Expression::AccessIndex { base, index } =
-                                func_ctx.expressions[pointer]
-                            {
-                                if access_to_unsupported_builtin(
-                                    base,
-                                    index,
-                                    module,
-                                    &func_ctx.info,
-                                ) {
-                                    return Ok(());
+                        Some(self.namer.call_unique(name))
+                    } else {
+                        let expr = &func_ctx.expressions[handle];
+                        let min_ref_count = expr.bake_ref_count();
+                        // Forcefully creating baking expressions in some cases to help with readability
+                        let required_baking_expr = match *expr {
+                            Expression::ImageLoad { .. }
+                            | Expression::ImageQuery { .. }
+                            | Expression::ImageSample { .. } => true,
+                            _ => false,
+                        };
+                        if min_ref_count <= func_ctx.info[handle].ref_count || required_baking_expr
+                        {
+                            // If expression contains unsupported builtin we should skip it
+                            if let Expression::Load { pointer } = func_ctx.expressions[handle] {
+                                if let Expression::AccessIndex { base, index } =
+                                    func_ctx.expressions[pointer]
+                                {
+                                    if access_to_unsupported_builtin(
+                                        base,
+                                        index,
+                                        module,
+                                        &func_ctx.info,
+                                    ) {
+                                        return Ok(());
+                                    }
                                 }
                             }
-                        }
 
+                            Some(format!("{}{}", BAKE_PREFIX, handle.index()))
+                        } else {
+                            None
+                        }
+                    };
+
+                    if let Some(name) = expr_name {
                         write!(self.out, "{}", INDENT.repeat(indent))?;
-                        self.write_baking_expr(module, handle, &func_ctx)?;
+                        self.start_named_expr(module, handle, &func_ctx, &name)?;
+                        self.write_expr(module, handle, &func_ctx)?;
+                        self.named_expressions.insert(handle, name);
                         writeln!(self.out, ";")?;
                     }
                 }
@@ -693,7 +695,10 @@ impl<W: Write> Writer<W> {
             } => {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
                 if let Some(expr) = result {
-                    self.write_baking_expr(module, expr, &func_ctx)?;
+                    let name = format!("{}{}", BAKE_PREFIX, expr.index());
+                    self.start_named_expr(module, expr, func_ctx, &name)?;
+                    self.write_expr(module, expr, func_ctx)?;
+                    self.named_expressions.insert(expr, name);
                 }
                 let func_name = &self.names[&NameKey::Function(function)];
                 write!(self.out, "{}(", func_name)?;
@@ -852,20 +857,6 @@ impl<W: Write> Writer<W> {
         }
 
         write!(self.out, " = ")?;
-        Ok(())
-    }
-
-    fn write_baking_expr(
-        &mut self,
-        module: &Module,
-        handle: Handle<Expression>,
-        func_ctx: &FunctionCtx,
-    ) -> BackendResult {
-        let name = format!("{}{}", BAKE_PREFIX, handle.index());
-        self.start_named_expr(module, handle, func_ctx, &name)?;
-        self.write_expr(module, handle, func_ctx)?;
-        self.named_expressions.insert(handle, name);
-
         Ok(())
     }
 
