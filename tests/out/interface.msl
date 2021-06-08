@@ -24,7 +24,8 @@ vertex vertex1Output vertex1(
 , metal::uint instance_index [[instance_id]]
 ) {
     const auto color1 = varyings.color1;
-    const auto _tmp = VertexOutput {metal::float4(1.0), static_cast<float>((vertex_index + instance_index) + color1)};
+    metal::uint tmp = (vertex_index + instance_index) + color1;
+    const auto _tmp = VertexOutput {metal::float4(1.0), static_cast<float>(tmp)};
     return vertex1Output { _tmp.position, _tmp.varying };
 }
 
@@ -45,7 +46,9 @@ fragment fragment1Output fragment1(
 , metal::uint sample_mask1 [[sample_mask]]
 ) {
     const VertexOutput in = { position, varyings1.varying };
-    const auto _tmp = FragmentOutput {in.varying, sample_mask1 & (1u << sample_index), front_facing ? 0.0 : 1.0};
+    metal::uint mask = sample_mask1 & (1u << sample_index);
+    float color2 = front_facing ? 0.0 : 1.0;
+    const auto _tmp = FragmentOutput {in.varying, mask, color2};
     return fragment1Output { _tmp.depth, _tmp.sample_mask, _tmp.color };
 }
 

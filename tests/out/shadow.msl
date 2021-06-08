@@ -29,7 +29,9 @@ float fetch_shadow(
     if (homogeneous_coords.w <= 0.0) {
         return 1.0;
     }
-    float _e26 = t_shadow.sample_compare(sampler_shadow, ((homogeneous_coords.xy * metal::float2(0.5, -0.5)) / metal::float2(homogeneous_coords.w)) + metal::float2(0.5, 0.5), static_cast<int>(light_id), homogeneous_coords.z / homogeneous_coords.w);
+    metal::float2 flip_correction = metal::float2(0.5, -0.5);
+    metal::float2 light_local = ((homogeneous_coords.xy * flip_correction) / metal::float2(homogeneous_coords.w)) + metal::float2(0.5, 0.5);
+    float _e26 = t_shadow.sample_compare(sampler_shadow, light_local, static_cast<int>(light_id), homogeneous_coords.z / homogeneous_coords.w);
     return _e26;
 }
 
@@ -51,6 +53,7 @@ fragment fs_mainOutput fs_main(
     const auto position = varyings.position;
     metal::float3 color1 = c_ambient;
     metal::uint i = 0u;
+    metal::float3 normal = metal::normalize(raw_normal);
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -64,11 +67,13 @@ fragment fs_mainOutput fs_main(
             break;
         }
         metal::uint _e19 = i;
-        Light _e21 = s_lights.data[_e19];
+        Light light = s_lights.data[_e19];
         metal::uint _e22 = i;
-        float _e25 = fetch_shadow(_e22, _e21.proj * position, t_shadow, sampler_shadow);
+        float _e25 = fetch_shadow(_e22, light.proj * position, t_shadow, sampler_shadow);
+        metal::float3 light_dir = metal::normalize(light.pos.xyz - position.xyz);
+        float diffuse = metal::max(0.0, metal::dot(normal, light_dir));
         metal::float3 _e34 = color1;
-        color1 = _e34 + ((_e25 * metal::max(0.0, metal::dot(metal::normalize(raw_normal), metal::normalize(_e21.pos.xyz - position.xyz)))) * _e21.color.xyz);
+        color1 = _e34 + ((_e25 * diffuse) * light.color.xyz);
     }
     metal::float3 _e43 = color1;
     return fs_mainOutput { metal::float4(_e43, 1.0) };

@@ -44,12 +44,13 @@ kernel void main1(
     metal::float2 pos1;
     metal::float2 vel1;
     metal::uint i = 0u;
-    if (global_invocation_id.x >= NUM_PARTICLES) {
+    uint index = global_invocation_id.x;
+    if (index >= NUM_PARTICLES) {
         return;
     }
-    metal::float2 _e10 = particlesSrc.particles[global_invocation_id.x].pos;
+    metal::float2 _e10 = particlesSrc.particles[index].pos;
     vPos = _e10;
-    metal::float2 _e15 = particlesSrc.particles[global_invocation_id.x].vel;
+    metal::float2 _e15 = particlesSrc.particles[index].vel;
     vVel = _e15;
     cMass = metal::float2(0.0, 0.0);
     cVel = metal::float2(0.0, 0.0);
@@ -66,7 +67,7 @@ kernel void main1(
             break;
         }
         metal::uint _e39 = i;
-        if (_e39 == global_invocation_id.x) {
+        if (_e39 == index) {
             continue;
         }
         metal::uint _e42 = i;
@@ -150,8 +151,8 @@ kernel void main1(
         vPos.y = -1.0;
     }
     metal::float2 _e164 = vPos;
-    particlesDst.particles[global_invocation_id.x].pos = _e164;
+    particlesDst.particles[index].pos = _e164;
     metal::float2 _e168 = vVel;
-    particlesDst.particles[global_invocation_id.x].vel = _e168;
+    particlesDst.particles[index].vel = _e168;
     return;
 }

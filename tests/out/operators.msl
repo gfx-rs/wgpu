@@ -4,7 +4,9 @@
 
 metal::float4 splat(
 ) {
-    return (((metal::float2(1.0) + metal::float2(2.0)) - metal::float2(3.0)) / metal::float2(4.0)).xyxy + static_cast<float4>(metal::int4(5) % metal::int4(2));
+    metal::float2 a = ((metal::float2(1.0) + metal::float2(2.0)) - metal::float2(3.0)) / metal::float2(4.0);
+    metal::int4 b = metal::int4(5) % metal::int4(2);
+    return a.xyxy + static_cast<float4>(b);
 }
 
 int unary(

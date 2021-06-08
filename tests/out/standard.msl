@@ -10,8 +10,8 @@ struct derivativesOutput {
 fragment derivativesOutput derivatives(
   metal::float4 foo [[position]]
 ) {
-    metal::float4 _e1 = metal::dfdx(foo);
-    metal::float4 _e2 = metal::dfdy(foo);
-    metal::float4 _e3 = metal::fwidth(foo);
-    return derivativesOutput { (_e1 + _e2) * _e3 };
+    metal::float4 x = metal::dfdx(foo);
+    metal::float4 y = metal::dfdy(foo);
+    metal::float4 z = metal::fwidth(foo);
+    return derivativesOutput { (x + y) * z };
 }

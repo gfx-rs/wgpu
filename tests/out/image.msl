@@ -9,9 +9,10 @@ kernel void main1(
 , metal::texture2d<uint, metal::access::read> image_src [[user(fake0)]]
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
-    metal::int2 _e10 = (int2(image_src.get_width(), image_src.get_height()) * static_cast<int2>(local_id.xy)) % metal::int2(10, 20);
-    metal::uint4 _e11 = image_src.read(metal::uint2(_e10));
-    image_dst.write(_e11, metal::uint(_e10.x));
+    metal::int2 dim = int2(image_src.get_width(), image_src.get_height());
+    metal::int2 itc = (dim * static_cast<int2>(local_id.xy)) % metal::int2(10, 20);
+    metal::uint4 value = image_src.read(metal::uint2(itc));
+    image_dst.write(value, metal::uint(itc.x));
     return;
 }
 
@@ -28,7 +29,27 @@ vertex queriesOutput queries(
 , metal::texture3d<float, metal::access::sample> image_3d [[user(fake0)]]
 , metal::texture2d_ms<float, metal::access::read> image_aa [[user(fake0)]]
 ) {
-    return queriesOutput { metal::float4(static_cast<float>((((((((((((((((((int(image_1d.get_width()) + int2(image_2d.get_width(), image_2d.get_height()).y) + int2(image_2d.get_width(1), image_2d.get_height(1)).y) + int2(image_2d_array.get_width(), image_2d_array.get_height()).y) + int2(image_2d_array.get_width(1), image_2d_array.get_height(1)).y) + int(image_2d_array.get_array_size())) + int3(image_cube.get_width()).y) + int3(image_cube.get_width(1)).y) + int3(image_cube_array.get_width()).y) + int3(image_cube_array.get_width(1)).y) + int(image_cube_array.get_array_size())) + int3(image_3d.get_width(), image_3d.get_height(), image_3d.get_depth()).z) + int3(image_3d.get_width(1), image_3d.get_height(1), image_3d.get_depth(1)).z) + int(image_aa.get_num_samples())) + int(image_2d.get_num_mip_levels())) + int(image_2d_array.get_num_mip_levels())) + int(image_3d.get_num_mip_levels())) + int(image_cube.get_num_mip_levels())) + int(image_cube_array.get_num_mip_levels()))) };
+    int dim_1d = int(image_1d.get_width());
+    metal::int2 dim_2d = int2(image_2d.get_width(), image_2d.get_height());
+    int num_levels_2d = int(image_2d.get_num_mip_levels());
+    metal::int2 dim_2d_lod = int2(image_2d.get_width(1), image_2d.get_height(1));
+    metal::int2 dim_2d_array = int2(image_2d_array.get_width(), image_2d_array.get_height());
+    int num_levels_2d_array = int(image_2d_array.get_num_mip_levels());
+    metal::int2 dim_2d_array_lod = int2(image_2d_array.get_width(1), image_2d_array.get_height(1));
+    int num_layers_2d = int(image_2d_array.get_array_size());
+    metal::int3 dim_cube = int3(image_cube.get_width());
+    int num_levels_cube = int(image_cube.get_num_mip_levels());
+    metal::int3 dim_cube_lod = int3(image_cube.get_width(1));
+    metal::int3 dim_cube_array = int3(image_cube_array.get_width());
+    int num_levels_cube_array = int(image_cube_array.get_num_mip_levels());
+    metal::int3 dim_cube_array_lod = int3(image_cube_array.get_width(1));
+    int num_layers_cube = int(image_cube_array.get_array_size());
+    metal::int3 dim_3d = int3(image_3d.get_width(), image_3d.get_height(), image_3d.get_depth());
+    int num_levels_3d = int(image_3d.get_num_mip_levels());
+    metal::int3 dim_3d_lod = int3(image_3d.get_width(1), image_3d.get_height(1), image_3d.get_depth(1));
+    int num_samples_aa = int(image_aa.get_num_samples());
+    int sum = (((((((((((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + num_layers_2d) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + num_layers_cube) + dim_3d.z) + dim_3d_lod.z) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array;
+    return queriesOutput { metal::float4(static_cast<float>(sum)) };
 }
 
 
@@ -39,8 +60,8 @@ fragment sample_comparisonOutput sample_comparison(
   metal::sampler sampler_cmp [[user(fake0)]]
 , metal::depth2d<float, metal::access::sample> image_2d_depth [[user(fake0)]]
 ) {
-    metal::float2 _e12 = metal::float2(0.5);
-    float _e14 = image_2d_depth.sample_compare(sampler_cmp, _e12, 0.5);
-    float _e15 = image_2d_depth.sample_compare(sampler_cmp, _e12, 0.5);
-    return sample_comparisonOutput { _e14 + _e15 };
+    metal::float2 tc = metal::float2(0.5);
+    float s2d_depth = image_2d_depth.sample_compare(sampler_cmp, tc, 0.5);
+    float s2d_depth_level = image_2d_depth.sample_compare(sampler_cmp, tc, 0.5);
+    return sample_comparisonOutput { s2d_depth + s2d_depth_level };
 }

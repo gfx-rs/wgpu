@@ -26,12 +26,14 @@ vertex vs_mainOutput vs_main(
     tmp2_ = static_cast<int>(vertex_index) & 1;
     int _e10 = tmp1_;
     int _e16 = tmp2_;
-    metal::float4 _e24 = metal::float4((static_cast<float>(_e10) * 4.0) - 1.0, (static_cast<float>(_e16) * 4.0) - 1.0, 0.0, 1.0);
+    metal::float4 pos = metal::float4((static_cast<float>(_e10) * 4.0) - 1.0, (static_cast<float>(_e16) * 4.0) - 1.0, 0.0, 1.0);
     metal::float4 _e27 = r_data.view[0];
     metal::float4 _e31 = r_data.view[1];
     metal::float4 _e35 = r_data.view[2];
+    metal::float3x3 inv_model_view = metal::transpose(metal::float3x3(_e27.xyz, _e31.xyz, _e35.xyz));
     metal::float4x4 _e40 = r_data.proj_inv;
-    const auto _tmp = VertexOutput {_e24, metal::transpose(metal::float3x3(_e27.xyz, _e31.xyz, _e35.xyz)) * (_e40 * _e24).xyz};
+    metal::float4 unprojected = _e40 * pos;
+    const auto _tmp = VertexOutput {pos, inv_model_view * unprojected.xyz};
     return vs_mainOutput { _tmp.position, _tmp.uv };
 }
 
