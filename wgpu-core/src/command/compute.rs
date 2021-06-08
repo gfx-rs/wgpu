@@ -13,7 +13,7 @@ use crate::{
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, Texture},
-    track::{StatefulTrackerSubset, TrackerSet, UsageConflict},
+    track::{StatefulTrackerSubset, TrackerSet, UsageConflict, UseExtendError},
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label, DOWNLEVEL_ERROR_WARNING_MESSAGE,
 };
@@ -22,7 +22,6 @@ use hal::CommandBuffer as _;
 use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, ShaderStage};
 
-use crate::track::UseExtendError;
 use std::{fmt, mem, str};
 
 #[doc(hidden)]
@@ -293,7 +292,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         if let Some(ref label) = base.label {
             unsafe {
-                raw.begin_debug_marker(label, 0);
+                raw.begin_debug_marker(label);
             }
         }
 
@@ -377,19 +376,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if !entries.is_empty() {
                         let pipeline_layout =
                             &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
-                        let desc_sets = entries.iter().map(|e| {
-                            bind_group_guard[e.group_id.as_ref().unwrap().value]
-                                .raw
-                                .raw()
-                        });
-                        let offsets = entries.iter().flat_map(|e| &e.dynamic_offsets).cloned();
-                        unsafe {
-                            raw.bind_compute_descriptor_sets(
-                                pipeline_layout,
-                                index as usize,
-                                desc_sets,
-                                offsets,
-                            );
+                        for (i, e) in entries.iter().enumerate() {
+                            let raw_bg = &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
+                            unsafe {
+                                raw.set_bind_group(
+                                    pipeline_layout,
+                                    index as u32 + i as u32,
+                                    raw_bg,
+                                    &e.dynamic_offsets,
+                                );
+                            }
                         }
                     }
                 }
@@ -408,7 +404,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope)?;
 
                     unsafe {
-                        raw.bind_compute_pipeline(&pipeline.raw);
+                        raw.set_compute_pipeline(&pipeline.raw);
                     }
 
                     // Rebind resources
@@ -420,19 +416,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             pipeline.layout_id.value,
                         );
                         if !entries.is_empty() {
-                            let desc_sets = entries.iter().map(|e| {
-                                bind_group_guard[e.group_id.as_ref().unwrap().value]
-                                    .raw
-                                    .raw()
-                            });
-                            let offsets = entries.iter().flat_map(|e| &e.dynamic_offsets).cloned();
-                            unsafe {
-                                raw.bind_compute_descriptor_sets(
-                                    &pipeline_layout.raw,
-                                    start_index,
-                                    desc_sets,
-                                    offsets,
-                                );
+                            for (i, e) in entries.iter().enumerate() {
+                                let raw_bg =
+                                    &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
+                                unsafe {
+                                    raw.set_bind_group(
+                                        &pipeline_layout.raw,
+                                        start_index as u32 + i as u32,
+                                        raw_bg,
+                                        &e.dynamic_offsets,
+                                    );
+                                }
                             }
                         }
 
@@ -447,8 +441,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 offset,
                                 size_bytes,
                                 |clear_offset, clear_data| unsafe {
-                                    raw.push_compute_constants(
+                                    raw.set_push_constants(
                                         &pipeline_layout.raw,
+                                        wgt::ShaderStage::COMPUTE,
                                         clear_offset,
                                         clear_data,
                                     );
@@ -488,7 +483,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         )
                         .map_pass_err(scope)?;
 
-                    unsafe { raw.push_compute_constants(&pipeline_layout.raw, offset, data_slice) }
+                    unsafe {
+                        raw.set_push_constants(
+                            &pipeline_layout.raw,
+                            wgt::ShaderStage::COMPUTE,
+                            offset,
+                            data_slice,
+                        );
+                    }
                 }
                 ComputeCommand::Dispatch(groups) => {
                     let scope = PassErrorScope::Dispatch {
@@ -537,7 +539,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope);
                     }
 
-                    let &(ref buf_raw, _) = indirect_buffer
+                    let buf_raw = indirect_buffer
                         .raw
                         .as_ref()
                         .ok_or(ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
@@ -569,14 +571,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         raw.dispatch_indirect(buf_raw, offset);
                     }
                 }
-                ComputeCommand::PushDebugGroup { color, len } => {
+                ComputeCommand::PushDebugGroup { color: _, len } => {
                     state.debug_scope_depth += 1;
                     let label =
                         str::from_utf8(&base.string_data[string_offset..string_offset + len])
                             .unwrap();
                     string_offset += len;
                     unsafe {
-                        raw.begin_debug_marker(label, color);
+                        raw.begin_debug_marker(label);
                     }
                 }
                 ComputeCommand::PopDebugGroup => {
@@ -591,12 +593,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         raw.end_debug_marker();
                     }
                 }
-                ComputeCommand::InsertDebugMarker { color, len } => {
+                ComputeCommand::InsertDebugMarker { color: _, len } => {
                     let label =
                         str::from_utf8(&base.string_data[string_offset..string_offset + len])
                             .unwrap();
                     string_offset += len;
-                    unsafe { raw.insert_debug_marker(label, color) }
+                    unsafe { raw.insert_debug_marker(label) }
                 }
                 ComputeCommand::WriteTimestamp {
                     query_set_id,

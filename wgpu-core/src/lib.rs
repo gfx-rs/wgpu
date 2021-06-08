@@ -78,18 +78,15 @@ pub type RawString = *const c_char;
 pub type Label<'a> = Option<Cow<'a, str>>;
 
 trait LabelHelpers<'a> {
-    fn to_string_or_default(&'a self) -> String;
+    fn borrow_option(&'a self) -> Option<&'a str>;
     fn borrow_or_default(&'a self) -> &'a str;
 }
 impl<'a> LabelHelpers<'a> for Label<'a> {
-    fn borrow_or_default(&'a self) -> &'a str {
-        self.as_ref().map(|cow| cow.as_ref()).unwrap_or("")
+    fn borrow_option(&'a self) -> Option<&'a str> {
+        self.as_ref().map(|cow| cow.as_ref())
     }
-    fn to_string_or_default(&'a self) -> String {
-        self.as_ref()
-            .map(|cow| cow.as_ref())
-            .unwrap_or("")
-            .to_string()
+    fn borrow_or_default(&'a self) -> &'a str {
+        self.borrow_option().unwrap_or_default()
     }
 }
 

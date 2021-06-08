@@ -3,28 +3,26 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::{range::RangedStates, PendingTransition, ResourceState, Unit};
-use crate::{
-    device::MAX_MIP_LEVELS,
-    id::{TextureId, Valid},
-};
+use crate::id::{TextureId, Valid};
 use hal::TextureUse;
 
 use arrayvec::ArrayVec;
 
 use std::{iter, ops::Range};
 
-type PlaneStates = RangedStates<hal::ArrayLayer, Unit<TextureUse>>;
+type PlaneStates = RangedStates<u32, Unit<TextureUse>>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TextureSelector {
+    //TODO: rename to `mip_levels` and `array_layers` for consistency
     //pub aspects: hal::FormatAspect,
-    pub levels: Range<hal::MipLevel>,
-    pub layers: Range<hal::ArrayLayer>,
+    pub levels: Range<u32>,
+    pub layers: Range<u32>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct TextureState {
-    mips: ArrayVec<[PlaneStates; MAX_MIP_LEVELS as usize]>,
+    mips: ArrayVec<[PlaneStates; hal::MAX_MIP_LEVELS as usize]>,
     /// True if we have the information about all the subresources here
     full: bool,
 }
@@ -43,7 +41,7 @@ impl PendingTransition<TextureState> {
 }
 
 impl TextureState {
-    pub fn new(mip_level_count: hal::MipLevel, array_layer_count: hal::ArrayLayer) -> Self {
+    pub fn new(mip_level_count: u32, array_layer_count: u32) -> Self {
         Self {
             mips: iter::repeat_with(|| {
                 PlaneStates::from_range(0..array_layer_count, Unit::new(TextureUse::UNINITIALIZED))
@@ -103,7 +101,7 @@ impl ResourceState for TextureState {
             .iter_mut()
             .enumerate()
         {
-            let level = selector.levels.start + mip_id as hal::MipLevel;
+            let level = selector.levels.start + mip_id as u32;
             let layers = mip.isolate(&selector.layers, Unit::new(usage));
             for &mut (ref range, ref mut unit) in layers {
                 if unit.last == usage && TextureUse::ORDERED.contains(usage) {
@@ -153,7 +151,7 @@ impl ResourceState for TextureState {
             .iter_mut()
             .enumerate()
         {
-            let level = selector.levels.start + mip_id as hal::MipLevel;
+            let level = selector.levels.start + mip_id as u32;
             let layers = mip.isolate(&selector.layers, Unit::new(usage));
             for &mut (ref range, ref mut unit) in layers {
                 match unit.first {
@@ -192,7 +190,7 @@ impl ResourceState for TextureState {
         }
 
         for (mip_id, (mip_self, mip_other)) in self.mips.iter_mut().zip(&other.mips).enumerate() {
-            let level = mip_id as hal::MipLevel;
+            let level = mip_id as u32;
             temp.extend(mip_self.merge(mip_other, 0));
             mip_self.clear();
 
@@ -374,7 +372,7 @@ mod test {
                 2..3,
                 Unit {
                     first: Some(TextureUse::COPY_SRC),
-                    last: TextureUse::ATTACHMENT_WRITE,
+                    last: TextureUse::COLOR_TARGET,
                 },
             ),
         ]);
@@ -415,7 +413,7 @@ mod test {
             ts1.mips[0].query(&(2..3), |&v| v),
             Some(Ok(Unit {
                 first: Some(TextureUse::SAMPLED),
-                last: TextureUse::ATTACHMENT_WRITE,
+                last: TextureUse::COLOR_TARGET,
             })),
             "wrong final layer 2 state"
         );
@@ -424,7 +422,7 @@ mod test {
         ts2.mips[0] = PlaneStates::from_slice(&[(
             2..3,
             Unit {
-                first: Some(TextureUse::ATTACHMENT_WRITE),
+                first: Some(TextureUse::COLOR_TARGET),
                 last: TextureUse::COPY_SRC,
             },
         )]);

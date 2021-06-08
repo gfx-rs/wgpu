@@ -796,26 +796,6 @@ bitflags::bitflags! {
     }
 }
 
-bitflags::bitflags! {
-    /// Flags controlling the shader processing.
-    ///
-    /// Note: These flags are internal tweaks, they don't affect the API.
-    #[repr(transparent)]
-    #[derive(Default)]
-    #[cfg_attr(feature = "trace", derive(serde::Serialize))]
-    #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-    pub struct ShaderFlags: u32 {
-        /// If enabled, `wgpu` will parse the shader with `Naga`
-        /// and validate it both internally and with regards to
-        /// the given pipeline interface.
-        const VALIDATION = 1;
-        /// If enabled, `wgpu` will attempt to operate on `Naga`'s internal
-        /// representation of the shader module for both validation and translation
-        /// into the backend shader language, on backends where `gfx-hal` supports this.
-        const EXPERIMENTAL_TRANSLATION = 2;
-    }
-}
-
 /// Dimensions of a particular texture view.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -1058,6 +1038,16 @@ pub enum PrimitiveTopology {
 impl Default for PrimitiveTopology {
     fn default() -> Self {
         PrimitiveTopology::TriangleList
+    }
+}
+
+impl PrimitiveTopology {
+    /// Returns true for strip topologies.
+    pub fn is_strip(&self) -> bool {
+        match *self {
+            Self::PointList | Self::LineList | Self::TriangleList => false,
+            Self::LineStrip | Self::TriangleStrip => true,
+        }
     }
 }
 
@@ -2496,11 +2486,11 @@ impl Extent3d {
     /// assert_eq!(wgpu::Extent3d { width: 60, height: 60, depth_or_array_layers: 1 }.max_mips(), 6);
     /// assert_eq!(wgpu::Extent3d { width: 240, height: 1, depth_or_array_layers: 1 }.max_mips(), 8);
     /// ```
-    pub fn max_mips(&self) -> u8 {
+    pub fn max_mips(&self) -> u32 {
         let max_dim = self.width.max(self.height.max(self.depth_or_array_layers));
         let max_levels = 32 - max_dim.leading_zeros();
 
-        max_levels as u8
+        max_levels
     }
 }
 
@@ -2582,6 +2572,14 @@ impl<L> TextureDescriptor<L> {
                 TextureDimension::D3 => u32::max(1, self.size.depth_or_array_layers >> level),
             },
         })
+    }
+
+    /// Returns the number of array layers.
+    pub fn array_layer_count(&self) -> u32 {
+        match self.dimension {
+            TextureDimension::D1 | TextureDimension::D2 => self.size.depth_or_array_layers,
+            TextureDimension::D3 => 1,
+        }
     }
 }
 

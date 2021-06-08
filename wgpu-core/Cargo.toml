@@ -37,7 +37,7 @@ thiserror = "1"
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
 tag = "gfx-25"
-features = ["spv-in", "spv-out", "wgsl-in"]
+features = ["spv-in", "wgsl-in"]
 
 [dependencies.wgt]
 path = "../wgpu-types"

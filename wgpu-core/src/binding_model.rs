@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::{descriptor::DescriptorSet, DeviceError, MissingFeatures, SHADER_STAGE_COUNT},
+    device::{DeviceError, MissingFeatures, SHADER_STAGE_COUNT},
     hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
     memory_init_tracker::MemoryInitTrackerAction,
@@ -633,7 +633,7 @@ pub struct BindGroupDynamicBindingData {
 
 #[derive(Debug)]
 pub struct BindGroup<A: hal::Api> {
-    pub(crate) raw: DescriptorSet<A>,
+    pub(crate) raw: A::BindGroup,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) layout_id: Valid<BindGroupLayoutId>,
     pub(crate) life_guard: LifeGuard,

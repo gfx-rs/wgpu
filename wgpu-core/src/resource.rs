@@ -242,15 +242,9 @@ pub struct TextureViewDescriptor<'a> {
 }
 
 #[derive(Debug)]
-pub(crate) enum TextureViewInner<A: hal::Api> {
-    Native {
-        raw: A::TextureView,
-        source_id: Stored<TextureId>,
-    },
-    SwapChain {
-        raw: A::SurfaceTexture,
-        source_id: Stored<SwapChainId>,
-    },
+pub(crate) enum TextureViewSource {
+    Native(Stored<TextureId>),
+    SwapChain(Stored<SwapChainId>),
 }
 
 #[derive(Debug)]
@@ -260,9 +254,16 @@ pub(crate) struct HalTextureViewDescriptor {
     pub range: wgt::ImageSubresourceRange,
 }
 
+impl HalTextureViewDescriptor {
+    pub fn aspects(&self) -> hal::FormatAspect {
+        hal::FormatAspect::from(self.format) & hal::FormatAspect::from(self.range.aspect)
+    }
+}
+
 #[derive(Debug)]
 pub struct TextureView<A: hal::Api> {
-    pub(crate) inner: TextureViewInner<A>,
+    pub(crate) raw: A::TextureView,
+    pub(crate) source: TextureViewSource,
     //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
@@ -280,30 +281,35 @@ pub enum CreateTextureViewError {
     InvalidTexture,
     #[error("not enough memory left")]
     OutOfMemory,
-    #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{image:?}`")]
+    #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{texture:?}`")]
     InvalidTextureViewDimension {
         view: wgt::TextureViewDimension,
-        image: wgt::TextureDimension,
+        texture: wgt::TextureDimension,
     },
     #[error("Invalid texture depth `{depth}` for texture view of dimension `Cubemap`. Cubemap views must use images of size 6.")]
-    InvalidCubemapTextureDepth { depth: u16 },
+    InvalidCubemapTextureDepth { depth: u32 },
     #[error("Invalid texture depth `{depth}` for texture view of dimension `CubemapArray`. Cubemap views must use images with sizes which are a multiple of 6.")]
-    InvalidCubemapArrayTextureDepth { depth: u16 },
+    InvalidCubemapArrayTextureDepth { depth: u32 },
     #[error(
         "TextureView mip level count + base mip level {requested} must be <= Texture mip level count {total}"
     )]
-    TooManyMipLevels { requested: u32, total: u8 },
+    TooManyMipLevels { requested: u32, total: u32 },
     #[error("TextureView array layer count + base array layer {requested} must be <= Texture depth/array layer count {total}")]
-    TooManyArrayLayers { requested: u32, total: u16 },
+    TooManyArrayLayers { requested: u32, total: u32 },
     #[error("Requested array layer count {requested} is not valid for the target view dimension {dim:?}")]
     InvalidArrayLayerCount {
         requested: u32,
         dim: wgt::TextureViewDimension,
     },
-    #[error("Aspect {requested:?} is not in the source texture ({total:?})")]
+    #[error("Aspect {requested_aspect:?} is not in the source texture format {texture_format:?}")]
     InvalidAspect {
-        requested: hal::FormatAspect,
-        total: hal::FormatAspect,
+        texture_format: wgt::TextureFormat,
+        requested_aspect: wgt::TextureAspect,
+    },
+    #[error("Unable to view texture {texture:?} as {view:?}")]
+    FormatReinterpretation {
+        texture: wgt::TextureFormat,
+        view: wgt::TextureFormat,
     },
 }
 
@@ -425,10 +431,7 @@ pub struct QuerySet<A: hal::Api> {
     pub(crate) raw: A::QuerySet,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
-    /// Amount of queries in the query set.
     pub(crate) desc: wgt::QuerySetDescriptor,
-    /// Amount of numbers in each query (i.e. a pipeline statistics query for two attributes will have this number be two)
-    pub(crate) elements: u32,
 }
 
 impl<A: hal::Api> Resource for QuerySet<A> {

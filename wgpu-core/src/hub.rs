@@ -6,14 +6,10 @@ use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, RenderBundle},
     device::Device,
-    id::{
-        AdapterId, BindGroupId, BindGroupLayoutId, BufferId, CommandBufferId, ComputePipelineId,
-        DeviceId, PipelineLayoutId, RenderBundleId, RenderPipelineId, SamplerId, ShaderModuleId,
-        SurfaceId, SwapChainId, TextureId, TextureViewId, TypedId, Valid,
-    },
+    id,
     instance::{Adapter, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
-    resource::{Buffer, Sampler, Texture, TextureView},
+    resource::{Buffer, QuerySet, Sampler, Texture, TextureView},
     swap_chain::SwapChain,
     Epoch, Index,
 };
@@ -21,8 +17,6 @@ use crate::{
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use wgt::Backend;
 
-use crate::id::QuerySetId;
-use crate::resource::QuerySet;
 #[cfg(debug_assertions)]
 use std::cell::Cell;
 use std::{fmt::Debug, marker::PhantomData, ops};
@@ -51,7 +45,7 @@ impl IdentityManager {
         }
     }
 
-    pub fn alloc<I: TypedId>(&mut self, backend: Backend) -> I {
+    pub fn alloc<I: id::TypedId>(&mut self, backend: Backend) -> I {
         match self.free.pop() {
             Some(index) => I::zip(index, self.epochs[index as usize], backend),
             None => {
@@ -63,7 +57,7 @@ impl IdentityManager {
         }
     }
 
-    pub fn free<I: TypedId + Debug>(&mut self, id: I) {
+    pub fn free<I: id::TypedId + Debug>(&mut self, id: I) {
         let (index, epoch, _backend) = id.unzip();
         // avoid doing this check in release
         if cfg!(debug_assertions) {
@@ -87,26 +81,26 @@ enum Element<T> {
 pub(crate) struct InvalidId;
 
 #[derive(Debug)]
-pub struct Storage<T, I: TypedId> {
+pub struct Storage<T, I: id::TypedId> {
     map: Vec<Element<T>>,
     kind: &'static str,
     _phantom: PhantomData<I>,
 }
 
-impl<T, I: TypedId> ops::Index<Valid<I>> for Storage<T, I> {
+impl<T, I: id::TypedId> ops::Index<id::Valid<I>> for Storage<T, I> {
     type Output = T;
-    fn index(&self, id: Valid<I>) -> &T {
+    fn index(&self, id: id::Valid<I>) -> &T {
         self.get(id.0).unwrap()
     }
 }
 
-impl<T, I: TypedId> ops::IndexMut<Valid<I>> for Storage<T, I> {
-    fn index_mut(&mut self, id: Valid<I>) -> &mut T {
+impl<T, I: id::TypedId> ops::IndexMut<id::Valid<I>> for Storage<T, I> {
+    fn index_mut(&mut self, id: id::Valid<I>) -> &mut T {
         self.get_mut(id.0).unwrap()
     }
 }
 
-impl<T, I: TypedId> Storage<T, I> {
+impl<T, I: id::TypedId> Storage<T, I> {
     pub(crate) fn contains(&self, id: I) -> bool {
         let (index, epoch, _) = id.unzip();
         match self.map[index as usize] {
@@ -347,7 +341,7 @@ pub trait IdentityHandler<I>: Debug {
     fn free(&self, id: I);
 }
 
-impl<I: TypedId + Debug> IdentityHandler<I> for Mutex<IdentityManager> {
+impl<I: id::TypedId + Debug> IdentityHandler<I> for Mutex<IdentityManager> {
     type Input = PhantomData<I>;
     fn process(&self, _id: Self::Input, backend: Backend) -> I {
         self.lock().alloc(backend)
@@ -365,7 +359,7 @@ pub trait IdentityHandlerFactory<I> {
 #[derive(Debug)]
 pub struct IdentityManagerFactory;
 
-impl<I: TypedId + Debug> IdentityHandlerFactory<I> for IdentityManagerFactory {
+impl<I: id::TypedId + Debug> IdentityHandlerFactory<I> for IdentityManagerFactory {
     type Filter = Mutex<IdentityManager>;
     fn spawn(&self, min_index: Index) -> Self::Filter {
         Mutex::new(IdentityManager::from_index(min_index))
@@ -373,23 +367,23 @@ impl<I: TypedId + Debug> IdentityHandlerFactory<I> for IdentityManagerFactory {
 }
 
 pub trait GlobalIdentityHandlerFactory:
-    IdentityHandlerFactory<AdapterId>
-    + IdentityHandlerFactory<DeviceId>
-    + IdentityHandlerFactory<SwapChainId>
-    + IdentityHandlerFactory<PipelineLayoutId>
-    + IdentityHandlerFactory<ShaderModuleId>
-    + IdentityHandlerFactory<BindGroupLayoutId>
-    + IdentityHandlerFactory<BindGroupId>
-    + IdentityHandlerFactory<CommandBufferId>
-    + IdentityHandlerFactory<RenderBundleId>
-    + IdentityHandlerFactory<RenderPipelineId>
-    + IdentityHandlerFactory<ComputePipelineId>
-    + IdentityHandlerFactory<QuerySetId>
-    + IdentityHandlerFactory<BufferId>
-    + IdentityHandlerFactory<TextureId>
-    + IdentityHandlerFactory<TextureViewId>
-    + IdentityHandlerFactory<SamplerId>
-    + IdentityHandlerFactory<SurfaceId>
+    IdentityHandlerFactory<id::AdapterId>
+    + IdentityHandlerFactory<id::DeviceId>
+    + IdentityHandlerFactory<id::SwapChainId>
+    + IdentityHandlerFactory<id::PipelineLayoutId>
+    + IdentityHandlerFactory<id::ShaderModuleId>
+    + IdentityHandlerFactory<id::BindGroupLayoutId>
+    + IdentityHandlerFactory<id::BindGroupId>
+    + IdentityHandlerFactory<id::CommandBufferId>
+    + IdentityHandlerFactory<id::RenderBundleId>
+    + IdentityHandlerFactory<id::RenderPipelineId>
+    + IdentityHandlerFactory<id::ComputePipelineId>
+    + IdentityHandlerFactory<id::QuerySetId>
+    + IdentityHandlerFactory<id::BufferId>
+    + IdentityHandlerFactory<id::TextureId>
+    + IdentityHandlerFactory<id::TextureViewId>
+    + IdentityHandlerFactory<id::SamplerId>
+    + IdentityHandlerFactory<id::SurfaceId>
 {
 }
 
@@ -409,13 +403,13 @@ pub trait Resource {
 }
 
 #[derive(Debug)]
-pub struct Registry<T: Resource, I: TypedId, F: IdentityHandlerFactory<I>> {
+pub struct Registry<T: Resource, I: id::TypedId, F: IdentityHandlerFactory<I>> {
     identity: F::Filter,
     data: RwLock<Storage<T, I>>,
     backend: Backend,
 }
 
-impl<T: Resource, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
+impl<T: Resource, I: id::TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     fn new(backend: Backend, factory: &F) -> Self {
         Self {
             identity: factory.spawn(0),
@@ -442,12 +436,12 @@ impl<T: Resource, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
 }
 
 #[must_use]
-pub(crate) struct FutureId<'a, I: TypedId, T> {
+pub(crate) struct FutureId<'a, I: id::TypedId, T> {
     id: I,
     data: &'a RwLock<Storage<T, I>>,
 }
 
-impl<I: TypedId + Copy, T> FutureId<'_, I, T> {
+impl<I: id::TypedId + Copy, T> FutureId<'_, I, T> {
     #[cfg(feature = "trace")]
     pub fn id(&self) -> I {
         self.id
@@ -457,9 +451,9 @@ impl<I: TypedId + Copy, T> FutureId<'_, I, T> {
         self.id
     }
 
-    pub fn assign<'a, A: Access<T>>(self, value: T, _: &'a mut Token<A>) -> Valid<I> {
+    pub fn assign<'a, A: Access<T>>(self, value: T, _: &'a mut Token<A>) -> id::Valid<I> {
         self.data.write().insert(self.id, value);
-        Valid(self.id)
+        id::Valid(self.id)
     }
 
     pub fn assign_error<'a, A: Access<T>>(self, label: &str, _: &'a mut Token<A>) -> I {
@@ -468,7 +462,7 @@ impl<I: TypedId + Copy, T> FutureId<'_, I, T> {
     }
 }
 
-impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
+impl<T: Resource, I: id::TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     pub(crate) fn prepare(
         &self,
         id_in: <F::Filter as IdentityHandler<I>>::Input,
@@ -535,24 +529,23 @@ impl<T: Resource, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I
     }
 }
 
-#[derive(Debug)]
 pub struct Hub<A: hal::Api, F: GlobalIdentityHandlerFactory> {
-    pub adapters: Registry<Adapter<A>, AdapterId, F>,
-    pub devices: Registry<Device<A>, DeviceId, F>,
-    pub swap_chains: Registry<SwapChain<A>, SwapChainId, F>,
-    pub pipeline_layouts: Registry<PipelineLayout<A>, PipelineLayoutId, F>,
-    pub shader_modules: Registry<ShaderModule<A>, ShaderModuleId, F>,
-    pub bind_group_layouts: Registry<BindGroupLayout<A>, BindGroupLayoutId, F>,
-    pub bind_groups: Registry<BindGroup<A>, BindGroupId, F>,
-    pub command_buffers: Registry<CommandBuffer<A>, CommandBufferId, F>,
-    pub render_bundles: Registry<RenderBundle, RenderBundleId, F>,
-    pub render_pipelines: Registry<RenderPipeline<A>, RenderPipelineId, F>,
-    pub compute_pipelines: Registry<ComputePipeline<A>, ComputePipelineId, F>,
-    pub query_sets: Registry<QuerySet<A>, QuerySetId, F>,
-    pub buffers: Registry<Buffer<A>, BufferId, F>,
-    pub textures: Registry<Texture<A>, TextureId, F>,
-    pub texture_views: Registry<TextureView<A>, TextureViewId, F>,
-    pub samplers: Registry<Sampler<A>, SamplerId, F>,
+    pub adapters: Registry<Adapter<A>, id::AdapterId, F>,
+    pub devices: Registry<Device<A>, id::DeviceId, F>,
+    pub swap_chains: Registry<SwapChain<A>, id::SwapChainId, F>,
+    pub pipeline_layouts: Registry<PipelineLayout<A>, id::PipelineLayoutId, F>,
+    pub shader_modules: Registry<ShaderModule<A>, id::ShaderModuleId, F>,
+    pub bind_group_layouts: Registry<BindGroupLayout<A>, id::BindGroupLayoutId, F>,
+    pub bind_groups: Registry<BindGroup<A>, id::BindGroupId, F>,
+    pub command_buffers: Registry<CommandBuffer<A>, id::CommandBufferId, F>,
+    pub render_bundles: Registry<RenderBundle, id::RenderBundleId, F>,
+    pub render_pipelines: Registry<RenderPipeline<A>, id::RenderPipelineId, F>,
+    pub compute_pipelines: Registry<ComputePipeline<A>, id::ComputePipelineId, F>,
+    pub query_sets: Registry<QuerySet<A>, id::QuerySetId, F>,
+    pub buffers: Registry<Buffer<A>, id::BufferId, F>,
+    pub textures: Registry<Texture<A>, id::TextureId, F>,
+    pub texture_views: Registry<TextureView<A>, id::TextureViewId, F>,
+    pub samplers: Registry<Sampler<A>, id::SamplerId, F>,
 }
 
 impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
@@ -582,9 +575,9 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     //TODO: instead of having a hacky `with_adapters` parameter,
     // we should have `clear_device(device_id)` that specifically destroys
     // everything related to a logical device.
-    fn clear(&self, surface_guard: &mut Storage<Surface, SurfaceId>, with_adapters: bool) {
-        use crate::resource::TextureViewInner;
-        use hal::Device as _;
+    fn clear(&self, surface_guard: &mut Storage<Surface, id::SurfaceId>, with_adapters: bool) {
+        use crate::resource::TextureViewSource;
+        use hal::{Device as _, Surface as _};
 
         let mut devices = self.devices.data.write();
         for element in devices.map.iter_mut() {
@@ -606,14 +599,14 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             let textures = self.textures.data.read();
             for element in self.texture_views.data.write().map.drain(..) {
                 if let Element::Occupied(texture_view, _) = element {
-                    match texture_view.inner {
-                        TextureViewInner::Native { raw, source_id } => {
+                    match texture_view.source {
+                        TextureViewSource::Native(source_id) => {
                             let device = &devices[textures[source_id.value].device_id.value];
                             unsafe {
-                                device.raw.destroy_image_view(raw);
+                                device.raw.destroy_texture_view(texture_view.raw);
                             }
                         }
-                        TextureViewInner::SwapChain { .. } => {} //TODO
+                        TextureViewSource::SwapChain(_) => {} //TODO
                     }
                 }
             }
@@ -633,15 +626,15 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         for element in self.command_buffers.data.write().map.drain(..) {
             if let Element::Occupied(command_buffer, _) = element {
                 let device = &devices[command_buffer.device_id.value];
-                device
-                    .cmd_allocator
-                    .after_submit(command_buffer, &device.raw, 0);
+                for raw in command_buffer.raw {
+                    device.raw.destroy_command_buffer(raw);
+                }
             }
         }
         for element in self.bind_groups.data.write().map.drain(..) {
             if let Element::Occupied(bind_group, _) = element {
                 let device = &devices[bind_group.device_id.value];
-                device.destroy_bind_group(bind_group);
+                device.raw.destroy_bind_group(bind_group.raw);
             }
         }
 
@@ -657,7 +650,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             if let Element::Occupied(bgl, _) = element {
                 let device = &devices[bgl.device_id.value];
                 unsafe {
-                    device.raw.destroy_descriptor_set_layout(bgl.raw);
+                    device.raw.destroy_bind_group_layout(bgl.raw);
                 }
             }
         }
@@ -681,7 +674,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             if let Element::Occupied(pipeline, _) = element {
                 let device = &devices[pipeline.device_id.value];
                 unsafe {
-                    device.raw.destroy_graphics_pipeline(pipeline.raw);
+                    device.raw.destroy_render_pipeline(pipeline.raw);
                 }
             }
         }
@@ -689,16 +682,13 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         for (index, element) in self.swap_chains.data.write().map.drain(..).enumerate() {
             if let Element::Occupied(swap_chain, epoch) = element {
                 let device = &devices[swap_chain.device_id.value];
-                unsafe {
-                    device.raw.destroy_semaphore(swap_chain.semaphore);
-                }
-                let suf_id = TypedId::zip(index as Index, epoch, A::VARIANT);
+                let suf_id = id::TypedId::zip(index as Index, epoch, A::VARIANT);
                 //TODO: hold the surface alive by the swapchain
                 if surface_guard.contains(suf_id) {
                     let surface = surface_guard.get_mut(suf_id).unwrap();
                     let suf = A::get_surface_mut(surface);
                     unsafe {
-                        suf.unconfigure_swapchain(&device.raw);
+                        suf.unconfigure(&device.raw);
                     }
                 }
             }
@@ -708,7 +698,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             if let Element::Occupied(query_set, _) = element {
                 let device = &devices[query_set.device_id.value];
                 unsafe {
-                    device.raw.destroy_query_pool(query_set.raw);
+                    device.raw.destroy_query_set(query_set.raw);
                 }
             }
         }
@@ -727,16 +717,18 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
 #[derive(Debug)]
 pub struct Hubs<F: GlobalIdentityHandlerFactory> {
     /*
-#[cfg(vulkan)]
-vulkan: Hub<backend::Vulkan, F>,
-#[cfg(metal)]
-metal: Hub<backend::Metal, F>,
-#[cfg(dx12)]
-dx12: Hub<backend::Dx12, F>,
-#[cfg(dx11)]
-dx11: Hub<backend::Dx11, F>,
-#[cfg(gl)]
-gl: Hub<backend::Gl, F>,*/}
+    #[cfg(vulkan)]
+    vulkan: Hub<backend::Vulkan, F>,
+    #[cfg(metal)]
+    metal: Hub<backend::Metal, F>,
+    #[cfg(dx12)]
+    dx12: Hub<backend::Dx12, F>,
+    #[cfg(dx11)]
+    dx11: Hub<backend::Dx11, F>,
+    #[cfg(gl)]
+    gl: Hub<backend::Gl, F>,*/
+    marker: PhantomData<F>,
+}
 
 impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
     fn new(factory: &F) -> Self {
@@ -753,6 +745,7 @@ impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
             #[cfg(gl)]
             gl: Hub::new(factory),
             */
+            marker: PhantomData,
         }
     }
 }
@@ -760,7 +753,7 @@ impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
 #[derive(Debug)]
 pub struct Global<G: GlobalIdentityHandlerFactory> {
     pub instance: Instance,
-    pub surfaces: Registry<Surface, SurfaceId, G>,
+    pub surfaces: Registry<Surface, id::SurfaceId, G>,
     hubs: Hubs<G>,
 }
 

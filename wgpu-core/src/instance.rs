@@ -113,7 +113,6 @@ impl crate::hub::Resource for Surface {
     }
 }
 
-#[derive(Debug)]
 pub struct Adapter<A: hal::Api> {
     pub(crate) raw: hal::ExposedAdapter<A>,
     life_guard: LifeGuard,
@@ -141,11 +140,16 @@ impl<A: HalApi> Adapter<A> {
             wgt::TextureFormat::Rgba8Unorm,
         ];
 
-        let formats = A::get_surface(surface).supported_formats(&self.raw.adapter);
+        let caps = self
+            .raw
+            .adapter
+            .surface_capabilities(A::get_surface_mut(surface))
+            .ok_or(GetSwapChainPreferredFormatError::UnsupportedQueueFamily)?;
+
         preferred_formats
             .iter()
             .cloned()
-            .find(|preferred| formats.contains(preferred))
+            .find(|preferred| caps.formats.contains(preferred))
             .ok_or(GetSwapChainPreferredFormatError::NotFound)
     }
 
@@ -204,7 +208,8 @@ impl<A: HalApi> Adapter<A> {
             ));
         }
 
-        if !self.downlevel.is_webgpu_compliant() {
+        let caps = &self.raw.capabilities;
+        if !caps.downlevel.is_webgpu_compliant() {
             log::warn!("{}", DOWNLEVEL_WARNING_MESSAGE);
         }
 
@@ -218,15 +223,14 @@ impl<A: HalApi> Adapter<A> {
         }
 
         let gpu = unsafe { self.raw.adapter.open(desc.features) }.map_err(|err| match err {
-            hal::Error::DeviceLost => RequestDeviceError::DeviceLost,
-            hal::Error::OutOfMemory => RequestDeviceError::OutOfMemory,
+            hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
+            hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
         })?;
 
         if let Some(_) = desc.label {
             //TODO
         }
 
-        let caps = &self.raw.capabilities;
         assert_eq!(
             0,
             BIND_BUFFER_ALIGNMENT % caps.alignments.storage_buffer_offset,
@@ -237,7 +241,7 @@ impl<A: HalApi> Adapter<A> {
             BIND_BUFFER_ALIGNMENT % caps.alignments.uniform_buffer_offset,
             "Adapter uniform buffer offset alignment not compatible with WGPU"
         );
-        if self.raw.limits < desc.limits {
+        if caps.limits < desc.limits {
             return Err(RequestDeviceError::LimitsExceeded);
         }
 
@@ -375,11 +379,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("create_surface_metal", "Instance");
 
         let surface = Surface {
+            /*
             metal: self.instance.metal.as_ref().map(|inst| {
                 // we don't want to link to metal-rs for this
                 #[allow(clippy::transmute_ptr_to_ref)]
                 inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
-            }),
+            }),*/
         };
 
         let mut token = Token::root();
@@ -630,7 +635,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| adapter.features)
+            .map(|adapter| adapter.raw.features)
             .map_err(|_| InvalidAdapter)
     }
 
@@ -643,7 +648,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| adapter.limits.clone())
+            .map(|adapter| adapter.raw.capabilities.limits.clone())
             .map_err(|_| InvalidAdapter)
     }
 
@@ -656,7 +661,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| adapter.raw.downlevel)
+            .map(|adapter| adapter.raw.capabilities.downlevel)
             .map_err(|_| InvalidAdapter)
     }
 

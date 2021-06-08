@@ -8,16 +8,13 @@ use std::{num::NonZeroU32, ops::Range};
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::CommandBuffer,
-    conv,
-    device::all_buffer_stages,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id::{BufferId, CommandEncoderId, TextureId},
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
-    resource::{BufferUse, TextureUse},
     track::TextureSelector,
 };
 
-use hal::command::CommandBuffer as _;
+use hal::CommandBuffer as _;
 use thiserror::Error;
 use wgt::{
     BufferAddress, BufferSize, BufferUsage, ImageSubresourceRange, TextureAspect, TextureUsage,
@@ -46,22 +43,22 @@ pub enum ClearError {
     },
     #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
     MissingCopyDstUsageFlag(Option<BufferId>, Option<TextureId>),
-    #[error("texture lacks the aspects that were specified in the image subresource range. Texture has {texture_aspects:?}, specified was {subresource_range_aspects:?}")]
+    #[error("texture lacks the aspects that were specified in the image subresource range. Texture with format {texture_format:?}, specified was {subresource_range_aspects:?}")]
     MissingTextureAspect {
-        texture_aspects: hal::FormatAspect,
+        texture_format: wgt::TextureFormat,
         subresource_range_aspects: TextureAspect,
     },
     #[error("image subresource level range is outside of the texture's level range. texture range is {texture_level_range:?},  \
 whereas subesource range specified start {subresource_base_mip_level} and count {subresource_mip_level_count:?}")]
     InvalidTextureLevelRange {
-        texture_level_range: Range<hal::image::Level>,
+        texture_level_range: Range<u32>,
         subresource_base_mip_level: u32,
         subresource_mip_level_count: Option<NonZeroU32>,
     },
     #[error("image subresource layer range is outside of the texture's layer range. texture range is {texture_layer_range:?},  \
 whereas subesource range specified start {subresource_base_array_layer} and count {subresource_array_layer_count:?}")]
     InvalidTextureLayerRange {
-        texture_layer_range: Range<hal::image::Layer>,
+        texture_layer_range: Range<u32>,
         subresource_base_array_layer: u32,
         subresource_array_layer_count: Option<NonZeroU32>,
     },
@@ -96,9 +93,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
             .buffers
-            .use_replace(&*buffer_guard, dst, (), BufferUse::COPY_DST)
+            .use_replace(&*buffer_guard, dst, (), hal::BufferUse::COPY_DST)
             .map_err(ClearError::InvalidBuffer)?;
-        let &(ref dst_raw, _) = dst_buffer
+        let dst_raw = dst_buffer
             .raw
             .as_ref()
             .ok_or(ClearError::InvalidBuffer(dst))?;
@@ -124,8 +121,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        let num_bytes_filled = size.map_or(dst_buffer.size - offset, |s| s.get());
-        if num_bytes_filled == 0 {
+        let end = match size {
+            Some(size) => offset + size.get(),
+            None => dst_buffer.size,
+        };
+        if offset == end {
             log::trace!("Ignoring fill_buffer of size 0");
             return Ok(());
         }
@@ -134,7 +134,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         cmd_buf.buffer_memory_init_actions.extend(
             dst_buffer
                 .initialization_status
-                .check(offset..(offset + num_bytes_filled))
+                .check(offset..end)
                 .map(|range| MemoryInitTrackerAction {
                     id: dst,
                     range,
@@ -143,24 +143,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
 
         // actual hal barrier & operation
-        let dst_barrier = dst_pending
-            .map(|pending| pending.into_hal(dst_buffer))
-            .next();
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
         let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {
-            cmd_buf_raw.pipeline_barrier(
-                all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
-                hal::memory::Dependencies::empty(),
-                dst_barrier.into_iter(),
-            );
-            cmd_buf_raw.fill_buffer(
-                dst_raw,
-                hal::buffer::SubRange {
-                    offset,
-                    size: size.map(|s| s.get()),
-                },
-                0,
-            );
+            cmd_buf_raw.transition_buffers(dst_barrier);
+            cmd_buf_raw.fill_buffer(dst_raw, offset..end, 0);
         }
         Ok(())
     }
@@ -198,24 +185,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| ClearError::InvalidTexture(dst))?;
 
         // Check if subresource aspects are valid.
-        let aspects = match subresource_range.aspect {
-            wgt::TextureAspect::All => dst_texture.aspects,
-            wgt::TextureAspect::DepthOnly => hal::FormatAspect::DEPTH,
-            wgt::TextureAspect::StencilOnly => hal::FormatAspect::STENCIL,
-        };
-        if !dst_texture.aspects.contains(aspects) {
+        let requested_aspects = hal::FormatAspect::from(subresource_range.aspect);
+        let clear_aspects = hal::FormatAspect::from(dst_texture.desc.format) & requested_aspects;
+        if clear_aspects.is_empty() {
             return Err(ClearError::MissingTextureAspect {
-                texture_aspects: dst_texture.aspects,
+                texture_format: dst_texture.desc.format,
                 subresource_range_aspects: subresource_range.aspect,
             });
         };
         // Check if subresource level range is valid
-        let subresource_level_end = if let Some(count) = subresource_range.mip_level_count {
-            (subresource_range.base_mip_level + count.get()) as u8
-        } else {
-            dst_texture.full_range.levels.end
+        let subresource_level_end = match subresource_range.mip_level_count {
+            Some(count) => subresource_range.base_mip_level + count.get(),
+            None => dst_texture.full_range.levels.end,
         };
-        if dst_texture.full_range.levels.start > subresource_range.base_mip_level as u8
+        if dst_texture.full_range.levels.start > subresource_range.base_mip_level
             || dst_texture.full_range.levels.end < subresource_level_end
         {
             return Err(ClearError::InvalidTextureLevelRange {
@@ -225,12 +208,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
         // Check if subresource layer range is valid
-        let subresource_layer_end = if let Some(count) = subresource_range.array_layer_count {
-            (subresource_range.base_array_layer + count.get()) as u16
-        } else {
-            dst_texture.full_range.layers.end
+        let subresource_layer_end = match subresource_range.array_layer_count {
+            Some(count) => subresource_range.base_array_layer + count.get(),
+            None => dst_texture.full_range.layers.end,
         };
-        if dst_texture.full_range.layers.start > subresource_range.base_array_layer as u16
+        if dst_texture.full_range.layers.start > subresource_range.base_array_layer
             || dst_texture.full_range.layers.end < subresource_layer_end
         {
             return Err(ClearError::InvalidTextureLayerRange {
@@ -248,31 +230,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &*texture_guard,
                 dst,
                 TextureSelector {
-                    levels: subresource_range.base_mip_level as u8..subresource_level_end,
-                    layers: subresource_range.base_array_layer as u16..subresource_layer_end,
+                    levels: subresource_range.base_mip_level..subresource_level_end,
+                    layers: subresource_range.base_array_layer..subresource_layer_end,
                 },
-                TextureUse::COPY_DST,
+                hal::TextureUse::COPY_DST,
             )
             .map_err(ClearError::InvalidTexture)?;
-        let &(ref dst_raw, _) = dst_texture
+        let dst_raw = dst_texture
             .raw
             .as_ref()
             .ok_or(ClearError::InvalidTexture(dst))?;
-        if !dst_texture.usage.contains(TextureUsage::COPY_DST) {
+        if !dst_texture.desc.usage.contains(TextureUsage::COPY_DST) {
             return Err(ClearError::MissingCopyDstUsageFlag(None, Some(dst)));
         }
 
         // actual hal barrier & operation
-        let dst_barrier = dst_pending
-            .map(|pending| pending.into_hal(dst_texture))
-            .next();
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_texture));
         let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
         unsafe {
-            cmd_buf_raw.pipeline_barrier(
-                all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
-                hal::memory::Dependencies::empty(),
-                dst_barrier.into_iter(),
-            );
+            cmd_buf_raw.transition_textures(dst_barrier);
+            /*TODO: image clears
             cmd_buf_raw.clear_image(
                 dst_raw,
                 hal::image::Layout::TransferDstOptimal,
@@ -288,7 +265,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     layer_start: subresource_range.base_array_layer as u16,
                     layer_count: subresource_range.array_layer_count.map(|c| c.get() as u16),
                 }),
-            );
+            );*/
         }
         Ok(())
     }

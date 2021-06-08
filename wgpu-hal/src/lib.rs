@@ -11,6 +11,8 @@
  *  - Mapping is persistent, with explicit synchronization.
  *  - Resource transitions are explicit.
  *  - All layouts are explicit. Binding model has compatibility.
+ *
+ *  General design direction: follow 2/3 major target APIs.
  */
 
 #![allow(
@@ -50,11 +52,13 @@ use thiserror::Error;
 
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const MAX_BIND_GROUPS: usize = 8;
+pub const MAX_VERTEX_BUFFERS: usize = 16;
+pub const MAX_COLOR_TARGETS: usize = 4;
+pub const MAX_MIP_LEVELS: u32 = 16;
 
 pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
-pub type MipLevel = u8;
-pub type ArrayLayer = u16;
+pub type FenceValue = u64;
 
 #[derive(Clone, Debug, PartialEq, Error)]
 pub enum DeviceError {
@@ -84,17 +88,13 @@ pub enum PipelineError {
 pub enum SurfaceError {
     #[error("surface is lost")]
     Lost,
+    #[error("surface is outdated, needs to be re-created")]
+    Outdated,
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error("other reason: {0}")]
     Other(&'static str),
 }
-
-/// Marker value returned if the presentation configuration no longer matches
-/// the surface properties exactly, but can still be used to present
-/// to the surface successfully.
-#[derive(Debug)]
-pub struct Suboptimal;
 
 pub trait Api: Clone + Sized {
     type Instance: Instance<Self>;
@@ -102,17 +102,15 @@ pub trait Api: Clone + Sized {
     type Adapter: Adapter<Self>;
     type Device: Device<Self>;
     type Queue: Queue<Self>;
-
     type CommandBuffer: CommandBuffer<Self>;
-    type RenderPass: RenderPass<Self>;
-    type ComputePass: ComputePass<Self>;
 
     type Buffer: fmt::Debug + Send + Sync + 'static;
-    type QuerySet: fmt::Debug + Send + Sync;
     type Texture: fmt::Debug + Send + Sync + 'static;
     type SurfaceTexture: fmt::Debug + Send + Sync + Borrow<Self::Texture>;
     type TextureView: fmt::Debug + Send + Sync;
     type Sampler: fmt::Debug + Send + Sync;
+    type QuerySet: fmt::Debug + Send + Sync;
+    type Fence: fmt::Debug + Send + Sync;
 
     type BindGroupLayout;
     type BindGroup: fmt::Debug + Send + Sync;
@@ -135,10 +133,12 @@ pub trait Surface<A: Api> {
 
     unsafe fn unconfigure(&mut self, device: &A::Device);
 
+    /// Returns `None` on timing out.
     unsafe fn acquire_texture(
         &mut self,
         timeout_ms: u32,
-    ) -> Result<(A::SurfaceTexture, Option<Suboptimal>), SurfaceError>;
+    ) -> Result<Option<AcquiredSurfaceTexture<A>>, SurfaceError>;
+    unsafe fn discard_texture(&mut self, texture: A::SurfaceTexture);
 }
 
 pub trait Adapter<A: Api> {
@@ -168,7 +168,7 @@ pub trait Device<A: Api> {
         buffer: &A::Buffer,
         range: MemoryRange,
     ) -> Result<NonNull<u8>, DeviceError>;
-    unsafe fn unmap_buffer(&self, buffer: &A::Buffer);
+    unsafe fn unmap_buffer(&self, buffer: &A::Buffer) -> Result<(), DeviceError>;
     unsafe fn flush_mapped_ranges<I: Iterator<Item = MemoryRange>>(
         &self,
         buffer: &A::Buffer,
@@ -233,17 +233,43 @@ pub trait Device<A: Api> {
         desc: &ComputePipelineDescriptor<A>,
     ) -> Result<A::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: A::ComputePipeline);
+
+    unsafe fn create_query_set(
+        &self,
+        desc: &wgt::QuerySetDescriptor,
+    ) -> Result<A::QuerySet, DeviceError>;
+    unsafe fn destroy_query_set(&self, set: A::QuerySet);
+    unsafe fn create_fence(&self) -> Result<A::Fence, DeviceError>;
+    unsafe fn destroy_fence(&self, fence: A::Fence);
+    unsafe fn get_fence_value(&self, fence: &A::Fence) -> Result<FenceValue, DeviceError>;
+    unsafe fn wait(
+        &self,
+        fence: &A::Fence,
+        value: FenceValue,
+        timeout_ms: u32,
+    ) -> Result<bool, DeviceError>;
+
+    unsafe fn start_capture(&self) -> bool;
+    unsafe fn stop_capture(&self);
 }
 
 pub trait Queue<A: Api> {
-    unsafe fn submit<I: Iterator<Item = A::CommandBuffer>>(&mut self, command_buffers: I);
+    unsafe fn submit<I: Iterator<Item = A::CommandBuffer>>(
+        &mut self,
+        command_buffers: I,
+        signal_fence: Option<(&A::Fence, FenceValue)>,
+    );
+    unsafe fn present(
+        &mut self,
+        surface: &mut A::Surface,
+        texture: A::SurfaceTexture,
+    ) -> Result<(), SurfaceError>;
 }
 
 pub trait SwapChain<A: Api> {}
 
 pub trait CommandBuffer<A: Api> {
-    unsafe fn begin(&mut self);
-    unsafe fn end(&mut self);
+    unsafe fn finish(&mut self);
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
     where
@@ -252,6 +278,8 @@ pub trait CommandBuffer<A: Api> {
     unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
     where
         T: Iterator<Item = TextureBarrier<'a, A>>;
+
+    // copy operations
 
     unsafe fn fill_buffer(&mut self, buffer: &A::Buffer, range: MemoryRange, value: u8);
 
@@ -283,14 +311,7 @@ pub trait CommandBuffer<A: Api> {
     ) where
         T: Iterator<Item = BufferTextureCopy>;
 
-    unsafe fn begin_render_pass(&mut self) -> A::RenderPass;
-    unsafe fn end_render_pass(&mut self, pass: A::RenderPass);
-    unsafe fn begin_compute_pass(&mut self) -> A::ComputePass;
-    unsafe fn end_compute_pass(&mut self, pass: A::ComputePass);
-}
-
-pub trait RenderPass<A: Api> {
-    unsafe fn set_pipeline(&mut self, pipeline: &A::RenderPipeline);
+    // pass common
 
     /// Sets the bind group at `index` to `group`, assuming the layout
     /// of all the preceeding groups to be taken from `layout`.
@@ -299,7 +320,42 @@ pub trait RenderPass<A: Api> {
         layout: &A::PipelineLayout,
         index: u32,
         group: &A::BindGroup,
+        dynamic_offsets: &[u32],
     );
+
+    unsafe fn set_push_constants(
+        &mut self,
+        layout: &A::PipelineLayout,
+        stages: wgt::ShaderStage,
+        offset: u32,
+        data: &[u32],
+    );
+
+    unsafe fn insert_debug_marker(&mut self, label: &str);
+    unsafe fn begin_debug_marker(&mut self, group_label: &str);
+    unsafe fn end_debug_marker(&mut self);
+
+    // queries
+
+    unsafe fn begin_query(&mut self, set: &A::QuerySet, index: u32);
+    unsafe fn end_query(&mut self, set: &A::QuerySet, index: u32);
+    unsafe fn write_timestamp(&mut self, set: &A::QuerySet, index: u32);
+    unsafe fn reset_queries(&mut self, set: &A::QuerySet, range: Range<u32>);
+    unsafe fn copy_query_results(
+        &mut self,
+        set: &A::QuerySet,
+        range: Range<u32>,
+        buffer: &A::Buffer,
+        offset: wgt::BufferAddress,
+    );
+
+    // render passes
+
+    // Begins a render pass, clears all active bindings.
+    unsafe fn begin_render_pass(&mut self, desc: &RenderPassDescriptor<A>);
+    unsafe fn end_render_pass(&mut self);
+
+    unsafe fn set_render_pipeline(&mut self, pipeline: &A::RenderPipeline);
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
@@ -307,10 +363,10 @@ pub trait RenderPass<A: Api> {
         format: wgt::IndexFormat,
     );
     unsafe fn set_vertex_buffer<'a>(&mut self, index: u32, binding: BufferBinding<'a, A>);
-    unsafe fn set_viewport(&mut self, rect: &Rect, depth_range: Range<f32>);
-    unsafe fn set_scissor_rect(&mut self, rect: &Rect);
+    unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>);
+    unsafe fn set_scissor_rect(&mut self, rect: &Rect<u32>);
     unsafe fn set_stencil_reference(&mut self, value: u32);
-    unsafe fn set_blend_constants(&mut self, color: wgt::Color);
+    unsafe fn set_blend_constants(&mut self, color: &wgt::Color);
 
     unsafe fn draw(
         &mut self,
@@ -339,19 +395,30 @@ pub trait RenderPass<A: Api> {
         offset: wgt::BufferAddress,
         draw_count: u32,
     );
-}
-
-pub trait ComputePass<A: Api> {
-    unsafe fn set_pipeline(&mut self, pipeline: &A::ComputePipeline);
-
-    /// Sets the bind group at `index` to `group`, assuming the layout
-    /// of all the preceeding groups to be taken from `layout`.
-    unsafe fn set_bind_group(
+    unsafe fn draw_indirect_count(
         &mut self,
-        layout: &A::PipelineLayout,
-        index: u32,
-        group: &A::BindGroup,
+        buffer: &A::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &A::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
     );
+    unsafe fn draw_indexed_indirect_count(
+        &mut self,
+        buffer: &A::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &A::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
+    );
+
+    // compute passes
+
+    // Begins a compute pass, clears all active bindings.
+    unsafe fn begin_compute_pass(&mut self);
+    unsafe fn end_compute_pass(&mut self);
+
+    unsafe fn set_compute_pipeline(&mut self, pipeline: &A::ComputePipeline);
 
     unsafe fn dispatch(&mut self, count: [u32; 3]);
     unsafe fn dispatch_indirect(&mut self, buffer: &A::Buffer, offset: wgt::BufferAddress);
@@ -423,6 +490,13 @@ bitflags!(
     }
 );
 
+bitflags!(
+    pub struct AttachmentOp: u8 {
+        const LOAD = 1;
+        const STORE = 2;
+    }
+);
+
 bitflags::bitflags! {
     /// Similar to `wgt::BufferUsage` but for internal use.
     pub struct BufferUse: u32 {
@@ -472,7 +546,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Alignments {
     /// The alignment of the start of the buffer used as a GPU copy source.
     pub buffer_copy_offset: wgt::BufferSize,
@@ -483,7 +557,7 @@ pub struct Alignments {
     pub uniform_buffer_offset: wgt::BufferSize,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Capabilities {
     pub limits: wgt::Limits,
     pub alignments: Alignments,
@@ -505,7 +579,7 @@ pub struct SurfaceCapabilities {
     /// List of supported texture formats.
     ///
     /// Must be at least one.
-    pub texture_formats: Vec<wgt::TextureFormat>,
+    pub formats: Vec<wgt::TextureFormat>,
 
     /// Range for the swap chain sizes.
     ///
@@ -524,17 +598,26 @@ pub struct SurfaceCapabilities {
     /// Supported texture usage flags.
     ///
     /// Must have at least `TextureUse::COLOR_TARGET`
-    pub texture_uses: TextureUse,
+    pub usage: TextureUse,
 
     /// List of supported V-sync modes.
     ///
     /// Must be at least one.
-    pub vsync_modes: Vec<VsyncMode>,
+    pub present_modes: Vec<wgt::PresentMode>,
 
     /// List of supported alpha composition modes.
     ///
     /// Must be at least one.
     pub composite_alpha_modes: Vec<CompositeAlphaMode>,
+}
+
+#[derive(Debug)]
+pub struct AcquiredSurfaceTexture<A: Api> {
+    pub texture: A::SurfaceTexture,
+    /// The presentation configuration no longer matches
+    /// the surface properties exactly, but can still be used to present
+    /// to the surface successfully.
+    pub suboptimal: bool,
 }
 
 #[derive(Debug)]
@@ -721,22 +804,9 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     /// The multi-sampling properties of the pipeline.
     pub multisample: wgt::MultisampleState,
     /// The fragment stage for this pipeline.
-    pub fragment_stage: ProgrammableStage<'a, A>,
+    pub fragment_stage: Option<ProgrammableStage<'a, A>>,
     /// The effect of draw calls on the color aspect of the output target.
     pub color_targets: Cow<'a, [wgt::ColorTargetState]>,
-}
-
-/// Specifies the mode regulating how a surface presents frames.
-#[derive(Debug, Clone)]
-pub enum VsyncMode {
-    /// Don't ever wait for v-sync.
-    Immediate,
-    /// Wait for v-sync, overwrite the last rendered frame.
-    Mailbox,
-    /// Present frames in the same order they are rendered.
-    Fifo,
-    /// Don't wait for the next v-sync if we just missed it.
-    Relaxed,
 }
 
 /// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
@@ -766,7 +836,7 @@ pub struct SurfaceConfiguration {
     /// `SurfaceCapabilities::swap_chain_size` range.
     pub swap_chain_size: u32,
     /// Vertical synchronization mode.
-    pub vsync_mode: VsyncMode,
+    pub present_mode: wgt::PresentMode,
     /// Alpha composition mode.
     pub composite_alpha_mode: CompositeAlphaMode,
     /// Format of the surface textures.
@@ -779,11 +849,11 @@ pub struct SurfaceConfiguration {
 }
 
 #[derive(Debug, Clone)]
-pub struct Rect {
-    pub x: f32,
-    pub y: f32,
-    pub w: f32,
-    pub h: f32,
+pub struct Rect<T> {
+    pub x: T,
+    pub y: T,
+    pub w: T,
+    pub h: T,
 }
 
 #[derive(Debug, Clone)]
@@ -795,7 +865,7 @@ pub struct BufferBarrier<'a, A: Api> {
 #[derive(Debug, Clone)]
 pub struct TextureBarrier<'a, A: Api> {
     pub texture: &'a A::Texture,
-    pub subresource: wgt::ImageSubresourceRange,
+    pub range: wgt::ImageSubresourceRange,
     pub usage: Range<TextureUse>,
 }
 
@@ -807,20 +877,82 @@ pub struct BufferCopy {
 }
 
 #[derive(Clone, Debug)]
+pub struct TextureCopyBase {
+    pub origin: wgt::Origin3d,
+    pub mip_level: u32,
+    pub aspect: FormatAspect,
+}
+
+#[derive(Clone, Debug)]
 pub struct TextureCopy {
-    pub src_subresource: wgt::ImageSubresourceRange,
-    pub src_origin: wgt::Origin3d,
-    pub dst_subresource: wgt::ImageSubresourceRange,
-    pub dst_origin: wgt::Origin3d,
+    pub src_base: TextureCopyBase,
+    pub dst_base: TextureCopyBase,
     pub size: wgt::Extent3d,
 }
 
 #[derive(Clone, Debug)]
 pub struct BufferTextureCopy {
     pub buffer_layout: wgt::ImageDataLayout,
-    pub texture_mip_level: u32,
-    pub texture_origin: wgt::Origin3d,
+    pub texture_base: TextureCopyBase,
     pub size: wgt::Extent3d,
+}
+
+#[derive(Debug)]
+pub struct Attachment<'a, A: Api> {
+    pub view: &'a A::TextureView,
+    /// Contains either a single mutating usage as a target, or a valid combination
+    /// of read-only usages.
+    pub usage: TextureUse,
+    /// Defines the boundary usages for the attachment.
+    /// It is expected to begin a render pass with `boundary_usage.start` usage,
+    /// and will end it with `boundary_usage.end` usage.
+    pub boundary_usage: Range<TextureUse>,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for Attachment<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            view: self.view,
+            usage: self.usage,
+            boundary_usage: self.boundary_usage.clone(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ColorAttachment<'a, A: Api> {
+    pub target: Attachment<'a, A>,
+    pub resolve_target: Option<Attachment<'a, A>>,
+    pub ops: AttachmentOp,
+    pub clear_value: wgt::Color,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for ColorAttachment<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            target: self.target.clone(),
+            resolve_target: self.resolve_target.clone(),
+            ops: self.ops,
+            clear_value: self.clear_value,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DepthStencilAttachment<'a, A: Api> {
+    pub target: Attachment<'a, A>,
+    pub depth_ops: AttachmentOp,
+    pub stencil_ops: AttachmentOp,
+    pub clear_value: (f32, u32),
+}
+
+#[derive(Clone, Debug)]
+pub struct RenderPassDescriptor<'a, A: Api> {
+    pub label: Label<'a>,
+    pub color_attachments: Cow<'a, [ColorAttachment<'a, A>]>,
+    pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
 }
 
 #[test]

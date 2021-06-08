@@ -12,7 +12,9 @@ use crate::{
     resource, Epoch, FastHashMap, Index, RefCount,
 };
 
-use std::{collections::hash_map::Entry, fmt, marker::PhantomData, ops, vec::Drain};
+use std::{
+    collections::hash_map::Entry, fmt, marker::PhantomData, num::NonZeroU32, ops, vec::Drain,
+};
 use thiserror::Error;
 
 pub(crate) use buffer::BufferState;
@@ -131,7 +133,7 @@ impl PendingTransition<BufferState> {
         buf: &'a resource::Buffer<A>,
     ) -> hal::BufferBarrier<'a, A> {
         log::trace!("\tbuffer -> {:?}", self);
-        let &(ref buffer, _) = buf.raw.as_ref().expect("Buffer is destroyed");
+        let buffer = buf.raw.as_ref().expect("Buffer is destroyed");
         hal::BufferBarrier {
             buffer,
             usage: self.usage,
@@ -155,10 +157,20 @@ impl PendingTransition<TextureState> {
         tex: &'a resource::Texture<A>,
     ) -> hal::TextureBarrier<'a, A> {
         log::trace!("\ttexture -> {:?}", self);
-        let &(ref texture, _) = tex.raw.as_ref().expect("Texture is destroyed");
+        let texture = tex.raw.as_ref().expect("Texture is destroyed");
         hal::TextureBarrier {
             texture,
-            subresource: self.selector,
+            range: wgt::ImageSubresourceRange {
+                aspect: wgt::TextureAspect::All,
+                base_mip_level: self.selector.levels.start,
+                mip_level_count: NonZeroU32::new(
+                    self.selector.levels.end - self.selector.levels.start,
+                ),
+                base_array_layer: self.selector.layers.start,
+                array_layer_count: NonZeroU32::new(
+                    self.selector.layers.end - self.selector.layers.start,
+                ),
+            },
             usage: self.usage,
         }
     }
@@ -168,8 +180,8 @@ impl From<PendingTransition<TextureState>> for UsageConflict {
     fn from(e: PendingTransition<TextureState>) -> Self {
         Self::Texture {
             id: e.id.0,
-            mip_levels: e.selector.levels.start as u32..e.selector.levels.end as u32,
-            array_layers: e.selector.layers.start as u32..e.selector.layers.end as u32,
+            mip_levels: e.selector.levels.start..e.selector.levels.end,
+            array_layers: e.selector.layers.start..e.selector.layers.end,
             combined_use: e.usage.end,
         }
     }

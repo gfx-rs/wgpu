@@ -7,7 +7,6 @@
 
 use crate::{
     binding_model::PushConstantUploadError,
-    hal::BufferUse,
     id,
     track::UseExtendError,
     validation::{MissingBufferUsageError, MissingTextureUsageError},
@@ -17,7 +16,7 @@ use wgt::{BufferAddress, BufferSize, Color};
 use std::num::NonZeroU32;
 use thiserror::Error;
 
-pub type BufferError = UseExtendError<BufferUse>;
+pub type BufferError = UseExtendError<hal::BufferUse>;
 
 /// Error validating a draw call.
 #[derive(Clone, Debug, Error, PartialEq)]

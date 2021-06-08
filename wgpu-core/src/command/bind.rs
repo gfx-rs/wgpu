@@ -7,7 +7,7 @@ use crate::{
     device::SHADER_STAGE_COUNT,
     hub::{HalApi, Storage},
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId, Valid},
-    Stored, MAX_BIND_GROUPS,
+    Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -42,7 +42,7 @@ mod compat {
 
     #[derive(Debug)]
     pub struct Manager<T> {
-        entries: [Entry<T>; crate::MAX_BIND_GROUPS],
+        entries: [Entry<T>; hal::MAX_BIND_GROUPS],
     }
 
     impl<T: Copy + PartialEq> Manager<T> {
@@ -145,7 +145,7 @@ pub(super) struct EntryPayload {
 pub(super) struct Binder {
     pub(super) pipeline_layout_id: Option<Valid<PipelineLayoutId>>, //TODO: strongly `Stored`
     manager: compat::Manager<Valid<BindGroupLayoutId>>,
-    payloads: [EntryPayload; MAX_BIND_GROUPS],
+    payloads: [EntryPayload; hal::MAX_BIND_GROUPS],
 }
 
 impl Binder {

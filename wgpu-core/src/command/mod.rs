@@ -70,10 +70,11 @@ impl<A: HalApi> CommandBuffer<A> {
         #[cfg(feature = "trace")] enable_tracing: bool,
         #[cfg(debug_assertions)] label: &Label,
     ) -> Self {
+        use crate::LabelHelpers as _;
         CommandBuffer {
             raw: vec![raw],
             status: CommandEncoderStatus::Recording,
-            recorded_thread_id: thread::current.id(),
+            recorded_thread_id: thread::current().id(),
             device_id,
             trackers: TrackerSet::new(A::VARIANT),
             used_swap_chains: Default::default(),
@@ -88,7 +89,7 @@ impl<A: HalApi> CommandBuffer<A> {
                 None
             },
             #[cfg(debug_assertions)]
-            label: label.to_string_or_default(),
+            label: label.borrow_or_default().to_string(),
         }
     }
 
@@ -242,8 +243,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 cmd_buf.status = CommandEncoderStatus::Finished;
                 // stop tracking the swapchain image, if used
                 for sc_id in cmd_buf.used_swap_chains.iter() {
-                    let view_id = swap_chain_guard[sc_id.value]
-                        .acquired_view_id
+                    let &(ref view_id, _) = swap_chain_guard[sc_id.value]
+                        .acquired_texture
                         .as_ref()
                         .expect("Used swap chain frame has already presented");
                     cmd_buf.trackers.views.remove(view_id.value);
@@ -272,7 +273,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
-            cmd_buf_raw.begin_debug_marker(label, 0);
+            cmd_buf_raw.begin_debug_marker(label);
         }
         Ok(())
     }
@@ -292,7 +293,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
-            cmd_buf_raw.insert_debug_marker(label, 0);
+            cmd_buf_raw.insert_debug_marker(label);
         }
         Ok(())
     }

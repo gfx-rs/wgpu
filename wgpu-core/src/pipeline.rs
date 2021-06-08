@@ -15,7 +15,7 @@ use thiserror::Error;
 pub enum ShaderModuleSource<'a> {
     SpirV(Cow<'a, [u32]>),
     Wgsl(Cow<'a, str>),
-    Naga(&'a naga::Module),
+    Naga(naga::Module),
 }
 
 #[derive(Clone, Debug)]
@@ -23,15 +23,13 @@ pub enum ShaderModuleSource<'a> {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
-    #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
-    pub flags: wgt::ShaderFlags,
 }
 
 #[derive(Debug)]
 pub struct ShaderModule<A: hal::Api> {
     pub(crate) raw: A::ShaderModule,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) interface: Option<validation::Interface>,
+    pub(crate) interface: validation::Interface,
     #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
@@ -53,7 +51,7 @@ impl<A: hal::Api> Resource for ShaderModule<A> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateShaderModuleError {
-    #[error("Failed to parse WGSL")]
+    #[error("Failed to parse a shader")]
     Parsing,
     #[error("Failed to generate the backend-specific code")]
     Generation,
