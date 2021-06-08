@@ -1511,8 +1511,8 @@ impl Parser {
                 (to_type, from_type) => {
                     return Err(Error::BadTypeCast {
                         span: arguments_span,
-                        from_type: from_type.to_wgsl(&ctx.types, &ctx.constants),
-                        to_type: to_type.to_wgsl(&ctx.types, &ctx.constants),
+                        from_type: from_type.to_wgsl(ctx.types, ctx.constants),
+                        to_type: to_type.to_wgsl(ctx.types, ctx.constants),
                     });
                 }
             }
@@ -1542,14 +1542,9 @@ impl Parser {
         let inner = match first_token_span {
             (Token::Word("true"), _) => crate::ConstantInner::boolean(true),
             (Token::Word("false"), _) => crate::ConstantInner::boolean(false),
-            (
-                Token::Number {
-                    ref value,
-                    ref ty,
-                    ref width,
-                },
-                _,
-            ) => Self::get_constant_inner(*value, *ty, *width, first_token_span)?,
+            (Token::Number { value, ty, width }, _) => {
+                Self::get_constant_inner(value, ty, width, first_token_span)?
+            }
             (Token::Word(name), name_span) => {
                 // look for an existing constant first
                 for (handle, var) in const_arena.iter() {
@@ -3213,7 +3208,7 @@ impl Parser {
             }
             (Token::Word("fn"), _) => {
                 let (function, name) =
-                    self.parse_function_decl(lexer, module, &lookup_global_expression)?;
+                    self.parse_function_decl(lexer, module, lookup_global_expression)?;
                 match stage {
                     Some(stage) => module.entry_points.push(crate::EntryPoint {
                         name: name.to_string(),

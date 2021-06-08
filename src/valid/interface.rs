@@ -413,7 +413,7 @@ impl super::Validator {
             crate::ShaderStage::Compute => ShaderStages::COMPUTE,
         };
 
-        let info = self.validate_function(&ep.function, module, &mod_info)?;
+        let info = self.validate_function(&ep.function, module, mod_info)?;
 
         if !info.available_stages.contains(stage_bit) {
             return Err(EntryPointError::ForbiddenStageOperations);

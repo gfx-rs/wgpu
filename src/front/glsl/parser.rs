@@ -513,9 +513,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             // TODO: Should we try to make constants here?
             // This is mostly a hack because we don't yet support adding
             // bodies to entry points for variable initialization
-            let maybe_constant = init
-                .clone()
-                .and_then(|(root, meta)| self.program.solve_constant(ctx.ctx, root, meta).ok());
+            let maybe_constant =
+                init.and_then(|(root, meta)| self.program.solve_constant(ctx.ctx, root, meta).ok());
 
             let pointer = ctx.add_var(self.program, ty, name, maybe_constant, meta)?;
 
@@ -1283,7 +1282,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                 let expr = self.parse_expression(ctx, body)?;
                                 let (root, meta) =
                                     ctx.lower_expect(self.program, expr, false, body)?;
-                                let constant = self.program.solve_constant(&ctx, root, meta)?;
+                                let constant = self.program.solve_constant(ctx, root, meta)?;
 
                                 match self.program.module.constants[constant].inner {
                                     ConstantInner::Scalar {

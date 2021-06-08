@@ -118,13 +118,13 @@ impl<W: Write> Writer<W> {
         // Write all constants
         for (handle, constant) in module.constants.iter() {
             if constant.name.is_some() {
-                self.write_global_constant(&module, &constant.inner, handle)?;
+                self.write_global_constant(module, &constant.inner, handle)?;
             }
         }
 
         // Write all globals
         for (ty, global) in module.global_variables.iter() {
-            self.write_global(&module, &global, ty)?;
+            self.write_global(module, global, ty)?;
         }
 
         if !module.global_variables.is_empty() {
@@ -144,7 +144,7 @@ impl<W: Write> Writer<W> {
             };
 
             // Write the function
-            self.write_function(&module, &function, &func_ctx)?;
+            self.write_function(module, function, &func_ctx)?;
 
             writeln!(self.out)?;
         }
@@ -165,11 +165,11 @@ impl<W: Write> Writer<W> {
 
             let func_ctx = FunctionCtx {
                 ty: FunctionType::EntryPoint(index as u16),
-                info: &info.get_entry_point(index),
+                info: info.get_entry_point(index),
                 expressions: &ep.function.expressions,
                 named_expressions: &ep.function.named_expressions,
             };
-            self.write_function(&module, &ep.function, &func_ctx)?;
+            self.write_function(module, &ep.function, &func_ctx)?;
 
             if index < module.entry_points.len() - 1 {
                 writeln!(self.out)?;
@@ -288,7 +288,7 @@ impl<W: Write> Writer<W> {
             write!(self.out, "var {}: ", self.names[&func_ctx.name_key(handle)])?;
 
             // Write the local type
-            self.write_type(&module, local.ty)?;
+            self.write_type(module, local.ty)?;
 
             // Write the local initializer if needed
             if let Some(init) = local.init {
@@ -312,7 +312,7 @@ impl<W: Write> Writer<W> {
         // Write the function body (statement list)
         for sta in func.body.iter() {
             // The indentation should always be 1 when writing the function body
-            self.write_stmt(&module, sta, &func_ctx, 1)?;
+            self.write_stmt(module, sta, func_ctx, 1)?;
         }
 
         writeln!(self.out, "}}")?;
@@ -607,7 +607,7 @@ impl<W: Write> Writer<W> {
                                         base,
                                         index,
                                         module,
-                                        &func_ctx.info,
+                                        func_ctx.info,
                                     ) {
                                         return Ok(());
                                     }
@@ -622,8 +622,8 @@ impl<W: Write> Writer<W> {
 
                     if let Some(name) = expr_name {
                         write!(self.out, "{}", INDENT.repeat(indent))?;
-                        self.start_named_expr(module, handle, &func_ctx, &name)?;
-                        self.write_expr(module, handle, &func_ctx)?;
+                        self.start_named_expr(module, handle, func_ctx, &name)?;
+                        self.write_expr(module, handle, func_ctx)?;
                         self.named_expressions.insert(handle, name);
                         writeln!(self.out, ";")?;
                     }
@@ -664,7 +664,7 @@ impl<W: Write> Writer<W> {
                 if let Some(return_value) = value {
                     // The leading space is important
                     write!(self.out, " ")?;
-                    self.write_expr(module, return_value, &func_ctx)?;
+                    self.write_expr(module, return_value, func_ctx)?;
                 }
                 writeln!(self.out, ";")?;
             }
@@ -678,7 +678,7 @@ impl<W: Write> Writer<W> {
                 // We already skip them when we generate struct type.
                 // Now we need to find expression that used struct with ignored builtins
                 if let Expression::AccessIndex { base, index } = func_ctx.expressions[pointer] {
-                    if access_to_unsupported_builtin(base, index, module, &func_ctx.info) {
+                    if access_to_unsupported_builtin(base, index, module, func_ctx.info) {
                         return Ok(());
                     }
                 }
@@ -880,7 +880,7 @@ impl<W: Write> Writer<W> {
         match *expression {
             Expression::Constant(constant) => self.write_constant(module, constant)?,
             Expression::Compose { ty, ref components } => {
-                self.write_type(&module, ty)?;
+                self.write_type(module, ty)?;
                 write!(self.out, "(")?;
                 // !spv-in specific notes!
                 // WGSL does not support all SPIR-V builtins and we should skip it in generated shaders.
@@ -900,7 +900,7 @@ impl<W: Write> Writer<W> {
                         if let Expression::AccessIndex { base, index } =
                             func_ctx.expressions[pointer]
                         {
-                            if access_to_unsupported_builtin(base, index, module, &func_ctx.info) {
+                            if access_to_unsupported_builtin(base, index, module, func_ctx.info) {
                                 skip_component = true;
                             }
                         }
@@ -915,7 +915,7 @@ impl<W: Write> Writer<W> {
                 // non spv-in specific notes!
                 // Real `Expression::Compose` logic generates here.
                 for (index, component) in components_to_write.iter().enumerate() {
-                    self.write_expr(module, *component, &func_ctx)?;
+                    self.write_expr(module, *component, func_ctx)?;
                     // Only write a comma if isn't the last element
                     if index != components_to_write.len().saturating_sub(1) {
                         // The leading space is for readability only

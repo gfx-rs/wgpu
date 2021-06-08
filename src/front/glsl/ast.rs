@@ -121,13 +121,13 @@ impl<'a> Program<'a> {
             constants: &self.module.constants,
             types: &self.module.types,
             global_vars: &self.module.global_variables,
-            local_vars: &context.locals,
+            local_vars: context.locals,
             functions: &self.module.functions,
-            arguments: &context.arguments,
+            arguments: context.arguments,
         };
         match context
             .typifier
-            .grow(handle, &context.expressions, &resolve_ctx)
+            .grow(handle, context.expressions, &resolve_ctx)
         {
             //TODO: better error report
             Err(error) => Err(ErrorKind::SemanticError(
@@ -148,13 +148,13 @@ impl<'a> Program<'a> {
             constants: &self.module.constants,
             types: &self.module.types,
             global_vars: &self.module.global_variables,
-            local_vars: &context.locals,
+            local_vars: context.locals,
             functions: &self.module.functions,
-            arguments: &context.arguments,
+            arguments: context.arguments,
         };
         match context
             .typifier
-            .grow(handle, &context.expressions, &resolve_ctx)
+            .grow(handle, context.expressions, &resolve_ctx)
         {
             //TODO: better error report
             Err(error) => Err(ErrorKind::SemanticError(
@@ -286,11 +286,11 @@ impl<'function> Context<'function> {
     }
 
     pub fn emit_start(&mut self) {
-        self.emitter.start(&self.expressions)
+        self.emitter.start(self.expressions)
     }
 
     pub fn emit_flush(&mut self, body: &mut Block) {
-        body.extend(self.emitter.finish(&self.expressions))
+        body.extend(self.emitter.finish(self.expressions))
     }
 
     pub fn add_expression(&mut self, expr: Expression, body: &mut Block) -> Handle<Expression> {

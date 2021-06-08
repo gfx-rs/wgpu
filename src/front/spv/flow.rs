@@ -521,7 +521,7 @@ impl FlowGraph {
         lookup_expression: &FastHashMap<spirv::Word, LookupExpression>,
     ) {
         for node_index in self.flow.node_indices() {
-            let phis = std::mem::replace(&mut self.flow[node_index].phis, Vec::new());
+            let phis = std::mem::take(&mut self.flow[node_index].phis);
             for phi in phis.iter() {
                 for &(variable_id, parent_id) in phi.variables.iter() {
                     let variable = &lookup_expression[&variable_id];
@@ -612,8 +612,7 @@ impl FlowGraph {
                         intended_merge
                     };
 
-                    let mut result: crate::Block =
-                        std::mem::replace(&mut self.flow[node_index].block, Vec::new());
+                    let mut result: crate::Block = std::mem::take(&mut self.flow[node_index].block);
 
                     let mut accept_stop_nodes = stop_nodes.clone();
                     accept_stop_nodes.insert(merge_node_index);
@@ -673,8 +672,7 @@ impl FlowGraph {
                 } => {
                     let merge_node_index =
                         self.block_to_node[&self.flow[node_index].merge.unwrap().merge_block_id];
-                    let mut result: crate::Block =
-                        std::mem::replace(&mut self.flow[node_index].block, Vec::new());
+                    let mut result: crate::Block = std::mem::take(&mut self.flow[node_index].block);
                     let mut cases = Vec::with_capacity(targets.len());
 
                     let mut stop_nodes_cases = stop_nodes.clone();
@@ -731,11 +729,10 @@ impl FlowGraph {
                         .unwrap()
                         .target();
 
-                    std::mem::replace(&mut self.flow[continue_edge].block, Vec::new())
+                    std::mem::take(&mut self.flow[continue_edge].block)
                 };
 
-                let mut body: crate::Block =
-                    std::mem::replace(&mut self.flow[node_index].block, Vec::new());
+                let mut body: crate::Block = std::mem::take(&mut self.flow[node_index].block);
 
                 let mut stop_nodes_merge = stop_nodes.clone();
                 stop_nodes_merge.insert(merge_node_index);
@@ -780,8 +777,7 @@ impl FlowGraph {
                 Ok(result)
             }
             Some(ControlFlowNodeType::Break) => {
-                let mut result: crate::Block =
-                    std::mem::replace(&mut self.flow[node_index].block, Vec::new());
+                let mut result: crate::Block = std::mem::take(&mut self.flow[node_index].block);
                 match self.flow[node_index].terminator {
                     Terminator::BranchConditional {
                         condition,
@@ -838,12 +834,11 @@ impl FlowGraph {
                 };
                 Ok(result)
             }
-            Some(ControlFlowNodeType::Continue) | Some(ControlFlowNodeType::Back) => Ok(
-                std::mem::replace(&mut self.flow[node_index].block, Vec::new()),
-            ),
+            Some(ControlFlowNodeType::Continue) | Some(ControlFlowNodeType::Back) => {
+                Ok(std::mem::take(&mut self.flow[node_index].block))
+            }
             Some(ControlFlowNodeType::Kill) => {
-                let mut result: crate::Block =
-                    std::mem::replace(&mut self.flow[node_index].block, Vec::new());
+                let mut result: crate::Block = std::mem::take(&mut self.flow[node_index].block);
                 result.push(crate::Statement::Kill);
                 Ok(result)
             }
@@ -852,24 +847,19 @@ impl FlowGraph {
                     Terminator::Return { value } => value,
                     _ => return Err(Error::InvalidTerminator),
                 };
-                let mut result: crate::Block =
-                    std::mem::replace(&mut self.flow[node_index].block, Vec::new());
+                let mut result: crate::Block = std::mem::take(&mut self.flow[node_index].block);
                 result.push(crate::Statement::Return { value });
                 Ok(result)
             }
             Some(ControlFlowNodeType::Merge) | None => match self.flow[node_index].terminator {
                 Terminator::Branch { target_id } => {
-                    let mut result: crate::Block =
-                        std::mem::replace(&mut self.flow[node_index].block, Vec::new());
+                    let mut result: crate::Block = std::mem::take(&mut self.flow[node_index].block);
                     result.extend(
                         self.convert_to_naga_traverse(self.block_to_node[&target_id], stop_nodes)?,
                     );
                     Ok(result)
                 }
-                _ => Ok(std::mem::replace(
-                    &mut self.flow[node_index].block,
-                    Vec::new(),
-                )),
+                _ => Ok(std::mem::take(&mut self.flow[node_index].block)),
             },
         }
     }

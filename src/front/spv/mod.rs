@@ -2215,7 +2215,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 } => {
                     if let [S::Break] = reject[..] {
                         // uplift "accept" into the parent
-                        let extracted = mem::replace(accept, Vec::new());
+                        let extracted = mem::take(accept);
                         statements.splice(i + 1..i + 1, extracted.into_iter());
                     } else {
                         self.patch_statements(reject)?;
@@ -2229,7 +2229,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 } => {
                     if cases.is_empty() {
                         // uplift "default" into the parent
-                        let extracted = mem::replace(default, Vec::new());
+                        let extracted = mem::take(default);
                         statements.splice(i + 1..i + 1, extracted.into_iter());
                     } else {
                         for case in cases.iter_mut() {

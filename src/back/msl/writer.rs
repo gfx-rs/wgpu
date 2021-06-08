@@ -853,7 +853,7 @@ impl<W: Write> Writer<W> {
                                 members,
                                 span,
                                 index as usize,
-                                &context.module,
+                                context.module,
                             ),
                             _ => None,
                         }
@@ -2080,7 +2080,7 @@ impl<W: Write> Writer<W> {
                         _ => continue,
                     };
                     varying_count += 1;
-                    let name = &self.names[&name_key];
+                    let name = &self.names[name_key];
                     let ty_name = TypeContext {
                         handle: ty,
                         arena: &module.types,
@@ -2177,7 +2177,7 @@ impl<W: Write> Writer<W> {
                     Some(ref binding @ &crate::Binding::BuiltIn(..)) => binding,
                     _ => continue,
                 };
-                let name = &self.names[&name_key];
+                let name = &self.names[name_key];
                 let ty_name = TypeContext {
                     handle: ty,
                     arena: &module.types,

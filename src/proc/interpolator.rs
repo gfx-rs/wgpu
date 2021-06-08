@@ -55,8 +55,8 @@ impl crate::Module {
                 //
                 // So, temporarily swap the member list out its type, assign appropriate
                 // interpolations to its members, and then swap the list back in.
-                use std::mem::replace;
-                let mut members = replace(m, vec![]);
+                use std::mem;
+                let mut members = mem::take(m);
 
                 for member in &mut members {
                     default_binding_or_struct(&mut member.binding, member.ty, types);
@@ -68,7 +68,7 @@ impl crate::Module {
                 match types.get_mut(ty).inner {
                     TypeInner::Struct {
                         members: ref mut m, ..
-                    } => replace(m, members),
+                    } => mem::replace(m, members),
                     _ => unreachable!("ty must be a struct"),
                 };
 
