@@ -1195,22 +1195,23 @@ impl<'a, W: Write> Writer<'a, W> {
             // This is where we can generate intermediate constants for some expression types.
             Statement::Emit(ref range) => {
                 for handle in range.clone() {
-                    if let Some(name) = ctx.named_expressions.get(&handle) {
-                        write!(self.out, "{}", INDENT.repeat(indent))?;
-
+                    let expr_name = if let Some(name) = ctx.named_expressions.get(&handle) {
                         // Front end provides names for all variables at the start of writing.
-                        // But we write them to step by step. We need to recache them inside `write_named_expr`
+                        // But we write them to step by step. We need to recache them
                         // Otherwise, we could accidentally write variable name instead of full expression.
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
-                        let sanitized_name = self.namer.call_unique(name);
-                        self.write_named_expr(handle, sanitized_name, ctx)?;
-                        continue;
-                    }
+                        Some(self.namer.call_unique(name))
+                    } else {
+                        let min_ref_count = ctx.expressions[handle].bake_ref_count();
+                        if min_ref_count <= ctx.info[handle].ref_count {
+                            Some(format!("_expr{}", handle.index()))
+                        } else {
+                            None
+                        }
+                    };
 
-                    let min_ref_count = ctx.expressions[handle].bake_ref_count();
-                    if min_ref_count <= ctx.info[handle].ref_count {
+                    if let Some(name) = expr_name {
                         write!(self.out, "{}", INDENT.repeat(indent))?;
-                        let name = format!("_expr{}", handle.index());
                         self.write_named_expr(handle, name, ctx)?;
                     }
                 }
