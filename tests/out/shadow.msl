@@ -54,15 +54,22 @@ fragment fs_mainOutput fs_main(
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            i = i + 1u;
+            metal::uint _e40 = i;
+            i = _e40 + 1u;
         }
         loop_init = false;
-        if (i >= metal::min(u_globals.num_lights.x, c_max_lights)) {
+        metal::uint _e12 = i;
+        metal::uint4 _e14 = u_globals.num_lights;
+        if (_e12 >= metal::min(_e14.x, c_max_lights)) {
             break;
         }
-        Light _e21 = s_lights.data[i];
-        float _e25 = fetch_shadow(i, _e21.proj * position, t_shadow, sampler_shadow);
-        color1 = color1 + ((_e25 * metal::max(0.0, metal::dot(metal::normalize(raw_normal), metal::normalize(_e21.pos.xyz - position.xyz)))) * _e21.color.xyz);
+        metal::uint _e19 = i;
+        Light _e21 = s_lights.data[_e19];
+        metal::uint _e22 = i;
+        float _e25 = fetch_shadow(_e22, _e21.proj * position, t_shadow, sampler_shadow);
+        metal::float3 _e34 = color1;
+        color1 = _e34 + ((_e25 * metal::max(0.0, metal::dot(metal::normalize(raw_normal), metal::normalize(_e21.pos.xyz - position.xyz)))) * _e21.color.xyz);
     }
-    return fs_mainOutput { metal::float4(color1, 1.0) };
+    metal::float3 _e43 = color1;
+    return fs_mainOutput { metal::float4(_e43, 1.0) };
 }

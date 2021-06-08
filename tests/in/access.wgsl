@@ -11,6 +11,11 @@ var<storage> bar: [[access(read_write)]] Bar;
 
 [[stage(vertex)]]
 fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
+    var foo: f32 = 0.0;
+    // We should check that backed doesn't skip this expression
+    let baz: f32 = foo;
+    foo = 1.0;
+
 	let index = 3u;
 	let b = bar.matrix[index].x;
 

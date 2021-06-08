@@ -11,9 +11,11 @@ struct Light {
 uniform Globals_block_0 {
     uvec4 num_lights;
 } _group_0_binding_0;
+
 readonly buffer Lights_block_1 {
     Light data[];
 } _group_0_binding_1;
+
 uniform highp sampler2DArrayShadow _group_0_binding_2;
 
 smooth in vec3 _vs2fs_location0;
@@ -37,17 +39,24 @@ void main() {
     uint i = 0u;
     vec3 normal = normalize(raw_normal);
     while(true) {
-        if((i >= min(_group_0_binding_0.num_lights.x, 10u))) {
+        uint _expr12 = i;
+        uvec4 _expr14 = _group_0_binding_0.num_lights;
+        if((_expr12 >= min(_expr14.x, 10u))) {
             break;
         }
-        Light light = _group_0_binding_1.data[i];
-        float _expr25 = fetch_shadow(i, (light.proj * position));
+        uint _expr19 = i;
+        Light light = _group_0_binding_1.data[_expr19];
+        uint _expr22 = i;
+        float _expr25 = fetch_shadow(_expr22, (light.proj * position));
         vec3 light_dir = normalize((light.pos.xyz - position.xyz));
         float diffuse = max(0.0, dot(normal, light_dir));
-        color1 = (color1 + ((_expr25 * diffuse) * light.color.xyz));
-        i = (i + 1u);
+        vec3 _expr34 = color1;
+        color1 = (_expr34 + ((_expr25 * diffuse) * light.color.xyz));
+        uint _expr40 = i;
+        i = (_expr40 + 1u);
     }
-    _fs2p_location0 = vec4(color1, 1.0);
+    vec3 _expr43 = color1;
+    _fs2p_location0 = vec4(_expr43, 1.0);
     return;
 }
 

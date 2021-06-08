@@ -28,14 +28,15 @@ void main() {
     out1.perspective = vec4(729.0, 1000.0, 1331.0, 1728.0);
     out1.perspective_centroid = 2197.0;
     out1.perspective_sample = 2744.0;
-    gl_Position = out1.position;
-    _vs2fs_location0 = out1.flat1;
-    _vs2fs_location1 = out1.linear;
-    _vs2fs_location2 = out1.linear_centroid;
-    _vs2fs_location3 = out1.linear_sample;
-    _vs2fs_location4 = out1.perspective;
-    _vs2fs_location5 = out1.perspective_centroid;
-    _vs2fs_location6 = out1.perspective_sample;
+    FragmentInput _expr30 = out1;
+    gl_Position = _expr30.position;
+    _vs2fs_location0 = _expr30.flat1;
+    _vs2fs_location1 = _expr30.linear;
+    _vs2fs_location2 = _expr30.linear_centroid;
+    _vs2fs_location3 = _expr30.linear_sample;
+    _vs2fs_location4 = _expr30.perspective;
+    _vs2fs_location5 = _expr30.perspective_centroid;
+    _vs2fs_location6 = _expr30.perspective_sample;
     return;
 }
 

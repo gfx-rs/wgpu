@@ -605,6 +605,22 @@ impl<W: Write> Writer<W> {
                         _ => false,
                     };
                     if min_ref_count <= func_ctx.info[handle].ref_count || required_baking_expr {
+                        // If expression contains unsupported builtin we should skip it
+                        if let Expression::Load { pointer } = func_ctx.expressions[handle] {
+                            if let Expression::AccessIndex { base, index } =
+                                func_ctx.expressions[pointer]
+                            {
+                                if access_to_unsupported_builtin(
+                                    base,
+                                    index,
+                                    module,
+                                    &func_ctx.info,
+                                ) {
+                                    return Ok(());
+                                }
+                            }
+                        }
+
                         write!(self.out, "{}", INDENT.repeat(indent))?;
                         self.write_baking_expr(module, handle, &func_ctx)?;
                         writeln!(self.out, ";")?;

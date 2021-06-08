@@ -17,17 +17,23 @@ metal::uint collatz_iterations(
     metal::uint i = 0u;
     n = n_base;
     while(true) {
-        if (n <= 1u) {
+        metal::uint _e5 = n;
+        if (_e5 <= 1u) {
             break;
         }
-        if ((n % 2u) == 0u) {
-            n = n / 2u;
+        metal::uint _e8 = n;
+        if ((_e8 % 2u) == 0u) {
+            metal::uint _e13 = n;
+            n = _e13 / 2u;
         } else {
-            n = (3u * n) + 1u;
+            metal::uint _e17 = n;
+            n = (3u * _e17) + 1u;
         }
-        i = i + 1u;
+        metal::uint _e21 = i;
+        i = _e21 + 1u;
     }
-    return i;
+    metal::uint _e24 = i;
+    return _e24;
 }
 
 struct main1Input {
@@ -36,7 +42,8 @@ kernel void main1(
   metal::uint3 global_id [[thread_position_in_grid]]
 , device PrimeIndices& v_indices [[user(fake0)]]
 ) {
-    metal::uint _e9 = collatz_iterations(v_indices.data[global_id.x]);
+    metal::uint _e8 = v_indices.data[global_id.x];
+    metal::uint _e9 = collatz_iterations(_e8);
     v_indices.data[global_id.x] = _e9;
     return;
 }

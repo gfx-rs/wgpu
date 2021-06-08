@@ -28,6 +28,10 @@ impl crate::Expression {
             crate::Expression::ImageSample { .. } | crate::Expression::ImageLoad { .. } => 1,
             // derivatives use the control flow
             crate::Expression::Derivative { .. } => 1,
+            // TODO: We need a better fix for named `Load` expressions
+            // More info - https://github.com/gfx-rs/naga/pull/914
+            // And https://github.com/gfx-rs/naga/issues/910
+            crate::Expression::Load { .. } => 1,
             // cache expressions that are referenced multiple times
             _ => 2,
         }

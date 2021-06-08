@@ -33,7 +33,8 @@ vertex main1Output main1(
     out.perspective = metal::float4(729.0, 1000.0, 1331.0, 1728.0);
     out.perspective_centroid = 2197.0;
     out.perspective_sample = 2744.0;
-    const auto _tmp = out;
+    FragmentInput _e30 = out;
+    const auto _tmp = _e30;
     return main1Output { _tmp.position, _tmp.flat, _tmp.linear, _tmp.linear_centroid, _tmp.linear_sample, _tmp.perspective, _tmp.perspective_centroid, _tmp.perspective_sample };
 }
 

@@ -10,7 +10,7 @@ struct Bar {
     metal::float4x4 matrix;
     type2 data;
 };
-struct type5 {
+struct type6 {
     int inner[5];
 };
 
@@ -24,7 +24,12 @@ vertex fooOutput foo(
 , device Bar& bar [[buffer(0)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
-    type5 c;
-    for(int _i=0; _i<5; ++_i) c.inner[_i] = type5 {bar.data[(1 + (_buffer_sizes.size0 - 64 - 4) / 4) - 1u], static_cast<int>(bar.matrix[3u].x), 3, 4, 5}.inner[_i];
-    return fooOutput { static_cast<float4>(metal::int4(c.inner[vi])) };
+    float foo1 = 0.0;
+    type6 c;
+    foo1 = 1.0;
+    metal::float4 _e9 = bar.matrix[3u];
+    int _e17 = bar.data[(1 + (_buffer_sizes.size0 - 64 - 4) / 4) - 1u];
+    for(int _i=0; _i<5; ++_i) c.inner[_i] = type6 {_e17, static_cast<int>(_e9.x), 3, 4, 5}.inner[_i];
+    int _e25 = c.inner[vi];
+    return fooOutput { static_cast<float4>(metal::int4(_e25)) };
 }

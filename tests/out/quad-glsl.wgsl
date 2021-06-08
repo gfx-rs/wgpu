@@ -15,8 +15,10 @@ var<private> v_uv1: vec2<f32>;
 var<private> o_color: vec4<f32>;
 
 fn vert_main() {
-    v_uv = a_uv;
-    gl_Position = vec4<f32>((1.2000000476837158 * a_pos), 0.0, 1.0);
+    let _e2: vec2<f32> = a_pos;
+    let _e4: vec2<f32> = a_uv;
+    v_uv = _e4;
+    gl_Position = vec4<f32>((1.2000000476837158 * _e2), 0.0, 1.0);
     return;
 }
 
@@ -30,11 +32,14 @@ fn vert_main1([[location(0), interpolate(perspective)]] param: vec2<f32>, [[loca
     a_pos = param;
     a_uv = param1;
     vert_main();
-    return VertexOutput(v_uv, gl_Position);
+    let _e5: vec2<f32> = v_uv;
+    let _e7: vec4<f32> = gl_Position;
+    return VertexOutput(_e5, _e7);
 }
 
 [[stage(fragment)]]
 fn frag_main1() -> FragmentOutput {
     frag_main();
-    return FragmentOutput(o_color);
+    let _e1: vec4<f32> = o_color;
+    return FragmentOutput(_e1);
 }
