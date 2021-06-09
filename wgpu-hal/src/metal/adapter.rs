@@ -581,6 +581,7 @@ impl super::PrivateCapabilities {
             ),
             sampler_clamp_to_border: Self::supports_any(&device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
             sampler_lod_average: {
+                // TODO: Clarify minimum macOS version with Apple (43707452)
                 let need_version = if os_is_mac { (10, 13) } else { (9, 0) };
                 Self::version_at_least(major, minor, need_version.0, need_version.1)
             },
@@ -839,6 +840,11 @@ impl super::PrivateCapabilities {
         downlevel.flags.set(
             wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
             self.texture_cube_array,
+        );
+        //TODO: separate the mutable comparisons from immutable ones
+        downlevel.flags.set(
+            wgt::DownlevelFlags::COMPARISON_SAMPLERS,
+            self.mutable_comparison_samplers,
         );
 
         crate::Capabilities {

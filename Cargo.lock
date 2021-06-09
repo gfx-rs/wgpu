@@ -1914,7 +1914,10 @@ dependencies = [
 name = "wgpu-hal"
 version = "0.1.0"
 dependencies = [
+ "arrayvec",
  "bitflags",
+ "foreign-types",
+ "fxhash",
  "log",
  "metal",
  "naga",

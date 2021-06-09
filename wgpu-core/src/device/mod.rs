@@ -744,6 +744,8 @@ impl<A: HalApi> Device<A> {
             None
         };
 
+        //TODO: check for wgt::DownlevelFlags::COMPARISON_SAMPLERS
+
         let hal_desc = hal::SamplerDescriptor {
             label: desc.label.borrow_option(),
             address_modes: desc.address_modes,

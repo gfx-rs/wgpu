@@ -693,10 +693,12 @@ bitflags::bitflags! {
         const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0010;
         /// Supports textures that are cube arrays.
         const CUBE_ARRAY_TEXTURES = 0x0000_0020;
+        /// Supports comparison samplers.
+        const COMPARISON_SAMPLERS = 0x0000_0040;
         /// Supports samplers with anisotropic filtering
         const ANISOTROPIC_FILTERING = 0x0001_0000;
         /// All flags are in their compliant state.
-        const COMPLIANT = 0x0000_003F;
+        const COMPLIANT = 0x0000_007F;
     }
 }
 

@@ -36,6 +36,7 @@
     clippy::pattern_type_mismatch,
 )]
 
+pub mod aux;
 pub mod empty;
 #[cfg(feature = "metal")]
 mod metal;

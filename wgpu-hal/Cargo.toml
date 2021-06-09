@@ -13,10 +13,12 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = ["metal"]
-metal = ["mtl", "objc", "parking_lot"]
+metal = ["foreign-types", "mtl", "objc", "parking_lot", "naga/msl-out"]
 
 [dependencies]
+arrayvec = "0.5"
 bitflags = "1.0"
+fxhash = "0.2"
 log = "0.4"
 parking_lot = { version = "0.11", optional = true }
 raw-window-handle = "0.3"
@@ -24,6 +26,7 @@ thiserror = "1"
 wgt = { package = "wgpu-types", path = "../wgpu-types" }
 
 # backends
+foreign-types = { version = "0.3", optional = true }
 mtl = { package = "metal", version = "0.22", optional = true }
 objc = { version = "0.2.5", optional = true }
 

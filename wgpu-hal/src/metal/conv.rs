@@ -20,13 +20,58 @@ pub fn map_texture_usage(usage: crate::TextureUse) -> mtl::MTLTextureUsage {
 }
 
 pub fn map_texture_view_dimension(dim: wgt::TextureViewDimension) -> mtl::MTLTextureType {
+    use mtl::MTLTextureType::*;
     use wgt::TextureViewDimension as Tvd;
     match dim {
-        Tvd::D1 => mtl::MTLTextureType::D1,
-        Tvd::D2 => mtl::MTLTextureType::D2,
-        Tvd::D2Array => mtl::MTLTextureType::D2Array,
-        Tvd::D3 => mtl::MTLTextureType::D3,
-        Tvd::Cube => mtl::MTLTextureType::Cube,
-        Tvd::CubeArray => mtl::MTLTextureType::CubeArray,
+        Tvd::D1 => D1,
+        Tvd::D2 => D2,
+        Tvd::D2Array => D2Array,
+        Tvd::D3 => D3,
+        Tvd::Cube => Cube,
+        Tvd::CubeArray => CubeArray,
+    }
+}
+
+pub fn map_compare_function(fun: wgt::CompareFunction) -> mtl::MTLCompareFunction {
+    use mtl::MTLCompareFunction::*;
+    use wgt::CompareFunction as Cf;
+    match fun {
+        Cf::Never => Never,
+        Cf::Less => Less,
+        Cf::LessEqual => LessEqual,
+        Cf::Equal => Equal,
+        Cf::GreaterEqual => GreaterEqual,
+        Cf::Greater => Greater,
+        Cf::NotEqual => NotEqual,
+        Cf::Always => Always,
+    }
+}
+
+pub fn map_filter_mode(filter: wgt::FilterMode) -> mtl::MTLSamplerMinMagFilter {
+    use mtl::MTLSamplerMinMagFilter::*;
+    match filter {
+        wgt::FilterMode::Nearest => Nearest,
+        wgt::FilterMode::Linear => Linear,
+    }
+}
+
+pub fn map_address_mode(address: wgt::AddressMode) -> mtl::MTLSamplerAddressMode {
+    use mtl::MTLSamplerAddressMode::*;
+    use wgt::AddressMode as Fm;
+    match address {
+        Fm::Repeat => Repeat,
+        Fm::MirrorRepeat => MirrorRepeat,
+        Fm::ClampToEdge => ClampToEdge,
+        Fm::ClampToBorder => ClampToBorderColor,
+        //Fm::MirrorClamp => MirrorClampToEdge,
+    }
+}
+
+pub fn map_border_color(border_color: wgt::SamplerBorderColor) -> mtl::MTLSamplerBorderColor {
+    use mtl::MTLSamplerBorderColor::*;
+    match border_color {
+        wgt::SamplerBorderColor::TransparentBlack => TransparentBlack,
+        wgt::SamplerBorderColor::OpaqueBlack => OpaqueBlack,
+        wgt::SamplerBorderColor::OpaqueWhite => OpaqueWhite,
     }
 }

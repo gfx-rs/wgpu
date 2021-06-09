@@ -1,18 +1,17 @@
-#![allow(unused_variables)]
-
 mod adapter;
 mod command;
 mod conv;
 mod device;
 mod surface;
 
-use std::{ops::Range, ptr::NonNull, sync::Arc, thread};
+use std::{iter, ops, ptr::NonNull, sync::Arc, thread};
 
+use arrayvec::ArrayVec;
+use foreign_types::ForeignTypeRef as _;
 use parking_lot::Mutex;
 
 #[derive(Clone)]
 pub struct Api;
-pub struct Context;
 pub struct Encoder;
 #[derive(Debug)]
 pub struct Resource;
@@ -32,13 +31,13 @@ impl crate::Api for Api {
     type Texture = Texture;
     type SurfaceTexture = SurfaceTexture;
     type TextureView = TextureView;
-    type Sampler = Resource;
+    type Sampler = Sampler;
     type QuerySet = Resource;
     type Fence = Resource;
 
-    type BindGroupLayout = Resource;
-    type BindGroup = Resource;
-    type PipelineLayout = Resource;
+    type BindGroupLayout = BindGroupLayout;
+    type BindGroup = BindGroup;
+    type PipelineLayout = PipelineLayout;
     type ShaderModule = Resource;
     type RenderPipeline = Resource;
     type ComputePipeline = Resource;
@@ -280,6 +279,12 @@ pub struct Buffer {
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
+impl Buffer {
+    fn as_raw(&self) -> BufferPtr {
+        unsafe { NonNull::new_unchecked(self.raw.as_ptr()) }
+    }
+}
+
 #[derive(Debug)]
 pub struct Texture {
     raw: mtl::Texture,
@@ -300,162 +305,166 @@ pub struct TextureView {
 unsafe impl Send for TextureView {}
 unsafe impl Sync for TextureView {}
 
-impl crate::CommandBuffer<Api> for Encoder {
-    unsafe fn finish(&mut self) {}
-
-    unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = crate::BufferBarrier<'a, Api>>,
-    {
+impl TextureView {
+    fn as_raw(&self) -> TexturePtr {
+        unsafe { NonNull::new_unchecked(self.raw.as_ptr()) }
     }
-
-    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = crate::TextureBarrier<'a, Api>>,
-    {
-    }
-
-    unsafe fn fill_buffer(&mut self, buffer: &Resource, range: crate::MemoryRange, value: u8) {}
-
-    unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Resource, dst: &Resource, regions: T)
-    where
-        T: Iterator<Item = crate::BufferCopy>,
-    {
-    }
-
-    /// Note: `dst` current usage has to be `TextureUse::COPY_DST`.
-    unsafe fn copy_texture_to_texture<T>(
-        &mut self,
-        src: &Resource,
-        src_usage: crate::TextureUse,
-        dst: &Resource,
-        regions: T,
-    ) {
-    }
-
-    /// Note: `dst` current usage has to be `TextureUse::COPY_DST`.
-    unsafe fn copy_buffer_to_texture<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
-
-    unsafe fn copy_texture_to_buffer<T>(
-        &mut self,
-        src: &Resource,
-        src_usage: crate::TextureUse,
-        dst: &Resource,
-        regions: T,
-    ) {
-    }
-
-    unsafe fn begin_query(&mut self, set: &Resource, index: u32) {}
-    unsafe fn end_query(&mut self, set: &Resource, index: u32) {}
-    unsafe fn write_timestamp(&mut self, set: &Resource, index: u32) {}
-    unsafe fn reset_queries(&mut self, set: &Resource, range: Range<u32>) {}
-    unsafe fn copy_query_results(
-        &mut self,
-        set: &Resource,
-        range: Range<u32>,
-        buffer: &Resource,
-        offset: wgt::BufferAddress,
-    ) {
-    }
-
-    // render
-
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<Api>) {}
-    unsafe fn end_render_pass(&mut self) {}
-
-    unsafe fn set_bind_group(
-        &mut self,
-        layout: &Resource,
-        index: u32,
-        group: &Resource,
-        dynamic_offsets: &[wgt::DynamicOffset],
-    ) {
-    }
-    unsafe fn set_push_constants(
-        &mut self,
-        layout: &Resource,
-        stages: wgt::ShaderStage,
-        offset: u32,
-        data: &[u32],
-    ) {
-    }
-
-    unsafe fn insert_debug_marker(&mut self, label: &str) {}
-    unsafe fn begin_debug_marker(&mut self, group_label: &str) {}
-    unsafe fn end_debug_marker(&mut self) {}
-
-    unsafe fn set_render_pipeline(&mut self, pipeline: &Resource) {}
-
-    unsafe fn set_index_buffer<'a>(
-        &mut self,
-        binding: crate::BufferBinding<'a, Api>,
-        format: wgt::IndexFormat,
-    ) {
-    }
-    unsafe fn set_vertex_buffer<'a>(&mut self, index: u32, binding: crate::BufferBinding<'a, Api>) {
-    }
-    unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {}
-    unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {}
-    unsafe fn set_stencil_reference(&mut self, value: u32) {}
-    unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {}
-
-    unsafe fn draw(
-        &mut self,
-        start_vertex: u32,
-        vertex_count: u32,
-        start_instance: u32,
-        instance_count: u32,
-    ) {
-    }
-    unsafe fn draw_indexed(
-        &mut self,
-        start_index: u32,
-        index_count: u32,
-        base_vertex: i32,
-        start_instance: u32,
-        instance_count: u32,
-    ) {
-    }
-    unsafe fn draw_indirect(
-        &mut self,
-        buffer: &Resource,
-        offset: wgt::BufferAddress,
-        draw_count: u32,
-    ) {
-    }
-    unsafe fn draw_indexed_indirect(
-        &mut self,
-        buffer: &Resource,
-        offset: wgt::BufferAddress,
-        draw_count: u32,
-    ) {
-    }
-    unsafe fn draw_indirect_count(
-        &mut self,
-        buffer: &Resource,
-        offset: wgt::BufferAddress,
-        count_buffer: &Resource,
-        count_offset: wgt::BufferAddress,
-        max_count: u32,
-    ) {
-    }
-    unsafe fn draw_indexed_indirect_count(
-        &mut self,
-        buffer: &Resource,
-        offset: wgt::BufferAddress,
-        count_buffer: &Resource,
-        count_offset: wgt::BufferAddress,
-        max_count: u32,
-    ) {
-    }
-
-    // compute
-
-    unsafe fn begin_compute_pass(&mut self) {}
-    unsafe fn end_compute_pass(&mut self) {}
-
-    unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}
-
-    unsafe fn dispatch(&mut self, count: [u32; 3]) {}
-    unsafe fn dispatch_indirect(&mut self, buffer: &Resource, offset: wgt::BufferAddress) {}
 }
+
+#[derive(Debug)]
+pub struct Sampler {
+    raw: mtl::SamplerState,
+}
+
+unsafe impl Send for Sampler {}
+unsafe impl Sync for Sampler {}
+
+impl Sampler {
+    fn as_raw(&self) -> SamplerPtr {
+        unsafe { NonNull::new_unchecked(self.raw.as_ptr()) }
+    }
+}
+
+type BindingMap = fxhash::FxHashMap<u32, wgt::BindGroupLayoutEntry>;
+
+#[derive(Debug)]
+pub struct BindGroupLayout {
+    entries: Arc<BindingMap>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ResourceData<T> {
+    buffers: T,
+    textures: T,
+    samplers: T,
+}
+
+#[derive(Clone, Debug, Default)]
+struct MultiStageData<T> {
+    vs: T,
+    fs: T,
+    cs: T,
+}
+
+const NAGA_STAGES: MultiStageData<naga::ShaderStage> = MultiStageData {
+    vs: naga::ShaderStage::Vertex,
+    fs: naga::ShaderStage::Fragment,
+    cs: naga::ShaderStage::Compute,
+};
+
+impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
+    type Output = T;
+    fn index(&self, stage: naga::ShaderStage) -> &T {
+        match stage {
+            naga::ShaderStage::Vertex => &self.vs,
+            naga::ShaderStage::Fragment => &self.fs,
+            naga::ShaderStage::Compute => &self.cs,
+        }
+    }
+}
+
+impl<T> MultiStageData<T> {
+    fn map<Y>(&self, fun: impl Fn(&T) -> Y) -> MultiStageData<Y> {
+        MultiStageData {
+            vs: fun(&self.vs),
+            fs: fun(&self.fs),
+            cs: fun(&self.cs),
+        }
+    }
+    fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T> {
+        iter::once(&self.vs)
+            .chain(iter::once(&self.fs))
+            .chain(iter::once(&self.cs))
+    }
+    fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T> {
+        iter::once(&mut self.vs)
+            .chain(iter::once(&mut self.fs))
+            .chain(iter::once(&mut self.cs))
+    }
+}
+
+type MultiStageResourceCounters = MultiStageData<ResourceData<ResourceIndex>>;
+
+#[derive(Debug)]
+struct BindGroupLayoutInfo {
+    base_resource_indices: MultiStageResourceCounters,
+    dynamic_buffers: Vec<MultiStageData<ResourceIndex>>,
+    sized_buffer_bindings: Vec<(u32, wgt::ShaderStage)>,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+struct PushConstantsStage {
+    count: u32,
+    buffer_index: ResourceIndex,
+}
+
+#[derive(Debug)]
+pub struct PipelineLayout {
+    naga_options: naga::back::msl::Options,
+    bind_group_infos: ArrayVec<[BindGroupLayoutInfo; crate::MAX_BIND_GROUPS]>,
+    push_constants_infos: MultiStageData<Option<PushConstantsStage>>,
+}
+
+trait AsNative {
+    type Native;
+    fn from(native: &Self::Native) -> Self;
+    fn as_native(&self) -> &Self::Native;
+}
+
+type BufferPtr = NonNull<mtl::MTLBuffer>;
+type TexturePtr = NonNull<mtl::MTLTexture>;
+type SamplerPtr = NonNull<mtl::MTLSamplerState>;
+type ResourcePtr = NonNull<mtl::MTLResource>;
+
+impl AsNative for BufferPtr {
+    type Native = mtl::BufferRef;
+    #[inline]
+    fn from(native: &Self::Native) -> Self {
+        unsafe { NonNull::new_unchecked(native.as_ptr()) }
+    }
+    #[inline]
+    fn as_native(&self) -> &Self::Native {
+        unsafe { Self::Native::from_ptr(self.as_ptr()) }
+    }
+}
+
+impl AsNative for TexturePtr {
+    type Native = mtl::TextureRef;
+    #[inline]
+    fn from(native: &Self::Native) -> Self {
+        unsafe { NonNull::new_unchecked(native.as_ptr()) }
+    }
+    #[inline]
+    fn as_native(&self) -> &Self::Native {
+        unsafe { Self::Native::from_ptr(self.as_ptr()) }
+    }
+}
+
+impl AsNative for SamplerPtr {
+    type Native = mtl::SamplerStateRef;
+    #[inline]
+    fn from(native: &Self::Native) -> Self {
+        unsafe { NonNull::new_unchecked(native.as_ptr()) }
+    }
+    #[inline]
+    fn as_native(&self) -> &Self::Native {
+        unsafe { Self::Native::from_ptr(self.as_ptr()) }
+    }
+}
+
+#[derive(Debug)]
+struct BufferResource {
+    ptr: BufferPtr,
+    offset: wgt::BufferAddress,
+}
+
+#[derive(Debug, Default)]
+pub struct BindGroup {
+    counters: MultiStageResourceCounters,
+    buffers: Vec<BufferResource>,
+    samplers: Vec<SamplerPtr>,
+    textures: Vec<TexturePtr>,
+}
+
+unsafe impl Send for BindGroup {}
+unsafe impl Sync for BindGroup {}
