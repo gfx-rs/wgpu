@@ -1,6 +1,13 @@
 #![allow(unused_variables)]
 
-use std::ops::Range;
+mod adapter;
+mod command;
+mod device;
+mod surface;
+
+use std::{ops::Range, ptr::NonNull, sync::Arc, thread};
+
+use parking_lot::Mutex;
 
 #[derive(Clone)]
 pub struct Api;
@@ -10,19 +17,20 @@ pub struct Encoder;
 pub struct Resource;
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
+type ResourceIndex = u32;
 
 impl crate::Api for Api {
-    type Instance = Context;
-    type Surface = Context;
-    type Adapter = Context;
-    type Queue = Context;
-    type Device = Context;
+    type Instance = Instance;
+    type Surface = Surface;
+    type Adapter = Adapter;
+    type Queue = Queue;
+    type Device = Device;
 
     type CommandBuffer = Encoder;
 
     type Buffer = Resource;
     type Texture = Resource;
-    type SurfaceTexture = Resource;
+    type SurfaceTexture = SurfaceTexture;
     type TextureView = Resource;
     type Sampler = Resource;
     type QuerySet = Resource;
@@ -36,59 +44,210 @@ impl crate::Api for Api {
     type ComputePipeline = Resource;
 }
 
-impl crate::Instance<Api> for Context {
+pub struct Instance {}
+
+impl crate::Instance<Api> for Instance {
     unsafe fn init() -> Result<Self, crate::InstanceError> {
-        Ok(Context)
+        Ok(Instance {})
     }
     unsafe fn create_surface(
         &self,
-        rwh: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Result<Context, crate::InstanceError> {
-        Ok(Context)
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, crate::InstanceError> {
+        match has_handle.raw_window_handle() {
+            #[cfg(target_os = "ios")]
+            raw_window_handle::RawWindowHandle::IOS(handle) => {
+                Ok(Surface::from_uiview(handle.ui_view))
+            }
+            #[cfg(target_os = "macos")]
+            raw_window_handle::RawWindowHandle::MacOS(handle) => {
+                Ok(Surface::from_nsview(handle.ns_view))
+            }
+            _ => Err(crate::InstanceError),
+        }
     }
-    unsafe fn destroy_surface(&self, surface: Context) {}
+
+    unsafe fn destroy_surface(&self, surface: Surface) {}
+
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
-        Vec::new()
+        let devices = mtl::Device::all();
+        let mut adapters: Vec<crate::ExposedAdapter<Api>> = devices
+            .into_iter()
+            .map(|dev| {
+                let name = dev.name().into();
+                let shared = AdapterShared::new(dev);
+                crate::ExposedAdapter {
+                    info: wgt::AdapterInfo {
+                        name,
+                        vendor: 0,
+                        device: 0,
+                        device_type: if shared.private_caps.low_power {
+                            wgt::DeviceType::IntegratedGpu
+                        } else {
+                            wgt::DeviceType::DiscreteGpu
+                        },
+                        backend: wgt::Backend::Metal,
+                    },
+                    features: shared.private_caps.features(),
+                    capabilities: shared.private_caps.capabilities(),
+                    adapter: Adapter::new(Arc::new(shared)),
+                }
+            })
+            .collect();
+        adapters.sort_by_key(|ad| {
+            (
+                ad.adapter.shared.private_caps.low_power,
+                ad.adapter.shared.private_caps.headless,
+            )
+        });
+        adapters
     }
 }
 
-impl crate::Surface<Api> for Context {
-    unsafe fn configure(
-        &mut self,
-        device: &Context,
-        config: &crate::SurfaceConfiguration,
-    ) -> Result<(), crate::SurfaceError> {
-        Ok(())
-    }
-
-    unsafe fn unconfigure(&mut self, device: &Context) {}
-
-    unsafe fn acquire_texture(
-        &mut self,
-        timeout_ms: u32,
-    ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
-        Ok(None)
-    }
-    unsafe fn discard_texture(&mut self, texture: Resource) {}
+#[derive(Clone, Debug)]
+struct PrivateCapabilities {
+    family_check: bool,
+    msl_version: mtl::MTLLanguageVersion,
+    exposed_queues: usize,
+    read_write_texture_tier: mtl::MTLReadWriteTextureTier,
+    resource_heaps: bool,
+    argument_buffers: bool,
+    shared_textures: bool,
+    mutable_comparison_samplers: bool,
+    sampler_clamp_to_border: bool,
+    sampler_lod_average: bool,
+    base_instance: bool,
+    base_vertex_instance_drawing: bool,
+    dual_source_blending: bool,
+    low_power: bool,
+    headless: bool,
+    layered_rendering: bool,
+    function_specialization: bool,
+    depth_clip_mode: bool,
+    texture_cube_array: bool,
+    format_depth24_stencil8: bool,
+    format_depth32_stencil8_filter: bool,
+    format_depth32_stencil8_none: bool,
+    format_min_srgb_channels: u8,
+    format_b5: bool,
+    format_bc: bool,
+    format_eac_etc: bool,
+    format_astc: bool,
+    format_any8_unorm_srgb_all: bool,
+    format_any8_unorm_srgb_no_write: bool,
+    format_any8_snorm_all: bool,
+    format_r16_norm_all: bool,
+    format_r32_all: bool,
+    format_r32_no_write: bool,
+    format_r32float_no_write_no_filter: bool,
+    format_r32float_no_filter: bool,
+    format_r32float_all: bool,
+    format_rgba8_srgb_all: bool,
+    format_rgba8_srgb_no_write: bool,
+    format_rgb10a2_unorm_all: bool,
+    format_rgb10a2_unorm_no_write: bool,
+    format_rgb10a2_uint_color: bool,
+    format_rgb10a2_uint_color_write: bool,
+    format_rg11b10_all: bool,
+    format_rg11b10_no_write: bool,
+    format_rgb9e5_all: bool,
+    format_rgb9e5_no_write: bool,
+    format_rgb9e5_filter_only: bool,
+    format_rg32_color: bool,
+    format_rg32_color_write: bool,
+    format_rg32float_all: bool,
+    format_rg32float_color_blend: bool,
+    format_rg32float_no_filter: bool,
+    format_rgba32int_color: bool,
+    format_rgba32int_color_write: bool,
+    format_rgba32float_color: bool,
+    format_rgba32float_color_write: bool,
+    format_rgba32float_all: bool,
+    format_depth16unorm: bool,
+    format_depth32float_filter: bool,
+    format_depth32float_none: bool,
+    format_bgr10a2_all: bool,
+    format_bgr10a2_no_write: bool,
+    max_buffers_per_stage: ResourceIndex,
+    max_textures_per_stage: ResourceIndex,
+    max_samplers_per_stage: ResourceIndex,
+    buffer_alignment: u64,
+    max_buffer_size: u64,
+    max_texture_size: u64,
+    max_texture_3d_size: u64,
+    max_texture_layers: u64,
+    max_fragment_input_components: u64,
+    max_color_render_targets: u8,
+    max_total_threadgroup_memory: u32,
+    sample_count_mask: u8,
+    supports_debug_markers: bool,
+    supports_binary_archives: bool,
+    can_set_maximum_drawables_count: bool,
+    can_set_display_sync: bool,
+    can_set_next_drawable_timeout: bool,
 }
 
-impl crate::Adapter<Api> for Context {
-    unsafe fn open(&self, features: wgt::Features) -> DeviceResult<crate::OpenDevice<Api>> {
-        Err(crate::DeviceError::Lost)
-    }
-    unsafe fn close(&self, device: Context) {}
-    unsafe fn texture_format_capabilities(
-        &self,
-        format: wgt::TextureFormat,
-    ) -> crate::TextureFormatCapability {
-        crate::TextureFormatCapability::empty()
-    }
-    unsafe fn surface_capabilities(&self, surface: &Context) -> Option<crate::SurfaceCapabilities> {
-        None
+#[derive(Clone, Debug)]
+struct PrivateDisabilities {
+    /// Near depth is not respected properly on some Intel GPUs.
+    broken_viewport_near_depth: bool,
+    /// Multi-target clears don't appear to work properly on Intel GPUs.
+    broken_layered_clear_image: bool,
+}
+
+struct AdapterShared {
+    device: Mutex<mtl::Device>,
+    disabilities: PrivateDisabilities,
+    private_caps: PrivateCapabilities,
+}
+
+impl AdapterShared {
+    fn new(device: mtl::Device) -> Self {
+        let private_caps = PrivateCapabilities::new(&device);
+        log::debug!("{:#?}", private_caps);
+
+        Self {
+            disabilities: PrivateDisabilities::new(&device),
+            private_caps: PrivateCapabilities::new(&device),
+            device: Mutex::new(device),
+        }
     }
 }
 
-impl crate::Queue<Api> for Context {
+struct Adapter {
+    shared: Arc<AdapterShared>,
+}
+
+struct Queue {
+    raw: mtl::CommandQueue,
+}
+
+struct Device {
+    shared: Arc<AdapterShared>,
+    features: wgt::Features,
+}
+
+struct Surface {
+    view: Option<NonNull<objc::runtime::Object>>,
+    render_layer: Mutex<mtl::MetalLayer>,
+    raw_swapchain_format: mtl::MTLPixelFormat,
+    main_thread_id: thread::ThreadId,
+    // Useful for UI-intensive applications that are sensitive to
+    // window resizing.
+    pub present_with_transaction: bool,
+}
+
+#[derive(Debug)]
+struct SurfaceTexture {
+    texture: Resource,
+    drawable: mtl::MetalDrawable,
+    present_with_transaction: bool,
+}
+
+unsafe impl Send for SurfaceTexture {}
+unsafe impl Sync for SurfaceTexture {}
+
+impl crate::Queue<Api> for Queue {
     unsafe fn submit<I>(
         &mut self,
         command_buffers: I,
@@ -98,8 +257,8 @@ impl crate::Queue<Api> for Context {
     }
     unsafe fn present(
         &mut self,
-        surface: &mut Context,
-        texture: Resource,
+        surface: &mut Surface,
+        texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
@@ -114,7 +273,7 @@ impl crate::Device<Api> for Context {
         &self,
         buffer: &Resource,
         range: crate::MemoryRange,
-    ) -> DeviceResult<std::ptr::NonNull<u8>> {
+    ) -> DeviceResult<NonNull<u8>> {
         Err(crate::DeviceError::Lost)
     }
     unsafe fn unmap_buffer(&self, buffer: &Resource) -> DeviceResult<()> {

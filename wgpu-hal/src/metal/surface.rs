@@ -1,0 +1,265 @@
+use std::{mem, os::raw::c_void, ptr::NonNull, thread};
+
+use objc::{
+    class, msg_send,
+    rc::autoreleasepool,
+    runtime::{Object, BOOL, YES},
+    sel, sel_impl,
+};
+use parking_lot::Mutex;
+
+#[link(name = "QuartzCore", kind = "framework")]
+extern "C" {
+    #[allow(non_upper_case_globals)]
+    static kCAGravityTopLeft: *mut Object;
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CGPoint {
+    pub x: mtl::CGFloat,
+    pub y: mtl::CGFloat,
+}
+
+impl CGPoint {
+    #[inline]
+    pub fn new(x: mtl::CGFloat, y: mtl::CGFloat) -> CGPoint {
+        CGPoint { x, y }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CGRect {
+    pub origin: CGPoint,
+    pub size: mtl::CGSize,
+}
+
+impl CGRect {
+    #[inline]
+    pub fn new(origin: CGPoint, size: mtl::CGSize) -> CGRect {
+        CGRect { origin, size }
+    }
+}
+
+impl super::Surface {
+    fn new(view: Option<NonNull<Object>>, layer: mtl::MetalLayer) -> Self {
+        Self {
+            view,
+            render_layer: Mutex::new(layer),
+            raw_swapchain_format: mtl::MTLPixelFormat::Invalid,
+            main_thread_id: thread::current().id(),
+            present_with_transaction: false,
+        }
+    }
+
+    #[cfg(target_os = "ios")]
+    pub unsafe fn from_uiview(uiview: *mut c_void) -> Self {
+        let view: cocoa_foundation::base::id = mem::transmute(uiview);
+        if view.is_null() {
+            panic!("window does not have a valid contentView");
+        }
+
+        let main_layer: *mut Object = msg_send![view, layer];
+        let class = class!(CAMetalLayer);
+        let is_valid_layer: BOOL = msg_send![main_layer, isKindOfClass: class];
+        let render_layer = if is_valid_layer == YES {
+            mem::transmute::<_, &MetalLayerRef>(main_layer).to_owned()
+        } else {
+            // If the main layer is not a CAMetalLayer, we create a CAMetalLayer sublayer and use it instead.
+            // Unlike on macOS, we cannot replace the main view as UIView does not allow it (when NSView does).
+            let new_layer: mtl::MetalLayer = msg_send![class, new];
+            let bounds: CGRect = msg_send![main_layer, bounds];
+            let () = msg_send![new_layer.as_ref(), setFrame: bounds];
+            let () = msg_send![main_layer, addSublayer: new_layer.as_ref()];
+            new_layer
+        };
+
+        let window: *mut Object = msg_send![view, window];
+        if !window.is_null() {
+            let screen: *mut Object = msg_send![window, screen];
+            assert!(!screen.is_null(), "window is not attached to a screen");
+
+            let scale_factor: CGFloat = msg_send![screen, nativeScale];
+            let () = msg_send![view, setContentScaleFactor: scale_factor];
+        }
+
+        let _: *mut c_void = msg_send![view, retain];
+        Self::new(NonNull::new(view), render_layer)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub unsafe fn from_nsview(nsview: *mut c_void) -> Self {
+        let view = nsview as *mut Object;
+        if view.is_null() {
+            panic!("window does not have a valid contentView");
+        }
+
+        let class = class!(CAMetalLayer);
+        // Deprecated! Clients should use `create_surface_from_layer` instead.
+        let is_actually_layer: BOOL = msg_send![view, isKindOfClass: class];
+        if is_actually_layer == YES {
+            return Self::from_layer(mem::transmute(view));
+        }
+
+        let existing: *mut Object = msg_send![view, layer];
+        let use_current = if existing.is_null() {
+            false
+        } else {
+            let result: BOOL = msg_send![existing, isKindOfClass: class];
+            result == YES
+        };
+
+        let render_layer: mtl::MetalLayer = if use_current {
+            mem::transmute::<_, &mtl::MetalLayerRef>(existing).to_owned()
+        } else {
+            let layer: mtl::MetalLayer = msg_send![class, new];
+            let () = msg_send![view, setLayer: layer.as_ref()];
+            let () = msg_send![view, setWantsLayer: YES];
+            let bounds: CGRect = msg_send![view, bounds];
+            let () = msg_send![layer.as_ref(), setBounds: bounds];
+
+            let window: *mut Object = msg_send![view, window];
+            if !window.is_null() {
+                let scale_factor: mtl::CGFloat = msg_send![window, backingScaleFactor];
+                let () = msg_send![layer, setContentsScale: scale_factor];
+            }
+            //let () = msg_send![layer, setDelegate: self.gfx_managed_metal_layer_delegate.0];
+            layer
+        };
+
+        let () = msg_send![render_layer, setContentsGravity: kCAGravityTopLeft];
+
+        let _: *mut c_void = msg_send![view, retain];
+        Self::new(NonNull::new(view), render_layer)
+    }
+
+    pub unsafe fn from_layer(layer: &mtl::MetalLayerRef) -> Self {
+        let class = class!(CAMetalLayer);
+        let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
+        assert_eq!(proper_kind, YES);
+        Self::new(None, layer.to_owned())
+    }
+
+    fn dimensions(&self) -> wgt::Extent3d {
+        let (size, scale): (mtl::CGSize, mtl::CGFloat) = match self.view {
+            Some(view) if !cfg!(target_os = "macos") => unsafe {
+                let bounds: CGRect = msg_send![view.as_ptr(), bounds];
+                let window: Option<NonNull<Object>> = msg_send![view.as_ptr(), window];
+                let screen = window.and_then(|window| -> Option<NonNull<Object>> {
+                    msg_send![window.as_ptr(), screen]
+                });
+                match screen {
+                    Some(screen) => {
+                        let screen_space: *mut Object = msg_send![screen.as_ptr(), coordinateSpace];
+                        let rect: CGRect = msg_send![view.as_ptr(), convertRect:bounds toCoordinateSpace:screen_space];
+                        let scale_factor: mtl::CGFloat = msg_send![screen.as_ptr(), nativeScale];
+                        (rect.size, scale_factor)
+                    }
+                    None => (bounds.size, 1.0),
+                }
+            },
+            _ => unsafe {
+                let render_layer_borrow = self.render_layer.lock();
+                let render_layer = render_layer_borrow.as_ref();
+                let bounds: CGRect = msg_send![render_layer, bounds];
+                let contents_scale: mtl::CGFloat = msg_send![render_layer, contentsScale];
+                (bounds.size, contents_scale)
+            },
+        };
+
+        wgt::Extent3d {
+            width: (size.width * scale) as u32,
+            height: (size.height * scale) as u32,
+            depth_or_array_layers: 1,
+        }
+    }
+}
+
+impl crate::Surface<super::Api> for super::Surface {
+    unsafe fn configure(
+        &mut self,
+        device: &super::Device,
+        config: &crate::SurfaceConfiguration,
+    ) -> Result<(), crate::SurfaceError> {
+        log::info!("build swapchain {:?}", config);
+
+        let caps = &device.shared.private_caps;
+        let mtl_format = caps.map_format(config.format);
+
+        let render_layer = self.render_layer.lock();
+        let framebuffer_only = config.usage == crate::TextureUse::COLOR_TARGET;
+        let display_sync = config.present_mode != wgt::PresentMode::Immediate;
+        let drawable_size =
+            mtl::CGSize::new(config.extent.width as f64, config.extent.height as f64);
+
+        match config.composite_alpha_mode {
+            crate::CompositeAlphaMode::Opaque => render_layer.set_opaque(true),
+            crate::CompositeAlphaMode::Alpha => render_layer.set_opaque(false),
+            crate::CompositeAlphaMode::PremultipliedAlpha => (),
+        }
+
+        let device_raw = device.shared.device.lock();
+        unsafe {
+            // On iOS, unless the user supplies a view with a CAMetalLayer, we
+            // create one as a sublayer. However, when the view changes size,
+            // its sublayers are not automatically resized, and we must resize
+            // it here. The drawable size and the layer size don't correlate
+            #[cfg(target_os = "ios")]
+            {
+                if let Some(view) = self.view {
+                    let main_layer: *mut Object = msg_send![view.as_ptr(), layer];
+                    let bounds: CGRect = msg_send![main_layer, bounds];
+                    let () = msg_send![*render_layer, setFrame: bounds];
+                }
+            }
+            render_layer.set_device(&*device_raw);
+            render_layer.set_pixel_format(mtl_format);
+            render_layer.set_framebuffer_only(framebuffer_only);
+            render_layer.set_presents_with_transaction(self.present_with_transaction);
+
+            // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
+            let () =
+                msg_send![*render_layer, setMaximumDrawableCount: config.swap_chain_size as u64];
+
+            render_layer.set_drawable_size(drawable_size);
+            if caps.can_set_next_drawable_timeout {
+                let () = msg_send![*render_layer, setAllowsNextDrawableTimeout:false];
+            }
+            if caps.can_set_display_sync {
+                let () = msg_send![*render_layer, setDisplaySyncEnabled: display_sync];
+            }
+        };
+
+        Ok(())
+    }
+
+    unsafe fn unconfigure(&mut self, _device: &super::Device) {
+        self.raw_swapchain_format = mtl::MTLPixelFormat::Invalid;
+    }
+
+    unsafe fn acquire_texture(
+        &mut self,
+        _timeout_ms: u32, //TODO
+    ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
+        let render_layer = self.render_layer.lock();
+        let (drawable, _texture) = autoreleasepool(|| {
+            let drawable = render_layer.next_drawable().unwrap();
+            (drawable.to_owned(), drawable.texture().to_owned())
+        });
+        let size = render_layer.drawable_size();
+
+        let suf_texture = super::SurfaceTexture {
+            texture: super::Resource,
+            drawable,
+            present_with_transaction: self.present_with_transaction,
+        };
+
+        Ok(Some(crate::AcquiredSurfaceTexture {
+            texture: suf_texture,
+            suboptimal: false,
+        }))
+    }
+
+    unsafe fn discard_texture(&mut self, _texture: super::SurfaceTexture) {}
+}
