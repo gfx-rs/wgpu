@@ -243,14 +243,20 @@ impl crate::Surface<super::Api> for super::Surface {
         _timeout_ms: u32, //TODO
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let render_layer = self.render_layer.lock();
-        let (drawable, _texture) = autoreleasepool(|| {
+        let (drawable, texture) = autoreleasepool(|| {
             let drawable = render_layer.next_drawable().unwrap();
             (drawable.to_owned(), drawable.texture().to_owned())
         });
         let size = render_layer.drawable_size();
 
         let suf_texture = super::SurfaceTexture {
-            texture: super::Resource,
+            texture: super::Texture {
+                raw: texture,
+                raw_format: self.raw_swapchain_format,
+                raw_type: mtl::MTLTextureType::D2,
+                array_layers: 1,
+                mip_levels: 1,
+            },
             drawable,
             present_with_transaction: self.present_with_transaction,
         };

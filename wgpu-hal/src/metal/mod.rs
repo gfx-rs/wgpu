@@ -2,6 +2,7 @@
 
 mod adapter;
 mod command;
+mod conv;
 mod device;
 mod surface;
 
@@ -16,7 +17,6 @@ pub struct Encoder;
 #[derive(Debug)]
 pub struct Resource;
 
-type DeviceResult<T> = Result<T, crate::DeviceError>;
 type ResourceIndex = u32;
 
 impl crate::Api for Api {
@@ -28,10 +28,10 @@ impl crate::Api for Api {
 
     type CommandBuffer = Encoder;
 
-    type Buffer = Resource;
-    type Texture = Resource;
+    type Buffer = Buffer;
+    type Texture = Texture;
     type SurfaceTexture = SurfaceTexture;
-    type TextureView = Resource;
+    type TextureView = TextureView;
     type Sampler = Resource;
     type QuerySet = Resource;
     type Fence = Resource;
@@ -239,9 +239,15 @@ struct Surface {
 
 #[derive(Debug)]
 struct SurfaceTexture {
-    texture: Resource,
+    texture: Texture,
     drawable: mtl::MetalDrawable,
     present_with_transaction: bool,
+}
+
+impl std::borrow::Borrow<Texture> for SurfaceTexture {
+    fn borrow(&self) -> &Texture {
+        &self.texture
+    }
 }
 
 unsafe impl Send for SurfaceTexture {}
@@ -252,7 +258,7 @@ impl crate::Queue<Api> for Queue {
         &mut self,
         command_buffers: I,
         signal_fence: Option<(&Resource, crate::FenceValue)>,
-    ) -> DeviceResult<()> {
+    ) -> Result<(), crate::DeviceError> {
         Ok(())
     }
     unsafe fn present(
@@ -264,119 +270,35 @@ impl crate::Queue<Api> for Queue {
     }
 }
 
-impl crate::Device<Api> for Context {
-    unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_buffer(&self, buffer: Resource) {}
-    unsafe fn map_buffer(
-        &self,
-        buffer: &Resource,
-        range: crate::MemoryRange,
-    ) -> DeviceResult<NonNull<u8>> {
-        Err(crate::DeviceError::Lost)
-    }
-    unsafe fn unmap_buffer(&self, buffer: &Resource) -> DeviceResult<()> {
-        Ok(())
-    }
-    unsafe fn flush_mapped_ranges<I>(&self, buffer: &Resource, ranges: I) {}
-    unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &Resource, ranges: I) {}
-
-    unsafe fn create_texture(&self, desc: &crate::TextureDescriptor) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_texture(&self, texture: Resource) {}
-    unsafe fn create_texture_view(
-        &self,
-        texture: &Resource,
-        desc: &crate::TextureViewDescriptor,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_texture_view(&self, view: Resource) {}
-    unsafe fn create_sampler(&self, desc: &crate::SamplerDescriptor) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_sampler(&self, sampler: Resource) {}
-
-    unsafe fn create_command_buffer(
-        &self,
-        desc: &crate::CommandBufferDescriptor,
-    ) -> DeviceResult<Encoder> {
-        Ok(Encoder)
-    }
-    unsafe fn destroy_command_buffer(&self, cmd_buf: Encoder) {}
-
-    unsafe fn create_bind_group_layout(
-        &self,
-        desc: &crate::BindGroupLayoutDescriptor,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_bind_group_layout(&self, bg_layout: Resource) {}
-    unsafe fn create_pipeline_layout(
-        &self,
-        desc: &crate::PipelineLayoutDescriptor<Api>,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Resource) {}
-    unsafe fn create_bind_group(
-        &self,
-        desc: &crate::BindGroupDescriptor<Api>,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_bind_group(&self, group: Resource) {}
-
-    unsafe fn create_shader_module(
-        &self,
-        desc: &crate::ShaderModuleDescriptor,
-        shader: crate::NagaShader,
-    ) -> Result<Resource, (crate::ShaderError, crate::NagaShader)> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_shader_module(&self, module: Resource) {}
-    unsafe fn create_render_pipeline(
-        &self,
-        desc: &crate::RenderPipelineDescriptor<Api>,
-    ) -> Result<Resource, crate::PipelineError> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_render_pipeline(&self, pipeline: Resource) {}
-    unsafe fn create_compute_pipeline(
-        &self,
-        desc: &crate::ComputePipelineDescriptor<Api>,
-    ) -> Result<Resource, crate::PipelineError> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_compute_pipeline(&self, pipeline: Resource) {}
-
-    unsafe fn create_query_set(&self, desc: &wgt::QuerySetDescriptor) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_query_set(&self, set: Resource) {}
-    unsafe fn create_fence(&self) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_fence(&self, fence: Resource) {}
-    unsafe fn get_fence_value(&self, fence: &Resource) -> DeviceResult<crate::FenceValue> {
-        Ok(0)
-    }
-    unsafe fn wait(
-        &self,
-        fence: &Resource,
-        value: crate::FenceValue,
-        timeout_ms: u32,
-    ) -> DeviceResult<bool> {
-        Ok(true)
-    }
-
-    unsafe fn start_capture(&self) -> bool {
-        false
-    }
-    unsafe fn stop_capture(&self) {}
+#[derive(Debug)]
+pub struct Buffer {
+    raw: mtl::Buffer,
+    size: wgt::BufferAddress,
+    options: mtl::MTLResourceOptions,
 }
+
+unsafe impl Send for Buffer {}
+unsafe impl Sync for Buffer {}
+
+#[derive(Debug)]
+pub struct Texture {
+    raw: mtl::Texture,
+    raw_format: mtl::MTLPixelFormat,
+    raw_type: mtl::MTLTextureType,
+    array_layers: u32,
+    mip_levels: u32,
+}
+
+unsafe impl Send for Texture {}
+unsafe impl Sync for Texture {}
+
+#[derive(Debug)]
+pub struct TextureView {
+    raw: mtl::Texture,
+}
+
+unsafe impl Send for TextureView {}
+unsafe impl Sync for TextureView {}
 
 impl crate::CommandBuffer<Api> for Encoder {
     unsafe fn finish(&mut self) {}
