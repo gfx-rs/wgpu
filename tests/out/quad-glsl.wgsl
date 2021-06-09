@@ -7,6 +7,7 @@ struct FragmentOutput {
     [[location(0), interpolate(perspective)]] member2: vec4<f32>;
 };
 
+var<private> c_scale: f32;
 var<private> a_pos: vec2<f32>;
 var<private> a_uv: vec2<f32>;
 var<private> v_uv: vec2<f32>;
@@ -15,10 +16,11 @@ var<private> v_uv1: vec2<f32>;
 var<private> o_color: vec4<f32>;
 
 fn vert_main() {
-    let _e2: vec2<f32> = a_pos;
-    let _e4: vec2<f32> = a_uv;
-    v_uv = _e4;
-    gl_Position = vec4<f32>((1.2000000476837158 * _e2), 0.0, 1.0);
+    let _e1: f32 = c_scale;
+    let _e3: vec2<f32> = a_pos;
+    let _e5: vec2<f32> = a_uv;
+    v_uv = _e5;
+    gl_Position = vec4<f32>((_e1 * _e3), 0.0, 1.0);
     return;
 }
 
