@@ -598,10 +598,12 @@ impl crate::Device<super::Api> for super::Device {
                         ..
                     } => {
                         let source = &desc.buffers[entry.resource_index as usize];
+                        let remaining_size =
+                            wgt::BufferSize::new(source.buffer.size - source.offset);
                         let binding_size = match ty {
-                            wgt::BufferBindingType::Storage { .. } => source
-                                .size
-                                .or(wgt::BufferSize::new(source.buffer.size - source.offset)),
+                            wgt::BufferBindingType::Storage { .. } => {
+                                source.size.or(remaining_size)
+                            }
                             _ => None,
                         };
                         bg.buffers.push(super::BufferResource {
@@ -872,7 +874,7 @@ impl crate::Device<super::Api> for super::Device {
                 raw_buffer.set_label("_QuerySet");
                 Ok(super::QuerySet {
                     raw_buffer,
-                    ty: desc.ty.clone(),
+                    ty: desc.ty,
                 })
             }
             wgt::QueryType::Timestamp | wgt::QueryType::PipelineStatistics(_) => {

@@ -581,8 +581,10 @@ impl<A: HalApi> Device<A> {
 
         let required_level_count =
             desc.range.base_mip_level + desc.range.mip_level_count.map_or(1, |count| count.get());
-        let required_layer_count = desc.range.base_array_layer
-            + desc.range.array_layer_count.map_or(1, |count| count.get());
+        let required_layer_count = match desc.range.array_layer_count {
+            Some(count) => desc.range.base_array_layer + count.get(),
+            None => texture.desc.array_layer_count(),
+        };
         let level_end = texture.full_range.levels.end;
         let layer_end = texture.full_range.layers.end;
         if required_level_count > level_end {
@@ -2090,7 +2092,7 @@ impl<A: HalApi> Device<A> {
             depth_stencil: desc.depth_stencil.clone(),
             multisample: desc.multisample,
             fragment_stage,
-            color_targets: color_targets,
+            color_targets,
         };
         let raw =
             unsafe { self.raw.create_render_pipeline(&pipeline_desc) }.map_err(
@@ -3420,7 +3422,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break DeviceError::Invalid,
             };
 
             let dev_stored = Stored {

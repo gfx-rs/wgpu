@@ -16,6 +16,7 @@ extern "C" {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[allow(clippy::upper_case_acronyms)]
 pub struct CGPoint {
     pub x: mtl::CGFloat,
     pub y: mtl::CGFloat,
@@ -23,6 +24,7 @@ pub struct CGPoint {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[allow(clippy::upper_case_acronyms)]
 pub struct CGRect {
     pub origin: CGPoint,
     pub size: mtl::CGSize,
@@ -81,6 +83,7 @@ impl super::Surface {
     }
 
     #[cfg(target_os = "macos")]
+    #[allow(clippy::transmute_ptr_to_ref)]
     pub unsafe fn from_nsview(nsview: *mut c_void) -> Self {
         let view = nsview as *mut Object;
         if view.is_null() {

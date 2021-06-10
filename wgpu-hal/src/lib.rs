@@ -26,6 +26,10 @@
     clippy::needless_lifetimes,
     // No need for defaults in the internal types.
     clippy::new_without_default,
+    // Matches are good and extendable, no need to make an exception here.
+    clippy::single_match,
+    // TODO!
+    clippy::missing_safety_doc,
 )]
 #![warn(
     trivial_casts,
@@ -796,7 +800,7 @@ impl<A: Api> Clone for ProgrammableStage<'_, A> {
     fn clone(&self) -> Self {
         Self {
             module: self.module,
-            entry_point: self.entry_point.clone(),
+            entry_point: self.entry_point,
         }
     }
 }

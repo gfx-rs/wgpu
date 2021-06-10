@@ -415,23 +415,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             false,
         )?;
 
-        let (block_width, block_height) = format_desc.block_dimensions;
-        let block_width = block_width as u32;
-        let block_height = block_height as u32;
-
         if !conv::is_valid_copy_dst_texture_format(texture_format) {
             return Err(TransferError::CopyToForbiddenTextureFormat(texture_format).into());
         }
-        let width_blocks = size.width / block_width;
-        let height_blocks = size.height / block_width;
+        let (block_width, block_height) = format_desc.block_dimensions;
+        let width_blocks = size.width / block_width as u32;
+        let height_blocks = size.height / block_height as u32;
 
-        let texel_rows_per_image = if let Some(rows_per_image) = data_layout.rows_per_image {
-            rows_per_image.get()
-        } else {
-            // doesn't really matter because we need this only if we copy more than one layer, and then we validate for this being not None
-            size.height
+        let block_rows_per_image = match data_layout.rows_per_image {
+            Some(rows_per_image) => rows_per_image.get(),
+            None => {
+                // doesn't really matter because we need this only if we copy more than one layer, and then we validate for this being not None
+                size.height
+            }
         };
-        let block_rows_per_image = texel_rows_per_image / block_height;
 
         let bytes_per_row_alignment = get_lowest_common_denom(
             device.alignments.buffer_copy_pitch.get() as u32,
@@ -522,7 +519,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             buffer_layout: wgt::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: NonZeroU32::new(stage_bytes_per_row),
-                rows_per_image: NonZeroU32::new(texel_rows_per_image),
+                rows_per_image: NonZeroU32::new(block_rows_per_image),
             },
             texture_base,
             size: wgt::Extent3d {

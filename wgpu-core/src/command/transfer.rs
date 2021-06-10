@@ -78,8 +78,6 @@ pub enum TransferError {
     UnalignedCopyOriginY,
     #[error("bytes per row does not respect `COPY_BYTES_PER_ROW_ALIGNMENT`")]
     UnalignedBytesPerRow,
-    #[error("number of rows per image is not a multiple of block height")]
-    UnalignedRowsPerImage,
     #[error("number of bytes per row needs to be specified since more than one row is copied")]
     UnspecifiedBytesPerRow,
     #[error("number of rows per image needs to be specified since more than one image is copied")]
@@ -179,23 +177,21 @@ pub(crate) fn validate_linear_texture_data(
         }
         bytes_per_block * width_in_blocks
     };
-    let rows_per_image = if let Some(rows_per_image) = layout.rows_per_image {
+    let block_rows_per_image = if let Some(rows_per_image) = layout.rows_per_image {
         rows_per_image.get() as BufferAddress
     } else {
         if copy_depth > 1 {
             return Err(TransferError::UnspecifiedRowsPerImage);
         }
-        copy_height
+        copy_height / block_height
     };
+    let rows_per_image = block_rows_per_image * block_height;
 
     if copy_width % block_width != 0 {
         return Err(TransferError::UnalignedCopyWidth);
     }
     if copy_height % block_height != 0 {
         return Err(TransferError::UnalignedCopyHeight);
-    }
-    if rows_per_image % block_height != 0 {
-        return Err(TransferError::UnalignedRowsPerImage);
     }
 
     if need_copy_aligned_rows {
@@ -213,8 +209,7 @@ pub(crate) fn validate_linear_texture_data(
     let required_bytes_in_copy = if copy_width == 0 || copy_height == 0 || copy_depth == 0 {
         0
     } else {
-        let texel_block_rows_per_image = rows_per_image / block_height;
-        let bytes_per_image = bytes_per_row * texel_block_rows_per_image;
+        let bytes_per_image = bytes_per_row * block_rows_per_image;
         let bytes_in_last_slice = bytes_per_row * (height_in_blocks - 1) + bytes_in_last_row;
         bytes_per_image * (copy_depth - 1) + bytes_in_last_slice
     };
@@ -251,12 +246,14 @@ pub(crate) fn validate_texture_copy_range(
     let block_width = block_width as u32;
     let block_height = block_height as u32;
 
-    let extent = desc.mip_level_size(texture_copy_view.mip_level).ok_or(
+    let extent_virtual = desc.mip_level_size(texture_copy_view.mip_level).ok_or(
         TransferError::InvalidTextureMipLevel {
             level: texture_copy_view.mip_level,
             total: desc.mip_level_count,
         },
     )?;
+    // physical size can be larger than the virtual
+    let extent = extent_virtual.physical_size(desc.format);
 
     let x_copy_max = texture_copy_view.origin.x + copy_size.width;
     if x_copy_max > extent.width {

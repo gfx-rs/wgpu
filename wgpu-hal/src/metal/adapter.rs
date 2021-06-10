@@ -512,6 +512,7 @@ impl super::PrivateCapabilities {
     pub fn new(device: &mtl::Device) -> Self {
         #[repr(C)]
         #[derive(Clone, Copy, Debug)]
+        #[allow(clippy::upper_case_acronyms)]
         struct NSOperatingSystemVersion {
             major: usize,
             minor: usize,

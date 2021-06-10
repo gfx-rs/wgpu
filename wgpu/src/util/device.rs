@@ -82,18 +82,16 @@ impl DeviceExt for crate::Device {
         let texture = self.create_texture(desc);
 
         let format_info = desc.format.describe();
-
-        let layer_iterations = match desc.dimension {
-            crate::TextureDimension::D1 | crate::TextureDimension::D2 => {
-                desc.size.depth_or_array_layers
-            }
-            crate::TextureDimension::D3 => 1,
-        };
+        let layer_iterations = desc.array_layer_count();
 
         let mut binary_offset = 0;
         for layer in 0..layer_iterations {
             for mip in 0..desc.mip_level_count {
-                let mip_size = desc.mip_level_size(mip).unwrap();
+                let mut mip_size = desc.mip_level_size(mip).unwrap();
+                // copying layers separately
+                if desc.dimension != wgt::TextureDimension::D3 {
+                    mip_size.depth_or_array_layers = 1;
+                }
 
                 // When uploading mips of compressed textures and the mip is supposed to be
                 // a size that isn't a multiple of the block size, the mip needs to be uploaded
@@ -128,7 +126,7 @@ impl DeviceExt for crate::Device {
                             NonZeroU32::new(bytes_per_row).expect("invalid bytes per row"),
                         ),
                         rows_per_image: Some(
-                            NonZeroU32::new(mip_physical.height).expect("invalid height"),
+                            NonZeroU32::new(height_blocks).expect("invalid height"),
                         ),
                     },
                     mip_physical,

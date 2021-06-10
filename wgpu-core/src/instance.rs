@@ -246,7 +246,7 @@ impl<A: HalApi> Adapter<A> {
                 ref_count: self.life_guard.add_ref(),
             },
             caps.alignments.clone(),
-            caps.downlevel.clone(),
+            caps.downlevel,
             desc,
             trace_path,
         )

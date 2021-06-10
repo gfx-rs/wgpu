@@ -313,7 +313,7 @@ impl crate::Queue<Api> for Queue {
                 raw.commit();
 
                 fence.update();
-                fence.pending_command_buffers.push((value, raw.to_owned()));
+                fence.pending_command_buffers.push((value, raw));
             }
         });
         Ok(())
