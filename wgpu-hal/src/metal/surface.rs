@@ -48,8 +48,9 @@ impl super::Surface {
     }
 
     #[cfg(target_os = "ios")]
+    #[allow(clippy::transmute_ptr_to_ref)]
     pub unsafe fn from_uiview(uiview: *mut c_void) -> Self {
-        let view: cocoa_foundation::base::id = mem::transmute(uiview);
+        let view = uiview as *mut Object;
         if view.is_null() {
             panic!("window does not have a valid contentView");
         }
@@ -58,7 +59,7 @@ impl super::Surface {
         let class = class!(CAMetalLayer);
         let is_valid_layer: BOOL = msg_send![main_layer, isKindOfClass: class];
         let render_layer = if is_valid_layer == YES {
-            mem::transmute::<_, &MetalLayerRef>(main_layer).to_owned()
+            mem::transmute::<_, &mtl::MetalLayerRef>(main_layer).to_owned()
         } else {
             // If the main layer is not a CAMetalLayer, we create a CAMetalLayer sublayer and use it instead.
             // Unlike on macOS, we cannot replace the main view as UIView does not allow it (when NSView does).
@@ -74,7 +75,7 @@ impl super::Surface {
             let screen: *mut Object = msg_send![window, screen];
             assert!(!screen.is_null(), "window is not attached to a screen");
 
-            let scale_factor: CGFloat = msg_send![screen, nativeScale];
+            let scale_factor: mtl::CGFloat = msg_send![screen, nativeScale];
             let () = msg_send![view, setContentScaleFactor: scale_factor];
         }
 

@@ -2490,9 +2490,7 @@ impl Extent3d {
     /// ```
     pub fn max_mips(&self) -> u32 {
         let max_dim = self.width.max(self.height.max(self.depth_or_array_layers));
-        let max_levels = 32 - max_dim.leading_zeros();
-
-        max_levels
+        32 - max_dim.leading_zeros()
     }
 }
 
