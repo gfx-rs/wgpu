@@ -3065,6 +3065,8 @@ pub struct QuerySetDescriptor {
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum QueryType {
+    /// Query returns a single 64-bit number, serving as an occlusion boolean.
+    Occlusion,
     /// Query returns up to 5 64-bit numbers based on the given flags.
     ///
     /// See [`PipelineStatisticsTypes`]'s documentation for more information

@@ -2175,6 +2175,7 @@ impl<A: HalApi> Device<A> {
         use resource::CreateQuerySetError as Error;
 
         match desc.ty {
+            wgt::QueryType::Occlusion => {}
             wgt::QueryType::Timestamp => {
                 self.require_features(wgt::Features::TIMESTAMP_QUERY)?;
             }

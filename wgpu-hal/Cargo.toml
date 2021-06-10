@@ -18,7 +18,6 @@ metal = ["foreign-types", "mtl", "objc", "parking_lot", "naga/msl-out"]
 [dependencies]
 arrayvec = "0.5"
 bitflags = "1.0"
-fxhash = "0.2"
 log = "0.4"
 parking_lot = { version = "0.11", optional = true }
 raw-window-handle = "0.3"

@@ -75,3 +75,180 @@ pub fn map_border_color(border_color: wgt::SamplerBorderColor) -> mtl::MTLSample
         wgt::SamplerBorderColor::OpaqueWhite => OpaqueWhite,
     }
 }
+
+pub fn map_primitive_topology(
+    topology: wgt::PrimitiveTopology,
+) -> (mtl::MTLPrimitiveTopologyClass, mtl::MTLPrimitiveType) {
+    use wgt::PrimitiveTopology as Pt;
+    match topology {
+        Pt::PointList => (
+            mtl::MTLPrimitiveTopologyClass::Point,
+            mtl::MTLPrimitiveType::Point,
+        ),
+        Pt::LineList => (
+            mtl::MTLPrimitiveTopologyClass::Line,
+            mtl::MTLPrimitiveType::Line,
+        ),
+        Pt::LineStrip => (
+            mtl::MTLPrimitiveTopologyClass::Line,
+            mtl::MTLPrimitiveType::LineStrip,
+        ),
+        Pt::TriangleList => (
+            mtl::MTLPrimitiveTopologyClass::Triangle,
+            mtl::MTLPrimitiveType::Triangle,
+        ),
+        Pt::TriangleStrip => (
+            mtl::MTLPrimitiveTopologyClass::Triangle,
+            mtl::MTLPrimitiveType::TriangleStrip,
+        ),
+    }
+}
+
+pub fn map_color_write(mask: wgt::ColorWrite) -> mtl::MTLColorWriteMask {
+    let mut raw_mask = mtl::MTLColorWriteMask::empty();
+
+    if mask.contains(wgt::ColorWrite::RED) {
+        raw_mask |= mtl::MTLColorWriteMask::Red;
+    }
+    if mask.contains(wgt::ColorWrite::GREEN) {
+        raw_mask |= mtl::MTLColorWriteMask::Green;
+    }
+    if mask.contains(wgt::ColorWrite::BLUE) {
+        raw_mask |= mtl::MTLColorWriteMask::Blue;
+    }
+    if mask.contains(wgt::ColorWrite::ALPHA) {
+        raw_mask |= mtl::MTLColorWriteMask::Alpha;
+    }
+
+    raw_mask
+}
+
+pub fn map_blend_factor(factor: wgt::BlendFactor) -> mtl::MTLBlendFactor {
+    use mtl::MTLBlendFactor::*;
+    use wgt::BlendFactor as Bf;
+
+    match factor {
+        Bf::Zero => Zero,
+        Bf::One => One,
+        Bf::Src => SourceColor,
+        Bf::OneMinusSrc => OneMinusSourceColor,
+        Bf::Dst => DestinationColor,
+        Bf::OneMinusDst => OneMinusDestinationColor,
+        Bf::SrcAlpha => SourceAlpha,
+        Bf::OneMinusSrcAlpha => OneMinusSourceAlpha,
+        Bf::DstAlpha => DestinationAlpha,
+        Bf::OneMinusDstAlpha => OneMinusDestinationAlpha,
+        Bf::Constant => BlendColor,
+        Bf::OneMinusConstant => OneMinusBlendColor,
+        //Bf::ConstantAlpha => BlendAlpha,
+        //Bf::OneMinusConstantAlpha => OneMinusBlendAlpha,
+        Bf::SrcAlphaSaturated => SourceAlphaSaturated,
+        //Bf::Src1 => Source1Color,
+        //Bf::OneMinusSrc1 => OneMinusSource1Color,
+        //Bf::Src1Alpha => Source1Alpha,
+        //Bf::OneMinusSrc1Alpha => OneMinusSource1Alpha,
+    }
+}
+
+pub fn map_blend_op(operation: wgt::BlendOperation) -> mtl::MTLBlendOperation {
+    use mtl::MTLBlendOperation::*;
+    use wgt::BlendOperation as Bo;
+
+    match operation {
+        Bo::Add => Add,
+        Bo::Subtract => Subtract,
+        Bo::ReverseSubtract => ReverseSubtract,
+        Bo::Min => Min,
+        Bo::Max => Max,
+    }
+}
+
+pub fn map_blend_component(
+    component: &wgt::BlendComponent,
+) -> (
+    mtl::MTLBlendOperation,
+    mtl::MTLBlendFactor,
+    mtl::MTLBlendFactor,
+) {
+    (
+        map_blend_op(component.operation),
+        map_blend_factor(component.src_factor),
+        map_blend_factor(component.dst_factor),
+    )
+}
+
+pub fn map_vertex_format(format: wgt::VertexFormat) -> mtl::MTLVertexFormat {
+    use mtl::MTLVertexFormat::*;
+    use wgt::VertexFormat as Vf;
+
+    match format {
+        Vf::Unorm8x2 => UChar2Normalized,
+        Vf::Snorm8x2 => Char2Normalized,
+        Vf::Uint8x2 => UChar2,
+        Vf::Sint8x2 => Char2,
+        Vf::Unorm8x4 => UChar4Normalized,
+        Vf::Snorm8x4 => Char4Normalized,
+        Vf::Uint8x4 => UChar4,
+        Vf::Sint8x4 => Char4,
+        Vf::Unorm16x2 => UShort2Normalized,
+        Vf::Snorm16x2 => Short2Normalized,
+        Vf::Uint16x2 => UShort2,
+        Vf::Sint16x2 => Short2,
+        Vf::Float16x2 => Half2,
+        Vf::Unorm16x4 => UShort4Normalized,
+        Vf::Snorm16x4 => Short4Normalized,
+        Vf::Uint16x4 => UShort4,
+        Vf::Sint16x4 => Short4,
+        Vf::Float16x4 => Half4,
+        Vf::Uint32 => UInt,
+        Vf::Sint32 => Int,
+        Vf::Float32 => Float,
+        Vf::Uint32x2 => UInt2,
+        Vf::Sint32x2 => Int2,
+        Vf::Float32x2 => Float2,
+        Vf::Uint32x3 => UInt3,
+        Vf::Sint32x3 => Int3,
+        Vf::Float32x3 => Float3,
+        Vf::Uint32x4 => UInt4,
+        Vf::Sint32x4 => Int4,
+        Vf::Float32x4 => Float4,
+    }
+}
+
+pub fn map_step_mode(mode: wgt::InputStepMode) -> mtl::MTLVertexStepFunction {
+    match mode {
+        wgt::InputStepMode::Vertex => mtl::MTLVertexStepFunction::PerVertex,
+        wgt::InputStepMode::Instance => mtl::MTLVertexStepFunction::PerInstance,
+    }
+}
+
+pub fn map_stencil_op(op: wgt::StencilOperation) -> mtl::MTLStencilOperation {
+    use mtl::MTLStencilOperation::*;
+    use wgt::StencilOperation as So;
+
+    match op {
+        So::Keep => Keep,
+        So::Zero => Zero,
+        So::Replace => Replace,
+        So::IncrementClamp => IncrementClamp,
+        So::IncrementWrap => IncrementWrap,
+        So::DecrementClamp => DecrementClamp,
+        So::DecrementWrap => DecrementWrap,
+        So::Invert => Invert,
+    }
+}
+
+pub fn map_winding(winding: wgt::FrontFace) -> mtl::MTLWinding {
+    match winding {
+        wgt::FrontFace::Cw => mtl::MTLWinding::Clockwise,
+        wgt::FrontFace::Ccw => mtl::MTLWinding::CounterClockwise,
+    }
+}
+
+pub fn map_cull_mode(face: Option<wgt::Face>) -> mtl::MTLCullMode {
+    match face {
+        None => mtl::MTLCullMode::None,
+        Some(wgt::Face::Front) => mtl::MTLCullMode::Front,
+        Some(wgt::Face::Back) => mtl::MTLCullMode::Back,
+    }
+}

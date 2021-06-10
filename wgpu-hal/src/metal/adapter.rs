@@ -25,7 +25,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 features,
             },
             queue: super::Queue {
-                raw: raw_device.new_command_queue(),
             },
         })
     }
@@ -802,10 +801,15 @@ impl super::PrivateCapabilities {
             supports_binary_archives: family_check
                 && (device.supports_family(MTLGPUFamily::Apple3)
                     || device.supports_family(MTLGPUFamily::Mac1)),
+            supports_capture_manager: if os_is_mac {
+                Self::version_at_least(major, minor, 10, 13)
+            } else {
+                Self::version_at_least(major, minor, 11, 0)
+            },
             can_set_maximum_drawables_count: os_is_mac
                 || Self::version_at_least(major, minor, 11, 2),
             can_set_display_sync: os_is_mac && Self::version_at_least(major, minor, 10, 13),
-            can_set_next_drawable_timeout: if is_mac {
+            can_set_next_drawable_timeout: if os_is_mac {
                 Self::version_at_least(major, minor, 10, 13)
             } else {
                 Self::version_at_least(major, minor, 11, 0)

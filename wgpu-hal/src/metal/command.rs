@@ -1,19 +1,17 @@
-use super::{Api, Resource};
-
 use std::ops::Range;
 
-impl crate::CommandBuffer<Api> for super::Encoder {
+impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     unsafe fn finish(&mut self) {}
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
     where
-        T: Iterator<Item = crate::BufferBarrier<'a, Api>>,
+        T: Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
     {
     }
 
     unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
     where
-        T: Iterator<Item = crate::TextureBarrier<'a, Api>>,
+        T: Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
     {
     }
 
@@ -62,7 +60,7 @@ impl crate::CommandBuffer<Api> for super::Encoder {
 
     // render
 
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<Api>) {}
+    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {}
     unsafe fn end_render_pass(&mut self) {}
 
     unsafe fn set_bind_group(
@@ -90,11 +88,11 @@ impl crate::CommandBuffer<Api> for super::Encoder {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: crate::BufferBinding<'a, Api>,
+        binding: crate::BufferBinding<'a, super::Api>,
         format: wgt::IndexFormat,
     ) {
     }
-    unsafe fn set_vertex_buffer<'a>(&mut self, index: u32, binding: crate::BufferBinding<'a, Api>) {
+    unsafe fn set_vertex_buffer<'a>(&mut self, index: u32, binding: crate::BufferBinding<'a, super::Api>) {
     }
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {}
     unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {}

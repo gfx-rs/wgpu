@@ -4,7 +4,12 @@ mod conv;
 mod device;
 mod surface;
 
-use std::{iter, ops, ptr::NonNull, sync::Arc, thread};
+use std::{
+    iter, ops,
+    ptr::NonNull,
+    sync::{atomic, Arc},
+    thread,
+};
 
 use arrayvec::ArrayVec;
 use foreign_types::ForeignTypeRef as _;
@@ -12,9 +17,6 @@ use parking_lot::Mutex;
 
 #[derive(Clone)]
 pub struct Api;
-pub struct Encoder;
-#[derive(Debug)]
-pub struct Resource;
 
 type ResourceIndex = u32;
 
@@ -25,22 +27,22 @@ impl crate::Api for Api {
     type Queue = Queue;
     type Device = Device;
 
-    type CommandBuffer = Encoder;
+    type CommandBuffer = CommandBuffer;
 
     type Buffer = Buffer;
     type Texture = Texture;
     type SurfaceTexture = SurfaceTexture;
     type TextureView = TextureView;
     type Sampler = Sampler;
-    type QuerySet = Resource;
-    type Fence = Resource;
+    type QuerySet = QuerySet;
+    type Fence = Fence;
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
     type PipelineLayout = PipelineLayout;
-    type ShaderModule = Resource;
-    type RenderPipeline = Resource;
-    type ComputePipeline = Resource;
+    type ShaderModule = ShaderModule;
+    type RenderPipeline = RenderPipeline;
+    type ComputePipeline = ComputePipeline;
 }
 
 pub struct Instance {}
@@ -181,6 +183,7 @@ struct PrivateCapabilities {
     sample_count_mask: u8,
     supports_debug_markers: bool,
     supports_binary_archives: bool,
+    supports_capture_manager: bool,
     can_set_maximum_drawables_count: bool,
     can_set_display_sync: bool,
     can_set_next_drawable_timeout: bool,
@@ -194,10 +197,17 @@ struct PrivateDisabilities {
     broken_layered_clear_image: bool,
 }
 
+#[derive(Debug, Default)]
+struct Settings {
+    retain_command_buffer_references: bool,
+}
+
 struct AdapterShared {
     device: Mutex<mtl::Device>,
+    queue: Mutex<mtl::CommandQueue>,
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
+    settings: Settings,
 }
 
 impl AdapterShared {
@@ -208,8 +218,21 @@ impl AdapterShared {
         Self {
             disabilities: PrivateDisabilities::new(&device),
             private_caps: PrivateCapabilities::new(&device),
+            queue: Mutex::new(device.new_command_queue()),
             device: Mutex::new(device),
+            settings: Settings::default(),
         }
+    }
+
+    fn create_command_buffer(&self) -> &mtl::CommandBufferRef {
+        let queue = self.queue.lock();
+        objc::rc::autoreleasepool(|| {
+            if self.settings.retain_command_buffer_references {
+                queue.new_command_buffer()
+            } else {
+                queue.new_command_buffer_with_unretained_references()
+            }
+        })
     }
 }
 
@@ -217,9 +240,7 @@ struct Adapter {
     shared: Arc<AdapterShared>,
 }
 
-struct Queue {
-    raw: mtl::CommandQueue,
-}
+struct Queue {}
 
 struct Device {
     shared: Arc<AdapterShared>,
@@ -256,7 +277,7 @@ impl crate::Queue<Api> for Queue {
     unsafe fn submit<I>(
         &mut self,
         command_buffers: I,
-        signal_fence: Option<(&Resource, crate::FenceValue)>,
+        signal_fence: Option<(&Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
         Ok(())
     }
@@ -325,11 +346,10 @@ impl Sampler {
     }
 }
 
-type BindingMap = fxhash::FxHashMap<u32, wgt::BindGroupLayoutEntry>;
-
 #[derive(Debug)]
 pub struct BindGroupLayout {
-    entries: Arc<BindingMap>,
+    /// Sorted list of BGL entries.
+    entries: Arc<Vec<wgt::BindGroupLayoutEntry>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -393,7 +413,7 @@ struct BindGroupLayoutInfo {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-struct PushConstantsStage {
+struct PushConstantsInfo {
     count: u32,
     buffer_index: ResourceIndex,
 }
@@ -402,7 +422,8 @@ struct PushConstantsStage {
 pub struct PipelineLayout {
     naga_options: naga::back::msl::Options,
     bind_group_infos: ArrayVec<[BindGroupLayoutInfo; crate::MAX_BIND_GROUPS]>,
-    push_constants_infos: MultiStageData<Option<PushConstantsStage>>,
+    push_constants_infos: MultiStageData<Option<PushConstantsInfo>>,
+    total_counters: MultiStageResourceCounters,
 }
 
 trait AsNative {
@@ -468,3 +489,72 @@ pub struct BindGroup {
 
 unsafe impl Send for BindGroup {}
 unsafe impl Sync for BindGroup {}
+
+#[derive(Debug)]
+pub struct ShaderModule {
+    raw: crate::NagaShader,
+}
+
+#[derive(Debug, Default)]
+struct PipelineStageInfo {
+    push_constants: Option<PushConstantsInfo>,
+    sizes_slot: Option<naga::back::msl::Slot>,
+    sized_bindings: Vec<naga::ResourceBinding>,
+}
+
+impl PipelineStageInfo {
+    fn clear(&mut self) {
+        self.push_constants = None;
+        self.sizes_slot = None;
+        self.sized_bindings.clear();
+    }
+
+    fn assign_from(&mut self, other: &Self) {
+        self.push_constants = other.push_constants;
+        self.sizes_slot = other.sizes_slot;
+        self.sized_bindings.clear();
+        self.sized_bindings.extend_from_slice(&other.sized_bindings);
+    }
+}
+
+pub struct RenderPipeline {
+    raw: mtl::RenderPipelineState,
+    vs_lib: mtl::Library,
+    fs_lib: Option<mtl::Library>,
+    vs_info: PipelineStageInfo,
+    fs_info: PipelineStageInfo,
+    raw_primitive_type: mtl::MTLPrimitiveType,
+    raw_front_winding: mtl::MTLWinding,
+    raw_cull_mode: mtl::MTLCullMode,
+    raw_depth_clip_mode: Option<mtl::MTLDepthClipMode>,
+    raw_depth_stencil: Option<mtl::DepthStencilState>,
+    depth_bias: wgt::DepthBiasState,
+}
+
+pub struct ComputePipeline {
+    raw: mtl::ComputePipelineState,
+    cs_lib: mtl::Library,
+    cs_info: PipelineStageInfo,
+    work_group_size: mtl::MTLSize,
+}
+
+#[derive(Debug)]
+pub struct QuerySet {
+    raw_buffer: mtl::Buffer,
+}
+
+unsafe impl Send for QuerySet {}
+unsafe impl Sync for QuerySet {}
+
+#[derive(Debug)]
+pub struct Fence {
+    completed_value: atomic::AtomicU64,
+    pending_command_buffers: Vec<(crate::FenceValue, mtl::CommandBuffer)>,
+}
+
+unsafe impl Send for Fence {}
+unsafe impl Sync for Fence {}
+
+pub struct CommandBuffer {
+    raw: mtl::CommandBuffer,
+}

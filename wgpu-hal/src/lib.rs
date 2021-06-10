@@ -88,6 +88,8 @@ pub enum ShaderError {
 pub enum PipelineError {
     #[error("linkage failed for stage {0:?}: {1}")]
     Linkage(wgt::ShaderStage, String),
+    #[error("entry point for stage {0:?} is invalid")]
+    EntryPoint(naga::ShaderStage),
     #[error(transparent)]
     Device(#[from] DeviceError),
 }
@@ -239,7 +241,7 @@ pub trait Device<A: Api> {
         &self,
         desc: &ShaderModuleDescriptor,
         shader: NagaShader,
-    ) -> Result<A::ShaderModule, (ShaderError, NagaShader)>;
+    ) -> Result<A::ShaderModule, ShaderError>;
     unsafe fn destroy_shader_module(&self, module: A::ShaderModule);
     unsafe fn create_render_pipeline(
         &self,
@@ -738,6 +740,15 @@ pub struct BindGroupEntry {
     pub resource_index: u32,
 }
 
+/// BindGroup descriptor.
+///
+/// Valid usage:
+///. - `entries` has to be sorted by ascending `BindGroupEntry::binding`
+///. - `entries` has to have the same set of `BindGroupEntry::binding` as `layout`
+///. - each entry has to be compatible with the `layout`
+///. - each entry's `BindGroupEntry::resource_index` is within range
+///    of the corresponding resource array, selected by the relevant
+///    `BindGroupLayoutEntry`.
 #[derive(Clone, Debug)]
 pub struct BindGroupDescriptor<'a, A: Api> {
     pub label: Label<'a>,
@@ -754,6 +765,7 @@ pub struct CommandBufferDescriptor<'a> {
 }
 
 /// Naga shader module.
+#[derive(Debug)]
 pub struct NagaShader {
     /// Shader module IR.
     pub module: naga::Module,

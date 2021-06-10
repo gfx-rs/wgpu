@@ -141,7 +141,7 @@ impl super::Surface {
         Self::new(None, layer.to_owned())
     }
 
-    fn dimensions(&self) -> wgt::Extent3d {
+    pub(super) fn dimensions(&self) -> wgt::Extent3d {
         let (size, scale): (mtl::CGSize, mtl::CGFloat) = match self.view {
             Some(view) if !cfg!(target_os = "macos") => unsafe {
                 let bounds: CGRect = msg_send![view.as_ptr(), bounds];
