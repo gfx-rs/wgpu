@@ -201,12 +201,16 @@ impl<A: hal::Api> Example<A> {
         };
         let staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
         unsafe {
-            let _is_coherent = true; //TODO
-            let ptr = device
+            let mapping = device
                 .map_buffer(&staging_buffer, 0..staging_buffer_desc.size)
                 .unwrap();
-            ptr::copy_nonoverlapping(texture_data.as_ptr(), ptr.as_ptr(), texture_data.len());
+            ptr::copy_nonoverlapping(
+                texture_data.as_ptr(),
+                mapping.ptr.as_ptr(),
+                texture_data.len(),
+            );
             device.unmap_buffer(&staging_buffer).unwrap();
+            assert!(mapping.is_coherent);
         }
 
         let texture_desc = hal::TextureDescriptor {
@@ -298,16 +302,16 @@ impl<A: hal::Api> Example<A> {
         };
         let global_buffer = unsafe {
             let buffer = device.create_buffer(&global_buffer_desc).unwrap();
-            let _is_coherent = true; //TODO
-            let ptr = device
+            let mapping = device
                 .map_buffer(&buffer, 0..global_buffer_desc.size)
                 .unwrap();
             ptr::copy_nonoverlapping(
                 &globals as *const Globals as *const u8,
-                ptr.as_ptr(),
+                mapping.ptr.as_ptr(),
                 mem::size_of::<Globals>(),
             );
             device.unmap_buffer(&buffer).unwrap();
+            assert!(mapping.is_coherent);
             buffer
         };
 
@@ -463,13 +467,17 @@ impl<A: hal::Api> Example<A> {
         }
 
         unsafe {
-            let _is_coherent = true; //TODO
             let size = self.bunnies.len() * wgt::BIND_BUFFER_ALIGNMENT as usize;
-            let ptr = self
+            let mapping = self
                 .device
                 .map_buffer(&self.local_buffer, 0..size as wgt::BufferAddress)
                 .unwrap();
-            ptr::copy_nonoverlapping(self.bunnies.as_ptr() as *const u8, ptr.as_ptr(), size);
+            ptr::copy_nonoverlapping(
+                self.bunnies.as_ptr() as *const u8,
+                mapping.ptr.as_ptr(),
+                size,
+            );
+            assert!(mapping.is_coherent);
             self.device.unmap_buffer(&self.local_buffer).unwrap();
         }
 

@@ -121,20 +121,20 @@ fn map_buffer<A: hal::Api>(
     size: BufferAddress,
     kind: HostMap,
 ) -> Result<ptr::NonNull<u8>, resource::BufferAccessError> {
-    let ptr = unsafe {
+    let mapping = unsafe {
         raw.map_buffer(buffer.raw.as_ref().unwrap(), offset..offset + size)
             .map_err(DeviceError::from)?
     };
 
     buffer.sync_mapped_writes = match kind {
-        HostMap::Read if !buffer.is_coherent => unsafe {
+        HostMap::Read if !mapping.is_coherent => unsafe {
             raw.invalidate_mapped_ranges(
                 buffer.raw.as_ref().unwrap(),
                 iter::once(offset..offset + size),
             );
             None
         },
-        HostMap::Write if !buffer.is_coherent => Some(offset..offset + size),
+        HostMap::Write if !mapping.is_coherent => Some(offset..offset + size),
         _ => None,
     };
 
@@ -146,12 +146,15 @@ fn map_buffer<A: hal::Api>(
     // we instead just initialize the memory here and make sure it is GPU visible, so this happens at max only once for every buffer region.
     //
     // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
-    let zero_init_needs_flush_now = !buffer.is_coherent && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
+    let zero_init_needs_flush_now = mapping.is_coherent && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
     for uninitialized_range in buffer.initialization_status.drain(offset..(size + offset)) {
         let num_bytes = uninitialized_range.end - uninitialized_range.start;
         unsafe {
             ptr::write_bytes(
-                ptr.as_ptr().offset(uninitialized_range.start as isize),
+                mapping
+                    .ptr
+                    .as_ptr()
+                    .offset(uninitialized_range.start as isize),
                 0,
                 num_bytes as usize,
             )
@@ -166,7 +169,7 @@ fn map_buffer<A: hal::Api>(
         }
     }
 
-    Ok(ptr)
+    Ok(mapping.ptr)
 }
 
 //Note: this logic is specifically moved out of `handle_mapping()` in order to
@@ -445,7 +448,6 @@ impl<A: HalApi> Device<A> {
             },
             usage: desc.usage,
             size: desc.size,
-            is_coherent: true, //TODO?
             initialization_status: MemoryInitTracker::new(desc.size),
             sync_mapped_writes: None,
             map_state: resource::BufferMapState::Idle,
@@ -2449,8 +2451,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 };
                 let stage_buffer = stage.raw.unwrap();
-                let ptr = match unsafe { device.raw.map_buffer(&stage_buffer, 0..stage.size) } {
-                    Ok(ptr) => ptr,
+                let mapping = match unsafe { device.raw.map_buffer(&stage_buffer, 0..stage.size) } {
+                    Ok(mapping) => mapping,
                     Err(e) => {
                         let raw = buffer.raw.unwrap();
                         let mut life_lock = device.lock_life(&mut token);
@@ -2466,13 +2468,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                 // Zero initialize memory and then mark both staging and buffer as initialized
                 // (it's guaranteed that this is the case by the time the buffer is usable)
-                unsafe { ptr::write_bytes(ptr.as_ptr(), 0, buffer.size as usize) };
+                unsafe { ptr::write_bytes(mapping.ptr.as_ptr(), 0, buffer.size as usize) };
                 buffer.initialization_status.clear(0..buffer.size);
                 stage.initialization_status.clear(0..buffer.size);
 
                 buffer.map_state = resource::BufferMapState::Init {
-                    ptr,
-                    needs_flush: !stage.is_coherent,
+                    ptr: mapping.ptr,
+                    needs_flush: !mapping.is_coherent,
                     stage_buffer,
                 };
                 hal::BufferUse::COPY_DST
@@ -2555,21 +2557,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let raw_buf = buffer.raw.as_ref().unwrap();
         unsafe {
-            let ptr = device
+            let mapping = device
                 .raw
-                .map_buffer(raw_buf, 0..data.len() as u64)
+                .map_buffer(raw_buf, offset..offset + data.len() as u64)
                 .map_err(DeviceError::from)?;
-            ptr::copy_nonoverlapping(
-                data.as_ptr(),
-                ptr.as_ptr().offset(offset as isize),
-                data.len(),
-            );
+            ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
+            if !mapping.is_coherent {
+                device
+                    .raw
+                    .flush_mapped_ranges(raw_buf, iter::once(offset..offset + data.len() as u64));
+            }
             device
                 .raw
                 .unmap_buffer(raw_buf)
                 .map_err(DeviceError::from)?;
         }
-        //TODO: flush
 
         Ok(())
     }
@@ -2598,18 +2600,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         check_buffer_usage(buffer.usage, wgt::BufferUsage::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        //TODO: invalidate
         let raw_buf = buffer.raw.as_ref().unwrap();
         unsafe {
-            let ptr = device
+            let mapping = device
                 .raw
-                .map_buffer(raw_buf, 0..data.len() as u64)
+                .map_buffer(raw_buf, offset..offset + data.len() as u64)
                 .map_err(DeviceError::from)?;
-            ptr::copy_nonoverlapping(
-                ptr.as_ptr().offset(offset as isize),
-                data.as_mut_ptr(),
-                data.len(),
-            );
+            if !mapping.is_coherent {
+                device.raw.invalidate_mapped_ranges(
+                    raw_buf,
+                    iter::once(offset..offset + data.len() as u64),
+                );
+            }
+            ptr::copy_nonoverlapping(mapping.ptr.as_ptr(), data.as_mut_ptr(), data.len());
             device
                 .raw
                 .unmap_buffer(raw_buf)

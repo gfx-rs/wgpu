@@ -122,7 +122,6 @@ pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 pub struct Buffer<A: hal::Api> {
     pub(crate) raw: Option<A::Buffer>,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) is_coherent: bool,
     pub(crate) usage: wgt::BufferUsage,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) initialization_status: MemoryInitTracker,

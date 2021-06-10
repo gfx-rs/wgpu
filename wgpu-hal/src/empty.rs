@@ -114,7 +114,7 @@ impl crate::Device<Api> for Context {
         &self,
         buffer: &Resource,
         range: crate::MemoryRange,
-    ) -> DeviceResult<std::ptr::NonNull<u8>> {
+    ) -> DeviceResult<crate::BufferMapping> {
         Err(crate::DeviceError::Lost)
     }
     unsafe fn unmap_buffer(&self, buffer: &Resource) -> DeviceResult<()> {

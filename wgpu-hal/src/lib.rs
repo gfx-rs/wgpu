@@ -195,7 +195,7 @@ pub trait Device<A: Api>: Send + Sync {
         &self,
         buffer: &A::Buffer,
         range: MemoryRange,
-    ) -> Result<NonNull<u8>, DeviceError>;
+    ) -> Result<BufferMapping, DeviceError>;
     unsafe fn unmap_buffer(&self, buffer: &A::Buffer) -> Result<(), DeviceError>;
     unsafe fn flush_mapped_ranges<I: Iterator<Item = MemoryRange>>(
         &self,
@@ -652,6 +652,12 @@ pub struct AcquiredSurfaceTexture<A: Api> {
 pub struct OpenDevice<A: Api> {
     pub device: A::Device,
     pub queue: A::Queue,
+}
+
+#[derive(Clone, Debug)]
+pub struct BufferMapping {
+    pub ptr: NonNull<u8>,
+    pub is_coherent: bool,
 }
 
 #[derive(Clone, Debug)]

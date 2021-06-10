@@ -26,7 +26,6 @@ use thiserror::Error;
 struct StagingData<A: hal::Api> {
     buffer: A::Buffer,
     cmdbuf: A::CommandBuffer,
-    is_coherent: bool,
 }
 
 impl<A: hal::Api> StagingData<A> {
@@ -36,8 +35,12 @@ impl<A: hal::Api> StagingData<A> {
         offset: wgt::BufferAddress,
         data: &[u8],
     ) -> Result<(), hal::DeviceError> {
-        let ptr = device.map_buffer(&self.buffer, offset..offset + data.len() as u64)?;
-        ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), data.len());
+        let mapping = device.map_buffer(&self.buffer, offset..offset + data.len() as u64)?;
+        ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
+        if !mapping.is_coherent {
+            device
+                .flush_mapped_ranges(&self.buffer, iter::once(offset..offset + data.len() as u64));
+        }
         device.unmap_buffer(&self.buffer)?;
         Ok(())
     }
@@ -175,11 +178,7 @@ impl<A: hal::Api> super::Device<A> {
             Some(cmdbuf) => cmdbuf,
             None => PendingWrites::<A>::create_cmd_buf(&self.raw),
         };
-        Ok(StagingData {
-            buffer,
-            cmdbuf,
-            is_coherent: true, //TODO
-        })
+        Ok(StagingData { buffer, cmdbuf })
     }
 
     fn initialize_buffer_memory(
@@ -474,13 +473,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             width_blocks * format_desc.block_size as u32
         };
 
-        let ptr = unsafe { device.raw.map_buffer(&stage.buffer, 0..stage_size) }
+        let mapping = unsafe { device.raw.map_buffer(&stage.buffer, 0..stage_size) }
             .map_err(DeviceError::from)?;
         unsafe {
             profiling::scope!("copy");
             if stage_bytes_per_row == bytes_per_row {
                 // Fast path if the data isalready being aligned optimally.
-                ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), stage_size as usize);
+                ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), stage_size as usize);
             } else {
                 // Copy row by row into the optimal alignment.
                 let copy_bytes_per_row = stage_bytes_per_row.min(bytes_per_row) as usize;
@@ -490,7 +489,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         ptr::copy_nonoverlapping(
                             data.as_ptr()
                                 .offset((rows_offset + row) as isize * bytes_per_row as isize),
-                            ptr.as_ptr().offset(
+                            mapping.ptr.as_ptr().offset(
                                 (rows_offset + row) as isize * stage_bytes_per_row as isize,
                             ),
                             copy_bytes_per_row,
@@ -500,15 +499,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
         unsafe {
-            device
-                .raw
-                .unmap_buffer(&stage.buffer)
-                .map_err(DeviceError::from)?;
-            if !stage.is_coherent {
+            if !mapping.is_coherent {
                 device
                     .raw
                     .flush_mapped_ranges(&stage.buffer, iter::once(0..stage_size));
             }
+            device
+                .raw
+                .unmap_buffer(&stage.buffer)
+                .map_err(DeviceError::from)?;
         }
 
         // WebGPU uses the physical size of the texture for copies whereas vulkan uses

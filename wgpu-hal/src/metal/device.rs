@@ -165,10 +165,13 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         buffer: &super::Buffer,
         range: crate::MemoryRange,
-    ) -> DeviceResult<ptr::NonNull<u8>> {
+    ) -> DeviceResult<crate::BufferMapping> {
         let ptr = buffer.raw.contents() as *mut u8;
         assert!(!ptr.is_null());
-        Ok(ptr::NonNull::new(ptr.offset(range.start as isize)).unwrap())
+        Ok(crate::BufferMapping {
+            ptr: ptr::NonNull::new(ptr.offset(range.start as isize)).unwrap(),
+            is_coherent: true,
+        })
     }
 
     unsafe fn unmap_buffer(&self, _buffer: &super::Buffer) -> DeviceResult<()> {
