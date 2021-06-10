@@ -47,7 +47,7 @@ impl framework::Example for Example {
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                "../../../wgpu-hal/examples/bunnymark/shader.wgsl"
+                "../../../wgpu-hal/examples/halmark/shader.wgsl"
             ))),
         });
 

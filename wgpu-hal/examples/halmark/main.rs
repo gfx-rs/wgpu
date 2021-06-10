@@ -26,8 +26,8 @@ struct Locals {
     _pad: u32,
 }
 
+#[allow(dead_code)]
 struct Example<A: hal::Api> {
-    #[allow(dead_code)]
     instance: A::Instance,
     surface: A::Surface,
     surface_format: wgt::TextureFormat,
@@ -39,6 +39,10 @@ struct Example<A: hal::Api> {
     pipeline: A::RenderPipeline,
     bunnies: Vec<Locals>,
     local_buffer: A::Buffer,
+    global_buffer: A::Buffer,
+    sampler: A::Sampler,
+    texture: A::Texture,
+    view: A::TextureView,
     extent: [u32; 2],
     start: Instant,
 }
@@ -62,7 +66,7 @@ impl<A: hal::Api> Example<A> {
             swap_chain_size: 2,
             present_mode: wgt::PresentMode::Fifo,
             composite_alpha_mode: hal::CompositeAlphaMode::Opaque,
-            format: wgt::TextureFormat::Rgba8UnormSrgb,
+            format: wgt::TextureFormat::Bgra8UnormSrgb,
             extent: wgt::Extent3d {
                 width: window_size.0,
                 height: window_size.1,
@@ -77,7 +81,7 @@ impl<A: hal::Api> Example<A> {
         let naga_shader = {
             let shader_file = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("examples")
-                .join("bunnymark")
+                .join("halmark")
                 .join("shader.wgsl");
             let source = std::fs::read_to_string(shader_file).unwrap();
             let module = naga::front::wgsl::Parser::new().parse(&source).unwrap();
@@ -91,7 +95,9 @@ impl<A: hal::Api> Example<A> {
         };
         let shader_desc = hal::ShaderModuleDescriptor { label: None };
         let shader = unsafe {
-            device.create_shader_module(&shader_desc, naga_shader).unwrap()
+            device
+                .create_shader_module(&shader_desc, naga_shader)
+                .unwrap()
         };
 
         let global_bgl_desc = hal::BindGroupLayoutDescriptor {
@@ -185,7 +191,7 @@ impl<A: hal::Api> Example<A> {
         };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
 
-        let texture_data = vec![0xFFu8; 3];
+        let texture_data = vec![0xFFu8; 4];
 
         let staging_buffer_desc = hal::BufferDescriptor {
             label: Some("stage"),
@@ -398,6 +404,10 @@ impl<A: hal::Api> Example<A> {
             local_group,
             bunnies: Vec::new(),
             local_buffer,
+            global_buffer,
+            sampler,
+            texture,
+            view,
             extent: [window_size.0, window_size.1],
             start: Instant::now(),
         })
@@ -422,8 +432,8 @@ impl<A: hal::Api> Example<A> {
                 spawn_count,
                 self.bunnies.len() + spawn_count
             );
-            for _ in 0..spawn_count {
-                let random = (elapsed.as_nanos() & 0xFF) as f32 / 255.0;
+            for i in 0..spawn_count {
+                let random = ((elapsed.as_nanos() * (i + 1) as u128) & 0xFF) as f32 / 255.0;
                 let speed = random * MAX_VELOCITY - (MAX_VELOCITY * 0.5);
                 self.bunnies.push(Locals {
                     position: [0.0, 0.5 * (self.extent[1] as f32)],
@@ -518,6 +528,7 @@ impl<A: hal::Api> Example<A> {
         }
 
         unsafe {
+            cmd_buf.end_render_pass();
             cmd_buf.finish();
             self.queue.submit(iter::once(cmd_buf), None).unwrap();
             self.queue.present(&mut self.surface, surface_tex).unwrap();
@@ -545,6 +556,9 @@ fn main() {
         let _ = &window; // force ownership by the closure
         *control_flow = winit::event_loop::ControlFlow::Poll;
         match event {
+            winit::event::Event::RedrawEventsCleared => {
+                window.request_redraw();
+            }
             winit::event::Event::WindowEvent { event, .. } => match event {
                 winit::event::WindowEvent::KeyboardInput {
                     input:

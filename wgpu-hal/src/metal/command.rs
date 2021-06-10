@@ -132,7 +132,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
                     bytes_per_image,
                     extent,
                     &dst.raw,
-                    dst_slice + slice_count,
+                    dst_slice + slice,
                     copy.texture_base.mip_level as u64,
                     dst_origin,
                     mtl::MTLBlitOption::empty(),

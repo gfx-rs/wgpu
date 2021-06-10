@@ -177,7 +177,7 @@ impl crate::Surface<super::Api> for super::Surface {
         log::info!("build swapchain {:?}", config);
 
         let caps = &device.shared.private_caps;
-        let mtl_format = caps.map_format(config.format);
+        self.raw_swapchain_format = caps.map_format(config.format);
 
         let render_layer = self.render_layer.lock();
         let framebuffer_only = config.usage == crate::TextureUse::COLOR_TARGET;
@@ -205,7 +205,7 @@ impl crate::Surface<super::Api> for super::Surface {
             }
         }
         render_layer.set_device(&*device_raw);
-        render_layer.set_pixel_format(mtl_format);
+        render_layer.set_pixel_format(self.raw_swapchain_format);
         render_layer.set_framebuffer_only(framebuffer_only);
         render_layer.set_presents_with_transaction(self.present_with_transaction);
 
