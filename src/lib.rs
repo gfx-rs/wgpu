@@ -562,7 +562,7 @@ pub enum Binding {
 }
 
 /// Pipeline binding information for global resources.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct ResourceBinding {
