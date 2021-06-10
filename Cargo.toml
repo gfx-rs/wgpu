@@ -7,7 +7,7 @@ members = [
     "wgpu-hal",
     "wgpu-types",
 ]
-default-members = ["wgpu", "player"]
+default-members = ["wgpu", "player", "wgpu-hal"]
 
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }

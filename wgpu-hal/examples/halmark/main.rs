@@ -43,6 +43,9 @@ struct Example<A: hal::Api> {
     sampler: A::Sampler,
     texture: A::Texture,
     view: A::TextureView,
+    fence: A::Fence,
+    fence_value: hal::FenceValue,
+    old_views: Vec<(hal::FenceValue, A::TextureView)>,
     extent: [u32; 2],
     start: Instant,
 }
@@ -385,16 +388,16 @@ impl<A: hal::Api> Example<A> {
             unsafe { device.create_bind_group(&local_group_desc).unwrap() }
         };
 
-        unsafe {
+        let fence = unsafe {
             let mut fence = device.create_fence().unwrap();
             init_cmd.finish();
             queue
                 .submit(iter::once(init_cmd), Some((&mut fence, 1)))
                 .unwrap();
             device.wait(&fence, 1, !0).unwrap();
-            device.destroy_fence(fence);
             device.destroy_buffer(staging_buffer);
-        }
+            fence
+        };
 
         Ok(Example {
             instance,
@@ -412,6 +415,9 @@ impl<A: hal::Api> Example<A> {
             sampler,
             texture,
             view,
+            old_views: Vec::new(),
+            fence,
+            fence_value: 1,
             extent: [window_size.0, window_size.1],
             start: Instant::now(),
         })
@@ -535,10 +541,20 @@ impl<A: hal::Api> Example<A> {
             }
         }
 
+        self.fence_value += 1;
+        let last_done = unsafe { self.device.get_fence_value(&self.fence).unwrap() };
+        self.old_views.retain(|&(value, _)| value <= last_done);
+        self.old_views.push((self.fence_value, surface_tex_view));
+
         unsafe {
             cmd_buf.end_render_pass();
             cmd_buf.finish();
-            self.queue.submit(iter::once(cmd_buf), None).unwrap();
+            self.queue
+                .submit(
+                    iter::once(cmd_buf),
+                    Some((&mut self.fence, self.fence_value)),
+                )
+                .unwrap();
             self.queue.present(&mut self.surface, surface_tex).unwrap();
         }
     }
