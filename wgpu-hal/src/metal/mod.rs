@@ -463,8 +463,6 @@ type MultiStageResourceCounters = MultiStageData<ResourceData<ResourceIndex>>;
 #[derive(Debug)]
 struct BindGroupLayoutInfo {
     base_resource_indices: MultiStageResourceCounters,
-    //dynamic_buffers: Vec<MultiStageData<ResourceIndex>>,
-    sized_buffer_bindings: Vec<(u32, wgt::ShaderStage)>,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -532,6 +530,8 @@ struct BufferResource {
     ptr: BufferPtr,
     offset: wgt::BufferAddress,
     dynamic_index: Option<u32>,
+    binding_size: Option<wgt::BufferSize>,
+    binding_location: u32,
 }
 
 #[derive(Debug, Default)]
@@ -557,10 +557,26 @@ struct PipelineStageInfo {
     sized_bindings: Vec<naga::ResourceBinding>,
 }
 
-#[allow(dead_code)] // silence xx_lib and xx_info warnings
+impl PipelineStageInfo {
+    fn clear(&mut self) {
+        self.push_constants = None;
+        self.sizes_slot = None;
+        self.sized_bindings.clear();
+    }
+
+    fn assign_from(&mut self, other: &Self) {
+        self.push_constants = other.push_constants;
+        self.sizes_slot = other.sizes_slot;
+        self.sized_bindings.clear();
+        self.sized_bindings.extend_from_slice(&other.sized_bindings);
+    }
+}
+
 pub struct RenderPipeline {
     raw: mtl::RenderPipelineState,
+    #[allow(dead_code)]
     vs_lib: mtl::Library,
+    #[allow(dead_code)]
     fs_lib: Option<mtl::Library>,
     vs_info: PipelineStageInfo,
     fs_info: PipelineStageInfo,
@@ -574,9 +590,9 @@ pub struct RenderPipeline {
 unsafe impl Send for RenderPipeline {}
 unsafe impl Sync for RenderPipeline {}
 
-#[allow(dead_code)] // silence xx_lib and xx_info warnings
 pub struct ComputePipeline {
     raw: mtl::ComputePipelineState,
+    #[allow(dead_code)]
     cs_lib: mtl::Library,
     cs_info: PipelineStageInfo,
     work_group_size: mtl::MTLSize,
@@ -628,16 +644,29 @@ struct IndexState {
     raw_type: mtl::MTLIndexType,
 }
 
+#[derive(Default)]
+struct Temp {
+    binding_sizes: Vec<wgt::BufferSize>,
+}
+
+struct CommandState {
+    raw_primitive_type: mtl::MTLPrimitiveType,
+    index: Option<IndexState>,
+    raw_wg_size: mtl::MTLSize,
+    stage_infos: MultiStageData<PipelineStageInfo>,
+    //TODO: use `naga::ResourceBinding` for keys
+    storage_buffer_length_map: fxhash::FxHashMap<(u32, u32), wgt::BufferSize>,
+}
+
 pub struct CommandBuffer {
     raw: mtl::CommandBuffer,
     blit: Option<mtl::BlitCommandEncoder>,
     render: Option<mtl::RenderCommandEncoder>,
     compute: Option<mtl::ComputeCommandEncoder>,
-    raw_primitive_type: mtl::MTLPrimitiveType,
-    index_state: Option<IndexState>,
-    raw_wg_size: mtl::MTLSize,
     max_buffers_per_stage: u32,
     disabilities: PrivateDisabilities,
+    state: CommandState,
+    temp: Temp,
 }
 
 unsafe impl Send for CommandBuffer {}

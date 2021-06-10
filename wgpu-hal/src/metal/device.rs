@@ -354,11 +354,16 @@ impl crate::Device<super::Api> for super::Device {
             blit: None,
             render: None,
             compute: None,
-            raw_primitive_type: mtl::MTLPrimitiveType::Point,
-            index_state: None,
-            raw_wg_size: mtl::MTLSize::new(0, 0, 0),
-            max_buffers_per_stage: self.shared.private_caps.max_buffers_per_stage,
             disabilities: self.shared.disabilities.clone(),
+            max_buffers_per_stage: self.shared.private_caps.max_buffers_per_stage,
+            state: super::CommandState {
+                raw_primitive_type: mtl::MTLPrimitiveType::Point,
+                index: None,
+                raw_wg_size: mtl::MTLSize::new(0, 0, 0),
+                stage_infos: Default::default(),
+                storage_buffer_length_map: Default::default(),
+            },
+            temp: super::Temp::default(),
         })
     }
     unsafe fn destroy_command_buffer(&self, mut cmd_buf: super::CommandBuffer) {
@@ -431,7 +436,6 @@ impl crate::Device<super::Api> for super::Device {
         for (group_index, &bgl) in desc.bind_group_layouts.iter().enumerate() {
             // remember where the resources for this set start at each shader stage
             let mut dynamic_buffers = Vec::new();
-            let mut sized_buffer_bindings = Vec::new();
             let base_resource_indices = stage_data.map(|info| info.counters.clone());
 
             for entry in bgl.entries.iter() {
@@ -451,7 +455,6 @@ impl crate::Device<super::Api> for super::Device {
                         }));
                     }
                     if let wgt::BufferBindingType::Storage { .. } = ty {
-                        sized_buffer_bindings.push((entry.binding, entry.visibility));
                         for info in stage_data.iter_mut() {
                             if entry.visibility.contains(map_naga_stage(info.stage)) {
                                 info.sizes_count += 1;
@@ -506,8 +509,6 @@ impl crate::Device<super::Api> for super::Device {
 
             bind_group_infos.push(super::BindGroupLayoutInfo {
                 base_resource_indices,
-                //dynamic_buffers,
-                sized_buffer_bindings,
             });
         }
 
@@ -592,9 +593,17 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 match layout.ty {
                     wgt::BindingType::Buffer {
-                        has_dynamic_offset, ..
+                        ty,
+                        has_dynamic_offset,
+                        ..
                     } => {
                         let source = &desc.buffers[entry.resource_index as usize];
+                        let binding_size = match ty {
+                            wgt::BufferBindingType::Storage { .. } => source
+                                .size
+                                .or(wgt::BufferSize::new(source.buffer.size - source.offset)),
+                            _ => None,
+                        };
                         bg.buffers.push(super::BufferResource {
                             ptr: source.buffer.as_raw(),
                             offset: source.offset,
@@ -603,6 +612,8 @@ impl crate::Device<super::Api> for super::Device {
                             } else {
                                 None
                             },
+                            binding_size,
+                            binding_location: layout.binding,
                         });
                         counter.buffers += 1;
                     }

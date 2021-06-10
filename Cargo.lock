@@ -1918,6 +1918,7 @@ dependencies = [
  "bitflags",
  "block",
  "foreign-types",
+ "fxhash",
  "log",
  "metal",
  "naga",

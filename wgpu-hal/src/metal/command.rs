@@ -1,6 +1,8 @@
 use super::{conv, AsNative};
 use std::{mem, ops::Range};
 
+const WORD_SIZE: usize = 4;
+
 impl super::CommandBuffer {
     fn enter_blit(&mut self) -> &mtl::BlitCommandEncoderRef {
         if self.blit.is_none() {
@@ -24,6 +26,34 @@ impl super::CommandBuffer {
         } else {
             self.enter_blit()
         }
+    }
+
+    fn begin_pass(&mut self) {
+        self.state.storage_buffer_length_map.clear();
+        self.state.stage_infos.vs.clear();
+        self.state.stage_infos.fs.clear();
+        self.state.stage_infos.cs.clear();
+        self.leave_blit();
+    }
+}
+
+impl super::CommandState {
+    fn make_sizes_buffer_update<'a>(
+        &self,
+        stage: naga::ShaderStage,
+        result_sizes: &'a mut Vec<wgt::BufferSize>,
+    ) -> Option<(u32, &'a [wgt::BufferSize])> {
+        let stage_info = &self.stage_infos[stage];
+        let slot = stage_info.sizes_slot?;
+        result_sizes.clear();
+        for br in stage_info.sized_bindings.iter() {
+            // If it's None, this isn't the right time to update the sizes
+            let size = self
+                .storage_buffer_length_map
+                .get(&(br.group, br.binding))?;
+            result_sizes.push(*size);
+        }
+        Some((slot as _, result_sizes))
     }
 }
 
@@ -228,7 +258,9 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     // render
 
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
-        self.leave_blit();
+        self.begin_pass();
+        self.state.index = None;
+
         let descriptor = mtl::RenderPassDescriptor::new();
         //TODO: set visibility results buffer
 
@@ -311,13 +343,14 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     unsafe fn set_bind_group(
         &mut self,
         layout: &super::PipelineLayout,
-        index: u32,
+        group_index: u32,
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
-        let bg_info = &layout.bind_group_infos[index as usize];
+        let bg_info = &layout.bind_group_infos[group_index as usize];
 
         if let Some(ref encoder) = self.render {
+            let mut changes_sizes_buffer = false;
             for index in 0..group.counters.vs.buffers {
                 let buf = &group.buffers[index as usize];
                 let mut offset = buf.offset;
@@ -329,7 +362,27 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
                     Some(buf.ptr.as_native()),
                     offset,
                 );
+                if let Some(size) = buf.binding_size {
+                    self.state
+                        .storage_buffer_length_map
+                        .insert((group_index, buf.binding_location), size);
+                    changes_sizes_buffer = true;
+                }
             }
+            if changes_sizes_buffer {
+                if let Some((index, sizes)) = self.state.make_sizes_buffer_update(
+                    naga::ShaderStage::Vertex,
+                    &mut self.temp.binding_sizes,
+                ) {
+                    encoder.set_vertex_bytes(
+                        index as _,
+                        (sizes.len() * WORD_SIZE) as u64,
+                        sizes.as_ptr() as _,
+                    );
+                }
+            }
+
+            changes_sizes_buffer = false;
             for index in 0..group.counters.fs.buffers {
                 let buf = &group.buffers[(group.counters.vs.buffers + index) as usize];
                 let mut offset = buf.offset;
@@ -341,6 +394,24 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
                     Some(buf.ptr.as_native()),
                     offset,
                 );
+                if let Some(size) = buf.binding_size {
+                    self.state
+                        .storage_buffer_length_map
+                        .insert((group_index, buf.binding_location), size);
+                    changes_sizes_buffer = true;
+                }
+            }
+            if changes_sizes_buffer {
+                if let Some((index, sizes)) = self.state.make_sizes_buffer_update(
+                    naga::ShaderStage::Fragment,
+                    &mut self.temp.binding_sizes,
+                ) {
+                    encoder.set_fragment_bytes(
+                        index as _,
+                        (sizes.len() * WORD_SIZE) as u64,
+                        sizes.as_ptr() as _,
+                    );
+                }
             }
 
             for index in 0..group.counters.vs.samplers {
@@ -380,6 +451,8 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
                 samplers: group.counters.vs.samplers + group.counters.fs.samplers,
                 textures: group.counters.vs.textures + group.counters.fs.textures,
             };
+
+            let mut changes_sizes_buffer = false;
             for index in 0..group.counters.cs.buffers {
                 let buf = &group.buffers[(index_base.buffers + index) as usize];
                 let mut offset = buf.offset;
@@ -391,7 +464,26 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
                     Some(buf.ptr.as_native()),
                     offset,
                 );
+                if let Some(size) = buf.binding_size {
+                    self.state
+                        .storage_buffer_length_map
+                        .insert((group_index, buf.binding_location), size);
+                    changes_sizes_buffer = true;
+                }
             }
+            if changes_sizes_buffer {
+                if let Some((index, sizes)) = self.state.make_sizes_buffer_update(
+                    naga::ShaderStage::Compute,
+                    &mut self.temp.binding_sizes,
+                ) {
+                    encoder.set_bytes(
+                        index as _,
+                        (sizes.len() * WORD_SIZE) as u64,
+                        sizes.as_ptr() as _,
+                    );
+                }
+            }
+
             for index in 0..group.counters.cs.samplers {
                 let res = group.samplers[(index_base.samplers + index) as usize];
                 encoder.set_sampler_state(
@@ -430,7 +522,10 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     }
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
-        self.raw_primitive_type = pipeline.raw_primitive_type;
+        self.state.raw_primitive_type = pipeline.raw_primitive_type;
+        self.state.stage_infos.vs.assign_from(&pipeline.vs_info);
+        self.state.stage_infos.fs.assign_from(&pipeline.fs_info);
+
         let encoder = self.render.as_ref().unwrap();
         encoder.set_render_pipeline_state(&pipeline.raw);
         encoder.set_front_facing_winding(pipeline.raw_front_winding);
@@ -441,6 +536,31 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
         if let Some((ref state, bias)) = pipeline.depth_stencil {
             encoder.set_depth_stencil_state(state);
             encoder.set_depth_bias(bias.constant as f32, bias.slope_scale, bias.clamp);
+        }
+
+        {
+            if let Some((index, sizes)) = self
+                .state
+                .make_sizes_buffer_update(naga::ShaderStage::Vertex, &mut self.temp.binding_sizes)
+            {
+                encoder.set_vertex_bytes(
+                    index as _,
+                    (sizes.len() * WORD_SIZE) as u64,
+                    sizes.as_ptr() as _,
+                );
+            }
+        }
+        if pipeline.fs_lib.is_some() {
+            if let Some((index, sizes)) = self
+                .state
+                .make_sizes_buffer_update(naga::ShaderStage::Fragment, &mut self.temp.binding_sizes)
+            {
+                encoder.set_fragment_bytes(
+                    index as _,
+                    (sizes.len() * WORD_SIZE) as u64,
+                    sizes.as_ptr() as _,
+                );
+            }
         }
     }
 
@@ -453,7 +573,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
             wgt::IndexFormat::Uint16 => (2, mtl::MTLIndexType::UInt16),
             wgt::IndexFormat::Uint32 => (4, mtl::MTLIndexType::UInt32),
         };
-        self.index_state = Some(super::IndexState {
+        self.state.index = Some(super::IndexState {
             buffer_ptr: AsNative::from(binding.buffer.raw.as_ref()),
             offset: binding.offset,
             stride,
@@ -522,7 +642,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
         let encoder = self.render.as_ref().unwrap();
         if start_instance != 0 {
             encoder.draw_primitives_instanced_base_instance(
-                self.raw_primitive_type,
+                self.state.raw_primitive_type,
                 start_vertex as _,
                 vertex_count as _,
                 instance_count as _,
@@ -530,14 +650,14 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
             );
         } else if instance_count != 1 {
             encoder.draw_primitives_instanced(
-                self.raw_primitive_type,
+                self.state.raw_primitive_type,
                 start_vertex as _,
                 vertex_count as _,
                 instance_count as _,
             );
         } else {
             encoder.draw_primitives(
-                self.raw_primitive_type,
+                self.state.raw_primitive_type,
                 start_vertex as _,
                 vertex_count as _,
             );
@@ -553,11 +673,11 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
         instance_count: u32,
     ) {
         let encoder = self.render.as_ref().unwrap();
-        let index = self.index_state.as_ref().unwrap();
+        let index = self.state.index.as_ref().unwrap();
         let offset = index.offset + index.stride * start_index as wgt::BufferAddress;
         if base_vertex != 0 || start_instance != 0 {
             encoder.draw_indexed_primitives_instanced_base_instance(
-                self.raw_primitive_type,
+                self.state.raw_primitive_type,
                 index_count as _,
                 index.raw_type,
                 index.buffer_ptr.as_native(),
@@ -568,7 +688,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
             );
         } else if instance_count != 1 {
             encoder.draw_indexed_primitives_instanced(
-                self.raw_primitive_type,
+                self.state.raw_primitive_type,
                 index_count as _,
                 index.raw_type,
                 index.buffer_ptr.as_native(),
@@ -577,7 +697,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
             );
         } else {
             encoder.draw_indexed_primitives(
-                self.raw_primitive_type,
+                self.state.raw_primitive_type,
                 index_count as _,
                 index.raw_type,
                 index.buffer_ptr.as_native(),
@@ -594,7 +714,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     ) {
         let encoder = self.render.as_ref().unwrap();
         for _ in 0..draw_count {
-            encoder.draw_primitives_indirect(self.raw_primitive_type, &buffer.raw, offset);
+            encoder.draw_primitives_indirect(self.state.raw_primitive_type, &buffer.raw, offset);
             offset += mem::size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
         }
     }
@@ -606,10 +726,10 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
         draw_count: u32,
     ) {
         let encoder = self.render.as_ref().unwrap();
-        let index = self.index_state.as_ref().unwrap();
+        let index = self.state.index.as_ref().unwrap();
         for _ in 0..draw_count {
             encoder.draw_indexed_primitives_indirect(
-                self.raw_primitive_type,
+                self.state.raw_primitive_type,
                 index.raw_type,
                 index.buffer_ptr.as_native(),
                 index.offset,
@@ -644,7 +764,8 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     // compute
 
     unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
-        self.leave_blit();
+        self.begin_pass();
+
         let encoder = self.raw.new_compute_command_encoder();
         if let Some(label) = desc.label {
             encoder.set_label(label);
@@ -656,9 +777,22 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
-        self.raw_wg_size = pipeline.work_group_size;
+        self.state.raw_wg_size = pipeline.work_group_size;
+        self.state.stage_infos.cs.assign_from(&pipeline.cs_info);
+
         let encoder = self.compute.as_ref().unwrap();
         encoder.set_compute_pipeline_state(&pipeline.raw);
+
+        if let Some((index, sizes)) = self
+            .state
+            .make_sizes_buffer_update(naga::ShaderStage::Compute, &mut self.temp.binding_sizes)
+        {
+            encoder.set_bytes(
+                index as _,
+                (sizes.len() * WORD_SIZE) as u64,
+                sizes.as_ptr() as _,
+            );
+        }
     }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
@@ -668,11 +802,11 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
             height: count[1] as u64,
             depth: count[2] as u64,
         };
-        encoder.dispatch_thread_groups(raw_count, self.raw_wg_size);
+        encoder.dispatch_thread_groups(raw_count, self.state.raw_wg_size);
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
         let encoder = self.compute.as_ref().unwrap();
-        encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, self.raw_wg_size);
+        encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, self.state.raw_wg_size);
     }
 }
