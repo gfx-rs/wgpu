@@ -841,7 +841,7 @@ impl<A: HalApi> Device<A> {
         };
         let raw = match unsafe { self.raw.create_shader_module(&hal_desc, hal_shader) } {
             Ok(raw) => raw,
-            Err((error, _shader)) => {
+            Err(error) => {
                 return Err(match error {
                     hal::ShaderError::Device(error) => {
                         pipeline::CreateShaderModuleError::Device(error.into())

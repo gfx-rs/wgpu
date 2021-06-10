@@ -212,6 +212,7 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> mtl::MTLVertexFormat {
         Vf::Uint32x4 => UInt4,
         Vf::Sint32x4 => Int4,
         Vf::Float32x4 => Float4,
+        Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
     }
 }
 
@@ -250,5 +251,61 @@ pub fn map_cull_mode(face: Option<wgt::Face>) -> mtl::MTLCullMode {
         None => mtl::MTLCullMode::None,
         Some(wgt::Face::Front) => mtl::MTLCullMode::Front,
         Some(wgt::Face::Back) => mtl::MTLCullMode::Back,
+    }
+}
+
+pub fn map_range(range: &crate::MemoryRange) -> mtl::NSRange {
+    mtl::NSRange {
+        location: range.start,
+        length: range.end - range.start,
+    }
+}
+
+pub fn map_extent(extent: &wgt::Extent3d, raw_type: mtl::MTLTextureType) -> (u64, mtl::MTLSize) {
+    let (depth, array_layers) = match raw_type {
+        mtl::MTLTextureType::D3 => (extent.depth_or_array_layers as u64, 1),
+        _ => (1, extent.depth_or_array_layers as u64),
+    };
+    (
+        array_layers,
+        mtl::MTLSize {
+            width: extent.width as u64,
+            height: extent.height as u64,
+            depth,
+        },
+    )
+}
+
+pub fn map_origin(origin: &wgt::Origin3d, raw_type: mtl::MTLTextureType) -> (u64, mtl::MTLOrigin) {
+    let (z, slice) = match raw_type {
+        mtl::MTLTextureType::D3 => (origin.z as u64, 0),
+        _ => (0, origin.z as u64),
+    };
+    (
+        slice,
+        mtl::MTLOrigin {
+            x: origin.x as u64,
+            y: origin.y as u64,
+            z,
+        },
+    )
+}
+
+pub fn map_store_action(store: bool, resolve: bool) -> mtl::MTLStoreAction {
+    use mtl::MTLStoreAction::*;
+    match (store, resolve) {
+        (true, true) => StoreAndMultisampleResolve,
+        (false, true) => MultisampleResolve,
+        (true, false) => Store,
+        (false, false) => DontCare,
+    }
+}
+
+pub fn map_clear_color(color: &wgt::Color) -> mtl::MTLClearColor {
+    mtl::MTLClearColor {
+        red: color.r,
+        green: color.g,
+        blue: color.b,
+        alpha: color.a,
     }
 }

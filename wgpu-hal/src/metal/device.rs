@@ -280,7 +280,8 @@ impl crate::Device<super::Api> for super::Device {
             )
         };
 
-        Ok(super::TextureView { raw })
+        let aspects = crate::FormatAspect::from(desc.format);
+        Ok(super::TextureView { raw, aspects })
     }
     unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}
 
@@ -336,8 +337,20 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::CommandBufferDescriptor,
     ) -> DeviceResult<super::CommandBuffer> {
-        let raw = self.shared.create_command_buffer().to_owned();
-        Ok(super::CommandBuffer { raw })
+        let raw = self.shared.create_command_buffer();
+        if let Some(label) = desc.label {
+            raw.set_label(label);
+        }
+
+        Ok(super::CommandBuffer {
+            raw,
+            blit: None,
+            render: None,
+            compute: None,
+            raw_primitive_type: mtl::MTLPrimitiveType::Point,
+            index_state: None,
+            raw_wg_size: mtl::MTLSize::new(0, 0, 0),
+        })
     }
     unsafe fn destroy_command_buffer(&self, _cmd_buf: super::CommandBuffer) {}
 
@@ -411,33 +424,29 @@ impl crate::Device<super::Api> for super::Device {
             let base_resource_indices = stage_data.map(|info| info.counters.clone());
 
             for entry in bgl.entries.iter() {
-                match entry.ty {
-                    wgt::BindingType::Buffer {
-                        ty,
-                        has_dynamic_offset,
-                        min_binding_size: _,
-                    } => {
-                        if has_dynamic_offset {
-                            dynamic_buffers.push(stage_data.map(|info| {
-                                if entry.visibility.contains(map_naga_stage(info.stage)) {
-                                    info.counters.buffers
-                                } else {
-                                    !0
-                                }
-                            }));
-                        }
-                        match ty {
-                            wgt::BufferBindingType::Storage { .. } => {
-                                sized_buffer_bindings.push((entry.binding, entry.visibility));
-                                for info in stage_data.iter_mut() {
-                                    if entry.visibility.contains(map_naga_stage(info.stage)) {
-                                        info.sizes_count += 1;
-                                    }
-                                }
+                if let wgt::BindingType::Buffer {
+                    ty,
+                    has_dynamic_offset,
+                    min_binding_size: _,
+                } = entry.ty
+                {
+                    if has_dynamic_offset {
+                        dynamic_buffers.push(stage_data.map(|info| {
+                            if entry.visibility.contains(map_naga_stage(info.stage)) {
+                                info.counters.buffers
+                            } else {
+                                !0
+                            }
+                        }));
+                    }
+                    if let wgt::BufferBindingType::Storage { .. } = ty {
+                        sized_buffer_bindings.push((entry.binding, entry.visibility));
+                        for info in stage_data.iter_mut() {
+                            if entry.visibility.contains(map_naga_stage(info.stage)) {
+                                info.sizes_count += 1;
                             }
                         }
                     }
-                    _ => {}
                 }
 
                 for info in stage_data.iter_mut() {
@@ -486,7 +495,7 @@ impl crate::Device<super::Api> for super::Device {
 
             bind_group_infos.push(super::BindGroupLayoutInfo {
                 base_resource_indices,
-                dynamic_buffers,
+                //dynamic_buffers,
                 sized_buffer_bindings,
             });
         }
@@ -558,16 +567,31 @@ impl crate::Device<super::Api> for super::Device {
         let mut bg = super::BindGroup::default();
         for (&stage, counter) in super::NAGA_STAGES.iter().zip(bg.counters.iter_mut()) {
             let stage_bit = map_naga_stage(stage);
+            let mut dynamic_offsets_count = 0u32;
             for (entry, layout) in desc.entries.iter().zip(desc.layout.entries.iter()) {
+                if let wgt::BindingType::Buffer {
+                    has_dynamic_offset: true,
+                    ..
+                } = layout.ty
+                {
+                    dynamic_offsets_count += 1;
+                }
                 if !layout.visibility.contains(stage_bit) {
                     continue;
                 }
                 match layout.ty {
-                    wgt::BindingType::Buffer { .. } => {
+                    wgt::BindingType::Buffer {
+                        has_dynamic_offset, ..
+                    } => {
                         let source = &desc.buffers[entry.resource_index as usize];
                         bg.buffers.push(super::BufferResource {
                             ptr: source.buffer.as_raw(),
                             offset: source.offset,
+                            dynamic_index: if has_dynamic_offset {
+                                Some(dynamic_offsets_count - 1)
+                            } else {
+                                None
+                            },
                         });
                         counter.buffers += 1;
                     }
@@ -592,7 +616,7 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn create_shader_module(
         &self,
-        desc: &crate::ShaderModuleDescriptor,
+        _desc: &crate::ShaderModuleDescriptor,
         shader: crate::NagaShader,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         Ok(super::ShaderModule { raw: shader })
@@ -660,7 +684,7 @@ impl crate::Device<super::Api> for super::Device {
             }
         }
 
-        let (raw_depth_stencil, depth_bias) = match desc.depth_stencil {
+        let depth_stencil = match desc.depth_stencil {
             Some(ref ds) => {
                 let raw_format = self.shared.private_caps.map_format(ds.format);
                 let aspects = crate::FormatAspect::from(ds.format);
@@ -677,9 +701,9 @@ impl crate::Device<super::Api> for super::Device {
                     .device
                     .lock()
                     .new_depth_stencil_state(&ds_descriptor);
-                (Some(raw), ds.bias)
+                Some((raw, ds.bias))
             }
-            None => (None, wgt::DepthBiasState::default()),
+            None => None,
         };
 
         if desc.layout.total_counters.vs.buffers + (desc.vertex_buffers.len() as u32)
@@ -703,9 +727,11 @@ impl crate::Device<super::Api> for super::Device {
                 buffer_desc.set_stride(vb.array_stride);
                 buffer_desc.set_step_function(conv::map_step_mode(vb.step_mode));
 
-                for (j, at) in vb.attributes.iter().enumerate() {
-                    let attribute_desc =
-                        vertex_descriptor.attributes().object_at(i as u64).unwrap();
+                for at in vb.attributes {
+                    let attribute_desc = vertex_descriptor
+                        .attributes()
+                        .object_at(at.shader_location as u64)
+                        .unwrap();
                     attribute_desc.set_format(conv::map_vertex_format(at.format));
                     attribute_desc.set_buffer_index(buffer_index);
                     attribute_desc.set_offset(at.offset);
@@ -763,8 +789,7 @@ impl crate::Device<super::Api> for super::Device {
             } else {
                 None
             },
-            raw_depth_stencil,
-            depth_bias,
+            depth_stencil,
         })
     }
     unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {}
@@ -817,12 +842,15 @@ impl crate::Device<super::Api> for super::Device {
     ) -> DeviceResult<super::QuerySet> {
         match desc.ty {
             wgt::QueryType::Occlusion => {
-                let size = desc.count as u64 * 8;
+                let size = desc.count as u64 * crate::QUERY_SIZE;
                 let options = mtl::MTLResourceOptions::empty();
                 //TODO: HazardTrackingModeUntracked
                 let raw_buffer = self.shared.device.lock().new_buffer(size, options);
                 raw_buffer.set_label("_QuerySet");
-                Ok(super::QuerySet { raw_buffer })
+                Ok(super::QuerySet {
+                    raw_buffer,
+                    ty: desc.ty.clone(),
+                })
             }
             wgt::QueryType::Timestamp | wgt::QueryType::PipelineStatistics(_) => {
                 Err(crate::DeviceError::OutOfMemory)

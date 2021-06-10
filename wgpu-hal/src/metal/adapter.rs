@@ -17,15 +17,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
         &self,
         features: wgt::Features,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let raw_device = self.shared.device.lock();
-
         Ok(crate::OpenDevice {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 features,
             },
-            queue: super::Queue {
-            },
+            queue: super::Queue {},
         })
     }
 
@@ -199,7 +196,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Bc4RUnorm
             | Tf::Bc4RSnorm
             | Tf::Bc5RgUnorm
+            | Tf::Bc5RgSnorm
             | Tf::Bc6hRgbSfloat
+            | Tf::Bc6hRgbUfloat
             | Tf::Bc7RgbaUnorm
             | Tf::Bc7RgbaUnormSrgb => {
                 if pc.format_bc {
@@ -946,7 +945,9 @@ impl super::PrivateCapabilities {
             Tf::Bc4RUnorm => BC4_RUnorm,
             Tf::Bc4RSnorm => BC4_RSnorm,
             Tf::Bc5RgUnorm => BC5_RGUnorm,
+            Tf::Bc5RgSnorm => BC5_RGSnorm,
             Tf::Bc6hRgbSfloat => BC6H_RGBFloat,
+            Tf::Bc6hRgbUfloat => BC6H_RGBUfloat,
             Tf::Bc7RgbaUnorm => BC7_RGBAUnorm,
             Tf::Bc7RgbaUnormSrgb => BC7_RGBAUnorm_sRGB,
             Tf::Etc2RgbUnorm => ETC2_RGB8,

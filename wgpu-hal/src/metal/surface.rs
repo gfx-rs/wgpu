@@ -21,25 +21,11 @@ pub struct CGPoint {
     pub y: mtl::CGFloat,
 }
 
-impl CGPoint {
-    #[inline]
-    pub fn new(x: mtl::CGFloat, y: mtl::CGFloat) -> CGPoint {
-        CGPoint { x, y }
-    }
-}
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CGRect {
     pub origin: CGPoint,
     pub size: mtl::CGSize,
-}
-
-impl CGRect {
-    #[inline]
-    pub fn new(origin: CGPoint, size: mtl::CGSize) -> CGRect {
-        CGRect { origin, size }
-    }
 }
 
 impl super::Surface {
@@ -50,6 +36,12 @@ impl super::Surface {
             raw_swapchain_format: mtl::MTLPixelFormat::Invalid,
             main_thread_id: thread::current().id(),
             present_with_transaction: false,
+        }
+    }
+
+    pub unsafe fn dispose(self) {
+        if let Some(view) = self.view {
+            let () = msg_send![view.as_ptr(), release];
         }
     }
 
@@ -200,36 +192,33 @@ impl crate::Surface<super::Api> for super::Surface {
         }
 
         let device_raw = device.shared.device.lock();
-        unsafe {
-            // On iOS, unless the user supplies a view with a CAMetalLayer, we
-            // create one as a sublayer. However, when the view changes size,
-            // its sublayers are not automatically resized, and we must resize
-            // it here. The drawable size and the layer size don't correlate
-            #[cfg(target_os = "ios")]
-            {
-                if let Some(view) = self.view {
-                    let main_layer: *mut Object = msg_send![view.as_ptr(), layer];
-                    let bounds: CGRect = msg_send![main_layer, bounds];
-                    let () = msg_send![*render_layer, setFrame: bounds];
-                }
+        // On iOS, unless the user supplies a view with a CAMetalLayer, we
+        // create one as a sublayer. However, when the view changes size,
+        // its sublayers are not automatically resized, and we must resize
+        // it here. The drawable size and the layer size don't correlate
+        #[cfg(target_os = "ios")]
+        {
+            if let Some(view) = self.view {
+                let main_layer: *mut Object = msg_send![view.as_ptr(), layer];
+                let bounds: CGRect = msg_send![main_layer, bounds];
+                let () = msg_send![*render_layer, setFrame: bounds];
             }
-            render_layer.set_device(&*device_raw);
-            render_layer.set_pixel_format(mtl_format);
-            render_layer.set_framebuffer_only(framebuffer_only);
-            render_layer.set_presents_with_transaction(self.present_with_transaction);
+        }
+        render_layer.set_device(&*device_raw);
+        render_layer.set_pixel_format(mtl_format);
+        render_layer.set_framebuffer_only(framebuffer_only);
+        render_layer.set_presents_with_transaction(self.present_with_transaction);
 
-            // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
-            let () =
-                msg_send![*render_layer, setMaximumDrawableCount: config.swap_chain_size as u64];
+        // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
+        let () = msg_send![*render_layer, setMaximumDrawableCount: config.swap_chain_size as u64];
 
-            render_layer.set_drawable_size(drawable_size);
-            if caps.can_set_next_drawable_timeout {
-                let () = msg_send![*render_layer, setAllowsNextDrawableTimeout:false];
-            }
-            if caps.can_set_display_sync {
-                let () = msg_send![*render_layer, setDisplaySyncEnabled: display_sync];
-            }
-        };
+        render_layer.set_drawable_size(drawable_size);
+        if caps.can_set_next_drawable_timeout {
+            let () = msg_send![*render_layer, setAllowsNextDrawableTimeout:false];
+        }
+        if caps.can_set_display_sync {
+            let () = msg_send![*render_layer, setDisplaySyncEnabled: display_sync];
+        }
 
         Ok(())
     }
@@ -247,7 +236,6 @@ impl crate::Surface<super::Api> for super::Surface {
             let drawable = render_layer.next_drawable().unwrap();
             (drawable.to_owned(), drawable.texture().to_owned())
         });
-        let size = render_layer.drawable_size();
 
         let suf_texture = super::SurfaceTexture {
             texture: super::Texture {

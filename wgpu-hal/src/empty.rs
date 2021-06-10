@@ -236,13 +236,8 @@ impl crate::CommandBuffer<Api> for Encoder {
 
     unsafe fn fill_buffer(&mut self, buffer: &Resource, range: crate::MemoryRange, value: u8) {}
 
-    unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Resource, dst: &Resource, regions: T)
-    where
-        T: Iterator<Item = crate::BufferCopy>,
-    {
-    }
+    unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
 
-    /// Note: `dst` current usage has to be `TextureUse::COPY_DST`.
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &Resource,
@@ -252,7 +247,6 @@ impl crate::CommandBuffer<Api> for Encoder {
     ) {
     }
 
-    /// Note: `dst` current usage has to be `TextureUse::COPY_DST`.
     unsafe fn copy_buffer_to_texture<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
 
     unsafe fn copy_texture_to_buffer<T>(

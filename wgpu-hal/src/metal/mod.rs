@@ -68,7 +68,9 @@ impl crate::Instance<Api> for Instance {
         }
     }
 
-    unsafe fn destroy_surface(&self, surface: Surface) {}
+    unsafe fn destroy_surface(&self, surface: Surface) {
+        surface.dispose();
+    }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
         let devices = mtl::Device::all();
@@ -224,30 +226,31 @@ impl AdapterShared {
         }
     }
 
-    fn create_command_buffer(&self) -> &mtl::CommandBufferRef {
+    fn create_command_buffer(&self) -> mtl::CommandBuffer {
         let queue = self.queue.lock();
-        objc::rc::autoreleasepool(|| {
-            if self.settings.retain_command_buffer_references {
+        objc::rc::autoreleasepool(move || {
+            let cmd_buf_ref = if self.settings.retain_command_buffer_references {
                 queue.new_command_buffer()
             } else {
                 queue.new_command_buffer_with_unretained_references()
-            }
+            };
+            cmd_buf_ref.to_owned()
         })
     }
 }
 
-struct Adapter {
+pub struct Adapter {
     shared: Arc<AdapterShared>,
 }
 
-struct Queue {}
+pub struct Queue {}
 
-struct Device {
+pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
 }
 
-struct Surface {
+pub struct Surface {
     view: Option<NonNull<objc::runtime::Object>>,
     render_layer: Mutex<mtl::MetalLayer>,
     raw_swapchain_format: mtl::MTLPixelFormat,
@@ -258,7 +261,7 @@ struct Surface {
 }
 
 #[derive(Debug)]
-struct SurfaceTexture {
+pub struct SurfaceTexture {
     texture: Texture,
     drawable: mtl::MetalDrawable,
     present_with_transaction: bool,
@@ -321,6 +324,7 @@ unsafe impl Sync for Texture {}
 #[derive(Debug)]
 pub struct TextureView {
     raw: mtl::Texture,
+    aspects: crate::FormatAspect,
 }
 
 unsafe impl Send for TextureView {}
@@ -408,7 +412,7 @@ type MultiStageResourceCounters = MultiStageData<ResourceData<ResourceIndex>>;
 #[derive(Debug)]
 struct BindGroupLayoutInfo {
     base_resource_indices: MultiStageResourceCounters,
-    dynamic_buffers: Vec<MultiStageData<ResourceIndex>>,
+    //dynamic_buffers: Vec<MultiStageData<ResourceIndex>>,
     sized_buffer_bindings: Vec<(u32, wgt::ShaderStage)>,
 }
 
@@ -435,7 +439,6 @@ trait AsNative {
 type BufferPtr = NonNull<mtl::MTLBuffer>;
 type TexturePtr = NonNull<mtl::MTLTexture>;
 type SamplerPtr = NonNull<mtl::MTLSamplerState>;
-type ResourcePtr = NonNull<mtl::MTLResource>;
 
 impl AsNative for BufferPtr {
     type Native = mtl::BufferRef;
@@ -477,6 +480,7 @@ impl AsNative for SamplerPtr {
 struct BufferResource {
     ptr: BufferPtr,
     offset: wgt::BufferAddress,
+    dynamic_index: Option<u32>,
 }
 
 #[derive(Debug, Default)]
@@ -502,21 +506,7 @@ struct PipelineStageInfo {
     sized_bindings: Vec<naga::ResourceBinding>,
 }
 
-impl PipelineStageInfo {
-    fn clear(&mut self) {
-        self.push_constants = None;
-        self.sizes_slot = None;
-        self.sized_bindings.clear();
-    }
-
-    fn assign_from(&mut self, other: &Self) {
-        self.push_constants = other.push_constants;
-        self.sizes_slot = other.sizes_slot;
-        self.sized_bindings.clear();
-        self.sized_bindings.extend_from_slice(&other.sized_bindings);
-    }
-}
-
+#[allow(dead_code)] // silence xx_lib and xx_info warnings
 pub struct RenderPipeline {
     raw: mtl::RenderPipelineState,
     vs_lib: mtl::Library,
@@ -527,10 +517,10 @@ pub struct RenderPipeline {
     raw_front_winding: mtl::MTLWinding,
     raw_cull_mode: mtl::MTLCullMode,
     raw_depth_clip_mode: Option<mtl::MTLDepthClipMode>,
-    raw_depth_stencil: Option<mtl::DepthStencilState>,
-    depth_bias: wgt::DepthBiasState,
+    depth_stencil: Option<(mtl::DepthStencilState, wgt::DepthBiasState)>,
 }
 
+#[allow(dead_code)] // silence xx_lib and xx_info warnings
 pub struct ComputePipeline {
     raw: mtl::ComputePipelineState,
     cs_lib: mtl::Library,
@@ -541,6 +531,7 @@ pub struct ComputePipeline {
 #[derive(Debug)]
 pub struct QuerySet {
     raw_buffer: mtl::Buffer,
+    ty: wgt::QueryType,
 }
 
 unsafe impl Send for QuerySet {}
@@ -555,6 +546,19 @@ pub struct Fence {
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
+struct IndexState {
+    buffer_ptr: BufferPtr,
+    offset: wgt::BufferAddress,
+    stride: wgt::BufferAddress,
+    raw_type: mtl::MTLIndexType,
+}
+
 pub struct CommandBuffer {
     raw: mtl::CommandBuffer,
+    blit: Option<mtl::BlitCommandEncoder>,
+    render: Option<mtl::RenderCommandEncoder>,
+    compute: Option<mtl::ComputeCommandEncoder>,
+    raw_primitive_type: mtl::MTLPrimitiveType,
+    index_state: Option<IndexState>,
+    raw_wg_size: mtl::MTLSize,
 }
