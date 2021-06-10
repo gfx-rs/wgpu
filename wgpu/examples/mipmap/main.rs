@@ -77,12 +77,10 @@ impl Example {
         texture: &wgpu::Texture,
         query_sets: &Option<QuerySets>,
         mip_count: u32,
-        shader_flags: wgpu::ShaderFlags,
     ) {
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
-            flags: shader_flags,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -206,7 +204,7 @@ impl framework::Example for Example {
 
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        adapter: &wgpu::Adapter,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -249,11 +247,7 @@ impl framework::Example for Example {
                     rows_per_image: None,
                 },
             },
-            wgpu::ImageCopyTexture {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-            },
+            texture.as_image_copy(),
             texture_extent,
         );
 
@@ -277,17 +271,9 @@ impl framework::Example for Example {
         });
 
         // Create the render pipeline
-        let mut flags = wgpu::ShaderFlags::VALIDATION;
-        match adapter.get_info().backend {
-            wgpu::Backend::Metal | wgpu::Backend::Vulkan => {
-                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION
-            }
-            _ => (), //TODO
-        }
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
-            flags,
         });
 
         let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -387,7 +373,6 @@ impl framework::Example for Example {
             &texture,
             &query_sets,
             MIP_LEVEL_COUNT,
-            flags,
         );
 
         queue.submit(Some(init_encoder.finish()));

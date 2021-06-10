@@ -48,6 +48,7 @@ version = "0.8"
 path = "../wgpu-hal"
 package = "wgpu-hal"
 version = "0.1"
+features = ["empty"]
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["metal"] }

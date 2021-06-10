@@ -31,27 +31,17 @@ impl framework::Example for Example {
     /// constructs initial instance of Example struct
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        adapter: &wgpu::Adapter,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        // load and compile the shader
-        let mut flags = wgpu::ShaderFlags::VALIDATION;
-        match adapter.get_info().backend {
-            wgt::Backend::Vulkan | wgt::Backend::Metal | wgt::Backend::Gl => {
-                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION;
-            }
-            _ => {} //TODO
-        }
         let compute_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("compute.wgsl"))),
-            flags,
         });
         let draw_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
-            flags,
         });
 
         // buffer for simulation parameters uniform

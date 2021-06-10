@@ -113,7 +113,7 @@ impl framework::Example for Example {
 
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        adapter: &wgpu::Adapter,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -184,11 +184,7 @@ impl framework::Example for Example {
         });
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         queue.write_texture(
-            wgpu::ImageCopyTexture {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-            },
+            texture.as_image_copy(),
             &texels,
             wgpu::ImageDataLayout {
                 offset: 0,
@@ -223,17 +219,9 @@ impl framework::Example for Example {
             label: None,
         });
 
-        let mut flags = wgpu::ShaderFlags::VALIDATION;
-        match adapter.get_info().backend {
-            wgpu::Backend::Metal | wgpu::Backend::Vulkan | wgpu::Backend::Gl => {
-                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION
-            }
-            _ => (), //TODO
-        }
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-            flags,
         });
 
         let vertex_buffers = [wgpu::VertexBufferLayout {

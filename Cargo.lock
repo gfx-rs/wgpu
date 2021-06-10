@@ -1916,6 +1916,7 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "bitflags",
+ "block",
  "foreign-types",
  "log",
  "metal",

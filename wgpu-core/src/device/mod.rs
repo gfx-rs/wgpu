@@ -32,6 +32,7 @@ pub const SHADER_STAGE_COUNT: usize = 3;
 const CLEANUP_WAIT_MS: u32 = 5000;
 
 const IMPLICIT_FAILURE: &str = "failed implicit";
+const EP_FAILURE: &str = "EP is invalid";
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 
@@ -1719,6 +1720,9 @@ impl<A: HalApi> Device<A> {
                     hal::PipelineError::Linkage(_stages, msg) => {
                         pipeline::CreateComputePipelineError::Internal(msg)
                     }
+                    hal::PipelineError::EntryPoint(_stage) => {
+                        pipeline::CreateComputePipelineError::Internal(EP_FAILURE.to_string())
+                    }
                 },
             )?;
 
@@ -2096,6 +2100,12 @@ impl<A: HalApi> Device<A> {
                     }
                     hal::PipelineError::Linkage(stage, msg) => {
                         pipeline::CreateRenderPipelineError::Internal { stage, error: msg }
+                    }
+                    hal::PipelineError::EntryPoint(stage) => {
+                        pipeline::CreateRenderPipelineError::Internal {
+                            stage: hal::aux::map_naga_stage(stage),
+                            error: EP_FAILURE.to_string(),
+                        }
                     }
                 },
             )?;

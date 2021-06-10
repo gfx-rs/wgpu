@@ -212,6 +212,9 @@ struct AdapterShared {
     settings: Settings,
 }
 
+unsafe impl Send for AdapterShared {}
+unsafe impl Sync for AdapterShared {}
+
 impl AdapterShared {
     fn new(device: mtl::Device) -> Self {
         let private_caps = PrivateCapabilities::new(&device);
@@ -243,7 +246,9 @@ pub struct Adapter {
     shared: Arc<AdapterShared>,
 }
 
-pub struct Queue {}
+pub struct Queue {
+    shared: Arc<AdapterShared>,
+}
 
 pub struct Device {
     shared: Arc<AdapterShared>,
@@ -259,6 +264,9 @@ pub struct Surface {
     // window resizing.
     pub present_with_transaction: bool,
 }
+
+unsafe impl Send for Surface {}
+unsafe impl Sync for Surface {}
 
 #[derive(Debug)]
 pub struct SurfaceTexture {
@@ -280,15 +288,58 @@ impl crate::Queue<Api> for Queue {
     unsafe fn submit<I>(
         &mut self,
         command_buffers: I,
-        signal_fence: Option<(&Fence, crate::FenceValue)>,
-    ) -> Result<(), crate::DeviceError> {
+        signal_fence: Option<(&mut Fence, crate::FenceValue)>,
+    ) -> Result<(), crate::DeviceError>
+    where
+        I: Iterator<Item = CommandBuffer>,
+    {
+        objc::rc::autoreleasepool(|| {
+            for cmd_buffer in command_buffers {
+                cmd_buffer.raw.commit();
+            }
+
+            //TODO: add the handler to the last command buffer in the list
+            // instead of committing an extra one
+            if let Some((fence, value)) = signal_fence {
+                let completed_value = Arc::clone(&fence.completed_value);
+                let block = block::ConcreteBlock::new(move |_cmd_buf| {
+                    completed_value.store(value, atomic::Ordering::Release);
+                })
+                .copy();
+
+                let raw = self.shared.create_command_buffer();
+                raw.set_label("_Signal");
+                raw.add_completed_handler(&block);
+                raw.commit();
+
+                fence.update();
+                fence.pending_command_buffers.push((value, raw.to_owned()));
+            }
+        });
         Ok(())
     }
     unsafe fn present(
         &mut self,
-        surface: &mut Surface,
+        _surface: &mut Surface,
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
+        let queue = self.shared.queue.lock();
+        objc::rc::autoreleasepool(|| {
+            let command_buffer = queue.new_command_buffer();
+            command_buffer.set_label("_Present");
+
+            // https://developer.apple.com/documentation/quartzcore/cametallayer/1478157-presentswithtransaction?language=objc
+            if !texture.present_with_transaction {
+                command_buffer.present_drawable(&texture.drawable);
+            }
+
+            command_buffer.commit();
+
+            if texture.present_with_transaction {
+                command_buffer.wait_until_scheduled();
+                texture.drawable.present();
+            }
+        });
         Ok(())
     }
 }
@@ -520,6 +571,9 @@ pub struct RenderPipeline {
     depth_stencil: Option<(mtl::DepthStencilState, wgt::DepthBiasState)>,
 }
 
+unsafe impl Send for RenderPipeline {}
+unsafe impl Sync for RenderPipeline {}
+
 #[allow(dead_code)] // silence xx_lib and xx_info warnings
 pub struct ComputePipeline {
     raw: mtl::ComputePipelineState,
@@ -527,6 +581,9 @@ pub struct ComputePipeline {
     cs_info: PipelineStageInfo,
     work_group_size: mtl::MTLSize,
 }
+
+unsafe impl Send for ComputePipeline {}
+unsafe impl Sync for ComputePipeline {}
 
 #[derive(Debug)]
 pub struct QuerySet {
@@ -539,12 +596,30 @@ unsafe impl Sync for QuerySet {}
 
 #[derive(Debug)]
 pub struct Fence {
-    completed_value: atomic::AtomicU64,
+    completed_value: Arc<atomic::AtomicU64>,
     pending_command_buffers: Vec<(crate::FenceValue, mtl::CommandBuffer)>,
 }
 
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
+
+impl Fence {
+    fn get_latest(&self) -> crate::FenceValue {
+        let mut max_value = self.completed_value.load(atomic::Ordering::Acquire);
+        for &(value, ref cmd_buf) in self.pending_command_buffers.iter() {
+            if cmd_buf.status() == mtl::MTLCommandBufferStatus::Completed {
+                max_value = value;
+            }
+        }
+        max_value
+    }
+
+    fn update(&mut self) {
+        let latest = self.get_latest();
+        self.pending_command_buffers
+            .retain(|&(value, _)| value > latest);
+    }
+}
 
 struct IndexState {
     buffer_ptr: BufferPtr,
@@ -561,4 +636,9 @@ pub struct CommandBuffer {
     raw_primitive_type: mtl::MTLPrimitiveType,
     index_state: Option<IndexState>,
     raw_wg_size: mtl::MTLSize,
+    max_buffers_per_stage: u32,
+    disabilities: PrivateDisabilities,
 }
+
+unsafe impl Send for CommandBuffer {}
+unsafe impl Sync for CommandBuffer {}

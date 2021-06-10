@@ -87,12 +87,14 @@ impl<A: hal::Api> QueryResetMap<A> {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SimplifiedQueryType {
+    Occlusion,
     Timestamp,
     PipelineStatistics,
 }
 impl From<wgt::QueryType> for SimplifiedQueryType {
     fn from(q: wgt::QueryType) -> Self {
         match q {
+            wgt::QueryType::Occlusion => SimplifiedQueryType::Occlusion,
             wgt::QueryType::Timestamp => SimplifiedQueryType::Timestamp,
             wgt::QueryType::PipelineStatistics(..) => SimplifiedQueryType::PipelineStatistics,
         }

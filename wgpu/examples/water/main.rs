@@ -263,7 +263,7 @@ impl Example {
 impl framework::Example for Example {
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        adapter: &wgpu::Adapter,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -486,22 +486,13 @@ impl framework::Example for Example {
         });
 
         // Upload/compile them to GPU code.
-        let mut flags = wgpu::ShaderFlags::VALIDATION;
-        match adapter.get_info().backend {
-            wgpu::Backend::Metal | wgpu::Backend::Vulkan => {
-                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION
-            }
-            _ => (), //TODO
-        }
         let terrain_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: Some("terrain"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("terrain.wgsl"))),
-            flags,
         });
         let water_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: Some("water"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("water.wgsl"))),
-            flags,
         });
 
         // Create the render pipelines. These describe how the data will flow through the GPU, and what

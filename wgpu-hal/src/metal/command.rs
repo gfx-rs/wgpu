@@ -470,11 +470,51 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
         index: u32,
         binding: crate::BufferBinding<'a, super::Api>,
     ) {
+        let buffer_index = self.max_buffers_per_stage as u64 - 1 - index as u64;
+        let encoder = self.render.as_ref().unwrap();
+        encoder.set_vertex_buffer(buffer_index, Some(&binding.buffer.raw), binding.offset);
     }
-    unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {}
-    unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {}
-    unsafe fn set_stencil_reference(&mut self, value: u32) {}
-    unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {}
+
+    unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {
+        let zfar = if self.disabilities.broken_viewport_near_depth {
+            depth_range.end - depth_range.start
+        } else {
+            depth_range.end
+        };
+        let encoder = self.render.as_ref().unwrap();
+        encoder.set_viewport(mtl::MTLViewport {
+            originX: rect.x as _,
+            originY: rect.y as _,
+            width: rect.w as _,
+            height: rect.h as _,
+            znear: depth_range.start as _,
+            zfar: zfar as _,
+        });
+    }
+    unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {
+        //TODO: support empty scissors by modifying the viewport
+        let scissor = mtl::MTLScissorRect {
+            x: rect.x as _,
+            y: rect.y as _,
+            width: rect.w as _,
+            height: rect.h as _,
+        };
+        let encoder = self.render.as_ref().unwrap();
+        encoder.set_scissor_rect(scissor);
+    }
+    unsafe fn set_stencil_reference(&mut self, value: u32) {
+        let encoder = self.render.as_ref().unwrap();
+        encoder.set_stencil_front_back_reference_value(value, value);
+    }
+    unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {
+        let encoder = self.render.as_ref().unwrap();
+        encoder.set_blend_color(
+            color.r as f32,
+            color.g as f32,
+            color.b as f32,
+            color.a as f32,
+        );
+    }
 
     unsafe fn draw(
         &mut self,
@@ -607,9 +647,12 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self) {
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
         self.leave_blit();
         let encoder = self.raw.new_compute_command_encoder();
+        if let Some(label) = desc.label {
+            encoder.set_label(label);
+        }
         self.compute = Some(encoder.to_owned());
     }
     unsafe fn end_compute_pass(&mut self) {

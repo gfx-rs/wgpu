@@ -22,7 +22,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 shared: Arc::clone(&self.shared),
                 features,
             },
-            queue: super::Queue {},
+            queue: super::Queue {
+                shared: Arc::clone(&self.shared),
+            },
         })
     }
 

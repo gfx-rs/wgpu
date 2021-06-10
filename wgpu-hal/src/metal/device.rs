@@ -266,7 +266,7 @@ impl crate::Device<super::Api> for super::Device {
                 None => texture.array_layers - desc.range.base_array_layer,
             };
 
-            texture.raw.new_texture_view_from_slice(
+            let raw = texture.raw.new_texture_view_from_slice(
                 raw_format,
                 raw_type,
                 mtl::NSRange {
@@ -277,7 +277,11 @@ impl crate::Device<super::Api> for super::Device {
                     location: desc.range.base_array_layer as _,
                     length: array_layer_count as _,
                 },
-            )
+            );
+            if let Some(label) = desc.label {
+                raw.set_label(label);
+            }
+            raw
         };
 
         let aspects = crate::FormatAspect::from(desc.format);
@@ -327,6 +331,9 @@ impl crate::Device<super::Api> for super::Device {
             descriptor.set_border_color(conv::map_border_color(border_color));
         }
 
+        if let Some(label) = desc.label {
+            descriptor.set_label(label);
+        }
         let raw = self.shared.device.lock().new_sampler(&descriptor);
 
         Ok(super::Sampler { raw })
@@ -350,6 +357,8 @@ impl crate::Device<super::Api> for super::Device {
             raw_primitive_type: mtl::MTLPrimitiveType::Point,
             index_state: None,
             raw_wg_size: mtl::MTLSize::new(0, 0, 0),
+            max_buffers_per_stage: self.shared.private_caps.max_buffers_per_stage,
+            disabilities: self.shared.disabilities.clone(),
         })
     }
     unsafe fn destroy_command_buffer(&self, _cmd_buf: super::CommandBuffer) {}
@@ -807,6 +816,7 @@ impl crate::Device<super::Api> for super::Device {
             naga::ShaderStage::Compute,
         )?;
         descriptor.set_compute_function(Some(&cs.function));
+
         if let Some(name) = desc.label {
             descriptor.set_label(name);
         }
@@ -861,7 +871,7 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn create_fence(&self) -> DeviceResult<super::Fence> {
         Ok(super::Fence {
-            completed_value: atomic::AtomicU64::new(0),
+            completed_value: Arc::new(atomic::AtomicU64::new(0)),
             pending_command_buffers: Vec::new(),
         })
     }

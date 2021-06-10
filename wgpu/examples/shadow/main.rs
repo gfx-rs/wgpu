@@ -215,7 +215,7 @@ impl framework::Example for Example {
 
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        adapter: &wgpu::Adapter,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
@@ -440,17 +440,9 @@ impl framework::Example for Example {
             attributes: &vertex_attr,
         };
 
-        let mut flags = wgpu::ShaderFlags::VALIDATION;
-        match adapter.get_info().backend {
-            wgpu::Backend::Metal | wgpu::Backend::Vulkan => {
-                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION;
-            }
-            _ => (), //TODO
-        }
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-            flags,
         });
 
         let shadow_pass = {

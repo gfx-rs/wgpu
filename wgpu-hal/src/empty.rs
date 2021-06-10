@@ -92,7 +92,7 @@ impl crate::Queue<Api> for Context {
     unsafe fn submit<I>(
         &mut self,
         command_buffers: I,
-        signal_fence: Option<(&Resource, crate::FenceValue)>,
+        signal_fence: Option<(&mut Resource, crate::FenceValue)>,
     ) -> DeviceResult<()> {
         Ok(())
     }
@@ -364,7 +364,7 @@ impl crate::CommandBuffer<Api> for Encoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self) {}
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {}
     unsafe fn end_compute_pass(&mut self) {}
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}

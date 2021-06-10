@@ -64,7 +64,6 @@ async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
     let cs_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        flags: wgpu::ShaderFlags::all(),
     });
 
     // Gets the size in bytes of the buffer.

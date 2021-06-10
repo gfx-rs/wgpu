@@ -91,10 +91,7 @@ impl<A: hal::Api> Example<A> {
         };
         let shader_desc = hal::ShaderModuleDescriptor { label: None };
         let shader = unsafe {
-            match device.create_shader_module(&shader_desc, naga_shader) {
-                Ok(shader) => shader,
-                Err((error, _shader)) => panic!("{}", error),
-            }
+            device.create_shader_module(&shader_desc, naga_shader).unwrap()
         };
 
         let global_bgl_desc = hal::BindGroupLayoutDescriptor {
@@ -379,10 +376,10 @@ impl<A: hal::Api> Example<A> {
         };
 
         unsafe {
-            let fence = device.create_fence().unwrap();
+            let mut fence = device.create_fence().unwrap();
             init_cmd.finish();
             queue
-                .submit(iter::once(init_cmd), Some((&fence, 1)))
+                .submit(iter::once(init_cmd), Some((&mut fence, 1)))
                 .unwrap();
             device.wait(&fence, 1, !0).unwrap();
             device.destroy_fence(fence);
@@ -528,6 +525,9 @@ impl<A: hal::Api> Example<A> {
     }
 }
 
+#[cfg(feature = "metal")]
+type Api = hal::api::Metal;
+
 fn main() {
     let event_loop = winit::event_loop::EventLoop::new();
     let window = winit::window::WindowBuilder::new()
@@ -535,10 +535,7 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    #[cfg(feature = "metal")]
-    let example_result = Example::<hal::api::Metal>::init(&window);
-    #[cfg(not(any(feature = "metal")))]
-    let example_result = Example::<hal::api::Empty>::init(&window);
+    let example_result = Example::<Api>::init(&window);
     let mut example = example_result.expect("Selected backend is not supported");
 
     let mut last_frame_inst = Instant::now();

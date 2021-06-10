@@ -37,11 +37,13 @@
 )]
 
 pub mod aux;
-pub mod empty;
+#[cfg(feature = "empty")]
+mod empty;
 #[cfg(feature = "metal")]
 mod metal;
 
 pub mod api {
+    #[cfg(feature = "empty")]
     pub use super::empty::Api as Empty;
     #[cfg(feature = "metal")]
     pub use super::metal::Api as Metal;
@@ -128,15 +130,15 @@ pub trait Api: Clone + Sized {
     type QuerySet: fmt::Debug + Send + Sync;
     type Fence: fmt::Debug + Send + Sync;
 
-    type BindGroupLayout;
+    type BindGroupLayout: Send + Sync;
     type BindGroup: fmt::Debug + Send + Sync;
-    type PipelineLayout;
+    type PipelineLayout: Send + Sync;
     type ShaderModule: fmt::Debug + Send + Sync;
-    type RenderPipeline;
-    type ComputePipeline;
+    type RenderPipeline: Send + Sync;
+    type ComputePipeline: Send + Sync;
 }
 
-pub trait Instance<A: Api>: Sized {
+pub trait Instance<A: Api>: Sized + Send + Sync {
     unsafe fn init() -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
@@ -146,7 +148,7 @@ pub trait Instance<A: Api>: Sized {
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
 }
 
-pub trait Surface<A: Api> {
+pub trait Surface<A: Api>: Send + Sync {
     unsafe fn configure(
         &mut self,
         device: &A::Device,
@@ -163,7 +165,7 @@ pub trait Surface<A: Api> {
     unsafe fn discard_texture(&mut self, texture: A::SurfaceTexture);
 }
 
-pub trait Adapter<A: Api> {
+pub trait Adapter<A: Api>: Send + Sync {
     unsafe fn open(&self, features: wgt::Features) -> Result<OpenDevice<A>, DeviceError>;
     unsafe fn close(&self, device: A::Device);
 
@@ -179,7 +181,7 @@ pub trait Adapter<A: Api> {
     unsafe fn surface_capabilities(&self, surface: &A::Surface) -> Option<SurfaceCapabilities>;
 }
 
-pub trait Device<A: Api> {
+pub trait Device<A: Api>: Send + Sync {
     /// Creates a new buffer.
     ///
     /// The initial usage is `BufferUse::empty()`.
@@ -275,12 +277,14 @@ pub trait Device<A: Api> {
     unsafe fn stop_capture(&self);
 }
 
-pub trait Queue<A: Api> {
-    unsafe fn submit<I: Iterator<Item = A::CommandBuffer>>(
+pub trait Queue<A: Api>: Send + Sync {
+    unsafe fn submit<I>(
         &mut self,
         command_buffers: I,
-        signal_fence: Option<(&A::Fence, FenceValue)>,
-    ) -> Result<(), DeviceError>;
+        signal_fence: Option<(&mut A::Fence, FenceValue)>,
+    ) -> Result<(), DeviceError>
+    where
+        I: Iterator<Item = A::CommandBuffer>;
     unsafe fn present(
         &mut self,
         surface: &mut A::Surface,
@@ -288,9 +292,7 @@ pub trait Queue<A: Api> {
     ) -> Result<(), SurfaceError>;
 }
 
-pub trait SwapChain<A: Api> {}
-
-pub trait CommandBuffer<A: Api> {
+pub trait CommandBuffer<A: Api>: Send + Sync {
     unsafe fn finish(&mut self);
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
@@ -437,7 +439,7 @@ pub trait CommandBuffer<A: Api> {
     // compute passes
 
     // Begins a compute pass, clears all active bindings.
-    unsafe fn begin_compute_pass(&mut self);
+    unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor);
     unsafe fn end_compute_pass(&mut self);
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &A::ComputePipeline);
@@ -986,6 +988,11 @@ pub struct RenderPassDescriptor<'a, A: Api> {
     pub label: Label<'a>,
     pub color_attachments: &'a [ColorAttachment<'a, A>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ComputePassDescriptor<'a> {
+    pub label: Label<'a>,
 }
 
 #[test]

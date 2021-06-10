@@ -52,7 +52,6 @@ macro_rules! include_spirv {
             $crate::ShaderModuleDescriptor {
                 label: Some($($token)*),
                 source: $crate::util::make_spirv(include_bytes!($($token)*)),
-                flags: $crate::ShaderFlags::VALIDATION,
             }
         }
     };
@@ -67,7 +66,6 @@ macro_rules! include_wgsl {
             $crate::ShaderModuleDescriptor {
                 label: Some($($token)*),
                 source: $crate::ShaderSource::Wgsl(include_str!($($token)*).into()),
-                flags: $crate::ShaderFlags::all(),
             }
         }
     };
