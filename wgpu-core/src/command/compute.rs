@@ -290,12 +290,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if let Some(ref label) = base.label {
-            unsafe {
-                raw.begin_debug_marker(label);
-            }
-        }
-
         let (_, mut token) = hub.render_bundles.read(&mut token);
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
@@ -314,6 +308,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut dynamic_offset_count = 0;
         let mut string_offset = 0;
         let mut active_query = None;
+
+        let hal_desc = hal::ComputePassDescriptor { label: base.label };
+        unsafe {
+            raw.begin_compute_pass(&hal_desc);
+        }
 
         for command in base.commands {
             match *command {
@@ -659,10 +658,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        if let Some(_) = base.label {
-            unsafe {
-                raw.end_debug_marker();
-            }
+        unsafe {
+            raw.end_compute_pass();
         }
         cmd_buf.status = CommandEncoderStatus::Recording;
 

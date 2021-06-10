@@ -10,7 +10,7 @@ impl super::CommandBuffer {
         self.blit.as_ref().unwrap()
     }
 
-    fn leave_blit(&mut self) {
+    pub(super) fn leave_blit(&mut self) {
         if let Some(encoder) = self.blit.take() {
             encoder.end_encoding();
         }
@@ -22,11 +22,7 @@ impl super::CommandBuffer {
         } else if let Some(ref encoder) = self.compute {
             encoder
         } else {
-            if self.blit.is_none() {
-                debug_assert!(self.render.is_none() && self.compute.is_none());
-                self.blit = Some(self.raw.new_blit_command_encoder().to_owned());
-            }
-            self.blit.as_ref().unwrap()
+            self.enter_blit()
         }
     }
 }

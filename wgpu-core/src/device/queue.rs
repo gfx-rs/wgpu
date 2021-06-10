@@ -68,9 +68,9 @@ impl<A: hal::Api> PendingWrites<A> {
     }
 
     pub fn dispose(self, device: &A::Device) {
-        if let Some(raw) = self.command_buffer {
+        if let Some(cmd_buf) = self.command_buffer {
             unsafe {
-                device.destroy_command_buffer(raw);
+                device.destroy_command_buffer(cmd_buf);
             }
         }
         for resource in self.temp_resources {
@@ -91,6 +91,7 @@ impl<A: hal::Api> PendingWrites<A> {
 
     fn consume(&mut self, stage: StagingData<A>) {
         self.temp_resources.push(TempResource::Buffer(stage.buffer));
+        assert!(self.command_buffer.is_none());
         self.command_buffer = Some(stage.cmdbuf);
     }
 

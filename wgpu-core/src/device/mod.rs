@@ -3448,6 +3448,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device.features,
                 #[cfg(feature = "trace")]
                 device.trace.is_some(),
+                #[cfg(debug_assertions)]
                 &desc.label,
             );
 
@@ -4412,14 +4413,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     #[cfg(feature = "trace")]
                     if let Some(ref trace) = device.trace {
                         let mut trace = trace.lock();
-                        let size = sub_range.size_to(buffer.size);
+                        let size = range.end - range.start;
                         let data = trace.make_binary("bin", unsafe {
                             std::slice::from_raw_parts(ptr.as_ptr(), size as usize)
                         });
                         trace.add(trace::Action::WriteBuffer {
                             id: buffer_id,
                             data,
-                            range: sub_range.offset..sub_range.offset + size,
+                            range: range.clone(),
                             queued: false,
                         });
                     }

@@ -361,7 +361,9 @@ impl crate::Device<super::Api> for super::Device {
             disabilities: self.shared.disabilities.clone(),
         })
     }
-    unsafe fn destroy_command_buffer(&self, _cmd_buf: super::CommandBuffer) {}
+    unsafe fn destroy_command_buffer(&self, mut cmd_buf: super::CommandBuffer) {
+        cmd_buf.leave_blit();
+    }
 
     unsafe fn create_bind_group_layout(
         &self,

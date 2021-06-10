@@ -269,6 +269,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .take()
                 .ok_or(SwapChainError::AlreadyAcquired)?;
             let (view_maybe, _) = hub.texture_views.unregister(view_id.value.0, &mut token);
+            drop(view_id); // contains the ref count
             let view = view_maybe.ok_or(SwapChainError::Invalid)?;
             if view.life_guard.ref_count.unwrap().load() != 1 {
                 return Err(SwapChainError::StillReferenced);

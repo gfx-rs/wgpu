@@ -70,7 +70,6 @@ impl<A: HalApi> CommandBuffer<A> {
         #[cfg(feature = "trace")] enable_tracing: bool,
         #[cfg(debug_assertions)] label: &Label,
     ) -> Self {
-        use crate::LabelHelpers as _;
         CommandBuffer {
             raw: vec![raw],
             status: CommandEncoderStatus::Recording,
@@ -89,7 +88,7 @@ impl<A: HalApi> CommandBuffer<A> {
                 None
             },
             #[cfg(debug_assertions)]
-            label: label.borrow_or_default().to_string(),
+            label: crate::LabelHelpers::borrow_or_default(label).to_string(),
         }
     }
 
