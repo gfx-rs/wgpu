@@ -586,8 +586,8 @@ bitflags::bitflags! {
 
 #[derive(Clone, Debug)]
 pub struct InstanceDescriptor<'a> {
-    name: &'a str,
-    flags: InstanceFlag,
+    pub name: &'a str,
+    pub flags: InstanceFlag,
 }
 
 #[derive(Clone, Debug)]
@@ -879,16 +879,16 @@ pub enum CompositeAlphaMode {
     /// constant alpha of 1.0.
     Opaque,
     /// The alpha channel, if it exists, of the textures is respected in the
+    /// compositing process. The non-alpha channels of the textures are
+    /// expected to already be multiplied by the alpha channel by the
+    /// application.
+    PreMultiplied,
+    /// The alpha channel, if it exists, of the textures is respected in the
     /// compositing process. The non-alpha channels of the textures are not
     /// expected to already be multiplied by the alpha channel by the
     /// application; instead, the compositor will multiply the non-alpha
     /// channels of the texture by the alpha channel during compositing.
-    Alpha,
-    /// The alpha channel, if it exists, of the textures is respected in the
-    /// compositing process. The non-alpha channels of the textures are
-    /// expected to already be multiplied by the alpha channel by the
-    /// application.
-    PremultipliedAlpha,
+    PostMultiplied,
 }
 
 #[derive(Debug, Clone)]

@@ -51,7 +51,7 @@ impl PhysicalDeviceFeatures {
         enabled_extensions: &[&'static CStr],
         requested_features: wgt::Features,
         downlevel_flags: wgt::DownlevelFlags,
-        supports_vulkan12_imageless_framebuffer: bool,
+        private_caps: &super::PrivateCapabilities,
     ) -> Self {
         // This must follow the "Valid Usage" requirements of [`VkDeviceCreateInfo`](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkDeviceCreateInfo.html).
         Self {
@@ -142,7 +142,7 @@ impl PhysicalDeviceFeatures {
                             requested_features.contains(wgt::Features::UNSIZED_BINDING_ARRAY),
                         )
                         //.sampler_filter_minmax(requested_features.contains(wgt::Features::SAMPLER_REDUCTION))
-                        .imageless_framebuffer(supports_vulkan12_imageless_framebuffer)
+                        .imageless_framebuffer(private_caps.imageless_framebuffers)
                         .build(),
                 )
             } else {
@@ -535,6 +535,29 @@ impl super::Instance {
                 .get_physical_device_queue_family_properties(phd)
         };
 
+        let private_caps = super::PrivateCapabilities {
+            flip_y_requires_shift: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
+                || phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name()),
+            imageless_framebuffers: phd_features
+                .vulkan_1_2
+                .map_or(false, |features| features.imageless_framebuffer == vk::TRUE)
+                || phd_capabilities.supports_extension(vk::KhrImagelessFramebufferFn::name()),
+            image_view_usage: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
+                || phd_capabilities.supports_extension(vk::KhrMaintenance2Fn::name()),
+            texture_d24: self
+                .shared
+                .raw
+                .get_physical_device_format_properties(phd, vk::Format::X8_D24_UNORM_PACK32)
+                .optimal_tiling_features
+                .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT),
+            texture_d24_s8: self
+                .shared
+                .raw
+                .get_physical_device_format_properties(phd, vk::Format::D24_UNORM_S8_UINT)
+                .optimal_tiling_features
+                .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT),
+        };
+
         let adapter = super::Adapter {
             raw: phd,
             instance: Arc::clone(&self.shared),
@@ -548,6 +571,7 @@ impl super::Instance {
             phd_features,
             available_features,
             downlevel_flags,
+            private_caps,
         };
 
         let capabilities = crate::Capabilities {
@@ -607,11 +631,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 })
         };
 
-        let supports_vulkan12_imageless_framebuffer = self
-            .phd_features
-            .vulkan_1_2
-            .map_or(false, |features| features.imageless_framebuffer == vk::TRUE);
-
         // Create device
         let raw_device = {
             let family_info = vk::DeviceQueueCreateInfo::builder()
@@ -633,7 +652,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     &enabled_extensions,
                     features,
                     self.downlevel_flags,
-                    supports_vulkan12_imageless_framebuffer,
+                    &self.private_caps,
                 );
             let mut info = vk::DeviceCreateInfo::builder()
                 .queue_create_infos(&family_infos)
@@ -688,6 +707,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             swapchain_fn,
         };
 
+        log::info!("Private capabilities: {:?}", self.private_caps);
+
         let device = super::Device {
             shared: Arc::new(super::DeviceShared {
                 raw: raw_device,
@@ -697,20 +718,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 },
                 features,
                 vendor_id: self.phd_capabilities.properties.vendor_id,
-                flip_y_requires_shift: self.phd_capabilities.properties.api_version
-                    >= vk::API_VERSION_1_1
-                    || self
-                        .phd_capabilities
-                        .supports_extension(vk::KhrMaintenance1Fn::name()),
-                imageless_framebuffers: supports_vulkan12_imageless_framebuffer
-                    || self
-                        .phd_capabilities
-                        .supports_extension(vk::KhrImagelessFramebufferFn::name()),
-                image_view_usage: self.phd_capabilities.properties.api_version
-                    >= vk::API_VERSION_1_1
-                    || self
-                        .phd_capabilities
-                        .supports_extension(vk::KhrMaintenance2Fn::name()),
+                private_caps: self.private_caps.clone(),
                 timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
             }),
             valid_ash_memory_types,
@@ -822,8 +830,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let formats = supported_formats
             .iter()
             .cloned()
-            .filter(|format| {
-                let vk_format = conv::map_texture_format(format);
+            .filter(|&format| {
+                let vk_format = self.private_caps.map_texture_format(format);
                 raw_surface_formats
                     .iter()
                     .any(|sf| sf.format == vk_format || sf.format == vk::Format::UNDEFINED)
@@ -838,7 +846,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             usage: conv::map_vk_image_usage(caps.supported_usage_flags),
             present_modes: raw_present_modes
                 .into_iter()
-                .map(conv::map_vk_present_mode)
+                .flat_map(conv::map_vk_present_mode)
                 .collect(),
             composite_alpha_modes: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
         })

@@ -295,7 +295,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             },
             composite_alpha_modes: vec![
                 crate::CompositeAlphaMode::Opaque,
-                crate::CompositeAlphaMode::Alpha,
+                crate::CompositeAlphaMode::PreMultiplied,
+                crate::CompositeAlphaMode::PostMultiplied,
             ],
 
             current_extent,

@@ -35,9 +35,19 @@ pub struct Instance {
 
 impl Instance {
     pub fn new(name: &str, backends: BackendBit) -> Self {
+        let mut flags = hal::InstanceFlag::empty();
+        if cfg!(debug_assertions) {
+            flags |= hal::InstanceFlag::VALIDATION;
+            flags |= hal::InstanceFlag::DEBUG;
+        }
+        let hal_desc = hal::InstanceDescriptor {
+            name: "wgpu",
+            flags,
+        };
+
         let map = |backend: Backend| unsafe {
             if backends.contains(backend.into()) {
-                hal::Instance::init().ok()
+                hal::Instance::init(&hal_desc).ok()
             } else {
                 None
             }

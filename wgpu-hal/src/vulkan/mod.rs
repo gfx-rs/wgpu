@@ -2,6 +2,7 @@
 
 mod adapter;
 mod conv;
+mod device;
 mod instance;
 
 use ash::{extensions::khr, vk};
@@ -104,6 +105,7 @@ pub struct Adapter {
     phd_features: adapter::PhysicalDeviceFeatures,
     available_features: wgt::Features,
     downlevel_flags: wgt::DownlevelFlags,
+    private_caps: PrivateCapabilities,
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.
@@ -128,19 +130,28 @@ struct DeviceExtensionFunctions {
     draw_indirect_count: Option<ExtensionFn<khr::DrawIndirectCount>>,
 }
 
+/// Set of internal capabilities, which don't show up in the exposed
+/// device geometry, but affect the code paths taken internally.
+#[derive(Clone, Debug)]
+struct PrivateCapabilities {
+    /// Y-flipping is implemented with either `VK_AMD_negative_viewport_height` or `VK_KHR_maintenance1`/1.1+. The AMD extension for negative viewport height does not require a Y shift.
+    ///
+    /// This flag is `true` if the device has `VK_KHR_maintenance1`/1.1+ and `false` otherwise (i.e. in the case of `VK_AMD_negative_viewport_height`).
+    flip_y_requires_shift: bool,
+    imageless_framebuffers: bool,
+    image_view_usage: bool,
+    texture_d24: bool,
+    texture_d24_s8: bool,
+}
+
 struct DeviceShared {
     raw: ash::Device,
     instance: Arc<InstanceShared>,
     extension_fns: DeviceExtensionFunctions,
     features: wgt::Features,
     vendor_id: u32,
-    /// The `hal::Features::NDC_Y_UP` flag is implemented with either `VK_AMD_negative_viewport_height` or `VK_KHR_maintenance1`/1.1+. The AMD extension for negative viewport height does not require a Y shift.
-    ///
-    /// This flag is `true` if the device has `VK_KHR_maintenance1`/1.1+ and `false` otherwise (i.e. in the case of `VK_AMD_negative_viewport_height`).
-    flip_y_requires_shift: bool,
-    imageless_framebuffers: bool,
-    image_view_usage: bool,
     timestamp_period: f32,
+    private_caps: PrivateCapabilities,
 }
 
 pub struct Device {
@@ -180,6 +191,7 @@ impl crate::Queue<Api> for Queue {
     }
 }
 
+pub struct Context;
 impl crate::Device<Api> for Context {
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
