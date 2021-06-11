@@ -67,6 +67,6 @@ validate-wgsl: $(SNAPSHOTS_OUT)/*.wgsl
 validate-hlsl: $(SNAPSHOTS_OUT)/*.hlsl
 	@set -e && for file in $(SNAPSHOTS_OUT)/*.Compute.hlsl ; do \
 		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/"};\
-		dxc $${file} -T cs_6_0;\
+		dxc $${file} -T cs_5_0;\
 	done
 

@@ -251,8 +251,13 @@ fn main() {
             }
             "hlsl" => {
                 use naga::back::hlsl;
-
-                let hlsl = hlsl::write_string(&module).unwrap_pretty();
+                // TODO: Get `ShaderModel` from user
+                let hlsl = hlsl::write_string(
+                    &module,
+                    info.as_ref().unwrap(),
+                    hlsl::ShaderModel::default(),
+                )
+                .unwrap_pretty();
                 fs::write(output_path, hlsl).unwrap();
             }
             "wgsl" => {
