@@ -48,9 +48,11 @@ impl crate::Api for Api {
 pub struct Instance {}
 
 impl crate::Instance<Api> for Instance {
-    unsafe fn init() -> Result<Self, crate::InstanceError> {
+    unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        //TODO: enable `METAL_DEVICE_WRAPPER_TYPE` environment based on the flags?
         Ok(Instance {})
     }
+
     unsafe fn create_surface(
         &self,
         has_handle: &impl raw_window_handle::HasRawWindowHandle,

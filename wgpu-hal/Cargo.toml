@@ -13,24 +13,30 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = []
-empty = []
-metal = ["block", "foreign-types", "mtl", "objc", "parking_lot", "naga/msl-out"]
+metal = ["naga/msl-out", "block", "foreign-types", "mtl", "objc", "parking_lot"]
+vulkan = ["naga/spv-out", "ash", "libloading", "inplace_it", "renderdoc-sys"]
 
 [dependencies]
-arrayvec = "0.5"
 bitflags = "1.0"
-fxhash = "0.2.1"
-log = "0.4"
-parking_lot = { version = "0.11", optional = true }
 raw-window-handle = "0.3"
 thiserror = "1"
 wgt = { package = "wgpu-types", path = "../wgpu-types" }
 
-# backends
+# backends common
+arrayvec = "0.5"
+fxhash = "0.2.1"
+libloading = { version = "0.7", optional = true }
+log = "0.4"
+parking_lot = { version = "0.11", optional = true }
+# backend: Metal
 block = { version = "0.1", optional = true }
 foreign-types = { version = "0.3", optional = true }
 mtl = { package = "metal", version = "0.22", optional = true }
 objc = { version = "0.2.5", optional = true }
+# backend: Vulkan
+ash = { version = "0.32", optional = true }
+inplace_it = { version ="0.3.3", optional = true }
+renderdoc-sys = { version = "0.7.1", optional = true }
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"

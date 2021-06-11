@@ -152,6 +152,8 @@ impl<S> Default for RequestAdapterOptions<S> {
     }
 }
 
+//TODO: make robust resource access configurable
+
 bitflags::bitflags! {
     /// Features that are not guaranteed to be supported.
     ///

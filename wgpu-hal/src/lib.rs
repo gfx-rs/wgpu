@@ -41,13 +41,13 @@
 )]
 
 pub mod aux;
-#[cfg(feature = "empty")]
 mod empty;
 #[cfg(feature = "metal")]
 mod metal;
+#[cfg(feature = "vulkan")]
+mod vulkan;
 
 pub mod api {
-    #[cfg(feature = "empty")]
     pub use super::empty::Api as Empty;
     #[cfg(feature = "metal")]
     pub use super::metal::Api as Metal;
@@ -143,7 +143,7 @@ pub trait Api: Clone + Sized {
 }
 
 pub trait Instance<A: Api>: Sized + Send + Sync {
-    unsafe fn init() -> Result<Self, InstanceError>;
+    unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
         rwh: &impl raw_window_handle::HasRawWindowHandle,
@@ -453,6 +453,16 @@ pub trait CommandBuffer<A: Api>: Send + Sync {
 }
 
 bitflags!(
+    /// Instance initialization flags.
+    pub struct InstanceFlag: u32 {
+        /// Generate debug information in shaders and objects.
+        const DEBUG = 0x1;
+        /// Enable validation, if possible.
+        const VALIDATION = 0x2;
+    }
+);
+
+bitflags!(
     /// Texture format capability flags.
     pub struct TextureFormatCapability: u32 {
         /// Format can be sampled.
@@ -572,6 +582,12 @@ bitflags::bitflags! {
         const ORDERED = Self::READ_ALL.bits | Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits;
         const UNINITIALIZED = 0xFFFF;
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct InstanceDescriptor<'a> {
+    name: &'a str,
+    flags: InstanceFlag,
 }
 
 #[derive(Clone, Debug)]
