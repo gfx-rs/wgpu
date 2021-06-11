@@ -20,6 +20,7 @@ impl super::Swapchain {
 }
 
 impl super::Instance {
+    #[allow(dead_code)]
     fn create_surface_from_xlib(
         &self,
         dpy: *mut vk::Display,
@@ -43,6 +44,7 @@ impl super::Instance {
         self.create_surface_from_vk_surface_khr(surface)
     }
 
+    #[allow(dead_code)]
     fn create_surface_from_xcb(
         &self,
         connection: *mut vk::xcb_connection_t,
@@ -66,6 +68,7 @@ impl super::Instance {
         self.create_surface_from_vk_surface_khr(surface)
     }
 
+    #[allow(dead_code)]
     fn create_surface_from_wayland(
         &self,
         display: *mut c_void,
@@ -88,6 +91,7 @@ impl super::Instance {
         self.create_surface_from_vk_surface_khr(surface)
     }
 
+    #[allow(dead_code)]
     fn create_surface_android(&self, window: *const c_void) -> super::Surface {
         let surface = {
             let a_loader = khr::AndroidSurface::new(&self.entry, &self.shared.raw);
@@ -101,6 +105,7 @@ impl super::Instance {
         self.create_surface_from_vk_surface_khr(surface)
     }
 
+    #[allow(dead_code)]
     fn create_surface_from_hwnd(
         &self,
         hinstance: *mut c_void,
@@ -512,6 +517,7 @@ impl crate::Surface<super::Api> for super::Surface {
             texture: super::Texture {
                 raw: sc.images[index as usize],
                 block: None,
+                aspects: crate::FormatAspect::COLOR,
             },
         };
         Ok(Some(crate::AcquiredSurfaceTexture {

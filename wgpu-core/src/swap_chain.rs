@@ -174,6 +174,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             label: Some("_Frame"),
             format: sc.desc.format,
             dimension: wgt::TextureViewDimension::D2,
+            usage: hal::TextureUse::COLOR_TARGET,
             range: wgt::ImageSubresourceRange::default(),
         };
 

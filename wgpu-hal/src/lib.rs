@@ -12,7 +12,10 @@
  *  - Resource transitions are explicit.
  *  - All layouts are explicit. Binding model has compatibility.
  *
- *  General design direction: follow 2/3 major target APIs.
+ *  General design direction is to follow the majority by the following weights:
+ *  - wgpu-core: 1.5
+ *  - primary backends (Vulkan/Metal/DX12): 1.0 each
+ *  - secondary backends (DX11/GLES): 0.5 each
  */
 
 #![allow(
@@ -197,16 +200,12 @@ pub trait Device<A: Api>: Send + Sync {
         range: MemoryRange,
     ) -> Result<BufferMapping, DeviceError>;
     unsafe fn unmap_buffer(&self, buffer: &A::Buffer) -> Result<(), DeviceError>;
-    unsafe fn flush_mapped_ranges<I: Iterator<Item = MemoryRange>>(
-        &self,
-        buffer: &A::Buffer,
-        ranges: I,
-    );
-    unsafe fn invalidate_mapped_ranges<I: Iterator<Item = MemoryRange>>(
-        &self,
-        buffer: &A::Buffer,
-        ranges: I,
-    );
+    unsafe fn flush_mapped_ranges<I>(&self, buffer: &A::Buffer, ranges: I)
+    where
+        I: Iterator<Item = MemoryRange>;
+    unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &A::Buffer, ranges: I)
+    where
+        I: Iterator<Item = MemoryRange>;
 
     /// Creates a new texture.
     ///
@@ -696,11 +695,19 @@ pub struct TextureDescriptor<'a> {
     pub memory_flags: MemoryFlag,
 }
 
+/// TextureView descriptor.
+///
+/// Valid usage:
+///. - `format` has to be the same as `TextureDescriptor::format`
+///. - `dimension` has to be compatible with `TextureDescriptor::dimension`
+///. - `usage` has to be a subset of `TextureDescriptor::usage`
+///. - `range` has to be a subset of parent texture
 #[derive(Clone, Debug)]
 pub struct TextureViewDescriptor<'a> {
     pub label: Label<'a>,
     pub format: wgt::TextureFormat,
     pub dimension: wgt::TextureViewDimension,
+    pub usage: TextureUse,
     pub range: wgt::ImageSubresourceRange,
 }
 

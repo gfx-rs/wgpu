@@ -585,7 +585,6 @@ impl super::Instance {
                 | vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
             phd_capabilities,
             phd_features,
-            available_features,
             downlevel_flags,
             private_caps,
         };
@@ -750,6 +749,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 },
                 features,
                 vendor_id: self.phd_capabilities.properties.vendor_id,
+                downlevel_flags: self.downlevel_flags,
                 private_caps: self.private_caps.clone(),
                 timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
             }),

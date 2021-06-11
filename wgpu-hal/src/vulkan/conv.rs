@@ -1,4 +1,5 @@
 use ash::vk;
+use std::num::NonZeroU32;
 
 impl super::PrivateCapabilities {
     pub fn map_texture_format(&self, format: wgt::TextureFormat) -> vk::Format {
@@ -302,4 +303,78 @@ pub fn map_buffer_usage(usage: crate::BufferUse) -> vk::BufferUsageFlags {
         flags |= vk::BufferUsageFlags::INDIRECT_BUFFER;
     }
     flags
+}
+
+pub fn map_view_dimension(dim: wgt::TextureViewDimension) -> vk::ImageViewType {
+    match dim {
+        wgt::TextureViewDimension::D1 => vk::ImageViewType::TYPE_1D,
+        wgt::TextureViewDimension::D2 => vk::ImageViewType::TYPE_2D,
+        wgt::TextureViewDimension::D2Array => vk::ImageViewType::TYPE_2D_ARRAY,
+        wgt::TextureViewDimension::Cube => vk::ImageViewType::CUBE,
+        wgt::TextureViewDimension::CubeArray => vk::ImageViewType::CUBE_ARRAY,
+        wgt::TextureViewDimension::D3 => vk::ImageViewType::TYPE_3D,
+    }
+}
+
+pub fn map_subresource_range(
+    range: &wgt::ImageSubresourceRange,
+    texture_aspect: crate::FormatAspect,
+) -> vk::ImageSubresourceRange {
+    vk::ImageSubresourceRange {
+        aspect_mask: map_aspects(crate::FormatAspect::from(range.aspect) & texture_aspect),
+        base_mip_level: range.base_mip_level,
+        level_count: range
+            .mip_level_count
+            .map_or(vk::REMAINING_MIP_LEVELS, NonZeroU32::get),
+        base_array_layer: range.base_array_layer,
+        layer_count: range
+            .array_layer_count
+            .map_or(vk::REMAINING_ARRAY_LAYERS, NonZeroU32::get),
+    }
+}
+
+pub fn map_filter_mode(mode: wgt::FilterMode) -> vk::Filter {
+    match mode {
+        wgt::FilterMode::Nearest => vk::Filter::NEAREST,
+        wgt::FilterMode::Linear => vk::Filter::LINEAR,
+    }
+}
+
+pub fn map_mip_filter_mode(mode: wgt::FilterMode) -> vk::SamplerMipmapMode {
+    match mode {
+        wgt::FilterMode::Nearest => vk::SamplerMipmapMode::NEAREST,
+        wgt::FilterMode::Linear => vk::SamplerMipmapMode::LINEAR,
+    }
+}
+
+pub fn map_address_mode(mode: wgt::AddressMode) -> vk::SamplerAddressMode {
+    match mode {
+        wgt::AddressMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+        wgt::AddressMode::Repeat => vk::SamplerAddressMode::REPEAT,
+        wgt::AddressMode::MirrorRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
+        wgt::AddressMode::ClampToBorder => vk::SamplerAddressMode::CLAMP_TO_BORDER,
+        //wgt::AddressMode::MirrorClamp => vk::SamplerAddressMode::MIRROR_CLAMP_TO_EDGE,
+    }
+}
+
+pub fn map_border_color(border_color: wgt::SamplerBorderColor) -> vk::BorderColor {
+    match border_color {
+        wgt::SamplerBorderColor::TransparentBlack => vk::BorderColor::FLOAT_TRANSPARENT_BLACK,
+        wgt::SamplerBorderColor::OpaqueBlack => vk::BorderColor::FLOAT_OPAQUE_BLACK,
+        wgt::SamplerBorderColor::OpaqueWhite => vk::BorderColor::FLOAT_OPAQUE_WHITE,
+    }
+}
+
+pub fn map_comparison(fun: wgt::CompareFunction) -> vk::CompareOp {
+    use wgt::CompareFunction as Cf;
+    match fun {
+        Cf::Never => vk::CompareOp::NEVER,
+        Cf::Less => vk::CompareOp::LESS,
+        Cf::LessEqual => vk::CompareOp::LESS_OR_EQUAL,
+        Cf::Equal => vk::CompareOp::EQUAL,
+        Cf::GreaterEqual => vk::CompareOp::GREATER_OR_EQUAL,
+        Cf::Greater => vk::CompareOp::GREATER,
+        Cf::NotEqual => vk::CompareOp::NOT_EQUAL,
+        Cf::Always => vk::CompareOp::ALWAYS,
+    }
 }

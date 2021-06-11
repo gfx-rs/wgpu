@@ -165,6 +165,7 @@ pub struct Texture<A: hal::Api> {
     pub(crate) raw: Option<A::Texture>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) desc: wgt::TextureDescriptor<()>,
+    pub(crate) hal_usage: hal::TextureUse,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,

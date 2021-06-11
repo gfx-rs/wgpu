@@ -33,8 +33,8 @@ impl crate::Api for Api {
     type Buffer = Buffer;
     type Texture = Texture;
     type SurfaceTexture = SurfaceTexture;
-    type TextureView = Resource;
-    type Sampler = Resource;
+    type TextureView = TextureView;
+    type Sampler = Sampler;
     type QuerySet = Resource;
     type Fence = Resource;
 
@@ -46,21 +46,11 @@ impl crate::Api for Api {
     type ComputePipeline = Resource;
 }
 
-struct RenderDocEntry {
-    api: renderdoc_sys::RENDERDOC_API_1_4_1,
-    lib: libloading::Library,
-}
-
-unsafe impl Send for RenderDocEntry {}
-unsafe impl Sync for RenderDocEntry {}
-
 struct InstanceShared {
     raw: ash::Instance,
     flags: crate::InstanceFlag,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
-    //TODO
     //debug_messenger: Option<DebugMessenger>,
-    //render_doc_entry: Result<RenderDocEntry, String>,
 }
 
 pub struct Instance {
@@ -72,7 +62,6 @@ pub struct Instance {
 struct Swapchain {
     raw: vk::SwapchainKHR,
     functor: khr::Swapchain,
-    extent: vk::Extent3D,
     device: Arc<DeviceShared>,
     fence: vk::Fence,
     //semaphore: vk::Semaphore,
@@ -105,7 +94,6 @@ pub struct Adapter {
     known_memory_flags: vk::MemoryPropertyFlags,
     phd_capabilities: adapter::PhysicalDeviceCapabilities,
     phd_features: adapter::PhysicalDeviceFeatures,
-    available_features: wgt::Features,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
 }
@@ -116,16 +104,6 @@ enum ExtensionFn<T> {
     Extension(T),
     /// The extension was promoted to a core version of Vulkan and the functions on `ash`'s `DeviceV1_x` traits should be used.
     Promoted,
-}
-
-impl<T> ExtensionFn<T> {
-    /// Expect `self` to be `Self::Extension` and return the inner value.
-    fn unwrap_extension(&self) -> &T {
-        match *self {
-            Self::Extension(ref t) => t,
-            Self::Promoted => panic!(),
-        }
-    }
 }
 
 struct DeviceExtensionFunctions {
@@ -153,6 +131,7 @@ struct DeviceShared {
     features: wgt::Features,
     vendor_id: u32,
     timestamp_period: f32,
+    downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
 }
 
@@ -172,13 +151,24 @@ pub struct Queue {
 #[derive(Debug)]
 pub struct Buffer {
     raw: vk::Buffer,
-    block: gpu_alloc::MemoryBlock<vk::DeviceMemory>,
+    block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
 }
 
 #[derive(Debug)]
 pub struct Texture {
     raw: vk::Image,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    aspects: crate::FormatAspect,
+}
+
+#[derive(Debug)]
+pub struct TextureView {
+    raw: vk::ImageView,
+}
+
+#[derive(Debug)]
+pub struct Sampler {
+    raw: vk::Sampler,
 }
 
 impl crate::Queue<Api> for Queue {

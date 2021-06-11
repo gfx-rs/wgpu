@@ -513,6 +513,7 @@ impl<A: HalApi> Device<A> {
             return Err(resource::CreateTextureError::InvalidMipLevelCount(mips));
         }
 
+        let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into());
         let hal_desc = hal::TextureDescriptor {
             label: desc.label.borrow_option(),
             size: desc.size,
@@ -520,7 +521,7 @@ impl<A: HalApi> Device<A> {
             sample_count: desc.sample_count,
             dimension: desc.dimension,
             format: desc.format,
-            usage: conv::map_texture_usage(desc.usage, desc.format.into()),
+            usage: hal_usage,
             memory_flags: hal::MemoryFlag::empty(),
         };
         let raw = unsafe {
@@ -536,6 +537,7 @@ impl<A: HalApi> Device<A> {
                 ref_count: self.life_guard.add_ref(),
             },
             desc: desc.map_label(|_| ()),
+            hal_usage,
             format_features,
             full_range: TextureSelector {
                 levels: 0..desc.mip_level_count,
@@ -677,6 +679,7 @@ impl<A: HalApi> Device<A> {
             label: desc.label.borrow_option(),
             format,
             dimension: view_dim,
+            usage: texture.hal_usage, // pass-through
             range: desc.range.clone(),
         };
 
