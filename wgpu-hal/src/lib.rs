@@ -872,7 +872,7 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
 
 /// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
 /// compositing.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CompositeAlphaMode {
     /// The alpha channel, if it exists, of the textures is ignored in the
     /// compositing process. Instead, the textures is treated as if it has a

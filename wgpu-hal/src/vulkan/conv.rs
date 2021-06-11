@@ -157,6 +157,14 @@ pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> crate::TextureUse {
     bits
 }
 
+pub fn map_texture_dimension(dim: wgt::TextureDimension) -> vk::ImageType {
+    match dim {
+        wgt::TextureDimension::D1 => vk::ImageType::TYPE_1D,
+        wgt::TextureDimension::D2 => vk::ImageType::TYPE_2D,
+        wgt::TextureDimension::D3 => vk::ImageType::TYPE_3D,
+    }
+}
+
 pub fn map_index_format(index_format: wgt::IndexFormat) -> vk::IndexType {
     match index_format {
         wgt::IndexFormat::Uint16 => vk::IndexType::UINT16,
@@ -189,15 +197,22 @@ pub fn map_origin(origin: wgt::Origin3d, texture_dim: wgt::TextureDimension) -> 
     }
 }
 
-pub fn map_extent(extent: wgt::Extent3d, texture_dim: wgt::TextureDimension) -> vk::Extent3D {
-    vk::Extent3D {
-        width: extent.width,
-        height: extent.height,
-        depth: match texture_dim {
-            wgt::TextureDimension::D3 => extent.depth_or_array_layers,
-            _ => 1,
+pub fn map_extent(
+    extent: wgt::Extent3d,
+    texture_dim: wgt::TextureDimension,
+) -> (u32, vk::Extent3D) {
+    let (depth, array_layers) = match texture_dim {
+        wgt::TextureDimension::D3 => (extent.depth_or_array_layers, 1),
+        _ => (1, extent.depth_or_array_layers),
+    };
+    (
+        array_layers,
+        vk::Extent3D {
+            width: extent.width,
+            height: extent.height,
+            depth,
         },
-    }
+    )
 }
 
 pub fn map_attachment_ops(
@@ -261,4 +276,30 @@ pub fn map_vk_composite_alpha(flags: vk::CompositeAlphaFlagsKHR) -> Vec<crate::C
         modes.push(crate::CompositeAlphaMode::PreMultiplied);
     }
     modes
+}
+
+pub fn map_buffer_usage(usage: crate::BufferUse) -> vk::BufferUsageFlags {
+    let mut flags = vk::BufferUsageFlags::empty();
+    if usage.contains(crate::BufferUse::COPY_SRC) {
+        flags |= vk::BufferUsageFlags::TRANSFER_SRC;
+    }
+    if usage.contains(crate::BufferUse::COPY_DST) {
+        flags |= vk::BufferUsageFlags::TRANSFER_DST;
+    }
+    if usage.contains(crate::BufferUse::UNIFORM) {
+        flags |= vk::BufferUsageFlags::UNIFORM_BUFFER;
+    }
+    if usage.intersects(crate::BufferUse::STORAGE_LOAD | crate::BufferUse::STORAGE_STORE) {
+        flags |= vk::BufferUsageFlags::STORAGE_BUFFER;
+    }
+    if usage.contains(crate::BufferUse::INDEX) {
+        flags |= vk::BufferUsageFlags::INDEX_BUFFER;
+    }
+    if usage.contains(crate::BufferUse::VERTEX) {
+        flags |= vk::BufferUsageFlags::VERTEX_BUFFER;
+    }
+    if usage.contains(crate::BufferUse::INDIRECT) {
+        flags |= vk::BufferUsageFlags::INDIRECT_BUFFER;
+    }
+    flags
 }

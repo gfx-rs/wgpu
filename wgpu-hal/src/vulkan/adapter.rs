@@ -5,10 +5,12 @@ use ash::{
     version::{DeviceV1_0, InstanceV1_0},
     vk,
 };
+use parking_lot::Mutex;
 
 use std::{ffi::CStr, mem, ptr, sync::Arc};
 
-const fn indexing_features() -> wgt::Features {
+//TODO: const fn?
+fn indexing_features() -> wgt::Features {
     wgt::Features::UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING
         | wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
         | wgt::Features::STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING
@@ -29,18 +31,21 @@ unsafe impl Sync for PhysicalDeviceFeatures {}
 
 impl PhysicalDeviceFeatures {
     /// Add the members of `self` into `info.enabled_features` and its `p_next` chain.
-    fn add_to_device_create_builder<'a>(&'a mut self, info: &mut vk::DeviceCreateInfoBuilder<'a>) {
-        *info = info.enabled_features(&self.core);
-
+    fn add_to_device_create_builder<'a>(
+        &'a mut self,
+        mut info: vk::DeviceCreateInfoBuilder<'a>,
+    ) -> vk::DeviceCreateInfoBuilder<'a> {
+        info = info.enabled_features(&self.core);
         if let Some(ref mut feature) = self.vulkan_1_2 {
-            *info = info.push_next(feature);
+            info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.descriptor_indexing {
-            *info = info.push_next(feature);
+            info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.imageless_framebuffer {
-            *info = info.push_next(feature);
+            info = info.push_next(feature);
         }
+        info
     }
 
     /// Create a `PhysicalDeviceFeatures` that will be used to create a logical device.
@@ -499,7 +504,7 @@ impl super::Instance {
             backend: wgt::Backend::Vulkan,
         };
 
-        let (mut available_features, downlevel_flags) = phd_features.to_wgpu(&phd_capabilities);
+        let (available_features, downlevel_flags) = phd_features.to_wgpu(&phd_capabilities);
         {
             use crate::aux::db;
             // see https://github.com/gfx-rs/gfx/issues/1930
@@ -544,18 +549,29 @@ impl super::Instance {
                 || phd_capabilities.supports_extension(vk::KhrImagelessFramebufferFn::name()),
             image_view_usage: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance2Fn::name()),
-            texture_d24: self
-                .shared
-                .raw
-                .get_physical_device_format_properties(phd, vk::Format::X8_D24_UNORM_PACK32)
-                .optimal_tiling_features
-                .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT),
-            texture_d24_s8: self
-                .shared
-                .raw
-                .get_physical_device_format_properties(phd, vk::Format::D24_UNORM_S8_UINT)
-                .optimal_tiling_features
-                .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT),
+            texture_d24: unsafe {
+                self.shared
+                    .raw
+                    .get_physical_device_format_properties(phd, vk::Format::X8_D24_UNORM_PACK32)
+                    .optimal_tiling_features
+                    .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
+            },
+            texture_d24_s8: unsafe {
+                self.shared
+                    .raw
+                    .get_physical_device_format_properties(phd, vk::Format::D24_UNORM_S8_UINT)
+                    .optimal_tiling_features
+                    .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
+            },
+        };
+
+        let capabilities = crate::Capabilities {
+            limits: phd_capabilities.to_wgpu_limits(),
+            alignments: phd_capabilities.to_hal_alignments(),
+            downlevel: wgt::DownlevelCapabilities {
+                flags: downlevel_flags,
+                shader_model: wgt::ShaderModel::Sm5, //TODO?
+            },
         };
 
         let adapter = super::Adapter {
@@ -572,15 +588,6 @@ impl super::Instance {
             available_features,
             downlevel_flags,
             private_caps,
-        };
-
-        let capabilities = crate::Capabilities {
-            limits: phd_capabilities.to_wgpu_limits(),
-            alignments: phd_capabilities.to_hal_alignments(),
-            downlevel: wgt::DownlevelCapabilities {
-                flags: downlevel_flags,
-                shader_model: wgt::ShaderModel::Sm5, //TODO?
-            },
         };
 
         Some(crate::ExposedAdapter {
@@ -614,22 +621,19 @@ impl crate::Adapter<super::Api> for super::Adapter {
             supported_extensions
         };
 
-        let valid_ash_memory_types = {
-            let mem_properties = self
-                .instance
-                .raw
-                .get_physical_device_memory_properties(self.raw);
-            mem_properties.memory_types[..mem_properties.memory_type_count as usize]
-                .iter()
-                .enumerate()
-                .fold(0, |u, (i, mem)| {
-                    if self.known_memory_flags.contains(mem.property_flags) {
-                        u | (1 << i)
-                    } else {
-                        u
-                    }
-                })
-        };
+        let mem_properties = self
+            .instance
+            .raw
+            .get_physical_device_memory_properties(self.raw);
+        let memory_types =
+            &mem_properties.memory_types[..mem_properties.memory_type_count as usize];
+        let valid_ash_memory_types = memory_types.iter().enumerate().fold(0, |u, (i, mem)| {
+            if self.known_memory_flags.contains(mem.property_flags) {
+                u | (1 << i)
+            } else {
+                u
+            }
+        });
 
         // Create device
         let raw_device = {
@@ -646,7 +650,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 })
                 .collect::<Vec<_>>();
 
-            let enabled_phd_features =
+            let mut enabled_phd_features =
                 PhysicalDeviceFeatures::from_extensions_and_requested_features(
                     self.phd_capabilities.properties.api_version,
                     &enabled_extensions,
@@ -654,10 +658,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     self.downlevel_flags,
                     &self.private_caps,
                 );
-            let mut info = vk::DeviceCreateInfo::builder()
+            let pre_info = vk::DeviceCreateInfo::builder()
                 .queue_create_infos(&family_infos)
                 .enabled_extension_names(&str_pointers);
-            enabled_phd_features.add_to_device_create_builder(&mut info);
+            let info = enabled_phd_features.add_to_device_create_builder(pre_info);
 
             self.instance.raw.create_device(self.raw, &info, None)?
         };
@@ -709,6 +713,34 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         log::info!("Private capabilities: {:?}", self.private_caps);
 
+        let mem_allocator = {
+            let limits = self.phd_capabilities.properties.limits;
+            let config = gpu_alloc::Config::i_am_prototyping(); //TODO
+            let properties = gpu_alloc::DeviceProperties {
+                max_memory_allocation_count: limits.max_memory_allocation_count,
+                max_memory_allocation_size: u64::max_value(), // TODO
+                non_coherent_atom_size: limits.non_coherent_atom_size,
+                memory_types: memory_types
+                    .iter()
+                    .map(|memory_type| gpu_alloc::MemoryType {
+                        props: gpu_alloc::MemoryPropertyFlags::from_bits_truncate(
+                            memory_type.property_flags.as_raw() as u8,
+                        ),
+                        heap: memory_type.heap_index,
+                    })
+                    .collect(),
+                memory_heaps: mem_properties.memory_heaps
+                    [..mem_properties.memory_heap_count as usize]
+                    .iter()
+                    .map(|&memory_heap| gpu_alloc::MemoryHeap {
+                        size: memory_heap.size,
+                    })
+                    .collect(),
+                buffer_device_address: false,
+            };
+            gpu_alloc::GpuAllocator::new(config, properties)
+        };
+
         let device = super::Device {
             shared: Arc::new(super::DeviceShared {
                 raw: raw_device,
@@ -721,6 +753,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 private_caps: self.private_caps.clone(),
                 timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
             }),
+            mem_allocator: Mutex::new(mem_allocator),
             valid_ash_memory_types,
             naga_options,
         };

@@ -194,7 +194,7 @@ impl super::Instance {
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        let entry = match unsafe { ash::Entry::new() } {
+        let entry = match ash::Entry::new() {
             Ok(entry) => entry,
             Err(err) => {
                 log::info!("Missing Vulkan entry points: {:?}", err);
@@ -282,10 +282,7 @@ impl crate::Instance<super::Api> for super::Instance {
             extensions.retain(|&ext| {
                 if instance_extensions
                     .iter()
-                    .find(|inst_ext| unsafe {
-                        CStr::from_ptr(inst_ext.extension_name.as_ptr()) == ext
-                    })
-                    .is_some()
+                    .any(|inst_ext| CStr::from_ptr(inst_ext.extension_name.as_ptr()) == ext)
                 {
                     true
                 } else {
@@ -314,10 +311,7 @@ impl crate::Instance<super::Api> for super::Instance {
             layers.retain(|&layer| {
                 if instance_layers
                     .iter()
-                    .find(|inst_layer| unsafe {
-                        CStr::from_ptr(inst_layer.layer_name.as_ptr()) == layer
-                    })
-                    .is_some()
+                    .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == layer)
                 {
                     true
                 } else {
@@ -430,7 +424,7 @@ impl crate::Instance<super::Api> for super::Instance {
     }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
-        let raw_devices = match unsafe { self.shared.raw.enumerate_physical_devices() } {
+        let raw_devices = match self.shared.raw.enumerate_physical_devices() {
             Ok(devices) => devices,
             Err(err) => {
                 log::error!("enumerate_adapters: {}", err);
@@ -517,9 +511,7 @@ impl crate::Surface<super::Api> for super::Surface {
             index,
             texture: super::Texture {
                 raw: sc.images[index as usize],
-                ty: vk::ImageType::TYPE_2D,
-                flags: vk::ImageCreateFlags::empty(),
-                extent: sc.extent,
+                block: None,
             },
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
