@@ -9,6 +9,7 @@ repository = "https://github.com/gfx-rs/naga"
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
 exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
+resolver = "2"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -26,7 +27,6 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 petgraph = { version ="0.5", optional = true }
 rose_tree = { version ="0.2", optional = true }
 pp-rs = { git = "https://github.com/Kangz/glslpp-rs.git", optional = true, rev = "c02476b" }
-#env_logger = "0.8" # uncomment temporarily for developing with the binary target
 
 [features]
 default = []
@@ -43,13 +43,13 @@ wgsl-in = ["codespan-reporting"]
 wgsl-out = []
 hlsl-out = []
 
-[[bin]]
-name = "naga"
-path = "bin/naga.rs"
-
 [dev-dependencies]
 diff = "0.1"
 ron = "0.6"
 serde = { version = "1.0", features = ["derive"] }
 spirv = { package = "spirv_headers", version = "1.5", features = ["deserialize"] }
 rspirv = "0.7"
+
+[workspace]
+members = [".", "cli"]
+default-members = ["cli"]
