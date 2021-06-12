@@ -1,9 +1,58 @@
 use super::conv;
 
 use ash::{extensions::khr, version::DeviceV1_0, vk};
+use inplace_it::inplace_or_alloc_from_iter;
 use parking_lot::Mutex;
 
-use std::{ptr::NonNull, sync::Arc};
+use std::{ptr, sync::Arc};
+
+impl super::DeviceShared {
+    unsafe fn set_object_name(
+        &self,
+        object_type: vk::ObjectType,
+        object: impl vk::Handle,
+        name: &str,
+    ) {
+        use std::ffi::CStr;
+
+        let extension = match self.instance.debug_utils {
+            Some(ref debug_utils) => &debug_utils.extension,
+            None => return,
+        };
+
+        // Keep variables outside the if-else block to ensure they do not
+        // go out of scope while we hold a pointer to them
+        let mut buffer: [u8; 64] = [0u8; 64];
+        let buffer_vec: Vec<u8>;
+
+        // Append a null terminator to the string
+        let name_bytes = if name.len() < buffer.len() {
+            // Common case, string is very small. Allocate a copy on the stack.
+            buffer.copy_from_slice(name.as_bytes());
+            // Add null terminator
+            buffer[name.len()] = 0;
+            &buffer[..name.len() + 1]
+        } else {
+            // Less common case, the string is large.
+            // This requires a heap allocation.
+            buffer_vec = name
+                .as_bytes()
+                .iter()
+                .cloned()
+                .chain(std::iter::once(0))
+                .collect();
+            &buffer_vec
+        };
+
+        let _result = extension.debug_utils_set_object_name(
+            self.raw.handle(),
+            &vk::DebugUtilsObjectNameInfoEXT::builder()
+                .object_type(object_type)
+                .object_handle(object.as_raw())
+                .object_name(CStr::from_bytes_with_nul_unchecked(name_bytes)),
+        );
+    }
+}
 
 impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
     unsafe fn allocate_memory(
@@ -46,15 +95,13 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
         memory: &mut vk::DeviceMemory,
         offset: u64,
         size: u64,
-    ) -> Result<NonNull<u8>, gpu_alloc::DeviceMapError> {
+    ) -> Result<ptr::NonNull<u8>, gpu_alloc::DeviceMapError> {
         match self
             .raw
             .map_memory(*memory, offset, size, vk::MemoryMapFlags::empty())
         {
-            Ok(ptr) => {
-                Ok(NonNull::new(ptr as *mut u8)
-                    .expect("Pointer to memory mapping must not be null"))
-            }
+            Ok(ptr) => Ok(ptr::NonNull::new(ptr as *mut u8)
+                .expect("Pointer to memory mapping must not be null")),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(gpu_alloc::DeviceMapError::OutOfDeviceMemory)
             }
@@ -212,6 +259,11 @@ impl crate::Device<super::Api> for super::Device {
             .raw
             .bind_buffer_memory(raw, *block.memory(), block.offset())?;
 
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::BUFFER, raw, label);
+        }
+
         Ok(super::Buffer {
             raw,
             block: Mutex::new(block),
@@ -254,7 +306,7 @@ impl crate::Device<super::Api> for super::Device {
                 .size(range.end - range.start)
                 .build()
         });
-        inplace_it::inplace_or_alloc_from_iter(vk_ranges, |array| {
+        inplace_or_alloc_from_iter(vk_ranges, |array| {
             self.shared.raw.flush_mapped_memory_ranges(array).unwrap()
         });
     }
@@ -270,7 +322,7 @@ impl crate::Device<super::Api> for super::Device {
                 .size(range.end - range.start)
                 .build()
         });
-        inplace_it::inplace_or_alloc_from_iter(vk_ranges, |array| {
+        inplace_or_alloc_from_iter(vk_ranges, |array| {
             self.shared
                 .raw
                 .invalidate_mapped_memory_ranges(array)
@@ -318,6 +370,11 @@ impl crate::Device<super::Api> for super::Device {
             .raw
             .bind_image_memory(raw, *block.memory(), block.offset())?;
 
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::IMAGE, raw, label);
+        }
+
         Ok(super::Texture {
             raw,
             block: Some(block),
@@ -353,6 +410,11 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         let raw = self.shared.raw.create_image_view(&vk_info, None)?;
+
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::IMAGE_VIEW, raw, label);
+        }
 
         Ok(super::TextureView { raw })
     }
@@ -398,6 +460,11 @@ impl crate::Device<super::Api> for super::Device {
 
         let raw = self.shared.raw.create_sampler(&vk_info, None)?;
 
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::SAMPLER, raw, label);
+        }
+
         Ok(super::Sampler { raw })
     }
     unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
@@ -415,17 +482,82 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
+    ) -> Result<super::BindGroupLayout, crate::DeviceError> {
+        //Note: not bothering with inplace_or_alloc_from_iter her as it's low frequency
+        let vk_bindings = desc
+            .entries
+            .iter()
+            .map(|entry| vk::DescriptorSetLayoutBinding {
+                binding: entry.binding,
+                descriptor_type: conv::map_binding_type(entry.ty),
+                descriptor_count: entry.count.map_or(1, |c| c.get()),
+                stage_flags: conv::map_shader_stage(entry.visibility),
+                p_immutable_samplers: ptr::null(),
+            })
+            .collect::<Vec<_>>();
+
+        let vk_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .flags(vk::DescriptorSetLayoutCreateFlags::empty())
+            .bindings(&vk_bindings);
+
+        let raw = self
+            .shared
+            .raw
+            .create_descriptor_set_layout(&vk_info, None)?;
+
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::DESCRIPTOR_SET_LAYOUT, raw, label);
+        }
+
+        Ok(super::BindGroupLayout { raw })
     }
-    unsafe fn destroy_bind_group_layout(&self, bg_layout: Resource) {}
+    unsafe fn destroy_bind_group_layout(&self, bg_layout: super::BindGroupLayout) {
+        self.shared
+            .raw
+            .destroy_descriptor_set_layout(bg_layout.raw, None);
+    }
+
     unsafe fn create_pipeline_layout(
         &self,
         desc: &crate::PipelineLayoutDescriptor<super::Api>,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
+    ) -> Result<super::PipelineLayout, crate::DeviceError> {
+        //Note: not bothering with inplace_or_alloc_from_iter her as it's low frequency
+        let vk_set_layouts = desc
+            .bind_group_layouts
+            .iter()
+            .map(|bgl| bgl.raw)
+            .collect::<Vec<_>>();
+        let vk_push_constant_ranges = desc
+            .push_constant_ranges
+            .iter()
+            .map(|pcr| vk::PushConstantRange {
+                stage_flags: conv::map_shader_stage(pcr.stages),
+                offset: pcr.range.start,
+                size: pcr.range.end - pcr.range.start,
+            })
+            .collect::<Vec<_>>();
+
+        let vk_info = vk::PipelineLayoutCreateInfo::builder()
+            .flags(vk::PipelineLayoutCreateFlags::empty())
+            .set_layouts(&vk_set_layouts)
+            .push_constant_ranges(&vk_push_constant_ranges);
+
+        let raw = self.shared.raw.create_pipeline_layout(&vk_info, None)?;
+
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::PIPELINE_LAYOUT, raw, label);
+        }
+
+        Ok(super::PipelineLayout { raw })
     }
-    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Resource) {}
+    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {
+        self.shared
+            .raw
+            .destroy_pipeline_layout(pipeline_layout.raw, None);
+    }
+
     unsafe fn create_bind_group(
         &self,
         desc: &crate::BindGroupDescriptor<super::Api>,

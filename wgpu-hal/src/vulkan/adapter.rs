@@ -194,6 +194,8 @@ impl PhysicalDeviceFeatures {
     fn to_wgpu(&self, caps: &PhysicalDeviceCapabilities) -> (wgt::Features, wgt::DownlevelFlags) {
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
+            | F::MAPPABLE_PRIMARY_BUFFERS
+            | F::PUSH_CONSTANTS
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::SAMPLED_TEXTURE_BINDING_ARRAY
             | F::BUFFER_BINDING_ARRAY;

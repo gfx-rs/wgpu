@@ -1,8 +1,9 @@
 use std::{
     cmp,
     ffi::{c_void, CStr, CString},
-    mem,
+    mem, slice,
     sync::Arc,
+    thread,
 };
 
 use ash::{
@@ -10,6 +11,104 @@ use ash::{
     version::{DeviceV1_0 as _, EntryV1_0 as _, InstanceV1_0 as _},
     vk,
 };
+
+unsafe extern "system" fn debug_utils_messenger_callback(
+    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    callback_data_ptr: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    _user_data: *mut c_void,
+) -> vk::Bool32 {
+    use std::borrow::Cow;
+    if thread::panicking() {
+        return vk::FALSE;
+    }
+
+    let message_severity = match message_severity {
+        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => log::Level::Error,
+        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::Level::Warn,
+        vk::DebugUtilsMessageSeverityFlagsEXT::INFO => log::Level::Info,
+        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::Level::Trace,
+        _ => log::Level::Warn,
+    };
+
+    let cd = &*callback_data_ptr;
+
+    let message_id_name = if cd.p_message_id_name.is_null() {
+        Cow::from("")
+    } else {
+        CStr::from_ptr(cd.p_message_id_name).to_string_lossy()
+    };
+
+    let message = if cd.p_message.is_null() {
+        Cow::from("")
+    } else {
+        CStr::from_ptr(cd.p_message).to_string_lossy()
+    };
+
+    log::log!(
+        message_severity,
+        "{:?} [{} (0x{:x})] : {}\n",
+        message_type,
+        message_id_name,
+        cd.message_id_number,
+        message
+    );
+
+    if cd.queue_label_count != 0 {
+        let labels = slice::from_raw_parts(cd.p_queue_labels, cd.queue_label_count as usize);
+        let names = labels
+            .iter()
+            .flat_map(|dul_obj| {
+                dul_obj
+                    .p_label_name
+                    .as_ref()
+                    .map(|lbl| CStr::from_ptr(lbl).to_string_lossy())
+            })
+            .collect::<Vec<_>>();
+        log::log!(message_severity, "\tqueues: {}\n", names.join(", "));
+    }
+
+    if cd.cmd_buf_label_count != 0 {
+        let labels = slice::from_raw_parts(cd.p_cmd_buf_labels, cd.cmd_buf_label_count as usize);
+        let names = labels
+            .iter()
+            .flat_map(|dul_obj| {
+                dul_obj
+                    .p_label_name
+                    .as_ref()
+                    .map(|lbl| CStr::from_ptr(lbl).to_string_lossy())
+            })
+            .collect::<Vec<_>>();
+        log::log!(
+            message_severity,
+            "\tcommand buffers: {}\n",
+            names.join(", ")
+        );
+    }
+
+    if cd.object_count != 0 {
+        let labels = slice::from_raw_parts(cd.p_objects, cd.object_count as usize);
+        //TODO: use color fields of `vk::DebugUtilsLabelExt`?
+        let names = labels
+            .iter()
+            .map(|obj_info| {
+                let name = obj_info
+                    .p_object_name
+                    .as_ref()
+                    .map(|name| CStr::from_ptr(name).to_string_lossy())
+                    .unwrap_or(Cow::Borrowed("?"));
+
+                format!(
+                    "(type: {:?}, hndl: 0x{:x}, name: {})",
+                    obj_info.object_type, obj_info.object_handle, name
+                )
+            })
+            .collect::<Vec<_>>();
+        log::log!(message_severity, "\tobjects: {}\n", names.join(", "));
+    }
+
+    vk::FALSE
+}
 
 impl super::Swapchain {
     unsafe fn release_resources(self, device: &ash::Device) -> Self {
@@ -275,7 +374,10 @@ impl crate::Instance<super::Api> for super::Instance {
                 extensions.push(ash::extensions::mvk::MacOSSurface::name());
             }
 
-            extensions.push(ext::DebugUtils::name());
+            if desc.flags.contains(crate::InstanceFlag::DEBUG) {
+                extensions.push(ext::DebugUtils::name());
+            }
+
             extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
 
             // VK_KHR_storage_buffer_storage_class required for `Naga` on Vulkan 1.0 devices
@@ -327,7 +429,7 @@ impl crate::Instance<super::Api> for super::Instance {
             layers
         };
 
-        let instance = {
+        let vk_instance = {
             let str_pointers = layers
                 .iter()
                 .chain(extensions.iter())
@@ -349,19 +451,40 @@ impl crate::Instance<super::Api> for super::Instance {
             })?
         };
 
+        let debug_utils = if extensions.contains(&ext::DebugUtils::name()) {
+            let extension = ext::DebugUtils::new(&entry, &vk_instance);
+            let vk_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+                .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
+                .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
+                .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
+                .pfn_user_callback(Some(debug_utils_messenger_callback));
+            let messenger = extension
+                .create_debug_utils_messenger(&vk_info, None)
+                .unwrap();
+            Some(super::DebugUtils {
+                extension,
+                messenger,
+            })
+        } else {
+            None
+        };
+
         let get_physical_device_properties = extensions
             .iter()
             .find(|&&ext| ext == vk::KhrGetPhysicalDeviceProperties2Fn::name())
             .map(|_| {
                 vk::KhrGetPhysicalDeviceProperties2Fn::load(|name| {
-                    mem::transmute(entry.get_instance_proc_addr(instance.handle(), name.as_ptr()))
+                    mem::transmute(
+                        entry.get_instance_proc_addr(vk_instance.handle(), name.as_ptr()),
+                    )
                 })
             });
 
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
-                raw: instance,
+                raw: vk_instance,
                 flags: desc.flags,
+                debug_utils,
                 get_physical_device_properties,
             }),
             extensions,

@@ -378,3 +378,39 @@ pub fn map_comparison(fun: wgt::CompareFunction) -> vk::CompareOp {
         Cf::Always => vk::CompareOp::ALWAYS,
     }
 }
+
+pub fn map_shader_stage(stage: wgt::ShaderStage) -> vk::ShaderStageFlags {
+    let mut flags = vk::ShaderStageFlags::empty();
+    if stage.contains(wgt::ShaderStage::VERTEX) {
+        flags |= vk::ShaderStageFlags::VERTEX;
+    }
+    if stage.contains(wgt::ShaderStage::FRAGMENT) {
+        flags |= vk::ShaderStageFlags::FRAGMENT;
+    }
+    if stage.contains(wgt::ShaderStage::COMPUTE) {
+        flags |= vk::ShaderStageFlags::COMPUTE;
+    }
+    flags
+}
+
+pub fn map_binding_type(ty: wgt::BindingType) -> vk::DescriptorType {
+    match ty {
+        wgt::BindingType::Buffer {
+            ty,
+            has_dynamic_offset,
+            ..
+        } => match ty {
+            wgt::BufferBindingType::Storage { .. } => match has_dynamic_offset {
+                true => vk::DescriptorType::STORAGE_BUFFER_DYNAMIC,
+                false => vk::DescriptorType::STORAGE_BUFFER,
+            },
+            wgt::BufferBindingType::Uniform => match has_dynamic_offset {
+                true => vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+                false => vk::DescriptorType::UNIFORM_BUFFER,
+            },
+        },
+        wgt::BindingType::Sampler { .. } => vk::DescriptorType::SAMPLER,
+        wgt::BindingType::Texture { .. } => vk::DescriptorType::SAMPLED_IMAGE,
+        wgt::BindingType::StorageTexture { .. } => vk::DescriptorType::STORAGE_IMAGE,
+    }
+}

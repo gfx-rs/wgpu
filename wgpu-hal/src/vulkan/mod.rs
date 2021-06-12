@@ -8,7 +8,10 @@ mod instance;
 
 use std::{borrow::Borrow, ffi::CStr, sync::Arc};
 
-use ash::{extensions::khr, vk};
+use ash::{
+    extensions::{ext, khr},
+    vk,
+};
 use parking_lot::Mutex;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
@@ -38,17 +41,23 @@ impl crate::Api for Api {
     type QuerySet = Resource;
     type Fence = Resource;
 
-    type BindGroupLayout = Resource;
+    type BindGroupLayout = BindGroupLayout;
     type BindGroup = Resource;
-    type PipelineLayout = Resource;
+    type PipelineLayout = PipelineLayout;
     type ShaderModule = Resource;
     type RenderPipeline = Resource;
     type ComputePipeline = Resource;
 }
 
+struct DebugUtils {
+    extension: ext::DebugUtils,
+    messenger: vk::DebugUtilsMessengerEXT,
+}
+
 struct InstanceShared {
     raw: ash::Instance,
     flags: crate::InstanceFlag,
+    debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
     //debug_messenger: Option<DebugMessenger>,
 }
@@ -169,6 +178,16 @@ pub struct TextureView {
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
+}
+
+#[derive(Debug)]
+pub struct BindGroupLayout {
+    raw: vk::DescriptorSetLayout,
+}
+
+#[derive(Debug)]
+pub struct PipelineLayout {
+    raw: vk::PipelineLayout,
 }
 
 impl crate::Queue<Api> for Queue {
