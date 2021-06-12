@@ -1365,8 +1365,8 @@ impl<W: Write> Writer<W> {
                 width: _,
                 ref value,
             } => {
-                if let Some(ref name) = constant.name {
-                    write!(self.out, "{}", name)?;
+                if constant.name.is_some() {
+                    write!(self.out, "{}", self.names[&NameKey::Constant(handle)])?;
                 } else {
                     self.write_scalar_value(*value)?;
                 }
