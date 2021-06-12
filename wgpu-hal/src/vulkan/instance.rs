@@ -503,6 +503,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 unix,
                 not(target_os = "android"),
                 not(target_os = "macos"),
+                not(target_os = "ios"),
                 not(target_os = "solaris")
             ))]
             RawWindowHandle::Wayland(handle)
@@ -514,6 +515,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 unix,
                 not(target_os = "android"),
                 not(target_os = "macos"),
+                not(target_os = "ios"),
                 not(target_os = "solaris")
             ))]
             RawWindowHandle::Xlib(handle)

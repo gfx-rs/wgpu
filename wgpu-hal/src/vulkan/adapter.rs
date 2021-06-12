@@ -741,6 +741,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             };
             gpu_alloc::GpuAllocator::new(config, properties)
         };
+        let desc_allocator = gpu_descriptor::DescriptorAllocator::new(0);
 
         let device = super::Device {
             shared: Arc::new(super::DeviceShared {
@@ -756,6 +757,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
             }),
             mem_allocator: Mutex::new(mem_allocator),
+            desc_allocator: Mutex::new(desc_allocator),
             valid_ash_memory_types,
             naga_options,
         };

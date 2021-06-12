@@ -1,5 +1,6 @@
 use super::conv;
 
+use arrayvec::ArrayVec;
 use ash::{extensions::khr, version::DeviceV1_0, vk};
 use inplace_it::inplace_or_alloc_from_iter;
 use parking_lot::Mutex;
@@ -131,6 +132,138 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
     ) -> Result<(), gpu_alloc::OutOfMemory> {
         // should never be called
         unimplemented!()
+    }
+}
+
+impl
+    gpu_descriptor::DescriptorDevice<vk::DescriptorSetLayout, vk::DescriptorPool, vk::DescriptorSet>
+    for super::DeviceShared
+{
+    unsafe fn create_descriptor_pool(
+        &self,
+        descriptor_count: &gpu_descriptor::DescriptorTotalCount,
+        max_sets: u32,
+        flags: gpu_descriptor::DescriptorPoolCreateFlags,
+    ) -> Result<vk::DescriptorPool, gpu_descriptor::CreatePoolError> {
+        //Note: ignoring other types, since they can't appear here
+        let unfiltered_counts = [
+            (vk::DescriptorType::SAMPLER, descriptor_count.sampler),
+            (
+                vk::DescriptorType::SAMPLED_IMAGE,
+                descriptor_count.sampled_image,
+            ),
+            (
+                vk::DescriptorType::STORAGE_IMAGE,
+                descriptor_count.storage_image,
+            ),
+            (
+                vk::DescriptorType::UNIFORM_BUFFER,
+                descriptor_count.uniform_buffer,
+            ),
+            (
+                vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+                descriptor_count.uniform_buffer_dynamic,
+            ),
+            (
+                vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count.storage_buffer,
+            ),
+            (
+                vk::DescriptorType::STORAGE_BUFFER_DYNAMIC,
+                descriptor_count.storage_buffer_dynamic,
+            ),
+        ];
+
+        let filtered_counts = unfiltered_counts
+            .iter()
+            .cloned()
+            .filter(|&(_, count)| count != 0)
+            .map(|(ty, count)| vk::DescriptorPoolSize {
+                ty,
+                descriptor_count: count,
+            })
+            .collect::<ArrayVec<[_; 8]>>();
+
+        let mut vk_flags = vk::DescriptorPoolCreateFlags::empty();
+        if flags.contains(gpu_descriptor::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET) {
+            vk_flags |= vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET;
+        }
+        let vk_info = vk::DescriptorPoolCreateInfo::builder()
+            .max_sets(max_sets)
+            .flags(vk_flags)
+            .pool_sizes(&filtered_counts)
+            .build();
+
+        match self.raw.create_descriptor_pool(&vk_info, None) {
+            Ok(pool) => Ok(pool),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(gpu_descriptor::CreatePoolError::OutOfHostMemory)
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(gpu_descriptor::CreatePoolError::OutOfDeviceMemory)
+            }
+            Err(vk::Result::ERROR_FRAGMENTATION) => {
+                Err(gpu_descriptor::CreatePoolError::Fragmentation)
+            }
+            Err(other) => {
+                log::error!("create_descriptor_pool: {:?}", other);
+                Err(gpu_descriptor::CreatePoolError::OutOfHostMemory)
+            }
+        }
+    }
+
+    unsafe fn destroy_descriptor_pool(&self, pool: vk::DescriptorPool) {
+        self.raw.destroy_descriptor_pool(pool, None)
+    }
+
+    unsafe fn alloc_descriptor_sets<'a>(
+        &self,
+        pool: &mut vk::DescriptorPool,
+        layouts: impl ExactSizeIterator<Item = &'a vk::DescriptorSetLayout>,
+        sets: &mut impl Extend<vk::DescriptorSet>,
+    ) -> Result<(), gpu_descriptor::DeviceAllocationError> {
+        let result = inplace_or_alloc_from_iter(layouts.cloned(), |layouts_slice| {
+            let vk_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(*pool)
+                .set_layouts(layouts_slice)
+                .build();
+            self.raw.allocate_descriptor_sets(&vk_info)
+        });
+
+        match result {
+            Ok(vk_sets) => {
+                sets.extend(vk_sets);
+                Ok(())
+            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY)
+            | Err(vk::Result::ERROR_OUT_OF_POOL_MEMORY) => {
+                Err(gpu_descriptor::DeviceAllocationError::OutOfHostMemory)
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(gpu_descriptor::DeviceAllocationError::OutOfDeviceMemory)
+            }
+            Err(vk::Result::ERROR_FRAGMENTED_POOL) => {
+                Err(gpu_descriptor::DeviceAllocationError::FragmentedPool)
+            }
+            Err(other) => {
+                log::error!("allocate_descriptor_sets: {:?}", other);
+                Err(gpu_descriptor::DeviceAllocationError::OutOfHostMemory)
+            }
+        }
+    }
+
+    unsafe fn dealloc_descriptor_sets<'a>(
+        &self,
+        pool: &mut vk::DescriptorPool,
+        sets: impl Iterator<Item = vk::DescriptorSet>,
+    ) {
+        let result = inplace_or_alloc_from_iter(sets, |sets_slice| {
+            self.raw.free_descriptor_sets(*pool, sets_slice)
+        });
+        match result {
+            Ok(()) => {}
+            Err(err) => log::error!("free_descriptor_sets: {:?}", err),
+        }
     }
 }
 
@@ -483,6 +616,42 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
     ) -> Result<super::BindGroupLayout, crate::DeviceError> {
+        let mut desc_count = gpu_descriptor::DescriptorTotalCount::default();
+        for entry in desc.entries {
+            let count = entry.count.map_or(1, |c| c.get());
+            match entry.ty {
+                wgt::BindingType::Buffer {
+                    ty,
+                    has_dynamic_offset,
+                    ..
+                } => match ty {
+                    wgt::BufferBindingType::Uniform => {
+                        if has_dynamic_offset {
+                            desc_count.uniform_buffer_dynamic += count;
+                        } else {
+                            desc_count.uniform_buffer += count;
+                        }
+                    }
+                    wgt::BufferBindingType::Storage { .. } => {
+                        if has_dynamic_offset {
+                            desc_count.storage_buffer_dynamic += count;
+                        } else {
+                            desc_count.storage_buffer += count;
+                        }
+                    }
+                },
+                wgt::BindingType::Sampler { .. } => {
+                    desc_count.sampler += count;
+                }
+                wgt::BindingType::Texture { .. } => {
+                    desc_count.sampled_image += count;
+                }
+                wgt::BindingType::StorageTexture { .. } => {
+                    desc_count.storage_image += count;
+                }
+            }
+        }
+
         //Note: not bothering with inplace_or_alloc_from_iter her as it's low frequency
         let vk_bindings = desc
             .entries
@@ -510,7 +679,7 @@ impl crate::Device<super::Api> for super::Device {
                 .set_object_name(vk::ObjectType::DESCRIPTOR_SET_LAYOUT, raw, label);
         }
 
-        Ok(super::BindGroupLayout { raw })
+        Ok(super::BindGroupLayout { raw, desc_count })
     }
     unsafe fn destroy_bind_group_layout(&self, bg_layout: super::BindGroupLayout) {
         self.shared
@@ -561,10 +730,23 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_bind_group(
         &self,
         desc: &crate::BindGroupDescriptor<super::Api>,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
+    ) -> Result<super::BindGroup, crate::DeviceError> {
+        let mut vk_sets = self.desc_allocator.lock().allocate(
+            &*self.shared,
+            &desc.layout.raw,
+            gpu_descriptor::DescriptorSetLayoutCreateFlags::empty(),
+            &desc.layout.desc_count,
+            1,
+        )?;
+        Ok(super::BindGroup {
+            raw: vk_sets.pop().unwrap(),
+        })
     }
-    unsafe fn destroy_bind_group(&self, group: Resource) {}
+    unsafe fn destroy_bind_group(&self, group: super::BindGroup) {
+        self.desc_allocator
+            .lock()
+            .free(&*self.shared, Some(group.raw));
+    }
 
     unsafe fn create_shader_module(
         &self,
@@ -627,7 +809,6 @@ impl From<gpu_alloc::AllocationError> for crate::DeviceError {
         }
     }
 }
-
 impl From<gpu_alloc::MapError> for crate::DeviceError {
     fn from(error: gpu_alloc::MapError) -> Self {
         use gpu_alloc::MapError as Me;
@@ -638,5 +819,11 @@ impl From<gpu_alloc::MapError> for crate::DeviceError {
                 Self::Lost
             }
         }
+    }
+}
+impl From<gpu_descriptor::AllocationError> for crate::DeviceError {
+    fn from(error: gpu_descriptor::AllocationError) -> Self {
+        log::error!("descriptor allocation: {:?}", error);
+        Self::OutOfMemory
     }
 }

@@ -75,7 +75,7 @@ impl crate::CommandBuffer<super::Api> for super::Encoder {
         &mut self,
         layout: &super::PipelineLayout,
         index: u32,
-        group: &Resource,
+        group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
     }

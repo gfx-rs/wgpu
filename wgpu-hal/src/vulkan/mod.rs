@@ -42,7 +42,7 @@ impl crate::Api for Api {
     type Fence = Resource;
 
     type BindGroupLayout = BindGroupLayout;
-    type BindGroup = Resource;
+    type BindGroup = BindGroup;
     type PipelineLayout = PipelineLayout;
     type ShaderModule = Resource;
     type RenderPipeline = Resource;
@@ -147,6 +147,8 @@ struct DeviceShared {
 pub struct Device {
     shared: Arc<DeviceShared>,
     mem_allocator: Mutex<gpu_alloc::GpuAllocator<vk::DeviceMemory>>,
+    desc_allocator:
+        Mutex<gpu_descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
     valid_ash_memory_types: u32,
     naga_options: naga::back::spv::Options,
 }
@@ -183,11 +185,17 @@ pub struct Sampler {
 #[derive(Debug)]
 pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,
+    desc_count: gpu_descriptor::DescriptorTotalCount,
 }
 
 #[derive(Debug)]
 pub struct PipelineLayout {
     raw: vk::PipelineLayout,
+}
+
+#[derive(Debug)]
+pub struct BindGroup {
+    raw: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
 }
 
 impl crate::Queue<Api> for Queue {

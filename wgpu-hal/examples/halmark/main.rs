@@ -52,8 +52,13 @@ struct Example<A: hal::Api> {
 
 impl<A: hal::Api> Example<A> {
     fn init(window: &winit::window::Window) -> Result<Self, hal::InstanceError> {
-        let instance = unsafe { A::Instance::init()? };
+        let instance_desc = hal::InstanceDescriptor {
+            name: "example",
+            flags: hal::InstanceFlag::all(),
+        };
+        let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe { instance.create_surface(window).unwrap() };
+
         let hal::OpenDevice { device, mut queue } = unsafe {
             let adapters = instance.enumerate_adapters();
             let exposed = adapters.get(0).ok_or(hal::InstanceError)?;
@@ -330,6 +335,7 @@ impl<A: hal::Api> Example<A> {
             label: None,
             format: texture_desc.format,
             dimension: wgt::TextureViewDimension::D2,
+            usage: hal::TextureUse::SAMPLED,
             range: wgt::ImageSubresourceRange::default(),
         };
         let view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
@@ -500,6 +506,7 @@ impl<A: hal::Api> Example<A> {
             label: None,
             format: self.surface_format,
             dimension: wgt::TextureViewDimension::D2,
+            usage: hal::TextureUse::COLOR_TARGET,
             range: wgt::ImageSubresourceRange::default(),
         };
         let surface_tex_view = unsafe {
