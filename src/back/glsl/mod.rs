@@ -1242,7 +1242,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 ref reject,
             } => {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
-                write!(self.out, "if(")?;
+                write!(self.out, "if (")?;
                 self.write_expr(condition, ctx)?;
                 writeln!(self.out, ") {{")?;
 

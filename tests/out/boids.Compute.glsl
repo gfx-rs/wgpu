@@ -41,7 +41,7 @@ void main() {
     vec2 vel1;
     uint i = 0u;
     uint index = global_invocation_id.x;
-    if((index >= 1500u)) {
+    if ((index >= 1500u)) {
         return;
     }
     vec2 _expr10 = _group_0_binding_1.particles[index].pos;
@@ -53,11 +53,11 @@ void main() {
     colVel = vec2(0.0, 0.0);
     while(true) {
         uint _expr37 = i;
-        if((_expr37 >= 1500u)) {
+        if ((_expr37 >= 1500u)) {
             break;
         }
         uint _expr39 = i;
-        if((_expr39 == index)) {
+        if ((_expr39 == index)) {
             continue;
         }
         uint _expr42 = i;
@@ -69,7 +69,7 @@ void main() {
         vec2 _expr51 = pos1;
         vec2 _expr52 = vPos;
         float _expr55 = _group_0_binding_0.rule1Distance;
-        if((distance(_expr51, _expr52) < _expr55)) {
+        if ((distance(_expr51, _expr52) < _expr55)) {
             vec2 _expr57 = cMass;
             vec2 _expr58 = pos1;
             cMass = (_expr57 + _expr58);
@@ -79,7 +79,7 @@ void main() {
         vec2 _expr63 = pos1;
         vec2 _expr64 = vPos;
         float _expr67 = _group_0_binding_0.rule2Distance;
-        if((distance(_expr63, _expr64) < _expr67)) {
+        if ((distance(_expr63, _expr64) < _expr67)) {
             vec2 _expr69 = colVel;
             vec2 _expr70 = pos1;
             vec2 _expr71 = vPos;
@@ -88,7 +88,7 @@ void main() {
         vec2 _expr74 = pos1;
         vec2 _expr75 = vPos;
         float _expr78 = _group_0_binding_0.rule3Distance;
-        if((distance(_expr74, _expr75) < _expr78)) {
+        if ((distance(_expr74, _expr75) < _expr78)) {
             vec2 _expr80 = cVel;
             vec2 _expr81 = vel1;
             cVel = (_expr80 + _expr81);
@@ -99,14 +99,14 @@ void main() {
         i = (_expr86 + 1u);
     }
     int _expr89 = cMassCount;
-    if((_expr89 > 0)) {
+    if ((_expr89 > 0)) {
         vec2 _expr92 = cMass;
         int _expr93 = cMassCount;
         vec2 _expr97 = vPos;
         cMass = ((_expr92 / vec2(float(_expr93))) - _expr97);
     }
     int _expr99 = cVelCount;
-    if((_expr99 > 0)) {
+    if ((_expr99 > 0)) {
         vec2 _expr102 = cVel;
         int _expr103 = cVelCount;
         cVel = (_expr102 / vec2(float(_expr103)));
@@ -127,19 +127,19 @@ void main() {
     float _expr134 = _group_0_binding_0.deltaT;
     vPos = (_expr131 + (_expr132 * _expr134));
     vec2 _expr137 = vPos;
-    if((_expr137.x < -1.0)) {
+    if ((_expr137.x < -1.0)) {
         vPos.x = 1.0;
     }
     vec2 _expr143 = vPos;
-    if((_expr143.x > 1.0)) {
+    if ((_expr143.x > 1.0)) {
         vPos.x = -1.0;
     }
     vec2 _expr149 = vPos;
-    if((_expr149.y < -1.0)) {
+    if ((_expr149.y < -1.0)) {
         vPos.y = 1.0;
     }
     vec2 _expr155 = vPos;
-    if((_expr155.y > 1.0)) {
+    if ((_expr155.y > 1.0)) {
         vPos.y = -1.0;
     }
     vec2 _expr164 = vPos;

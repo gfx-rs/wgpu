@@ -23,7 +23,7 @@ smooth in vec4 _vs2fs_location1;
 layout(location = 0) out vec4 _fs2p_location0;
 
 float fetch_shadow(uint light_id, vec4 homogeneous_coords) {
-    if((homogeneous_coords.w <= 0.0)) {
+    if ((homogeneous_coords.w <= 0.0)) {
         return 1.0;
     }
     vec2 flip_correction = vec2(0.5, -0.5);
@@ -41,7 +41,7 @@ void main() {
     while(true) {
         uint _expr12 = i;
         uvec4 _expr14 = _group_0_binding_0.num_lights;
-        if((_expr12 >= min(_expr14.x, 10u))) {
+        if ((_expr12 >= min(_expr14.x, 10u))) {
             break;
         }
         uint _expr19 = i;
