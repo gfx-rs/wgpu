@@ -5,8 +5,8 @@ SNAPSHOTS_OUT=tests/out
 
 all:
 	cargo fmt
-	cargo test --all-features
-	cargo clippy --all-features
+	cargo test --all-features --workspace
+	cargo clippy --all-features --workspace -- -D warnings
 
 clean:
 	rm *.metal *.air *.metallib *.vert *.frag *.comp *.spv
@@ -69,4 +69,3 @@ validate-hlsl: $(SNAPSHOTS_OUT)/*.hlsl
 		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/"};\
 		dxc $${file} -T cs_5_0;\
 	done
-

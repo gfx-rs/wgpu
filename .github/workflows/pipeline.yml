@@ -24,7 +24,7 @@ jobs:
         name: Test all features
         with:
           command: test
-          args: --all-features
+          args: --all-features --workspace
       - name: Check snapshots
         run: git diff --exit-code -- tests/out
   clippy:
@@ -41,4 +41,4 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-features -- -D warnings
+          args: --all-features --workspace -- -D warnings

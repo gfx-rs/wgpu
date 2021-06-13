@@ -45,7 +45,7 @@ cargo run --features wgsl-in,glsl-out -- my_shader.wgsl my_shader.vert --profile
 
 ## Development workflow
 
-The main instrument aiding the development is the good old `cargo test --all-features`,
+The main instrument aiding the development is the good old `cargo test --all-features --workspace`,
 which will run the unit tests, and also update all the snapshots. You'll see these
 changes in git before committing the code.
 
