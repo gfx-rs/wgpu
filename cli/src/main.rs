@@ -20,8 +20,15 @@ trait PrettyResult {
 }
 
 fn print_err(error: impl Error) {
-    eprintln!("{}:", error);
+    eprint!("{}", error);
+
     let mut e = error.source();
+    if e.is_some() {
+        eprintln!(": ");
+    } else {
+        eprintln!();
+    }
+
     while let Some(source) = e {
         eprintln!("\t{}", source);
         e = source.source();
@@ -92,7 +99,7 @@ fn main() {
     }
 
     let input_path = match input_path {
-        Some(ref string) => string,
+        Some(ref string) => Path::new(string),
         None => {
             println!("Call with <input> <output> [<options>]");
             return;
@@ -135,7 +142,11 @@ fn main() {
                     defines: Default::default(),
                 },
             )
-            .unwrap_pretty()
+            .unwrap_or_else(|err| {
+                let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
+                emit_glsl_parser_error(err, filename.unwrap_or("glsl"), &input);
+                std::process::exit(1);
+            })
         }
         "frag" => {
             let input = fs::read_to_string(input_path).unwrap();
@@ -148,7 +159,11 @@ fn main() {
                     defines: Default::default(),
                 },
             )
-            .unwrap_pretty()
+            .unwrap_or_else(|err| {
+                let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
+                emit_glsl_parser_error(err, filename.unwrap_or("glsl"), &input);
+                std::process::exit(1);
+            })
         }
         "comp" => {
             let input = fs::read_to_string(input_path).unwrap();
@@ -161,7 +176,11 @@ fn main() {
                     defines: Default::default(),
                 },
             )
-            .unwrap_pretty()
+            .unwrap_or_else(|err| {
+                let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
+                emit_glsl_parser_error(err, filename.unwrap_or("glsl"), &input);
+                std::process::exit(1);
+            })
         }
         other => panic!("Unknown input extension: {}", other),
     };
@@ -273,4 +292,27 @@ fn main() {
             }
         }
     }
+}
+
+use codespan_reporting::{
+    diagnostic::{Diagnostic, Label},
+    files::SimpleFile,
+    term::{
+        self,
+        termcolor::{ColorChoice, StandardStream},
+    },
+};
+
+pub fn emit_glsl_parser_error(err: naga::front::glsl::ParseError, filename: &str, source: &str) {
+    let diagnostic = match err.kind.metadata() {
+        Some(metadata) => Diagnostic::error()
+            .with_message(err.kind.to_string())
+            .with_labels(vec![Label::primary((), metadata.start..metadata.end)]),
+        None => Diagnostic::error().with_message(err.kind.to_string()),
+    };
+
+    let files = SimpleFile::new(filename, source);
+    let config = codespan_reporting::term::Config::default();
+    let writer = StandardStream::stderr(ColorChoice::Auto);
+    term::emit(&mut writer.lock(), &config, &files, &diagnostic).expect("cannot write error");
 }
